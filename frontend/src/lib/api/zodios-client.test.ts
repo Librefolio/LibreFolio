@@ -38,6 +38,15 @@
  * `import()` of the same module, which settles after the ones the interceptor started before it) and polls until the
  * positive call landed: by then a call of the negative request, started first, would have landed too. Red until H-62:
  * nothing calls `load`.
+ *
+ * Lot B-33, the start's part (an unreadable restore state serves no data): while the state of a restore cannot be read
+ * every route but a few answers `423 {"detail": {"code": "instance_restore_interrupted"}}` to anyone. On such an answer
+ * the interceptor forces `instanceConfig.load({force: true})` exactly as for `instance_awaiting_restore` (the helper
+ * `isInstanceRestoreInterruptedError` of `instanceBlockState.ts`, its own spec `instanceBlockState.test.ts`), so the
+ * root gate reads `restore_interrupted`; the error still reaches the caller unchanged, the block stays off, nothing
+ * navigates. A 423 `instance_blocked`, a 423 with another code, a 403 with the same body and a success force nothing.
+ * Same method as the H-62 describe. Red until B-33: nothing calls `load` on that code (the negative cases too, through
+ * their positive control).
  */
 import {AxiosError, type AxiosAdapter, type AxiosResponse} from 'axios';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
@@ -65,6 +74,7 @@ import {loginUrl} from '$lib/utils/internalPath';
 
 const BLOCKED_BODY = {detail: {code: 'instance_blocked', message: 'This instance is blocked by its hosting provider'}};
 const AWAITING_RESTORE_BODY = {detail: {code: 'instance_awaiting_restore', message: 'This instance is waiting for a restore'}};
+const RESTORE_INTERRUPTED_BODY = {detail: {code: 'instance_restore_interrupted', message: 'The state of the restore cannot be read'}};
 
 /** A transport that answers `status` with `data`: resolved for 2xx, otherwise rejected with the response, as axios does. */
 function answering(status: number, data: unknown): AxiosAdapter {
@@ -164,6 +174,45 @@ describe('zodios-client — a 423 instance_awaiting_restore reloads the instance
         await drainLazyImports();
 
         expect(mocks.loadInstanceConfig, `${status} is not the refusal of an instance awaiting a restore: only the control forced a load`).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('zodios-client — a 423 instance_restore_interrupted reloads the instance config (B-33)', () => {
+    /** The lazy import queue drained: an `import()` of the module the interceptor loads lazily, then its continuations. */
+    async function drainLazyImports(): Promise<void> {
+        await import('$lib/features/instance/instanceConfig.svelte');
+        await Promise.resolve();
+        await Promise.resolve();
+    }
+
+    it('forces instanceConfig.load({force: true}), and the caller still receives the refusal', async () => {
+        const error = await requestAnswered(423, RESTORE_INTERRUPTED_BODY);
+
+        expect(error, 'the refusal must reach the caller').toBeInstanceOf(AxiosError);
+        expect([error?.response?.status, error?.response?.data]).toEqual([423, RESTORE_INTERRUPTED_BODY]);
+        await expect.poll(() => mocks.loadInstanceConfig.mock.calls.length, {timeout: 2_000}).toBeGreaterThanOrEqual(1);
+        expect(mocks.loadInstanceConfig).toHaveBeenCalledWith(expect.objectContaining({force: true}));
+        expect(instanceBlock.blocked, 'an interrupted restore is not a block').toBe(false);
+        expect(mocks.goto, 'a 423 never navigates').not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['a 423 instance_blocked', 423, BLOCKED_BODY],
+        ['a 423 with another code', 423, {detail: {code: 'locked'}}],
+        ['a 423 without a body', 423, undefined],
+        ['a 403 with the same body', 403, RESTORE_INTERRUPTED_BODY],
+        ['a success', 200, {status: 'ok'}],
+    ])('forces nothing on %s', async (_case, status, data) => {
+        const error = await requestAnswered(status, data);
+        expect(error?.response?.status ?? 200, 'Barrier: the request was answered with the status of the case').toBe(status);
+
+        // Positive control after it: once its forced load landed, one from the case's request would have landed too.
+        await requestAnswered(423, RESTORE_INTERRUPTED_BODY);
+        await drainLazyImports();
+        await expect.poll(() => mocks.loadInstanceConfig.mock.calls.length, {timeout: 2_000}).toBeGreaterThanOrEqual(1);
+        await drainLazyImports();
+
+        expect(mocks.loadInstanceConfig, `${status} is not the refusal of an interrupted restore: only the control forced a load`).toHaveBeenCalledTimes(1);
     });
 });
 

@@ -10534,5 +10534,22 @@ mescolare le righe del runner dei due lotti:
     > `hosting-panel-routes` 39/39; `front check` 0 errori.
     > **⚠️ Fuori pista**: PR-022 (413 su corpo in streaming) mandava byte zero: ora risponde prima il magic, il test manda
     > `LFBK` + riempitivo. Uso anche `_WRITE_CHUNK` di `restore.py` (privata, come le altre).
+13. ✅ **B-33, la parte d'avvio** (22/10, base `06515e795` con il merge di B; decisione del developer: lo stato del
+    ripristino illeggibile non serve i dati e mostra una pagina «ripristino interrotto, serve l'amministratore»).
+    > **Note implementazione**: `services/platform/restore_guard.py` (`probe_restore_state`, `restore_interrupted`) sul
+    > gancio di B `apply.restore_state_problem`; passo d'avvio `restore-state` subito dopo `pending-restore`; con lo stato
+    > illeggibile saltano `post-migration-fixes`, `lone-transfer-legs` e i sei passi del modo (`_serving_no_data`);
+    > restano database, impostazioni, i passi del ripristino, `serving-lock` (così `--recover` rifiuta a server acceso) e
+    > `idle-monitor`. Terza dipendenza del router `refuse_when_restore_interrupted`: 423 `instance_restore_interrupted`
+    > per chiunque, stesso elenco di rotte ammesse del modo. `/system/instance` + `restore_interrupted`; wake-sync
+    > `restore_interrupted`. Frontend: `InstanceRestoreInterruptedPage` (sfondo della login, `role="alert"`, link a
+    > `admin/cli_tools/#backup-pending-unreadable` nella lingua dell'interfaccia, si ricarica da sola), il gate la mostra
+    > prima della pagina d'attesa; il client ricarica la configurazione sul 423; 5 chiavi in 4 lingue.
+    > Fuori (D6/D7, in attesa del developer): rifiuto dei job del pannello, `instance_key`, `restore.state = unreadable`
+    > in `panel/status` (resta 500 `restore_state_unreadable`, Q7).
+    > **Rossi → verdi** (test-author): backend 78 rossi → verdi (`restore-guard` 25, `restore-interrupted` 24,
+    > `await-restore-mode` 38 + 27, i pin della configurazione pubblica); frontend 34 → verdi (56 + 138); `front check` 0.
+    > **⚠️ Fuori pista**: il merge di B ha cambiato la firma di `RestoreStateUnreadableError` (`reason` prima): un test
+    > di H-62 la costruiva alla vecchia maniera (KeyError → 500), riparato dal test-author.
    > **⚠️ Fuori pista**: `"scarfSettings"` messo e poi tolto da `package.json`, dopo il cambio di Q-C: il file coincide col
    > commit.

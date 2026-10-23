@@ -127,6 +127,7 @@ class InstanceConfigResponse(StrictModel):
 
     profile: InstanceProfile = Field(description="selfhosted: an install run by its owner; managed: an instance a hosting provider runs for its customers")
     mode: InstanceMode = Field(default="normal", description="normal, or awaiting_restore while the hosting panel restores the instance (H-62): every API route but a few answers 423 `instance_awaiting_restore`, and the app shows a waiting page")
+    restore_interrupted: bool = Field(default=False, description="True while the state of the instance's restore cannot be read (B-33): it serves no data, every API route but a few answers 423 `instance_restore_interrupted`, and the app shows a page that asks for the administrator")
     accounts: AccountsInstanceConfig = Field(description="Who may create an account (workstream A)")
     email: EmailInstanceConfig = Field(default_factory=EmailInstanceConfig, description="Whether the instance can send emails (workstream E)")
     support_url: str | None = Field(

@@ -1126,6 +1126,53 @@ ticket learns neither whether the instance is blocked nor whether it awaits a re
 | `507` | Not enough free space in the data directory | `backup_no_space`, `no_space` |
 | `500` | The data directory's restore folder cannot be used, the state of the restore cannot be read, or a step could not be done; the log has the cause | `restore_folder_unusable`, `restore_state_unreadable`, `backup_upload_failed`, `stage_failed`, `restore_confirm_failed`, `restore_restart_failed`, `restore_cancel_failed` |
 
+### 🧩 When the State of a Restore Cannot Be Read {: #restore-interrupted }
+
+Every restore, yours or an administrator's, keeps its state in the data directory, in
+`.restore/restore.json`. That file can become unreadable: its owner or permissions changed, a disk
+error, a link or a folder in its place, or content no LibreFolio wrote. A restore may then have
+stopped half way, and LibreFolio cannot tell which data it holds. This can happen on any instance,
+managed or not.
+
+Every start checks it, right after applying a restore that waits for it. When it cannot read it,
+the instance serves **no data** until its administrator chooses what to do, and the start logs one
+error, with the reason (`io`, `not_a_file` or `invalid`), never the file's content:
+
+```text
+The state of the restore cannot be read: LibreFolio serves no data until the administrator runs ./dev.py backup pending --recover
+```
+
+- **The start skips** what repairs, writes or warms up the data. The log has one
+  `Startup step skipped` line for each, naming the step: `post-migration-fixes`,
+  `lone-transfer-legs`, `admin-bootstrap`, `stored-currencies`, `provider-prewarm`,
+  `market-holidays`, `brim-parse-pool` and `scheduler`. The database, the steps of the restore and
+  the idle monitor still run.
+- **The same API calls answer as in the [awaiting restore mode](#await-restore)**: the probes and
+  the version, `GET /api/v1/system/instance`, the
+  [scheduled wake-up](sleep_wake.md#wake-sync) and your panel's routes (its status, its backup jobs
+  and its restore). Every other call answers `423 Locked`, to anyone, signed in or not, the sign-in
+  included:
+
+    ```json
+    {"detail": {"code": "instance_restore_interrupted", "message": "A restore of this instance stopped half way: it serves no data until its administrator recovers it"}}
+    ```
+
+- `GET /api/v1/system/instance` says `"restore_interrupted": true`.
+- The scheduled wake-up answers the status `restore_interrupted` and runs no job.
+- Your panel's [status](#panel-status) answers `500` with the code `restore_state_unreadable`, as
+  it does whenever the state of the restore cannot be read.
+- Users who open the instance get a full page instead of every page of the app, the sign-in page
+  included: **The restore stopped half way**, on the sign-in page's background. It asks them to
+  contact their administrator, links the steps to recover, asks the instance every 30 seconds
+  whether it serves the data again, and reloads itself when it does; **Try again** reloads it at
+  once.
+
+**The way out is on the machine**, for whoever runs it: stop LibreFolio, run
+`./dev.py backup pending` to see what happened, then `./dev.py backup pending --recover`, which puts
+the data of before back, and start LibreFolio again: see
+«An Unreadable Restore State» in [Command-Line Tools](cli_tools.md). The instance decides once,
+at its start: a file made readable again while LibreFolio runs counts only at the next start.
+
 ---
 
 ## 📤 The Upload Limit of a Restore {: #restore-upload-limit }
@@ -1261,6 +1308,8 @@ LIBREFOLIO_PRIVACY_URL=https://hosting.example.com/privacy
   The guard on the API and its list
 - ⏳ For developers: **[Awaiting Restore](../developer/architecture/security.md#await-restore)** —
   The mode's guard and its list, the skipped startup steps and the panel's restore routes
+- 🧩 For developers: **[A Restore Stopped Half Way](../developer/architecture/security.md#restore-interrupted)** —
+  The probe of the restore's state at start, its guard on the API and the skipped startup steps
 - 🔌 For developers: **[The Hosting Panel's Access](../developer/architecture/security.md#panel-access)** —
   The dependency of the panel's routes, its limit and its log line
 - 🖼️ For developers: **[The Content-Security-Policy and Frame Protection](../developer/architecture/security.md#managed-headers)** —

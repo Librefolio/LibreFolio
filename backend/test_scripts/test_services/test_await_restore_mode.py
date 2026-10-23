@@ -13,10 +13,12 @@ Under test, written by H-62 and missing today:
 (c) ``lifecycle.Step`` gains ``skip_when: Callable[[], bool] | None = None``; ``run_startup_steps`` does not call a step
     whose ``skip_when()`` is true at the moment the step comes (read then, not when the step was built), and runs the
     others in order.
-(d) ``app_lifespan.STARTUP_STEPS``: exactly ``admin-bootstrap``, ``scheduler``, ``provider-prewarm``,
-    ``market-holidays``, ``brim-parse-pool`` and ``stored-currencies`` carry a ``skip_when``, true in the mode and false
-    outside it; ``database``, ``pending-restore``, ``restore-commit`` and ``idle-monitor`` keep running (pinned by the
-    set). Each of the six, run through ``run_startup_steps`` with the function it calls replaced by a recorder, calls
+(d) ``app_lifespan.STARTUP_STEPS``: ``admin-bootstrap``, ``scheduler``, ``provider-prewarm``, ``market-holidays``,
+    ``brim-parse-pool`` and ``stored-currencies`` carry a ``skip_when``, true in the mode and false outside it;
+    ``database``, ``pending-restore``, ``restore-commit`` and ``idle-monitor`` keep running (pinned by the set). B-33
+    (22/10): exactly eight steps carry a ``skip_when`` — those six, and ``post-migration-fixes`` and
+    ``lone-transfer-legs``, which skip only while the restore is interrupted (false in the mode); all eight true while
+    interrupted is in ``test_restore_guard.py``. Each of the six, run through ``run_startup_steps`` with the function it calls replaced by a recorder, calls
     nothing in the mode (so no ``/setup`` link is born with ``LIBREFOLIO_ADMIN_EMAIL`` set) and calls it once outside.
 
 Every name of H-62 is read by the test that needs it, so the file collects and each test reports its own red.
@@ -47,6 +49,9 @@ SKIPPED_IN_THE_MODE = {
     "brim-parse-pool": "_start_brim_parse_pool_prewarm",
     "stored-currencies": "_start_stored_currency_audit",
 }
+#: B-33: the steps that skip only while the restore is interrupted (``restore_guard.restore_interrupted()``), never for
+#: the mode alone.
+SKIPPED_ONLY_WHEN_INTERRUPTED = ("post-migration-fixes", "lone-transfer-legs")
 #: Steps the mode keeps (§6): a guard that they are there and carry no skip.
 KEPT_IN_THE_MODE = ("database", "pending-restore", "restore-commit", "idle-monitor")
 
@@ -196,13 +201,14 @@ async def test_run_startup_steps_skips_a_step_whose_skip_when_is_true_when_it_co
 # =============================================================================
 
 
-def test_exactly_the_six_steps_of_the_mode_carry_a_skip_when():
-    """(d) In ``STARTUP_STEPS`` exactly the six steps of §6 carry a ``skip_when``; the steps the mode keeps are there
-    and carry none."""
+def test_exactly_the_eight_steps_of_the_mode_and_of_the_interruption_carry_a_skip_when():
+    """(d) In ``STARTUP_STEPS`` exactly eight steps carry a ``skip_when`` (B-33, 22/10): the six of §6 and the two that
+    skip only while the restore is interrupted; the steps the mode keeps are there and carry none."""
     names = [step.name for step in app_lifespan.STARTUP_STEPS]
     with_skip = sorted(step.name for step in app_lifespan.STARTUP_STEPS if _skip_when(step) is not None)
+    expected = sorted((*SKIPPED_IN_THE_MODE, *SKIPPED_ONLY_WHEN_INTERRUPTED))
     assert set(KEPT_IN_THE_MODE) <= set(names), f"Barrier: the kept steps are in STARTUP_STEPS: {names}"
-    assert with_skip == sorted(SKIPPED_IN_THE_MODE), f"the steps with skip_when must be exactly {sorted(SKIPPED_IN_THE_MODE)}: {with_skip}"
+    assert with_skip == expected, f"the steps with skip_when must be exactly {expected}: {with_skip}"
 
 
 @pytest.mark.parametrize(("value", "expected"), [pytest.param("1", True, id="awaiting"), pytest.param(None, False, id="unset"), pytest.param("off", False, id="off")])
@@ -215,6 +221,19 @@ def test_the_skip_of_the_six_steps_follows_the_switch(monkeypatch, value, expect
     _set(monkeypatch, value)
     answers = {name: steps[name].skip_when() for name in SKIPPED_IN_THE_MODE}
     assert answers == dict.fromkeys(SKIPPED_IN_THE_MODE, expected), f"{AWAIT_VARIABLE}={value!r}: {answers}"
+
+
+@pytest.mark.parametrize("value", [pytest.param("1", id="awaiting"), pytest.param(None, id="unset")])
+def test_the_two_steps_of_the_interruption_never_skip_for_the_mode(monkeypatch, value):
+    """(d, B-33) ``post-migration-fixes`` and ``lone-transfer-legs`` carry a ``skip_when`` that the mode alone never
+    makes true: they skip only while the restore is interrupted (this process never probed it)."""
+    steps = {step.name: step for step in app_lifespan.STARTUP_STEPS}
+    missing = [name for name in SKIPPED_ONLY_WHEN_INTERRUPTED if _skip_when(steps[name]) is None]
+    if missing:
+        pytest.fail(f"B-33: these steps carry no skip_when: {missing}")
+    _set(monkeypatch, value)
+    answers = {name: steps[name].skip_when() for name in SKIPPED_ONLY_WHEN_INTERRUPTED}
+    assert answers == dict.fromkeys(SKIPPED_ONLY_WHEN_INTERRUPTED, False), f"{AWAIT_VARIABLE}={value!r}: {answers}"
 
 
 @pytest.mark.asyncio

@@ -51,6 +51,8 @@ On an instance blocked by its hosting provider (`LIBREFOLIO_BLOCKED`), every rou
 
 While the hosting panel restores an instance (`LIBREFOLIO_AWAIT_RESTORE`), every route but the probes, `/system/instance`, the scheduled wake-up and the panel's routes answers `423 Locked` with `detail.code` `instance_awaiting_restore`, to anyone, signed in or not: see [Awaiting Restore](../architecture/security.md#await-restore).
 
+When the process found the state of the restore (`.restore/restore.json`) unreadable at its start, the same routes answer and every other one answers `423 Locked` with `detail.code` `instance_restore_interrupted`, to anyone, until the administrator runs `./dev.py backup pending --recover` and restarts LibreFolio; `GET /system/instance` then says `restore_interrupted: true`: see [A Restore Stopped Half Way](../architecture/security.md#restore-interrupted).
+
 ## 📋 Pydantic Schemas
 
 The API uses **Pydantic** models for data validation and serialization. These schemas define the structure of the data exchanged between the frontend and backend. You can find the

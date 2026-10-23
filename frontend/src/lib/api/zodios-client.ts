@@ -22,7 +22,7 @@ import {debug} from '$lib/debug';
 import {loginUrl} from '$lib/utils/internalPath';
 import {notifyPortfolioMutation} from '$lib/stores/portfolio/portfolioMutation';
 import {priceRefresh} from '$lib/features/price-refresh/priceRefresh';
-import {instanceBlockState, isInstanceAwaitingRestoreError, isInstanceBlockedError} from '$lib/features/instance/instanceBlockState';
+import {instanceBlockState, isInstanceAwaitingRestoreError, isInstanceBlockedError, isInstanceRestoreInterruptedError} from '$lib/features/instance/instanceBlockState';
 
 // =============================================================================
 // CONFIGURATION
@@ -161,10 +161,10 @@ axiosInstance.interceptors.response.use(
             instanceBlockState.markBlocked();
         }
 
-        // A 423 `instance_awaiting_restore` (H-62): the hosting panel is restoring this instance. Read the instance's
-        // configuration again, so the root layout's gate shows the waiting page even when it was read before the mode
-        // began. A dynamic import: the configuration is a runes module that imports this client.
-        if (isInstanceAwaitingRestoreError(error.response?.status, error.response?.data)) {
+        // A 423 `instance_awaiting_restore` (H-62: the hosting panel is restoring this instance) or
+        // `instance_restore_interrupted` (B-33: the state of the restore cannot be read). Read the instance's
+        // configuration again, so the root layout's gate shows its page even when it was read before the state began. A dynamic import: the configuration is a runes module that imports this client.
+        if (isInstanceAwaitingRestoreError(error.response?.status, error.response?.data) || isInstanceRestoreInterruptedError(error.response?.status, error.response?.data)) {
             void import('$lib/features/instance/instanceConfig.svelte').then(({instanceConfig}) => instanceConfig.load({force: true}));
         }
 

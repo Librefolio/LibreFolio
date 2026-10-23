@@ -867,6 +867,14 @@ def api_await_restore_mode(verbose: bool = False, test_names: list[str] | None =
     return run_command(cmd, "Awaiting restore mode API tests", verbose=verbose)
 
 
+def api_restore_interrupted(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the interrupted restore's API tests: refuse_when_restore_interrupted, its allowed set, instance/wake/panel status (B-33, H)."""
+    print_section("Restore Interrupted API")
+    print_info("Testing: 423 instance_restore_interrupted for anyone outside the allowed set (the mode's), the third router dependency, restore_interrupted in /system/instance, wake-sync restore_interrupted, GET /panel/status unchanged")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_restore_interrupted_api.py", test_names)
+    return run_command(cmd, "Restore interrupted API tests", verbose=verbose)
+
+
 def api_panel_status(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run the hosting panel's status route tests: GET /panel/status (H-61, R1)."""
     print_section("Hosting Panel Status API")
@@ -1410,6 +1418,16 @@ Tests for REST API endpoints (server auto-started):
         # PURE: the app of main.py in this process (ASGI), every request's session on a private SQLite file under
         # tmp_path, the switches by monkeypatch, the data directory under tmp_path: the lane's backend and DB are never
         # reached.
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "restore-interrupted",
+        api_restore_interrupted,
+        name="Restore Interrupted API",
+        desc="B-33 (H, 22/10): while restore_guard.restore_interrupted() every /api/v1 route but ALLOWED_WHEN_RESTORE_INTERRUPTED (= ALLOWED_WHEN_AWAITING_RESTORE, pinned by name and route) answers 423 instance_restore_interrupted to anyone, login, registration, setup, me and data included; refuse_when_restore_interrupted the third router dependency after block and mode; /system/instance restore_interrupted; wake-sync restore_interrupted with nothing past the switches; GET /panel/status still allowed (500 restore_state_unreadable, Q7)",
+        # PURE: the app of main.py in this process (ASGI), every request's session on a private SQLite file under
+        # tmp_path, the interruption and the switches by monkeypatch: the lane's backend and DB are never reached.
         isolation="pure",
     )
     add_test(api, "broker-multiuser", api_broker_multiuser, name="Broker Multi-User", desc="Role-based permissions")
