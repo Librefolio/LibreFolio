@@ -10841,3 +10841,13 @@ punto di partenza, l'audit dello stesso giorno:
   **Il developer sceglie A** il 20/10; codice e test pronti il 20/10 (`returns.flows_by_snapshot_date`; 22 rossi prima;
   Dashboard invariata su 4 copie), in attesa del checkpoint. Dettagli: piano MF, «MF-E2b».
   - ✅ 21/10 (riconciliazione): in `dev_release2` col treno 4 (`015094472`; commit `bf748bbc3`).
+
+## W2 · Il form delle transazioni (fase 01)
+
+Sessione nata il 23/10 (ondata 5), sul form (`TransactionFormModal.svelte`). Piano:
+[`Phase_1/04_importTransactions/plan-phase01Step2TransactionForm-W2.prompt.md`](../Phase_1/04_importTransactions/plan-phase01Step2TransactionForm-W2.prompt.md).
+
+- **W2-1 · Il selettore «Importo totale / Prezzo unitario» nella modifica multipla (Bulk)** — minimo, comodità; W2, 23/10
+  (decisione D4 del coordinatore sul #47: niente nel Bulk in questo giro, è di W, e prezzo × quantità può differire
+  dall'addebito reale). Il form di una singola BUY/SELL ha il selettore (`POST /transactions/trade-amount`); la griglia del Bulk
+  no. Se serve, il Bulk riusa lo stesso endpoint e `txTradeAmount.ts`. Dettagli: piano W2, «#47 — decisioni».
