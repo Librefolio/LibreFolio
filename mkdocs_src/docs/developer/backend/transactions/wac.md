@@ -617,11 +617,16 @@ unknown cost therefore comes from:
   `test_market_data_wipe_split_guard.py` and `test_provider_wipe_split_guard.py` in
   `backend/test_scripts/test_services/` for the two wipes). Removing the provider
   altogether never takes such a split away either: **No Provider**
-  (`DELETE /api/v1/assets/provider`) answers 409
-  `PROVIDER_REMOVAL_LINKED_TRANSACTIONS` while any transaction is linked to an
-  event the provider generated, whether or not the transaction has a cost (see
+  (`DELETE /api/v1/assets/provider`) answers the same 409
+  `PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST` while a split the provider
+  generated has such an adjustment (see
   [Provider Removal](../assets/events.md#provider-removal);
-  `test_provider_removal_link_guard.py`, in the same folder).
+  `test_provider_removal_link_guard.py`, in the same folder). Any other
+  transaction linked to an event the provider generated is only disconnected
+  (`asset_event_id` to `NULL`) and kept; the earlier refusal for every linked
+  transaction (X-R62) is gone. The asset form counts what a change or removal
+  deletes before it is sent, with the dry run
+  [`POST /assets/provider/impact`](../assets/events.md#provider-change-impact).
 
 **An explicit `null` in an update** (decision P5, coordinator reading B, 16/10).
 An update that leaves out `cost_basis_override` changes nothing. One that sends it

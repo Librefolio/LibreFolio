@@ -1,60 +1,48 @@
-"""X-R62 (workstream X, taken by H): removing an asset's provider while a transaction is linked to an event that provider
-generated answers 500 with the SQL text.
+"""X-R62 -> X-R69 (workstream X): removing an asset's provider while transactions are linked to the events it generated.
 
-Measured before the cure (read at c7f414827): ``DELETE /api/v1/assets/provider?asset_ids=…`` (``remove_providers_bulk``,
-``api/v1/assets/providers.py``) calls ``AssetSourceManager.bulk_remove_providers(asset_ids, session)``
-(``ProviderManagementOperations.bulk_remove_providers``, ``services/assets/provider_management.py``): one ``DELETE FROM
-asset_provider_assignments WHERE asset_id IN (…)``, then a commit, no check; and the removal knows no caller: given a
-``current_user_id``, it raises ``TypeError``. ``asset_events.provider_assignment_id`` is ``ON DELETE CASCADE``,
-``transactions.asset_event_id`` ``ON DELETE RESTRICT`` (``db/models.py``), and every connection turns SQLite's foreign
-keys on (``db/session.py``). So the DELETE cascades to the events the assignment generated (``provider_assignment_id``
-its id) and, at the first one a transaction links to (``asset_event_id`` its id), fails with an ``IntegrityError``, which
-the route answers 500 with ``detail=str(e)``: the SQL text, the statement and its parameters. Any provider's generated
-event blocks it once a transaction links to it: a market provider's DIVIDEND or SPLIT, a plan's coupon (an INTEREST
-event) and the INTEREST transaction it paid. A manual event (``provider_assignment_id IS NULL``) is not deleted and never
-blocks. (A change of provider disconnects those transactions instead, Policy D, and X-R49 refuses only a change that
-would take a SPLIT from costless adjustments: that a removal refuses where a change disconnects is decided, not tested
-here.)
+History, short. X-R62 made ``DELETE /api/v1/assets/provider?asset_ids=…`` (``remove_providers_bulk``, ``api/v1/assets/providers.py``
+-> ``ProviderManagementOperations.bulk_remove_providers``, ``services/assets/provider_management.py``) refuse with
+``PROVIDER_REMOVAL_LINKED_TRANSACTIONS`` (409) while a transaction was linked to an event the removed assignment generated
+(``asset_events.provider_assignment_id`` is ``ON DELETE CASCADE``, ``transactions.asset_event_id`` ``ON DELETE RESTRICT``,
+and every connection turns SQLite's foreign keys on), instead of the 500 with the SQL text it answered before. That
+refusal is REPLACED by the developer's decision of 22-23/10 (lot X5-1): «togli» (remove the provider) and «cambia»
+(change the provider, or a parametric provider's params) follow ONE rule. A dry run (``POST /assets/provider/impact``,
+``test_provider_change_impact.py``) tells what would be lost; once confirmed, both UNLINK the transactions linked to the
+events that disappear. ``PROVIDER_REMOVAL_LINKED_TRANSACTIONS`` no longer exists.
 
-The cure's contract (X-R62):
+The contract this file pins:
 
-* ``services/assets/event_links.py``. ``visible_transaction_ids(session, transaction_ids, current_user_id)``, a
-  ``set[int]``: the ids among ``transaction_ids`` on a broker ``current_user_id`` holds a ``BrokerUserAccess`` row for;
-  an empty set without a caller or without an id (R13-SEC7's rule, ``split_guard``'s today).
-  ``events_with_linked_transactions(session, events, current_user_id)``, a ``list[dict]``, ``events`` a sequence of
-  ``(event_id, date, type)``: the events at least one transaction links to, ordered by (date, event id), each exactly
-  ``{"event_id", "date" (ISO), "type" (the event's), "transaction_ids" (the visible ones, sorted),
-  "hidden_transactions_count" (the others)}``; ``[]`` when none is linked;
-* ``bulk_remove_providers(asset_ids, session, *, current_user_id=None)``; the route passes
-  ``current_user_id=_current_user.id``. An empty request answers as today. Before any write, the request's assets in its
-  order: one without an assignment skipped; for the others, the events of the assignment through
-  ``events_with_linked_transactions``, a name ``provider_management`` imports; at the first asset with linked events,
-  ``AssetSourceError`` ``PROVIDER_REMOVAL_LINKED_TRANSACTIONS``, its ``details`` exactly ``{"asset_id", "item_index"
-  (the asset's first position in the request), "events"}``, its message exactly ``_message``'s: how many events, how
-  many transactions (seen and hidden), never an id, whoever asks. All or nothing: every assignment of the request (those
-  before the refused asset included), every event, every transaction (its ``asset_event_id`` above all) as it was, not
-  even pending in the refused call's session, nothing committed. Otherwise the delete as today, the assignment's events
-  with it, and the same ``FABulkRemoveResponse``. When the delete or its commit still raises an ``IntegrityError`` (a
-  link made between the check and the delete): the session rolled back, then ``AssetSourceError``
-  ``PROVIDER_REMOVAL_CONFLICT``, ``details`` ``{}``, its message exactly ``CONFLICT_MESSAGE``; nothing removed;
-* the route answers both 409, ``detail`` exactly ``{"error_code", "message", "params"}``, ``params`` the details, never
-  the SQL text. Every other answer unchanged.
+* ``bulk_remove_providers(asset_ids, session, *, current_user_id=None)``. For every asset of the request with an
+  assignment: ``transactions.asset_event_id`` is set to NULL for every transaction linked to an event of the assignment
+  (``asset_events.provider_assignment_id == assignment.id``), whoever owns the broker; then the assignment is deleted, its
+  events with it (the cascade), and the commit. The answer is the same ``FABulkRemoveResponse``. Manual events
+  (``provider_assignment_id IS NULL``) are untouched and their linked transactions stay linked; prices are NOT deleted.
+* The one hard refusal left is X-R49's: a SPLIT among the events that disappear with linked incoming ADJUSTMENTs WITHOUT a
+  purchase cost (``split_guard.splits_with_costless_adjustments``): ``AssetSourceError`` with ``error_code`` exactly
+  ``PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST`` (the code of the change, X-R49), ``details`` exactly ``{"asset_id",
+  "item_index" (the asset's first position in the request), "splits"}``, ``splits`` as ``split_guard`` names them for the
+  caller (visible ids, ``hidden_transactions_count``), the message starting with the code and giving the totals only,
+  never an id. All or nothing: checked before the first write, nothing written for any asset of the request (those before
+  the refused one included), not even pending in the refused call's session. A SPLIT whose adjustments HAVE a cost does
+  not refuse: it is disconnected like any other event.
+* The route answers that refusal and ``PROVIDER_REMOVAL_CONFLICT`` (the IntegrityError of a link made between the
+  disconnection and the delete: rolled back, ``details`` ``{}``, the message exactly ``CONFLICT_MESSAGE``) 409,
+  ``detail`` exactly ``{"error_code", "message", "params"}``, never the SQL text.
 
-Guards, green before and after: a provider without a linked transaction (removed, its events with it), a manual event
-with a linked transaction (it stays, still linked), an asset without an assignment in the request, an empty request;
-through the service without a caller, as the route calls it today, and through the route: the removal as today, each
-asset answered a success, ``deleted_count`` 1, "Provider removed".
+Guards, green before and after: a provider without a linked transaction (removed, its events with it), a manual event with
+a linked transaction (it stays, still linked), an asset without an assignment, an empty request, and the two helpers of
+``event_links.py`` the dry run reuses.
 
 A refusal is looked for as the router meets it: nobody commits after a refused call, the session just closes. Right after
 the refusal its own session is read: nothing pending there (``new``, ``dirty``, ``deleted``) and, through raw SQL, the
-rows as they were (a write made before the refusal shows there, committed or not); once that session is closed, a fresh
-connection reads what is committed; every column, ``updated_at`` included. A call that raises today where the contract
-refuses (the ``TypeError`` of the unknown keyword, the ``IntegrityError`` without a caller) fails its test naming the
-exception, never as an error. A name of the cure is read in the test that needs it (``getattr``, the new module through
-``importlib``): until it exists that test fails naming X-R62, and the file collects. The route tests call the route in
-process: the provider router mounted at ``/api/v1/assets`` as the app mounts it, on an app of the call's own,
-``get_current_user`` overridden there to the unit's user, the session the real dependency opens; the answer read as the
-client reads it, JSON. Each red says what the user faces before the cure («Red today»); a guard passes before and after.
+rows as they were; once that session is closed, a fresh connection reads what is committed; every column, ``updated_at``
+included. A call that raises where the contract expects an answer fails its test naming the exception, never as an error.
+The route tests call the route in process: the provider router mounted at ``/api/v1/assets`` as the app mounts it, on an
+app of the call's own, ``get_current_user`` overridden there to the unit's user, the session the real dependency opens; the
+answer read as the client reads it, JSON. The race of the conflict tests is a real one: an SQLAlchemy ``before_cursor_execute``
+listener on the lane's engine re-links the disconnected transaction to its event on the same connection, just before the
+first DELETE of the removal, so the RESTRICT fires whatever order the implementation deletes in. Each red says what happens
+before the lot ("Red today"); a guard passes before and after.
 
 Isolation: WRITE-SCOPED, the services default. Every row is this unit's own, under a unique marker: three EUR assets,
 inactive so that no scheduler of the lane refreshes them (the market asset, the plan's, the bare one), two users and two
@@ -69,10 +57,11 @@ cases are this unit's.
 """
 
 import asyncio
-import importlib
 import json
 import sys
 import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import date, timedelta
 from decimal import Decimal
@@ -91,7 +80,7 @@ setup_test_database()
 
 import httpx
 from fastapi import FastAPI
-from sqlalchemy import bindparam, delete, or_, text
+from sqlalchemy import bindparam, delete, event, or_, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.v1.assets import providers as providers_api
@@ -112,10 +101,11 @@ from backend.app.db.models import (
     UserRole,
 )
 from backend.app.db.session import get_async_engine
-from backend.app.services.assets import provider_management
 from backend.app.services.assets.base import AssetSourceError
+from backend.app.services.assets.event_links import events_with_linked_transactions, visible_transaction_ids
 from backend.app.services.assets.manager import AssetSourceManager
 from backend.test_scripts.test_services.test_provider_wipe_split_guard import (
+    _WHOLE_NUMBER,
     _add,
     _barrier_costless,
     _barrier_who_sees_what,
@@ -126,19 +116,19 @@ from backend.test_scripts.test_services.test_provider_wipe_split_guard import (
     _detail,
     _read,
     _State,
+    _undated,
+    _unlinked,
 )
+from backend.test_scripts.test_services.test_provider_wipe_split_guard import _assert_details as _assert_split_details
+from backend.test_scripts.test_services.test_provider_wipe_split_guard import _details as _split_details
 from backend.test_scripts.test_utils import unique_id
 
-#: The refusal's code (X-R62).
-CODE = "PROVIDER_REMOVAL_LINKED_TRANSACTIONS"
-#: The code of a link made between the check and the delete, and its message, exactly.
+#: The refusal's code: X-R49's, the change's, now the removal's too (X-R69). The code X-R62 gave a removal,
+#: PROVIDER_REMOVAL_LINKED_TRANSACTIONS, no longer exists.
+CODE = "PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST"
+#: The code of a link made between the disconnection and the delete, and its message, exactly.
 CONFLICT = "PROVIDER_REMOVAL_CONFLICT"
 CONFLICT_MESSAGE = "PROVIDER_REMOVAL_CONFLICT: the provider could not be removed, because a row still refers to the events it generated; nothing was removed"
-#: X-R49's code: a change's refusal, never a removal's.
-WIPE_CODE = "PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST"
-#: The cure's module, and its check as ``provider_management`` names it: the target the race patches.
-EVENT_LINKS = "backend.app.services.assets.event_links"
-CHECK = "events_with_linked_transactions"
 #: The providers: a market one, whose refresh stores dividends and splits, and the parametric plan, whose refresh stores
 #: its coupons.
 MARKET = "yfinance"
@@ -149,10 +139,10 @@ REMOVE_PATH = "/api/v1/assets/provider"
 REMOVED = {"success": True, "deleted_count": 1, "message": "Provider removed"}
 #: The unit's assets by role.
 ASSET_TYPES = {"market": AssetType.STOCK, "plan": AssetType.BOND, "bare": AssetType.STOCK}
-#: What an answer carrying the SQL text holds, read case-insensitively: none belongs to an X-R62 answer.
+#: What an answer carrying the SQL text holds, read case-insensitively: none belongs to an answer of the removal.
 SQL_MARKERS = ("foreign key", "constraint", "delete from", "integrityerror", "sqlite", "[sql:")
-#: What a call that raises meets today, for the message of the test it fails.
-TODAY = "Today the route calls the removal without a caller: its DELETE cascades to the events the assignment generated and fails on the RESTRICT of a transaction linked to one: an IntegrityError, answered 500 with the SQL text as its detail"
+#: What a removal meets before X-R69, for the message of the test it fails.
+TODAY = "Before X-R69 a removal is refused with PROVIDER_REMOVAL_LINKED_TRANSACTIONS (409) while a transaction links to an event its assignment generated, instead of unlinking it"
 
 # A window far from the mock dataset and from the other units that write events (1986, 1988, 1990, 1991-1992,
 # 1994-1995). Rows are scoped by asset and broker anyway: the dates only keep the failure output readable.
@@ -395,17 +385,11 @@ class _Refused:
     seen: _State
 
 
-def _given(caller: dict) -> str:
-    """For a red's message: the keyword the call was given, which the removal does not take before X-R62."""
-    return f" (X-R62: the removal takes the caller as the keyword current_user_id, here {caller})" if caller else ""
-
-
 async def _refused_remove(owned: _Owned, asset_ids: list[int], before: _State, story: str, *, code: str = CODE, **caller: int) -> _Refused:
     """The removal of ``asset_ids``, for a request the contract refuses with ``code``, ``caller`` the ``current_user_id``
     it is given if any: the refusal, and what the refused call's own session holds right after it. As in the route,
-    nobody commits after it: the session closes. Any other exception fails the test, naming it (the ``TypeError`` of the
-    unknown keyword, or the ``IntegrityError`` without a caller, before the cure); so does a removal that goes through,
-    saying what it deleted against ``before``."""
+    nobody commits after it: the session closes. Any other exception fails the test, naming it; so does a removal that
+    goes through, saying what it deleted against ``before``."""
     async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
         try:
             answer = await AssetSourceManager.bulk_remove_providers(asset_ids, session, **caller)
@@ -414,7 +398,7 @@ async def _refused_remove(owned: _Owned, asset_ids: list[int], before: _State, s
             in_transaction = session.in_transaction()
             return _Refused(error=refusal, pending=pending, in_transaction=in_transaction, seen=await _read(session, owned))
         except Exception as exc:  # noqa: BLE001 — any other exception is the defect under test
-            pytest.fail(f"{story} raised {exc!r} instead of the refusal {code}{_given(caller)}. {TODAY}")
+            pytest.fail(f"{story} raised {exc!r} instead of the refusal {code}. {TODAY}")
     pytest.fail(f"{story} went through, answering {answer.model_dump(mode='json')}, instead of being refused with {code}: {_changes(before, await _committed(owned))}")
 
 
@@ -430,7 +414,7 @@ async def _removed(owned: _Owned, asset_ids: list[int], story: str, *, via: str)
         try:
             answer = await AssetSourceManager.bulk_remove_providers(asset_ids, session)
         except AssetSourceError as refusal:
-            pytest.fail(f"{story} was refused: {refusal.error_code} {refusal.message} {refusal.details} (X-R62 refuses only while a transaction links to an event a removed assignment generated)")
+            pytest.fail(f"{story} was refused: {refusal.error_code} {refusal.message} {refusal.details} (X-R69 refuses only a SPLIT whose linked incoming adjustments have no purchase cost; {TODAY})")
         except Exception as exc:  # noqa: BLE001 — any exception is the defect under test
             pytest.fail(f"{story} raised {exc!r}: the route answers 500")
     return answer.model_dump(mode="json")
@@ -461,17 +445,16 @@ def _sql_in(response: httpx.Response) -> list[str]:
     return [marker for marker in SQL_MARKERS if marker in body]
 
 
-def _assert_answered_409(response: httpx.Response, story: str, *, code: str, message: str) -> object:
-    """The answer is 409, ``detail`` exactly ``{"error_code": code, "message": message, "params"}``, and no SQL anywhere
-    in its body: its params, for the test to read."""
+def _assert_answered_409(response: httpx.Response, story: str, *, code: str) -> tuple[str, object]:
+    """The answer is 409, ``detail`` exactly ``{"error_code": code, "message", "params"}``, and no SQL anywhere in its body:
+    its message and its params, for the test to read."""
     sql = _sql_in(response)
     shown = f", carrying the SQL text ({', '.join(sql)})" if sql else ""
-    assert response.status_code == 409 and not sql, f"{story} answers {response.status_code}{shown}: {response.text}; expected 409 {code}, never the SQL text (X-R62)"
+    assert response.status_code == 409 and not sql, f"{story} answers {response.status_code}{shown}: {response.text}; expected 409 {code}, never the SQL text"
     detail = _detail(response)
     assert sorted(detail) == ["error_code", "message", "params"], f"{story}: the 409's detail holds the keys {sorted(detail)}: expected exactly error_code, message and params: {detail}"
     assert detail["error_code"] == code, f"{story}: the 409 names {detail['error_code']} ({detail['message']}): expected {code}"
-    assert detail["message"] == message, f"{story}: the 409's message reads {detail['message']!r}: expected exactly {message!r}"
-    return detail["params"]
+    return detail["message"], detail["params"]
 
 
 # --------------------------------------------------------------------------- #
@@ -479,21 +462,16 @@ def _assert_answered_409(response: httpx.Response, story: str, *, code: str, mes
 # --------------------------------------------------------------------------- #
 
 
-def _message(events: int, transactions: int) -> str:
-    """The refusal's message, exactly: the totals, never an id, whoever asks."""
-    return f"PROVIDER_REMOVAL_LINKED_TRANSACTIONS: removing the provider would delete {events} event(s) it generated, linked to {transactions} transaction(s); unlink them first"
-
-
 def _entry(event_id: int, offset: int, kind: AssetEventType, seen: list[int], hidden: int) -> dict:
-    """One event of the refusal, as the contract gives it: its id, its date (ISO), its type, the linked transactions the
-    caller sees (sorted), how many it does not."""
+    """One event as ``events_with_linked_transactions`` gives it: its id, its date (ISO), its type, the linked transactions
+    the caller sees (sorted), how many it does not."""
     return {"event_id": event_id, "date": _day(offset).isoformat(), "type": kind.value, "transaction_ids": sorted(seen), "hidden_transactions_count": hidden}
 
 
-def _details(asset_id: int, item_index: int, events: list[dict]) -> dict:
-    """The refusal's details, as the contract gives them: the refused asset, its first position in the request, its
-    linked events."""
-    return {"asset_id": asset_id, "item_index": item_index, "events": events}
+def _split_entry(event_id: int, offset: int, seen: list[int], hidden: int) -> dict:
+    """One SPLIT of the refusal, as ``split_guard`` gives it: the event, its date (ISO), the costless adjustments the caller
+    sees (sorted), how many it does not."""
+    return {"event_id": event_id, "date": _day(offset).isoformat(), "transaction_ids": sorted(seen), "hidden_transactions_count": hidden}
 
 
 def _assert_events(events: object, expected: list[dict], story: str, where: str) -> None:
@@ -501,29 +479,22 @@ def _assert_events(events: object, expected: list[dict], story: str, where: str)
     entries = events if isinstance(events, list) else []
     order = [entry.get("event_id") if isinstance(entry, dict) else entry for entry in entries]
     wanted = [entry["event_id"] for entry in expected]
-    assert isinstance(events, list) and order == wanted, f"{story}: {where} list the events {order} ({events!r}): expected {wanted}, each generated event a transaction links to once, ordered by (date, event id); no manual event, none without a link"
+    assert isinstance(events, list) and order == wanted, f"{story}: {where} list the events {order} ({events!r}): expected {wanted}, each event a transaction links to once, ordered by (date, event id); none without a link"
     for found, entry in zip(entries, expected, strict=True):
         assert found == entry, f"{story}: {where} give the event {entry['event_id']} as {found}: expected exactly {entry}: its date (ISO), its type, the linked transactions the caller can see on their brokers (sorted), the others counted, no other key (which could carry a hidden id)"
 
 
-def _assert_details(details: object, expected: dict, story: str, where: str) -> None:
-    """``details`` (the refusal's, or the 409's ``params``) is exactly ``expected``: the refused asset and its first
-    position in the request, and its events as ``_assert_events`` reads them; no other key, which could carry a hidden
-    id."""
-    found = details if isinstance(details, dict) else {}
-    assert sorted(found) == sorted(expected), f"{story}: {where} hold the keys {sorted(found)}: expected exactly {sorted(expected)}, another key could carry a hidden id: {details!r}"
-    item, wanted = (found["asset_id"], found["item_index"]), (expected["asset_id"], expected["item_index"])
-    assert item == wanted, f"{story}: {where} name the asset {item} as (asset_id, item_index): expected {wanted}, the refused asset and its first position in the request"
-    _assert_events(found["events"], expected["events"], story, where)
-
-
-def _assert_refused(error: AssetSourceError, expected: dict, story: str, *, events: int, transactions: int) -> None:
-    """The refusal is ``PROVIDER_REMOVAL_LINKED_TRANSACTIONS``, its details exactly ``expected``, its message exactly
-    ``_message(events, transactions)``."""
+def _assert_refused(error: AssetSourceError, expected: dict, story: str, *, splits: int, adjustments: int, ids: list[int]) -> None:
+    """The refusal is ``PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST``, its details exactly ``expected`` (the refused asset,
+    its first position, its SPLITs as the caller may see them), its message starting with the code and naming no id of the
+    case (``ids``): whoever reads it, it carries nothing the details filter. The totals (``splits`` SPLITs, ``adjustments``
+    adjustments) and the asset and position are not looked for as ids: they read as plain numbers."""
     assert error.error_code == CODE, f"{story} was refused with {error.error_code} ({error.message}), not {CODE}: {error.details}"
-    _assert_details(error.details, expected, story, "the refusal's details")
-    wanted = _message(events, transactions)
-    assert error.message == wanted, f"{story}: the refusal's message reads {error.message!r}: expected exactly {wanted!r}, the totals only, never an id, whoever asks (X-R62)"
+    _assert_split_details(error.details, expected, story, "the refusal's details")
+    assert isinstance(error.message, str) and error.message.startswith(f"{CODE}:"), f"{story}: the refusal's message reads {error.message!r}: expected it to start with {CODE}:"
+    numbers = {int(number) for number in _WHOLE_NUMBER.findall(error.message)}
+    named = sorted((set(ids) & numbers) - {splits, adjustments, expected["asset_id"], expected["item_index"]})
+    assert not named, f"{story}: the message {error.message!r} names the id(s) {named}: expected no id, a hidden adjustment's id would reach a user who cannot see its broker"
 
 
 async def _assert_nothing_written(owned: _Owned, before: _State, refused: _Refused, story: str) -> None:
@@ -532,8 +503,8 @@ async def _assert_nothing_written(owned: _Owned, before: _State, refused: _Refus
     fresh connection reads ``before`` too. Every column of every assignment, event, price and transaction of the unit's,
     ``updated_at`` included."""
     pending = {name: rows for name, rows in refused.pending.items() if rows}
-    assert not pending, f"{story} was refused with changes pending in its session: {pending} (X-R62: nothing of the request written, not even pending: a caller committing after the refusal would store it)"
-    assert refused.seen == before, f"{story} was refused after writing: its own session reads {_changes(before, refused.seen)} (X-R62: all or nothing, nothing of the request written, not even pending in its session)"
+    assert not pending, f"{story} was refused with changes pending in its session: {pending} (X-R69: nothing of the request written, not even pending: a caller committing after the refusal would store it)"
+    assert refused.seen == before, f"{story} was refused after writing: its own session reads {_changes(before, refused.seen)} (X-R69: all or nothing, nothing of the request written, not even pending in its session)"
     after = await _committed(owned)
     assert after == before, f"{story} was refused, yet the database changed: {_changes(before, after)}"
 
@@ -556,6 +527,30 @@ def _assert_removed(before: _State, after: _State, story: str, *, asset_ids: set
     gone_events = sorted(set(before.events) - set(events))
     assert (after.assignments, after.events) == (assignments, events), f"{story}: the assignments and events moved as {_changes(before, after)}: expected the assignments {sorted(gone)} gone with the events {gone_events} they generated, every other one as it was, as today"
     assert (after.prices, after.transactions) == (before.prices, before.transactions), f"{story}: the prices or transactions moved as {_changes(before, after)}: expected every one as it was, its link included, as today"
+
+
+def _assert_removed_and_disconnected(before: _State, after: _State, story: str, *, asset_ids: set[int], disconnected: set[int]) -> None:
+    """What the removal does when it goes through (X-R69): the assignments of ``asset_ids`` gone, with every event they
+    generated (the cascade); every other assignment and event (a manual one of those assets included) and every price as
+    it was; no transaction deleted; the ``disconnected`` ones (exactly those linked to a generated event that went) with
+    ``asset_event_id`` NULL and every other column as it was (``updated_at`` aside); every other transaction as it was, every
+    column, its link included."""
+    gone = {row_id for row_id, row in before.assignments.items() if row["asset_id"] in asset_ids}
+    assert gone, f"barrier: {story}: none of the assets {sorted(asset_ids)} holds an assignment before the removal: nothing to remove"
+    assignments = {row_id: row for row_id, row in before.assignments.items() if row_id not in gone}
+    events = {row_id: row for row_id, row in before.events.items() if row["provider_assignment_id"] not in gone}
+    gone_events = set(before.events) - set(events)
+    linked = {row_id for row_id, row in before.transactions.items() if row["asset_event_id"] in gone_events}
+    assert linked == disconnected, f"barrier: {story}: the transactions linked to the events {sorted(gone_events)} that go are {sorted(linked)}, the test expects {sorted(disconnected)}"
+    assert (after.assignments, after.events) == (assignments, events), f"{story}: the assignments and events moved as {_changes(before, after)}: expected the assignments {sorted(gone)} gone with the events {sorted(gone_events)} they generated, every other one as it was"
+    assert after.prices == before.prices, f"{story}: the prices moved as {_changes(before, after)}: expected every one as it was, a removal deletes none"
+    assert set(after.transactions) == set(before.transactions), f"{story}: the transactions moved as {_changes(before, after)}: expected every one kept, a removal deletes none"
+    for row_id, row in before.transactions.items():
+        found = after.transactions[row_id]
+        if row_id in disconnected:
+            assert _undated(found) == _unlinked(row), f"{story}: the transaction {row_id} reads {found}: expected the same row with asset_event_id NULL (was {row['asset_event_id']})"
+        else:
+            assert found == row, f"{story}: the transaction {row_id} moved from {row} to {found}: expected it untouched, its link included"
 
 
 # --------------------------------------------------------------------------- #
@@ -634,264 +629,325 @@ def _views(spread: _Spread) -> dict[str, list[dict]]:
     }
 
 
-# --------------------------------------------------------------------------- #
-# The cure's names, read where a test needs them
-# --------------------------------------------------------------------------- #
-
-
-def _event_links(name: str):
-    """The helper ``name`` of ``services/assets/event_links.py``: the test that needs it fails naming X-R62 until the
-    module and the name exist."""
-    try:
-        module = importlib.import_module(EVENT_LINKS)
-    except ModuleNotFoundError as exc:
-        if exc.name != EVENT_LINKS:
-            raise
-        pytest.fail(f"X-R62: the module {EVENT_LINKS} does not exist, so nothing gives {name}: the events a removal would delete with the transactions linked to them, as the caller may see them. {TODAY}")
-    helper = getattr(module, name, None)
-    if helper is None:
-        pytest.fail(f"X-R62: {EVENT_LINKS} has no {name}")
-    return helper
-
-
-def _without_the_check(monkeypatch: pytest.MonkeyPatch) -> list:
-    """X-R62's check, as ``provider_management`` names it (``events_with_linked_transactions``), patched to find no link
-    while one exists: the race of a link made between the check and the delete. The calls the patch receives, so the
-    test can tell the check was asked; until the name exists the test fails naming X-R62."""
-    if getattr(provider_management, CHECK, None) is None:
-        pytest.fail(f"X-R62: backend.app.services.assets.provider_management has no {CHECK}: the removal checks no link before its DELETE, so no link can be missed. {TODAY}")
-    calls: list = []
-
-    async def _no_link_found(*args, **kwargs) -> list:
-        calls.append((args, kwargs))
-        return []
-
-    monkeypatch.setattr(provider_management, CHECK, _no_link_found)
-    return calls
-
-
 # ─────────────────────────────────────────────────────────────────────────────
-# Reds: a removal refuses while a transaction links to an event of a removed assignment
+# Reds: removing a provider unlinks the transactions of the events that disappear; only a costless SPLIT refuses
 # ─────────────────────────────────────────────────────────────────────────────
+
+
+async def _price(asset_id: int, offset: int, close: str) -> int:
+    """A closing price of ``asset_id`` on day ``offset``, in EUR: its id."""
+    return await _add(PriceHistory(asset_id=asset_id, date=_day(offset), close=Decimal(close), currency="EUR", source_plugin_key="test"))
+
+
+@dataclass(frozen=True)
+class _SplitCase:
+    """A provider's SPLIT of 2 (day ``SPLIT_DAY``) of the asset of ``role``, with the transactions linked to it."""
+
+    role: str
+    asset_id: int
+    split_id: int
+    adjustments: list[int]
+
+
+async def _split_case(owned: _Owned, role: str, *, on_b: bool = False, cost: str | None = None) -> _SplitCase:
+    """On the asset of ``role`` (the market asset or the plan's): its provider's SPLIT of 2, an event of its assignment, with
+    an ADJUSTMENT +10 on broker B first when ``on_b``, then one on broker A, booked the next day, costless or with ``cost``
+    EUR a unit. Barrier: P-10's layer lists the costless adjustments, none when they have a cost."""
+    asset_id = owned.role_ids[role]
+    assignment_id = owned.market_assignment_id if role == "market" else owned.plan_assignment_id
+    split_id = await _event(asset_id, SPLIT_DAY, AssetEventType.SPLIT, "2", assignment_id=assignment_id, notes="2-for-1")
+    adjustments = []
+    if on_b:
+        adjustments.append(await _adjustment(asset_id, owned.broker_b_id, split_id, SPLIT_DAY + 1, cost=cost))
+    adjustments.append(await _adjustment(asset_id, owned.broker_a_id, split_id, SPLIT_DAY + 1, cost=cost))
+    kind = "without a cost" if cost is None else f"costing {cost} EUR a unit"
+    await _barrier_costless([split_id], {split_id: sorted(adjustments)} if cost is None else {}, f"the {role} provider's SPLIT with incoming adjustments {kind}")
+    await _barrier_who_sees_what(owned)
+    return _SplitCase(role=role, asset_id=asset_id, split_id=split_id, adjustments=sorted(adjustments))
 
 
 @pytest.mark.asyncio
-async def test_removing_a_provider_whose_dividend_a_transaction_links_to_is_refused_and_writes_nothing(owned):
-    """Red today (X-R62): the removal takes no ``current_user_id`` (TypeError). Called without one, as the route calls
-    it, its DELETE cascades to the market provider's DIVIDEND and fails on the RESTRICT of the DIVIDEND transaction
-    linked to it: an IntegrityError, which the route answers 500 with the SQL text.
+@pytest.mark.parametrize("via", ["service", "route"])
+async def test_removing_a_provider_unlinks_the_transactions_linked_to_its_dividend(owned, via):
+    """Red today (X-R69): the removal is refused with PROVIDER_REMOVAL_LINKED_TRANSACTIONS (409 through the route) while a
+    transaction links to an event of the assignment.
 
-    Contract: as user A, who holds an access to the transaction's broker, removing the market asset's provider is
-    refused with PROVIDER_REMOVAL_LINKED_TRANSACTIONS, its details exactly ``{"asset_id": the market asset, "item_index":
-    0, "events": [{event_id, date (day 20), type "DIVIDEND", transaction_ids [the dividend's], hidden_transactions_count
-    0}]}`` (the provider's PRICE_ADJUSTMENT, linked to nothing, not listed), its message exactly the totals: 1 event, 1
-    transaction. Nothing written: the assignment, both events and the link as they were, nothing pending in the refused
-    call's session, nothing committed.
+    Contract: the market provider's DIVIDEND (day 20) is linked to a DIVIDEND on broker A; beside it a PRICE_ADJUSTMENT
+    linked to nothing, a price of the market asset, and a manual DIVIDEND (day 35) linked to a DIVIDEND on broker A. Removing
+    the market asset's provider, through the service without a caller or the route as user A: answered as before (a
+    success, ``deleted_count`` 1, "Provider removed"); the assignment gone with its two events (the cascade); the DIVIDEND
+    transaction still there, its ``asset_event_id`` NULL, every other column as it was; the price kept; the manual event
+    and its transaction as they were, still linked.
     """
     case = await _dividend(owned)
     unlinked = await _event(owned.market_asset_id, UNLINKED_DAY, AssetEventType.PRICE_ADJUSTMENT, "-0.10", assignment_id=owned.market_assignment_id)
-    await _barrier_links(owned, {case.event_id: (owned.market_assignment_id, [case.tx_id]), unlinked: (owned.market_assignment_id, [])}, "the provider's DIVIDEND linked to a transaction on broker A, its PRICE_ADJUSTMENT to none")
-    await _barrier_who_sees_what(owned)
+    manual = await _event(owned.market_asset_id, MANUAL_DAY, AssetEventType.DIVIDEND, "0.45", notes="manual")
+    manual_on_a = await _income(owned.market_asset_id, owned.broker_a_id, TransactionType.DIVIDEND, MANUAL_DAY, "4.50", event_id=manual)
+    await _price(owned.market_asset_id, UNLINKED_DAY, "10")
+    await _barrier_links(owned, {case.event_id: (owned.market_assignment_id, [case.tx_id]), unlinked: (owned.market_assignment_id, []), manual: (None, [manual_on_a])}, "the provider's DIVIDEND linked to a transaction on broker A, its PRICE_ADJUSTMENT to none, a manual DIVIDEND linked")
+    await _barrier_foreign_keys()
     before = await _committed(owned)
-    story = f"user A removing the provider of the asset {owned.market_asset_id}, whose DIVIDEND {case.event_id} of {_day(DIVIDEND_DAY)} the transaction {case.tx_id} (broker A, theirs) links to, beside its PRICE_ADJUSTMENT {unlinked}, linked to nothing"
+    story = f"removing the provider of the asset {owned.market_asset_id} via the {via}, whose DIVIDEND {case.event_id} the transaction {case.tx_id} links to, beside a manual DIVIDEND {manual} linked to {manual_on_a}"
 
-    refused = await _refused_remove(owned, [owned.market_asset_id], before, story, current_user_id=owned.user_a_id)
+    answer = await _removed(owned, [owned.market_asset_id], story, via=via)
 
-    _assert_refused(refused.error, _details(owned.market_asset_id, 0, [_entry(case.event_id, DIVIDEND_DAY, AssetEventType.DIVIDEND, [case.tx_id], 0)]), story, events=1, transactions=1)
-    await _assert_nothing_written(owned, before, refused, story)
+    _assert_answered_as_today(answer, [owned.market_asset_id], story)
+    _assert_removed_and_disconnected(before, await _committed(owned), story, asset_ids={owned.market_asset_id}, disconnected={case.tx_id})
 
 
 @pytest.mark.asyncio
-async def test_removing_a_plan_whose_coupon_its_interest_links_to_is_refused_the_same_way(owned):
-    """Red today (X-R62), J's case: the removal takes no ``current_user_id`` (TypeError). Called without one, as the
-    route calls it, its DELETE cascades to the plan's coupon and fails on the RESTRICT of the INTEREST transaction the
-    coupon paid: an IntegrityError, which the route answers 500 with the SQL text.
+@pytest.mark.parametrize("via", ["service", "route"])
+async def test_removing_a_plan_unlinks_the_interest_its_coupon_paid(owned, via):
+    """Red today (X-R69), J's case: the removal is refused with PROVIDER_REMOVAL_LINKED_TRANSACTIONS (409 through the route)
+    while the INTEREST a coupon paid links to it.
 
-    Contract: as user A, removing the plan (scheduled_investment) of the plan's asset is refused the same way: details
-    exactly ``{"asset_id": the plan's asset, "item_index": 0, "events": [{event_id, date (day 28), type "INTEREST",
-    transaction_ids [the INTEREST], hidden_transactions_count 0}]}``, the message the totals (1 event, 1 transaction);
-    nothing written.
+    Contract: the plan's coupon (day 28, an INTEREST event of the plan's assignment) is linked to the INTEREST of 3.33 EUR
+    it paid on broker A. Removing the plan of the plan's asset, through the service or the route as user A: answered as
+    before; the assignment gone with its coupon; the INTEREST transaction kept, unlinked, every other column as it was.
     """
     coupon = await _coupon(owned)
     await _barrier_links(owned, {coupon.event_id: (owned.plan_assignment_id, [coupon.tx_id])}, "the plan's coupon linked to the INTEREST it paid on broker A")
-    await _barrier_who_sees_what(owned)
+    await _barrier_foreign_keys()
     before = await _committed(owned)
-    story = f"user A removing the plan of the asset {owned.plan_asset_id}, whose coupon {coupon.event_id} of {_day(COUPON_DAY)} the INTEREST {coupon.tx_id} (broker A, theirs) links to"
+    story = f"removing the plan of the asset {owned.plan_asset_id} via the {via}, whose coupon {coupon.event_id} the INTEREST {coupon.tx_id} links to"
 
-    refused = await _refused_remove(owned, [owned.plan_asset_id], before, story, current_user_id=owned.user_a_id)
+    answer = await _removed(owned, [owned.plan_asset_id], story, via=via)
 
-    _assert_refused(refused.error, _details(owned.plan_asset_id, 0, [_entry(coupon.event_id, COUPON_DAY, AssetEventType.INTEREST, [coupon.tx_id], 0)]), story, events=1, transactions=1)
-    await _assert_nothing_written(owned, before, refused, story)
+    _assert_answered_as_today(answer, [owned.plan_asset_id], story)
+    _assert_removed_and_disconnected(before, await _committed(owned), story, asset_ids={owned.plan_asset_id}, disconnected={coupon.tx_id})
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("cost", [pytest.param(None, id="costless"), pytest.param("12.5", id="with-a-cost")])
-async def test_removing_a_provider_whose_split_an_adjustment_links_to_is_refused_with_the_removals_code(owned, cost):
-    """Red today (X-R62): the removal takes no ``current_user_id`` (TypeError). Called without one, as the route calls
-    it, its DELETE cascades to the provider's SPLIT and fails on the RESTRICT of the ADJUSTMENT linked to it: an
-    IntegrityError, which the route answers 500 with the SQL text.
+@pytest.mark.parametrize("via", ["service", "route"])
+async def test_the_unlinking_reaches_every_transaction_of_every_event_whoever_owns_the_broker(owned, via):
+    """Red today (X-R69): the removal is refused while any transaction links to an event of the assignment.
 
-    Contract: the provider's SPLIT of 2 (day 20) linked to an ADJUSTMENT +10 on broker A, without a cost (X-R49's case
-    for a change: P-10's layer lists it) or with one (X-R49 lets a change through). Any linked transaction blocks a
-    removal: as user A both are refused with PROVIDER_REMOVAL_LINKED_TRANSACTIONS, never X-R49's code; details exactly
-    ``{"asset_id": the market asset, "item_index": 0, "events": [{event_id, date (day 20), type "SPLIT",
-    transaction_ids [the adjustment], hidden_transactions_count 0}]}``, the message the totals (1 event, 1 transaction);
-    nothing written.
+    Contract: the market provider's DIVIDEND (day 20) linked to a DIVIDEND on broker B, written first (user B's, which user A
+    cannot see), then on broker A; a second DIVIDEND (day 50) linked on broker B alone; a PRICE_ADJUSTMENT linked to
+    nothing. Removing the provider through the service without a caller or the route as user A: every one of the three
+    transactions is unlinked, visible to the caller or not (a removal's unlinking is not a view), nothing else moves.
     """
-    kind = "without a cost" if cost is None else f"of {cost} EUR a unit"
-    split_id = await _event(owned.market_asset_id, SPLIT_DAY, AssetEventType.SPLIT, "2", assignment_id=owned.market_assignment_id, notes="2-for-1")
-    adjustment_id = await _adjustment(owned.market_asset_id, owned.broker_a_id, split_id, SPLIT_DAY + 1, cost=cost)
-    await _barrier_links(owned, {split_id: (owned.market_assignment_id, [adjustment_id])}, f"the provider's SPLIT linked to an adjustment {kind} on broker A")
-    await _barrier_costless([split_id], {split_id: [adjustment_id]} if cost is None else {}, f"the provider's SPLIT linked to an adjustment {kind}")
+    first = await _event(owned.market_asset_id, DIVIDEND_DAY, AssetEventType.DIVIDEND, "0.50", assignment_id=owned.market_assignment_id)
+    on_b = await _income(owned.market_asset_id, owned.broker_b_id, TransactionType.DIVIDEND, DIVIDEND_DAY, "5.00", event_id=first)
+    on_a = await _income(owned.market_asset_id, owned.broker_a_id, TransactionType.DIVIDEND, DIVIDEND_DAY, "5.00", event_id=first)
+    second = await _event(owned.market_asset_id, LATE_DAY, AssetEventType.DIVIDEND, "0.60", assignment_id=owned.market_assignment_id)
+    second_on_b = await _income(owned.market_asset_id, owned.broker_b_id, TransactionType.DIVIDEND, LATE_DAY, "6.00", event_id=second)
+    other = await _event(owned.market_asset_id, UNLINKED_DAY, AssetEventType.PRICE_ADJUSTMENT, "-0.10", assignment_id=owned.market_assignment_id)
+    await _barrier_links(owned, {first: (owned.market_assignment_id, sorted([on_b, on_a])), second: (owned.market_assignment_id, [second_on_b]), other: (owned.market_assignment_id, [])}, "two DIVIDENDs linked on both brokers, a PRICE_ADJUSTMENT to none")
     await _barrier_who_sees_what(owned)
     before = await _committed(owned)
-    story = f"user A removing the provider of the asset {owned.market_asset_id}, whose SPLIT {split_id} of {_day(SPLIT_DAY)} the adjustment {adjustment_id} {kind} (broker A, theirs) links to (X-R49's {WIPE_CODE} refuses a change, never a removal)"
+    story = f"removing the provider of the asset {owned.market_asset_id} via the {via}, whose DIVIDENDs {first} and {second} the transactions {on_b} (broker B), {on_a} (broker A) and {second_on_b} (broker B) link to"
 
-    refused = await _refused_remove(owned, [owned.market_asset_id], before, story, current_user_id=owned.user_a_id)
+    answer = await _removed(owned, [owned.market_asset_id], story, via=via)
 
-    _assert_refused(refused.error, _details(owned.market_asset_id, 0, [_entry(split_id, SPLIT_DAY, AssetEventType.SPLIT, [adjustment_id], 0)]), story, events=1, transactions=1)
+    _assert_answered_as_today(answer, [owned.market_asset_id], story)
+    _assert_removed_and_disconnected(before, await _committed(owned), story, asset_ids={owned.market_asset_id}, disconnected={on_b, on_a, second_on_b})
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("role", ["market", "plan"])
+async def test_removing_a_provider_whose_split_has_costless_adjustments_is_refused_with_the_changes_code(owned, role):
+    """Red today (X-R69): the removal is refused with PROVIDER_REMOVAL_LINKED_TRANSACTIONS, the retired code.
+
+    Contract: the provider's SPLIT of 2 (day 20) linked to an ADJUSTMENT +10 on broker A without a purchase cost (the case
+    of P-10: without the SPLIT it would be an acquisition of unknown cost). As user A, removing the provider of the market
+    asset or of the plan's is refused with PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST, X-R49's code; details exactly
+    ``{"asset_id", "item_index": 0, "splits": [{event_id, date (day 20), transaction_ids [the adjustment],
+    hidden_transactions_count 0}]}``, the message starting with the code and naming no id. Nothing written, not even
+    pending in the refused call's session.
+    """
+    case = await _split_case(owned, role)
+    await _barrier_links(owned, {case.split_id: (owned.market_assignment_id if role == "market" else owned.plan_assignment_id, case.adjustments)}, f"the {role} provider's SPLIT linked to a costless adjustment on broker A")
+    before = await _committed(owned)
+    story = f"user A removing the provider of the asset {case.asset_id} ({role}), whose SPLIT {case.split_id} of {_day(SPLIT_DAY)} the costless adjustment(s) {case.adjustments} (broker A, theirs) link to"
+
+    refused = await _refused_remove(owned, [case.asset_id], before, story, current_user_id=owned.user_a_id)
+
+    _assert_refused(refused.error, _split_details(case.asset_id, 0, [_split_entry(case.split_id, SPLIT_DAY, case.adjustments, 0)]), story, splits=1, adjustments=1, ids=case.adjustments)
     await _assert_nothing_written(owned, before, refused, story)
 
 
 @pytest.mark.asyncio
-async def test_the_refusal_shows_each_caller_only_the_transactions_on_their_brokers_event_by_event_in_date_order(owned):
-    """Red today (X-R62): the removal takes no ``current_user_id`` (TypeError). Called without one, as the route calls
-    it, its DELETE fails on the first RESTRICT it meets: an IntegrityError, which the route answers 500 with the SQL
-    text, its parameters the asset ids.
+@pytest.mark.parametrize("via", ["service", "route"])
+async def test_removing_a_provider_whose_split_adjustments_have_a_cost_unlinks_them_instead_of_refusing(owned, via):
+    """Red today (X-R69): the removal is refused with PROVIDER_REMOVAL_LINKED_TRANSACTIONS.
+
+    Contract: the same SPLIT, its ADJUSTMENT +10 on broker A with a cost of 12.5 EUR a unit, beside a DIVIDEND linked on
+    broker A. The cost lifts X-R49's refusal: through the service or the route as user A the removal goes through, answered as
+    before; the SPLIT and the DIVIDEND gone with the assignment, the adjustment and the DIVIDEND transaction kept, unlinked,
+    every other column (the cost included) as it was.
+    """
+    case = await _split_case(owned, "market", cost="12.5")
+    dividend = await _dividend(owned)
+    await _barrier_links(owned, {case.split_id: (owned.market_assignment_id, case.adjustments), dividend.event_id: (owned.market_assignment_id, [dividend.tx_id])}, "the provider's SPLIT linked to an adjustment with a cost, its DIVIDEND to a transaction")
+    await _barrier_foreign_keys()
+    before = await _committed(owned)
+    story = f"removing the provider of the asset {owned.market_asset_id} via the {via}, whose SPLIT {case.split_id} the adjustment(s) {case.adjustments} with a cost link to"
+
+    answer = await _removed(owned, [owned.market_asset_id], story, via=via)
+
+    _assert_answered_as_today(answer, [owned.market_asset_id], story)
+    _assert_removed_and_disconnected(before, await _committed(owned), story, asset_ids={owned.market_asset_id}, disconnected={*case.adjustments, dividend.tx_id})
+
+
+@pytest.mark.asyncio
+async def test_the_refusal_shows_each_caller_only_the_costless_adjustments_on_their_brokers(owned):
+    """Red today (X-R69): the removal is refused with PROVIDER_REMOVAL_LINKED_TRANSACTIONS, naming events, not SPLITs.
 
     Contract (R13-SEC7's rule, as X-R48 and X-R49): the market provider's events spread over dates and brokers
-    (``_Spread``): a DIVIDEND of day 50 written first, linked on broker A; a SPLIT of day 20 linked to an adjustment on
-    broker B, written first, then to two on broker A (one costless, one with a cost); a DIVIDEND of day 20, written after
-    the SPLIT, linked on broker B; a PRICE_ADJUSTMENT linked to nothing; beside them a manual DIVIDEND of day 35 linked
-    on broker A. The refusal lists the assignment's three linked events by (date, id): the SPLIT, the DIVIDEND of day 20,
-    the DIVIDEND of day 50; never the PRICE_ADJUSTMENT, never the manual event. As user A each shows broker A's
-    transactions, sorted, and counts the others; as user B broker B's; without a caller (the default, fail closed) none
-    is named and all are counted. The message is the same for the three, the totals: 3 events, 5 transactions. None of
-    the three writes anything.
+    (``_Spread``): the SPLIT of day 20 linked to a costless adjustment on broker B, written first, then to a costless one and
+    one with a cost on broker A; two DIVIDENDs and a PRICE_ADJUSTMENT; beside them a manual SPLIT (day 35) linked to a
+    costless adjustment on broker A. The refusal names the provider's SPLIT alone (the DIVIDENDs are unlinked, the manual
+    SPLIT survives the removal, the adjustment with a cost is not a costless one): as user A its costless adjustment on
+    broker A and 1 hidden; as user B broker B's and 1 hidden; without a caller (the default, fail closed) none named and 2
+    hidden. The message starts with the code and names no id. None of the three writes anything.
     """
     spread = await _spread(owned)
-    manual = await _event(owned.market_asset_id, MANUAL_DAY, AssetEventType.DIVIDEND, "0.45", notes="manual")
-    manual_on_a = await _income(owned.market_asset_id, owned.broker_a_id, TransactionType.DIVIDEND, MANUAL_DAY, "4.50", event_id=manual)
-    await _barrier_links(owned, {**spread.links(owned.market_assignment_id), manual: (None, [manual_on_a])}, "the provider's events spread over dates and brokers, beside a manual DIVIDEND linked on broker A")
+    manual = await _event(owned.market_asset_id, MANUAL_DAY, AssetEventType.SPLIT, "3", notes="manual 3-for-1")
+    manual_on_a = await _adjustment(owned.market_asset_id, owned.broker_a_id, manual, MANUAL_DAY + 1)
+    costless = sorted([spread.split_on_b, spread.split_on_a[0]])
+    await _barrier_costless([spread.split, manual], {spread.split: costless, manual: [manual_on_a]}, "the provider's SPLIT and a manual SPLIT, both with costless adjustments")
     await _barrier_who_sees_what(owned)
     before = await _committed(owned)
-    views = _views(spread)
-    story = f"removing the provider of the asset {owned.market_asset_id}, whose SPLIT {spread.split} and DIVIDENDs {spread.early} and {spread.late} transactions on both brokers link to, beside its manual DIVIDEND {manual}"
+    views = {
+        "user A": ({"current_user_id": owned.user_a_id}, [_split_entry(spread.split, SPLIT_DAY, [spread.split_on_a[0]], 1)]),
+        "user B": ({"current_user_id": owned.user_b_id}, [_split_entry(spread.split, SPLIT_DAY, [spread.split_on_b], 1)]),
+        "no caller": ({}, [_split_entry(spread.split, SPLIT_DAY, [], 2)]),
+    }
+    story = f"removing the provider of the asset {owned.market_asset_id}, whose SPLIT {spread.split} the costless adjustments {costless} (brokers B and A) link to, beside a manual SPLIT {manual}"
 
-    for caller, keyword in (("user A", {"current_user_id": owned.user_a_id}), ("user B", {"current_user_id": owned.user_b_id}), ("no caller", {})):
+    for caller, (keyword, splits) in views.items():
         refused = await _refused_remove(owned, [owned.market_asset_id], before, f"{caller} {story}", **keyword)
-        _assert_refused(refused.error, _details(owned.market_asset_id, 0, views[caller]), f"{caller} {story}", events=3, transactions=5)
+        _assert_refused(refused.error, _split_details(owned.market_asset_id, 0, splits), f"{caller} {story}", splits=1, adjustments=2, ids=[*costless, manual_on_a, *spread.split_on_a])
         await _assert_nothing_written(owned, before, refused, f"{caller} {story}")
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(("roles", "item_index"), [pytest.param(("market", "plan"), 1, id="removable-then-blocked"), pytest.param(("plan", "plan"), 0, id="blocked-twice"), pytest.param(("bare", "plan"), 1, id="unassigned-then-blocked")])
 async def test_a_blocked_asset_refuses_the_whole_request_at_its_first_position(owned, roles, item_index):
-    """Red today (X-R62): the removal takes no ``current_user_id`` (TypeError). Called without one, as the route calls
-    it, the DELETE of every assignment of the request fails on the plan's coupon: an IntegrityError, which the route
-    answers 500 with the SQL text.
+    """Red today (X-R69): the request is refused with the retired code, naming a coupon-like event.
 
-    Contract: all or nothing. The plan's coupon, linked to its INTEREST on broker A, blocks the plan's asset; the market
-    asset's provider, whose DIVIDEND no transaction links to, could go; the bare asset has no assignment. As user A: the
-    market asset then the plan's, refused at ``item_index`` 1, the market asset's assignment and its DIVIDEND not
-    removed either; the plan's twice, refused at 0, its first position; the bare asset then the plan's, refused at 1 (the
-    bare asset skipped, still counted). Each refusal's details exactly ``{"asset_id": the plan's asset, "item_index",
-    "events": [the coupon, transaction_ids [its INTEREST], 0 hidden]}``, the message the totals (1 event, 1
-    transaction); nothing of the request written, in the refused call's session neither.
+    Contract: all or nothing. The plan's SPLIT, linked to a costless adjustment on broker A, blocks the plan's asset; the
+    market asset's provider, whose DIVIDEND a transaction links to (it would be unlinked), could go; the bare asset has no
+    assignment. As user A: the market asset then the plan's, refused at ``item_index`` 1, the market asset's assignment
+    removed neither, its DIVIDEND transaction still linked; the plan's twice, refused at 0, its first position; the bare asset
+    then the plan's, refused at 1 (the bare asset skipped, still counted). Each refusal's details exactly ``{"asset_id": the
+    plan's asset, "item_index", "splits": [the SPLIT, [its adjustment], 0 hidden]}``; nothing of the request written, in the
+    refused call's session neither: the unlinking is part of what is not written.
     """
-    coupon = await _coupon(owned)
-    dividend = await _event(owned.market_asset_id, DIVIDEND_DAY, AssetEventType.DIVIDEND, "0.50", assignment_id=owned.market_assignment_id)
-    await _barrier_links(owned, {coupon.event_id: (owned.plan_assignment_id, [coupon.tx_id]), dividend: (owned.market_assignment_id, [])}, "the plan's coupon linked to its INTEREST on broker A, the market provider's DIVIDEND to nothing")
+    plan = await _split_case(owned, "plan")
+    dividend = await _dividend(owned)
+    await _barrier_links(owned, {plan.split_id: (owned.plan_assignment_id, plan.adjustments), dividend.event_id: (owned.market_assignment_id, [dividend.tx_id])}, "the plan's SPLIT linked to a costless adjustment on broker A, the market provider's DIVIDEND to a transaction")
     before = await _committed(owned)
     _barrier_unassigned(before, owned.bare_asset_id, "the bare asset")
     asset_ids = [owned.role_ids[role] for role in roles]
-    story = f"user A removing the providers of the assets {asset_ids} ({', '.join(roles)}), the plan's coupon {coupon.event_id} linked to the INTEREST {coupon.tx_id}, the market provider's DIVIDEND {dividend} to nothing"
+    story = f"user A removing the providers of the assets {asset_ids} ({', '.join(roles)}), the plan's SPLIT {plan.split_id} linked to the costless adjustment(s) {plan.adjustments}, the market provider's DIVIDEND {dividend.event_id} to {dividend.tx_id}"
 
     refused = await _refused_remove(owned, asset_ids, before, story, current_user_id=owned.user_a_id)
 
-    _assert_refused(refused.error, _details(owned.plan_asset_id, item_index, [_entry(coupon.event_id, COUPON_DAY, AssetEventType.INTEREST, [coupon.tx_id], 0)]), story, events=1, transactions=1)
+    _assert_refused(refused.error, _split_details(owned.plan_asset_id, item_index, [_split_entry(plan.split_id, SPLIT_DAY, plan.adjustments, 0)]), story, splits=1, adjustments=1, ids=[*plan.adjustments, dividend.tx_id])
     await _assert_nothing_written(owned, before, refused, story)
 
 
 @pytest.mark.asyncio
-async def test_the_removal_endpoint_answers_409_with_the_callers_view_and_writes_nothing(owned):
-    """Red today (X-R62): 500, its detail the SQL text: ``(sqlite3.IntegrityError) FOREIGN KEY constraint failed``, the
-    DELETE and its parameters.
+async def test_the_removal_endpoint_answers_409_with_the_changes_code_and_the_callers_view_and_writes_nothing(owned):
+    """Red today (X-R69): 409, but ``error_code`` PROVIDER_REMOVAL_LINKED_TRANSACTIONS and ``params.events``; and for a SPLIT
+    only, the code the route now answers does not exist for a removal: 500.
 
-    Contract: ``DELETE /assets/provider?asset_ids=`` the market asset, as user A (in process), its provider's DIVIDEND
-    (day 20) linked to a DIVIDEND on broker B, written first (user B's), and to one on broker A: 409, ``detail`` exactly
-    {``error_code`` PROVIDER_REMOVAL_LINKED_TRANSACTIONS, ``message`` (the totals: 1 event, 2 transactions), ``params``
-    {"asset_id": the market asset, "item_index": 0, "events": [{event_id, date, type "DIVIDEND", transaction_ids [broker
-    A's], hidden_transactions_count 1}]}}, user A's view: the route passes its caller. No SQL anywhere in the body;
-    nothing written.
+    Contract: ``DELETE /assets/provider?asset_ids=`` the market asset, as user A (in process), its provider's SPLIT (day
+    20) linked to a costless adjustment on broker B, written first (user B's), and to one on broker A: 409, ``detail`` exactly
+    {``error_code`` PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST, ``message`` (starting with the code, no id), ``params``
+    {"asset_id", "item_index": 0, "splits": [{event_id, date, transaction_ids [broker A's], hidden_transactions_count
+    1}]}}, user A's view: the route passes its caller. No SQL anywhere in the body; nothing written.
     """
-    dividend = await _event(owned.market_asset_id, DIVIDEND_DAY, AssetEventType.DIVIDEND, "0.50", assignment_id=owned.market_assignment_id)
-    on_b = await _income(owned.market_asset_id, owned.broker_b_id, TransactionType.DIVIDEND, DIVIDEND_DAY, "5.00", event_id=dividend)
-    on_a = await _income(owned.market_asset_id, owned.broker_a_id, TransactionType.DIVIDEND, DIVIDEND_DAY, "5.00", event_id=dividend)
-    await _barrier_links(owned, {dividend: (owned.market_assignment_id, sorted([on_b, on_a]))}, "the provider's DIVIDEND linked on broker B, then on broker A")
-    await _barrier_who_sees_what(owned)
+    case = await _split_case(owned, "market", on_b=True)
+    on_b, on_a = case.adjustments[0], case.adjustments[-1]
     before = await _committed(owned)
-    story = f"DELETE /assets/provider as user A, the asset {owned.market_asset_id}, whose DIVIDEND {dividend} of {_day(DIVIDEND_DAY)} the transactions {on_b} (broker B, user B's) and {on_a} (broker A, theirs) link to"
+    story = f"DELETE /assets/provider as user A, the asset {owned.market_asset_id}, whose SPLIT {case.split_id} of {_day(SPLIT_DAY)} the costless adjustments {on_b} (broker B, user B's) and {on_a} (broker A, theirs) link to"
 
     response = await _route(owned.user_a_id, [owned.market_asset_id])
 
     if response.status_code == 200:
         pytest.fail(f"{story} answered 200 {response.text} and removed: {_changes(before, await _committed(owned))}: expected 409 {CODE}")
-    params = _assert_answered_409(response, story, code=CODE, message=_message(1, 2))
-    _assert_details(params, _details(owned.market_asset_id, 0, [_entry(dividend, DIVIDEND_DAY, AssetEventType.DIVIDEND, [on_a], 1)]), story, "the 409's params")
+    message, params = _assert_answered_409(response, story, code=CODE)
+    assert message.startswith(f"{CODE}:"), f"{story}: the 409's message reads {message!r}: expected it to start with {CODE}:"
+    _assert_split_details(params, _split_details(owned.market_asset_id, 0, [_split_entry(case.split_id, SPLIT_DAY, [on_a], 1)]), story, "the 409's params")
     after = await _committed(owned)
     assert after == before, f"{story} was refused, yet the database changed: {_changes(before, after)}"
 
 
-@pytest.mark.asyncio
-async def test_a_link_the_check_missed_is_a_conflict_rolled_back_and_nothing_is_removed(owned, monkeypatch):
-    """Red today (X-R62): there is no check to miss (``provider_management`` has no ``events_with_linked_transactions``):
-    the DELETE meets the link and fails with an IntegrityError, which the route answers 500 with the SQL text.
+@contextmanager
+def _link_made_before_the_delete(event_id: int, tx_id: int) -> Iterator[list[str]]:
+    """The race of a link made after the removal disconnected its transactions and before it deletes: a listener on the
+    lane's engine (``before_cursor_execute``) that, at the first DELETE of an assignment or of an event, sets the
+    transaction ``tx_id``'s ``asset_event_id`` back to ``event_id`` on the same connection and in the same transaction, as a
+    concurrent import would have. The RESTRICT of ``transactions.asset_event_id`` then stops the DELETE, whatever order the
+    removal deletes in. Yields the statements the listener fired on (empty when the removal never deleted); the listener is
+    removed on exit."""
+    fired: list[str] = []
 
-    Contract: the check patched to find no link while the provider's DIVIDEND is linked to a DIVIDEND on broker A, as a
-    link made between the check and the delete would be. As user A the DELETE still raises an IntegrityError: the
-    removal rolls its session back, then refuses with PROVIDER_REMOVAL_CONFLICT, ``details`` ``{}``, its message exactly
-    ``CONFLICT_MESSAGE``. Nothing removed: the assignment, its event and the link as they were; the refused call's
-    session out of its transaction, nothing pending there; nothing committed.
+    def relink(connection, cursor, statement, parameters, context, executemany):  # noqa: ARG001 — the signature SQLAlchemy calls
+        if fired or not statement.lstrip().upper().startswith(("DELETE FROM ASSET_PROVIDER_ASSIGNMENTS", "DELETE FROM ASSET_EVENTS")):
+            return
+        fired.append(statement)
+        connection.exec_driver_sql("UPDATE transactions SET asset_event_id = ? WHERE id = ?", (event_id, tx_id))
+
+    engine = get_async_engine().sync_engine
+    event.listen(engine, "before_cursor_execute", relink)
+    try:
+        yield fired
+    finally:
+        event.remove(engine, "before_cursor_execute", relink)
+
+
+@pytest.mark.asyncio
+async def test_a_link_made_after_the_unlinking_is_a_conflict_rolled_back_and_nothing_is_removed(owned):
+    """Red today (X-R69): the removal refuses first with PROVIDER_REMOVAL_LINKED_TRANSACTIONS, so the DELETE is never reached.
+
+    Contract: the provider's DIVIDEND is linked to a DIVIDEND on broker A; a listener sets that link back just before the
+    removal's first DELETE (``_link_made_before_the_delete``). As user A the DELETE raises an IntegrityError: the removal rolls
+    its session back, then refuses with PROVIDER_REMOVAL_CONFLICT, ``details`` ``{}``, its message exactly ``CONFLICT_MESSAGE``.
+    Nothing removed, and the unlinking rolled back with it: the assignment, its event and the link as they were; the refused
+    call's session out of its transaction, nothing pending there; nothing committed.
     """
-    calls = _without_the_check(monkeypatch)
     case = await _dividend(owned)
     await _barrier_links(owned, {case.event_id: (owned.market_assignment_id, [case.tx_id])}, "the provider's DIVIDEND linked to a transaction on broker A")
     await _barrier_foreign_keys()
     before = await _committed(owned)
-    story = f"user A removing the provider of the asset {owned.market_asset_id}, the check finding no link while its DIVIDEND {case.event_id} is linked to the transaction {case.tx_id}"
+    story = f"user A removing the provider of the asset {owned.market_asset_id}, the transaction {case.tx_id} linked back to its DIVIDEND {case.event_id} just before the DELETE"
 
-    refused = await _refused_remove(owned, [owned.market_asset_id], before, story, code=CONFLICT, current_user_id=owned.user_a_id)
+    with _link_made_before_the_delete(case.event_id, case.tx_id) as fired:
+        refused = await _refused_remove(owned, [owned.market_asset_id], before, story, code=CONFLICT, current_user_id=owned.user_a_id)
 
-    assert calls, f"{story}: the removal never called provider_management.{CHECK}, so the patch could not stand for a missed link"
+    assert fired, f"{story}: the removal never reached a DELETE of an assignment or of an event, so the race never happened"
     assert (refused.error.error_code, refused.error.details) == (CONFLICT, {}), f"{story} was refused with {refused.error.error_code} {refused.error.details} ({refused.error.message}): expected {CONFLICT} and no details"
     assert refused.error.message == CONFLICT_MESSAGE, f"{story}: the conflict's message reads {refused.error.message!r}: expected exactly {CONFLICT_MESSAGE!r}, never the SQL text"
-    assert not refused.in_transaction, f"{story} was refused with its session still in a transaction, the failed DELETE's: X-R62 rolls the session back, then refuses"
+    assert not refused.in_transaction, f"{story} was refused with its session still in a transaction, the failed DELETE's: the removal rolls the session back, then refuses"
     await _assert_nothing_written(owned, before, refused, story)
 
 
 @pytest.mark.asyncio
-async def test_the_removal_endpoint_answers_a_missed_link_409_without_the_sql_text(owned, monkeypatch):
-    """Red today (X-R62): there is no check to miss; the route answers the IntegrityError 500 with the SQL text.
+async def test_the_removal_endpoint_answers_a_late_link_409_without_the_sql_text(owned):
+    """Red today (X-R69): the route answers 409 PROVIDER_REMOVAL_LINKED_TRANSACTIONS from the check before the DELETE.
 
-    Contract: the check patched to find no link while the provider's DIVIDEND is linked to a DIVIDEND on broker A:
-    ``DELETE /assets/provider`` as user A (in process) answers 409, ``detail`` exactly {``error_code``
-    PROVIDER_REMOVAL_CONFLICT, ``message`` ``CONFLICT_MESSAGE``, ``params`` {}}; no SQL anywhere in the body; nothing
-    removed.
+    Contract: the same race (``_link_made_before_the_delete``): ``DELETE /assets/provider`` as user A (in process) answers 409,
+    ``detail`` exactly {``error_code`` PROVIDER_REMOVAL_CONFLICT, ``message`` ``CONFLICT_MESSAGE``, ``params`` {}}; no SQL anywhere
+    in the body; nothing removed.
     """
-    calls = _without_the_check(monkeypatch)
     case = await _dividend(owned)
     await _barrier_links(owned, {case.event_id: (owned.market_assignment_id, [case.tx_id])}, "the provider's DIVIDEND linked to a transaction on broker A")
     await _barrier_foreign_keys()
     before = await _committed(owned)
-    story = f"DELETE /assets/provider as user A, the asset {owned.market_asset_id}, the check finding no link while its DIVIDEND {case.event_id} is linked to the transaction {case.tx_id}"
+    story = f"DELETE /assets/provider as user A, the asset {owned.market_asset_id}, the transaction {case.tx_id} linked back to its DIVIDEND {case.event_id} just before the DELETE"
 
-    response = await _route(owned.user_a_id, [owned.market_asset_id])
+    with _link_made_before_the_delete(case.event_id, case.tx_id) as fired:
+        response = await _route(owned.user_a_id, [owned.market_asset_id])
 
-    assert calls, f"{story}: the removal never called provider_management.{CHECK}, so the patch could not stand for a missed link"
+    assert fired, f"{story}: the removal never reached a DELETE of an assignment or of an event, so the race never happened"
     if response.status_code == 200:
         pytest.fail(f"{story} answered 200 {response.text} and removed: {_changes(before, await _committed(owned))}: expected 409 {CONFLICT}")
-    params = _assert_answered_409(response, story, code=CONFLICT, message=CONFLICT_MESSAGE)
+    message, params = _assert_answered_409(response, story, code=CONFLICT)
+    assert message == CONFLICT_MESSAGE, f"{story}: the 409's message reads {message!r}: expected exactly {CONFLICT_MESSAGE!r}"
     assert params == {}, f"{story}: the 409's params are {params!r}: expected {{}}, a conflict names nothing"
     after = await _committed(owned)
     assert after == before, f"{story} was refused, yet the database changed: {_changes(before, after)}"
@@ -899,13 +955,12 @@ async def test_the_removal_endpoint_answers_a_missed_link_409_without_the_sql_te
 
 @pytest.mark.asyncio
 async def test_visible_transaction_ids_keeps_only_the_transactions_on_the_callers_brokers(owned):
-    """Red today (X-R62): ``services/assets/event_links.py`` does not exist.
+    """Guard: green before and after (the dry run reuses it).
 
     Contract: ``visible_transaction_ids(session, transaction_ids, current_user_id)``, of a DIVIDEND on broker B, written
     first, and one on broker A: user A keeps {broker A's}, user B {broker B's}; without a caller, or without an id, an
     empty set; user A given broker B's alone, an empty set. It writes nothing.
     """
-    visible_transaction_ids = _event_links("visible_transaction_ids")
     on_b = await _income(owned.market_asset_id, owned.broker_b_id, TransactionType.DIVIDEND, DIVIDEND_DAY, "5.00")
     on_a = await _income(owned.market_asset_id, owned.broker_a_id, TransactionType.DIVIDEND, DIVIDEND_DAY, "5.00")
     await _barrier_who_sees_what(owned)
@@ -928,7 +983,7 @@ async def test_visible_transaction_ids_keeps_only_the_transactions_on_the_caller
 
 @pytest.mark.asyncio
 async def test_events_with_linked_transactions_lists_the_linked_events_in_date_order_as_each_caller_sees_them(owned):
-    """Red today (X-R62): ``services/assets/event_links.py`` does not exist.
+    """Guard: green before and after (the dry run reuses it).
 
     Contract: ``events_with_linked_transactions(session, events, current_user_id)``, ``events`` given as ``(event_id,
     date, type)`` and out of order: the market provider's events spread over dates and brokers (``_Spread``). The linked
@@ -937,7 +992,6 @@ async def test_events_with_linked_transactions_lists_the_linked_events_in_date_o
     each their view. The PRICE_ADJUSTMENT, linked to nothing, never: alone it gives ``[]``, as no event does. It writes
     nothing.
     """
-    events_with_linked_transactions = _event_links(CHECK)
     spread = await _spread(owned)
     await _barrier_links(owned, spread.links(owned.market_assignment_id), "the provider's events spread over dates and brokers")
     await _barrier_who_sees_what(owned)

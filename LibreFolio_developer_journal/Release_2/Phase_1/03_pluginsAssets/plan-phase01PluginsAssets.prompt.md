@@ -9102,3 +9102,45 @@ revisioni) aspettano i loro segnali (Y5-1 committato; il via del coordinatore).
    > saved, current, plugin.settings_fields)`; (3) un test end-to-end: parse col predefinito, l'utente cambia il valore → stantio;
    > nuovo parse → non stantio.
    > **⚠️ Fuori pista**: il punto dell'impronta, che nel kickoff era «una domanda», è risolto dal coordinatore nel contratto.
+
+### X5-1 · C-65a + W-B2 + X-R69 — il dry-run e la modale unica (23/10, base `38150d30e`)
+
+> Decisione del developer (22-23/10): «togli» e «cambia» seguono la stessa regola: un dry-run dice che cosa si perde, la
+> modale lo mostra con i conteggi, e se confermi si **scollegano** le transazioni. Il rifiuto duro resta solo per gli SPLIT
+> con rettifiche senza costo (X-R49). Nello stesso lotto, per MF-SPL1 (opzione C): la nota «Known limitation: splits» nei
+> documenti di Yahoo e la correzione della frase di X5-2 sul Sync completo.
+
+1. ✅ 23/10 · Analisi del codice: la modifica dei parametri di un piano parametrico e l'uscita da esso cancellavano i prezzi e
+   gli eventi del fornitore scollegando le transazioni **con una riga di log**; «togli» rifiutava appena un evento
+   generato aveva una transazione collegata (X-R62, `PROVIDER_REMOVAL_LINKED_TRANSACTIONS`); una modifica fra fornitori di
+   mercato non cancella nulla. Un solo riepilogo esisteva, quello della valuta (`market_data_summary`).
+2. ✅ 23/10 · I rossi backend (`test-author`): `test_provider_removal_link_guard.py` riscritto (26 test, 17 rossi, 9 guardie),
+   `test_provider_change_impact.py` nuovo (32 test, tutti rossi), `test_routes_generic_500.py` (1 rosso). Il test-author li ha
+   provati anche contro un prototipo fuori dal repo (verdi): rossi per il motivo giusto (`X-x51-*.log`).
+3. ✅ 23/10 · La cura backend. `schemas/provider.py`: `FAProviderImpactRequest/Response/Result/Split`.
+   `provider_management.py`: `provider_change_impact` (conta prezzi, eventi dell'assegnazione e transazioni collegate, **totale
+   anche delle non visibili e mai nominate**; `blocking_splits` come il rifiuto X-R49), `_reject_removals_of_costless_splits`
+   al posto di `_reject_removals_of_linked_events`, e «togli» scollega (`asset_event_id` a NULL) prima di cancellare. Rotta
+   `POST /api/v1/assets/provider/impact`; la 409 della rimozione ora è `PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST`.
+   Verdi: 26 + 32 + 34 (generic 500) + 12 (wipe guard). `ruff`/`black` puliti.
+   > **Note implementazione**: ogni elemento del dry-run è misurato sullo stato salvato, senza sequenza (un asset che compare
+   > in assegnazione e in rimozione ha i conteggi suoi in entrambi); il motivo di un asset nominato due volte fra le
+   > assegnazioni segue l'elemento precedente, come il ciclo di scrittura.
+4. ✅ 23/10 · I rossi frontend (`test-author`): `providerImpact.test.ts` (nuovo), `AssetModal.providerLifecycle.test.ts` riscritto
+   (69 test, 24 rossi), `currencyChangeErrors.test.ts` (8 rossi), `AssetModal.test.ts` (2 guardie), E2E in `asset-modal.spec.ts`.
+5. ✅ 23/10 · La cura frontend. `providerImpact.ts` nuovo (`loadProviderImpact` mai bloccante: nessun lutto, blocco o errore
+   → nessuna modale; `impactValues`; `IMPACT_DIALOG`); `AssetModal.svelte`: **una** `ConfirmModal` al posto delle due (rigenera e
+   «scarta la serie»), con i testId di prima più `asset-provider-remove-confirm`; il riepilogo `market_data_summary` non si usa
+   più qui. `currencyChangeErrors.ts` perde il ramo della vecchia rimozione. i18n: 13 chiavi `assets.modal.providerImpact.*`
+   in 4 lingue, 7 chiavi vecchie tolte, la frase del rifiuto per gli split ora vale anche per «togli» (con il ramo `many` del
+   francese). Vocabolario per N68: «punti prezzo», «eventi generati dal provider», «perdono il collegamento a un evento cancellato».
+   > **⚠️ Fuori pista**: due bug nei test del test-author, corretti: la lista delle cifre attese per una rimozione (non cancella
+   > prezzi) e il registro delle chiamate dopo un primo passaggio. Il `front check` ha trovato un errore di tipo su una riga
+   > vecchia di `AssetModal.test.ts` (il tipo generato di `provider_params` con il lock nuovo): un cast.
+6. ✅ 23/10 · Doc (`docs-writer`, EN): `developer/backend/assets/{events,architecture}.md`, `transactions/wac.md`,
+   `user/assets/create-edit.en.md` (sezione «Changing or removing the provider»). Debito di traduzione: `create-edit.{it,fr,es}`.
+7. ✅ 23/10 · Nota sugli split (MF-SPL1, opzione C): `yahoo-finance.en.md` («Known limitation: splits», con l'esempio AAPL 4:1) e una
+   voce per sviluppatori in `provider_yahoo_finance.md`; la frase sul Sync completo dice che non cambia questo limite.
+8. ✅ 23/10 · Prove: `front check` **0 errori, 0 avvisi**; `component-unit` e `core-unit` verdi; Vitest dei file toccati (219
+   test su `providerImpact`, `currencyChangeErrors`, `AssetModal.providerLifecycle`); `i18n audit`: 0 chiavi mancanti o
+   inutilizzate. **E2E non lanciati** (`front-asset asset-modal`, `asset-detail`): aspettano lo slot.
