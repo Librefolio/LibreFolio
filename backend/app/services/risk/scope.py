@@ -32,13 +32,14 @@ from backend.app.schemas.risk import (
     RiskQueryRequest,
     RiskWarning,
 )
-from backend.app.services.assets.manager import AssetSourceManager
+from backend.app.services.assets import price_query
+from backend.app.services.assets.price_query import PriceQueryOperations
 from backend.app.services.financial_math.weights import share_of
-from backend.app.services.market_series import prepare_asset_series_set
+from backend.app.services.market_series import prepare_asset_series_set, prepare_asset_series_set_from_readings
 from backend.app.services.portfolio_service import PortfolioService
 from backend.app.services.risk.base import RiskAssetClassification, resource_limit_error
 from backend.app.services.risk.scenario_catalog import get_loaded_risk_scenario_catalog
-from backend.app.utils.date_range_limits import BulkTooManyDaysError, range_span_floor
+from backend.app.utils.date_range_limits import range_span_floor
 from backend.app.utils.datetime_utils import latest_range_end
 
 logger = get_logger(__name__)
@@ -354,32 +355,30 @@ async def prepare_asset_series(
     load_start = date_range.start
     if load_start > date.min:
         load_start -= timedelta(days=1)
-    try:
-        price_results = await AssetSourceManager.get_prices_bulk(
-            [
-                FAPriceQueryItem(
-                    asset_id=asset_id,
-                    date_range=DateRangeModel(
-                        start=load_start,
-                        end=date_end,
-                    ),
-                    target_currency=target_currency,
-                )
-                for asset_id in asset_ids
-            ],
+    # R1: the series are read by observation (``ObservedPrices``), and the preparation builds points only on the days it uses.
+    # The per-day budget (J-50) is the one the price query keeps, counted as it counted: one point a day from the first one.
+    readings = []
+    item_days = 0
+    for asset_id in asset_ids:
+        reading = await PriceQueryOperations.observed_prices(
+            FAPriceQueryItem(asset_id=asset_id, date_range=DateRangeModel(start=load_start, end=date_end), target_currency=target_currency),
             db,
         )
-    except BulkTooManyDaysError as exc:
-        # J-50: the prices of these assets over this period are more per-day points than one request may build (Z-25):
-        # a size limit, refused as every other one is (D379), with the settings that bring it back within reach.
-        raise resource_limit_error(
-            f"The prices of {len(asset_ids)} asset(s) over this period would build {exc.item_days} per-day points, more than {exc.max_item_days}",
-            metric="price_item_days",
-            actual=exc.item_days,
-            limit=exc.max_item_days,
-        ) from exc
-    return prepare_asset_series_set(
-        price_results,
+        if reading.first_point_date is not None:
+            item_days += (date_end - reading.first_point_date).days + 1
+        if item_days > price_query.MAX_BULK_ITEM_DAYS:
+            # J-50: these assets over this period are more per-day points than one request may build (Z-25): a size limit, refused
+            # as every other one is (D379), with the settings that bring it back within reach. Counted up to the asset that
+            # crossed the budget: the later ones are not read.
+            raise resource_limit_error(
+                f"The prices of {len(asset_ids)} asset(s) over this period would build {item_days} per-day points, more than {price_query.MAX_BULK_ITEM_DAYS}",
+                metric="price_item_days",
+                actual=item_days,
+                limit=price_query.MAX_BULK_ITEM_DAYS,
+            )
+        readings.append(reading)
+    return prepare_asset_series_set_from_readings(
+        readings,
         requested_range=date_range,
         target_currency=target_currency,
         market_holidays=market_holidays,
