@@ -31,6 +31,16 @@ the tests pin exit codes, what is on disk, and the stable codes on a ❌ line (`
     1 and a ❌ line.
     After every one of (b), (c), (d): no temporary ``.lfbk`` (nor partial, nor clear zip) left anywhere under the
     test's folder — the data directory, the inputs, the system's temporary folder (moved there).
+(e) SEC-5 of the security review of H-62 (finding 11; interface ``B-sec345-interface.md``). ``inspect``, ``decrypt``,
+    ``restore --dry-run`` of the vectors' good tar with an identity file its group or others may read (0644, 0640):
+    one line starting with ``⚠️`` names the file and its mode in octal (``0644``) and suggests ``chmod 600``; the
+    command goes on (its ``🔏`` line; ``decrypt`` exits 0 and writes the vector's zip). A 0600 file: no such line.
+    ``keygen``: the key is written to a temporary file in F's folder (0600), through ``os.write``, ``fsync``ed while F
+    does not exist yet, then linked or renamed to F; a write or an ``fsync`` that fails (``os.write``, ``os.fsync``
+    replaced for the files of F's folder alone): exit 1, a ❌ line, F does not exist, nothing left in the folder, the key
+    on no stream; an F that appears while the key is written is never replaced: exit 1, F as it was, nothing beside it.
+    An F there before: (a), unchanged. Written RED: no warning is printed, and ``keygen`` writes F itself through a file
+    object, neither through ``os.write`` nor with an ``fsync``.
 
 Pure, as ``test_backup_cli_secure.py``, whose fixtures and helpers are imported: data directories under ``tmp_path`` seen
 through ``LIBREFOLIO_DATA_DIR`` (production mode, checked); the commands run in this process through the parser
@@ -43,6 +53,7 @@ real database at the head made once for the module by ``alembic upgrade``. POSIX
 
 from __future__ import annotations
 
+import errno
 import json
 import os
 import re
@@ -50,6 +61,7 @@ import shutil
 import stat
 import tarfile
 from pathlib import Path
+from typing import Any
 
 import pyrage
 import pytest
@@ -429,3 +441,168 @@ def test_an_identity_file_given_with_a_zip_is_refused(tmp_path, monkeypatch, cap
     ran = run(capsys, *reader_argv(command, clear, out, "--identity-file", str(key)))
     assert ran.code == 1 and ran.refused, f"{command} of a zip with --identity-file: exit 1 and a ❌ line, not {ran.code}: {ran.text[-cli.TAIL:]}"
     assert list(out.parent.iterdir()) == [], f"nothing at -o: {sorted(entry.name for entry in out.parent.iterdir())}"
+
+
+# =============================================================================
+# (e) SEC-5: the key file on the command line
+# =============================================================================
+
+#: (e) The modes of a key file its group or others may read, and the one only its owner reads.
+LOOSE_MODES = [pytest.param(0o644, id="0644"), pytest.param(0o640, id="0640")]
+#: (e) The line every reader prints once the password is opened: the command went on.
+OPENED = "🔏 Sealed backup "
+
+
+def loose_key_warnings(ran: Ran, key: Path) -> list[str]:
+    """The ``⚠️`` lines naming ``key``."""
+    return [line for line in ran.text.splitlines() if line.startswith("⚠️") and str(key) in line]
+
+
+def read_with_key_of_mode(tmp_path: Path, monkeypatch, capsys, command: str, mode: int) -> tuple[Ran, Path, Path]:
+    """``command`` of the vectors' good tar, ``test-identity-1.txt`` copied with ``mode``: what it did, the key, ``-o``."""
+    secure.instance(tmp_path, monkeypatch)
+    inputs = tmp_path / "inputs"
+    archive, key = vector(GOOD, inputs), vector(IDENTITY_1, inputs)
+    key.chmod(mode)
+    out = secure.output_path(tmp_path)
+    return run(capsys, *reader_argv(command, archive, out, "--identity-file", str(key))), key, out
+
+
+@pytest.mark.parametrize("mode", LOOSE_MODES)
+@pytest.mark.parametrize("command", READERS)
+def test_a_key_file_others_may_read_is_warned_of_and_the_command_goes_on(tmp_path, monkeypatch, capsys, prompts, system_temp, command, mode):
+    """(e) SEC-5: one ``⚠️`` line names the key file, its mode in octal and ``chmod 600``; the password is opened all the
+    same (the ``🔏`` line), and ``decrypt`` exits 0 with the vector's zip. Red until the cure: no warning."""
+    print_section(f"SEC-5: {command} with a key file of mode {mode:04o}")
+    ran, key, out = read_with_key_of_mode(tmp_path, monkeypatch, capsys, command, mode)
+    assert stat.S_IMODE(key.stat().st_mode) == mode, f"precondition: the key file's mode is {mode:04o}"
+    assert [line for line in ran.out.splitlines() if line.startswith(OPENED)], f"{command}: the command goes on, the password opened: exit {ran.code}: {ran.text[-cli.TAIL:]}"
+    if command == "decrypt":
+        assert ran.code == 0 and cli.sha256_of(out) == CASES[GOOD]["zip_sha256"], f"decrypt: exit 0, the vector's zip written: exit {ran.code}: {ran.text[-cli.TAIL:]}"
+    warned = loose_key_warnings(ran, key)
+    assert len(warned) == 1, f"{command}: one ⚠️ line naming {key.name}: {warned}: {ran.text[-cli.TAIL:]}"
+    assert f"{mode:04o}" in warned[0] and "chmod 600" in warned[0], f"{command}: the line says the mode {mode:04o} and suggests chmod 600: {warned[0]}"
+    print_success(f"{command}, {mode:04o}: warned, went on")
+
+
+@pytest.mark.parametrize("command", READERS)
+def test_a_key_file_only_its_owner_reads_is_not_warned_of(tmp_path, monkeypatch, capsys, prompts, system_temp, command):
+    """(e) SEC-5, a GUARD: a 0600 key file: no ``⚠️`` line names it, nothing suggests ``chmod 600``; the command goes on."""
+    ran, key, _out = read_with_key_of_mode(tmp_path, monkeypatch, capsys, command, 0o600)
+    assert [line for line in ran.out.splitlines() if line.startswith(OPENED)], f"{command}: the password opened: exit {ran.code}: {ran.text[-cli.TAIL:]}"
+    assert loose_key_warnings(ran, key) == [] and "chmod 600" not in ran.text, f"{command}: no warning for a 0600 key file: {ran.text[-cli.TAIL:]}"
+
+
+def in_folder(fd: int, folder: Path) -> bool:
+    """Whether ``fd`` is a regular file of ``folder``: one of its entries, or a file of its file system without a name
+    yet (``O_TMPFILE``)."""
+    found = os.fstat(fd)
+    if not stat.S_ISREG(found.st_mode):
+        return False
+    if found.st_nlink == 0 and found.st_dev == folder.stat().st_dev:
+        return True
+    return any(entry.inode() == found.st_ino and entry.stat(follow_symlinks=False).st_dev == found.st_dev for entry in os.scandir(folder))
+
+
+def name_in_folder(fd: int, folder: Path) -> str | None:
+    found = os.fstat(fd)
+    return next((entry.name for entry in os.scandir(folder) if entry.inode() == found.st_ino), None)
+
+
+def keygen_target(tmp_path: Path, monkeypatch) -> Path:
+    secure.instance(tmp_path, monkeypatch)
+    folder = tmp_path / "keys"
+    folder.mkdir()
+    return folder / "backup-identity.txt"
+
+
+def test_keygen_writes_its_key_to_a_private_temporary_file_then_links_it(tmp_path, monkeypatch, capsys):
+    """(e) SEC-5: every byte of the key goes through ``os.write`` to a file of F's folder that is not F, of mode 0600,
+    ``fsync``ed while F does not exist yet; then F holds the key (exit 0) and nothing else is left in the folder. Red
+    until the cure: ``keygen`` writes F itself, through a file object, without an ``fsync``."""
+    print_section("SEC-5: keygen writes its key atomically")
+    target = keygen_target(tmp_path, monkeypatch)
+    folder = target.parent
+    real_write, real_fsync = os.write, os.fsync
+    writes: list[tuple[str | None, int]] = []
+    fsyncs: list[tuple[str | None, bool]] = []
+
+    def write(fd: int, data: Any) -> int:
+        if in_folder(fd, folder):
+            writes.append((name_in_folder(fd, folder), stat.S_IMODE(os.fstat(fd).st_mode)))
+        return real_write(fd, data)
+
+    def fsync(fd: int) -> None:
+        if in_folder(fd, folder):
+            fsyncs.append((name_in_folder(fd, folder), os.path.lexists(target)))
+        real_fsync(fd)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(os, "write", write)
+        patch.setattr(os, "fsync", fsync)
+        ran = run(capsys, "keygen", "--identity-file", str(target))
+    assert ran.code == 0 and target.is_file(), f"keygen: exit 0 and F written: exit {ran.code}: {ran.text[-cli.TAIL:]}"
+    assert writes, "the key is written through os.write to a file of F's folder (none seen)"
+    assert all(name != target.name and mode == 0o600 for name, mode in writes), f"every write goes to a temporary file, never F, of mode 0600: {writes}"
+    assert fsyncs and all(name != target.name and not existed for name, existed in fsyncs), f"the temporary file is fsynced while F does not exist yet: {fsyncs}"
+    assert sorted(entry.name for entry in folder.iterdir()) == [target.name] and stat.S_IMODE(target.stat().st_mode) == 0o600, f"F alone in its folder, 0600: {sorted(entry.name for entry in folder.iterdir())}"
+    assert [line for line in target.read_text(encoding="utf-8").splitlines() if line.startswith("AGE-SECRET-KEY-1")], "F holds the key"
+    print_success("keygen: a temporary 0600 file, fsynced, then F")
+
+
+#: (e) What fails while ``keygen`` writes the key: (the function of ``os``, its errno).
+KEYGEN_FAILURES = [
+    pytest.param("write", errno.EIO, id="os.write-EIO"),
+    pytest.param("write", errno.ENOSPC, id="os.write-ENOSPC"),
+    pytest.param("fsync", errno.EIO, id="os.fsync-EIO"),
+]
+
+
+@pytest.mark.parametrize(("failing", "error_number"), KEYGEN_FAILURES)
+def test_keygen_that_fails_while_writing_leaves_no_key_file_and_no_temporary_file(tmp_path, monkeypatch, capsys, failing, error_number):
+    """(e) SEC-5: ``os.write`` or ``os.fsync`` fails for the files of F's folder: exit 1, a ❌ line, F does not exist,
+    nothing left in the folder, the private key on no stream. Barrier: the failure was met. Red until the cure: keygen
+    calls neither, exits 0 and leaves F."""
+    target = keygen_target(tmp_path, monkeypatch)
+    folder = target.parent
+    real = getattr(os, failing)
+    met: list[str] = []
+
+    def failing_call(fd: int, *args: Any) -> Any:
+        if in_folder(fd, folder):
+            met.append(failing)
+            raise OSError(error_number, os.strerror(error_number))
+        return real(fd, *args)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(os, failing, failing_call)
+        ran = run(capsys, "keygen", "--identity-file", str(target))
+    assert ran.code == 1 and ran.refused, f"os.{failing} failing: exit 1 and a ❌ line, not exit {ran.code}: {ran.text[-cli.TAIL:]}"
+    assert met, f"barrier: os.{failing} was called for the key, and failed"
+    assert not os.path.lexists(target) and list(folder.iterdir()) == [], f"F does not exist, no temporary file left: {sorted(entry.name for entry in folder.iterdir())}"
+    assert "AGE-SECRET-KEY" not in ran.text.upper(), "the private key on no stream"
+    print_success(f"keygen, os.{failing} failing: exit 1, nothing left")
+
+
+def test_keygen_never_replaces_a_key_file_that_appears_while_it_writes(tmp_path, monkeypatch, capsys):
+    """(e) SEC-5: F does not exist when ``keygen`` starts, and appears (another process's key) once the temporary file is
+    ``fsync``ed: exit 1, a ❌ line saying it exists, F as it was, nothing beside it. Barrier: the ``fsync`` of the key
+    ran. Red until the cure: no ``fsync``, and F written directly."""
+    target = keygen_target(tmp_path, monkeypatch)
+    folder = target.parent
+    real_fsync = os.fsync
+    met: list[str] = []
+
+    def fsync(fd: int) -> None:
+        real_fsync(fd)
+        if in_folder(fd, folder) and not os.path.lexists(target):
+            met.append("fsync")
+            target.write_bytes(KEPT)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(os, "fsync", fsync)
+        ran = run(capsys, "keygen", "--identity-file", str(target))
+    assert met, f"barrier: the temporary key was fsynced before F existed (exit {ran.code}): {ran.text[-cli.TAIL:]}"
+    assert ran.code == 1 and [line for line in ran.refused if "exist" in line], f"exit 1, a ❌ line saying F exists: exit {ran.code}: {ran.text[-cli.TAIL:]}"
+    assert target.read_bytes() == KEPT and sorted(entry.name for entry in folder.iterdir()) == [target.name], f"F as it was, nothing beside it: {sorted(entry.name for entry in folder.iterdir())}"
+    print_success("keygen: an F that appeared is never replaced")
