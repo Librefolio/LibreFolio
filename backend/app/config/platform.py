@@ -105,6 +105,27 @@ def instance_blocked() -> bool:
     raise ValueError("LIBREFOLIO_BLOCKED must be one of 1/0, true/false, yes/no, on/off, or unset")
 
 
+def awaiting_restore() -> bool:
+    """``LIBREFOLIO_AWAIT_RESTORE``: the instance waits for its hosting panel to restore its data (lot H-62).
+
+    A machine the panel created on an empty volume, to put a backup back: every API route answers 423 but a few
+    (``api/v1/instance_block.py``), the panel's restore routes work (``api/v1/backup/panel_restore.py``), and the start
+    skips the steps that would make it a new instance (``services/platform/app_lifespan.py``). Only the panel ends it,
+    by unsetting the variable and restarting the machine. Read at each call, with the values of ``instance_blocked()``:
+    any other value raises ``ValueError``, and the startup checks stop the server on it.
+    """
+    value = os.environ.get("LIBREFOLIO_AWAIT_RESTORE", "").strip().lower()
+    if not value or value in _BLOCKED_FALSE:
+        return False
+    if value in _BLOCKED_TRUE:
+        return True
+    raise ValueError("LIBREFOLIO_AWAIT_RESTORE must be one of 1/0, true/false, yes/no, on/off, or unset")
+
+
+#: The name workstream B's backup routes read (``getattr(platform, "await_restore", None)``): the same function.
+await_restore = awaiting_restore
+
+
 def instance_deletion_date() -> date | None:
     """``LIBREFOLIO_DELETION_DATE``: the day the hosting provider will delete a blocked instance and its data.
 

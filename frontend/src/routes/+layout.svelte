@@ -5,6 +5,7 @@
     import {currentLanguage} from '$lib/stores/app/language';
     import {startCspNotice} from '$lib/features/security/cspNotice';
     import {startImageErrorFallback} from '$lib/features/security/imageErrorFallback';
+    import AwaitingRestoreGate from '$lib/features/instance/components/AwaitingRestoreGate.svelte';
 
     // Initialize i18n
     initI18n();
@@ -59,6 +60,9 @@
     <div></div>
 {:else}
     <div class="min-h-screen">
-        <slot />
+        <!-- H-62: while the hosting panel restores the instance, its waiting page instead of every route -->
+        <AwaitingRestoreGate>
+            <slot />
+        </AwaitingRestoreGate>
     </div>
 {/if}

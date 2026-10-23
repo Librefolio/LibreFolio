@@ -67,6 +67,20 @@
       "deletionDate": "La instancia y sus datos se eliminarán el {date}.",
       "manageSubscription": "Gestionar la suscripción",
       "backupTitle": "Guarda una copia de los datos"
+    },
+    "awaitingRestore": {
+      "title": "Restaurando tus datos",
+      "message": "Estamos poniendo tus datos en su sitio: inténtalo de nuevo en unos minutos.",
+      "autoReload": "Esta página se recarga sola cuando tus datos estén listos.",
+      "retry": "Reintentar"
+    },
+    "restoreInterrupted": {
+      "title": "La restauración se detuvo a medias",
+      "message": "LibreFolio no sabe qué datos contiene, así que no muestra ninguno hasta que tu administrador elija cómo seguir.",
+      "adminHint": "Administrador: detén LibreFolio y ejecuta ./dev.py backup pending para ver qué pasó y --recover para devolver los datos de antes.",
+      "docs": "Cómo recuperar",
+      "autoReload": "Esta página se recarga sola cuando LibreFolio vuelva a servir los datos.",
+      "support": "Contactar con soporte"
     }
   }
 }

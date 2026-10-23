@@ -821,8 +821,9 @@ Instance Key».
 A secure backup (lot B4: decisions 38 and 39, P12) is the zip of a clear backup encrypted with a password its maker
 chooses, in an envelope of LibreFolio's own, `.lfbk`, made of standard pieces of `cryptography`: scrypt and
 AES-256-GCM. Decision 38 ruled out a password-protected zip, which only some tools open (7-Zip, Keka) and whose key
-derivation is weak. Without a password the backup is the plain zip, as before, and the hosting panel's routes never
-encrypt (`backend/app/api/v1/backup/panel.py` passes no password). The format is
+derivation is weak. Without a password the backup is the plain zip, as before. The hosting panel's routes never take a
+password: they hand out a plain zip, or, with `LIBREFOLIO_BACKUP_RECIPIENTS`, a [sealed backup](#sealed-backups), an
+`.lfbk` whose random password is encrypted for the provider's key. The format is
 `backend/app/services/platform/instance_backup/envelope.py`; what the administrator sees is
 [Secure Backups](../../admin/backup_restore.md#secure).
 
@@ -1117,11 +1118,11 @@ part on its own, the locks held, the links, a part that raises, a clean data dir
 
 #### Configuration Checks of the Backup {: #backup-config-checks }
 
-`backend/app/services/platform/instance_backup/checks.py` (lot B-9) gives three checks in the shape of H's `ConfigCheck`
+`backend/app/services/platform/instance_backup/checks.py` (lot B-9) gives four checks in the shape of H's `ConfigCheck`
 ([Configuration Checks](#configuration-checks)), under the same rules: they change nothing, never raise, and never put
 the token or a file's content in a result. With them, an unusable token, upload limit or restore limit shows in the
 start log, not only at the hosting panel's first call, at the first restore upload or at the first check (the third,
-`backup.restore_limit`, since lot B-35).
+`backup.restore_limit`, since lot B-35; the fourth, `backup.recipients`, since lot L3).
 
 | `check_id` | State | `i18n_key` | `detail` | Severity |
 |------------|-------|------------|----------|----------|
@@ -1138,8 +1139,12 @@ start log, not only at the hosting panel's first call, at the first restore uplo
 | `backup.restore_limit` | No limit: `0`, unset in the self-hosted profile, or unset with an upload limit of `0` | `backup.checks.restoreLimit.unlimited` | — | `ok` |
 | `backup.restore_limit` | `BackupConfigError`: `BACKUP_MAX_RESTORE_MB_INVALID`, not a whole number; or, while it is unset outside `selfhosted`, the upload limit's `BACKUP_MAX_UPLOAD_MB_INVALID` | `backup.checks.restoreLimit.invalid` | `{"variable": …}`, from `exc.variable`: `LIBREFOLIO_BACKUP_MAX_RESTORE_MB`, or `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` in the second case | `error` |
 | `backup.restore_limit` | `ProfileDefaultError`: while it is unset outside `selfhosted`, the upload limit's entry of `ENVIRONMENT_PROFILE_DEFAULTS` is missing or of the wrong type | `backup.checks.restoreLimit.profileTable` | — | `error` |
+| `backup.recipients` (reads `backup_recipients()`, [Sealed Backups](#sealed-backups)) | One or two usable `age1…` recipients | `backup.checks.recipients.ok` | `{"count": n}` | `ok` |
+| `backup.recipients` | Unset, and `backup_requires_recipients()` false (any profile but `managed`): the panel's backups are clear zips | `backup.checks.recipients.off` | — | `ok` |
+| `backup.recipients` | `BackupConfigError`: `BACKUP_RECIPIENTS_INVALID`, `BACKUP_RECIPIENTS_TOO_MANY` or `BACKUP_RECIPIENTS_DUPLICATE` | `backup.checks.recipients.invalid` | `{"reason": …}`, the error's `code`, never the value | `error` |
+| `backup.recipients` | Unset in the `managed` profile (decision D1 of the L3 contract: never a clear zip to the panel) | `backup.checks.recipients.missingManaged` | — | `error` |
 
-- **In `CONFIG_CHECKS`.** `BACKUP_CONFIG_CHECKS = (check_panel_token, check_upload_limit, check_restore_limit)` is unpacked in
+- **In `CONFIG_CHECKS`.** `BACKUP_CONFIG_CHECKS = (check_panel_token, check_upload_limit, check_restore_limit, check_recipients)` is unpacked in
   `CONFIG_CHECKS` right after `check_test_mode`, the last of the platform's, before workstream A's `ACCOUNTS_CONFIG_CHECKS` and E's
   `*EMAIL_CONFIG_CHECKS`, which still close the tuple. The startup audit logs their
   error states as errors, each with its `summary`, a line naming its variable (quoted in «Startup Checks» of [Configuration](../../admin/configuration.md)), and the start goes on. The routes are unchanged: `503`, and their own
@@ -1152,6 +1157,114 @@ start log, not only at the hosting panel's first call, at the first restore uplo
 
 Tests: `./dev.py test services backup-checks` (`backend/test_scripts/test_services/test_backup_checks.py`), and
 `./dev.py test services config-audit`.
+
+### 🔏 Sealed Backups (`.tar`) {: #sealed-backups }
+
+A sealed backup (lot L3) is a [secure backup](#secure-backups) whose password nobody types: LibreFolio draws it, encrypts
+it with [age](https://age-encryption.org/) for one or two public keys, and forgets it. It serves the hosting panel's
+nightly backup, whose provider must be able to restore an instance without the instance being able to read its own
+backups, and the self-hoster's cron. The format was agreed with the cloud coordinator in `BACKUP-contratto-L3.md`, the
+L3 contract, kept in the project folder outside the repository (`sealed.py`'s docstring names it); where the two
+differ, the code below is what ships. What the administrator sees is
+[Sealed Backups](../../admin/backup_restore.md#sealed).
+
+**No cryptography of our own.** The `.lfbk` inside is the version-1 envelope of above, unchanged. The password is
+encrypted with age, a published format with a reference implementation in Go (`age`) and one in Rust (`rage`), through
+`pyrage` 1.4.0, the Python binding of `rage`, pinned in the `Pipfile` and on the coordinator's side alike. Only X25519
+recipients and identities (`pyrage.x25519`): no SSH keys, no plugins. So a sealed backup opens with standard tools,
+`tar` and `age -d`, without LibreFolio, and the interoperability was checked once by hand with `age` 1.3.2 on the
+vectors (contract §9.2); `test_sealed_011_*` repeat it when an `age` binary is on the `PATH`, and skip visibly
+otherwise.
+
+**The file**, `librefolio-backup-<UTC>.tar` (`FILE_SUFFIX`): a POSIX ustar archive, uncompressed, of exactly three
+members in this order (`MEMBERS`):
+
+| # | Member | Content |
+|---|--------|---------|
+| 1 | `manifest.json` | `build_manifest()`: canonical JSON (sorted keys, no spaces, UTF-8, no final line break) with exactly `format` `"lfbk-tar"`, `version` `1`, `recipients` (the `age1…` strings, in the variable's order), `lfbk_sha256`, `lfbk_size`, `created_at` (UTC, `…Z`), `librefolio_version`, `db_revision` (string or `null`) and `password_member` `"password.age"`. No personal data |
+| 2 | `password.age` | `seal_password()`: `pyrage.encrypt()` of the password, binary (not armored) |
+| 3 | `backup.lfbk` | The job's envelope, streamed into the tar |
+
+- **Small members first.** With the two small members ahead, the first `HEAD_BYTES` (10 240 bytes, one tar record) hold
+  the manifest, the password and the envelope's 52-byte header: the coordinator verifies a stored copy (manifest,
+  password, scrypt `check`) with a ranged read, without downloading it.
+- **Deterministic.** `write_sealed()` writes through `tarfile` with `USTAR_FORMAT`, members `0600`, uid/gid `0`, empty
+  names and `mtime` the job's creation time; the same three members give the same bytes
+  (`test_sealed_003_write_sealed_rebuilds_the_good_vector_byte_for_byte`). The output goes through `_NewFile` (exclusive,
+  `0600`, `<name>.part`, fsynced, renamed), and `_HashingFile` computes its SHA-256 on the way.
+- **The password.** `new_password()`: `secrets.token_bytes(32)` in base64url without padding, 43 characters, ASCII, so
+  NFC leaves it unchanged for the envelope's key derivation. One per backup. It lives in the job's thread only, as a
+  secure backup's does: never in `state.json`, a log, an exception or a `repr`.
+
+**The job** (`jobs.py`). `start_backup()` and `run_backup()` take a `password` or `recipients`, never both
+(`_one_protection()`, `ValueError`). With recipients, `_run()` draws the password, passes `instance_key=None` to
+`build_archive()` (decision 39: a sealed backup never carries the instance key, and never gets the
+`instance_key_unusable` warning), then `_protect()` runs `_encrypt()` as for a secure backup and `_seal()`: the free
+space for the envelope's size plus 64 MiB (`backup_no_space`), the phase `sealing`, the manifest built from the
+archive's own (`app_version`, `alembic_revision`), the `.tar` written. The job's file is the `.tar`: `file_name`,
+`file_size` and `file_sha256` describe it, and the job records `sealed: true` and `sealed_recipients`
+(`InstanceBackupJob`; `false` and `[]` otherwise). The zip and the envelope are removed with the other work files, at
+the end of the run: until then, during `sealing`, the work folder holds the zip, the envelope and the `.tar`.
+
+**The recipients** (`config/backup.py`). `backup_recipients()` reads `LIBREFOLIO_BACKUP_RECIPIENTS`: unset or blank is
+`None`; otherwise comma-separated items, stripped, each one `age1…` and parsed by `x25519.Recipient.from_str()`, kept in
+its canonical form (lower case), at most `MAX_RECIPIENTS` (2), no duplicates. `BackupConfigError` carries
+`BACKUP_RECIPIENTS_INVALID`, `BACKUP_RECIPIENTS_TOO_MANY` or `BACKUP_RECIPIENTS_DUPLICATE`, and its message names the
+item's position, never its value: a private key pasted by mistake must not reach a log. Not a secret, so no `_FILE`.
+`backup_requires_recipients()` is true in the `managed` profile only. The panel's start (`panel.py`, `_recipients()`)
+reads both at each request: a value it cannot use, or none on a managed instance, answers `503`
+`backup_panel_unavailable` and logs the variable and the code, never a clear zip instead; unset on any other profile, the
+panel gets the clear zip of before. The check is `backup.recipients`, in the table above.
+
+**The strict reader.** `read_sealed()` is LibreFolio's own, short ustar reader; `tarfile` is used only to write.
+`tarfile` reads PAX and GNU headers, links, folders and long or absolute names, which a backup has no use for; a reader
+written for exactly this file refuses them by construction, and the contract lets each side choose its reader under the
+same rules (the coordinator's is incremental, fed from a stream). It never extracts by name: it records each member's
+offset and size and reads there.
+
+- **Each header** (`_header()`): magic `ustar\0` and version `00` (GNU's `ustar  \0` is refused), the checksum
+  recomputed, type `0` or NUL only, no `prefix`, an ASCII name, octal numbers.
+- **The archive** (`_members()`): exactly three members, then a zero block; names and order equal to `MEMBERS`;
+  `manifest.json` and `password.age` at most 4096 bytes each (`SMALL_MEMBER_MAX`); anything cut short refused.
+- **The envelope**: its first 52 bytes start with `LFBK` and pass `EnvelopeHeader.from_bytes()`, so its bounds are
+  checked before any derivation.
+- **The manifest** (`_manifest()`): UTF-8 JSON, one object, duplicate keys refused, exactly the nine keys (an unknown
+  key means a `version` 2), each of its type; read by content, not by bytes, so the canonical form is written, not
+  required. `lfbk_size` and `lfbk_sha256` must match the third member.
+- **The opening.** `read_identities()` reads a key file as `age-keygen` writes it (comments, blank lines,
+  `AGE-SECRET-KEY-1…` lines); `open_password()` decrypts with them and wants exactly 43 base64url characters;
+  `check_password()` is `unlock_header()` on the header already read, the scrypt check without decrypting a chunk;
+  `extract_envelope()` copies the third member to a new file.
+
+`SealedError.code` is `sealed_tar_invalid`, `sealed_manifest_invalid`, `sealed_no_identity`, `sealed_password_invalid`
+or `sealed_identity_invalid`; the messages hold no path and no secret. `is_sealed()` tells a sealed backup by the
+`ustar` magic at offset 257, whatever its name.
+
+**Where it is read.** The command line (`scripts/backup_cli.py`): `keygen` writes an identity
+(`identity_file_text()`, `O_CREAT|O_EXCL|O_NOFOLLOW`, `0600`) and prints its recipient; `create --recipient`/`--sealed`
+(`_recipients_for()`); `inspect`, `restore` and `decrypt` go through `_sealed_first()`, which refuses a sealed file
+without `--identity-file` (`sealed_backup_needs_key`) and `--identity-file` with any other, and `_run_sealed()`, which
+reads the key file before the switch of user (as `--password-file`), opens and checks the password, copies the envelope
+into a `mkdtemp()` folder removed at the end, and runs the same command on it with that password. The restore check of
+the app (`staging.py`, `_open_archive()`) recognises the magic and refuses the file with `sealed_backup_needs_key`: the
+server has no private key, by design.
+
+| Source | What it holds |
+|--------|---------------|
+| `backend/app/services/platform/instance_backup/sealed.py` | The format: writing (`new_password()`, `seal_password()`, `build_manifest()`, `write_sealed()`), the strict reader (`read_sealed()`), the opening (`read_identities()`, `open_password()`, `check_password()`, `extract_envelope()`) |
+| `backend/app/services/platform/instance_backup/jobs.py` | `_protect()`, `_seal()`, the phase `sealing`, the job's `sealed` and `sealed_recipients` |
+| `backend/app/config/backup.py` | `backup_recipients()`, `backup_requires_recipients()` |
+| `backend/app/services/platform/instance_backup/checks.py` | `check_recipients()` |
+| `backend/app/api/v1/backup/panel.py`, `backend/app/api/v1/backup/job_views.py` | The panel's start and its `503`; the download as `application/x-tar` |
+| `backend/app/services/platform/instance_backup/staging.py` | `sealed_backup_needs_key` in a check |
+| `scripts/backup_cli.py` | `cmd_keygen()`, `_recipients_for()`, `_sealed_first()`, `_run_sealed()` |
+| `backend/test_scripts/fixtures/backup_l3/` | The vectors shared with the cloud coordinator: `vectors.json`, two TEST ONLY identities, the good archive, the rotation one and the negatives, made once by `generate_vectors.py` |
+
+Tests: `./dev.py test services backup-sealed` (`backend/test_scripts/test_services/test_backup_sealed.py`: every vector,
+the byte-for-byte rebuild, the reader's refusals, the identities, the cloud's key derivation, `age` interoperability
+when available), `./dev.py test utils backup-cli-sealed` (`test_utilities/test_backup_cli_sealed.py`),
+`./dev.py test api backup-panel` (`test_api/test_backup_panel.py`: the sealed panel job, the `503`) and
+`./dev.py test services backup-checks` (`backup.recipients`).
 
 ## 🩺 Configuration Checks {: #configuration-checks }
 
@@ -1463,9 +1576,11 @@ Docker health checks, Uptime Kuma, orchestrators and hosting panels. `check_read
 shape:
 
 ```json
-{"status": "ready", "checks": {"database": "ok", "migrations": "ok"}}
+{"status": "ready", "checks": {"database": "ok", "migrations": "ok"}, "mode": "normal"}
 ```
 
+- **`mode`** is `normal`, or `awaiting_restore` while the hosting panel restores the instance
+  ([Awaiting Restore](#await-restore)): `ready` then means ready to receive the backup.
 - **Codes only.** The body never carries an error message, a path or a revision id. The details go to the server
   log, once per change of state: `Instance not ready` (warning, with both codes and the problem) or `Instance ready`
   (info). A monitor that asks every few seconds adds no log line while the state holds.
@@ -1476,7 +1591,7 @@ shape:
 
 ### 🔒 Private Endpoints (auth required)
 
-All other endpoints — including Auth (profile, password), Settings (user settings, onboarding progress, and the global settings: any signed-in user reads them through `GET /settings/global` and `GET /settings/global/{key}`, only an administrator writes them; the login page needs none of them, it reads `/system/instance`), System diagnostics (`/system/plugin-diagnostics`), the block page (`/system/block`, see [Instance Block](#instance-block)), the catch-up of the prices (`/system/price-refresh`, see [Catch-up Progress](../backend/scheduler.md#price-refresh)), Brokers, BRIM (files and plugins), Transactions, **Uploads** (CRUD + file serving + plugin assets), FX, Assets, Risk, Tools, Backup, and Users — require a valid session cookie. The routes of the hosting panel take a token of their own instead of a session cookie, one per scope, sent as `Authorization: Bearer`: the backup routes (`/backup/panel/*`, `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`), the [scheduled wake-up](../../admin/sleep_wake.md#wake-sync) (`/system/wake-sync`, `LIBREFOLIO_WAKE_TOKEN`) and the setup status (`/panel/status`, `LIBREFOLIO_PANEL_STATUS_TOKEN`). One dependency checks them all, `panel_access(scope)`: a missing or wrong token answers `401`, too many refused ones from an address `429`, and while a scope's token is not set its routes answer `404`, as a path that does not exist: see [The Hosting Panel's Access](#panel-access) below. The account administration routes of `/users` (every route but `/users/search`) also require an administrator (`require_admin`): see [Administrator API](access_control.md#admin-user-api). So does `GET /security/checks`, the configuration checks on demand: see [The Checks on Demand](#security-checks-endpoint).
+All other endpoints — including Auth (profile, password), Settings (user settings, onboarding progress, and the global settings: any signed-in user reads them through `GET /settings/global` and `GET /settings/global/{key}`, only an administrator writes them; the login page needs none of them, it reads `/system/instance`), System diagnostics (`/system/plugin-diagnostics`), the block page (`/system/block`, see [Instance Block](#instance-block)), the catch-up of the prices (`/system/price-refresh`, see [Catch-up Progress](../backend/scheduler.md#price-refresh)), Brokers, BRIM (files and plugins), Transactions, **Uploads** (CRUD + file serving + plugin assets), FX, Assets, Risk, Tools, Backup, and Users — require a valid session cookie. The routes of the hosting panel take a token of their own instead of a session cookie, one per scope, sent as `Authorization: Bearer`: the backup routes (`/backup/panel/*`, `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`), the [scheduled wake-up](../../admin/sleep_wake.md#wake-sync) (`/system/wake-sync`, `LIBREFOLIO_WAKE_TOKEN`) and the setup status (`/panel/status`, `LIBREFOLIO_PANEL_STATUS_TOKEN`); the panel's restore (`/backup/panel/restore/*`, scope `backup:restore`) takes a signed ticket only, never a token. One dependency checks them all, `panel_access(scope)`: a missing or wrong token answers `401`, too many refused ones from an address `429`, and while a scope's token is not set its routes answer `404`, as a path that does not exist: see [The Hosting Panel's Access](#panel-access) below. The account administration routes of `/users` (every route but `/users/search`) also require an administrator (`require_admin`): see [Administrator API](access_control.md#admin-user-api). So does `GET /security/checks`, the configuration checks on demand: see [The Checks on Demand](#security-checks-endpoint).
 
 !!! info "📁 Files are protected too"
 
@@ -1494,7 +1609,8 @@ dependency checks all its routes: `panel_access(scope)` in `backend/app/services
 |-------|--------|------------------------------|---------------|---------------------|
 | `backup` | The four `/backup/panel/jobs…` routes, `backend/app/api/v1/backup/panel.py` (workstream B) | `backup_download_token()`: `SecretFileError`, `BackupConfigError` | `BackupPanelToken` | `backup_panel_unauthorized` / `backup_panel_unavailable` |
 | `wake` | `POST /system/wake-sync`, `backend/app/api/v1/system/wake.py` (workstream Z) | `wake_token()`: `SecretFileError`, `SleepWakeConfigError` | `WakeToken` | `wake_unauthorized` / `wake_unavailable` |
-| `status` | `GET /panel/status`, the [setup status](../../admin/hosting_providers.md#panel-status), read by [`admin_setup_status()`](access_control.md#setup-status) | `panel_status_token()` (`backend/app/config/hosting_panel.py`): `SecretFileError`, `HostingPanelConfigError` | `PanelStatusToken` | `panel_status_unauthorized` / `panel_status_unavailable` |
+| `status` | `GET /panel/status`, the [setup status](../../admin/hosting_providers.md#panel-status), read by [`admin_setup_status()`](access_control.md#setup-status), with the instance's `mode` and its `restore` (lot H-62) | `panel_status_token()` (`backend/app/config/hosting_panel.py`): `SecretFileError`, `HostingPanelConfigError` | `PanelStatusToken` | `panel_status_unauthorized` / `panel_status_unavailable` |
+| `backup:restore` (`PanelScope.BACKUP_RESTORE`) | The seven `/backup/panel/restore…` routes, `backend/app/api/v1/backup/panel_restore.py` (lot H-62): see [Awaiting Restore](#await-restore) | None: `read_token` always answers `None`, so no token opens it and, without the panel's public keys, it is off (`404`); a signed ticket of this scope only | `BackupRestorePanelTicket` | `backup_restore_unauthorized` / `backup_restore_unavailable` |
 
 `panel_access(scope)` returns the same function for the same scope, so FastAPI runs it once per request. It takes the
 `Request` and the scope's `HTTPBearer(auto_error=False)`, and returns `PanelCaller(scope, credential="token")`, a frozen
@@ -1517,7 +1633,7 @@ Every refusal but the `404` has the body `{"detail": {"code": …, "message": �
 routes are the ones they had before.
 
 - **The limiter.** `PANEL_ATTEMPTS`, built by `new_panel_attempts()`: one
-  [sliding-window limiter](../backend/email.md#rate-window) for the three scopes, `PANEL_ATTEMPT_LIMIT` (20) refused
+  [sliding-window limiter](../backend/email.md#rate-window) for the four scopes, `PANEL_ATTEMPT_LIMIT` (20) refused
   credentials per key in `PANEL_ATTEMPT_WINDOW_SECONDS` (600), in memory and per process. The dependency reads the
   module attribute at each call, so a test puts one of its own in place:
   `monkeypatch.setattr(access, "PANEL_ATTEMPTS", SlidingWindowLimiter(20, 600, clock=fake))`. In every test process
@@ -1529,17 +1645,19 @@ routes are the ones they had before.
   query) and `credential` (`"token"`), with the `request_id` from structlog's context variables
   ([Request Logs](#request-logs)). Never the token, the value sent, a header, the query or the client's address:
   uvicorn's access line has the address.
-- **The OpenAPI tag.** `HOSTING_PANEL_TAG`, «Hosting panel», is the only tag of the six routes. FastAPI adds the tags
+- **The OpenAPI tag.** `HOSTING_PANEL_TAG`, «Hosting panel», is the only tag of the thirteen routes. FastAPI adds the tags
   of a router to those of what it includes, and never replaces them, so the tag sits on each include and the parent
-  routers have none: `backend/app/api/v1/backup/__init__.py` includes `panel.panel_router` with it and its other
+  routers have none: `backend/app/api/v1/backup/__init__.py` includes `panel.panel_router` and
+  `panel_restore.panel_restore_router` with it and its other
   routers with `Backup & Export`, `backend/app/api/v1/system/__init__.py` includes `wake.wake_router` with it and the
   others with `System`, and `backend/app/api/v1/router.py` includes the status route's router with the prefix `/panel`
   and the tag. Paths, methods and endpoint names did not move, so the operation ids and the aliases of the web app's
   client are those of before.
-- **The bearer schemes.** Each route asks for its scope's scheme alone, `BackupPanelToken`, `WakeToken` or
-  `PanelStatusToken`, an HTTP bearer whose description names its variable: the OpenAPI document tells which token
-  opens which route.
-- **On a blocked instance** the six routes stay allowed: see [Instance Block](#instance-block).
+- **The bearer schemes.** Each route asks for its scope's scheme alone, `BackupPanelToken`, `WakeToken`,
+  `PanelStatusToken` or `BackupRestorePanelTicket`, an HTTP bearer whose description names its variable: the OpenAPI
+  document tells which token, or ticket, opens which route.
+- **On a blocked instance** the thirteen routes stay allowed: see [Instance Block](#instance-block). The seven restore
+  routes then answer `423 instance_blocked` themselves, past the ticket ([Awaiting Restore](#await-restore)).
 
 **Level L2: signed tickets.** Beside the tokens, `panel_access()` accepts a ticket signed by the panel's Ed25519
 key (lot H-61, checkpoint 2), scope by scope. The panel's public keys are read at each call
@@ -1795,8 +1913,10 @@ profile:
 [Configuration Checks](#configuration-checks)).
 
 **The guard.** `refuse_when_blocked` (`backend/app/api/v1/instance_block.py`) is a dependency of the
-`/api/v1` router, `APIRouter(dependencies=[Depends(refuse_when_blocked)])` in
-`backend/app/api/v1/router.py`, so it covers every API route (`APIRoute`) under it, today's and
+`/api/v1` router, `APIRouter(dependencies=[Depends(refuse_when_blocked), Depends(refuse_when_awaiting_restore), Depends(refuse_when_restore_interrupted)])` in
+`backend/app/api/v1/router.py` (the second one is [Awaiting Restore](#await-restore), the third
+[A Restore Stopped Half Way](#restore-interrupted), both read after the block), so it
+covers every API route (`APIRoute`) under it, today's and
 tomorrow's. FastAPI gives no router dependency to a plain `Route`, a `WebSocketRoute` or a `Mount`, so
 none of them belongs under `/api/v1`. FastAPI hands
 a dependency the endpoint function of the matched route (`request.scope["endpoint"]`), not its full
@@ -1815,6 +1935,7 @@ path, so the allow-list `ALLOWED_WHEN_BLOCKED` is a `frozenset` of endpoint func
 | `GET /system/test-lane-health` | `health.test_lane_health` | The test runner's probe, `404` outside test mode |
 | `POST /system/wake-sync` | `wake.wake_sync` | The [scheduled wake-up](../../admin/sleep_wake.md#wake-sync), with its own token instead of a session: on a blocked instance it runs no job and answers `200` with `status: "blocked"` (decision D-W3) |
 | `GET /panel/status` | `panel.get_panel_status` | The hosting panel's [setup status](../../admin/hosting_providers.md#panel-status), read by [`admin_setup_status()`](access_control.md#setup-status), with its own token instead of a session (lot H-61): it answers as on any other instance |
+| The seven `/backup/panel/restore…` routes | `_PANEL_RESTORE_ROUTES` of `instance_block.py` (`backup_panel_restore.*`) | The panel's restore, with its ticket instead of a session (lot H-62): past the ticket each route answers `423 instance_blocked` itself, so a caller without a valid ticket learns nothing of the block. No restore happens on a blocked instance ([Awaiting Restore](#await-restore)) |
 
 **The refusal.** On a blocked instance, an endpoint outside the list first runs `get_current_user()`
 with the request's own database session (FastAPI caches the dependency), then refuses:
@@ -1880,7 +2001,8 @@ reads `LIBREFOLIO_BLOCKED` and leaves it waiting (`instance_blocked`) until the 
 the restart (`GET /backup/restore/outcome`, lot B5c): it starts nothing, changes nothing but its own ticket, and
 returns three fields and no data. When the block takes effect at the restart that a page asked, that page reads `instance_blocked`
 there, where its session may be gone (without `JWT_SECRET` every start ends them) and the status route answers `401`
-or `423`. Any other
+or `423`. The panel's restore routes (`/backup/panel/restore…`, lot H-62) are on the list only so that the ticket is
+read first: each one then refuses a blocked instance itself, `423 instance_blocked`, and restores nothing. Any other
 addition goes through the developer first. `./dev.py test api instance-block` (`backend/test_scripts/test_api/test_instance_block.py`)
 pins the list by name and by route, checks that every API route under `/api/v1` resolves
 `refuse_when_blocked` first, and that the only other routes under `/api/v1` are the API's
@@ -1892,6 +2014,137 @@ covered: the browser still loads the app, which turns the first `423` into the b
 [Instance block](../frontend/state/app-state.md#instance-block)). The scheduler does not go through
 HTTP, so the guard does not reach it: `run_due_jobs()` checks `instance_blocked()` itself and runs no
 job on a blocked instance ([Scheduler](../backend/scheduler.md#run-checks)).
+
+### ⏳ Awaiting Restore {: #await-restore }
+
+Lot H-62. A hosting panel that restores an instance onto a new machine starts it with `LIBREFOLIO_AWAIT_RESTORE`; the
+administrator's side is [Restoring an Instance from Your Panel](../../admin/hosting_providers.md#panel-restore).
+`awaiting_restore()` (`backend/app/config/platform.py`) reads it from the process environment at each call, with the
+values of `instance_blocked()`: any other value raises `ValueError`, and `log_configuration_audit()` stops the start
+on it, or logs a warning while it is on.
+
+**The guard.** `refuse_when_awaiting_restore` (`backend/app/api/v1/instance_block.py`) is the second dependency of the
+`/api/v1` router, right after `refuse_when_blocked`. While the mode is on, every endpoint outside
+`ALLOWED_WHEN_AWAITING_RESTORE` answers `423` with the code `INSTANCE_AWAITING_RESTORE_CODE`,
+`instance_awaiting_restore`, to anyone, signed in or not (decision Q5): unlike the block, it never asks for a session,
+since the volume is empty or holds the data being restored. The list:
+
+| Endpoints | Functions |
+|-----------|-----------|
+| `GET /system/health`, `GET /system/test-lane-health`, `GET /system/ready`, `GET /system/info` | `health.health_check`, `health.test_lane_health`, `ready.get_readiness`, `info.get_system_info` |
+| `GET /system/instance` | `instance.get_instance_config` |
+| `POST /system/wake-sync` | `wake.wake_sync`: `_wake_run()` answers `status: "awaiting_restore"` and runs no job |
+| `GET /panel/status` | `panel.get_panel_status` |
+| The four `/backup/panel/jobs…` routes | `backup_panel.start_panel_backup`, `get_panel_backup_job`, `download_panel_backup`, `delete_panel_backup_job`: in the mode a start answers `409 backup_awaiting_restore` (`backup/panel.py`, `_awaiting_restore()`), so a backup of the empty data never starts |
+| The seven `/backup/panel/restore…` routes | `_PANEL_RESTORE_ROUTES` |
+
+`InstanceMode` (`backend/app/schemas/system.py`), `normal` or `awaiting_restore`, is the `mode` field of
+`ReadinessResponse` (`/system/ready`), `InstanceConfigResponse` (`/system/instance`) and `PanelStatusResponse`
+(`/panel/status`). The web app's root layout reads it from `/system/instance`: `AwaitingRestoreGate.svelte` shows
+`InstanceAwaitingRestorePage.svelte` instead of every route, which asks `/system/instance` every 30 seconds and
+reloads once the mode reads `normal` (`frontend/src/lib/features/instance/components/`).
+
+**The start.** `Step.skip_when` (`backend/app/services/platform/lifecycle.py`) is asked when a startup step comes; a
+step whose predicate answers `True` is not run, with one `Startup step skipped` info line. `STARTUP_STEPS`
+(`backend/app/services/platform/app_lifespan.py`) marks six with `skip_when=_serving_no_data` (`awaiting_restore()
+or restore_interrupted()`, so [A Restore Stopped Half Way](#restore-interrupted) skips them too): `admin-bootstrap`,
+`stored-currencies`, `provider-prewarm`, `market-holidays`, `brim-parse-pool` and `scheduler`. The database, the
+restore's own steps (`pending-restore`, `restore-commit`) and the idle monitor still run.
+
+**The restore routes.** `backend/app/api/v1/backup/panel_restore.py` reuses the administrator's restore
+(`api/v1/backup/restore.py`: the same upload writer, limits, check on a copy, confirmation and restart); only the
+caller changes. Every route depends on `_restore_gate`, in this order: `panel_access(PanelScope.BACKUP_RESTORE)`
+(ticket only, [The Hosting Panel's Access](#panel-access)), then `423 instance_blocked` on a blocked instance, then
+`409 restore_mode_required` outside the mode, so a stolen signing key can at most fill an empty volume. Only an `.lfbk`
+envelope is kept (`400 restore_envelope_required` otherwise, the file removed): `_receive_envelope()` refuses a body
+that does not start with `LFBK` before a byte is written, and `upload_panel_restore_archive()` removes a finished file
+whose `kind` is not `envelope`. The writer finishes with `finish(replace_others=False)`, so the uploads before it stay
+until this one is accepted; only then does `restore_jobs.remove_replaced_uploads(keep=…)` remove them (but the one a
+running check reads): a refused upload never costs the previous good one (SEC-3). Every `500 restore_state_unreadable`
+of these routes carries B's `reason` (`io`, `not_a_file`, `invalid`) in its `detail` (`_state_unreadable(exc)`). The panel's views are closed models
+with `extra="forbid"` (`backend/app/schemas/hosting_panel.py`): `PanelRestoreStageReport` (the administrators as
+`administrators_count`, the control totals as a verdict and `control_totals_differences_count`, no tables, files or
+sizes), `PanelRestoreStatus` (`confirmed_via` instead of the username: a panel confirmation records `confirmed_via: panel` and the ticket's `kid` as `confirmed_by`) and, in `/panel/status`,
+`PanelRestoreSummary` (`state`, `reason`, `waiting`, `backup_created_at`, `stage_id`; when the state cannot be read,
+`_restore_summary()` in `backend/app/api/v1/panel.py` answers `200` with `state` `unreadable` and B's `reason`, `io`,
+`not_a_file` or `invalid`, the other three `null`: never `null`, and never a `500`, decision D7). The panel sees only the checks it started (`origin` `panel`): any other check answers `404 restore_stage_not_found`
+(`_panel_check()`). A repeated `POST …/stage` with the same `upload_id` while its check runs, a repeated confirmation
+of the same stage, or a restart while the restore is under way or committed, answers `202` with the check or the
+state found. The router is `NoInputEchoRoute`: a `422` never
+repeats the password.
+
+**Ending the mode.** Only the panel ends it, removing the variable and restarting once the status reads `committed`.
+For a blocked instance (contract R4), the panel starts the machine with the block off and, at `committed`, changes the
+variables in one machine update (mode off, `LIBREFOLIO_BLOCKED` on, `LIBREFOLIO_DELETION_DATE` unchanged): both
+guards read the environment at each request, so the first request after that single restart already gets
+`423 instance_blocked`.
+
+Tests: `./dev.py test api await-restore-mode` (`backend/test_scripts/test_api/test_await_restore_mode_api.py`: the
+list pinned by name and route, both switches, R4), `./dev.py test api panel-restore`
+(`backend/test_scripts/test_api/test_panel_restore_api.py`: the scope, the order of the refusals, the routes, the
+report) and `./dev.py test services await-restore-mode`
+(`backend/test_scripts/test_services/test_await_restore_mode.py`).
+
+### 🧩 A Restore Stopped Half Way {: #restore-interrupted }
+
+Lot B-33, the start's part (workstream H; the command-line side is workstream B's,
+«An Unreadable Restore State» in [Command-Line Tools](../../admin/cli_tools.md)). When the state of the restore,
+`.restore/restore.json`, cannot be read (its owner or permissions changed, a disk error, a link or a folder in its
+place, content no LibreFolio wrote), a restore may have stopped half way and LibreFolio cannot tell which data it holds.
+The administrator's side is [When the State of a Restore Cannot Be Read](../../admin/hosting_providers.md#restore-interrupted).
+
+**The probe.** `backend/app/services/platform/restore_guard.py` owns it. The startup step `restore-state`, right after
+`pending-restore`, calls `probe_restore_state()` in a thread, which asks workstream B's
+`apply.restore_state_problem()` (`backend/app/services/platform/instance_backup/apply.py`: the
+`RestoreStateUnreadableError`, or `None` when the state can be read or there is none; it never raises). The answer is
+kept in the module for the whole process, and `restore_interrupted()` returns it: `False` in a process that never
+probed. When it cannot read the state, the step logs one error with B's `reason` (`io`, `not_a_file`, `invalid`), never
+the state's content, `The state of the restore cannot be read: LibreFolio serves no data until the administrator runs
+./dev.py backup pending --recover`; it never stops the start. A state made readable while the process runs counts only
+at the next start: the way out is `./dev.py backup pending --recover` with LibreFolio stopped, then a restart.
+
+**The start.** While `restore_interrupted()`, `STARTUP_STEPS` skips what repairs, writes or warms up the data:
+`post-migration-fixes` and `lone-transfer-legs` (`skip_when=restore_interrupted`), and the six steps of
+[Awaiting Restore](#await-restore) (`skip_when=_serving_no_data`): `admin-bootstrap`, `stored-currencies`,
+`provider-prewarm`, `market-holidays`, `brim-parse-pool` and `scheduler`. The other steps carry no skip, the database,
+`global-settings`, `restore-commit`, `backup-leftovers`, `serving-lock` and `idle-monitor` among them.
+
+**The guard.** `refuse_when_restore_interrupted` (`backend/app/api/v1/instance_block.py`) is the third dependency of the
+`/api/v1` router, after `refuse_when_blocked` and `refuse_when_awaiting_restore`. While `restore_interrupted()`, every
+endpoint outside `ALLOWED_WHEN_RESTORE_INTERRUPTED` answers `423` with the code `INSTANCE_RESTORE_INTERRUPTED_CODE`,
+`instance_restore_interrupted`, to anyone, signed in or not. `ALLOWED_WHEN_RESTORE_INTERRUPTED` is
+`ALLOWED_WHEN_AWAITING_RESTORE` itself (a test pins them equal): the probes, `/system/info`, `/system/instance`,
+`/system/wake-sync` and the hosting panel's routes. One of them answers otherwise (D7): `backup_panel.start_panel_backup`
+answers `409 backup_restore_interrupted` (`BACKUP_RESTORE_INTERRUPTED_CODE`), since a backup of data in doubt would
+pass the coordinator's checks and push a good copy out of those it keeps. The guard first runs the panel's credential
+check by hand, `panel_caller(request, PanelScope.BACKUP)` (`backend/app/services/platform/hosting_panel/access.py`), so a
+caller without a valid credential gets the same `401`, `404`, `429` or `503` as outside the state; following, downloading
+and deleting a panel job still answer. In this state:
+
+- `InstanceConfigResponse` (`backend/app/schemas/system.py`, `GET /system/instance`) says `restore_interrupted: true`;
+  the field is `false` otherwise;
+- `_wake_run()` (`backend/app/api/v1/system/wake.py`) answers `status: "restore_interrupted"` and runs no job (after
+  `awaiting_restore`, which wins);
+- `GET /panel/status` answers `200` with `restore.state` `unreadable` and its `reason`, as whenever the state cannot be
+  read (D7).
+
+**The web app.** `AwaitingRestoreGate.svelte` reads `instanceConfig.config.restore_interrupted`; while it is `true` it
+shows `InstanceRestoreInterruptedPage.svelte` instead of every route, and wins over the awaiting-restore page
+(`frontend/src/lib/features/instance/components/`). The page, on the login's `AnimatedBackground`, asks for the
+administrator, links `admin/cli_tools/#backup-pending-unreadable` in the interface language, asks `/system/instance`
+every 30 seconds and reloads once `restore_interrupted` reads `false`. When `instanceConfig.config.support_url`
+(`LIBREFOLIO_SUPPORT_URL`) gives a usable address, it adds a «Contact support» link
+(`data-testid="instance-restore-interrupted-support"`): `supportChannel(supportUrl, {githubFallback: false})`
+(`frontend/src/lib/components/assets/assetSearchReport.ts`) checks it again and keeps a `mailto:` address or an
+`http(s)` page, opened in a new tab; anything else shows no link, never the project's GitHub (D7). The API client's response interceptor
+(`frontend/src/lib/api/zodios-client.ts`) reads the configuration again on a `423 instance_restore_interrupted`
+(`isInstanceRestoreInterruptedError()`, `frontend/src/lib/features/instance/instanceBlockState.ts`), so the gate shows
+the page even when the configuration was read before.
+
+Tests: `./dev.py test services restore-guard` (`backend/test_scripts/test_services/test_restore_guard.py`: the probe,
+its log line, the step's place and the skipped steps) and `./dev.py test api restore-interrupted`
+(`backend/test_scripts/test_api/test_restore_interrupted_api.py`: the list pinned by name and route, the third
+dependency, `/system/instance`, wake-sync, `/panel/status`).
 
 ## 🎟️ Single-use Account Tokens {: #account-tokens }
 

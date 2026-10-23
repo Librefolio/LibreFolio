@@ -1604,6 +1604,22 @@ def services_platform_readiness(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "Instance readiness tests", verbose=verbose)
 
 
+def services_await_restore_mode(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the «awaiting restore» mode's switch and startup (H-62, §6): awaiting_restore(), the startup check, Step.skip_when, the six skipped steps."""
+    print_section("Services: Awaiting Restore Mode")
+    print_info("Testing: config/platform.awaiting_restore(), config_audit on LIBREFOLIO_AWAIT_RESTORE, lifecycle.Step.skip_when, app_lifespan.STARTUP_STEPS")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_await_restore_mode.py", test_names)
+    return run_command(cmd, "Awaiting restore mode tests", verbose=verbose)
+
+
+def services_restore_guard(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the probe of an unreadable restore state and the startup it stops serving data (B-33, H)."""
+    print_section("Services: Restore Guard")
+    print_info("Testing: services/platform/restore_guard.py (probe_restore_state, restore_interrupted), app_lifespan.STARTUP_STEPS restore-state and the eight skipped steps")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_restore_guard.py", test_names)
+    return run_command(cmd, "Restore guard tests", verbose=verbose)
+
+
 def services_app_lifecycle(verbose: bool = False, test_names: list = None) -> bool:
     """Test the app's startup and shutdown steps and their runner, the middleware stack and the static site's routes."""
     print_section("Services: App Lifecycle")
@@ -1698,6 +1714,14 @@ def services_backup_envelope(verbose: bool = False, test_names: list = None) -> 
     print_info("Testing: backend/app/services/platform/instance_backup/envelope.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_envelope.py", test_names)
     return run_command(cmd, "Secure backup envelope tests", verbose=verbose)
+
+
+def services_backup_sealed(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the sealed nightly backup (.tar of manifest, password.age, backup.lfbk; lot L3) against the common vectors."""
+    print_section("Services: Sealed Backup")
+    print_info("Testing: backend/app/services/platform/instance_backup/sealed.py, envelope.py (unlock_header), fixtures/backup_l3/")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_sealed.py", test_names)
+    return run_command(cmd, "Sealed backup tests", verbose=verbose)
 
 
 def services_backup_secure_rules(verbose: bool = False, test_names: list = None) -> bool:
@@ -3060,6 +3084,24 @@ Note: No backend server required.
     add_test(cat, "app-lifecycle", services_app_lifecycle, name="App Lifecycle", desc="Step runner (order, awaits, deadline cuts, a failure never skips the shutdown, step in progress); app steps in relative order, late-bound; middleware outermost first; SPA catch-all last", isolation="pure")
     add_test(
         cat,
+        "await-restore-mode",
+        services_await_restore_mode,
+        name="Awaiting Restore Mode",
+        desc="H-62 (L3 §6): LIBREFOLIO_AWAIT_RESTORE read at each call with the values of LIBREFOLIO_BLOCKED, a typo stops the start; Step.skip_when skips a step at its turn; exactly admin-bootstrap, scheduler, provider-prewarm, market-holidays, brim-parse-pool, stored-currencies skipped in the mode",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "restore-guard",
+        services_restore_guard,
+        name="Restore Guard",
+        desc="B-33 (H, 22/10): probe_restore_state asks apply.restore_state_problem (the given or the instance's data directory), keeps the answer, logs one error line with the reason and never the state's content; restore_interrupted() False in a process that never probed; restore-state right after pending-restore, never stops the start; while interrupted post-migration-fixes, lone-transfer-legs and the six steps of the mode call nothing, the kept steps carry no skip",
+        # PURE: B's hook replaced by monkeypatch (or a state file under tmp_path), the steps run alone with their calls
+        # recorded, one child interpreter that only imports the module. No DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "static-cache-policy",
         services_static_cache_policy,
         name="Static Cache Policy",
@@ -3162,6 +3204,16 @@ Note: No backend server required.
         name="Secure Backup Envelope",
         desc="The .lfbk envelope (lot B4, decisions 38 and P12): its constants; round trips at the chunk edges; the 52-byte header at its offsets; known answers built with cryptography's Scrypt and AESGCM; bounds refused before any derivation (envelope_unsupported), too short or not ours (envelope_damaged); wrong_password, also for changed key parameters; every tampering of the chunks (a byte, a tag, truncations, an appended, swapped, dropped or repeated chunk) envelope_damaged with nothing left; NFC, not NFKC; no overwrite, 0600, .part only while writing, progress; the key never in its repr; constant memory",
         # PURE: files under tmp_path only. No DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-sealed",
+        services_backup_sealed,
+        name="Sealed Backup",
+        desc="The sealed nightly backup (lot L3, contract §3 and §9): every case of fixtures/backup_l3/vectors.json through read_sealed, open_password, check_password, extract_envelope and the envelope's decryption with its expected outcome; write_sealed rebuilding the good .tar byte for byte (0600, no .part, no overwrite); build_manifest's bytes; new_password; seal_password binary age and open_password (sealed_no_identity, sealed_password_invalid); read_sealed refusals (PAX, GNU, directory, link, members, small members over 4096, not LFBK v1, truncated; manifest UTF-8 JSON object, duplicate, unknown or missing keys, types, format, version, recipients, size and hash, password_member); read_identities and identity_file_text; is_sealed; the cloud derivation rows; interop with the age binary when installed (skipped visibly otherwise); envelope.unlock_header",
+        # PURE: committed vectors read only, files under tmp_path; the optional age binary run on tmp_path files. No DB,
+        # no server, no network.
         isolation="pure",
     )
     add_test(

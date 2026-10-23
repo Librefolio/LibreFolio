@@ -16,7 +16,8 @@ because a run can outlast the 60 seconds after which Fly's proxy closes a connec
 once, one every ``WAKE_KEEPALIVE_SECONDS`` while the jobs run, then the JSON of ``WakeSyncResponse``, which the leading
 whitespace leaves valid. Once the first space has left, the status is 200 whatever happens, and the body's ``status``
 tells how the run ended: ``blocked`` on an instance its hosting provider blocked, where the route stays allowed
-(``api/v1/instance_block.py``) and no job runs. A wake-up is never the user's presence (``sleep_wake/activity.py``).
+(``api/v1/instance_block.py``) and no job runs, ``awaiting_restore`` on an instance its panel is restoring (H-62), where
+no job runs either. A wake-up is never the user's presence (``sleep_wake/activity.py``).
 """
 
 import asyncio
@@ -27,9 +28,11 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 
+from backend.app.config.platform import awaiting_restore
 from backend.app.logging_config import get_logger
 from backend.app.schemas.sleep_wake import WakeSyncJob, WakeSyncResponse
 from backend.app.services.platform.hosting_panel.access import PanelCaller, PanelScope, panel_access
+from backend.app.services.platform.restore_guard import restore_interrupted
 from backend.app.services.platform.scheduler.scheduler import RunReport, run_due_jobs
 from backend.app.services.platform.sleep_wake import idle_monitor
 
@@ -84,7 +87,14 @@ async def _wake_run() -> WakeSyncResponse:
     """The run of one wake-up, to its end whatever happens to the request that asked for it."""
     started_at = _utc_now()
     try:
-        result = _response(await run_due_jobs("wake"))
+        # H-62: an instance awaiting its restore has no data to bring up to date; B-33: nor one whose restore stopped half
+        # way, which serves none. No job runs
+        if awaiting_restore():
+            result = WakeSyncResponse(status="awaiting_restore", started_at=started_at, finished_at=_utc_now())
+        elif restore_interrupted():
+            result = WakeSyncResponse(status="restore_interrupted", started_at=started_at, finished_at=_utc_now())
+        else:
+            result = _response(await run_due_jobs("wake"))
     except Exception as exc:
         logger.exception("Wake-up run failed")
         result = WakeSyncResponse(status="error", started_at=started_at, finished_at=_utc_now(), error=type(exc).__name__)

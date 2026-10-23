@@ -131,6 +131,9 @@ function job(overrides: Partial<Job> = {}): Job {
         warnings: [],
         error_code: null,
         encrypted: false,
+        instance_key_included: false,
+        sealed: false,
+        sealed_recipients: [],
         ...overrides,
     };
 }
@@ -1500,5 +1503,34 @@ describe('BackupDownloadCard — B-8, defect of the review (19/10): a secure req
         expect(screen.queryByTestId('backup-error'), 'the backup asked for: no error').toBeNull();
         expect(sessionStorage.getItem(KEY), 'the archive must stay downloadable after a reload').toBe(RUNNING_JOB_ID);
         expect(events(), 'followed as one started here: its end announced, once, with no toast').toEqual([{name: 'backup.created', detail: {job_id: RUNNING_JOB_ID, file_size: FILE_SIZE, warnings: [], encrypted: false}}]);
+    });
+});
+
+// =====================================================================================================================
+// L3-2 — the phase `sealing` of a sealed backup (workstream B, interface §7; written red first)
+// =====================================================================================================================
+
+/*
+ * A sealed backup of the hosting panel ends with a short phase, `sealing` (contract L3 §4): the password encrypted for
+ * the recipients, the tar written. The tab may follow such a job, so the card names that phase with its own label,
+ * `backup.download.phase.sealing` — never the label of another phase, nor the «creating» fallback of a job with no
+ * phase. Red today: the card has no label for `sealing`.
+ */
+
+/** L3-2's new phase: the generated client does not know it yet. */
+const SEALING = 'sealing' as string as NonNullable<InstanceBackupJob['phase']>;
+
+describe('L3-2 — BackupDownloadCard: the phase sealing', () => {
+    it('a job sealing: data-phase sealing and its own label, not another phase nor the creating fallback', async () => {
+        api.start.mockResolvedValueOnce(running({phase: SEALING, done_bytes: 600, total_bytes: 1200}));
+        render(BackupDownloadCard);
+
+        await clickCreate();
+
+        const progress = screen.getByTestId('backup-progress');
+        expect(progress).toHaveAttribute('data-phase', 'sealing');
+        expect(progress, 'the label of the phase sealing').toHaveTextContent('backup.download.phase.sealing');
+        expect(progress, 'not the fallback of a job with no phase').not.toHaveTextContent('backup.download.creating');
+        expect(progressBar()).toHaveAttribute('aria-valuenow', '50');
     });
 });
