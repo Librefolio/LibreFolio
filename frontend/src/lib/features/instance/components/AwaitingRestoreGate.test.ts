@@ -36,6 +36,14 @@
  * default poll reads the same `$lib/api` mock, which never answers. Red until B-33: the gate ignores the prop and the
  * field, so the interrupted page never shows (and the awaiting page or the app stays on screen).
  *
+ * Lot H5-3: the gate gains the optional prop `readRestoreInterruptedReason?: () => 'restore_state' | 'owner_assignment' |
+ * null | undefined`, by default `instanceConfig.config.restore_interrupted_reason ?? null`, and passes it to the page as
+ * `reason`. The precedence is unchanged (interrupted wins over awaiting, else the routes); a reason on its own, with
+ * `restore_interrupted` false, shows nothing. Which page variant is on screen is read from the docs link
+ * (`instance-restore-interrupted-docs`), an untranslated contract: the owner reason links `/mkdocs/admin/backup_restore/`
+ * (no anchor), the restore-state one (also absent and null) the `#backup-pending-unreadable` anchor. Red until H5-3:
+ * the gate ignores the prop and the field, so the owner cases still show the restore-state link.
+ *
  * Registered in `front_component_unit` (`scripts/test_runner/_frontend_utility.py`, action `component-unit`).
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
@@ -48,7 +56,7 @@ const mocks = await vi.hoisted(async () => {
     const {reactiveBox} = await import('$test/runes.svelte');
     return {
         // What the fake `instanceConfig.config` returns: a config with or without `mode`.
-        config: reactiveBox<{value: {profile: string; mode?: string; restore_interrupted?: unknown}}>({value: {profile: 'managed'}}),
+        config: reactiveBox<{value: {profile: string; mode?: string; restore_interrupted?: unknown; restore_interrupted_reason?: unknown}}>({value: {profile: 'managed'}}),
         load: vi.fn(() => Promise.resolve()).mockName('instanceConfig.load'),
         getInstanceConfig: vi.fn(() => new Promise(() => {})).mockName('zodiosApi.get_instance_config_api_v1_system_instance_get'),
     };
@@ -285,6 +293,137 @@ describe('AwaitingRestoreGate — an unreadable restore state (B-33)', () => {
             flushSync();
 
             expectChildrenOnly(`restore_interrupted ${String(value)}`);
+            expect(screen.queryByTestId(INTERRUPTED), 'no interrupted page').toBeNull();
+        });
+    });
+});
+
+describe('AwaitingRestoreGate — the reason of an interrupted restore (H5-3)', () => {
+    const INTERRUPTED = 'instance-restore-interrupted';
+    const DOCS = 'instance-restore-interrupted-docs';
+    const RESTORE_STATE_HREF = '/mkdocs/admin/cli_tools/#backup-pending-unreadable';
+    const OWNER_HREF = '/mkdocs/admin/backup_restore/';
+
+    type Reason = 'restore_state' | 'owner_assignment' | null | undefined;
+
+    function docsHref(): string | null {
+        return screen.getByTestId(DOCS).getAttribute('href');
+    }
+
+    /** Mount the gate with injected mode, interrupted flag and reason, all of which the test flips. */
+    function mountReasonGate(initial: {mode?: string; interrupted: boolean; reason: Reason}) {
+        const mode = reactiveBox<{value: string | undefined}>({value: initial.mode ?? 'normal'});
+        const interrupted = reactiveBox<{value: boolean}>({value: initial.interrupted});
+        const reason = reactiveBox<{value: Reason}>({value: initial.reason});
+        const {children, mounts} = childrenProbe();
+        render(AwaitingRestoreGate, {
+            props: {children, loadConfig: vi.fn(() => Promise.resolve()), readMode: () => mode.value, readRestoreInterrupted: () => interrupted.value, readRestoreInterruptedReason: () => reason.value},
+        });
+        flushSync();
+        return {mode, interrupted, reason, mounts};
+    }
+
+    describe('injected reason', () => {
+        it('passes owner_assignment to the page: the docs link is the backup and restore guide, whole', () => {
+            const {mounts} = mountReasonGate({interrupted: true, reason: 'owner_assignment'});
+
+            expect(screen.getByTestId(INTERRUPTED), 'the interrupted page').toBeInTheDocument();
+            expect(docsHref()).toBe(OWNER_HREF);
+            expect(screen.queryByTestId(CHILD), 'the app is not on screen').toBeNull();
+            expect(mounts.count, 'the app was never mounted').toBe(0);
+        });
+
+        it.each([
+            ['restore_state', 'restore_state'],
+            ['null', null],
+            ['undefined', undefined],
+        ] as const)('shows today’s page, with the CLI anchor, for reason %s', (_case, reason) => {
+            mountReasonGate({interrupted: true, reason});
+
+            expect(screen.getByTestId(INTERRUPTED)).toBeInTheDocument();
+            expect(docsHref()).toBe(RESTORE_STATE_HREF);
+        });
+
+        it('follows the reason both ways while the page stays up', async () => {
+            const {reason} = mountReasonGate({interrupted: true, reason: 'restore_state'});
+            expect(docsHref(), 'Barrier: the restore-state page').toBe(RESTORE_STATE_HREF);
+
+            reason.value = 'owner_assignment';
+            await tick();
+            expect(docsHref()).toBe(OWNER_HREF);
+
+            reason.value = 'restore_state';
+            await tick();
+            expect(docsHref()).toBe(RESTORE_STATE_HREF);
+        });
+
+        it('keeps the precedence: interrupted wins over awaiting, with either reason', () => {
+            const {mounts} = mountReasonGate({mode: 'awaiting_restore', interrupted: true, reason: 'owner_assignment'});
+
+            expect(screen.getByTestId(INTERRUPTED)).toBeInTheDocument();
+            expect(docsHref()).toBe(OWNER_HREF);
+            expect(screen.queryByTestId(PAGE), 'no awaiting-restore page').toBeNull();
+            expect(mounts.count, 'the app was never mounted').toBe(0);
+        });
+
+        it.each([
+            ['normal', 'normal', CHILD],
+            ['awaiting_restore', 'awaiting_restore', PAGE],
+        ])('a reason alone, without restore_interrupted, changes nothing: mode %s', (_case, mode, shown) => {
+            mountReasonGate({mode, interrupted: false, reason: 'owner_assignment'});
+
+            expect(screen.getByTestId(shown), `mode ${mode}`).toBeInTheDocument();
+            expect(screen.queryByTestId(INTERRUPTED), 'no interrupted page').toBeNull();
+        });
+
+        it('gives the app back when the flag turns off, whatever the reason', async () => {
+            const {interrupted} = mountReasonGate({interrupted: true, reason: 'owner_assignment'});
+            expect(docsHref(), 'Barrier: the owner page').toBe(OWNER_HREF);
+
+            interrupted.value = false;
+            await tick();
+
+            expectChildrenOnly('the owner exists, the restore is over');
+            expect(screen.queryByTestId(INTERRUPTED), 'no interrupted page').toBeNull();
+        });
+    });
+
+    describe('defaults: instanceConfig.config.restore_interrupted_reason', () => {
+        it('reads owner_assignment: the page links the backup and restore guide; flips to restore_state with the config', async () => {
+            mocks.config.value = {profile: 'managed', mode: 'normal', restore_interrupted: true, restore_interrupted_reason: 'owner_assignment'};
+            const {children, mounts} = childrenProbe();
+            render(AwaitingRestoreGate, {props: {children}});
+            flushSync();
+            expect(screen.getByTestId(INTERRUPTED), 'the interrupted page').toBeInTheDocument();
+            expect(docsHref()).toBe(OWNER_HREF);
+            expect(mounts.count, 'the app was never mounted').toBe(0);
+
+            mocks.config.value = {profile: 'managed', mode: 'normal', restore_interrupted: true, restore_interrupted_reason: 'restore_state'};
+            await tick();
+            expect(docsHref()).toBe(RESTORE_STATE_HREF);
+        });
+
+        it.each([
+            ['restore_state', 'restore_state'],
+            ['null', null],
+            ['absent (an older server)', undefined],
+        ])('shows today’s page when the reason is %s', (_case, value) => {
+            mocks.config.value = value === undefined ? {profile: 'managed', mode: 'normal', restore_interrupted: true} : {profile: 'managed', mode: 'normal', restore_interrupted: true, restore_interrupted_reason: value};
+            const {children} = childrenProbe();
+            render(AwaitingRestoreGate, {props: {children}});
+            flushSync();
+
+            expect(screen.getByTestId(INTERRUPTED)).toBeInTheDocument();
+            expect(docsHref()).toBe(RESTORE_STATE_HREF);
+        });
+
+        it('a reason alone, with restore_interrupted false, shows the app', () => {
+            mocks.config.value = {profile: 'managed', mode: 'normal', restore_interrupted: false, restore_interrupted_reason: 'owner_assignment'};
+            const {children} = childrenProbe();
+            render(AwaitingRestoreGate, {props: {children}});
+            flushSync();
+
+            expectChildrenOnly('restore_interrupted false');
             expect(screen.queryByTestId(INTERRUPTED), 'no interrupted page').toBeNull();
         });
     });

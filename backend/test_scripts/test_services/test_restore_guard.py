@@ -72,7 +72,7 @@ SKIPPED_WHEN_INTERRUPTED = {
 }
 #: The steps that keep running while interrupted (B guards the copies itself; the serving lock keeps ``--recover`` out
 #: while LibreFolio runs).
-KEPT_WHEN_INTERRUPTED = ("pending-restore", "restore-state", "serving-lock", "database", "global-settings", "restore-commit", "backup-leftovers", "idle-monitor")
+KEPT_WHEN_INTERRUPTED = ("pending-restore", "restore-state", "serving-lock", "database", "global-settings", "restore-commit", "restore-owner", "backup-leftovers", "idle-monitor")
 
 _MISSING = object()
 
@@ -284,8 +284,8 @@ async def test_the_restore_state_step_runs_the_probe_and_never_stops_the_start(m
 
 
 def test_the_steps_kept_while_interrupted_carry_no_skip():
-    """(b) ``database``, ``global-settings``, ``pending-restore``, ``restore-state``, ``restore-commit``,
-    ``backup-leftovers``, ``serving-lock`` and ``idle-monitor`` are startup steps and nothing skips them."""
+    """(b) ``database``, ``global-settings``, ``pending-restore``, ``restore-state``, ``restore-commit``, ``restore-owner``
+    (H5-3), ``backup-leftovers``, ``serving-lock`` and ``idle-monitor`` are startup steps and nothing skips them."""
     steps = _steps()
     missing = [name for name in KEPT_WHEN_INTERRUPTED if name not in steps]
     assert missing == [], f"these kept steps are not in STARTUP_STEPS: {missing}"
