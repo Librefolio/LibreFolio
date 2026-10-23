@@ -1591,6 +1591,14 @@ def services_await_restore_mode(verbose: bool = False, test_names: list = None) 
     return run_command(cmd, "Awaiting restore mode tests", verbose=verbose)
 
 
+def services_restore_guard(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the probe of an unreadable restore state and the startup it stops serving data (B-33, H)."""
+    print_section("Services: Restore Guard")
+    print_info("Testing: services/platform/restore_guard.py (probe_restore_state, restore_interrupted), app_lifespan.STARTUP_STEPS restore-state and the eight skipped steps")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_restore_guard.py", test_names)
+    return run_command(cmd, "Restore guard tests", verbose=verbose)
+
+
 def services_app_lifecycle(verbose: bool = False, test_names: list = None) -> bool:
     """Test the app's startup and shutdown steps and their runner, the middleware stack and the static site's routes."""
     print_section("Services: App Lifecycle")
@@ -3044,6 +3052,16 @@ Note: No backend server required.
         services_await_restore_mode,
         name="Awaiting Restore Mode",
         desc="H-62 (L3 §6): LIBREFOLIO_AWAIT_RESTORE read at each call with the values of LIBREFOLIO_BLOCKED, a typo stops the start; Step.skip_when skips a step at its turn; exactly admin-bootstrap, scheduler, provider-prewarm, market-holidays, brim-parse-pool, stored-currencies skipped in the mode",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "restore-guard",
+        services_restore_guard,
+        name="Restore Guard",
+        desc="B-33 (H, 22/10): probe_restore_state asks apply.restore_state_problem (the given or the instance's data directory), keeps the answer, logs one error line with the reason and never the state's content; restore_interrupted() False in a process that never probed; restore-state right after pending-restore, never stops the start; while interrupted post-migration-fixes, lone-transfer-legs and the six steps of the mode call nothing, the kept steps carry no skip",
+        # PURE: B's hook replaced by monkeypatch (or a state file under tmp_path), the steps run alone with their calls
+        # recorded, one child interpreter that only imports the module. No DB, no server, no network.
         isolation="pure",
     )
     add_test(

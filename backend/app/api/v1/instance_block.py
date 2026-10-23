@@ -44,6 +44,7 @@ from backend.app.api.v1.backup import restore as backup_restore
 from backend.app.api.v1.system import block, health, info, instance, ready, wake
 from backend.app.config.platform import awaiting_restore, instance_blocked
 from backend.app.db.session import get_session_generator
+from backend.app.services.platform.restore_guard import restore_interrupted
 
 INSTANCE_BLOCKED_CODE = "instance_blocked"
 
@@ -150,3 +151,24 @@ async def refuse_when_awaiting_restore(request: Request) -> None:
     """
     if awaiting_restore() and request.scope.get("endpoint") not in ALLOWED_WHEN_AWAITING_RESTORE:
         raise HTTPException(status_code=status.HTTP_423_LOCKED, detail={"code": INSTANCE_AWAITING_RESTORE_CODE, "message": "This instance is waiting for its hosting provider to restore its data"})
+
+
+# =============================================================================
+# A restore stopped half way (lot B-33, the start's part)
+# =============================================================================
+
+INSTANCE_RESTORE_INTERRUPTED_CODE = "instance_restore_interrupted"
+
+#: What answers while the state of the restore cannot be read: the same as while the instance awaits its restore —
+#: the probes, the public configuration (with ``restore_interrupted``), the scheduled wake-up (it runs nothing), and the
+#: hosting panel's routes. A test pins it equal to ``ALLOWED_WHEN_AWAITING_RESTORE``.
+ALLOWED_WHEN_RESTORE_INTERRUPTED = ALLOWED_WHEN_AWAITING_RESTORE
+
+
+async def refuse_when_restore_interrupted(request: Request) -> None:
+    """Router dependency of ``/api/v1``, third, after the block and the awaiting-restore mode: while this process found
+    the state of the restore unreadable at its start (``services/platform/restore_guard.py``), every endpoint not in
+    ``ALLOWED_WHEN_RESTORE_INTERRUPTED`` answers 423 ``instance_restore_interrupted`` — to anyone: LibreFolio cannot tell
+    which data it holds, and serves none until the administrator chooses with ``./dev.py backup pending --recover``."""
+    if restore_interrupted() and request.scope.get("endpoint") not in ALLOWED_WHEN_RESTORE_INTERRUPTED:
+        raise HTTPException(status_code=status.HTTP_423_LOCKED, detail={"code": INSTANCE_RESTORE_INTERRUPTED_CODE, "message": "A restore of this instance stopped half way: it serves no data until its administrator recovers it"})

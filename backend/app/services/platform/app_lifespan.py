@@ -40,6 +40,7 @@ from backend.app.services.platform.instance_backup.apply import apply_pending_re
 from backend.app.services.platform.instance_backup.leftovers import sweep_backup_leftovers
 from backend.app.services.platform.lifecycle import Step, run_shutdown_steps, run_startup_steps
 from backend.app.services.platform.plugin_secrets_check import log_plugin_secrets_check
+from backend.app.services.platform.restore_guard import probe_restore_state, restore_interrupted
 from backend.app.services.platform.scheduler import get_shutdown_event, scheduler_loop
 from backend.app.services.platform.shutdown_budget import child_processes_step, install_shutdown_watchdog, shutdown_deadline
 from backend.app.services.platform.sleep_wake.idle_monitor import start_idle_monitor, stop_idle_monitor
@@ -218,9 +219,16 @@ def _shutdown_brim_parse_pool() -> None:
 # The steps, in order
 # =============================================================================
 
-#: H-62: an instance awaiting its restore (``LIBREFOLIO_AWAIT_RESTORE``) skips the steps marked ``skip_when=awaiting_restore``:
+
+def _serving_no_data() -> bool:
+    """The instance serves no data: it awaits its restore (H-62) or its restore stopped half way (B-33)."""
+    return awaiting_restore() or restore_interrupted()
+
+
+#: H-62: an instance awaiting its restore (``LIBREFOLIO_AWAIT_RESTORE``) skips the steps marked ``skip_when=_serving_no_data``:
 #: no initial administrator nor ``/setup`` link (a backup brings its own), no scheduler nor background warm-ups on an
-#: empty database. The database, the restore's own steps and the idle monitor still run.
+#: empty database. B-33: so does an instance whose restore state cannot be read, which also skips the repairs of the
+#: data (``skip_when=restore_interrupted``). The database, the restore's own steps and the idle monitor still run.
 STARTUP_STEPS: tuple[Step, ...] = (
     # First: from here on a SIGTERM or a SIGINT starts the shutdown budget (only under uvicorn's own signal handlers)
     Step("shutdown-watchdog", lambda: install_shutdown_watchdog()),
@@ -229,6 +237,9 @@ STARTUP_STEPS: tuple[Step, ...] = (
     Step("signal-plugins", lambda: _load_signal_plugins()),
     Step("tool-catalog", lambda: _load_tool_catalog()),
     Step("pending-restore", lambda: asyncio.to_thread(apply_pending_restore)),
+    # B-33: a state of the restore that cannot be read may hide a restore stopped half way: from here on this process
+    # serves no data (restore_guard.py), and the steps that repair, write or warm up the data are skipped
+    Step("restore-state", lambda: asyncio.to_thread(probe_restore_state)),
     # Ensure all data directories exist (prod or test based on mode)
     Step("data-directories", lambda: ensure_data_dirs()),
     # Before any step reads the data: from here on a restore never swaps or undoes under this process
@@ -238,13 +249,13 @@ STARTUP_STEPS: tuple[Step, ...] = (
     # Ensure database exists and is migrated
     Step("database", lambda: ensure_database_exists()),
     # Then the repairs that cannot be migrations, before anything else opens the database
-    Step("post-migration-fixes", lambda: asyncio.to_thread(run_post_migration_fixes_at_startup)),
+    Step("post-migration-fixes", lambda: asyncio.to_thread(run_post_migration_fixes_at_startup), skip_when=restore_interrupted),
     # Then the lone giving TRANSFER legs older deletions left, at their Auto cost, which the fixes cannot compute (decision 47)
-    Step("lone-transfer-legs", lambda: convert_lone_giving_legs_at_startup()),
+    Step("lone-transfer-legs", lambda: convert_lone_giving_legs_at_startup(), skip_when=restore_interrupted),
     # Initialize global settings with defaults (if not already present)
     Step("global-settings", lambda: _initialize_global_settings()),
     # The initial administrator of LIBREFOLIO_ADMIN_EMAIL (F02, workstream A), once the settings exist
-    Step("admin-bootstrap", lambda: startup_admin_bootstrap(), skip_when=awaiting_restore),
+    Step("admin-bootstrap", lambda: startup_admin_bootstrap(), skip_when=_serving_no_data),
     # The first start on restored data completed: commit the restore (B3), before any step reports on or serves the data.
     # A step before this one that raises rolls the restore back at the next start; one after it no longer does (N57).
     Step("restore-commit", lambda: asyncio.to_thread(finish_pending_restore)),
@@ -255,11 +266,11 @@ STARTUP_STEPS: tuple[Step, ...] = (
     Step("plugin-secrets-check", lambda: log_plugin_secrets_check()),
     # The audit of the stored currency codes, in background: one warning when some are not ISO 4217 codes (E-19a). After
     # both repairs and once the restore is settled, since it reports on the data (N57); read-only, never a stop or a wait
-    Step("stored-currencies", lambda: _start_stored_currency_audit(), skip_when=awaiting_restore),
-    Step("provider-prewarm", lambda: _start_provider_prewarm(), skip_when=awaiting_restore),
-    Step("market-holidays", lambda: _start_market_holiday_prewarm(), skip_when=awaiting_restore),
-    Step("brim-parse-pool", lambda: _start_brim_parse_pool_prewarm(), skip_when=awaiting_restore),
-    Step("scheduler", lambda: _start_scheduler(), skip_when=awaiting_restore),
+    Step("stored-currencies", lambda: _start_stored_currency_audit(), skip_when=_serving_no_data),
+    Step("provider-prewarm", lambda: _start_provider_prewarm(), skip_when=_serving_no_data),
+    Step("market-holidays", lambda: _start_market_holiday_prewarm(), skip_when=_serving_no_data),
+    Step("brim-parse-pool", lambda: _start_brim_parse_pool_prewarm(), skip_when=_serving_no_data),
+    Step("scheduler", lambda: _start_scheduler(), skip_when=_serving_no_data),
     Step("idle-monitor", lambda: start_idle_monitor()),
 )
 
