@@ -27,7 +27,6 @@ from backend.app.services.email import delivery
 from backend.app.services.email.delivery import EmailError, EmailRateLimitedError, EmailUnavailableError, send_email
 from backend.app.services.email.links import email_link, links_state, require_links
 from backend.app.services.email.messages import build_email_changed, build_invite, build_password_reset, build_test_message, email_language, supported_email_language
-from backend.app.services.platform.client_address import client_rate_key
 from backend.app.utils.datetime_utils import ensure_utc, utcnow
 from backend.app.utils.runtime.rate_window import SlidingWindowLimiter
 
@@ -37,11 +36,12 @@ LinkPurpose = Literal["invite", "password_reset"]
 
 _PURPOSES: dict[str, AccountTokenPurpose] = {"invite": AccountTokenPurpose.INVITE, "password_reset": AccountTokenPurpose.PASSWORD_RESET}
 
-#: «Forgot password», per client address: 10 requests every 15 minutes, keyed by workstream H's ``client_rate_key()``:
-#: an IPv6 client counts by its /64, which one subscriber usually holds whole. The address is H's ``client_address()``:
-#: the header a trusted proxy sets when ``LIBREFOLIO_CLIENT_IP_HEADER`` names it, otherwise the connection's, which
-#: follows ``X-Forwarded-For`` only from the proxies uvicorn trusts (``FORWARDED_ALLOW_IPS``).
-FORGOT_BY_ADDRESS = SlidingWindowLimiter(10, 15 * 60)
+# «Forgot password», per client address: not a limiter of its own. It spends the counter every activation and reset
+# email asks for, ``delivery.ADDRESS_BUDGET`` (``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS`` an hour, 20 by default),
+# keyed by workstream H's ``client_rate_key()``: an IPv6 client counts by its /64, which one subscriber usually holds
+# whole. The address is H's ``rate_limit_address()``, from ``client_address()``: the header a trusted proxy sets when
+# ``LIBREFOLIO_CLIENT_IP_HEADER`` names it, otherwise the connection's, which follows ``X-Forwarded-For`` only from the
+# proxies uvicorn trusts (``FORWARDED_ALLOW_IPS``).
 #: «Forgot password», per identifier as written (case-insensitive): 3 requests an hour, whether an account matches or not.
 FORGOT_BY_IDENTIFIER = SlidingWindowLimiter(3, 60 * 60)
 #: «Forgot password», per recipient mailbox (``delivery.mailbox_budget_key()``: the aliases of one mailbox count
@@ -189,21 +189,27 @@ async def admit_forgotten_password(address: str | None, identifier: str) -> None
     """Whether a «forgot password» request may go on, before anything about the accounts is read.
 
     Raises ``EmailUnavailableError`` or ``EmailLinksUnavailableError`` (the configuration, the same for everyone) and
-    ``EmailRateLimitedError``: too many requests from this address or for this identifier, or the hourly budget of the
-    instance spent. None of them depends on whether an account matches.
+    ``EmailRateLimitedError``: too many requests from this address (the counter shared with the activation emails) or for
+    this identifier, or the hourly budget of the instance spent; ``retry_after`` is the longest wait of the counters that
+    refuse. None of them depends on whether an account matches.
     """
     state = await require_email()
     require_links()
-    # Without an address (a unix socket), one shared count would let a single client block the feature for everyone:
-    # the limits per identifier and per account, and the hourly budget, still apply.
-    checks = ((FORGOT_BY_ADDRESS, client_rate_key(address)), (FORGOT_BY_IDENTIFIER, identifier.strip().casefold()))
-    for limiter, key in checks:
-        if key is None:
-            continue
-        decision = limiter.hit(key)
-        if not decision.allowed:
-            raise EmailRateLimitedError(decision.retry_after)
+    # The instance's budget and the address's counter are only peeked here: the address's unit is spent by
+    # ``forgotten_password_work`` when a reset email really goes, so a request for an unknown account costs it nothing, and
+    # the answer cannot depend on whether an account matches. The identifier's counter is hit (a refused hit is not
+    # recorded). Without an address (a unix socket), the address counter does not apply: one shared count would let a
+    # single client block the feature for everyone; the limits per identifier and per account, and the hourly budget,
+    # still do.
     budget = delivery.budget_status(state.max_per_hour)
+    identifier_key = identifier.strip().casefold()
+    by_address = delivery.address_budget_peek(address)
+    if not by_address.allowed:
+        # The wait is the longest of the counters that stop the request (a peek: this request does not count there)
+        raise EmailRateLimitedError(delivery.longest_wait(by_address, FORGOT_BY_IDENTIFIER.peek(identifier_key), budget))
+    by_identifier = FORGOT_BY_IDENTIFIER.hit(identifier_key)
+    if not by_identifier.allowed:
+        raise EmailRateLimitedError(delivery.longest_wait(by_identifier, budget))
     if not budget.allowed:
         raise EmailRateLimitedError(budget.retry_after)
 
@@ -237,14 +243,31 @@ async def _admin_link_live(session: AsyncSession, user_id: int, now: datetime) -
     return (await session.execute(statement.limit(1))).first() is not None
 
 
-async def forgotten_password_work(identifier: str, *, engine: AsyncEngine | None = None, now: datetime | None = None) -> None:
+async def _held_back(session: AsyncSession, user_id: int, moment: datetime) -> str | None:
+    """Why no reset email goes to the account now, as the line to log, or None: it had a reset link moments ago (the per-account limits), or an administrator's reset link is still live."""
+    if not await _reset_emails_allowed(session, user_id, moment):
+        return "Forgotten password: the account had a reset link moments ago, nothing sent"
+    if await _admin_link_live(session, user_id, moment):
+        return "Forgotten password: an administrator's reset link is still live, nothing sent"
+    return None
+
+
+def _reset_race_lost(created: list[datetime], moment: datetime) -> bool:
+    """Whether the reset links of the account, the new one included, are past its per-account limits: another request won."""
+    return len(created) > RESET_EMAILS_PER_HOUR or sum(value > moment - RESET_EMAIL_MIN_INTERVAL for value in created) > 1
+
+
+async def forgotten_password_work(identifier: str, *, engine: AsyncEngine | None = None, now: datetime | None = None, address: str | None = None) -> None:
     """The work of a «forgot password» request, after its answer: a reset link by email to the account, if there is one.
 
     Runs in the background with a session of its own. It looks the account up as the login does; an unknown or
     inactive account, an account past its limits or holding an administrator's live reset link, a mailbox past its
     limit, a configuration changed meanwhile or a refused email end it in silence, logged without the identifier. The
     link is created only once the email can go out (configuration, links and hourly budget checked again), and revoked
-    when the email does not go out after all. Never raises.
+    when the email does not go out after all. ``address`` is the client's: once every check has admitted the email, just
+    before the commit, the work spends a unit of that address's counter (``delivery.ADDRESS_BUDGET``); if the counter
+    filled meanwhile, nothing is sent and nothing is kept. Only an email that goes is counted, and the answer to the
+    request never depends on it. Never raises.
     """
     try:
         async with AsyncSession(engine or get_async_engine(), expire_on_commit=False) as session:
@@ -255,11 +278,9 @@ async def forgotten_password_work(identifier: str, *, engine: AsyncEngine | None
             # Read now: a rollback expires ``user``, and an async session cannot reload it inside a log call.
             user_id = user.id
             moment = now or utcnow()
-            if not await _reset_emails_allowed(session, user_id, moment):
-                logger.info("Forgotten password: the account had a reset link moments ago, nothing sent", user_id=user_id)
-                return
-            if await _admin_link_live(session, user_id, moment):
-                logger.info("Forgotten password: an administrator's reset link is still live, nothing sent", user_id=user_id)
+            held_back = await _held_back(session, user_id, moment)
+            if held_back is not None:
+                logger.info(held_back, user_id=user_id)
                 return
             # Checked again now, since the answer went out: nothing is created when the email cannot go.
             state = await require_email()
@@ -274,9 +295,13 @@ async def forgotten_password_work(identifier: str, *, engine: AsyncEngine | None
             # Counted again inside the write transaction, the new link included: of two requests that passed the first
             # count together, the second sees the first one's link here and stops (SQLite writes one at a time).
             created = await _recent_resets(session, user_id, moment)
-            if len(created) > RESET_EMAILS_PER_HOUR or sum(value > moment - RESET_EMAIL_MIN_INTERVAL for value in created) > 1:
+            if _reset_race_lost(created, moment):
                 await session.rollback()
                 logger.info("Forgotten password: another request won the race, nothing sent", user_id=user_id)
+                return
+            if not delivery.address_budget_hit(address).allowed:
+                await session.rollback()
+                logger.info("Forgotten password: the client address had its emails moments ago, nothing sent", user_id=user_id)
                 return
             await session.commit()
             # Read now: after a rollback the row is expired, and an async session cannot reload it inside the handler.

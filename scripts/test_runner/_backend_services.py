@@ -2336,7 +2336,7 @@ Note: No backend server required.
         "email-config",
         services_email_config,
         name="E-mail Configuration",
-        desc="LIBREFOLIO_SMTP_* accessors read at call time: blank is unset, three TLS modes with their default ports, port and hourly limit in ASCII digits, one mailbox for From and Reply-To (no CR/LF, no second address), the password through env_secret, EmailConfigError naming the variable and never the password",
+        desc="LIBREFOLIO_SMTP_* accessors read at call time: blank is unset, three TLS modes with their default ports, port, hourly limit and sign-up emails per address (LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS, 20) in ASCII digits, one mailbox for From and Reply-To (no CR/LF, no second address), the password through env_secret, EmailConfigError naming the variable and never the password",
         # PURE: no lane DB, no server; every LIBREFOLIO_SMTP_* is removed then set with monkeypatch, password files in tmp_path.
         isolation="pure",
     )
@@ -2394,7 +2394,7 @@ Note: No backend server required.
         "email-verification-hooks",
         services_email_verification_hooks,
         name="E-mail Verification Hooks",
-        desc="user_usage counts an inactive account with a live verification link once (not expired, revoked or consumed; an active account once); register_user holds the account and the limit counts it, or rolls everything back on EMAIL_VERIFICATION_UNAVAILABLE (the invitation live); update_user_status revokes the verification links on a change of is_active, and on a deactivation of an account already inactive that waits (a regular inactive account unchanged), set_user_active either way (deactivating ends the wait); registration_email_allowed: 10 an hour per client address; holds_place/place_holders: inactive with a live link, now deciding; _refuse_what_cannot_turn_on: only require_email_verification off → on without an email with a link",
+        desc="user_usage counts an inactive account with a live verification link once (not expired, revoked or consumed; an active account once); register_user holds the account and the limit counts it, or rolls everything back on EMAIL_VERIFICATION_UNAVAILABLE (the invitation live); update_user_status revokes the verification links on a change of is_active, and on a deactivation of an account already inactive that waits (a regular inactive account unchanged), set_user_active either way (deactivating ends the wait); registration_email_verdict: 20 an hour per client address by default, or LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS read at every call (a bad value: the default), the instance's budget spent also holds, the wait is the longest of the counters that hold; holds_place/place_holders: inactive with a live link, now deciding; _refuse_what_cannot_turn_on: only require_email_verification off → on without an email with a link",
         # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
         # server, no SMTP conversation; the email variables removed then set with monkeypatch; the loopback only resolves.
         isolation="pure",

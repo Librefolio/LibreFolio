@@ -23,8 +23,12 @@ process environment at every call. The contract pinned here:
 9. ``EmailConfigError`` carries ``variable`` and ``code``; its message names the variable and never holds the SMTP
    password, set in the same environment.
 10. Every accessor reads the environment at each call: a change is seen at once, nothing is cached.
+11. ``signup_emails_per_address``: ``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS``, 20 by default (``DEFAULT_SIGNUP_EMAILS_PER_ADDRESS``);
+    ASCII digits, at least 1, else ``SIGNUP_EMAILS_PER_ADDRESS_INVALID``. It is the one variable of this section that
+    does not start with ``SMTP_ENV_PREFIX``: it limits the registration emails per client address, not the server.
 
-Pure: no database, no server, no network. An autouse fixture removes every ``LIBREFOLIO_SMTP_*`` the lane may have
+Pure: no database, no server, no network. An autouse fixture removes every ``LIBREFOLIO_SMTP_*`` and the
+``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS`` the lane may have
 inherited (until C-96 lands a lane carries the developer's ``.env``); each test sets only what it needs, with
 ``monkeypatch``; password files live in ``tmp_path``.
 
@@ -41,11 +45,13 @@ import pytest
 
 from backend.app.config import SecretFileError, env_secret
 from backend.app.config.email import (
+    DEFAULT_SIGNUP_EMAILS_PER_ADDRESS,
     DEFAULT_SMTP_MAX_PER_HOUR,
     DEFAULT_SMTP_PORTS,
     SMTP_ENV_PREFIX,
     TLS_MODES,
     EmailConfigError,
+    signup_emails_per_address,
     smtp_host,
     smtp_max_per_hour,
     smtp_password,
@@ -68,6 +74,8 @@ PASSWORD_FILE = "LIBREFOLIO_SMTP_PASSWORD_FILE"
 FROM = "LIBREFOLIO_SMTP_FROM"
 REPLY_TO = "LIBREFOLIO_SMTP_REPLY_TO"
 MAX_PER_HOUR = "LIBREFOLIO_SMTP_MAX_PER_HOUR"
+#: The one variable of the section outside the ``LIBREFOLIO_SMTP_`` prefix.
+SIGNUP_PER_ADDRESS = "LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS"
 
 #: Recognisable password: a message that holds it would show it.
 CANARY_PASSWORD = "c4nary-SMTP-p4ss-must-never-reach-a-message"
@@ -86,7 +94,7 @@ MAILBOX_VARIABLES = [
 def _no_inherited_smtp_variables(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every ``LIBREFOLIO_SMTP_*`` the lane inherited is removed: a test sees only the variables it sets itself."""
     for name in list(os.environ):
-        if name.startswith(SMTP_PREFIX):
+        if name.startswith(SMTP_PREFIX) or name == SIGNUP_PER_ADDRESS:
             monkeypatch.delenv(name, raising=False)
 
 
@@ -119,7 +127,9 @@ def test_the_constants_have_their_values() -> None:
     assert TLS_MODES == ("starttls", "tls", "none")
     assert DEFAULT_SMTP_PORTS == {"starttls": 587, "tls": 465, "none": 25}
     assert DEFAULT_SMTP_MAX_PER_HOUR == 50
-    print_success("prefix, modes, ports 587/465/25, 50 per hour")
+    assert DEFAULT_SIGNUP_EMAILS_PER_ADDRESS == 20
+    assert not SIGNUP_PER_ADDRESS.startswith(SMTP_PREFIX), "the signup variable is the one outside the SMTP prefix"
+    print_success("prefix, modes, ports 587/465/25, 50 per hour, 20 signup emails per address")
 
 
 def test_email_config_error_is_a_value_error() -> None:
@@ -147,10 +157,11 @@ def test_email_config_error_is_a_value_error() -> None:
         pytest.param(FROM, smtp_sender, None, id="from"),
         pytest.param(REPLY_TO, smtp_reply_to, None, id="reply-to"),
         pytest.param(MAX_PER_HOUR, smtp_max_per_hour, 50, id="max-per-hour"),
+        pytest.param(SIGNUP_PER_ADDRESS, signup_emails_per_address, 20, id="signup-emails-per-address"),
     ],
 )
 def test_a_blank_variable_is_an_unset_one(monkeypatch: pytest.MonkeyPatch, variable: str, accessor: Callable[[], object], unset_result: object, value: str | None) -> None:
-    """EMC-003 — contract 2: unset, empty or blank, each accessor gives its default — ``None``, ``starttls``, 587 (the port of ``starttls``) or 50 — and never an error."""
+    """EMC-003 — contract 2: unset, empty or blank, each accessor gives its default — ``None``, ``starttls``, 587 (the port of ``starttls``), 50 or 20 — and never an error."""
     print_section(f"EMC-003: {variable} = {value!r}")
     _set(monkeypatch, variable, value)
 
@@ -397,6 +408,34 @@ def test_smtp_max_per_hour_refuses_anything_else(monkeypatch: pytest.MonkeyPatch
 
 
 # =============================================================================
+# 11. SIGN-UP EMAILS PER CLIENT ADDRESS
+# =============================================================================
+
+
+@pytest.mark.parametrize(("value", "expected"), [("20", 20), (" 3 ", 3), ("1", 1), ("500", 500)])
+def test_signup_emails_per_address_reads_a_positive_integer(monkeypatch: pytest.MonkeyPatch, value: str, expected: int) -> None:
+    """EMC-020 — contract 11: ASCII digits, stripped, at least 1."""
+    print_section(f"EMC-020: signup emails per address {value!r}")
+    monkeypatch.setenv(SIGNUP_PER_ADDRESS, value)
+
+    assert signup_emails_per_address() == expected
+    print_success(f"→ {expected}")
+
+
+@pytest.mark.parametrize("value", ["0", "-1", "abc", "1.5", "+5", "1_0", "\uff12\uff10"])
+def test_signup_emails_per_address_refuses_anything_else(monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    """EMC-021 — contract 11: zero, negative, words, decimals, signs, ``1_0`` and fullwidth digits are ``SIGNUP_EMAILS_PER_ADDRESS_INVALID``, naming the variable."""
+    print_section(f"EMC-021: signup emails per address {value!r}")
+    monkeypatch.setenv(SIGNUP_PER_ADDRESS, value)
+
+    error = _config_error(signup_emails_per_address)
+
+    assert (error.variable, error.code) == (SIGNUP_PER_ADDRESS, "SIGNUP_EMAILS_PER_ADDRESS_INVALID")
+    assert SIGNUP_PER_ADDRESS in str(error)
+    print_success("SIGNUP_EMAILS_PER_ADDRESS_INVALID")
+
+
+# =============================================================================
 # 9. THE ERROR
 # =============================================================================
 
@@ -410,6 +449,7 @@ def test_smtp_max_per_hour_refuses_anything_else(monkeypatch: pytest.MonkeyPatch
         pytest.param(FROM, "noreply", smtp_sender, "SMTP_FROM_INVALID", id="from"),
         pytest.param(REPLY_TO, "noreply", smtp_reply_to, "SMTP_REPLY_TO_INVALID", id="reply-to"),
         pytest.param(MAX_PER_HOUR, "0", smtp_max_per_hour, "SMTP_MAX_PER_HOUR_INVALID", id="max-per-hour"),
+        pytest.param(SIGNUP_PER_ADDRESS, "0", signup_emails_per_address, "SIGNUP_EMAILS_PER_ADDRESS_INVALID", id="signup-emails-per-address"),
     ],
 )
 def test_the_error_names_its_variable_and_never_the_password(monkeypatch: pytest.MonkeyPatch, variable: str, value: str, accessor: Callable[[], object], code: str) -> None:
@@ -444,6 +484,7 @@ def test_the_error_names_its_variable_and_never_the_password(monkeypatch: pytest
         pytest.param(FROM, smtp_sender, "a@example.com", ("", "a@example.com"), "B <b@example.org>", ("B", "b@example.org"), None, id="from"),
         pytest.param(REPLY_TO, smtp_reply_to, "a@example.com", ("", "a@example.com"), "B <b@example.org>", ("B", "b@example.org"), None, id="reply-to"),
         pytest.param(MAX_PER_HOUR, smtp_max_per_hour, "5", 5, "6", 6, 50, id="max-per-hour"),
+        pytest.param(SIGNUP_PER_ADDRESS, signup_emails_per_address, "5", 5, "6", 6, 20, id="signup-emails-per-address"),
     ],
 )
 def test_every_accessor_reads_the_environment_at_each_call(

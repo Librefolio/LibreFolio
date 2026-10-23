@@ -37,7 +37,7 @@ in place. The contract:
    the Docker image behind the proxy HTTPS needs, neither ``LIBREFOLIO_CLIENT_IP_HEADER`` nor ``FORWARDED_ALLOW_IPS``
    set —, every visitor arrives from the proxy's private address with an ``X-Forwarded-For`` the app does not trust.
    Two visitors behind one private proxy never share one budget of registration emails: the route gives
-   ``registration_email_allowed`` H-36's ``rate_limit_address(request)``, the client address of 1 but for a
+   ``registration_email_verdict`` H-36's ``rate_limit_address(request)``, the client address of 1 but for a
    registration from a local peer (``classify_ip``: loopback, private, link-local, unique-local, CGNAT) carrying
    ``X-Forwarded-For``, ``Forwarded`` or ``X-Real-IP`` whose address neither ``LIBREFOLIO_CLIENT_IP_HEADER`` nor
    uvicorn gave: ``None``, counted under no address. A public address's own forwarding headers move nothing, and a
@@ -47,7 +47,7 @@ in place. The contract:
 6. What the answer says about that email (lot E-26 (b)): ``verification_email`` is ``null`` when nothing waits
    (``verification_required: false``: the option off, or the instance's first account), ``"sending"`` when the email
    is queued — a request counted under no address included (5) — and ``"held"`` when the limit per client address
-   (``REGISTRATION_EMAILS_BY_ADDRESS``) holds it. The English ``message`` changes only in its middle piece:
+   (``delivery.ADDRESS_BUDGET``) holds it. The English ``message`` changes only in its middle piece:
    «Registration successful», «Registration successful: check your email to activate the account», or «Registration
    successful: the activation email is held (too many registrations from this address); sign in to ask for a new
    link»; the `` (Admin)`` of a superuser follows whichever it is. Every case above that reads the register answer
@@ -62,8 +62,8 @@ Pure: the real auth, users, settings and email routers run in-process on a priva
 4. A new instance registers by invitation (workstream A): the cases that register without one set ``registration_mode``
 to ``open`` in that file — never through ``LIBREFOLIO_REGISTRATION``, which would lock it —; the first account and the
 invited cases keep the default. An autouse fixture removes every inherited ``LIBREFOLIO_SMTP_*``,
-``LIBREFOLIO_PUBLIC_URL``, ``LIBREFOLIO_BLOCKED``, ``LIBREFOLIO_MAX_USERS`` and ``LIBREFOLIO_REGISTRATION``; each test
-sets its own with ``monkeypatch``. The hourly budget, the «resend» limiter, the per-mailbox limiter and the limiter of
+``LIBREFOLIO_PUBLIC_URL``, ``LIBREFOLIO_BLOCKED``, ``LIBREFOLIO_MAX_USERS``, ``LIBREFOLIO_REGISTRATION`` and
+``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS``; each test sets its own with ``monkeypatch``. The hourly budget, the «resend» limiter, the per-mailbox limiter and the limiter of
 registration emails per client address are private on a fake clock; ``socket.getaddrinfo`` resolves the loopback only;
 every SMTP conversation is with ``FakeSmtpServer`` on 127.0.0.1. Where minutes must pass between two steps,
 ``verification.utcnow`` is a clock the test moves. Nothing is timed.
@@ -107,7 +107,7 @@ from backend.app.schemas.settings import SETTINGS_REGISTRY
 from backend.app.services.accounts import auth_service, token_service
 from backend.app.services.accounts.settings_service import initialize_global_settings
 from backend.app.services.accounts.token_service import IssuedToken, TokenStatus
-from backend.app.services.email import delivery, smtp, verification
+from backend.app.services.email import delivery, flows, smtp, verification
 from backend.app.services.platform.client_address import _untrusted_forwarding, untrusted_forwarding_seen
 from backend.app.utils.datetime_utils import utcnow
 from backend.app.utils.runtime.rate_window import SlidingWindowLimiter
@@ -120,6 +120,7 @@ USERS = f"{API_V1_PREFIX}/users"
 BULK = f"{API_V1_PREFIX}/settings/global/bulk"
 CONFIRM = f"{API_V1_PREFIX}/email/verification/confirm"
 RESEND = f"{API_V1_PREFIX}/email/verification/resend"
+FORGOT = f"{API_V1_PREFIX}/email/password-reset"
 BASE_URL = "http://test"
 TIMEOUT = 30.0
 CLIENT = ("198.51.100.7", 40001)
@@ -127,7 +128,9 @@ CLIENT = ("198.51.100.7", 40001)
 SMTP_PREFIX = "LIBREFOLIO_SMTP_"
 PUBLIC_URL_VARIABLE = "LIBREFOLIO_PUBLIC_URL"
 MAX_USERS_VARIABLE = "LIBREFOLIO_MAX_USERS"
-INHERITED = (PUBLIC_URL_VARIABLE, "LIBREFOLIO_BLOCKED", MAX_USERS_VARIABLE, "LIBREFOLIO_REGISTRATION")
+#: How many registration emails one client address may send in the hour: the limit of ``delivery.ADDRESS_BUDGET`` is read from it when the registration asks, 20 unset.
+SIGNUP_PER_ADDRESS = "LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS"
+INHERITED = (PUBLIC_URL_VARIABLE, "LIBREFOLIO_BLOCKED", MAX_USERS_VARIABLE, "LIBREFOLIO_REGISTRATION", SIGNUP_PER_ADDRESS)
 PUBLIC_URL = "https://folio.zq-public.example.com:8443/app"
 SENDER_HEADER = "LibreFolio <noreply@example.com>"
 LOOPBACK_NAMES = frozenset({"127.0.0.1", "::1", "localhost"})
@@ -146,11 +149,10 @@ VERA = "zq_vera"
 NOBODY = "zq_nobody"
 VERIFICATION = AccountTokenPurpose.EMAIL_VERIFICATION
 INVITE = AccountTokenPurpose.INVITE
-SHIPPED_RESEND = verification.RESEND_BY_ADDRESS
 #: The process's limiter of verification emails per recipient mailbox: replaced by a private one, as «resend»'s is.
 SHIPPED_MAILBOX = verification.VERIFICATION_BY_MAILBOX
-#: The process's limiter of registration emails per client address: replaced by a private one, as the others are.
-SHIPPED_REGISTRATION_EMAILS = verification.REGISTRATION_EMAILS_BY_ADDRESS
+#: The process's counter per client address (registrations, «resend» and «forgot password» share it): replaced by a private one, as the others are.
+SHIPPED_ADDRESS_BUDGET = delivery.ADDRESS_BUDGET
 START = 1_000.0
 #: The English ``message`` of a registration answer (lot E-26 (b)): its middle piece says what happens to the email, and
 #: ``ADMIN_SUFFIX`` follows whichever it is for a superuser.
@@ -211,11 +213,6 @@ def budget(monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> SlidingWindowLi
 
 
 @pytest.fixture(autouse=True)
-def _private_resend_limit(monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> None:
-    monkeypatch.setattr(verification, "RESEND_BY_ADDRESS", SlidingWindowLimiter(SHIPPED_RESEND.limit, SHIPPED_RESEND.window_seconds, clock=clock))
-
-
-@pytest.fixture(autouse=True)
 def _private_mailbox_limit(monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> None:
     """Every test registers the same few mailboxes: with the process's limiter, the fourth email of the run to one of them would be refused."""
     monkeypatch.setattr(verification, "VERIFICATION_BY_MAILBOX", SlidingWindowLimiter(SHIPPED_MAILBOX.limit, SHIPPED_MAILBOX.window_seconds, clock=clock))
@@ -223,9 +220,9 @@ def _private_mailbox_limit(monkeypatch: pytest.MonkeyPatch, clock: FakeClock) ->
 
 @pytest.fixture(autouse=True)
 def registration_emails(monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> SlidingWindowLimiter:
-    """Every registration of this module comes from one in-process client address: with the process's limiter, the eleventh of the run would go without its email."""
-    limiter = SlidingWindowLimiter(SHIPPED_REGISTRATION_EMAILS.limit, SHIPPED_REGISTRATION_EMAILS.window_seconds, clock=clock)
-    monkeypatch.setattr(verification, "REGISTRATION_EMAILS_BY_ADDRESS", limiter)
+    """Every request of this module comes from one in-process client address: with the process's counter, the 21st of the run would be held or refused. A private one, with the shipped limit, on the fake clock."""
+    limiter = SlidingWindowLimiter(SHIPPED_ADDRESS_BUDGET.limit, SHIPPED_ADDRESS_BUDGET.window_seconds, clock=clock)
+    monkeypatch.setattr(delivery, "ADDRESS_BUDGET", limiter)
     return limiter
 
 
@@ -366,6 +363,14 @@ def _ready(monkeypatch: pytest.MonkeyPatch, fake: FakeSmtpServer) -> None:
     for name, value in {"HOST": fake.host, "PORT": str(fake.port), "TLS": "none", "FROM": SENDER_HEADER}.items():
         monkeypatch.setenv(SMTP_PREFIX + name, value)
     monkeypatch.setenv(PUBLIC_URL_VARIABLE, PUBLIC_URL)
+
+
+def _one_registration_email_an_hour_on(monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> SlidingWindowLimiter:
+    """One registration email an hour per client address, on a private limiter on the fake clock: the limit is ``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS=1``, which the registration reads when it asks — the limiter's own limit is not what decides."""
+    monkeypatch.setenv(SIGNUP_PER_ADDRESS, "1")
+    limiter = SlidingWindowLimiter(1, 3600, clock=clock)
+    monkeypatch.setattr(delivery, "ADDRESS_BUDGET", limiter)
+    return limiter
 
 
 def _email_off(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -684,9 +689,9 @@ async def test_the_patch_answer_says_whether_a_waiting_account_holds_its_place(p
 
 @pytest.mark.asyncio
 async def test_registration_emails_are_limited_per_client_address(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> None:
-    """EVH-013 — contract 1 (E5b, after the security review): ``REGISTRATION_EMAILS_BY_ADDRESS`` at one email an hour for this test. Two registrations from one client address both answer 201 ``verification_required: true``: the first with ``verification_email: "sending"`` and the «check your email» message, the second with ``verification_email: "held"`` and the held message (no `` (Admin)``: Wanda is a regular account); only the first one's email goes. The second account waits with its hold — inactive, one verification token without an address, neither consumed nor revoked —, and «Verification email held: too many registrations from this address» is logged, ``info``, with its ``user_id``. Its owner then asks «resend» from the sign-in: 200, and its link goes."""
+    """EVH-013 — contract 1 (E5b, after the security review): ``delivery.ADDRESS_BUDGET`` at one email an hour for this test. Two registrations from one client address both answer 201 ``verification_required: true``: the first with ``verification_email: "sending"`` and the «check your email» message, the second with ``verification_email: "held"`` and the held message (no `` (Admin)``: Wanda is a regular account); only the first one's email goes. The second account waits with its hold — inactive, one verification token without an address, neither consumed nor revoked —, and «Verification email held: too many registrations from this address» is logged, ``info``, with its ``user_id``. Its owner then asks «resend» from the sign-in: 200, and its link goes."""
     print_section("EVH-013: registration emails per client address")
-    monkeypatch.setattr(verification, "REGISTRATION_EMAILS_BY_ADDRESS", SlidingWindowLimiter(1, 3600, clock=clock))
+    _one_registration_email_an_hour_on(monkeypatch, clock)
     await _add_user(private.engine, ADMIN, admin=True)
     await _option(private.engine, "true")
     await _registration_open(private.engine)
@@ -699,17 +704,180 @@ async def test_registration_emails_are_limited_per_client_address(private: _Priv
         sent_by_the_registrations = [message.rcpt_tos for message in fake.messages]
         wanda = await _user(private.engine, "zq_wanda")
         holds = [(row.email, row.consumed_at, row.revoked_at) for row in await _verification_rows(private.engine, wanda.id)]
+        too_early = await _post(private, RESEND, {"username": "zq_wanda", "password": PASSWORD})
+        after_the_wait = [message.rcpt_tos for message in fake.messages]
+        clock.now = START + 3600
         resent = await _post(private, RESEND, {"username": "zq_wanda", "password": PASSWORD})
 
     assert [(answer.status_code, *_verification(answer)) for answer in (first, second)] == [(201, True, "sending"), (201, True, "held")], [answer.text for answer in (first, second)]
     assert [answer.json()["message"] for answer in (first, second)] == [MESSAGE_SENDING, MESSAGE_HELD], [answer.text for answer in (first, second)]
+    assert [answer.json()["verification_retry_after_seconds"] for answer in (first, second)] == [None, 3600], "null when sending; the held one says in how many seconds the counter admits it"
+    assert (too_early.status_code, _detail(too_early)["error_code"], _detail(too_early)["retry_after"], too_early.headers["Retry-After"]) == (429, "EMAIL_RATE_LIMITED", 3600, "3600"), "the counter is shared with «resend»: the time the registration was told is true"
+    assert after_the_wait == [[f"{VERA}@example.com"]], "the early resend sent nothing"
     assert sent_by_the_registrations == [[f"{VERA}@example.com"]], "only the first registration's email goes"
     assert wanda.is_active is False and holds == [(None, None, None)], holds
-    held = [(event["log_level"], event.get("user_id")) for event in events if event.get("event") == "Verification email held: too many registrations from this address"]
+    held = [(event["log_level"], event.get("user_id")) for event in events if event.get("event") == "Verification email held: address limit or instance budget reached"]
     assert held == [("info", wanda.id)], events
     assert resent.status_code == 200, resent.text
     assert [message.rcpt_tos for message in fake.messages] == [[f"{VERA}@example.com"], ["zq_wanda@example.com"]]
-    print_success("201 twice, one email; the second waits with its hold, and resend sends its link")
+    print_success("201 twice, one email; the second waits with its hold, told 3600 s; resend is refused until then and sends its link after")
+
+
+@pytest.mark.asyncio
+async def test_the_variable_sets_how_many_registration_emails_one_address_may_send(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> None:
+    """EVH-019 — ``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS=2`` on a limiter built for far more: three registrations from one client address all answer 201 ``verification_required: true`` — ``verification_email`` ``"sending"``, ``"sending"``, ``"held"``; the emails of the first two go and the third waits with its hold. The variable, not the limiter's own limit, decides."""
+    print_section("EVH-019: LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS=2")
+    monkeypatch.setenv(SIGNUP_PER_ADDRESS, "2")
+    monkeypatch.setattr(delivery, "ADDRESS_BUDGET", SlidingWindowLimiter(1000, 3600, clock=clock))
+    await _add_user(private.engine, ADMIN, admin=True)
+    await _option(private.engine, "true")
+    await _registration_open(private.engine)
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        answers = [await _register(private, name) for name in (VERA, "zq_wanda", "zq_xenia")]
+        sent = [message.rcpt_tos for message in fake.messages]
+        xenia = await _user(private.engine, "zq_xenia")
+        holds = [(row.email, row.consumed_at, row.revoked_at) for row in await _verification_rows(private.engine, xenia.id)]
+
+    assert [(answer.status_code, *_verification(answer)) for answer in answers] == [(201, True, "sending"), (201, True, "sending"), (201, True, "held")], [answer.text for answer in answers]
+    assert [answer.json()["verification_retry_after_seconds"] for answer in answers] == [None, None, 3600]
+    assert sent == [[f"{VERA}@example.com"], ["zq_wanda@example.com"]], "the emails of the first two go, the third is held"
+    assert xenia.is_active is False and holds == [(None, None, None)], holds
+    print_success("sending, sending, held")
+
+
+@pytest.mark.asyncio
+async def test_a_variable_that_cannot_be_used_turns_email_off_and_refuses_the_registration(private: _Private, monkeypatch: pytest.MonkeyPatch, network: list[str]) -> None:
+    """EVH-020 — the same way as a bad ``LIBREFOLIO_SMTP_*`` value: ``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS=0`` beside a server that works makes email unusable (``email.smtp`` reports it), so with the option on a registration is 409 ``EMAIL_VERIFICATION_UNAVAILABLE`` and nothing is created. The server does not stop; nothing is sent."""
+    print_section("EVH-020: a bad signup limit")
+    await _add_user(private.engine, ADMIN, admin=True)
+    await _option(private.engine, "true")
+    await _registration_open(private.engine)
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        monkeypatch.setenv(SIGNUP_PER_ADDRESS, "0")
+        response = await _register(private, VERA)
+        sent = list(fake.messages)
+
+    assert (response.status_code, _detail(response)["error_code"]) == (409, "EMAIL_VERIFICATION_UNAVAILABLE"), response.text
+    assert await _user(private.engine, VERA) is None
+    assert sent == [] and network == []
+    print_success("409, nothing created, nothing sent")
+
+
+@pytest.mark.asyncio
+async def test_the_instance_budget_spent_holds_the_registration_with_its_wait(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock, budget: SlidingWindowLimiter, registration_emails: SlidingWindowLimiter) -> None:
+    """EVH-021 — E-26: the instance's hourly budget spent (``LIBREFOLIO_SMTP_MAX_PER_HOUR=1``, its unit taken at START, 100 s before the registration) holds the registration of an address whose own counter is empty: 201 ``verification_required: true``, ``verification_email: "held"``, ``verification_retry_after_seconds: 3500`` (the budget's wait, whole seconds rounded up); no email, the account waits with its hold, the address's counter counts nothing, the log line says the instance and holds no address, name nor identifier."""
+    print_section("EVH-021: instance budget spent")
+    await _add_user(private.engine, ADMIN, admin=True)
+    await _option(private.engine, "true")
+    await _registration_open(private.engine)
+    clock.now = START
+    assert budget.hit(limit=1).allowed, "setup: the only unit of the hour"
+    clock.now = START + 100
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        monkeypatch.setenv(SMTP_PREFIX + "MAX_PER_HOUR", "1")
+        with capture_logs() as events:
+            answer = await _register(private, VERA)
+        sent = list(fake.messages)
+
+    vera = await _user(private.engine, VERA)
+    holds = [(row.email, row.consumed_at, row.revoked_at) for row in await _verification_rows(private.engine, vera.id)]
+    assert (answer.status_code, *_verification(answer)) == (201, True, "held"), answer.text
+    assert answer.json()["verification_retry_after_seconds"] == 3500
+    assert answer.json()["message"] == MESSAGE_HELD
+    assert sent == [] and vera.is_active is False and holds == [(None, None, None)], holds
+    assert len(registration_emails) == 0, "the address's counter counts only an email that goes"
+    held = [event for event in events if event.get("event") == "Verification email held: address limit or instance budget reached"]
+    assert [(event["log_level"], event.get("user_id"), event.get("by_address"), event.get("by_instance")) for event in held] == [("info", vera.id, False, True)], events
+    assert all(value not in str(event) for event in held for value in (VERA, "127.0.0.1", CLIENT[0])), held
+    print_success("held by the instance, told 3500 s, the address uncounted")
+
+
+@pytest.mark.asyncio
+async def test_a_registration_held_by_both_counters_is_told_the_longest_wait(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock, budget: SlidingWindowLimiter) -> None:
+    """EVH-022 — E-26: the address's counter full since START (``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS=1``, a first registration), the instance's budget (``LIBREFOLIO_SMTP_MAX_PER_HOUR=1``) holding two emails, the registration's at START and a second one at START + 1000: the second registration, at START + 1500, answers 201 ``held`` with ``verification_retry_after_seconds: 3100`` — the instance's ``3600 - 500``, longer than the address's ``3600 - 1500`` —, the longest of the two."""
+    print_section("EVH-022: both counters, the longest wait")
+    _one_registration_email_an_hour_on(monkeypatch, clock)
+    await _add_user(private.engine, ADMIN, admin=True)
+    await _option(private.engine, "true")
+    await _registration_open(private.engine)
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        monkeypatch.setenv(SMTP_PREFIX + "MAX_PER_HOUR", "50")
+        clock.now = START
+        first = await _register(private, VERA)
+        clock.now = START + 1000
+        assert budget.hit(limit=50).allowed, "setup: a second email of the instance, after the first registration's"
+        monkeypatch.setenv(SMTP_PREFIX + "MAX_PER_HOUR", "1")
+        clock.now = START + 1500
+        second = await _register(private, "zq_wanda")
+
+    assert (first.status_code, *_verification(first)) == (201, True, "sending"), first.text
+    assert (second.status_code, *_verification(second)) == (201, True, "held"), second.text
+    assert second.json()["verification_retry_after_seconds"] == 3100
+    print_success("held by both: 3100 s, the longest")
+
+
+@pytest.mark.asyncio
+async def test_registrations_resends_and_forgotten_passwords_share_one_counter_per_address(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock, registration_emails: SlidingWindowLimiter) -> None:
+    """EVH-023 — E-26: ``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS=3``, one counter per client address for the three ways to ask for an email, counting the emails that go. From one address: two registrations (both ``"sending"``) and a «forgot password» for the administrator's account (202, and its reset email goes) make three. The next request, of any of the three kinds, is refused with the same wait: a registration is 201 ``"held"`` with ``verification_retry_after_seconds`` 3600, a resend and a forgotten password 429 ``EMAIL_RATE_LIMITED`` with ``retry_after`` 3600 and ``Retry-After: 3600``. Another address is not affected by any of it."""
+    print_section("EVH-023: one counter for registration, resend and forgot password")
+    monkeypatch.setenv(SIGNUP_PER_ADDRESS, "3")
+    monkeypatch.setattr(flows, "FORGOT_BY_IDENTIFIER", SlidingWindowLimiter(3, 3600, clock=clock))
+    await _add_user(private.engine, ADMIN, admin=True)
+    await _option(private.engine, "true")
+    await _registration_open(private.engine)
+    other = ("203.0.113.9", 40002)
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        registered = [await _register(private, name) for name in (VERA, "zq_wanda")]
+        forgot = await _post(private, FORGOT, {"identifier": ADMIN})
+        counted = registration_emails.count(CLIENT[0])
+        held = await _register(private, "zq_xenia")
+        resend_refused = await _post(private, RESEND, {"username": VERA, "password": PASSWORD})
+        forgot_refused = await _post(private, FORGOT, {"identifier": f"{NOBODY}_2"})
+        elsewhere = await _register(private, "zq_yara", client=other)
+
+    assert [(answer.status_code, *_verification(answer)) for answer in registered] == [(201, True, "sending")] * 2
+    assert forgot.status_code == 202 and counted == 3, (forgot.text, counted)
+    assert (held.status_code, *_verification(held)) == (201, True, "held"), held.text
+    assert held.json()["verification_retry_after_seconds"] == 3600
+    for refused in (resend_refused, forgot_refused):
+        assert (refused.status_code, _detail(refused)["error_code"], _detail(refused)["retry_after"], refused.headers["Retry-After"]) == (429, "EMAIL_RATE_LIMITED", 3600, "3600"), refused.text
+    assert (elsewhere.status_code, *_verification(elsewhere)) == (201, True, "sending"), elsewhere.text
+    print_success("3 emails that went; the next held or refused with the same 3600 s; another address free")
+
+
+@pytest.mark.asyncio
+async def test_wrong_passwords_at_the_resend_do_not_stop_registrations_or_forgotten_passwords(private: _Private, monkeypatch: pytest.MonkeyPatch, registration_emails: SlidingWindowLimiter, clock: FakeClock) -> None:
+    """EVH-024 — E-26, the correction of 23/10: six wrong passwords at «send the link again» from one address (``LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS=3``) are each a 401 and use none of the address's counter — the sign-in's own limit on wrong passwords brakes them —: a registration from that address afterwards is still ``"sending"`` and a «forgot password» for an existing account still goes (202, its email), the counter then holding exactly those two emails."""
+    print_section("EVH-024: wrong passwords cost the counter nothing")
+    monkeypatch.setenv(SIGNUP_PER_ADDRESS, "3")
+    monkeypatch.setattr(flows, "FORGOT_BY_IDENTIFIER", SlidingWindowLimiter(3, 3600, clock=clock))
+    await _add_user(private.engine, ADMIN, admin=True)
+    await _option(private.engine, "true")
+    await _registration_open(private.engine)
+
+    with FakeSmtpServer() as fake:
+        _ready(monkeypatch, fake)
+        wrong = [await _post(private, RESEND, {"username": f"{NOBODY}_{index}", "password": WRONG_PASSWORD}) for index in range(6)]
+        counted_by_the_wrong_ones = registration_emails.count(CLIENT[0])
+        registered = await _register(private, VERA)
+        forgot = await _post(private, FORGOT, {"identifier": ADMIN})
+
+    assert [answer.status_code for answer in wrong] == [401] * 6
+    assert counted_by_the_wrong_ones == 0
+    assert (registered.status_code, *_verification(registered)) == (201, True, "sending"), registered.text
+    assert forgot.status_code == 202
+    assert registration_emails.count(CLIENT[0]) == 2 and len(fake.messages) == 2
+    print_success("0 after six wrong passwords; then a registration and a reset email, 2 units")
 
 
 # =============================================================================
@@ -786,9 +954,8 @@ OWN_FORWARDING_HEADERS = FORWARDING_HEADERS
 
 
 async def _one_registration_email_an_hour(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> SlidingWindowLimiter:
-    """``REGISTRATION_EMAILS_BY_ADDRESS`` at one email an hour, so that each case needs two registrations; the administrator, the option on, registration open. ``LIBREFOLIO_MAX_USERS`` stays unset, and the mailbox limiter and the hourly budget are the autouse fixtures' private ones: only the limit per address decides. Returns that limiter."""
-    limiter = SlidingWindowLimiter(1, 3600, clock=clock)
-    monkeypatch.setattr(verification, "REGISTRATION_EMAILS_BY_ADDRESS", limiter)
+    """``delivery.ADDRESS_BUDGET`` at one email an hour, so that each case needs two registrations; the administrator, the option on, registration open. ``LIBREFOLIO_MAX_USERS`` stays unset, and the mailbox limiter and the hourly budget are the autouse fixtures' private ones: only the limit per address decides. Returns that limiter."""
+    limiter = _one_registration_email_an_hour_on(monkeypatch, clock)
     await _add_user(private.engine, ADMIN, admin=True)
     await _option(private.engine, "true")
     await _registration_open(private.engine)
@@ -805,7 +972,7 @@ async def _wait_of(private: _Private, username: str) -> tuple[bool, list[tuple[A
 @pytest.mark.parametrize(("header", "prefix"), FORWARDING_HEADERS)
 @pytest.mark.parametrize("proxy", PRIVATE_PROXIES)
 async def test_two_visitors_behind_one_private_proxy_each_get_their_registration_email(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock, proxy: str, header: str, prefix: str) -> None:
-    """EVH-014 — contract 5, red before the cure of decision N70 (H-36's ``rate_limit_address``): ``REGISTRATION_EMAILS_BY_ADDRESS`` at one email an hour for this test; the option on, registration open, email ready. Both registrations come from the proxy's private address — ``172.17.0.1``, the Docker bridge; ``fd00::2``, an IPv6 unique-local one —, each with a forwarding header naming its visitor. Visitor A registers: 201 ``verification_required: true`` with ``verification_email: "sending"``, and A's verification email goes. Visitor B registers through the same proxy: 201, the same two fields, and B's email goes too, never held (``"sending"``, not ``"held"``). Then the skip itself, which B's email alone would not prove: the limiter per address holds no key at all — neither registration counted under an address, the proxy's or its visitor's. The headers are exactly H-36's list — ``X-Forwarded-For``, ``Forwarded`` (``for=…``), ``X-Real-IP`` —, crossed with the two peers: six cases."""
+    """EVH-014 — contract 5, red before the cure of decision N70 (H-36's ``rate_limit_address``): ``delivery.ADDRESS_BUDGET`` at one email an hour for this test; the option on, registration open, email ready. Both registrations come from the proxy's private address — ``172.17.0.1``, the Docker bridge; ``fd00::2``, an IPv6 unique-local one —, each with a forwarding header naming its visitor. Visitor A registers: 201 ``verification_required: true`` with ``verification_email: "sending"``, and A's verification email goes. Visitor B registers through the same proxy: 201, the same two fields, and B's email goes too, never held (``"sending"``, not ``"held"``). Then the skip itself, which B's email alone would not prove: the limiter per address holds no key at all — neither registration counted under an address, the proxy's or its visitor's. The headers are exactly H-36's list — ``X-Forwarded-For``, ``Forwarded`` (``for=…``), ``X-Real-IP`` —, crossed with the two peers: six cases."""
     print_section(f"EVH-014: two visitors behind {proxy}, {header}")
     by_address = await _one_registration_email_an_hour(private, monkeypatch, clock)
     peer = (proxy, PROXY_PORT)
@@ -827,7 +994,7 @@ async def test_two_visitors_behind_one_private_proxy_each_get_their_registration
 @pytest.mark.asyncio
 @pytest.mark.parametrize(("header", "prefix"), OWN_FORWARDING_HEADERS)
 async def test_a_public_clients_own_forwarding_header_does_not_release_a_held_registration_email(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock, header: str, prefix: str) -> None:
-    """EVH-015 — contract 5, a guard, green before and after the cure: ``REGISTRATION_EMAILS_BY_ADDRESS`` at one email an hour for this test; the option on, registration open, email ready. A client at the public address ``198.51.100.7`` writes a forwarding header itself — ``X-Forwarded-For``, ``Forwarded`` (``for=…``) or ``X-Real-IP`` —, naming ``203.0.113.10`` for the first registration, ``203.0.113.20`` for the second: both answer 201 ``verification_required: true`` — ``verification_email: "sending"`` for the first, ``"held"`` for the second —; the first one's email goes, the second's is held — its account created and waiting with its hold: inactive, one verification token without an address, neither consumed nor revoked —: what a client writes never moves its own budget. The forwarding headers that count follow H-36, and the cure may extend the parametrization."""
+    """EVH-015 — contract 5, a guard, green before and after the cure: ``delivery.ADDRESS_BUDGET`` at one email an hour for this test; the option on, registration open, email ready. A client at the public address ``198.51.100.7`` writes a forwarding header itself — ``X-Forwarded-For``, ``Forwarded`` (``for=…``) or ``X-Real-IP`` —, naming ``203.0.113.10`` for the first registration, ``203.0.113.20`` for the second: both answer 201 ``verification_required: true`` — ``verification_email: "sending"`` for the first, ``"held"`` for the second —; the first one's email goes, the second's is held — its account created and waiting with its hold: inactive, one verification token without an address, neither consumed nor revoked —: what a client writes never moves its own budget. The forwarding headers that count follow H-36, and the cure may extend the parametrization."""
     print_section(f"EVH-015: a public client's own {header}")
     await _one_registration_email_an_hour(private, monkeypatch, clock)
 
@@ -846,7 +1013,7 @@ async def test_a_public_clients_own_forwarding_header_does_not_release_a_held_re
 
 @pytest.mark.asyncio
 async def test_a_private_client_without_a_forwarding_header_keeps_its_own_registration_budget(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> None:
-    """EVH-016 — contract 5, a guard, green before and after the cure: ``REGISTRATION_EMAILS_BY_ADDRESS`` at one email an hour for this test; the option on, registration open, email ready. A device of the local network talks to LibreFolio directly — the private address ``192.168.1.5``, no forwarding header — and registers twice: both answer 201 ``verification_required: true`` — ``verification_email: "sending"`` for the first, ``"held"`` for the second —; the first one's email goes, the second's is held — its account created and waiting with its hold —: a private address alone is not a proxy, and keeps its own budget. The forwarding headers that count follow H-36, and the cure may extend the parametrization."""
+    """EVH-016 — contract 5, a guard, green before and after the cure: ``delivery.ADDRESS_BUDGET`` at one email an hour for this test; the option on, registration open, email ready. A device of the local network talks to LibreFolio directly — the private address ``192.168.1.5``, no forwarding header — and registers twice: both answer 201 ``verification_required: true`` — ``verification_email: "sending"`` for the first, ``"held"`` for the second —; the first one's email goes, the second's is held — its account created and waiting with its hold —: a private address alone is not a proxy, and keeps its own budget. The forwarding headers that count follow H-36, and the cure may extend the parametrization."""
     print_section("EVH-016: a device of the local network")
     await _one_registration_email_an_hour(private, monkeypatch, clock)
 
@@ -904,9 +1071,9 @@ async def test_sending_is_queued_not_delivered_when_the_mailbox_limit_is_spent(p
 
 @pytest.mark.asyncio
 async def test_an_invited_administrator_whose_email_is_held_keeps_the_admin_suffix(private: _Private, monkeypatch: pytest.MonkeyPatch, clock: FakeClock) -> None:
-    """EVH-018 — contract 6: ``REGISTRATION_EMAILS_BY_ADDRESS`` at one email an hour on the fake clock (as EVH-013); the option on; the registration mode stays the module's default, by invitation. From one client address, a registration by a regular invitation answers 201 ``(true, "sending")`` and its email goes; then one by an administrator's invitation (``grants_admin``) answers 201 ``(true, "held")``: the account is a superuser, inactive and waiting with its hold, its invitation consumed, no email for it, and the message is the held one with `` (Admin)`` after it, exactly."""
+    """EVH-018 — contract 6: ``delivery.ADDRESS_BUDGET`` at one email an hour on the fake clock (as EVH-013); the option on; the registration mode stays the module's default, by invitation. From one client address, a registration by a regular invitation answers 201 ``(true, "sending")`` and its email goes; then one by an administrator's invitation (``grants_admin``) answers 201 ``(true, "held")``: the account is a superuser, inactive and waiting with its hold, its invitation consumed, no email for it, and the message is the held one with `` (Admin)`` after it, exactly."""
     print_section("EVH-018: an invited administrator, held")
-    monkeypatch.setattr(verification, "REGISTRATION_EMAILS_BY_ADDRESS", SlidingWindowLimiter(1, 3600, clock=clock))
+    _one_registration_email_an_hour_on(monkeypatch, clock)
     admin = await _add_user(private.engine, ADMIN, admin=True)
     await _option(private.engine, "true")
     regular_invitation = await _issue_invite(private.engine, admin.id)
@@ -921,6 +1088,7 @@ async def test_an_invited_administrator_whose_email_is_held_keeps_the_admin_suff
     invited_admin = await _user(private.engine, INVITED_ADMIN)
     assert [(answer.status_code, *_verification(answer)) for answer in (first, second)] == [(201, True, "sending"), (201, True, "held")], [answer.text for answer in (first, second)]
     assert [answer.json()["message"] for answer in (first, second)] == [MESSAGE_SENDING, MESSAGE_HELD + ADMIN_SUFFIX], [answer.text for answer in (first, second)]
+    assert [answer.json()["verification_retry_after_seconds"] for answer in (first, second)] == [None, 3600]
     assert (invited_admin.is_superuser, invited_admin.is_active) == (True, False), "the invitation made it an administrator, and it waits for its link"
     assert await _wait_of(private, INVITED_ADMIN) == (False, [(None, None, None)]), "the held account waits with its hold"
     assert sent == [[f"{VERA}@example.com"]], "only the first registration's email goes: none for the held administrator"
