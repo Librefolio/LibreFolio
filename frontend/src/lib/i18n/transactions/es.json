@@ -256,7 +256,8 @@
       "costBasisNotAllowed": "❌ {type} no lleva coste base aquí: quítelo. Solo lo llevan las unidades que entran con un Ajuste o una Transferencia de Activos.",
       "costBasisModeIncompatible": "❌ {type} no lleva coste base aquí, así que ningún modo Auto o Manual: quítelo.",
       "costBasisNegative": "El coste base no puede ser negativo: escribe 0 o más.",
-      "pairAdjustmentNotAllowed": "Dos Ajustes no se pueden enlazar: para mover activos entre brókeres usa una Transferencia de Activos."
+      "pairAdjustmentNotAllowed": "Dos Ajustes no se pueden enlazar: para mover activos entre brókeres usa una Transferencia de Activos.",
+      "pairArrivalBeforeDeparture": "La llegada ({arrivalDate}) tiene fecha anterior a la salida ({departureDate}). Se guardó tal como se introdujo: revisa las dos fechas."
     },
     "pydantic": {
       "greaterThan": "El valor debe ser mayor que {gt}",

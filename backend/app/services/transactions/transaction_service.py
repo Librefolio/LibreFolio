@@ -33,7 +33,7 @@ from backend.app.services.transactions.auto_cost import TransactionAutoCostMixin
 from backend.app.services.transactions.balances import TransactionBalancesMixin
 from backend.app.services.transactions.batch_costs import compute_wac_and_fx_issues, validate_cost_basis
 from backend.app.services.transactions.batch_creates import apply_creates, apply_promotes, resolve_create_links
-from backend.app.services.transactions.batch_edits import apply_deletes, apply_splits, apply_updates, make_standalone, pair_sides, validate_updated_pairs
+from backend.app.services.transactions.batch_edits import apply_deletes, apply_splits, apply_updates, make_standalone, pair_sides, validate_updated_pairs, warn_inverted_updated_pairs
 from backend.app.services.transactions.event_suggestions import TransactionEventSuggestionsMixin
 from backend.app.services.transactions.promotion import TransactionPromotionMixin
 from backend.app.services.transactions.queries import TransactionQueryMixin
@@ -160,6 +160,7 @@ class TransactionService(TransactionAccessMixin, TransactionValidationMixin, Tra
         await apply_splits(self, context)
         await apply_updates(self, context)
         await validate_updated_pairs(self, context)
+        await warn_inverted_updated_pairs(self, context)
 
         await apply_creates(self, context)
         await apply_promotes(self, context)

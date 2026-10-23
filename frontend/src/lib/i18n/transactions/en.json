@@ -256,7 +256,8 @@
       "costBasisNotAllowed": "❌ {type} takes no cost basis here: remove it. Only units that come in through an Adjustment or an Asset Transfer carry one.",
       "costBasisModeIncompatible": "❌ {type} takes no cost basis here, so no Auto or Manual mode: remove it.",
       "costBasisNegative": "The cost basis can't be negative: enter 0 or more.",
-      "pairAdjustmentNotAllowed": "Two Adjustments cannot be linked: use an Asset Transfer to move units between brokers."
+      "pairAdjustmentNotAllowed": "Two Adjustments cannot be linked: use an Asset Transfer to move units between brokers.",
+      "pairArrivalBeforeDeparture": "The arrival ({arrivalDate}) is dated before the departure ({departureDate}). It was saved as entered: check the two dates."
     },
     "pydantic": {
       "greaterThan": "Value must be greater than {gt}",
