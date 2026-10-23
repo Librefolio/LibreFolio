@@ -851,6 +851,30 @@ def api_hosting_panel_routes(verbose: bool = False, test_names: list[str] | None
     return run_command(cmd, "Hosting panel route tests", verbose=verbose)
 
 
+def api_panel_restore(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the hosting panel's restore route tests: /backup/panel/restore/* (H-62, contract L3 §5)."""
+    print_section("Hosting Panel Restore API")
+    print_info("Testing: the scope backup:restore (ticket only), the order of the refusals (credential, block, mode), upload, check, the panel's report (R1), confirm, restart, status, cancel, no echo; Needs B (Q1, Q2, Q4) apart")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_panel_restore_api.py", test_names)
+    return run_command(cmd, "Hosting panel restore API tests", verbose=verbose)
+
+
+def api_await_restore_mode(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the «awaiting restore» mode's API tests: refuse_when_awaiting_restore, its allowed set, ready/instance/wake/panel status (H-62, §6)."""
+    print_section("Awaiting Restore Mode API")
+    print_info("Testing: 423 instance_awaiting_restore for anyone outside the allowed set (pinned), mode in /system/ready and /system/instance, wake-sync awaiting_restore, both switches and R4, GET /panel/status mode and restore; Needs B (Q3) apart")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_await_restore_mode_api.py", test_names)
+    return run_command(cmd, "Awaiting restore mode API tests", verbose=verbose)
+
+
+def api_restore_interrupted(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the interrupted restore's API tests: refuse_when_restore_interrupted, its allowed set, instance/wake/panel status (B-33, H)."""
+    print_section("Restore Interrupted API")
+    print_info("Testing: 423 instance_restore_interrupted for anyone outside the allowed set (the mode's), the third router dependency, restore_interrupted in /system/instance, wake-sync restore_interrupted, GET /panel/status restore unreadable (D7), the panel's backup start 409 backup_restore_interrupted")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_restore_interrupted_api.py", test_names)
+    return run_command(cmd, "Restore interrupted API tests", verbose=verbose)
+
+
 def api_panel_status(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run the hosting panel's status route tests: GET /panel/status (H-61, R1)."""
     print_section("Hosting Panel Status API")
@@ -1028,6 +1052,15 @@ def e2e_backup_roundtrip(verbose: bool = False, test_names: list = None) -> bool
     print_info("Tests: the same totals after the restore; an older backup upgraded; a newer one refused")
     cmd = _build_pytest_cmd("backend/test_scripts/test_e2e/test_backup_roundtrip.py", test_names)
     return run_command(cmd, "Backup round trip E2E tests", verbose=verbose)
+
+
+def e2e_backup_roundtrip_l3(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the sealed nightly backup restored through the hosting panel: two real servers on Unix sockets (contract L3)."""
+    print_section("E2E: Sealed Backup Restored by the Panel (L3)")
+    print_info("Testing: POST /backup/panel/jobs sealed (L3-2), sealed.read_sealed/open_password, the panel's restore routes and LIBREFOLIO_AWAIT_RESTORE (H-62)")
+    print_info("Tests: sealed backup → awaiting-restore instance → upload, stage, confirm, restart → committed in a new process → out of the mode, same totals")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_e2e/test_backup_roundtrip_l3.py", test_names)
+    return run_command(cmd, "Backup round trip L3 E2E tests", verbose=verbose)
 
 
 def e2e_test(verbose: bool = False) -> bool:
@@ -1364,6 +1397,39 @@ Tests for REST API endpoints (server auto-started):
         desc="H-61 R1: GET /panel/status off 404 without a token, panel_status_unauthorized, the four states of the initial administrator's setup with the expiry of a pending one only, no personal data, answered on a blocked instance, its OpenAPI schema",
         isolation="pure",
     )
+    add_test(
+        api,
+        "panel-restore",
+        api_panel_restore,
+        name="Hosting Panel Restore API",
+        desc="H-62 (L3 §5): /backup/panel/restore/* with the ticket-only scope backup:restore: 404 without keys, 401 backup_restore_unauthorized to any L1 token (counted), wrong scope, replay, 429, 503 backup_restore_unavailable, then 423 instance_blocked, then 409 restore_mode_required, the same in every state; .lfbk only (400 restore_envelope_required), 413, R3 slow body; wrong_password keeps the upload; PanelRestoreStageReport (20 fields, administrators_count, no portfolio data); confirm via panel with the kid logged, restart once after the answer, status, cancel; no echo of the password; Needs B Q1/Q2/Q4 apart",
+        # PURE: the app of main.py in this process (ASGI), the switches and the panel's variables by monkeypatch, the data
+        # directory under tmp_path, the database session a stand-in that fails if reached, restart recorded, fake
+        # threads; the archives from test_backup_staging.py's alembic databases under tmp_path: no lane server, DB or
+        # network is reached (the api category still starts the lane's backend around it).
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "await-restore-mode",
+        api_await_restore_mode,
+        name="Awaiting Restore Mode API",
+        desc="H-62 (L3 §6): LIBREFOLIO_AWAIT_RESTORE → 423 instance_awaiting_restore for anyone on every /api/v1 route but ALLOWED_WHEN_AWAITING_RESTORE (pinned by name and route), registration, setup, login and me included; the dependency right after refuse_when_blocked on every route; ready and instance say mode; wake-sync awaiting_restore with nothing past the switches; both switches 423; R4 the block at the first request; GET /panel/status mode and restore, an unreadable state as restore unreadable with its reason (D7); Needs B Q3 apart",
+        # PURE: the app of main.py in this process (ASGI), every request's session on a private SQLite file under
+        # tmp_path, the switches by monkeypatch, the data directory under tmp_path: the lane's backend and DB are never
+        # reached.
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "restore-interrupted",
+        api_restore_interrupted,
+        name="Restore Interrupted API",
+        desc="B-33 (H, 22/10): while restore_guard.restore_interrupted() every /api/v1 route but ALLOWED_WHEN_RESTORE_INTERRUPTED (= ALLOWED_WHEN_AWAITING_RESTORE, pinned by name and route) answers 423 instance_restore_interrupted to anyone, login, registration, setup, me and data included; refuse_when_restore_interrupted the third router dependency after block and mode; /system/instance restore_interrupted; wake-sync restore_interrupted with nothing past the switches; GET /panel/status still allowed (restore unreadable with its reason, D7); the panel's backup start 409 backup_restore_interrupted after its credential (D7), its poll, download and delete allowed",
+        # PURE: the app of main.py in this process (ASGI), every request's session on a private SQLite file under
+        # tmp_path, the interruption and the switches by monkeypatch: the lane's backend and DB are never reached.
+        isolation="pure",
+    )
     add_test(api, "broker-multiuser", api_broker_multiuser, name="Broker Multi-User", desc="Role-based permissions")
     add_test(api, "users-search", api_users_search, name="User Search API", desc="User search, share validation")
     add_test(api, "portfolio", api_portfolio, name="Portfolio API", desc="Summary, history, asset-history, FIFO lots endpoints")
@@ -1448,6 +1514,18 @@ Complete workflow tests via REST API:
         # PURE: the source, the target and the archives are data directories under tmp_path, made by child processes in
         # test mode pointed at them (populate, alembic, the start); the lane's data directory, database and server are
         # never read nor written (the shared conftest's session fixture aside, as for every pure unit).
+        isolation="pure",
+    )
+    add_test(
+        e2e,
+        "backup-roundtrip-l3",
+        e2e_backup_roundtrip_l3,
+        name="Backup Round Trip L3",
+        desc="Contract L3 (lot B5): a populated instance served with LIBREFOLIO_BACKUP_RECIPIENTS makes a sealed backup for the hosting panel (a backup ticket): a .tar without the instance key, its download the job's SHA-256, read with read_sealed, its password opened by the test identity and checked against the envelope; an empty instance in LIBREFOLIO_AWAIT_RESTORE (the source's instance key) answers mode awaiting_restore, 423 instance_awaiting_restore, 409 backup_awaiting_restore; the panel uploads the envelope, checks it (R1: no administrators, differences or tables), confirms, restarts; a new process commits it; out of the mode the target has the source's rows, files, ledger totals and reports, and its administrator signs in; a backup ticket never opens the restore routes, and out of the mode they answer 409 restore_mode_required. RED until H-62",
+        tests="Sealed backup → Await restore → Upload, Stage, Confirm, Restart → Committed → Same totals",
+        # PURE: every data directory and archive under tmp_path, every server a child uvicorn of the test on a Unix socket
+        # under /tmp (never a TCP port), in test mode on its own data directory; the lane's data directory, database and
+        # server are never read nor written.
         isolation="pure",
     )
     add_test(e2e, "all", e2e_test, test_names=False, name="All E2E Tests", desc="Run all E2E tests")

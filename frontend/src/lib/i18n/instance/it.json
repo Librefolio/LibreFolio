@@ -67,6 +67,20 @@
       "deletionDate": "L'istanza e i suoi dati verranno cancellati il {date}.",
       "manageSubscription": "Gestisci abbonamento",
       "backupTitle": "Conserva una copia dei dati"
+    },
+    "awaitingRestore": {
+      "title": "Stiamo ripristinando i tuoi dati",
+      "message": "Stiamo rimettendo a posto i tuoi dati: riprova tra qualche minuto.",
+      "autoReload": "La pagina si ricarica da sola quando i dati sono pronti.",
+      "retry": "Riprova"
+    },
+    "restoreInterrupted": {
+      "title": "Il ripristino si è fermato a metà",
+      "message": "LibreFolio non sa quali dati contiene, quindi non ne mostra nessuno finché il tuo amministratore non sceglie come procedere.",
+      "adminHint": "Amministratore: ferma LibreFolio, poi esegui ./dev.py backup pending per vedere cosa è successo e --recover per rimettere i dati di prima.",
+      "docs": "Come recuperare",
+      "autoReload": "La pagina si ricarica da sola quando LibreFolio torna a servire i dati.",
+      "support": "Scrivi all'assistenza"
     }
   }
 }

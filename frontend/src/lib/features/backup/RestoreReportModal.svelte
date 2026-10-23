@@ -13,7 +13,7 @@
     import {formatBytes} from '$lib/utils/files/upload';
     import type {RestoreStageReport} from './backupApi';
     import {confirmationMatches, confirmationWords, pickConfirmationWord} from './restoreFlow.svelte';
-    import {restoreTotalsKey, restoreWarningKey} from './restoreText';
+    import {WARNINGS_SHOWN_APART, restoreTotalsKey, restoreWarningKey} from './restoreText';
 
     interface Props {
         open: boolean;
@@ -40,6 +40,10 @@
     const hiddenDifferences = $derived(Math.max(0, report.control_totals_differences_count - report.control_totals_differences.length));
     // Decision 39: the saved keys of the data providers this instance cannot read, to enter again after the restore.
     const unreadableSecrets = $derived(report.secrets_unreadable.system + report.secrets_unreadable.user);
+    // L3: «sign in with the backup's credentials» is the sentence under the administrators; the account that reads the
+    // report missing from the backup is a red notice of its own. Neither is a line of the warnings box.
+    const listedWarnings = $derived(report.warnings.filter((warning) => !WARNINGS_SHOWN_APART.has(warning)));
+    const ownAccountMissing = $derived(report.warnings.includes('confirming_account_not_in_backup'));
 
     function confirm() {
         if (canConfirm) onConfirm();
@@ -150,14 +154,21 @@
         <!-- Developer decision P11: one notice on the invitations and links, nothing more. -->
         <p class="text-sm text-lf-secondary" data-testid="restore-report-links">{$_('backup.restore.report.linksExpired')}</p>
 
-        {#if report.warnings.length > 0}
+        {#if ownAccountMissing}
+            <p class="flex items-start gap-2 rounded-lg border border-lf-danger-line bg-lf-danger-soft p-3 text-sm text-lf-danger-on-soft" role="alert" data-testid="restore-report-own-account">
+                <ShieldAlert class="mt-0.5 shrink-0" size={16} aria-hidden="true" />
+                <span>{$_('backup.restore.report.ownAccountMissing')}</span>
+            </p>
+        {/if}
+
+        {#if listedWarnings.length > 0}
             <div class="rounded-lg border border-lf-warning-line bg-lf-warning-soft p-3 text-sm text-lf-warning-on-soft" data-testid="restore-report-warnings">
                 <p class="flex items-center gap-2 font-medium">
                     <TriangleAlert class="shrink-0" size={16} aria-hidden="true" />
                     {$_('backup.restore.report.warningsTitle')}
                 </p>
                 <ul class="mt-2 list-disc space-y-1 pl-6">
-                    {#each report.warnings as warning (warning)}
+                    {#each listedWarnings as warning (warning)}
                         <li data-testid="restore-report-warning" data-warning={warning}>{$_(restoreWarningKey(warning))}</li>
                     {/each}
                 </ul>

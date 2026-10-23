@@ -13,6 +13,7 @@
     "backup.panel_token": "admin/hosting_providers/#panel-token",
     "backup.upload_limit": "admin/hosting_providers/#restore-upload-limit",
     "backup.restore_limit": "admin/hosting_providers/#restore-upload-limit",
+    "backup.recipients": "admin/backup_restore/#sealed",
     "accounts.login_limit": "admin/configuration/#login-limit",
     "email.smtp": "admin/email/#variables",
     "email.smtp_encryption": "admin/email/#encryption-modes",

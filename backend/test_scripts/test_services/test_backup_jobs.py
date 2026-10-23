@@ -77,6 +77,17 @@ Under test: ``backend/app/services/platform/instance_backup/jobs.py``.
     job names none. The guard of B-50 against a transient ``OSError`` fails the first open of the state wherever it is
     made: the global ``os.open`` (the cure's ``paths.read_regular_file``) or ``io.open`` (``Path.read_text``'s, before
     the cure).
+(L3) Whether a job's archive carries the instance key, ``BackupJob.instance_key_included`` (``False`` by default),
+    beside the SHA-256 it already records. A backup without a password, of any origin, never carries the key: its job
+    says ``False``, and ``file_sha256`` is the SHA-256 of the archive's exact bytes on disk. The flag is written into
+    ``state.json`` and read back by ``get_job``, ``True`` as ``False``; a state written before L3, without the key,
+    reads ``False``; ``to_json`` / ``from_json`` keep it. (A secure backup with the key LibreFolio generated, ``True``,
+    is ``test_backup_secure.py``'s (j): its sources and keys are set up there.) Before L3 the dataclass has no such
+    field, and each case says so (``key_flag``).
+(L3-2) The sealed backup's fields of a job (interface §5): ``archive_name(created_at, sealed=True)`` is
+    ``librefolio-backup-YYYYMMDD-HHMMSS.tar`` in UTC; ``BackupJob.sealed`` (``False``) and ``sealed_recipients``
+    (``()``) by default, ``to_json`` / ``from_json`` keep them, ``get_job`` reads them from ``state.json``; a state
+    written before L3-2, without them, reads ``False`` / ``()``. The sealed run itself is ``test_backup_secure.py``'s (k).
 
 Pure: every data directory is in ``tmp_path`` and every call is given its ``data_dir``; ``jobs.get_data_dir`` is
 replaced by a guard that fails the test, so the lane's data directory is never reached (the cases of the routes' views,
@@ -105,7 +116,7 @@ import time
 import uuid
 from collections.abc import Callable, Iterator
 from contextlib import closing, contextmanager
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field, fields, replace
 from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -2112,3 +2123,123 @@ def test_a_job_whose_state_is_a_link_is_not_found_with_one_warning_and_its_targe
     assert one_warning_naming(events, job_id), f"the read must log one warning {UNREADABLE_WARNING!r} with the job's id and {NOT_REGULAR}: {unreadable_warnings(events)}"
     assert (entries_of(folder), entries_of(elsewhere)) == (before, outside), f"the folder, its link, and what the link points to must be left as they are: {entries_of(folder)}, {entries_of(elsewhere)}"
     print_success(f"{'link to a valid state' if valid else 'dangling link'}: not found, one warning {NOT_REGULAR}, nothing followed")
+
+
+# =============================================================================
+# (L3) instance_key_included: whether a job's archive carries the instance key
+# =============================================================================
+
+#: The field lot L3 adds to ``BackupJob`` (and to the API's ``InstanceBackupJob``).
+KEY_FLAG = "instance_key_included"
+
+
+def key_flag(job: BackupJob) -> bool:
+    """``job.instance_key_included``; before L3, a failure that says the field is missing."""
+    if KEY_FLAG not in {item.name for item in fields(BackupJob)}:
+        pytest.fail(f"red until L3: BackupJob has no field {KEY_FLAG}", pytrace=False)
+    return getattr(job, KEY_FLAG)
+
+
+@pytest.mark.parametrize("origin", ["ui", "cli", "panel"])
+def test_a_backup_without_a_password_says_it_carries_no_instance_key_and_the_sha256_of_its_bytes(data_dir, origin):
+    """(L3) A backup without a password, of any origin: done, ``instance_key_included`` ``False``, ``file_sha256`` the
+    SHA-256 of the archive's exact bytes; ``state.json`` holds the flag, and ``get_job`` reads it back."""
+    print_section(f"instance_key_included, a backup of origin {origin} without a password")
+    job, folder = run_backup(origin=origin, data_dir=data_dir)
+    assert (job.status, job.error_code) == ("done", None), f"precondition: the backup is done: {job}"
+    assert (job.file_size, job.file_sha256) == file_digest(folder / job.file_name), "the state gives the archive's size and SHA-256, those of the bytes on disk"
+    assert key_flag(job) is False, f"no password: the archive never carries the key: {job}"
+    written = json.loads((folder / STATE_FILE).read_text(encoding="utf-8"))
+    assert written.get(KEY_FLAG, "<missing>") is False, f"state.json records the flag: {written.get(KEY_FLAG, '<missing>')!r}"
+    assert key_flag(get_job(job.job_id, data_dir=data_dir)) is False, "get_job reads the flag back"
+    print_success(f"{origin}: no key, sha256 {job.file_sha256[:12]}…")
+
+
+def test_a_state_written_before_l3_reads_instance_key_included_false(data_dir):
+    """(L3) A ``state.json`` written before L3, without the key: ``from_json`` and ``get_job`` read ``False``, everything
+    else as written."""
+    job, folder = run_backup(data_dir=data_dir)
+    key_flag(job)
+    older = {name: value for name, value in json.loads(job.to_json()).items() if name != KEY_FLAG}
+    (folder / STATE_FILE).write_text(json.dumps(older), encoding="utf-8")
+    assert key_flag(BackupJob.from_json(json.dumps(older))) is False, "a state without the key reads False"
+    read = get_job(job.job_id, data_dir=data_dir)
+    assert (key_flag(read), read) == (False, job), f"get_job of such a state: the job as written, the flag False: {read}"
+    print_success("a state of before L3 reads instance_key_included False")
+
+
+def test_instance_key_included_true_is_written_and_read_back(data_dir):
+    """(L3) ``True`` round-trips: ``to_json`` / ``from_json`` keep it, and ``get_job`` reads it from ``state.json``."""
+    job, folder = run_backup(data_dir=data_dir)
+    key_flag(job)
+    carried = replace(job, **{KEY_FLAG: True})
+    assert BackupJob.from_json(carried.to_json()) == carried, "to_json then from_json keeps True"
+    (folder / STATE_FILE).write_text(carried.to_json(), encoding="utf-8")
+    read = get_job(job.job_id, data_dir=data_dir)
+    assert (key_flag(read), read) == (True, carried), f"get_job reads True back from state.json: {read}"
+    print_success("instance_key_included True written and read back")
+
+
+# =============================================================================
+# (L3-2) The sealed backup's fields of a job
+# =============================================================================
+
+#: The fields lot L3-2 adds to ``BackupJob`` (interface §5).
+SEAL_FIELDS = ("sealed", "sealed_recipients")
+#: A recipient as the state records it: a public key, not a secret (an age X25519 recipient of the L3 test vectors).
+RECIPIENT = "age1r7hr6nule5dwh69r76kn65y70dudk6xuyf2vel5g5kv8mvlszf8qrdp3av"
+
+
+def seal_fields(job: BackupJob) -> tuple[bool, tuple[str, ...]]:
+    """``(job.sealed, job.sealed_recipients)``; before L3-2, a failure that says the fields are missing."""
+    missing = [name for name in SEAL_FIELDS if name not in {item.name for item in fields(BackupJob)}]
+    if missing:
+        pytest.fail(f"red until L3-2: BackupJob has no field {', '.join(missing)}", pytrace=False)
+    return job.sealed, tuple(job.sealed_recipients)
+
+
+def test_a_sealed_archive_is_named_after_its_creation_time_in_utc_with_tar():
+    """(L3-2) ``archive_name(created, sealed=True)``: the same name in UTC, ``.tar``."""
+    created = datetime(2026, 10, 23, 5, 0, 12, tzinfo=timezone(timedelta(hours=2)))
+    try:
+        name = archive_name(created, sealed=True)
+    except TypeError as exc:
+        pytest.fail(f"red until L3-2: archive_name takes no sealed= yet ({exc})", pytrace=False)
+    assert name == "librefolio-backup-20261023-030012.tar", f"05:00:12+02:00 is 03:00:12 UTC, .tar: {name}"
+    print_success(name)
+
+
+def test_a_backup_without_recipients_is_not_sealed_and_says_so_in_its_state(data_dir):
+    """(L3-2) A backup of today: ``sealed`` ``False``, ``sealed_recipients`` empty, in ``state.json`` too."""
+    job, folder = run_backup(data_dir=data_dir)
+    assert seal_fields(job) == (False, ()), f"no recipients, no seal: {job}"
+    written = json.loads((folder / STATE_FILE).read_text(encoding="utf-8"))
+    assert (written.get("sealed", "<missing>"), written.get("sealed_recipients", "<missing>")) == (False, []), f"state.json records the fields: {written}"
+    print_success("not sealed: False, []")
+
+
+def test_a_state_written_before_l3_2_reads_not_sealed(data_dir):
+    """(L3-2) A ``state.json`` without the seal's keys: ``from_json`` and ``get_job`` read ``False`` / ``()``, the rest
+    as written."""
+    job, folder = run_backup(data_dir=data_dir)
+    seal_fields(job)
+    older = {name: value for name, value in json.loads(job.to_json()).items() if name not in SEAL_FIELDS}
+    (folder / STATE_FILE).write_text(json.dumps(older), encoding="utf-8")
+    assert seal_fields(BackupJob.from_json(json.dumps(older))) == (False, ()), "a state without the keys reads not sealed"
+    read = get_job(job.job_id, data_dir=data_dir)
+    assert (seal_fields(read), read) == ((False, ()), job), f"get_job of such a state: the job as written, not sealed: {read}"
+    print_success("a state of before L3-2 reads sealed False, ()")
+
+
+def test_a_sealed_state_is_written_and_read_back(data_dir):
+    """(L3-2) ``sealed`` ``True`` and its recipients round-trip through ``to_json`` / ``from_json`` and ``state.json``,
+    the recipients as a tuple."""
+    job, folder = run_backup(data_dir=data_dir)
+    seal_fields(job)
+    sealed = replace(job, sealed=True, sealed_recipients=(RECIPIENT,), encrypted=True)
+    assert BackupJob.from_json(sealed.to_json()) == sealed, "to_json then from_json keeps the seal"
+    assert json.loads(sealed.to_json())["sealed_recipients"] == [RECIPIENT], "state.json writes the recipients as a list"
+    (folder / STATE_FILE).write_text(sealed.to_json(), encoding="utf-8")
+    read = get_job(job.job_id, data_dir=data_dir)
+    assert (seal_fields(read), read) == ((True, (RECIPIENT,)), sealed), f"get_job reads the seal back: {read}"
+    print_success("sealed True and its recipient written and read back")

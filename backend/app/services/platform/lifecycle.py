@@ -37,11 +37,16 @@ _current_step: str | None = None
 
 @dataclass(frozen=True)
 class Step:
-    """One startup or shutdown step: a name for the log and the watchdog, and the call that does the work."""
+    """One startup or shutdown step: a name for the log and the watchdog, and the call that does the work.
+
+    ``skip_when``, on a startup step: asked when the step comes, the step is not run while it answers True (H-62: the
+    steps an instance awaiting its restore must not run).
+    """
 
     name: str
     run: Callable[[], object]
     blocking: bool = False
+    skip_when: Callable[[], bool] | None = None
 
 
 @dataclass(frozen=True)
@@ -63,6 +68,9 @@ async def run_startup_steps(steps: Sequence[Step]) -> None:
     """Run the startup steps in order, each to its end. An exception stops the startup."""
     global _current_step
     for step in steps:
+        if step.skip_when is not None and step.skip_when():
+            logger.info("Startup step skipped", step=step.name)
+            continue
         _current_step = f"startup:{step.name}"
         try:
             await _completed(step.run())

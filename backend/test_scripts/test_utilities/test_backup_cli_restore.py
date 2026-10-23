@@ -89,6 +89,20 @@ it), printed by ``pending`` and by a confirmation on a blocked instance.
     ``IN_AN_INDEX``, on this module's database at the head): SQLite fails the copy's integrity check, «unknown function».
     Exactly one ❌ line, after the 🔎 line, ending in ``(database_damaged)``, exit 1, no traceback; no copy left, the live
     data untouched, the function's name (the archive's text) on neither output.
+(k) Lot L3-2 (red until it lands; contract L3 §5): a restore the command line confirms — with ``--yes``, or the word
+    typed on a terminal — records ``confirmed_via`` ``cli`` in ``restore.json``, beside ``confirmed_by`` ``cli``.
+(l) B-33 (red until it lands; interface ``B-b33-interface.md`` §3). ``pending`` with a state that cannot be read —
+    refused by the file system (``io``), a folder (``not_a_file``), no state (``invalid``): exit 1, exactly one ❌ line
+    holding ``restore_state_unreadable`` and the reason word; then what is on disk — the swapped folders
+    ``.restore/previous/`` holds, how many checked copies are kept — and the command ``./dev.py backup pending
+    --recover``; never the state's content, never a path, no traceback; nothing changed. (g)'s ``pending`` cases now
+    expect this (they pinned one line, the system's words in it); ``pending --cancel`` and ``restore --yes`` keep (g)'s
+    one line. ``pending --recover``: with such a state, exit 0, a ✅ line, the folders it moved named, ``./dev.py backup
+    restore`` named; each folder of ``previous/`` back in place, its live one in ``.restore/failed/``, the state renamed
+    ``restore.json.unreadable-<UTC>``; then ``pending`` says no restore. With a readable state, or none: exit 1, one
+    line ``❌ Nothing to recover…``, nothing moved. While a server serves the data directory (its serving lock held by
+    this process, as ``hold_serving_lock`` holds it): exit 1, one ❌ line, nothing moved. ``--recover`` with
+    ``--cancel``: refused by the parser (exit 2). The help names ``--recover``.
 
 Pure, as ``test_backup_cli.py``, whose fixtures and helpers are imported: data directories under ``tmp_path`` seen through
 ``LIBREFOLIO_DATA_DIR`` (production mode, checked); a real database at the head made once by ``alembic upgrade`` for the
@@ -111,6 +125,7 @@ import importlib
 import json
 import os
 import pty
+import re
 import stat
 import sys
 import zipfile
@@ -842,16 +857,16 @@ def mode_for_a_while(path: Path, mode: int) -> Iterator[None]:
 
 @pytest.mark.parametrize("error", [errno.EACCES, errno.EIO], ids=["permission-denied", "input-output-error"])
 def test_pending_says_that_the_state_cannot_be_read_and_exits_1(tmp_path, monkeypatch, capsys, error):
-    """(g) §3: today a state the file system cannot read reads as «no restore» (ℹ️, exit 0) though a restore may wait.
-    One line, verbatim, the system's reason in it and never the path; exit 1, no traceback; the state as it was."""
+    """(g) §3, as B-33 §3 amends it (l): a state the file system cannot read is never «no restore». Exit 1, one ❌ line
+    with ``restore_state_unreadable`` and the reason ``io`` (B-33; it was the system's words), the ``--recover`` command,
+    never the path, no traceback; the state as it was."""
     print_section("B-32: a state that cannot be read")
     root = instance(tmp_path, monkeypatch)
     before = write_state(root, "pending")
     unreadable_state(monkeypatch, root, error)
     code = run("pending")
     out = capsys.readouterr().out
-    assert (code, said(out)) == (1, [unreadable_line(error)]), f"exit 1 and one line, verbatim {unreadable_line(error)!r}, never «No restore waits»: exit {code}: {out}"
-    assert "Traceback" not in out and os.fspath(state_path(root)) not in out, f"no traceback, no path: {out}"
+    assert_said_unreadable(code, out, "io", root)
     assert state_path(root).read_bytes() == before, "the state as it was"
     print_success(f"{errno.errorcode[error]}: (restore_state_unreadable), exit 1")
 
@@ -988,7 +1003,11 @@ def test_the_script_says_that_a_state_the_file_system_refuses_cannot_be_read(tmp
     with mode_for_a_while(locked, mode):
         done = cli.script(*argv, env=cli.child_env(data), cwd=tmp_path)
     expected = unreadable_line(errno.EACCES)
-    assert (done.returncode, said(done.stdout)) == (1, [expected]), f"{' '.join(argv)}, {fault}: exit 1 and one line, verbatim {expected!r}: exit {done.returncode}\n{done.stdout[-cli.TAIL:]}{done.stderr[-cli.TAIL:]}"
+    if argv == ("pending",):
+        # B-33 §3 (l): pending says the reason word and what to run, not (g)'s one line.
+        assert_said_unreadable(done.returncode, done.stdout, "io", data)
+    else:
+        assert (done.returncode, said(done.stdout)) == (1, [expected]), f"{' '.join(argv)}, {fault}: exit 1 and one line, verbatim {expected!r}: exit {done.returncode}\n{done.stdout[-cli.TAIL:]}{done.stderr[-cli.TAIL:]}"
     assert "Traceback" not in done.stderr, f"no traceback: {done.stderr[-cli.TAIL:]}"
     assert state_path(data).read_bytes() == before, "the state kept"
     print_success(f"script {' '.join(argv)}, {fault}: (restore_state_unreadable)")
@@ -1427,3 +1446,233 @@ def test_a_dry_run_of_an_archive_whose_index_calls_a_function_this_librefolio_la
     assert staging_cases.B43_FUNCTION not in captured.out + captured.err, f"the function's name, the archive's text, on neither output: {lines}"
     assert (cli.stages_left(root), live(root)) == ([], before), f"no copy left, the live data untouched: {cli.stages_left(root)}"
     print_success("restore --dry-run: ❌ … (database_damaged), exit 1, no traceback")
+
+
+# =============================================================================
+# (k) Lot L3-2: confirmed_via cli
+# =============================================================================
+
+
+@pytest.mark.parametrize("how", ["--yes", "typed-on-a-terminal"])
+def test_a_restore_the_command_line_confirms_is_recorded_via_cli(tmp_path, monkeypatch, capsys, head_database, how):
+    """(k) L3-2: the command line's confirmation writes ``confirmed_via`` ``cli`` in ``restore.json``, beside
+    ``confirmed_by`` ``cli``, with ``--yes`` as with the word typed on a terminal."""
+    print_section(f"(k) L3-2 confirmed_via cli, {how}")
+    root = instance(tmp_path, monkeypatch)
+    archive = cli.restorable(tmp_path, head_database)
+    if how == "--yes":
+        code = run("restore", str(archive), "--yes")
+    else:
+        with stdin_with(monkeypatch, "restore", terminal=True):
+            code = run("restore", str(archive))
+    out = capsys.readouterr().out
+    assert code == 0 and "waits for the next start" in out, f"precondition: the restore is confirmed: exit {code}: {out}"
+    state = json.loads(state_path(root).read_text(encoding="utf-8"))
+    recorded = (state["status"], state["confirmed_by"], state.get("confirmed_via", "<missing: no confirmed_via before L3-2>"))
+    assert recorded == ("pending", "cli", "cli"), f"pending, confirmed by cli, via cli: {state}"
+    print_success(f"{how}: confirmed_via cli")
+
+
+# =============================================================================
+# (l) B-33: pending with a state that cannot be read, pending --recover
+# =============================================================================
+
+
+#: (l) B-33 §3: the command ``pending`` gives to run.
+RECOVER_COMMAND = "./dev.py backup pending --recover"
+#: (l) What a state nobody can read holds: never printed.
+STATE_MARK = "b33-the-content-of-a-state-nobody-can-read"
+#: (l) The folders a restore swaps (``paths.SWAPPED_FOLDERS``), spelled out.
+SWAPPED = ("sqlite", "custom-uploads", "broker_reports", "scenario_catalog")
+#: (l) The data of before, as ``.restore/previous/`` keeps it: one file in each folder, none the live instance's.
+BEFORE = {name: {f"{name}/before.bin": f"the {name} of before\n".encode()} for name in SWAPPED}
+#: (l) The three reasons, each one way.
+REASONS = [pytest.param("io", id="io"), pytest.param("not_a_file", id="not_a_file"), pytest.param("invalid", id="invalid")]
+
+
+def assert_said_unreadable(code: int, out: str, reason: str, root: Path) -> None:
+    """(l) B-33 §3: ``pending`` with a state that cannot be read: exit 1; exactly one ❌ line, holding
+    ``restore_state_unreadable`` and the reason word; the ``--recover`` command; never the state's content nor a path of
+    the data directory; no traceback."""
+    refusals = [line for line in said(out) if line.startswith("❌")]
+    assert code == 1 and len(refusals) == 1, f"exit 1 and one ❌ line: exit {code}: {out}"
+    assert "restore_state_unreadable" in refusals[0] and re.search(rf"\b{reason}\b", refusals[0]), f"[new] B-33 §3: the ❌ line holds restore_state_unreadable and the reason {reason!r}: {refusals[0]!r}"
+    assert RECOVER_COMMAND in out, f"[new] B-33 §3: pending names the command to run, {RECOVER_COMMAND!r}: {out}"
+    assert STATE_MARK not in out and os.fspath(root) not in out and "Traceback" not in out, f"never the state's content, a path, a traceback: {out}"
+
+
+def unreadable_as(monkeypatch, root: Path, reason: str) -> None:
+    """``.restore/restore.json`` (a restore applying, as a start leaves it) made a state that cannot be read: refused by
+    the file system (``io``, EACCES), a folder (``not_a_file``), or no state (``invalid``)."""
+    write_state(root, "applying")
+    if reason == "io":
+        unreadable_state(monkeypatch, root)
+    elif reason == "not_a_file":
+        state_path(root).unlink()
+        state_path(root).mkdir(mode=0o700)
+        (state_path(root) / "inside.json").write_text(STATE_MARK, encoding="utf-8")
+    else:
+        state_path(root).write_text("{" + STATE_MARK, encoding="utf-8")
+
+
+def previous_holding(root: Path, *names: str) -> Path:
+    """``.restore/previous/`` holding the data of before of ``names``: what a swap stopped half way leaves."""
+    previous = restore_dir(root) / "previous"
+    previous.mkdir(mode=0o700, parents=True, exist_ok=True)
+    for name in names:
+        for entry, content in BEFORE[name].items():
+            (previous / entry).parent.mkdir(parents=True, exist_ok=True)
+            (previous / entry).write_bytes(content)
+    return previous
+
+
+def checked_copies(root: Path, count: int) -> list[str]:
+    """``count`` checked copies kept in ``.restore/stage/``: their ids."""
+    ids = [f"{index:032x}" for index in range(1, count + 1)]
+    for stage_id in ids:
+        (stage_data_dir(root, stage_id) / "sqlite").mkdir(mode=0o700, parents=True)
+        (stage_dir(root, stage_id) / "report.json").write_text("{}\n", encoding="utf-8")
+    return ids
+
+
+def files_below(folder: Path) -> dict[str, bytes] | None:
+    """Every file below ``folder`` with its bytes, by its path from it; ``None`` where nothing stands."""
+    if not os.path.lexists(folder):
+        return None
+    return {path.relative_to(folder).as_posix(): path.read_bytes() for path in sorted(folder.rglob("*")) if path.is_file() and not path.is_symlink()}
+
+
+def everything(root: Path) -> dict[str, tuple]:
+    """Every path below ``root``, ``.restore`` included, never through a link: its kind, a file's bytes. The apply lock
+    aside: a refusal taken under it may create it, which moves nothing."""
+    found: dict[str, tuple] = {}
+    for folder, names, files in os.walk(root):
+        for name in [*names, *files]:
+            path = Path(folder) / name
+            if path == restore_dir(root) / "apply.lock":
+                continue
+            info = path.lstat()
+            kind = "link" if stat.S_ISLNK(info.st_mode) else "folder" if stat.S_ISDIR(info.st_mode) else "file"
+            found[path.relative_to(root).as_posix()] = (kind, path.read_bytes() if kind == "file" and stat.S_ISREG(info.st_mode) else None)
+    return found
+
+
+@pytest.mark.parametrize("reason", REASONS)
+def test_pending_with_a_state_that_cannot_be_read_says_what_is_on_disk_and_what_to_run(tmp_path, monkeypatch, capsys, reason):
+    """(l) B-33 §3: exit 1, one ❌ line with ``restore_state_unreadable`` and the reason word; the swapped folders
+    ``previous/`` holds, each named; how many checked copies are kept (2); the command ``./dev.py backup pending
+    --recover``; never the state's content or a path; nothing changed on disk. Red before B-33: ``io`` printed the
+    system's words without the command, ``not_a_file`` and ``invalid`` read as no restore (exit 0)."""
+    print_section("(l) B-33: pending with a state that cannot be read")
+    root = instance(tmp_path, monkeypatch)
+    unreadable_as(monkeypatch, root, reason)
+    previous_holding(root, "custom-uploads", "broker_reports")
+    checked_copies(root, 2)
+    before = everything(root) if reason != "io" else None
+    code = run("pending")
+    out = capsys.readouterr().out
+    assert_said_unreadable(code, out, reason, root)
+    held = [name for name in ("custom-uploads", "broker_reports") if name not in out]
+    assert "previous" in out and held == [], f"[new] B-33 §3: what previous/ holds, each folder named: missing {held}: {out}"
+    assert any(re.search(r"\b2\b", line) and "cop" in line.lower() for line in out.splitlines()), f"[new] B-33 §3: how many checked copies are kept (2): {out}"
+    if before is not None:
+        assert everything(root) == before, "nothing changed on disk"
+    print_success(f"{reason}: ❌ (restore_state_unreadable), previous/ and the copies said, --recover named")
+
+
+def test_recover_puts_the_data_of_before_back_and_pending_then_says_no_restore(tmp_path, monkeypatch, capsys):
+    """(l) B-33 §3: ``pending --recover`` with a state that cannot be read (``invalid``), ``previous/`` holding
+    ``custom-uploads`` and ``broker_reports``: exit 0, a ✅ line, the two folders named, ``./dev.py backup restore``
+    named. On disk: the two folders of before back in place, the live ones in ``.restore/failed/``, ``scenario_catalog``
+    and the database as they were; the state renamed ``restore.json.unreadable-<UTC>``, kept as it was. Then ``pending``:
+    exit 0, no restore."""
+    root = instance(tmp_path, monkeypatch)
+    unreadable_as(monkeypatch, root, "invalid")
+    state = state_path(root).read_bytes()
+    previous_holding(root, "custom-uploads", "broker_reports")
+    live_before = {name: files_below(root / name) for name in SWAPPED}
+    code = run("pending", "--recover")
+    out = capsys.readouterr().out
+    lines = said(out)
+    assert code == 0 and any(line.startswith("✅") for line in lines) and not any(line.startswith("❌") for line in lines), f"[new] B-33 §3: --recover with an unreadable state: exit 0, a ✅ line, no ❌: exit {code}: {out}"
+    assert "custom-uploads" in out and "broker_reports" in out and "./dev.py backup restore" in out, f"the folders moved named, and ./dev.py backup restore: {out}"
+    assert STATE_MARK not in out and "Traceback" not in out, f"never the state's content, no traceback: {out}"
+    for name in ("custom-uploads", "broker_reports"):
+        assert files_below(root / name) == {"before.bin": BEFORE[name][f"{name}/before.bin"]}, f"{name}: the data of before back in place"
+        assert files_below(restore_dir(root) / "failed" / name) == live_before[name], f"{name}: the live one in .restore/failed/"
+    assert {name: files_below(root / name) for name in ("sqlite", "scenario_catalog")} == {name: live_before[name] for name in ("sqlite", "scenario_catalog")}, "the folders previous/ did not hold, as they were"
+    kept = [path.name for path in restore_dir(root).iterdir() if re.fullmatch(r"restore\.json\.unreadable-\d{8}T\d{6}Z", path.name)]
+    assert not os.path.lexists(state_path(root)) and len(kept) == 1 and (restore_dir(root) / kept[0]).read_bytes() == state, f"the state renamed, kept as it was: {sorted(path.name for path in restore_dir(root).iterdir())}"
+    again = run("pending")
+    out = capsys.readouterr().out
+    assert again == 0 and "no restore" in out.lower(), f"then pending: exit 0, no restore: exit {again}: {out}"
+    print_success("--recover: exit 0, two folders back, the state kept aside; pending: no restore")
+
+
+def _no_state_at_all(monkeypatch, root: Path) -> None:
+    previous_holding(root, "custom-uploads")
+
+
+def _a_readable_pending_restore(monkeypatch, root: Path) -> None:
+    write_state(root, "pending")
+    previous_holding(root, "custom-uploads")
+
+
+@pytest.mark.parametrize("arrange", [_no_state_at_all, _a_readable_pending_restore], ids=["no-state", "readable-pending"])
+def test_recover_with_nothing_to_recover_exits_1_and_moves_nothing(tmp_path, monkeypatch, capsys, arrange):
+    """(l) B-33 §3: ``pending --recover`` with no state, or one this LibreFolio reads (``previous/`` there all the
+    same): exit 1, one line ``❌ Nothing to recover…``, nothing moved, written or removed."""
+    root = instance(tmp_path, monkeypatch)
+    arrange(monkeypatch, root)
+    before = everything(root)
+    code = run("pending", "--recover")
+    out = capsys.readouterr().out
+    refusals = [line for line in said(out) if line.startswith("❌")]
+    assert code == 1 and len(refusals) == 1 and refusals[0].startswith("❌ Nothing to recover"), f"[new] B-33 §3: exit 1, one line ❌ Nothing to recover…: exit {code}: {out}"
+    assert everything(root) == before, "nothing moved, written or removed"
+    print_success(f"{arrange.__name__}: ❌ Nothing to recover, exit 1")
+
+
+def test_recover_while_a_server_serves_the_data_directory_exits_1_and_moves_nothing(tmp_path, monkeypatch, capsys):
+    """(l) B-33 §3: a server holds the serving lock of the data directory (this process, through a descriptor of its
+    own, as ``hold_serving_lock`` holds it; released at the end): ``pending --recover`` exits 1 with one ❌ line, nothing
+    moved, written or removed."""
+    root = instance(tmp_path, monkeypatch)
+    unreadable_as(monkeypatch, root, "invalid")
+    previous_holding(root, "custom-uploads")
+    apply = apply_module()
+    key = str(root.resolve())
+    assert apply.hold_serving_lock(root) is True, "precondition: a server serves the data directory"
+    try:
+        before = everything(root)
+        code = run("pending", "--recover")
+    finally:
+        os.close(apply._SERVING.pop(key))
+    out = capsys.readouterr().out
+    refusals = [line for line in said(out) if line.startswith("❌")]
+    assert code == 1 and len(refusals) == 1, f"[new] B-33 §3: exit 1, one ❌ line while a server serves the data directory: exit {code}: {out}"
+    assert everything(root) == before, "nothing moved, written or removed"
+    print_success("served: ❌, exit 1, nothing moved")
+
+
+def test_recover_and_cancel_together_are_refused_by_the_parser(tmp_path, monkeypatch, capsys):
+    """(l) B-33 §3: ``--recover`` and ``--cancel`` exclude each other: the parser refuses them together (exit 2, «not
+    allowed with»), naming ``--recover``; nothing runs. Red before B-33: refused, but as an argument it does not know."""
+    root = instance(tmp_path, monkeypatch)
+    unreadable_as(monkeypatch, root, "invalid")
+    before = everything(root)
+    parser = argparse.ArgumentParser(prog="dev.py")
+    backup_cli.register_subparser(parser.add_subparsers(dest="command"))
+    with pytest.raises(SystemExit) as done:
+        parser.parse_args(["backup", "pending", "--recover", "--cancel"])
+    err = capsys.readouterr().err
+    assert done.value.code == 2 and "not allowed with" in err and "--recover" in err, f"[new] B-33 §3: refused by the parser as exclusive (exit 2, «not allowed with», --recover named), not as an unknown argument: exit {done.value.code}: {err}"
+    assert everything(root) == before, "nothing ran"
+    print_success("--recover --cancel: exit 2")
+
+
+def test_the_help_of_pending_names_recover(monkeypatch, capsys):
+    """(l) B-33 §3: ``backup pending --help`` names ``--recover``."""
+    pending_help = cli.help_of(monkeypatch, capsys, "backup", "pending")
+    assert "--recover" in pending_help, f"[new] B-33 §3: pending --help names --recover: {pending_help}"
+    print_success("pending --help: --recover")
