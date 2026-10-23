@@ -171,7 +171,7 @@ async def refuse_when_restore_interrupted(request: Request) -> None:
     """Router dependency of ``/api/v1``, third, after the block and the awaiting-restore mode: while this process found
     the state of the restore unreadable at its start (``services/platform/restore_guard.py``), every endpoint not in
     ``ALLOWED_WHEN_RESTORE_INTERRUPTED`` answers 423 ``instance_restore_interrupted`` — to anyone: LibreFolio cannot tell
-    which data it holds, and serves none until the administrator chooses with ``./dev.py backup pending --recover``.
+    which data it holds, and serves none until the administrator chooses with ``./dev.py backup pending --recover previous``.
 
     The hosting panel's backup start answers 409 ``backup_restore_interrupted`` instead (D7): a backup of data in doubt
     would pass the coordinator's checks and push a good copy out of the seven it keeps. The panel's credential is
