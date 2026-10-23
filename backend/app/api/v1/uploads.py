@@ -40,9 +40,9 @@ from backend.app.schemas.uploads import (
 from backend.app.services.accounts.global_settings_service import get_max_upload_mb
 from backend.app.services.files.file_preview import (
     FilePreviewLinks,
-    UnsupportedPreviewError,
     build_image_preview_url,
     build_preview_response,
+    preview_failure_detail,
 )
 from backend.app.services.files.static_uploads import (
     UploadSecurityError,
@@ -320,10 +320,8 @@ async def get_upload_file_preview(
             links,
             sheet_name=sheet_name,
         )
-    except UnsupportedPreviewError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    except ValueError as e:  # UnsupportedPreviewError and UnreadablePreviewError are ValueErrors: coded by preview_failure_detail
+        raise HTTPException(status_code=400, detail=preview_failure_detail(e)) from e
     except Exception as e:
         logger.exception("Failed to build upload preview", error=str(e), file_id=file_id)
         raise HTTPException(status_code=500, detail="Failed to build file preview") from e

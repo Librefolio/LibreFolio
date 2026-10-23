@@ -532,6 +532,12 @@
       "rows_unreadable": "L'ultima colonna dice che cosa non si è potuto leggere in ogni riga."
     },
     "notesCount": "{n, plural, one {# nota} other {# note}}",
-    "noNotices": "Nessun avviso né nota"
+    "noNotices": "Nessun avviso né nota",
+    "parseFailed": "Il plugin {plugin_name} non ha potuto leggere il file: {reason}",
+    "parseFailedNoReason": "Il file non si è potuto leggere e il plugin non ne ha indicato il motivo.",
+    "previewFailed": {
+      "preview_unsupported": "Questo tipo di file non ha un'anteprima.",
+      "preview_unreadable": "Il file sembra danneggiato o non è quello che dice l'estensione: non si può mostrare l'anteprima."
+    }
   }
 }

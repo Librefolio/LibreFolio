@@ -50,9 +50,10 @@
     import ParseDetailModal from '$lib/features/transactions/import/ParseDetailModal.svelte';
     import ImportBrokerMismatchModal, {type BrokerMismatchBroker, type BrokerMismatchPlugin, type BrokerMismatchTarget} from '$lib/features/transactions/import/ImportBrokerMismatchModal.svelte';
     import {findDefaultPluginMismatch, resolveParseRefusalMessage, type ParseRefusal} from '$lib/features/transactions/import/defaultPluginCheck';
+    import {resolveParseFailureMessage} from '$lib/features/transactions/import/parseFailure';
     import {brimPluginName} from '$lib/utils/brim/pluginText';
     import {isFallbackPlugin} from '$lib/utils/brim/pluginKind';
-    import {fetchFilePreview, getFilePreviewError} from '$lib/utils/files/filePreview';
+    import {fetchFilePreview} from '$lib/utils/files/filePreview';
     import {generateUUID} from '$lib/utils/core/uuid';
     import {mapWithConcurrency} from '$lib/utils/core/requestConcurrency';
     import DataTable from '$lib/components/table/DataTable.svelte';
@@ -4043,7 +4044,7 @@ ${arrow}<span>${label}</span></span>`,
             result.status = 'done';
         } catch (e) {
             result.status = 'error';
-            result.errorMessage = extractErrorMessage(e);
+            result.errorMessage = resolveParseFailureMessage(e, $t);
         }
     }
 
@@ -4335,7 +4336,7 @@ ${arrow}<span>${label}</span></span>`,
         } catch (error) {
             if (token === previewRequestToken) {
                 previewData = null;
-                previewError = getFilePreviewError(error, 'Preview failed');
+                previewError = resolveParseFailureMessage(error, $t, 'Preview failed');
             }
         } finally {
             if (token === previewRequestToken) previewLoading = false;

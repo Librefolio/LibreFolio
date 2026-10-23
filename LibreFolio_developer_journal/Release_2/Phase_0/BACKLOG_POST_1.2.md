@@ -7348,6 +7348,12 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   decidere: quale fonte vince fra un prezzo osservato e questa stima, come la si segna (prezzo stimato, non osservato), se vale anche
   per l'ADJUSTMENT in entrata. Dopo la 1.3.
   🌊 22/10: ondata 6 (proprietario MF): è diventata una buona idea (developer). La gamba che entra in un trasferimento si usa come stima del prezzo, come già si fa per BUY e SELL
+- **W-B95 · La pagina Files mostra ancora l'inglese per un'anteprima che non si può costruire** — minimo, lingua; W, 23/10 (trovato da W5-5 / C-70b).
+  Il 400 dell'anteprima di un file ora è `{code: "preview_unsupported" | "preview_unreadable", message}` (`file_preview.preview_failure_detail`); il wizard e
+  `BrokerImportFilesModal` lo traducono (`resolveParseFailureMessage`, `importWizard.previewFailed.*`). `routes/(app)/files/+page.svelte:722` usa ancora
+  `getFilePreviewError(error, 'Preview failed')` e mostra il `message` inglese (com'era prima, nessuna regressione). Cura: la stessa riga con `resolveParseFailureMessage(error, $_, …)`
+  (o `$t`); poi `getFilePreviewError` non ha più chiamanti e si toglie. **Proprietario da assegnare** (la pagina Files non è di W: la gira il coordinatore).
+  Dettagli: piano 04, «W5-5 · C-70b — esito».
 - **W-B76 · La riga aperta con `?highlight=<id>` non resta segnata** — minimo, test e chiarezza; Y-31 (Y), 17/10, via il
   coordinatore. `pulseElement` (`frontend/src/routes/(app)/transactions/+page.svelte:491-501`) dà alla riga la classe
   `tx-row-highlight` per 1,6 s e poi la toglie: finita l'animazione, né l'utente né un test sa quale riga si è aperta, e l'E2E di
