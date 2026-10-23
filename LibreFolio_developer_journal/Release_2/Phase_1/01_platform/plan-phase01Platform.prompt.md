@@ -10566,3 +10566,37 @@ mescolare le righe del runner dei due lotti:
     > `restore-interrupted` 34, `panel-status` 20, `hosting-panel-routes` 40); frontend 5 → verdi (130).
    > **⚠️ Fuori pista**: `"scarfSettings"` messo e poi tolto da `package.json`, dopo il cambio di Q-C: il file coincide col
    > commit.
+
+---
+
+### Ondata 5 (23/10/2026, base `1fd80c481` = `dev_release2`, treni 9 e 10 dentro; sessione H su Sonnet)
+
+Brief: `salvataggi-worktrees-20261021/ondata5/kickoff-H.md`. Lotti: H5-1 (`users_used`/`users_limit`), H5-2 (X-R84),
+DOC-2 (ricerca per lingua), DOC-1 (riordino della guida admin, con le guide Tailscale).
+
+1. ✅ **H5-1 · `users_used` e `users_limit` in `GET /api/v1/panel/status`** (23/10, treno 11a; richiesta formale del cloud, C5).
+   > **Note implementazione**: `PanelStatusResponse` ha due chiavi in più: `users_used` (intero ≥ 0, da
+   > `registration_service.user_usage`: attivi + inviti vivi + inattivi in attesa di verifica o di setup, ognuno una volta)
+   > e `users_limit` (intero ≥ 1 da `LIBREFOLIO_MAX_USERS`, `null` senza limite). Solo conteggi: nessun nome, email o id
+   > (un test semina dei «canarini» e cerca nel corpo grezzo). La risposta ha ora sei chiavi: è un **cambio di contratto**
+   > con il cloud (chiavi nuove, quelle che il cloud ignora se non le conosce). Docs: `hosting_providers.en.md` (esempio, tabella,
+   > pulsante «istanza piena»), `api/index.md`, `security.md`. `api sync` ok.
+   > **Rossi → verdi** (test-author): 36 casi rossi (`panel-status` 28, `await-restore-mode` 8; `restore-interrupted` 3
+   > dalla stessa chiave) → `panel-status` 33, `await-restore-mode` 36, `restore-interrupted` 34, `hosting-panel-routes` 40,
+   > `panel-restore` 136, `system` 122, `registration` 102; `api all` verde; `front check` 0/0.
+   > **⚠️ Fuori pista**: lo schema documenta `users_limit` con `minimum` 1 (è il vincolo vero di `LIBREFOLIO_MAX_USERS`); la
+   > prima versione del test chiedeva `{"type":"integer"}` esatto, adattata. Debito di traduzione: `hosting_providers` it/fr/es
+   > non esistono (solo inglese).
+2. ✅ **H5-2 · X-R84, un chunk che non si carica ricarica la pagina una volta** (23/10, treno 11a).
+   > **Note implementazione**: `frontend/src/lib/utils/core/chunkReload.ts` (`isChunkLoadError`, `reloadOnceForChunkError`,
+   > `installChunkReload`) e `frontend/src/hooks.client.ts` (nuovo: `installChunkReload()` all'avvio + `handleError`).
+   > Riconosce i messaggi di Chrome, Firefox, Safari e di Vite; il guardiano è un tempo in `sessionStorage`
+   > (`lf-chunk-reload-at`, finestra 60 s, scritto prima del `reload`); senza storage non ricarica mai (nessun ciclo).
+   > `app.html` non toccato (anti-FOUC e colori intatti, nessun hash a mano). Niente spec E2E (decisione del coordinatore:
+   > i 70 Vitest coprono il riconoscimento e il guardiano).
+   > **Rossi → verdi** (test-author): 70 casi (import mancante) → 70/70; `check-orphans` pulito; `front check` 0/0.
+3. ⏳ **DOC-2 · ricerca per lingua**: analisi `ondata5/H-DOC2-analisi.md`; strada B approvata dal coordinatore e dal developer
+   (un indice per lingua + script che sceglie il file + pulsante «cerca anche nelle altre lingue»). Parte dopo la consegna di H5-1/H5-2.
+4. ⏳ **DOC-1 · riordino della guida admin**: inventario e albero in `ondata5/H-DOC1-inventario.md` (14 → 28 pagine piatte, la
+   gerarchia nella nav; mappa di reindirizzamento delle ancore). Albero approvato dal developer; **non si ristruttura** finché
+   non sono committati H5-1, il lotto di B (`backup pending`) e quelli di X sulla doc admin.
