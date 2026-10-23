@@ -53,6 +53,15 @@ def front_fx_detail(verbose: bool = False, ui: bool = False, headed: bool = Fals
     return _run_playwright("fx/fx-detail.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_fx_detail_rolling_return(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run FX detail page rolling-return E2E tests (X5-F1)."""
+    print_section("Frontend FX Detail Rolling Return Tests")
+    if not _ensure_frontend_build(): return False
+    if not _ensure_db_populated(): return False
+    if not _ensure_test_users(): return False
+    return _run_playwright("fx/fx-detail-rolling-return.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_fx_add_pair(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run FX add pair modal E2E tests."""
     print_section("Frontend FX Add Pair Tests")
@@ -181,6 +190,7 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "fx-unit", front_fx_unit, test_names=False, name="FX Unit Tests", desc="Vitest unit tests: EditBuffer, TimeSeriesStore, fxStoreRegistry, flag font gate (static/lf-flags.css, LF Flags-first stacks, no emoji family named in src/offline.html)", tests="vitest")
     add_test(cat, "fx-list", front_fx_list, name="FX List Page", desc="List page navigation, cards, filters", tests="fx/fx-list.spec.ts")
     add_test(cat, "fx-detail", front_fx_detail, name="FX Detail Page", desc="Detail page chart, panels, swap", tests="fx/fx-detail.spec.ts")
+    add_test(cat, "fx-detail-rolling-return", front_fx_detail_rolling_return, name="FX Detail Rolling Return", desc="X5-F1: the rolling return in the FX pair detail chart: mode toggle (price / calendar-return), the window presets and the convert request each sends, back to prices sends nothing, the mode saved with the pair's chart settings and kept on reload, a saved fx-pair comparison asked in the same request, a pair saved in calendar-return opens in it", tests="fx/fx-detail-rolling-return.spec.ts")
     add_test(cat, "fx-add-pair", front_fx_add_pair, name="FX Add Pair", desc="Add pair modal, validation", tests="fx/fx-add-pair.spec.ts")
     add_test(cat, "fx-editor", front_fx_editor, name="FX Data Editor", desc="Inline editing, save, cancel", tests="fx/fx-data-editor.spec.ts")
     add_test(cat, "fx-csv-import", front_fx_csv_import, name="FX CSV Import", desc="CSV upload, preview, import", tests="fx/fx-csv-import.spec.ts")

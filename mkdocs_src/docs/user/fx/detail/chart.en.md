@@ -52,10 +52,41 @@ Hover the chart, or touch it on mobile, to see:
 
 ---
 
+## 🔁 Rolling Return {: #rolling-return }
+
+Two buttons above the chart choose what it draws: **Prices** (the rate history, as above) and
+**Rolling Return**.
+
+In **Rolling Return** every point answers *how much has the rate moved over the last N days?* It
+compares that day's rate with the rate N calendar days earlier. Example: on EUR → USD with the **3M**
+window (90 days), if the rate is 1.0845 today and was 1.0500 ninety days ago, the point reads
+**+3.3 %**. Above zero the first currency bought more of the second than N days before; below zero, less.
+
+- 🗓️ **Window** — next to the two buttons: **1W**, **1M**, **3M**, **1Y**, or **Custom** (a whole
+  number of weeks, months or years). Until you pick one, the window is automatic: the largest preset
+  that fits the period on screen. The window may be longer than the period: LibreFolio reads the older
+  rates it needs. The **?** button opens the [same explanation](../../assets/detail/chart.md#rolling-return)
+  given for assets, and the [Chart Settings](../chart-settings.md#rolling-return-view) preview draws
+  this view too.
+- 💱 **Compare with another pair** — add an **FX Pair** in the [Signals](signals.md#data-comparison)
+  panel: each compared pair draws its own rolling return, with the same window. In this mode the panel
+  offers only these comparisons; your other signals stay saved and come back with **Prices**.
+- 🔄 **Direction** — the return follows the direction the page shows, EUR → USD or USD → EUR.
+- 📏 ✏️ **Measure** and **Edit Rates** are hidden: they work on the rates, so they belong to **Prices**.
+- 💾 **Remembered** — the mode and the window are saved with this pair's chart settings, in this
+  browser. The pair's card in the FX list shares them: a card in **Rolling Return** opens the page in
+  it, and the page opens again in the mode you left it in. Going back to **Prices** is immediate.
+
+Changing the period, the window, the direction or the compared pairs, or clicking **Refresh**,
+computes the return again, and a spinner shows until the answer arrives. If no return can be
+computed, the chart shows the reason instead of a curve.
+
+---
+
 ## 🧰 Chart buttons
 
-- 📏 **Measure** — see [Measures](measures.md).
-- ✏️ **Edit Rates** — see [Data Editor](data-editor.md).
+- 📏 **Measure** — see [Measures](measures.md). **Prices** only.
+- ✏️ **Edit Rates** — see [Data Editor](data-editor.md). **Prices** only.
 - ⚙️ **Aesthetics** — colours, fill, grid and axis ranges, as in [Chart Settings](../chart-settings.md).
 - 📊 The **Signals** panel above the chart — see [Signals](signals.md).
 
