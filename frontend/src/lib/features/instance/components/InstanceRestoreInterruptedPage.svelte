@@ -1,7 +1,7 @@
 <!--
   The page of an instance whose restore stopped half way (B-33): the state of the restore cannot be read, LibreFolio
   cannot tell which data it holds, and every API route but a few answers 423 `instance_restore_interrupted` until the
-  administrator chooses with `./dev.py backup pending --recover`. The page says so on the login's animated background,
+  administrator chooses with `./dev.py backup pending --recover previous`. The page says so on the login's animated background,
   links the recovery's documentation and, when the instance names one, its support (D7), asks the instance every `pollMs` whether it serves the data again, and reloads
   once it does.
 -->

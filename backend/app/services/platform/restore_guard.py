@@ -4,7 +4,7 @@ Owner: workstream H (platform). When the state of the restore (``.restore/restor
 permissions changed, a disk error, a link or a folder in its place, content no LibreFolio wrote — a restore may have
 stopped half way, and LibreFolio cannot tell which data it holds. The start asks once, right after ``pending-restore``
 (``app_lifespan.py``, step ``restore-state``), through workstream B's ``apply.restore_state_problem``. When it cannot
-read it, the process serves no data until the administrator chooses with ``./dev.py backup pending --recover`` and
+read it, the process serves no data until the administrator chooses with ``./dev.py backup pending --recover previous`` and
 starts LibreFolio again:
 
 - the steps that repair, write or warm up the data are skipped (``skip_when``);
@@ -34,7 +34,7 @@ def probe_restore_state(data_dir: Path | None = None) -> bool:
     problem = restore_apply.restore_state_problem(data_dir or get_data_dir())
     _interrupted = problem is not None
     if problem is not None:
-        logger.error("The state of the restore cannot be read: LibreFolio serves no data until the administrator runs ./dev.py backup pending --recover", reason=problem.reason)
+        logger.error("The state of the restore cannot be read: LibreFolio serves no data until the administrator runs ./dev.py backup pending --recover previous", reason=problem.reason)
     return _interrupted
 
 
