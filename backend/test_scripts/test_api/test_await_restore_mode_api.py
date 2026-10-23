@@ -612,7 +612,7 @@ async def test_a_restore_state_that_cannot_be_read_is_500_restore_state_unreadab
     never ``restore: null``."""
 
     def unreadable(*_args: Any, **_kwargs: Any) -> NoReturn:
-        raise apply_module.RestoreStateUnreadableError("Permission denied")
+        raise apply_module.RestoreStateUnreadableError("io", "Permission denied")
 
     instance.monkeypatch.setattr(apply_module, "read_restore", unreadable)
     response = await panel_status(instance)

@@ -361,6 +361,7 @@ The report's `status`:
 | `not_leader` | No job ran for this call. Either the call waited ten minutes for another run of the scheduler, in the same server process or in another one, and gave up, with a warning in the server log; or, on Windows with several server processes, the process that received the call does not run the jobs. See [Several Workers](#wake-sync-workers) |
 | `blocked` | The hosting provider blocked the instance, and no job ran: see [A Blocked Instance](#wake-sync-blocked) |
 | `awaiting_restore` | The hosting panel is restoring the instance, and no job ran: see [The Awaiting Restore Mode](hosting_providers.md#await-restore) |
+| `restore_interrupted` | The state of a restore cannot be read, so the instance serves no data, and no job ran: see [When the State of a Restore Cannot Be Read](hosting_providers.md#restore-interrupted) |
 
 !!! tip "🧑‍💻 Writing the caller"
 

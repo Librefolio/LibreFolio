@@ -34,6 +34,16 @@ export function isInstanceAwaitingRestoreError(status: number | undefined, data:
     return typeof detail === 'object' && detail !== null && (detail as {code?: unknown}).code === INSTANCE_AWAITING_RESTORE_CODE;
 }
 
+/** The `detail.code` of the 423 every user route answers while the state of the restore cannot be read (B-33). */
+export const INSTANCE_RESTORE_INTERRUPTED_CODE = 'instance_restore_interrupted';
+
+/** Whether an API error is the refusal of an instance whose restore stopped half way: status 423 and `detail.code` `instance_restore_interrupted`. */
+export function isInstanceRestoreInterruptedError(status: number | undefined, data: unknown): boolean {
+    if (status !== INSTANCE_BLOCKED_STATUS || typeof data !== 'object' || data === null) return false;
+    const detail = (data as {detail?: unknown}).detail;
+    return typeof detail === 'object' && detail !== null && (detail as {code?: unknown}).code === INSTANCE_RESTORE_INTERRUPTED_CODE;
+}
+
 let blocked = false;
 const listeners = new Set<() => void>();
 

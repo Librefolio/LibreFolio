@@ -26,6 +26,16 @@
  *
  * Red until H-62: neither the gate nor the page exists, so the file fails to import.
  *
+ * Lot B-33, the start's part (an unreadable restore state serves no data): `GET /api/v1/system/instance` answers
+ * `restore_interrupted: true` and the backend refuses every other route with 423 `instance_restore_interrupted`. The
+ * gate gains the optional prop `readRestoreInterrupted?: () => boolean`, by default
+ * `instanceConfig.config.restore_interrupted === true`; while it is true the gate renders `InstanceRestoreInterruptedPage`
+ * (`instance-restore-interrupted`) and neither the children (never mounted) nor the awaiting page: interrupted wins over
+ * awaiting. False, absent or anything but `true` leaves the H-62 behaviour as it is, and the choice follows the flag
+ * both ways. The interrupted page is the real component (its spec is `InstanceRestoreInterruptedPage.test.ts`); its
+ * default poll reads the same `$lib/api` mock, which never answers. Red until B-33: the gate ignores the prop and the
+ * field, so the interrupted page never shows (and the awaiting page or the app stays on screen).
+ *
  * Registered in `front_component_unit` (`scripts/test_runner/_frontend_utility.py`, action `component-unit`).
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
@@ -38,7 +48,7 @@ const mocks = await vi.hoisted(async () => {
     const {reactiveBox} = await import('$test/runes.svelte');
     return {
         // What the fake `instanceConfig.config` returns: a config with or without `mode`.
-        config: reactiveBox<{value: {profile: string; mode?: string}}>({value: {profile: 'managed'}}),
+        config: reactiveBox<{value: {profile: string; mode?: string; restore_interrupted?: unknown}}>({value: {profile: 'managed'}}),
         load: vi.fn(() => Promise.resolve()).mockName('instanceConfig.load'),
         getInstanceConfig: vi.fn(() => new Promise(() => {})).mockName('zodiosApi.get_instance_config_api_v1_system_instance_get'),
     };
@@ -178,5 +188,104 @@ describe('AwaitingRestoreGate — defaults: instanceConfig', () => {
         flushSync();
 
         expectChildrenOnly('no mode');
+    });
+});
+
+describe('AwaitingRestoreGate — an unreadable restore state (B-33)', () => {
+    const INTERRUPTED = 'instance-restore-interrupted';
+
+    /** Mount the gate with an injected mode and an injected interrupted flag, both of which the test flips. */
+    function mountInterruptedGate(initialMode: string | undefined, initialInterrupted: boolean) {
+        const mode = reactiveBox<{value: string | undefined}>({value: initialMode});
+        const interrupted = reactiveBox<{value: boolean}>({value: initialInterrupted});
+        const loadConfig = vi.fn(() => Promise.resolve()).mockName('loadConfig');
+        const {children, mounts} = childrenProbe();
+        render(AwaitingRestoreGate, {props: {children, loadConfig, readMode: () => mode.value, readRestoreInterrupted: () => interrupted.value}});
+        flushSync();
+        return {mode, interrupted, loadConfig, mounts};
+    }
+
+    function expectInterruptedOnly(why: string, mounts?: {count: number}): void {
+        expect(screen.getByTestId(INTERRUPTED), why).toBeInTheDocument();
+        expect(screen.queryByTestId(CHILD), `${why}: the app is not on screen`).toBeNull();
+        expect(screen.queryByTestId(PAGE), `${why}: no awaiting-restore page`).toBeNull();
+        if (mounts) expect(mounts.count, `${why}: the app was never mounted`).toBe(0);
+    }
+
+    describe('injected flag', () => {
+        it('shows the interrupted page, and never mounts the app, while the restore is interrupted', () => {
+            const {mounts, loadConfig} = mountInterruptedGate('normal', true);
+
+            expectInterruptedOnly('the restore state cannot be read', mounts);
+            expect(loadConfig, 'the config is still loaded once on mount').toHaveBeenCalledTimes(1);
+        });
+
+        it('prefers the interrupted page over the awaiting page when both hold', () => {
+            const {mounts} = mountInterruptedGate('awaiting_restore', true);
+
+            expectInterruptedOnly('interrupted wins over awaiting', mounts);
+        });
+
+        it.each([
+            ['normal', 'normal', CHILD],
+            ['awaiting_restore', 'awaiting_restore', PAGE],
+        ])('keeps the H-62 behaviour when not interrupted and the mode is %s', (_case, mode, shown) => {
+            mountInterruptedGate(mode, false);
+
+            expect(screen.getByTestId(shown), `mode ${mode}, not interrupted`).toBeInTheDocument();
+            expect(screen.queryByTestId(INTERRUPTED), 'no interrupted page').toBeNull();
+        });
+
+        it('replaces the app with the interrupted page when the flag turns on, and gives it back when it turns off', async () => {
+            const {interrupted} = mountInterruptedGate('normal', false);
+            expectChildrenOnly('Barrier: the app runs');
+            expect(screen.queryByTestId(INTERRUPTED), 'Barrier: no interrupted page yet').toBeNull();
+
+            interrupted.value = true;
+            await tick();
+            expectInterruptedOnly('the restore state became unreadable after the app had started');
+
+            interrupted.value = false;
+            await tick();
+            expectChildrenOnly('the administrator recovered');
+            expect(screen.queryByTestId(INTERRUPTED), 'the interrupted page is gone').toBeNull();
+        });
+    });
+
+    describe('defaults: instanceConfig.config.restore_interrupted', () => {
+        it('shows the interrupted page while instanceConfig says restore_interrupted: true, the app once it says false', async () => {
+            mocks.config.value = {profile: 'managed', mode: 'normal', restore_interrupted: true};
+            const {children, mounts} = childrenProbe();
+            render(AwaitingRestoreGate, {props: {children}});
+            flushSync();
+            expectInterruptedOnly('instanceConfig says restore_interrupted: true', mounts);
+
+            mocks.config.value = {profile: 'managed', mode: 'normal', restore_interrupted: false};
+            await tick();
+            expectChildrenOnly('instanceConfig says restore_interrupted: false');
+        });
+
+        it('prefers the interrupted page over the awaiting page by default too', () => {
+            mocks.config.value = {profile: 'managed', mode: 'awaiting_restore', restore_interrupted: true};
+            const {children, mounts} = childrenProbe();
+            render(AwaitingRestoreGate, {props: {children}});
+            flushSync();
+
+            expectInterruptedOnly('both flags from instanceConfig', mounts);
+        });
+
+        it.each([
+            ['absent (an older server, or the defaults)', undefined],
+            ['false', false],
+            ['a truthy value that is not true', 'yes'],
+        ])('shows the app when restore_interrupted is %s', (_case, value) => {
+            mocks.config.value = value === undefined ? {profile: 'managed', mode: 'normal'} : {profile: 'managed', mode: 'normal', restore_interrupted: value};
+            const {children} = childrenProbe();
+            render(AwaitingRestoreGate, {props: {children}});
+            flushSync();
+
+            expectChildrenOnly(`restore_interrupted ${String(value)}`);
+            expect(screen.queryByTestId(INTERRUPTED), 'no interrupted page').toBeNull();
+        });
     });
 });

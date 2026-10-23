@@ -73,6 +73,13 @@
       "message": "We are putting your data back in place: try again in a few minutes.",
       "autoReload": "This page reloads by itself when your data is ready.",
       "retry": "Try again"
+    },
+    "restoreInterrupted": {
+      "title": "The restore stopped half way",
+      "message": "LibreFolio cannot tell which data it holds, so it shows none until your administrator chooses how to go on.",
+      "adminHint": "Administrator: stop LibreFolio, then run ./dev.py backup pending to see what happened and --recover to put the data of before back.",
+      "docs": "How to recover",
+      "autoReload": "This page reloads by itself once LibreFolio serves the data again."
     }
   }
 }

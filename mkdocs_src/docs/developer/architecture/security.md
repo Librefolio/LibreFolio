@@ -1913,8 +1913,9 @@ profile:
 [Configuration Checks](#configuration-checks)).
 
 **The guard.** `refuse_when_blocked` (`backend/app/api/v1/instance_block.py`) is a dependency of the
-`/api/v1` router, `APIRouter(dependencies=[Depends(refuse_when_blocked), Depends(refuse_when_awaiting_restore)])` in
-`backend/app/api/v1/router.py` (the second one is [Awaiting Restore](#await-restore), read after the block), so it
+`/api/v1` router, `APIRouter(dependencies=[Depends(refuse_when_blocked), Depends(refuse_when_awaiting_restore), Depends(refuse_when_restore_interrupted)])` in
+`backend/app/api/v1/router.py` (the second one is [Awaiting Restore](#await-restore), the third
+[A Restore Stopped Half Way](#restore-interrupted), both read after the block), so it
 covers every API route (`APIRoute`) under it, today's and
 tomorrow's. FastAPI gives no router dependency to a plain `Route`, a `WebSocketRoute` or a `Mount`, so
 none of them belongs under `/api/v1`. FastAPI hands
@@ -2045,7 +2046,8 @@ reloads once the mode reads `normal` (`frontend/src/lib/features/instance/compon
 
 **The start.** `Step.skip_when` (`backend/app/services/platform/lifecycle.py`) is asked when a startup step comes; a
 step whose predicate answers `True` is not run, with one `Startup step skipped` info line. `STARTUP_STEPS`
-(`backend/app/services/platform/app_lifespan.py`) marks six with `skip_when=awaiting_restore`: `admin-bootstrap`,
+(`backend/app/services/platform/app_lifespan.py`) marks six with `skip_when=_serving_no_data` (`awaiting_restore()
+or restore_interrupted()`, so [A Restore Stopped Half Way](#restore-interrupted) skips them too): `admin-bootstrap`,
 `stored-currencies`, `provider-prewarm`, `market-holidays`, `brim-parse-pool` and `scheduler`. The database, the
 restore's own steps (`pending-restore`, `restore-commit`) and the idle monitor still run.
 
@@ -2076,6 +2078,57 @@ list pinned by name and route, both switches, R4), `./dev.py test api panel-rest
 (`backend/test_scripts/test_api/test_panel_restore_api.py`: the scope, the order of the refusals, the routes, the
 report) and `./dev.py test services await-restore-mode`
 (`backend/test_scripts/test_services/test_await_restore_mode.py`).
+
+### 🧩 A Restore Stopped Half Way {: #restore-interrupted }
+
+Lot B-33, the start's part (workstream H; the command-line side is workstream B's,
+«An Unreadable Restore State» in [Command-Line Tools](../../admin/cli_tools.md)). When the state of the restore,
+`.restore/restore.json`, cannot be read (its owner or permissions changed, a disk error, a link or a folder in its
+place, content no LibreFolio wrote), a restore may have stopped half way and LibreFolio cannot tell which data it holds.
+The administrator's side is [When the State of a Restore Cannot Be Read](../../admin/hosting_providers.md#restore-interrupted).
+
+**The probe.** `backend/app/services/platform/restore_guard.py` owns it. The startup step `restore-state`, right after
+`pending-restore`, calls `probe_restore_state()` in a thread, which asks workstream B's
+`apply.restore_state_problem()` (`backend/app/services/platform/instance_backup/apply.py`: the
+`RestoreStateUnreadableError`, or `None` when the state can be read or there is none; it never raises). The answer is
+kept in the module for the whole process, and `restore_interrupted()` returns it: `False` in a process that never
+probed. When it cannot read the state, the step logs one error with B's `reason` (`io`, `not_a_file`, `invalid`), never
+the state's content, `The state of the restore cannot be read: LibreFolio serves no data until the administrator runs
+./dev.py backup pending --recover`; it never stops the start. A state made readable while the process runs counts only
+at the next start: the way out is `./dev.py backup pending --recover` with LibreFolio stopped, then a restart.
+
+**The start.** While `restore_interrupted()`, `STARTUP_STEPS` skips what repairs, writes or warms up the data:
+`post-migration-fixes` and `lone-transfer-legs` (`skip_when=restore_interrupted`), and the six steps of
+[Awaiting Restore](#await-restore) (`skip_when=_serving_no_data`): `admin-bootstrap`, `stored-currencies`,
+`provider-prewarm`, `market-holidays`, `brim-parse-pool` and `scheduler`. The other steps carry no skip, the database,
+`global-settings`, `restore-commit`, `backup-leftovers`, `serving-lock` and `idle-monitor` among them.
+
+**The guard.** `refuse_when_restore_interrupted` (`backend/app/api/v1/instance_block.py`) is the third dependency of the
+`/api/v1` router, after `refuse_when_blocked` and `refuse_when_awaiting_restore`. While `restore_interrupted()`, every
+endpoint outside `ALLOWED_WHEN_RESTORE_INTERRUPTED` answers `423` with the code `INSTANCE_RESTORE_INTERRUPTED_CODE`,
+`instance_restore_interrupted`, to anyone, signed in or not. `ALLOWED_WHEN_RESTORE_INTERRUPTED` is
+`ALLOWED_WHEN_AWAITING_RESTORE` itself (a test pins them equal): the probes, `/system/info`, `/system/instance`,
+`/system/wake-sync` and the hosting panel's routes. In this state:
+
+- `InstanceConfigResponse` (`backend/app/schemas/system.py`, `GET /system/instance`) says `restore_interrupted: true`;
+  the field is `false` otherwise;
+- `_wake_run()` (`backend/app/api/v1/system/wake.py`) answers `status: "restore_interrupted"` and runs no job (after
+  `awaiting_restore`, which wins);
+- `GET /panel/status` still answers `500 restore_state_unreadable`, as whenever the state cannot be read.
+
+**The web app.** `AwaitingRestoreGate.svelte` reads `instanceConfig.config.restore_interrupted`; while it is `true` it
+shows `InstanceRestoreInterruptedPage.svelte` instead of every route, and wins over the awaiting-restore page
+(`frontend/src/lib/features/instance/components/`). The page, on the login's `AnimatedBackground`, asks for the
+administrator, links `admin/cli_tools/#backup-pending-unreadable` in the interface language, asks `/system/instance`
+every 30 seconds and reloads once `restore_interrupted` reads `false`. The API client's response interceptor
+(`frontend/src/lib/api/zodios-client.ts`) reads the configuration again on a `423 instance_restore_interrupted`
+(`isInstanceRestoreInterruptedError()`, `frontend/src/lib/features/instance/instanceBlockState.ts`), so the gate shows
+the page even when the configuration was read before.
+
+Tests: `./dev.py test services restore-guard` (`backend/test_scripts/test_services/test_restore_guard.py`: the probe,
+its log line, the step's place and the skipped steps) and `./dev.py test api restore-interrupted`
+(`backend/test_scripts/test_api/test_restore_interrupted_api.py`: the list pinned by name and route, the third
+dependency, `/system/instance`, wake-sync, `/panel/status`).
 
 ## 🎟️ Single-use Account Tokens {: #account-tokens }
 
