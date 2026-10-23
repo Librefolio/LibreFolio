@@ -201,7 +201,8 @@
       "issuesHeader": "Se han encontrado errores de validación",
       "balanceIssuesHeader": "Esta configuración genera datos inconsistentes",
       "autoOff": "Auto-validación OFF ({n} filas > {threshold}) — pulsa ⚡️Validar ahora antes del commit",
-      "contextualIssuesHeader": "Con los demás cambios pendientes, esta fila causa los siguientes problemas:"
+      "contextualIssuesHeader": "Con los demás cambios pendientes, esta fila causa los siguientes problemas:",
+      "checkSummary": "{n, plural, one {# campo por corregir} other {# campos por corregir}}"
     },
     "errors": {
       "idRequired": "El ID de transacción es obligatorio y debe ser > 0",
