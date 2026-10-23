@@ -10853,3 +10853,9 @@ punto di partenza, l'audit dello stesso giorno:
   sviluppatori (`transactions/price_resolver.md`, «Design contract», MF) e nella pagina utente di Yahoo (X).
   **Obiettivo dopo la 1.3: A**: il plugin salva le chiusure come scambiate (× i rapporti degli split successivi, da
   `ticker.splits`), insieme ai lettori che conoscono gli split (grafici, segnali, rischio applicano gli eventi SPLIT).
+- **MF-P1d · Il MWRR mostra 10 % nel giorno del versamento di un periodo che apre a zero** — piccolo, numeri (valore
+  falso mostrato), **da decidere**; test-author di MF, 23/10 (rossi di P1c). Con un'apertura a 0 e un punto della linea
+  nel giorno dell'unico versamento, il versamento si somma al valore finale e tutti i flussi sono 0: il VAN è 0 a ogni
+  tasso e Newton restituisce la sua partenza, 0,1 (verificato: apertura 0 il 1/1, versamento 1 000 il 1/3 → la linea
+  dice 0,100000 il 1/3). Capita anche su una storia corta, per esempio un conto svuotato e poi rifinanziato nella
+  finestra. Cura proposta: nessun tasso quando tutti i flussi sono zero. Dettagli: piano MF, «MF5-4 · P1c».

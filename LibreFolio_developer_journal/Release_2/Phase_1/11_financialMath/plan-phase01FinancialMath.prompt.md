@@ -4750,3 +4750,26 @@ posizione, quindi MV − costo (mittente) o costo − MV (destinatario) restava 
   > sceso esattamente della loro somma, nient'altro cambiato; il residuo diventa più piccolo in 42 casi su 42, in 6
   > scompare; Σ|residuo| 126 130 → 105 010); `mkdocs build` 0, `check-links` 0. Log `ondata5/MF-b5-verify.log`.
   > Richiesta a Y (frontend): `OtherPeriodEffectsTable.svelte:76` e `PerformanceChart.svelte:296`.
+
+#### MF5-4 · MF-P1c — gli zeri falsi della griglia del MWRR (23/10)
+Base `259a30076` (B5 committato). Via del coordinatore: corpora di prova soltanto (i dati reali li chiede al developer).
+- ✅ **Rossi** (test-author): `test_financial_math/test_mwrr_false_grid_zero.py` (28; su HEAD 16 rossi per la ragione
+  giusta, 12 guardie verdi). Flussi trovati: apertura −0,0, versamento −1 000 a 85/100/126 anni e valore +1 200 poco dopo
+  → HEAD restituisce un punto della griglia (6 605,9 / 1 736,8 / 379,19) dove ogni termine è andato a 0,0; la radice vera
+  ≈ 8,3·10⁷ è fuori griglia; un caso a 90 anni con la radice vera 5 957 sulla griglia ma oltre la soglia di underflow
+  (≈ 3 981): non dimostrabile → «—». Dashboard simulata: 379,189396 e 3 980,071706.
+- ✅ **Cura** (`returns.py`): un punto della griglia con VAN esattamente 0,0 è radice solo se `_changes_sign_at` (nella
+  scansione e in `_bracketed_xirr_at`). Doc: `developer/backend/financial_math.md` (paragrafo del solutore).
+  > **⚠️ Fuori pista**: tre test esistenti di `test_mwrr_warm_start.py` fissavano i tassi falsi (379,189…, il 12,80
+  > della Dashboard): li riscrive test-author. Trovato un difetto vicino, fuori lotto: con tutti i flussi a zero Newton
+  > restituisce la sua partenza (0,1 → «10 %» nel giorno del versamento di un periodo che apre a zero): backlog MF-P1d.
+- ✅ **Conteggi** (prima della cura, albero di `259a30076`, `MF-p4/count_p1c.py`, slot 22:56–22:58): copia base 88 report
+  (11 utenti × 2 valute × 4 finestre) **0** zeri falsi; copie del 1900/1500 8 report ciascuna: eur1900 0, typo1500 0,
+  usd1900 **1** punto della linea («tutto», valuta base: 250,19), buy1900 **2** punti («tutto», base e USD: 379,19); le
+  card mai. Dati reali: non usati (il coordinatore li chiede al developer).
+- ✅ **Test esistenti riscritti** (test-author): `test_mwrr_warm_start.py` i 3 casi (+78/−25; il 12,80 della Dashboard in
+  una sezione 7 «P1c»); i due file insieme 228 verdi.
+- ✅ **Porte e parità** (slot 23:16–23:31, carico 1,5 → 1,3; `ondata5/MF-p1c-verify.log`): `financial-math` **2785**,
+  `portfolio-engine` **41**, `roi-fifo-utils` **1970**, `api portfolio` **55**; parità contro `259a30076`: 202 casi, **3
+  differenze, tutte e sole i 3 punti contati** (2025-09-30 della linea MWRR «tutto»: 250,188643 → None, 379,189396 →
+  None ×2; il resto dei tre report identico); `mkdocs build` 0, `check-links` 0. **CHECKPOINT READY** inviato, FROZEN.

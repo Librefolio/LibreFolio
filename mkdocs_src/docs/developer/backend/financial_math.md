@@ -121,7 +121,11 @@ of Newton's answer); a root the bracketing found may instead show the NPV changi
 (`_is_bracketed_xirr_root`), which keeps the true root of an ill-conditioned NPV, whose terms are far larger than the
 flows and cancel at the root (P1b). A sign change is read from the two signs, never from their product, which
 underflows to 0.0 when both NPVs are tiny; and a sign is trusted only above the NPV's rounding noise where its terms
-underflow (`_npv_noise_floor`, `_opposite_signs`).
+underflow (`_npv_noise_floor`, `_opposite_signs`). A grid point whose NPV is exactly 0.0 counts as a root only where
+the NPV changes sign around it (`_changes_sign_at`, in the scan and in `_bracketed_xirr_at`; P1c): on a period that
+opens at 0 and whose flows all lie decades after its start (a typo dated in 1900), every term underflows to 0.0 at the
+top of the grid, and that point solved nothing; the period has no rate there («—»), while a genuine exact zero, a rate
+of exactly 0, still changes sign and counts.
 
 `float_price_return()` and `observed_annualization()` (`returns.py`) serve the float return series that the risk and
 signal statistics read. `market_series.py`, which prepares those series, takes both from here and keeps no return
