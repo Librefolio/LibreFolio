@@ -7901,3 +7901,30 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > **Doc** (docs-writer): `admin/backup_restore.en.md`, sezione nuova `#owner-account` (quando si chiede, quali account,
 > cosa succede al commit, senza email, riga di `backup pending`, tabella dei rifiuti) + un punto in `#restore-settings`.
 > `mkdocs build` strict pulito, check-links 97 validi. Nessun `translate-stamp`: debito di traduzione IT/FR/ES.
+
+#### B5-1b — `backup pending --recover owner` ✅ 2026-10-24
+
+> Richiesta del coordinatore (buco trovato da H): un esito `error:<CODE>` dell'assegnazione del titolare è terminale
+> (`owner_pending` non riprova, `--recover previous` cura solo lo stato illeggibile) e la guardia di H tiene l'istanza chiusa.
+> Interfaccia: `ondata5/B-b51-interface.md` §9.
+> **Note implementazione**:
+> - `apply.reset_owner_assignment(data_dir)`: azzera `owner_outcome` e `owner_reset_path` solo se l'esito è `error:`; non scrive
+>   altro. Ordine dei lucchetti: `owner.lock` (nuovo `owner.held_owner_lock`) e poi il lucchetto di apply, come lo step di
+>   avvio. Ritorna se un server serve la cartella dati. Nuovo errore `RestoreOwnerNotFailedError` (`owner_not_failed`).
+> - CLI: `RECOVER_CHOICES` ora ha `owner`. Lo snapshot `--json` di un ripristino committato dall'app con esito `error:` dà
+>   `reason: "owner_assignment"` e `choices: ["owner"]` (mai codice, nome, id o link).
+>   - Server fermo: azzera e richiama subito `assign_restored_owner()`; stampa la riga dell'esito.
+>   - Server acceso: azzera soltanto; l'assegnazione avviene al prossimo avvio.
+>   - Codici d'uscita:
+>     - 0 fatto;
+>     - 3 niente da riprovare (gara persa con un altro azzeramento);
+>     - 4 lo stato non offre `owner`, anche al secondo lancio;
+>     - 5: `restore_in_use` (lucchetto occupato), `owner_assignment_failed` (rifiutato di nuovo) o `failed`.
+> - La riga d'errore di `backup pending` ora dice `…; ./dev.py backup pending --recover owner tries again`.
+> - Test (rossi prima): `backup-owner` 90, `backup-cli-recover` 199, `backup-cli-restore` 139; regressione verde (apply 387,
+>   staging 248, restore-apply 285, panel-restore 136, restore-interrupted 34, restore-guard 25, cli 106/49/106, E2E 3+3).
+> **⚠️ Fuori pista**: nel brief dei rossi avevo scritto «secondo lancio → exit 3»; il §9.2 dice 4 e il test-author ha seguito
+> il §9.2. Il caso «nessun esito registrato» stampa la riga già esistente di `_print_owner_outcome`, non una frase nuova.
+> **Doc** (docs-writer): `admin/cli_tools.en.md`, sezioni `#backup-pending` e `#backup-pending-json` (riga d'esempio, `reason`
+> `owner_assignment`, tabella dei codici d'uscita, paragrafo `--recover owner`, «Run again» con il 4). `mkdocs build` strict
+> pulito, check-links 97. Nessun `translate-stamp`: debito di traduzione IT/FR/ES su `admin/cli_tools`.

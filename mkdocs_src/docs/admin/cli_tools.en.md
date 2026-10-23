@@ -639,6 +639,9 @@ pipenv run ./dev.py backup pending --cancel
 # When the state of the restore cannot be read: put the data of before back (LibreFolio stopped)
 pipenv run ./dev.py backup pending --recover previous
 
+# When the owner's account could not be set after a restore from the app: clear the error and try again
+pipenv run ./dev.py backup pending --recover owner
+
 # For a script: the state as one JSON line, and the same actions with fixed exit codes
 pipenv run ./dev.py backup pending --json
 pipenv run ./dev.py backup pending --recover cancel --json
@@ -696,7 +699,7 @@ A script, or a machine that reaches the server over `ssh`, reads the state with 
 | Key | Value |
 | --- | --- |
 | `state` | `none`, `pending`, `in_progress`, `committed`, `rolled_back` or `unreadable` |
-| `reason` | Why: the rollback reason of a `rolled_back` state (`first_start_failed`, `swap_interrupted`, `swap_failed`, `stage_missing`), or `io`, `not_a_file`, `invalid` for an `unreadable` one; `null` otherwise |
+| `reason` | Why: the rollback reason of a `rolled_back` state (`first_start_failed`, `swap_interrupted`, `swap_failed`, `stage_missing`), or `io`, `not_a_file`, `invalid` for an `unreadable` one, or `owner_assignment` for a `committed` one whose owner's account could not be set; `null` otherwise |
 | `waiting` | Why a start did not apply a restore that waits: `backup_running`, `other_data_directory`, `server_running`, `instance_blocked`, or `null` |
 | `backup_created_at` | When the backup of the restore was made, as `2026-10-23T03:00:12Z` (UTC); `null` with no state, or an unreadable one |
 | `safety_copy` | `{"present": true, "at": "<date>Z"}` when the data of before a swap is kept in `.restore/previous/`, otherwise `{"present": false, "at": null}` |
@@ -709,7 +712,7 @@ After a `--recover`, the line describes the state **after** it and adds `recover
 | `none` | No restore was confirmed, or the last one was dropped | none |
 | `pending` | A restore waits for the next start | `cancel` |
 | `in_progress` | A start is applying it, or has applied it and has not completed yet | none |
-| `committed` | The last restore is done | none |
+| `committed` | The last restore is done. With `reason` `owner_assignment`, it was confirmed from the app and the owner's account could not be set: the restore guard keeps the instance closed, and the server log has the code | `owner` with that `reason`, otherwise none |
 | `rolled_back` | The last restore was undone, with its `reason` | none |
 | `unreadable` | The state of the restore cannot be read: [An Unreadable Restore State](#backup-pending-unreadable) | `previous` |
 
@@ -720,17 +723,22 @@ After a `--recover`, the line describes the state **after** it and adds `recover
 
 The line never holds a username, an email, a path or an identifier: who confirmed the restore, the data directory and the checked copy are not in it. `safety_copy.at` is the moment the restore was applied, or, with an unreadable state, when `.restore/previous/` last changed.
 
-**The exit codes.** `--recover previous` puts the data of before back when the state cannot be read, with LibreFolio stopped; `--recover cancel` drops the restore waiting, with its checked copy. The exit codes are the same with or without `--json`:
+**The exit codes.** `--recover previous` puts the data of before back when the state cannot be read, with LibreFolio stopped; `--recover cancel` drops the restore waiting, with its checked copy; `--recover owner` tries again an owner's account that could not be set. The exit codes are the same with or without `--json`:
 
 | Exit | When | `error` in the line |
 | --- | --- | --- |
-| `0` | Done: the data of before is back, or the restore waiting was dropped | none |
+| `0` | Done: the data of before is back, the restore waiting was dropped, or the owner's account was set, or cleared and left pending (the line says which) | none |
 | `2` | A usage error: `--recover` without a choice, `--recover` with `--cancel`, or `--json` with `--cancel` (use `--recover cancel`) | none: the line is not written |
-| `3` | Nothing to recover: no restore state, or the choice was already done | `nothing_to_recover` |
-| `4` | The choice is not valid in this state, such as `previous` while the state can be read, `cancel` while it cannot, or a word that is not a choice: nothing changes | `choice_not_valid` |
-| `5` | It failed: LibreFolio is running on this data directory (`restore_in_use`), a folder could not be moved back (`restore_apply_failed`), the restore could not be dropped (`failed`): nothing is claimed done. With a data directory that is missing, `5` too, but no line is written: stdout stays empty and stderr says why | `restore_in_use`, `restore_apply_failed` or `failed` |
+| `3` | Nothing to recover: no restore state, or the choice was already done. For `--recover owner`: there is no failed assignment left to try again, because another reset won the race, or no restore | `nothing_to_recover` |
+| `4` | The choice is not valid in this state, such as `previous` while the state can be read, `cancel` while it cannot, `owner` when the state offers no `owner` (a second run, after it worked, too), or a word that is not a choice: nothing changes | `choice_not_valid` |
+| `5` | It failed: LibreFolio is running on this data directory (`restore_in_use`), a folder could not be moved back (`restore_apply_failed`), the restore could not be dropped (`failed`): nothing is claimed done. For `--recover owner`, `restore_in_use` also means another process is setting the owner's account right now: run it again in a moment; `owner_assignment_failed` means the account was refused again. With a data directory that is missing, `5` too, but no line is written: stdout stays empty and stderr says why | `restore_in_use`, `restore_apply_failed`, `owner_assignment_failed` or `failed` |
 
-Run again, a choice changes nothing: the second `--recover previous` finds no unreadable state, moves no folder, adds nothing to `.restore/failed/`, and exits with `3`; so does a second `--recover cancel`. A script may therefore repeat it until it reads `0` or `3`.
+**`--recover owner`.** When a restore confirmed from the app of a managed instance could not set the owner's account, the restore guard keeps the instance closed and the server log has the code. `backup pending` prints the error with its way out: `❌ The owner's account could not be set (<code>): the server log has the cause; ./dev.py backup pending --recover owner tries again`. `--recover owner` clears that error and tries again at once when LibreFolio is stopped; when LibreFolio runs, it only clears the error, and the account is set at its next start. Then:
+
+- ✅ Exit `0`, and one line says which case: the account is set, or the error is cleared and the account is set at the next start. When no email could be sent (`link_only`), the line carries the link that sets the account's password: give it only to the owner. With `--json`, that line goes to stderr, and the JSON line never holds a link, a name, an address or an identifier.
+- 🔁 Exit `5` with `owner_assignment_failed` when the account was refused again: the line has the code. Fix the cause, for instance an address already taken, then run it again.
+
+Run again, a choice changes nothing: the second `--recover previous` finds no unreadable state, moves no folder, adds nothing to `.restore/failed/`, and exits with `3`; so does a second `--recover cancel`. A second `--recover owner` finds no failed assignment and exits with `4`. A script may therefore repeat `previous` or `cancel` until it reads `0` or `3`, and `owner` until it reads `0` or `4`.
 
 A script that reads the state and recovers, on a server where LibreFolio is stopped:
 

@@ -24,7 +24,7 @@ Usage:
                                                A sealed backup, its password opened with the private key in F
     ./dev.py backup pending [--cancel]         The restore waiting for the next start, or the last one; --cancel drops it
     ./dev.py backup pending --json             The same as one JSON line, for a machine (exit 0)
-    ./dev.py backup pending --recover CHOICE   Act on it without asking: previous, cancel (exit 0, 3, 4 or 5)
+    ./dev.py backup pending --recover CHOICE   Act on it without asking: previous, cancel, owner (exit 0, 3, 4 or 5)
     ./dev.py backup --test-db create           Use the test data directory
 
 A relative PATH or ARCHIVE starts from the project root, like every path given to dev.py. The password of a secure
@@ -952,7 +952,7 @@ def _print_owner_outcome(state) -> None:
         link = state.owner_reset_path or "no longer known: the owner uses «Forgot password?» once email works"
         print(f"⚠️  The owner's account is set, but no email could be sent: give this link only to the owner, it sets the account's password: {link}")
     else:
-        print(f"❌ The owner's account could not be set ({_safe(outcome.removeprefix('error:'))}): the server log has the cause")
+        print(f"❌ The owner's account could not be set ({_safe(outcome.removeprefix('error:'))}): the server log has the cause; ./dev.py backup pending --recover owner tries again")
 
 
 def cmd_decrypt(args) -> int:
@@ -1231,7 +1231,7 @@ class _StoreTrueNotWith(argparse.Action):
 #: ``cli_tools``. 2 is also argparse's own usage error.
 EXIT_DONE, EXIT_USAGE, EXIT_NOTHING_TO_RECOVER, EXIT_CHOICE_NOT_VALID, EXIT_FAILED = 0, 2, 3, 4, 5
 #: The choices ``--recover`` knows, and the ones each state offers (``_pending_snapshot``).
-RECOVER_CHOICES = ("previous", "cancel")
+RECOVER_CHOICES = ("previous", "cancel", "owner")
 
 
 def cmd_pending(args) -> int:
@@ -1304,6 +1304,9 @@ def _pending_snapshot(data_dir: Path) -> dict:
         name, reason, choices = "pending", None, ["cancel"]
     elif state.status == "committed":
         name, reason, choices = "committed", None, []
+        # B5-1b: the owner's assignment failed for good (a recorded error): the way out is --recover owner.
+        if state.confirmed_via == "admin" and state.owner_user_id is not None and (state.owner_outcome or "").startswith("error:"):
+            reason, choices = "owner_assignment", ["owner"]
     elif state.status == "rolled_back":
         name, reason, choices = "rolled_back", state.reason, []
     else:
@@ -1373,10 +1376,51 @@ def _recover_choice(data_dir: Path, choice: str) -> tuple[int, str | None]:
         return EXIT_CHOICE_NOT_VALID, "choice_not_valid"
     if choice == "previous":
         return _recover_previous(data_dir)
+    if choice == "owner":
+        return _recover_owner(data_dir)
     if _cancel_pending(data_dir) == 0:
         return EXIT_DONE, None
     # Dropped by someone meanwhile: nothing left to do; anything else failed.
     return (EXIT_NOTHING_TO_RECOVER, "nothing_to_recover") if _pending_snapshot(data_dir)["state"] == "none" else (EXIT_FAILED, "failed")
+
+
+def _recover_owner(data_dir: Path) -> tuple[int, str | None]:
+    """``backup pending --recover owner`` (B5-1b): clear the error recorded for the owner's account, and, when no server
+    serves the data directory, try again at once; a running server tries at its next start. The exit code and, when it
+    is not ``EXIT_DONE``, the stable word that says why. Idempotent: a second run finds nothing to clear."""
+    import asyncio  # noqa: PLC0415
+
+    from backend.app.services.platform.instance_backup.apply import RestoreInUseError, RestoreOwnerNotFailedError, RestoreStateUnreadableError, read_restore, reset_owner_assignment  # noqa: PLC0415
+    from backend.app.services.platform.instance_backup.owner import assign_restored_owner  # noqa: PLC0415
+    from backend.app.services.platform.instance_backup.paths import BackupPathError  # noqa: PLC0415
+
+    try:
+        served = reset_owner_assignment(data_dir)
+    except RestoreOwnerNotFailedError:
+        print("❌ Nothing to try again: the owner's account has no failed assignment (restore_nothing_to_recover)")
+        return EXIT_NOTHING_TO_RECOVER, "nothing_to_recover"
+    except RestoreInUseError:
+        print("❌ The owner's account is being set right now: run the command again in a moment (restore_in_use)")
+        return EXIT_FAILED, "restore_in_use"
+    except (RestoreStateUnreadableError, OSError, BackupPathError) as exc:
+        print(f"❌ The owner's account could not be tried again: {getattr(exc, 'strerror', None) or type(exc).__name__}")
+        return EXIT_FAILED, "failed"
+    if served:
+        print("✅ The failed assignment was cleared: the owner's account is set when LibreFolio starts again")
+        return EXIT_DONE, None
+    asyncio.run(assign_restored_owner(data_dir))
+    try:
+        state = read_restore(data_dir)
+    except RestoreStateUnreadableError:
+        state = None
+    outcome = getattr(state, "owner_outcome", None)
+    if state is None:
+        print("⏳ The owner's account is set at the next start of the server")
+        return EXIT_DONE, None
+    _print_owner_outcome(state)
+    if outcome is not None and outcome.startswith("error:"):
+        return EXIT_FAILED, "owner_assignment_failed"
+    return EXIT_DONE, None
 
 
 def _print_unreadable_state(data_dir: Path, exc) -> None:
@@ -1554,7 +1598,7 @@ A relative path starts from the project root, like every path given to dev.py. A
     pending_actions.add_argument(
         "--recover",
         metavar="CHOICE",
-        help="Act on the restore without asking. previous: when its state cannot be read, put the data of before back (stop LibreFolio first); cancel: drop the restore waiting. Exit 0 done, 3 nothing to recover, 4 not valid in this state, 5 failed",
+        help="Act on the restore without asking. previous: when its state cannot be read, put the data of before back (stop LibreFolio first); cancel: drop the restore waiting; owner: when the owner's account could not be set, clear the error and try again. Exit 0 done, 3 nothing to recover, 4 not valid in this state, 5 failed",
     )
     pending.add_argument("--json", action=_StoreTrueNotWith, not_with="cancel", help="Say the state as one JSON line on stdout (nothing else there; the text goes to stderr), for a machine")
     pending.set_defaults(backup_func=cmd_pending)
