@@ -5534,6 +5534,15 @@ A-21b, A-31, A-41, A-49 e A-58 aspettano una decisione; A-4 e A-10 sono lavoro d
   - (e) La CLI non ha `user delete`: per eliminare il titolare l'hoster toglie la variabile o cambia il profilo; la guida dice solo deactivate e demote.
   - (f) Il limite di accesso (10 errori in 15 minuti per identificatore) permette a chiunque di bloccare per poco il login con l'email del titolare; con lo username funziona. Indipendente da A5-1.
 
+- **A-64 · Note della revisione di sicurezza del cambio email del titolare (A5-1b)** — basso; A, 23/10 (revisione Opus).
+  - (a) Riservare l'indirizzo di `LIBREFOLIO_ADMIN_EMAIL` in `update_profile`, registrazione e inviti nel `managed`: oggi un utente può prendersi quell'indirizzo prima del clic e bloccare il cambio (DoS leggero: link revocato, poi `blocked`); chiuderebbe anche la guarigione per indirizzo.
+  - (b) Link perso: nessun comando CLI per riemettere il link di cambio (`dev.py user owner-email-link`: revoca e riemette); oggi il rimedio è documentato (variabile al vecchio indirizzo, riavvio, di nuovo il nuovo, riavvio).
+  - (c) Testo dedicato per l'avviso al vecchio indirizzo quando il cambio lo decide l'host (oggi il generico «se non sei stato tu…»).
+  - (d) La conferma non chiede la password attuale: se l'host sbaglia l'indirizzo o il dominio nuovo è compromesso, chi riceve il link conferma e con «password dimenticata» prende l'account. Difesa in profondità possibile: chiederla sulla pagina di conferma. Scelta di design (l'host è l'autorità).
+  - (e) Il fallback per indirizzo di `account_protection` prima della prima sync non è fail-closed (un processo che non ha ancora letto lo stato protegge per indirizzo, anche un utente comune): dopo la sync vale la regola stretta.
+  - (f) `admin-bootstrap` gira prima di `restore-commit`: un link `/setup` generato al primo avvio dopo un ripristino verrebbe revocato dallo stesso commit (visto sul link di cambio, che A ha spostato dopo). Da verificare con H e B.
+  - (g) Fondere la 006 nella 005 prima del rilascio (rimedio di `user set-email` per chi sale da 1.2; vedi il piano 02_accounts, «A5-1b parte 2»).
+
 ## X · Plugin, asset e ricerca (fase 01)
 
 Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md).

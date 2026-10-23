@@ -452,9 +452,18 @@ deletion failed: nothing was deleted*. The deleted account's sessions get `401` 
 ### 🛡️ Protected Accounts {: #account-protection }
 
 `user_service.account_protection(user) -> Optional[str]` gives the reason why nobody may delete, deactivate
-or demote an account, or `None`. It is the hook for the administrator created from the environment on a
-managed instance, who pays for it. The [initial administrator](#initial-admin) of lot A7a is not protected
-yet: the hook still returns `None` for every account.
+or demote an account, or `None`. It is the hook for the owner of a managed instance, the administrator who pays
+for it (`PAYING_ADMINISTRATOR`). On any other profile it returns `None` for every account. On a managed instance
+(`LIBREFOLIO_PROFILE=managed`):
+
+- the account recorded as the instance owner (`users.is_instance_owner`) is protected by that mark alone, whatever
+  its address and whatever the variable says;
+- once the startup step `owner-sync` has read the owner (`user_service.note_recorded_owner()`), the mark decides alone when
+  an owner is recorded: an account that holds the address of a variable changed in conflict is a stranger and never
+  receives the owner's protection;
+- when the step recorded nobody, the account with the address of `LIBREFOLIO_ADMIN_EMAIL` (A–Z case aside) is protected by
+  its address only while it is an active administrator (the criterion by which the step records an owner);
+- before the step has run (a command, a test) the A5-1 address rule is the fallback: the address alone protects.
 
 - `GET /users` reflects it in `protected` (`AdminUserRead`), as do the accounts `PATCH` returns.
 - `DELETE /users/{user_id}`, and a `PATCH /users/{user_id}` that deactivates or demotes the account,
@@ -466,6 +475,33 @@ yet: the hook still returns `None` for every account.
 - The command line stays above protection: `./dev.py user deactivate`, `user demote` and the other
   user commands never read the hook, as the operator of the server may do what the administrator
   API refuses.
+
+### 📬 The Owner's Address {: #owner-email-change }
+
+The protected owner cannot change its address from the app (`PUT /auth/profile` answers `409 ACCOUNT_PROTECTED`).
+The real change starts at the host, and `services/accounts/instance_owner.py` runs it:
+
+- **`startup_owner_sync()`**, the startup step `owner-sync` (right after `restore-commit`, which revokes every live
+  one-time link after a restore and would kill a link issued before it; skipped while the instance serves no data): managed only, with a usable variable. A waiting initial administrator
+  (`pending_admin`): nothing, `bootstrap_admin_service` follows the variable as before. No owner recorded: the
+  account with the variable's address is recorded (heal) only if it is an active administrator, else an error is logged and
+  nobody is recorded. The owner has the variable's address: nothing, stale links
+  revoked. Otherwise: another account holds the address → `blocked`, an error line, no change; a live `email_change`
+  link already carries it → `waiting`, nothing resent; else the owner's older links are revoked, a new one is issued
+  (7 days, `email` = the new address) under SQLite's write lock (two workers issue one) and emailed to the NEW address
+  in a background task (`build_email_change_confirmation()`). The link is logged at `warning` only when the email did
+  not go.
+- **`owner_change_status(session)`** answers `"pending"`, `"blocked"` or `None` for the security checks and the
+  hosting panel. It reads only and never returns an address.
+- **`POST /email/email-change/confirm`** (`confirm_owner_email_change`, no session): `confirm_email_change()` spends the
+  link and, in the same transaction, checks that the instance is managed, that the token's account is the recorded
+  owner, that the token's address is still the variable's and that no other account holds it; then sets the address
+  (verified), ends the owner's sessions, and revokes its other change links and its reset links. A link that no longer
+  matches is revoked and answers `TOKEN_INVALID` `revoked`. The notice to the old address is
+  `flows.email_changed_work`, as for the profile.
+
+Tests: `./dev.py test services owner-email-change`, `./dev.py test api owner-email-change`,
+`./dev.py test db migration-006`.
 
 ### 🔑 Password-Reset Links {: #reset-links }
 
