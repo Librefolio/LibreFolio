@@ -33,12 +33,14 @@ _StatusWaiting = _STATUS["waiting"].annotation
 
 
 class PanelRestoreSummary(BaseModel):
-    """The restore of the instance, in ``GET /panel/status``: its state and why it waits, without who confirmed it."""
+    """The restore of the instance, in ``GET /panel/status``: its state and why it waits, without who confirmed it.
+    ``unreadable`` (D7): the state of the restore cannot be read, ``reason`` then says why (``io``, ``not_a_file``,
+    ``invalid``), and the instance serves no data until its administrator recovers it."""
 
     model_config = ConfigDict(extra="forbid")
 
-    state: _StatusState
-    reason: _StatusReason = None
+    state: _StatusState | Literal["unreadable"]
+    reason: _StatusReason | Literal["io", "not_a_file", "invalid"] = None
     waiting: _StatusWaiting = None
     backup_created_at: datetime | None = None
     stage_id: str | None = None

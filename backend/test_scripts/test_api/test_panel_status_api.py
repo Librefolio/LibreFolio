@@ -115,8 +115,12 @@ ANSWER_KEYS = {"admin_setup", "setup_expires_at", "mode", "restore"}
 SETUP_STATES = ("none", "pending", "done", "expired")
 
 #: The OpenAPI document: the route's responses, exactly; its one tag; the scheme of its token.
-#: H-62 (Q7): a restore state that cannot be read is a 500 ``restore_state_unreadable``, documented; red until H-62.
-DOCUMENTED_RESPONSES = {"200", "401", "404", "429", "500", "503"}
+#: D7 (contract L3 §10 option A, replacing H-62's Q7): a restore state that cannot be read is a 200 with ``restore.state
+#: == "unreadable"``, so the route documents no 500 ``restore_state_unreadable`` any more: either no 500 at all, or one
+#: that does not name that code. Red until D7.
+DOCUMENTED_RESPONSES = {"200", "401", "404", "429", "503"}
+OPTIONAL_RESPONSES = {"500"}
+GONE_CODE = "restore_state_unreadable"
 HOSTING_PANEL_TAG = "Hosting panel"
 STATUS_SCHEME = "PanelStatusToken"
 
@@ -636,12 +640,15 @@ def _resolved(schema: dict[str, Any], document: dict[str, Any]) -> dict[str, Any
 def test_openapi_documents_the_status_answer_and_its_five_responses(app):
     """R1-06 (§4): the 200 of ``GET /api/v1/panel/status`` is ``PanelStatusResponse``, with exactly two properties and no
     other (``extra="forbid"``): ``admin_setup``, required, a string enum of the four states, and ``setup_expires_at``, a
-    date-time or null. The responses documented are exactly 200, 401, 404, 429 and 503."""
+    date-time or null. The responses documented are 200, 401, 404, 429 and 503; D7: a 500 only if it does not name
+    ``restore_state_unreadable`` (an unreadable restore state is a 200 now)."""
     print_section("R1-06: GET /panel/status in the OpenAPI document")
     document = app.openapi()
     operation = _status_operation(document)
     responses = operation.get("responses", {})
-    assert set(responses) == DOCUMENTED_RESPONSES, f"the route documents exactly the responses {sorted(DOCUMENTED_RESPONSES)}: {sorted(responses)}"
+    assert DOCUMENTED_RESPONSES <= set(responses) <= DOCUMENTED_RESPONSES | OPTIONAL_RESPONSES, f"the route documents the responses {sorted(DOCUMENTED_RESPONSES)}, a 500 at most beside them: {sorted(responses)}"
+    gone = (responses.get("500") or {}).get("description", "")
+    assert GONE_CODE not in gone, f"D7: an unreadable restore state is a 200 now, the route's 500 must not document {GONE_CODE}: {gone!r}"
 
     schema = responses["200"].get("content", {}).get("application/json", {}).get("schema")
     assert schema == {"$ref": "#/components/schemas/PanelStatusResponse"}, f"the 200 of GET {STATUS_PATH} is PanelStatusResponse: {schema}"

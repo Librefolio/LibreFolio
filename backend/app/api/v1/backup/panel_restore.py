@@ -56,7 +56,7 @@ from backend.app.services.platform.instance_backup import apply as restore_apply
 from backend.app.services.platform.instance_backup import restart, restore_jobs
 from backend.app.services.platform.instance_backup.envelope import MAGIC, EnvelopeError
 from backend.app.services.platform.instance_backup.jobs import out_of_space
-from backend.app.services.platform.instance_backup.paths import BackupPathError
+from backend.app.services.platform.instance_backup.paths import BackupPathError, upload_path
 from backend.app.services.platform.instance_backup.staging import StagingBusyError
 
 logger = get_logger(__name__)
@@ -146,14 +146,15 @@ async def _receive_envelope(request: Request, writer: restore_jobs.UploadWriter)
             buffer.clear()
     if buffer:
         await asyncio.to_thread(writer.write, bytes(buffer))
-    return await asyncio.to_thread(writer.finish)
+    # The other uploads stay until this one is accepted (SEC-3): a refused body never costs the previous good upload
+    return await asyncio.to_thread(lambda: writer.finish(replace_others=False))
 
 
 def _read_state() -> restore_apply.RestoreState | None:
     try:
         return restore_apply.read_restore(get_data_dir())
-    except restore_apply.RestoreStateUnreadableError:
-        raise _state_unreadable() from None
+    except restore_apply.RestoreStateUnreadableError as exc:
+        raise _state_unreadable(exc) from None
 
 
 @panel_restore_router.put(
@@ -191,6 +192,14 @@ async def upload_panel_restore_archive(request: Request, _caller: RestoreCaller)
         if failure is exc:
             raise
         raise failure from None
+    data_dir = get_data_dir()
+    if uploaded.kind != "envelope":
+        # The second defence: the finished file is no envelope after all. It goes, and the previous upload stays
+        await asyncio.to_thread(upload_path(data_dir, uploaded.upload_id).unlink, missing_ok=True)
+        logger.warning("A panel restore upload was not an envelope: refused once finished", upload_id=uploaded.upload_id)
+        raise backup_error(status.HTTP_400_BAD_REQUEST, "restore_envelope_required", "Only the backup's .lfbk envelope is accepted")
+    # Accepted: only now does it replace the uploads before it
+    await asyncio.to_thread(restore_jobs.remove_replaced_uploads, data_dir, keep=uploaded.upload_id)
     return RestoreUpload(upload_id=uploaded.upload_id, size=uploaded.size, kind=uploaded.kind)
 
 
@@ -280,8 +289,8 @@ def confirm_panel_restore_check(stage_id: str, caller: RestoreCaller) -> PanelRe
         raise backup_error(status.HTTP_404_NOT_FOUND, "restore_stage_not_found", "No check has this id") from None
     except restore_jobs.CheckRunningError:
         raise backup_error(status.HTTP_409_CONFLICT, "restore_stage_running", "The check still runs") from None
-    except restore_apply.RestoreStateUnreadableError:
-        raise _state_unreadable() from None
+    except restore_apply.RestoreStateUnreadableError as exc:
+        raise _state_unreadable(exc) from None
     except restore_apply.RestoreStateError as exc:
         if exc.code == "restore_already_pending":
             current = _read_state()
@@ -322,8 +331,8 @@ def restart_panel_restore(background_tasks: BackgroundTasks, response: Response,
         if current is not None and (current.status in _IN_PROGRESS or current.status == "committed"):
             return _panel_status(current)
         raise backup_error(status.HTTP_409_CONFLICT, "restore_not_pending", _NOT_PENDING) from None
-    except restore_apply.RestoreStateUnreadableError:
-        raise _state_unreadable() from None
+    except restore_apply.RestoreStateUnreadableError as exc:
+        raise _state_unreadable(exc) from None
     except BackupPathError:
         raise _folder_unusable() from None
     except OSError as exc:
@@ -364,8 +373,8 @@ def cancel_panel_pending_restore(_caller: RestoreCaller) -> Response:
         restore_apply.cancel_restore(data_dir=get_data_dir(), drop_copy=True)
     except restore_apply.RestoreNotPendingError:
         raise backup_error(status.HTTP_404_NOT_FOUND, "restore_not_pending", _NOT_PENDING) from None
-    except restore_apply.RestoreStateUnreadableError:
-        raise _state_unreadable() from None
+    except restore_apply.RestoreStateUnreadableError as exc:
+        raise _state_unreadable(exc) from None
     except OSError as exc:
         logger.error("A pending restore could not be cancelled by the panel", error=f"{type(exc).__name__}: {exc.strerror or exc}")
         raise backup_error(status.HTTP_500_INTERNAL_SERVER_ERROR, "restore_cancel_failed", "The restore could not be cancelled: the server's log has the cause") from None

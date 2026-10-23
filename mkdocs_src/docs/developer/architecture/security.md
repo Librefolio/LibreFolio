@@ -2056,12 +2056,18 @@ restore's own steps (`pending-restore`, `restore-commit`) and the idle monitor s
 caller changes. Every route depends on `_restore_gate`, in this order: `panel_access(PanelScope.BACKUP_RESTORE)`
 (ticket only, [The Hosting Panel's Access](#panel-access)), then `423 instance_blocked` on a blocked instance, then
 `409 restore_mode_required` outside the mode, so a stolen signing key can at most fill an empty volume. Only an `.lfbk`
-envelope is kept (`400 restore_envelope_required` otherwise, the file removed). The panel's views are closed models
+envelope is kept (`400 restore_envelope_required` otherwise, the file removed): `_receive_envelope()` refuses a body
+that does not start with `LFBK` before a byte is written, and `upload_panel_restore_archive()` removes a finished file
+whose `kind` is not `envelope`. The writer finishes with `finish(replace_others=False)`, so the uploads before it stay
+until this one is accepted; only then does `restore_jobs.remove_replaced_uploads(keep=…)` remove them (but the one a
+running check reads): a refused upload never costs the previous good one (SEC-3). Every `500 restore_state_unreadable`
+of these routes carries B's `reason` (`io`, `not_a_file`, `invalid`) in its `detail` (`_state_unreadable(exc)`). The panel's views are closed models
 with `extra="forbid"` (`backend/app/schemas/hosting_panel.py`): `PanelRestoreStageReport` (the administrators as
 `administrators_count`, the control totals as a verdict and `control_totals_differences_count`, no tables, files or
 sizes), `PanelRestoreStatus` (`confirmed_via` instead of the username: a panel confirmation records `confirmed_via: panel` and the ticket's `kid` as `confirmed_by`) and, in `/panel/status`,
-`PanelRestoreSummary` (`state`, `reason`, `waiting`, `backup_created_at`, `stage_id`; `500 restore_state_unreadable`
-when the state cannot be read, never `null`). The panel sees only the checks it started (`origin` `panel`): any other check answers `404 restore_stage_not_found`
+`PanelRestoreSummary` (`state`, `reason`, `waiting`, `backup_created_at`, `stage_id`; when the state cannot be read,
+`_restore_summary()` in `backend/app/api/v1/panel.py` answers `200` with `state` `unreadable` and B's `reason`, `io`,
+`not_a_file` or `invalid`, the other three `null`: never `null`, and never a `500`, decision D7). The panel sees only the checks it started (`origin` `panel`): any other check answers `404 restore_stage_not_found`
 (`_panel_check()`). A repeated `POST …/stage` with the same `upload_id` while its check runs, a repeated confirmation
 of the same stage, or a restart while the restore is under way or committed, answers `202` with the check or the
 state found. The router is `NoInputEchoRoute`: a `422` never
@@ -2108,19 +2114,29 @@ at the next start: the way out is `./dev.py backup pending --recover` with Libre
 endpoint outside `ALLOWED_WHEN_RESTORE_INTERRUPTED` answers `423` with the code `INSTANCE_RESTORE_INTERRUPTED_CODE`,
 `instance_restore_interrupted`, to anyone, signed in or not. `ALLOWED_WHEN_RESTORE_INTERRUPTED` is
 `ALLOWED_WHEN_AWAITING_RESTORE` itself (a test pins them equal): the probes, `/system/info`, `/system/instance`,
-`/system/wake-sync` and the hosting panel's routes. In this state:
+`/system/wake-sync` and the hosting panel's routes. One of them answers otherwise (D7): `backup_panel.start_panel_backup`
+answers `409 backup_restore_interrupted` (`BACKUP_RESTORE_INTERRUPTED_CODE`), since a backup of data in doubt would
+pass the coordinator's checks and push a good copy out of those it keeps. The guard first runs the panel's credential
+check by hand, `panel_caller(request, PanelScope.BACKUP)` (`backend/app/services/platform/hosting_panel/access.py`), so a
+caller without a valid credential gets the same `401`, `404`, `429` or `503` as outside the state; following, downloading
+and deleting a panel job still answer. In this state:
 
 - `InstanceConfigResponse` (`backend/app/schemas/system.py`, `GET /system/instance`) says `restore_interrupted: true`;
   the field is `false` otherwise;
 - `_wake_run()` (`backend/app/api/v1/system/wake.py`) answers `status: "restore_interrupted"` and runs no job (after
   `awaiting_restore`, which wins);
-- `GET /panel/status` still answers `500 restore_state_unreadable`, as whenever the state cannot be read.
+- `GET /panel/status` answers `200` with `restore.state` `unreadable` and its `reason`, as whenever the state cannot be
+  read (D7).
 
 **The web app.** `AwaitingRestoreGate.svelte` reads `instanceConfig.config.restore_interrupted`; while it is `true` it
 shows `InstanceRestoreInterruptedPage.svelte` instead of every route, and wins over the awaiting-restore page
 (`frontend/src/lib/features/instance/components/`). The page, on the login's `AnimatedBackground`, asks for the
 administrator, links `admin/cli_tools/#backup-pending-unreadable` in the interface language, asks `/system/instance`
-every 30 seconds and reloads once `restore_interrupted` reads `false`. The API client's response interceptor
+every 30 seconds and reloads once `restore_interrupted` reads `false`. When `instanceConfig.config.support_url`
+(`LIBREFOLIO_SUPPORT_URL`) gives a usable address, it adds a «Contact support» link
+(`data-testid="instance-restore-interrupted-support"`): `supportChannel(supportUrl, {githubFallback: false})`
+(`frontend/src/lib/components/assets/assetSearchReport.ts`) checks it again and keeps a `mailto:` address or an
+`http(s)` page, opened in a new tab; anything else shows no link, never the project's GitHub (D7). The API client's response interceptor
 (`frontend/src/lib/api/zodios-client.ts`) reads the configuration again on a `423 instance_restore_interrupted`
 (`isInstanceRestoreInterruptedError()`, `frontend/src/lib/features/instance/instanceBlockState.ts`), so the gate shows
 the page even when the configuration was read before.

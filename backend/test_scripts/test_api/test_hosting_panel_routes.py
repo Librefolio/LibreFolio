@@ -39,6 +39,9 @@ tags, whichever router or include adds them: the tests pin the outcome, never th
   nothing else; no other operation asks for any of the three, and none asks for two of them.
 - HPR-005, each of the six documents 429 beside its 401, 404 and 503.
 
+D7 (contract L3 §10 option A, the last lot of wave 4): HPR-009 pins that the panel status's ``restore`` documents
+the ``unreadable`` state and its reasons (``io``, ``not_a_file``, ``invalid``). Red until D7.
+
 H-62 (contract L3 §5) adds the seven routes of the panel's restore (``api/v1/backup/panel_restore.py``, scope
 ``backup:restore``, ticket only) to ``PANEL_ROUTES``: HPR-002, HPR-003 and HPR-005 cover them as the six; HPR-004 stays on
 the six token routes (``TOKEN_ROUTES``); HPR-006 pins that the seven share one bearer scheme of their own, and HPR-007
@@ -411,3 +414,56 @@ def test_the_restore_routes_that_read_a_limit_document_each_code_of_their_503(do
     missing = [code for code in RESTORE_503_CODES[operation_name] if f"`{code}`" not in description]
     assert missing == [], f"{operation_name}: its 503 must document {list(RESTORE_503_CODES[operation_name])}: {missing} missing from {description!r}"
     print_success(f"{operation_name}: 503 documents {list(RESTORE_503_CODES[operation_name])}")
+
+
+# =============================================================================
+# HPR-009 (D7): the panel status's restore can be unreadable
+# =============================================================================
+
+#: D7 (contract L3 §10 option A): the states and the reasons ``PanelRestoreSummary`` must admit, and its five keys.
+SUMMARY_KEYS = frozenset({"state", "reason", "waiting", "backup_created_at", "stage_id"})
+SUMMARY_STATES = frozenset({"pending", "in_progress", "committed", "rolled_back", "unreadable"})
+SUMMARY_REASONS = frozenset({"first_start_failed", "swap_interrupted", "swap_failed", "stage_missing", "io", "not_a_file", "invalid"})
+
+
+def _component(schema: dict[str, Any], document: dict[str, Any]) -> dict[str, Any]:
+    """``schema``, or the component its ``$ref`` names."""
+    reference = schema.get("$ref")
+    if not isinstance(reference, str):
+        return schema
+    return document.get("components", {}).get("schemas", {}).get(reference.rsplit("/", 1)[-1], {})
+
+
+def _values(schema: dict[str, Any], document: dict[str, Any]) -> tuple[set[Any], bool]:
+    """The values a schema's enums and consts admit, through ``$ref``, ``anyOf`` and ``oneOf``; and whether it admits
+    null."""
+    schema = _component(schema, document)
+    values: set[Any] = set(schema.get("enum", []))
+    if "const" in schema:
+        values.add(schema["const"])
+    nullable = schema.get("type") == "null" or None in values
+    for variant in (*schema.get("anyOf", []), *schema.get("oneOf", [])):
+        more, null = _values(variant, document)
+        values |= more
+        nullable = nullable or null
+    values.discard(None)
+    return values, nullable
+
+
+def test_the_panel_status_restore_documents_the_unreadable_state_and_its_reasons(document):
+    """HPR-009 (D7): in the document, ``PanelStatusResponse.restore`` is a ``PanelRestoreSummary`` or null; the summary
+    keeps exactly its five properties (no other allowed); its ``state`` enum includes ``unreadable`` beside the four
+    states of a restore recorded, its ``reason`` (nullable) the reasons of a rollback and of an unreadable state."""
+    components = document.get("components", {}).get("schemas", {})
+    restore = (components.get("PanelStatusResponse", {}).get("properties") or {}).get("restore", {})
+    references = [variant for variant in restore.get("anyOf", [restore]) if "$ref" in variant]
+    assert len(references) == 1, f"PanelStatusResponse.restore is one component or null: {restore}"
+    summary = _component(references[0], document)
+    properties = summary.get("properties") or {}
+    assert set(properties) == SUMMARY_KEYS and summary.get("additionalProperties") is False, f"the restore summary has exactly {sorted(SUMMARY_KEYS)} and no other: {summary}"
+
+    states, _ = _values(properties["state"], document)
+    reasons, reason_nullable = _values(properties["reason"], document)
+    assert SUMMARY_STATES <= states, f"D7: PanelRestoreSummary.state must admit {sorted(SUMMARY_STATES)}: missing {sorted(SUMMARY_STATES - states)}, documented {sorted(states)}"
+    assert SUMMARY_REASONS <= reasons and reason_nullable, f"D7: PanelRestoreSummary.reason must admit {sorted(SUMMARY_REASONS)} or null: missing {sorted(SUMMARY_REASONS - reasons)}, documented {sorted(reasons)}, nullable {reason_nullable}"
+    print_success(f"PanelRestoreSummary: state {sorted(states)}, reason {sorted(reasons)} or null")
