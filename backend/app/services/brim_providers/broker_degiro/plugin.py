@@ -701,7 +701,7 @@ class DegiroBrokerProvider(BRIMProvider):
         if layout == "orders":
             return _orders_list_output(language, sum(1 for row in rows[1:] if any(cell.strip() for cell in row)))
         if layout != "statement":
-            raise BRIMParseError("Not a DEGIRO Account Statement", details={"file": file_path.name})
+            raise BRIMParseError("Not a DEGIRO Account Statement", details={"file": file_path.name, "code": "degiro_not_account_statement"})
         output = _StatementReader(self, broker_id, header, language, rows).run()
         logger.info("DEGIRO file parsed", transaction_count=len(output.transactions), notice_count=len(output.warnings), asset_count=len(output.extracted_assets), language=language)
         return output
@@ -710,10 +710,10 @@ class DegiroBrokerProvider(BRIMProvider):
         try:
             rows = read_rows(file_path, delimiter=self.detect_csv_delimiter(file_path))
         except FileNotFoundError:
-            raise BRIMParseError(f"File not found: {file_path}") from None
+            raise BRIMParseError(f"File not found: {file_path}", details={"code": "file_not_found", "context": {"file": file_path.name}}) from None
         except Exception as e:
-            raise BRIMParseError(f"Error reading file: {e}") from e
+            raise BRIMParseError(f"Error reading file: {e}", details={"code": "file_unreadable", "context": {"error": str(e)}}) from e
         rows = [[str(cell) for cell in row] for row in rows]
         if not rows:
-            raise BRIMParseError("The file is empty", details={"file": file_path.name})
+            raise BRIMParseError("The file is empty", details={"file": file_path.name, "code": "file_empty"})
         return rows

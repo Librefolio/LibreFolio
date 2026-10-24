@@ -240,12 +240,19 @@ def parse(provider: BRIMProvider, file_path: Path, broker_id: int, account: str)
     try:
         scalable = read_file(provider, file_path)
     except FileNotFoundError:
-        raise BRIMParseError(f"File not found: {file_path}") from None
+        raise BRIMParseError(f"File not found: {file_path}", details={"code": "file_not_found", "context": {"file": file_path.name}}) from None
     except Exception as e:
-        raise BRIMParseError(f"Error reading file: {e}") from e
+        raise BRIMParseError(f"Error reading file: {e}", details={"code": "file_unreadable", "context": {"error": str(e)}}) from e
     if scalable is None or not _reads(scalable, account):
         refused = refusal(provider, file_path, account)
-        raise BRIMParseError(refused.message if refused else "Not a Scalable Capital export", details={"file": file_path.name})
+        raise BRIMParseError(
+            refused.message if refused else "Not a Scalable Capital export",
+            details={
+                "file": file_path.name,
+                "code": (refused.code if refused is not None and refused.code else "scalable_not_export"),
+                "context": (refused.context or {}) if refused is not None else {},
+            },
+        )
     output = _Reader(provider, broker_id, scalable).run()
     logger.info("Scalable Capital file parsed", plugin_code=provider.provider_code, layout=scalable.kind, transaction_count=len(output.transactions), notice_count=len(output.warnings), asset_count=len(output.extracted_assets))
     return output

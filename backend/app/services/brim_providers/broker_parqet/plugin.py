@@ -152,7 +152,7 @@ class ParqetBrokerProvider(BRIMProvider):
                 normalized_headers = {_normalize_parqet_header(header) for header in reader.fieldnames or []}
                 required_headers = {COL_IDENTIFIER, COL_HOLDINGNAME, COL_ASSETTYPE}
                 if not required_headers.issubset(normalized_headers):
-                    raise BRIMParseError("Parqet CSV header mismatch")
+                    raise BRIMParseError("Parqet CSV header mismatch", details={"code": "header_mismatch"})
 
                 row_num = 1
                 for raw_row in reader:
@@ -280,11 +280,11 @@ class ParqetBrokerProvider(BRIMProvider):
                         )
 
         except FileNotFoundError:
-            raise BRIMParseError(f"File not found: {file_path}") from None
+            raise BRIMParseError(f"File not found: {file_path}", details={"code": "file_not_found", "context": {"file": file_path.name}}) from None
         except BRIMParseError:
             raise
         except Exception as e:
-            raise BRIMParseError(f"Error parsing file: {e}") from e
+            raise BRIMParseError(f"Error parsing file: {e}", details={"code": "file_unreadable", "context": {"error": str(e)}}) from e
 
         if not transactions:
             warnings.append("No valid transactions found in file")

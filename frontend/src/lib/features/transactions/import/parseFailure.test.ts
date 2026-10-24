@@ -30,7 +30,7 @@ import en from '$lib/i18n/importWizard/en.json';
 import it_ from '$lib/i18n/importWizard/it.json';
 import fr from '$lib/i18n/importWizard/fr.json';
 import es from '$lib/i18n/importWizard/es.json';
-import {resolveParseFailureMessage} from './parseFailure';
+import {resolveGapFixFailureMessage, resolveParseFailureMessage} from './parseFailure';
 
 /** Fake `$t`: a known key interpolates `{token}`s from its values; an unknown key comes back as itself, as svelte-i18n answers a missing key. */
 function makeT(known: Record<string, string> = {}) {
@@ -205,6 +205,124 @@ describe('importWizard catalogues — the keys the failure message reads, in the
     it('keeps the two preview texts apart in every language: unsupported is not unreadable', () => {
         for (const [language, {importWizard: wizard}] of Object.entries(catalogues)) {
             expect(wizard.previewFailed?.preview_unsupported, language).not.toBe(wizard.previewFailed?.preview_unreadable);
+        }
+    });
+});
+
+/*
+ * resolveGapFixFailureMessage — the gap-fix's own 409 (lot W5-6, E-21 / W-B80). `POST /gap-fix` refuses a broker whose
+ * ledger it cannot read with `409 {detail: {code: 'ledger_unreadable', message, reason, params}}`: `message` is the English
+ * sentence, `reason` says which refusal it is (`currency_codes`: codes that are not ISO 4217, params `{codes, more}`;
+ * `values`: values that are not a number, params `{count}`) and `params` fill the translation
+ * `importWizard.reportSet.gapFix.ledgerUnreadable.<reason>`. The helper lives in `parseFailure.ts` beside
+ * `resolveParseFailureMessage`; red until it is exported (every call is "not a function").
+ */
+
+const LEDGER_KEY_PREFIX = 'importWizard.reportSet.gapFix.ledgerUnreadable';
+const LEDGER_ENGLISH = "LibreFolio's balances of this broker cannot be compared with the bank: its transactions hold currency codes that are not ISO 4217 codes: 'EURO' (EUR). Correct them first.";
+
+function ledgerUnreadable(reason: unknown, params: unknown, message: unknown = LEDGER_ENGLISH): unknown {
+    return apiError({code: 'ledger_unreadable', message, reason, params}, 409);
+}
+
+describe('resolveGapFixFailureMessage — the 409 ledger_unreadable of the gap-fix', () => {
+    it('currency_codes: the translation of importWizard.reportSet.gapFix.ledgerUnreadable.currency_codes, the params as its values', () => {
+        const params = {codes: "'EURO' (EUR)", more: 0};
+        const t = makeT({[`${LEDGER_KEY_PREFIX}.currency_codes`]: 'Currency codes to correct first: {codes} (+{more}).'});
+
+        expect(resolveGapFixFailureMessage(ledgerUnreadable('currency_codes', params), t)).toBe("Currency codes to correct first: 'EURO' (EUR) (+0).");
+
+        expect(t).toHaveBeenCalledWith(`${LEDGER_KEY_PREFIX}.currency_codes`, {values: params});
+    });
+
+    it('values: the translation of importWizard.reportSet.gapFix.ledgerUnreadable.values, with the count', () => {
+        const params = {count: 3};
+        const t = makeT({[`${LEDGER_KEY_PREFIX}.values`]: '{count} transactions hold a value that is not a number.'});
+
+        expect(resolveGapFixFailureMessage(ledgerUnreadable('values', params), t)).toBe('3 transactions hold a value that is not a number.');
+
+        expect(t).toHaveBeenCalledWith(`${LEDGER_KEY_PREFIX}.values`, {values: params});
+    });
+
+    it.each([
+        ['currency_codes', {codes: "'EURO' (EUR)", more: 0}],
+        ['values', {count: 3}],
+        ['a reason this build does not know', {anything: 1}],
+    ])('%s: no translation in the catalogue gives the English message of the API, never the key', (reason, params) => {
+        const t = makeT();
+        const knownReason = reason === 'a reason this build does not know' ? 'something_new' : reason;
+
+        const shown = resolveGapFixFailureMessage(ledgerUnreadable(knownReason, params), t);
+
+        expect(shown).toBe(LEDGER_ENGLISH);
+        expect(shown).not.toContain(LEDGER_KEY_PREFIX);
+    });
+
+    it.each([
+        ['no reason', undefined],
+        ['a reason that is not text', 42],
+    ])('%s: the English message of the API, without asking the catalogue for a key built from nothing', (_label, reason) => {
+        const t = makeT();
+
+        expect(resolveGapFixFailureMessage(ledgerUnreadable(reason, {count: 1}), t)).toBe(LEDGER_ENGLISH);
+
+        expect(t).not.toHaveBeenCalledWith(expect.stringContaining('undefined'), expect.anything());
+    });
+
+    it('params the API left out are handed on as an empty object, not as undefined', () => {
+        const t = makeT({[`${LEDGER_KEY_PREFIX}.values`]: 'values {count}'});
+
+        resolveGapFixFailureMessage(ledgerUnreadable('values', undefined), t);
+
+        expect(t).toHaveBeenCalledWith(`${LEDGER_KEY_PREFIX}.values`, {values: {}});
+    });
+});
+
+describe('resolveGapFixFailureMessage — any other error is extractErrorMessage, as before', () => {
+    const t = makeT({[`${LEDGER_KEY_PREFIX}.values`]: 'translated', [`${LEDGER_KEY_PREFIX}.currency_codes`]: 'translated'});
+
+    it.each([
+        ['another 409 code of the set', apiError({code: 'set_incomplete', message: 'The set is incomplete', reason: 'values', params: {count: 1}}, 409)],
+        ['a string detail', apiError('Plugin not found: broker_nobody', 404)],
+        ['a validation array', apiError([{loc: ['body', 'broker_id'], msg: 'field required', type: 'missing'}], 422)],
+        ['a network error', new Error('Network Error')],
+        ['not an error at all', 'boom'],
+        ['null', null],
+        ['an HTTP failure with no detail', Object.assign(new Error('boom'), {response: {status: 502, statusText: 'Bad Gateway', data: {}}})],
+    ])('%s is exactly extractErrorMessage(error)', (_label, error) => {
+        expect(resolveGapFixFailureMessage(error, t)).toBe(extractErrorMessage(error));
+    });
+
+    it('hands the fallback on to extractErrorMessage', () => {
+        const error = new Error('Network Error');
+
+        expect(resolveGapFixFailureMessage(error, t, 'The gap-fix failed')).toBe(extractErrorMessage(error, 'The gap-fix failed'));
+    });
+
+    it("a parse_failed detail is not this helper's business: extractErrorMessage, with no frame asked of the catalogue", () => {
+        const probe = makeT();
+        const error = apiError(parseFailed({code: 'missing_columns', message: 'x'}));
+
+        expect(resolveGapFixFailureMessage(error, probe)).toBe(extractErrorMessage(error));
+        expect(probe).not.toHaveBeenCalledWith(FRAME_KEY, expect.anything());
+    });
+});
+
+describe('importWizard catalogues — the gap-fix ledgerUnreadable texts, in the four languages', () => {
+    const catalogues = {en, it: it_, fr, es} as Record<string, {importWizard: Record<string, any>}>;
+    //: The placeholder names each reason's texts must carry (the keys of `params`).
+    const PLACEHOLDERS: Record<string, string[]> = {currency_codes: ['codes', 'more'], values: ['count']};
+
+    it.each(Object.keys(catalogues))('%s has a non-empty text for each reason, with the placeholders of its params', (language) => {
+        const texts = catalogues[language].importWizard.reportSet?.gapFix?.ledgerUnreadable;
+
+        for (const [reason, names] of Object.entries(PLACEHOLDERS)) {
+            const text = texts?.[reason];
+            expect(typeof text, `${language}: importWizard.reportSet.gapFix.ledgerUnreadable.${reason}`).toBe('string');
+            expect((text as string).trim(), `${language}: ${reason} is not empty`).not.toBe('');
+            for (const name of names) {
+                expect(text as string, `${language}: ${reason} uses {${name}}`).toMatch(new RegExp(`\\{${name}[,}]`));
+            }
         }
     });
 });

@@ -437,7 +437,11 @@
         "column": {
           "point": "Point"
         },
-        "noProposals": "Ce point ne demande aucune correction."
+        "noProposals": "Ce point ne demande aucune correction.",
+        "ledgerUnreadable": {
+          "currency_codes": "Les soldes de LibreFolio pour ce courtier ne peuvent pas être comparés à la banque : ses transactions contiennent des codes de devise qui ne sont pas des codes ISO 4217 : {codes}{more, plural, =0 {} other { et # autres}}. Corrigez-les d'abord.",
+          "values": "Les soldes de LibreFolio pour ce courtier ne peuvent pas être comparés à la banque : {count, plural, one {# de ses transactions contient une valeur qui n'est pas un nombre} other {# de ses transactions contiennent une valeur qui n'est pas un nombre}}. Demandez à l'administrateur de les réparer."
+        }
       },
       "badge": {
         "column": "Lot de rapports",
@@ -514,7 +518,22 @@
       "missing_columns": "{count, plural, one {Colonne obligatoire {columns} introuvable dans l'en-tête du CSV.} other {Colonnes obligatoires {columns} introuvables dans l'en-tête du CSV.}}",
       "no_movement_rows": "Le fichier ne contient aucune ligne de mouvement.",
       "degiro_csv_only": "Seul l'export CSV est lu : téléchargez le Relevé de compte au format CSV.",
-      "degiro_not_account_statement": "Ce n'est pas un Relevé de compte DEGIRO : il faut 12 colonnes, avec l'ISIN en cinquième position, des colonnes de montant sans nom en neuvième et onzième position, et des dates au format JJ-MM-AAAA."
+      "degiro_not_account_statement": "Ce n'est pas un Relevé de compte DEGIRO : il faut 12 colonnes, avec l'ISIN en cinquième position, des colonnes de montant sans nom en neuvième et onzième position, et des dates au format JJ-MM-AAAA.",
+      "file_not_found": "Le fichier est introuvable.",
+      "header_mismatch": "La ligne d'en-tête n'est pas celle de cet export.",
+      "header_row_not_found": "La ligne d'en-tête du tableau est introuvable dans le fichier.",
+      "no_valid_transactions": "Le fichier ne contient aucune transaction valide.",
+      "file_empty": "Le fichier est vide.",
+      "intesa_layout_unknown": "La mise en page ne correspond à aucun des deux exports Intesa Sanpaolo (mouvements ou patrimoine).",
+      "scalable_not_export": "Ce n'est pas un export de Scalable Capital.",
+      "danske_custody_columns_missing": "Ce n'est pas un export de dépôt de Danske Bank : les colonnes des transactions sont absentes.",
+      "danske_cash_columns_missing": "Ce n'est pas un relevé de compte de Danske Bank : les colonnes du compte sont absentes.",
+      "danske_combined_columns_missing": "Ce n'est pas un fichier combiné de Danske Bank : les colonnes {missing} sont absentes.",
+      "danske_not_combined_file": "Ce n'est pas un fichier combiné de Danske Bank.",
+      "danske_combined_line_unknown_kind": "La ligne {line} du fichier combiné a un type inconnu ({kind}).",
+      "danske_combined_line_incomplete": "La ligne {line} du fichier combiné est incomplète.",
+      "danske_combined_line_not_cash": "La ligne {line} du fichier combiné n'est pas une ligne de trésorerie autonome.",
+      "danske_no_dated_rows": "Les exports de dépôt n'ont aucune ligne datée : il n'y a rien à combiner."
     },
     "brimEvidence": {
       "scalable_unreadable_rows": "Sur ces lignes, une date, un montant, une devise, les parts ou le titre manque ou est illisible.",

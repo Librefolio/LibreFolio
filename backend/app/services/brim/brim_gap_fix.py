@@ -88,8 +88,13 @@ async def _refuse_non_iso_cash(session: AsyncSession, request: BRIMGapFixRequest
     if not codes:
         return
     named = ", ".join(f"{shown_currency_text(code)!r} ({suggested_iso_currency(code) or 'no ISO code'})" for code in codes[:NON_ISO_CODES_NAMED])
-    more = f" and {len(codes) - NON_ISO_CODES_NAMED} more" if len(codes) > NON_ISO_CODES_NAMED else ""
-    raise BRIMLedgerUnreadable(f"LibreFolio's balances of this broker cannot be compared with the bank: its transactions hold currency codes that are not ISO 4217 codes: {named}{more}. Correct them first.")
+    more_count = max(len(codes) - NON_ISO_CODES_NAMED, 0)
+    more = f" and {more_count} more" if more_count else ""
+    raise BRIMLedgerUnreadable(
+        f"LibreFolio's balances of this broker cannot be compared with the bank: its transactions hold currency codes that are not ISO 4217 codes: {named}{more}. Correct them first.",
+        reason="currency_codes",
+        params={"codes": named, "more": more_count},
+    )
 
 
 async def _state_at(session: AsyncSession, request: BRIMGapFixRequest, as_of: date, proposals: Sequence[TXCreateItem]) -> Tuple[Dict[str, Decimal], Dict[int, Decimal]]:
@@ -99,7 +104,11 @@ async def _state_at(session: AsyncSession, request: BRIMGapFixRequest, as_of: da
     try:
         db_cash, db_quantities = await TransactionService(session).get_balances_at_end_of(request.broker_id, as_of, exclude_tx_ids=request.pending_delete_tx_ids)
     except UnreadableLedgerError as exc:
-        raise BRIMLedgerUnreadable(f"LibreFolio's balances of this broker cannot be compared with the bank: {exc.count} of its transactions hold a value that is not a number. Ask the administrator to repair them.") from exc
+        raise BRIMLedgerUnreadable(
+            f"LibreFolio's balances of this broker cannot be compared with the bank: {exc.count} of its transactions hold a value that is not a number. Ask the administrator to repair them.",
+            reason="values",
+            params={"count": exc.count},
+        ) from exc
     await _refuse_non_iso_cash(session, request, as_of)
     cash: Dict[str, Decimal] = defaultdict(lambda: ZERO, {code: Decimal(amount or 0) for code, amount in db_cash.items()})
     quantities: Dict[int, Decimal] = defaultdict(lambda: ZERO, {asset_id: Decimal(quantity or 0) for asset_id, quantity in db_quantities.items()})

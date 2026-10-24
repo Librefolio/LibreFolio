@@ -284,9 +284,9 @@ class CryptoComBrokerProvider(BRIMProvider):
                         warnings.append(f"Row {row_num}: unsupported Crypto.com kind '{kind}', skipping")
 
         except FileNotFoundError:
-            raise BRIMParseError(f"File not found: {file_path}") from None
+            raise BRIMParseError(f"File not found: {file_path}", details={"code": "file_not_found", "context": {"file": file_path.name}}) from None
         except Exception as e:
-            raise BRIMParseError(f"Error parsing file: {e}") from e
+            raise BRIMParseError(f"Error parsing file: {e}", details={"code": "file_unreadable", "context": {"error": str(e)}}) from e
 
         if not transactions:
             warnings.append("No valid transactions found in file")

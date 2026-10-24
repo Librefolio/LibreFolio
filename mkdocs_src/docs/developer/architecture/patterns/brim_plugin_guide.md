@@ -550,12 +550,94 @@ English sentence the wizard would show as it is (lot W5-5, C-70b):
 - The file goes to `failed` with the English text as its stored `error_message`, as before: it is the diagnostic, not what the
   user reads.
 
+```mermaid
+flowchart LR
+    A["Plugin raises<br/>BRIMParseError(message, details={code, context})"] --> B["API: 400 detail<br/>parse_failed {reason: code, context}"]
+    A -. "English message" .-> L["logs and error_message<br/>of the failed file"]
+    B --> C["Wizard: resolveParseFailureMessage<br/>(parseFailure.ts)"]
+    C --> D["frame importWizard.parseFailed"]
+    C --> E["reason importWizard.parseRefusal.&lt;code&gt;<br/>with context as values"]
+```
+
 The wizard (`resolveParseFailureMessage`, `parseFailure.ts`) shows `importWizard.parseFailed` with the plugin's name and the
 reason, translated as `importWizard.parseRefusal.<code>` with the `context` (the keys of the [refusals](#cannot-parse-detail),
-and the ones of every `BRIMParseError` code), else the plugin's own sentence. A failure with no reason at all shows
-`importWizard.parseFailedNoReason`. The same helper reads the 400 of the two file previews (`GET …/files/{file_id}/preview` and
-`GET /api/v1/uploads/file/{file_id}/preview`): `{"code": "preview_unsupported" | "preview_unreadable", "message": "…"}`,
-translated as `importWizard.previewFailed.<code>`.
+and the ones of every `BRIMParseError` code), else the plugin's own sentence (`resolveParseRefusalMessage`,
+`defaultPluginCheck.ts`). A failure with no reason at all shows `importWizard.parseFailedNoReason`. The same helper reads the 400
+of the two file previews (`GET …/files/{file_id}/preview` and `GET /api/v1/uploads/file/{file_id}/preview`):
+`{"code": "preview_unsupported" | "preview_unreadable", "message": "…"}`, translated as `importWizard.previewFailed.<code>`.
+
+#### 📏 The rule: every `BRIMParseError` carries a code {: #parse-error-code-rule }
+
+Since lot W5-6 (backlog E-21) this is **mandatory**, for every `raise BRIMParseError(...)` in a plugin
+(`backend/app/services/brim_providers/`, shared readers such as `_scalable.py` included):
+
+- **A `code`.** `details={"code": "<code>", ...}`: a string constant, or a refusal's code (`refused.code`, as `_scalable.py`
+  does for `scalable_not_export`). A raise without one would show the user an English sentence.
+- **A `context` when the text has placeholders.** A dict **literal** whose keys are exactly the placeholders of the user text
+  (`{"file": file_path.name}`, `{"columns": "date", "count": 1}`). `plugin_name` is the one placeholder you never supply: the
+  wizard adds it.
+- **The English `message` stays the diagnostic.** It goes to the logs and to the `error_message` of the failed file; the
+  user never needs to read it. Write it for the developer who reads the log.
+- **The user text lives in `importWizard.parseRefusal.<code>`, in the four languages.** Add it with the i18n tool (the
+  placeholders must be the same names in all four):
+
+    ```bash
+    ./dev.py i18n add "importWizard.parseRefusal.<code>" --en "…" --it "…" --fr "…" --es "…"
+    ```
+
+- **Other `details` keys stay.** Keys such as `"file"` or `"headers"` keep sitting beside `code` and `context`; they are for
+  diagnostics and are not sent to the wizard.
+- **Do not lose the code on the way out.** A coded raise inside a `try` needs `except BRIMParseError: raise` **before** any
+  broad `except Exception`, otherwise the broad handler catches it and re-wraps it in a new `BRIMParseError` that has the
+  code of the wrapper, not yours (or none).
+
+```python
+try:
+    rows = self._read_rows(file_path)  # may raise BRIMParseError(…, details={"code": "header_row_not_found", …})
+    ...
+except BRIMParseError:
+    raise
+except Exception as e:
+    raise BRIMParseError(f"Error parsing file: {e}", details={"code": "file_unreadable", "context": {"error": str(e)}}) from e
+```
+
+**Shared codes plugins reuse.** Reuse these, with their translations, before adding a code of your own:
+
+| `code` | `context` | Cause |
+|--------|-----------|-------|
+| `file_not_found` | `file` | the path to parse does not exist (the plugin raises it in its `except FileNotFoundError`) |
+| `file_unreadable` | `error` | the file could not be read or decoded |
+| `header_mismatch` | none | the header row is not the one of this export |
+| `header_row_not_found` | `layout`, `expected` (both optional) | the table's header row was not found in the file |
+| `missing_columns` | `columns`, `count` | required columns are not in the header (`count` picks the plural) |
+| `no_valid_transactions` | none | the file holds no valid transactions |
+| `file_empty` | none | the file is empty |
+| `no_movement_rows` | none | the file has no movement rows |
+| `no_header_row` | none | the file has no header row |
+
+**Plugin-specific codes** are prefixed with the plugin's name, so they never collide: `danske_*` (Danske Bank: the cash,
+custody and combined layouts), `degiro_*` (`degiro_csv_only`, `degiro_not_account_statement`), `intesa_layout_unknown` and
+`scalable_*` (the [Scalable refusals](#cannot-parse-detail), plus `scalable_not_export`). The catalogue
+`frontend/src/lib/i18n/importWizard/en.json`, under `parseRefusal`, is the list that is always current.
+
+**The tests that guard it.** `./dev.py test services brim-parse-error-codes`
+(`backend/test_scripts/test_services/test_brim_parse_error_codes.py`) reads every plugin file statically (`ast`), so a new
+plugin or a new raise is caught without anybody remembering it, and names each offender by `file:line`:
+
+- every `BRIMParseError` has a `code` (and a `context` literal has string-constant keys);
+- a coded raise is not swallowed: a broad `except Exception` after it in the same `try` must be preceded by an
+  `except BRIMParseError` that re-raises;
+- every code has a text in the four languages, with the same placeholders, and the placeholders are all supplied by the
+  `context` of the raise sites of that code.
+
+#### 🧮 The gap-fix 409 is translated the same way {: #gap-fix-failure }
+
+`POST /brokers/import/gap-fix` ([below](#report-sets)) refuses with **409**
+`{code: "ledger_unreadable", message, reason: "values" | "currency_codes", params}` when LibreFolio's side of the comparison
+cannot be computed (`BRIMLedgerUnreadable`, `_set_error_detail` in `api/v1/brokers.py`). The wizard shows it through
+`resolveGapFixFailureMessage` (`parseFailure.ts`) as `importWizard.reportSet.gapFix.ledgerUnreadable.<reason>` with `params`
+(`values`: `count`; `currency_codes`: `codes` and `more`). `message` stays English, the fallback when the key or the `reason`
+is missing; every other set error still shows its `message`.
 
 ### 🧰 Base-class helpers you should use
 
@@ -1708,7 +1790,8 @@ When a transaction of the broker dated up to a checkpoint's `as_of` (and not amo
 endpoint answers **409** `{"code": "ledger_unreadable", "message": …}` instead of comparing a
 wrong balance with the bank, which would propose a correction duplicating the row it cannot read
 (`get_balances_at_end_of` raises `UnreadableLedgerError`, `brim_gap_fix` turns it into
-`BRIMLedgerUnreadable`; W-B74). The wizard shows the message in that broker's group.
+`BRIMLedgerUnreadable`; W-B74). The wizard shows the refusal in that broker's group, in the UI language
+([how it is translated](#gap-fix-failure)).
 
 When those transactions hold a cash currency that is not a canonical ISO 4217 code — a name or a number an earlier
 version saved as written (`978`, `EURO`), or a code in another case (`eur`) — the endpoint answers the same **409**

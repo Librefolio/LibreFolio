@@ -428,12 +428,12 @@ class GenericCSVBrokerProvider(BRIMProvider):
                 if "date" not in column_map:
                     raise BRIMParseError(
                         "Required column 'date' not found in CSV header",
-                        details={"headers": reader.fieldnames},
+                        details={"headers": reader.fieldnames, "code": "missing_columns", "context": {"columns": "date", "count": 1}},
                     )
                 if "type" not in column_map:
                     raise BRIMParseError(
                         "Required column 'type' not found in CSV header",
-                        details={"headers": reader.fieldnames},
+                        details={"headers": reader.fieldnames, "code": "missing_columns", "context": {"columns": "type", "count": 1}},
                     )
 
                 # Parse rows
@@ -473,7 +473,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
         except BRIMParseError:
             raise
         except Exception as e:
-            raise BRIMParseError(f"Error reading CSV file: {e!s}", details={"file": file_path.name}) from e
+            raise BRIMParseError(f"Error reading CSV file: {e!s}", details={"file": file_path.name, "code": "file_unreadable", "context": {"error": str(e)}}) from e
 
         if not transactions:
             warnings.append("No valid transactions found in file")

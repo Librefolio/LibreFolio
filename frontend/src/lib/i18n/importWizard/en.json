@@ -437,7 +437,11 @@
         "column": {
           "point": "Point"
         },
-        "noProposals": "This point needs no correction."
+        "noProposals": "This point needs no correction.",
+        "ledgerUnreadable": {
+          "currency_codes": "LibreFolio's balances of this broker cannot be compared with the bank: its transactions hold currency codes that are not ISO 4217 codes: {codes}{more, plural, =0 {} other { and # more}}. Correct them first.",
+          "values": "LibreFolio's balances of this broker cannot be compared with the bank: {count, plural, one {# of its transactions holds a value that is not a number} other {# of its transactions hold a value that is not a number}}. Ask the administrator to repair them."
+        }
       },
       "badge": {
         "column": "Report set",
@@ -514,7 +518,22 @@
       "missing_columns": "{count, plural, one {Required column {columns} not found in the CSV header.} other {Required columns {columns} not found in the CSV header.}}",
       "no_movement_rows": "The file has no movement rows.",
       "degiro_csv_only": "Only the CSV export is read: download the Account Statement as CSV.",
-      "degiro_not_account_statement": "This is not a DEGIRO Account Statement: expected 12 columns with the ISIN fifth, unnamed amount columns ninth and eleventh, and dates as DD-MM-YYYY."
+      "degiro_not_account_statement": "This is not a DEGIRO Account Statement: expected 12 columns with the ISIN fifth, unnamed amount columns ninth and eleventh, and dates as DD-MM-YYYY.",
+      "file_not_found": "The file was not found.",
+      "header_mismatch": "The header row is not the one of this export.",
+      "header_row_not_found": "The header row of the table was not found in the file.",
+      "no_valid_transactions": "The file holds no valid transactions.",
+      "file_empty": "The file is empty.",
+      "intesa_layout_unknown": "The layout is none of the two Intesa Sanpaolo exports (movements or patrimonio).",
+      "scalable_not_export": "This is not a Scalable Capital export.",
+      "danske_custody_columns_missing": "This is not a Danske Bank custody export: the transaction columns are missing.",
+      "danske_cash_columns_missing": "This is not a Danske Bank cash statement: the account columns are missing.",
+      "danske_combined_columns_missing": "This is not a Danske Bank combined file: the columns {missing} are missing.",
+      "danske_not_combined_file": "This is not a Danske Bank combined file.",
+      "danske_combined_line_unknown_kind": "Line {line} of the combined file has an unknown kind ({kind}).",
+      "danske_combined_line_incomplete": "Line {line} of the combined file is incomplete.",
+      "danske_combined_line_not_cash": "Line {line} of the combined file is not a standalone cash row.",
+      "danske_no_dated_rows": "The custody exports have no dated rows: there is nothing to combine."
     },
     "brimEvidence": {
       "scalable_unreadable_rows": "On these rows a date, an amount, a currency, the shares or the security is missing or cannot be read.",

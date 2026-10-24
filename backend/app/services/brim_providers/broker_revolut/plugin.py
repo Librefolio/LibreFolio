@@ -345,14 +345,14 @@ class RevolutBrokerProvider(BRIMProvider):
                     return self._parse_invest(reader, broker_id)
                 if _is_crypto_header(reader.fieldnames):
                     return self._parse_crypto(reader, broker_id)
-                raise BRIMParseError("Unsupported Revolut CSV header")
+                raise BRIMParseError("Unsupported Revolut CSV header", details={"code": "header_mismatch"})
 
         except FileNotFoundError:
-            raise BRIMParseError(f"File not found: {file_path}") from None
+            raise BRIMParseError(f"File not found: {file_path}", details={"code": "file_not_found", "context": {"file": file_path.name}}) from None
         except BRIMParseError:
             raise
         except Exception as e:
-            raise BRIMParseError(f"Error parsing file: {e}") from e
+            raise BRIMParseError(f"Error parsing file: {e}", details={"code": "file_unreadable", "context": {"error": str(e)}}) from e
 
     def _parse_invest(self, reader: csv.DictReader, broker_id: int) -> BRIMParseOutput:  # noqa: C901 — flat row loop: validation guards and per-type field mapping, no nested logic
         """Parse Revolut Invest rows."""

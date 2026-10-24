@@ -200,7 +200,7 @@ class SaxoBrokerProvider(BRIMProvider):
             with self._open_text(file_path, newline="") as f:
                 reader = csv.DictReader(f, delimiter=detected_delim)
                 if reader.fieldnames != SAXO_HEADER:
-                    raise BRIMParseError("Unexpected Saxo CSV header")
+                    raise BRIMParseError("Unexpected Saxo CSV header", details={"code": "header_mismatch"})
 
                 row_num = 1
                 for row in reader:
@@ -309,11 +309,11 @@ class SaxoBrokerProvider(BRIMProvider):
                     )
 
         except FileNotFoundError:
-            raise BRIMParseError(f"File not found: {file_path}") from None
+            raise BRIMParseError(f"File not found: {file_path}", details={"code": "file_not_found", "context": {"file": file_path.name}}) from None
         except BRIMParseError:
             raise
         except Exception as e:
-            raise BRIMParseError(f"Error parsing file: {e}") from e
+            raise BRIMParseError(f"Error parsing file: {e}", details={"code": "file_unreadable", "context": {"error": str(e)}}) from e
 
         if not transactions:
             warnings.append("No valid transactions found in file")
