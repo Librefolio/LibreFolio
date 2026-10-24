@@ -991,6 +991,16 @@ def services_brim_parse_error_codes(verbose: bool = False, test_names: list = No
     return run_command(cmd, "BRIM parse error codes tests", verbose=verbose)
 
 
+def services_brim_field_contract(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the contract of a field in a BRIM plugin: declaration, default = old behaviour, per-user value, stale parse."""
+    print_section("Services: BRIM Field Contract")
+    print_info("Testing: plugin_settings/resolver.py (default_settings_fingerprint, settings_changed_since), the worked example of the BRIM plugin guide")
+    print_info("Tests: a BRIM plugin declares a field and registers, the default is the old behaviour, the parse sees the importing user's value, a parse is stale exactly when the values a re-parse would receive differ")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_field_contract.py", test_names)
+    return run_command(cmd, "BRIM field contract tests", verbose=verbose)
+
+
 def services_settings(verbose: bool = False, test_names: list = None) -> bool:
     """Test settings service: user settings CRUD, get_effective_base_currency."""
     print_section("Services: Settings Service")
@@ -2647,6 +2657,14 @@ Note: No backend server required.
         services_brim_parse_error_codes,
         name="BRIM Parse Error Codes",
         desc="W5-6 (E-21): every BRIMParseError raised by a BRIM plugin carries details code/context (static ast scan), is not swallowed by a broad except, and has its importWizard.parseRefusal text with agreeing placeholders in en/it/fr/es; generic CSV and DEGIRO raise the expected codes",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "brim-field-contract",
+        services_brim_field_contract,
+        name="BRIM Field Contract",
+        desc="A field in a BRIM plugin (CP12): declaration, default = the behaviour before the field, the importing user's value, and the stale-parse rule (settings_changed_since)",
         isolation="pure",
     )
     add_test(cat, "settings", services_settings, name="Settings Service", desc="User settings CRUD, get_effective_base_currency")
