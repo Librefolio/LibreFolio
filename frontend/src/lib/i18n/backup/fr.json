@@ -232,7 +232,7 @@
         "owner_choice_required": "Choisissez le compte qui devient celui du propriétaire avant de confirmer.",
         "owner_choice_invalid": "Le compte choisi ne peut pas devenir celui du propriétaire : choisissez-en un parmi ceux proposés.",
         "owner_email_not_set": "LIBREFOLIO_ADMIN_EMAIL n'est pas définie : le compte du propriétaire ne peut pas être choisi. Demandez à l'hébergeur.",
-        "owner_conflict": "La sauvegarde contient deux comptes avec la même adresse ou le même nom, ou l'adresse du propriétaire comme nom d'un autre compte : elle ne peut pas être restaurée ici."
+        "owner_conflict": "La sauvegarde contient deux comptes avec la même adresse ou le même nom, l'adresse du titulaire comme nom d'un autre compte, ou un administrateur qui attend encore son lien de configuration : elle ne peut pas être restaurée ici."
       },
       "password": {
         "intro": "Une sauvegarde sécurisée : saisissez le mot de passe avec lequel elle a été faite.",
@@ -271,7 +271,7 @@
     "ownerChoice": {
       "title": "Qui est le titulaire de cette instance ?",
       "intro": "Choisissez quel utilisateur de cette sauvegarde devient l'administrateur qui paie l'instance.",
-      "notice": "Cet utilisateur recevra l'adresse e-mail du titulaire ({email}) et deviendra administrateur protégé. Son mot de passe sera réinitialisé : un lien pour en choisir un nouveau est envoyé à cette adresse.",
+      "notice": "Cet utilisateur recevra l'adresse e-mail du titulaire ({email}) et deviendra administrateur protégé. Son mot de passe sera réinitialisé : un lien pour en choisir un nouveau est envoyé à cette adresse. Si l'e-mail ne peut pas partir, le lien est écrit dans le journal de l'instance, pour que l'hébergeur le remette au titulaire.",
       "locked": "Un utilisateur de cette sauvegarde a déjà l'adresse e-mail du titulaire : c'est lui le titulaire.",
       "adminBadge": "Administrateur",
       "inactiveBadge": "Désactivé",

@@ -1100,6 +1100,7 @@ def _close_the_way_in(data_dir: Path, now: datetime, owner_user_id: int | None =
     revoked_at = now.astimezone(UTC).replace(tzinfo=None).isoformat(sep=" ", timespec="microseconds")
     database = database_path(data_dir)
     with closing(sqlite3.connect(f"{database.resolve().as_uri()}?mode=rw", uri=True, timeout=30)) as conn:
+        conn.execute("PRAGMA trusted_schema = OFF")
         conn.execute("PRAGMA busy_timeout = 30000")
         restored = int(conn.execute("SELECT COALESCE(MAX(session_version), 0) FROM users").fetchone()[0])
         value = max(restore_ms, restored + 1, before + 1)
@@ -1113,6 +1114,7 @@ def _close_the_way_in(data_dir: Path, now: datetime, owner_user_id: int | None =
                     "UPDATE account_tokens SET revoked_at = ? WHERE consumed_at IS NULL AND revoked_at IS NULL AND NOT (typeof(id) = 'integer' AND id > ?)",
                     (revoked_at, token_watermark),
                 ).rowcount
+            _clear_owner_flag(conn)
             if owner_user_id is not None:
                 _close_owner_account(conn, owner_user_id, unusable, owner_email, stage_id)
     return value, revoked
@@ -1123,6 +1125,16 @@ def _unusable_hash() -> str:
     from backend.app.services.accounts import auth_service  # noqa: PLC0415 — accounts import the platform services
 
     return auth_service.unusable_password_hash()
+
+
+def _clear_owner_flag(conn: sqlite3.Connection) -> None:
+    """Nobody is the instance's owner at the restore: the flag ``users.is_instance_owner`` (workstream A's migration) is
+    written by whoever prepared the backup, so it is cleared on every account. The owner is then the account this restore
+    assigns (``_close_owner_account``) or, without one, the one the first start derives from ``LIBREFOLIO_ADMIN_EMAIL``
+    (A's owner sync): otherwise an owner-change link could go to the real owner's address for an account the backup's
+    author flagged."""
+    if "is_instance_owner" in {row[1] for row in conn.execute("PRAGMA table_info(users)")}:
+        conn.execute("UPDATE users SET is_instance_owner = 0 WHERE is_instance_owner != 0")
 
 
 def _close_owner_account(conn: sqlite3.Connection, user_id: int, unusable: str, owner_email: str | None, stage_id: str | None) -> None:
@@ -1140,9 +1152,8 @@ def _close_owner_account(conn: sqlite3.Connection, user_id: int, unusable: str, 
             logger.warning("Another account of the restored data holds the owner's address: only the chosen account's password is closed", stage_id=stage_id, user_id=user_id)
         else:
             conn.execute("UPDATE users SET email = ?, is_superuser = 1, is_active = 1 WHERE id = ?", (owner_email, user_id))
-            # The column of workstream A's migration 006: one owner per instance, the configured one.
+            # The column of workstream A's migration: one owner per instance, the configured one (cleared on all before).
             if "is_instance_owner" in {row[1] for row in conn.execute("PRAGMA table_info(users)")}:
-                conn.execute("UPDATE users SET is_instance_owner = 0 WHERE id != ? AND is_instance_owner != 0", (user_id,))
                 conn.execute("UPDATE users SET is_instance_owner = 1 WHERE id = ?", (user_id,))
             assigned = True
     logger.warning("The account the owner chose is closed: its password unusable until the owner's link", stage_id=stage_id, user_id=user_id, assigned=assigned)
