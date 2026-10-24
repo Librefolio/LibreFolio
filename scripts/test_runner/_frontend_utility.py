@@ -506,6 +506,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/backup/BackupDownloadCard.test.ts",
             "src/lib/features/backup/RestoreCard.test.ts",
             "src/lib/features/backup/RestoreReportModal.test.ts",
+            "src/lib/features/backup/OwnerChoiceModal.test.ts",
             "src/lib/features/backup/RestartOverlay.test.ts",
             *(["-t", "|".join(test_names)] if test_names else []),
         ],

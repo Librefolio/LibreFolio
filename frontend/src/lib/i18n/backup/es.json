@@ -263,6 +263,18 @@
         "invalid": "LIBREFOLIO_BACKUP_RECIPIENTS no se puede usar ({reason}): uno o dos destinatarios age1…, separados por comas. Las copias de seguridad del panel del proveedor responden 503 hasta que se corrija.",
         "missingManaged": "LIBREFOLIO_BACKUP_RECIPIENTS no está definida: una instancia gestionada nunca entrega una copia de seguridad sin cifrar al panel del proveedor, cuyas copias responden 503 hasta que se defina."
       }
+    },
+    "ownerChoice": {
+      "title": "¿Quién es el titular de esta instancia?",
+      "intro": "Elige qué usuario de esta copia pasa a ser el administrador que paga la instancia.",
+      "notice": "A este usuario se le pondrá el correo del titular ({email}) y será administrador protegido. Su contraseña se restablecerá: se envía a esa dirección un enlace para elegir una nueva.",
+      "locked": "Un usuario de esta copia ya tiene el correo del titular: es el titular.",
+      "adminBadge": "Administrador",
+      "inactiveBadge": "Desactivado",
+      "ownerBadge": "Correo del titular",
+      "empty": "Esta copia no tiene usuarios entre los que elegir.",
+      "confirm": "Confirmar y restaurar",
+      "cancel": "Cancelar"
     }
   }
 }

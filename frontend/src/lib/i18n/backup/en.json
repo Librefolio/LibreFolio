@@ -263,6 +263,18 @@
         "invalid": "LIBREFOLIO_BACKUP_RECIPIENTS cannot be used ({reason}): one or two age1… recipients, comma-separated. The hosting panel's backups answer 503 until it is fixed.",
         "missingManaged": "LIBREFOLIO_BACKUP_RECIPIENTS is not set: a managed instance never hands a plain backup to its hosting panel, whose backups answer 503 until it is set."
       }
+    },
+    "ownerChoice": {
+      "title": "Who is the owner of this instance?",
+      "intro": "Choose which user of this backup becomes the administrator who pays for the instance.",
+      "notice": "This user will get the owner's email address ({email}) and become a protected administrator. Their password will be reset: a link to choose a new one is sent to that address.",
+      "locked": "One user of this backup already has the owner's email address: it is the owner.",
+      "adminBadge": "Administrator",
+      "inactiveBadge": "Deactivated",
+      "ownerBadge": "Owner's email",
+      "empty": "This backup has no users to choose from.",
+      "confirm": "Confirm and restore",
+      "cancel": "Cancel"
     }
   }
 }
