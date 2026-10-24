@@ -1601,3 +1601,66 @@ describe('the ui/select boundary', () => {
         expect(offenders).toEqual([]);
     });
 });
+
+// ─── An asset with no currency is not a currency ─────────────────────────────────────────────
+
+/**
+ * Y5-2 (mini-lot): `ChartSignalsSection` hands the panel `currency: ''` for an asset that has none, and the CURRENCY
+ * filter menu then listed an entry with an empty label. A missing currency is not a value to filter by: the menu offers
+ * the currencies assets actually have, the asset stays in the list, and a currency filter (which can only match a
+ * currency) leaves it out.
+ */
+describe('AssetPickerPanel: an asset whose currency is empty or blank', () => {
+    const NO_CURRENCY_NAME = 'Nocur Probe Fund';
+    const WITH_CURRENCY_NAME = 'Withcur Probe Fund';
+    /** EUR, USD, an empty currency and a blank one; all of one type, so a row differs from another only by name and currency. */
+    const CURRENCY_CATALOGUE = [asset(61, WITH_CURRENCY_NAME, {currency: 'EUR'}), asset(62, 'Dollar Probe Fund', {currency: 'USD'}), asset(63, NO_CURRENCY_NAME, {currency: ''}), asset(64, 'Blank Probe Fund', {currency: '  '})];
+
+    it('multi: adds no entry to the currency menu, whatever the empty value is spelled', async () => {
+        mountMulti({assets: CURRENCY_CATALOGUE, verdicts: new Map()});
+        const panel = await openMulti();
+
+        const values = [...menuOptions(await openFilterMenu(panel, MULTI, 'currency'), MULTI, 'currency').keys()];
+        expect(values.sort()).toEqual(['EUR', 'USD']);
+        // Control: the type menu is untouched, one type for the four assets.
+        expect([...menuOptions(await openFilterMenu(panel, MULTI, 'type'), MULTI, 'type').keys()]).toEqual(['ETF']);
+    });
+
+    it('multi: the asset stays listed and can be added; a currency filter leaves it out; its row shows no currency', async () => {
+        const {onadd} = mountMulti({assets: CURRENCY_CATALOGUE, verdicts: new Map()});
+        const panel = await openMulti();
+
+        expect(listedIds(panel)).toEqual(expect.arrayContaining([61, 62, 63, 64]));
+        // The row says what the currency-less asset is, and no currency: it reads as its sibling's row minus «EUR».
+        const expectedText = textOf(multiRow(panel, 61))
+            .replace(WITH_CURRENCY_NAME, NO_CURRENCY_NAME)
+            .replace(/\s*EUR$/, '');
+        expect(textOf(multiRow(panel, 61)), 'control: the sibling row ends on its currency').toMatch(/EUR$/);
+        expect(textOf(multiRow(panel, 63))).toBe(expectedText);
+
+        await toggleFilter(panel, MULTI, 'currency', 'EUR');
+        expect(listedIds(panel)).toEqual([61]);
+        await toggleFilter(panel, MULTI, 'currency', 'EUR');
+        expect(listedIds(panel)).toEqual(expect.arrayContaining([61, 62, 63, 64]));
+
+        await fireEvent.click(multiRow(panel, 63));
+        await fireEvent.click(multiConfirm(panel));
+        expect(onadd).toHaveBeenCalledExactlyOnceWith([63]);
+    });
+
+    it('single: adds no entry to the currency menu; the asset is listed and can be chosen; the EUR filter hides it', async () => {
+        const {onchange} = mountSingle({assets: CURRENCY_CATALOGUE, verdicts: new Map()});
+        await openSingle();
+
+        expect([...menuOptions(await openFilterMenu(singleRoot(), SINGLE, 'currency'), SINGLE, 'currency').keys()].sort()).toEqual(['EUR', 'USD']);
+        expect(optionIds()).toEqual(expect.arrayContaining([61, 62, 63, 64]));
+
+        await toggleFilter(singleRoot(), SINGLE, 'currency', 'EUR');
+        expect(optionIds()).toEqual([61]);
+        await toggleFilter(singleRoot(), SINGLE, 'currency', 'EUR');
+        expect(optionIds()).toEqual(expect.arrayContaining([61, 62, 63, 64]));
+
+        await fireEvent.click(choice(63));
+        expect(onchange).toHaveBeenCalledExactlyOnceWith(63);
+    });
+});
