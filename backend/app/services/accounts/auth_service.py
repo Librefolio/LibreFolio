@@ -46,6 +46,16 @@ def hash_password(password: str) -> str:
     return hashed.decode("utf-8")
 
 
+def unusable_password_hash() -> str:
+    """A password hash that no password produces: the bcrypt hash of a random secret nobody ever sees (as the initial
+    administrator waiting for its setup gets), of the cost every password gets.
+
+    A real hash, not a marker: a sign-in attempt costs what it costs for any account. Synchronous and slow on purpose
+    (bcrypt): an async caller runs it with ``asyncio.to_thread``.
+    """
+    return hash_password(secrets.token_urlsafe(32))
+
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
     Verify a password against its hash.

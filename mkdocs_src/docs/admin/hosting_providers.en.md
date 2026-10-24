@@ -138,7 +138,7 @@ your users sign in again after each restart. See
 
 - `LIBREFOLIO_PROFILE=managed`.
 - Its administrator, from `LIBREFOLIO_ADMIN_EMAIL`, with a setup link your panel delivers: see
-  [The Initial Administrator](#initial-admin).
+  [The Initial Administrator](#initial-admin). On a managed instance that administrator is protected: nobody can delete, deactivate or demote it, or reset its password or sign it out as another administrator, and it cannot delete itself or change its email address from the app (`409 ACCOUNT_PROTECTED`, a *Protected* badge in the Users tab; its address is changed from the host, with a confirmation link: [Changing the Administrator's Address](#owner-email-change)), while `./dev.py user …` on the server still can, except deleting, which that command does not do: the emergency exit.
 - A `JWT_SECRET` of at least 32 random characters, so that sessions survive restarts. To keep it out
   of `.env`, use `JWT_SECRET_FILE`: see «Secrets» in [Environment Variables](configuration.md).
 - Its own instance key: never share one key between instances. See «The Instance Key» in
@@ -377,6 +377,94 @@ gets a password, this way, it no longer waits for its setup:
   alone, the account has a password nobody knows until `dev.py user reset` or a reset link gives it
   one; given a password alone, it stays inactive until `dev.py user activate`, or **Reactivate** in
   [Users & Invitations](users.md#pending-setup).
+
+### 📬 Changing the Administrator's Address {: #owner-email-change }
+
+The account that owns a managed instance, the one with the address of `LIBREFOLIO_ADMIN_EMAIL`, cannot
+change its own address from the app: it answers `409 ACCOUNT_PROTECTED`. When your customer's contact
+changes, you change it from the host, and LibreFolio asks the **new** address to confirm it before
+anything moves. The instance remembers which account is its owner (a mark on the account, not
+visible in the app or in the API), so changing the variable never makes it lose track of who it is.
+
+1. Update your registry, set `LIBREFOLIO_ADMIN_EMAIL=new.contact@customer.example` and restart the
+   instance.
+2. At that start LibreFolio emails a confirmation link, valid for **7 days**, to the *new* address
+   (it needs [email and `LIBREFOLIO_PUBLIC_URL`](email.md#public-url)). It is sent once: a restart
+   while that link is still valid sends nothing more, and a link that expired is replaced at the next
+   start.
+3. Your customer opens it from the new address. The account moves to the new address, which counts as
+   verified, every session of the account ends and the previous address gets a notice that it
+   changed. The password does not change: from then on the account signs in with the new address.
+
+Until the link is opened, **nothing changes**: the account keeps its old address, it stays protected
+(nobody can delete, deactivate or demote it from the app), and your customer keeps working. If you
+change the variable again before the click, the link already sent stops working and the next start
+sends a new one for the latest address.
+
+**An address that belongs to another account.** If another account of the instance already has the
+new address, nothing is sent and nothing changes: the start logs an error saying that
+`LIBREFOLIO_ADMIN_EMAIL` belongs to another account, the owner keeps its address and its
+protection, and the other account is *not* protected (only the owner is). Free the address, for
+example with `./dev.py user set-email`, or change the variable, and restart. The same applies if the
+address is taken between the email and the click: the link is refused and revoked.
+
+**Without email.** If email is off or cannot be used, or `LIBREFOLIO_PUBLIC_URL` is not set, or the
+SMTP server refuses the message, LibreFolio writes the link in the startup log as a `warning`, as it
+does for the `/setup` link: *Confirmation link for the instance owner's new email address*. Pass it on
+to your customer, who must open it. It is written only when the email did not go; and without
+`LIBREFOLIO_PUBLIC_URL` it is a path, to put after the address of your server.
+
+**A customer who has not set the password yet.** While the first administrator still waits for its
+`/setup` link, nothing of this applies: changing the variable follows
+[the rules of the initial administrator](#initial-admin-variables), the waiting account takes the new
+address and the links you sent to the old one stop working. The confirmation link is only for an
+owner that is already active.
+
+**A link that got lost.** There is no command to send the link again, and the instance never keeps it:
+only its fingerprint is stored. If the customer never received it, or it expired, put `LIBREFOLIO_ADMIN_EMAIL`
+back to the **old** address and restart (the instance sees no change and revokes the unused link), then set the
+**new** address again and restart: a new link goes out. The previous link stays valid for 7 days, so a customer who
+finds it can still use it; a restart with the new address in place never sends a second one while it is valid.
+
+**The old address.** When the link is confirmed, the old address receives a short, generic notice that the
+address of the account changed. It does not say the new address, so that nobody who still reads the old mailbox
+learns it.
+
+**Who counts as the owner.** At a start with no owner recorded, the instance records the account that has the address
+of `LIBREFOLIO_ADMIN_EMAIL` as the owner only if it is an **active administrator**. An ordinary account, or a
+deactivated administrator, that has that address is not recorded (the start logs an error that does not name the
+address or the account) and is not protected as the owner. The first administrator the instance creates for
+you is recorded from the start.
+
+!!! note "State of a change"
+
+    The instance knows whether a change is *pending* (waiting for the click, or for a new link at the next start)
+    or *blocked* (another account holds the address), and never carries an address. Today this state is not shown
+    anywhere in the app or in the hosting panel API: connecting it to the panel's status and to a security check is
+    planned work, and until then the startup log is where to look.
+
+### 🔁 Restoring a Backup on a Managed Instance: the Owner {: #restore-owner }
+
+A backup can come from any instance, and whoever prepared it can write anything in it, so on a managed instance nothing in its
+accounts, passwords or one-time links is trusted. When an administrator restores a backup from the app, the restore asks which
+account of that backup is the owner, and then, in one step:
+
+1. that account gets the address of `LIBREFOLIO_ADMIN_EMAIL`, becomes an active administrator and the **only** owner: the
+   owner mark of every other account is removed, so the owner the backup had is no longer protected;
+2. its password becomes unusable (nobody can sign in with the password the backup carried, whoever prepared it) and its
+   open sessions end;
+3. every one-time link of that account that the backup carried is cancelled: its password-reset links are deleted and its
+   other links (email verification, setup, email change) are revoked, whatever they said;
+4. one new password-reset link is emailed to the address of `LIBREFOLIO_ADMIN_EMAIL`, so the real owner chooses a password.
+
+If the email cannot go (email off or unusable, no `LIBREFOLIO_PUBLIC_URL`, the hourly limit, a refusal by the SMTP server), the
+link is written in the **log of the instance** as a `warning`, *Password-reset link for the instance owner*, and nowhere else:
+the report of the restore says only that the link is in the log, and never contains it, because the report can be read by any
+administrator. Pass the link to the owner. When the email went, the link is in no log.
+
+If the first start after the restore is repeated, the step is repeated too: the previous link stops working and a new one is
+sent. A restore made from the hosting panel does none of this. The whole restore is described in
+[Backup & Restore](backup_restore.md).
 
 ---
 

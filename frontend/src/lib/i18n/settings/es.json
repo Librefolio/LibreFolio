@@ -308,7 +308,7 @@
         "LAST_ADMIN": "El último administrador activo no se puede desactivar ni degradar.",
         "USER_LIMIT_REACHED": "La instancia está llena: primero libera una plaza (desactiva o elimina una cuenta, o revoca una invitación).",
         "REGISTRATION_DISABLED": "El registro está cerrado: no se pueden crear invitaciones.",
-        "ACCOUNT_PROTECTED": "Esta cuenta está protegida: nadie puede desactivarla, degradarla ni eliminarla.",
+        "ACCOUNT_PROTECTED": "Esta cuenta está protegida: desde aquí nadie puede desactivarla, degradarla, eliminarla, restablecer su contraseña ni cerrar sus sesiones. Si algo tiene que cambiar, pídeselo a quien aloja esta instancia.",
         "SELF_DELETION": "Elimina tu propia cuenta desde la pestaña Perfil.",
         "DEMOTE_FIRST": "Un administrador debe ser degradado antes de poder eliminarlo.",
         "NOT_FOUND": "Esta cuenta ya no existe: la lista se vuelve a cargar.",
@@ -419,6 +419,11 @@
       },
       "blockedScript": "Esta pestaña del navegador bloqueó un script que LibreFolio no envió ({sources}): lo añade un proxy, una CDN o una extensión del navegador. Desactiva esa inyección para este sitio.",
       "guide": "Guía"
+    },
+    "protectedEmail": {
+      "title": "Aquí no puedes cambiar el correo",
+      "message": "Es la dirección de correo del titular de la suscripción, así que no se puede cambiar desde LibreFolio. Pide a quien aloja esta instancia que la cambie.",
+      "support": "Contactar con soporte"
     }
   }
 }

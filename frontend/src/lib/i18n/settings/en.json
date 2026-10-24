@@ -308,7 +308,7 @@
         "LAST_ADMIN": "The last active administrator can be neither deactivated nor demoted.",
         "USER_LIMIT_REACHED": "The instance is full: free a place first (deactivate or delete an account, or revoke an invitation).",
         "REGISTRATION_DISABLED": "Registration is closed: no invitation can be created.",
-        "ACCOUNT_PROTECTED": "This account is protected: nobody can deactivate, demote or delete it.",
+        "ACCOUNT_PROTECTED": "This account is protected: nobody can deactivate, demote, delete, reset or sign it out from here. Ask the host of this instance if something has to change.",
         "SELF_DELETION": "Delete your own account from the Profile tab.",
         "DEMOTE_FIRST": "An administrator must be demoted before it can be deleted.",
         "NOT_FOUND": "This account no longer exists: the list is reloaded.",
@@ -419,6 +419,11 @@
       },
       "blockedScript": "This browser tab blocked a script LibreFolio did not send ({sources}): a proxy, a CDN or a browser extension adds it. Turn that injection off for this site.",
       "guide": "Guide"
+    },
+    "protectedEmail": {
+      "title": "You can't change the email here",
+      "message": "This is the email address of the owner of the subscription, so it can't be changed from LibreFolio. Ask the host of this instance to change it.",
+      "support": "Contact support"
     }
   }
 }
