@@ -162,9 +162,10 @@ case of (f), a copy that cannot be removed, before B-31; those of (o) before B-3
     the test that needs them (``b33_name``, "[new] B-33 …"). Data directories of (r) are bare (no database) but for the
     confirmation; a call that may meet a FIFO runs in a thread given a deadline (``in_time``), its reader let go after.
 (s) Lot B5-1 (interface ``B-b51-interface.md`` §0, §3; written RED before it): the owner's choice at the confirmation.
-    ``confirm_restore(..., owner_user_id=None)``; ``RestoreState`` gains ``owner_user_id``, ``owner_outcome`` and
-    ``owner_reset_path``, all ``None`` by default — a state written before B5-1 reads them ``None``, and (e)'s state and
-    (h)'s ``STATE_FIELDS`` hold them too. In the ``managed`` profile (``LIBREFOLIO_PROFILE``), a confirmation via
+    ``confirm_restore(..., owner_user_id=None)``; ``RestoreState`` gains ``owner_user_id`` and ``owner_outcome``,
+    both ``None`` by default — a state written before B5-1 reads them ``None``, and (e)'s state and (h)'s
+    ``STATE_FIELDS`` hold them too; it has no ``owner_reset_path`` (R13 security review: the owner's link is never kept
+    in the state; a file that still has the key reads fine and the key is dropped). In the ``managed`` profile (``LIBREFOLIO_PROFILE``), a confirmation via
     ``admin`` must name the owner's account among the report's ``owner_candidates``: none, ``owner_choice_required``;
     ``LIBREFOLIO_ADMIN_EMAIL`` unset,
     ``owner_email_not_set``; an id that is no candidate, a candidate that is neither an active administrator nor the
@@ -230,6 +231,7 @@ from __future__ import annotations
 
 import dataclasses
 import fcntl
+import hashlib
 import importlib
 import inspect
 import json
@@ -1223,7 +1225,8 @@ def test_confirm_writes_a_pending_state_from_the_report_atomically_and_privately
         # Lot B5-1 (s): the owner's choice and what became of it, nothing for a self-hosted confirmation.
         "owner_user_id": None,
         "owner_outcome": None,
-        "owner_reset_path": None,
+        # Lot B5-1d: only the swap sets it.
+        "token_watermark": None,
     }
     assert state.model_dump() == expected, f"the state of a confirmed restore: {state.model_dump()}"
     written = state_file(instance.root)
@@ -3310,7 +3313,8 @@ def test_finish_leaves_a_restore_that_is_not_applied_alone(tmp_path, databases, 
 # =============================================================================
 
 #: The fields of a restore's state (contract §2): the commit adds none; its count of revoked links goes to the log.
-#: Lot B5-1 (s) adds the owner's three fields, written at the confirmation and after the first start, not by the commit.
+#: Lot B5-1 (s) adds the owner's two fields, written at the confirmation and after the first start, not by the commit;
+#: lot B5-1d adds ``token_watermark``, written by the swap.
 STATE_FIELDS = {
     "format",
     "status",
@@ -3331,7 +3335,7 @@ STATE_FIELDS = {
     "session_version",
     "owner_user_id",
     "owner_outcome",
-    "owner_reset_path",
+    "token_watermark",
 }
 #: How SQLAlchemy stores a datetime in SQLite: UTC, no offset, always six digits of microseconds.
 SQLALCHEMY_DATETIME = "%Y-%m-%d %H:%M:%S.%f"
@@ -3538,6 +3542,251 @@ async def test_the_commit_revokes_every_live_link_of_the_restored_database_at_th
     assert counted, f"the count of links revoked ({LIVE_RESTORED}) is logged, as a field of an event of the commit: {events}"
     assert set(json.loads(state_file(instance.root).read_text(encoding="utf-8"))) == set(apply.RestoreState.model_fields) == STATE_FIELDS, "the state gains no field: the count goes to the log only"
     print_success(f"{variant}: {len(live_ids)} live links revoked at {stored}")
+
+
+# -----------------------------------------------------------------------------
+# (h) Lot B5-1d: the token watermark. A link the same start issues before the commit (admin-bootstrap's /setup link on a
+# restore whose data has no account at all) is not the backup's: only the tokens the SWAPPED database held are revoked
+# -----------------------------------------------------------------------------
+
+#: A moment far from the restore, either side: ``created_at`` is written by whoever prepared the backup (or by the clock
+#: of the start), so the criterion to keep a token is its id against the watermark, never its date.
+FAR_FUTURE = datetime(2126, 1, 1, tzinfo=UTC)
+FAR_PAST = datetime(2001, 1, 1, tzinfo=UTC)
+#: The id of a token of the backup, far above the others: the watermark is exactly it.
+HUGE_TOKEN_ID = 1_000_000
+
+
+def put_token(database: Path, name: str, *, created_at: datetime, token_id: int | None = None, user_id: int | None = None, consumed: bool = False, revoked: bool = False) -> int:
+    """One ``account_tokens`` row written by hand with sqlite3 (an invitation: no account needed), its id returned. The hash
+    is the SHA-256 of ``name``; ``consumed`` / ``revoked`` ``ACTED_AFTER`` its issue. Stored as SQLAlchemy stores a datetime."""
+
+    def stored(moment: datetime) -> str:
+        return moment.astimezone(UTC).replace(tzinfo=None).isoformat(sep=" ", timespec="microseconds")
+
+    acted = stored(created_at + ACTED_AFTER)
+    with closing(sqlite3.connect(database)) as conn, conn:
+        cursor = conn.execute(
+            "INSERT INTO account_tokens (id, purpose, token_hash, user_id, email, grants_admin, created_at, expires_at, consumed_at, revoked_at) VALUES (?, 'invite', ?, ?, ?, 0, ?, ?, ?, ?)",
+            (token_id, hashlib.sha256(name.encode()).hexdigest(), user_id, f"{name}@example.test", stored(created_at), stored(created_at + timedelta(days=1)), acted if consumed else None, acted if revoked else None),
+        )
+        return int(cursor.lastrowid)
+
+
+def token_rows(database: Path) -> dict[int, tuple[str | None, str | None]]:
+    """Each token's (consumed_at, revoked_at) by id."""
+    return {token_id: (consumed_at, revoked_at) for token_id, consumed_at, revoked_at in cases.rows_of(database, "SELECT id, consumed_at, revoked_at FROM account_tokens")}
+
+
+def revoked_count_logged(events: list[dict[str, Any]]) -> list[Any]:
+    return [event["links_revoked"] for event in events if "links_revoked" in event]
+
+
+def raw_state(instance: Instance) -> dict[str, Any]:
+    return json.loads(state_file(instance.root).read_text(encoding="utf-8"))
+
+
+def backup_tokens_into(instance: Instance, *, with_users: bool = True) -> dict[str, int]:
+    """The tokens of the backup, in the checked copy before the restore: a live one now, a live one dated in the FUTURE, a
+    live one with the largest id (``HUGE_TOKEN_ID``, dated in the future), a consumed and a revoked one. Their ids by name."""
+    database = instance.copy / DATABASE_ENTRY
+    when = instance.report.staged_at
+    ids = {
+        "live": put_token(database, "b5d-live", created_at=when),
+        "live-future": put_token(database, "b5d-live-future", created_at=FAR_FUTURE),
+        "consumed": put_token(database, "b5d-consumed", created_at=when - timedelta(days=3), consumed=True),
+        "revoked": put_token(database, "b5d-revoked", created_at=when - timedelta(days=2), revoked=True),
+        "live-huge-id": put_token(database, "b5d-live-huge", created_at=FAR_FUTURE, token_id=HUGE_TOKEN_ID),
+    }
+    with closing(sqlite3.connect(database)) as conn:
+        conn.execute("PRAGMA journal_mode=DELETE")
+    return ids
+
+
+def bootstrap_after_the_swap(instance: Instance, created_at: datetime, name: str = "b5d-bootstrap") -> tuple[int, int]:
+    """What ``admin-bootstrap`` does in the same start, between the swap and the commit: an administrator and the /setup
+    link for it, written into the swapped database. (the user's id, the token's id)"""
+    database = instance.root / DATABASE_ENTRY
+    cases.add_accounts(database, [(f"{name}_admin", 1, 1)])
+    user_id = cases.rows_of(database, f"SELECT id FROM users WHERE username = '{name}_admin'")[0][0]
+    return user_id, put_token(database, name, created_at=created_at, user_id=user_id)
+
+
+def swapped(apply: Any, instance: Instance) -> Any:
+    """``confirm_restore`` then ``apply_pending_restore`` in this boot: the ``applied`` state."""
+    confirm(apply, instance)
+    state = apply.apply_pending_restore(instance.root, boot=never_ran(apply), now=instance.applied_at)
+    assert state is not None and state.status == "applied", f"precondition: the swap is applied: {state}"
+    return state
+
+
+def _no_table(database: Path) -> None:
+    """A backup database without ``account_tokens``: a database of before the table, with only a ``users``."""
+    database.unlink()
+    with closing(sqlite3.connect(database)) as conn, conn:
+        conn.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, session_version INTEGER NOT NULL DEFAULT 0)")
+
+
+def _unreadable(database: Path) -> None:
+    database.write_bytes(b"this is not a SQLite database " * 64)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("shape", ["restored-links", "no-tokens", "no-table", "unreadable"])
+async def test_the_swap_records_the_largest_token_id_of_the_backup_as_the_watermark(tmp_path, databases, checked, shape):
+    """(h) B5-1d: ``apply_pending_restore`` records ``token_watermark`` in the ``applied`` state, in ``restore.json`` too: the
+    largest ``account_tokens.id`` of the swapped database (an int); ``0`` when the backup has no token or no table; ``None``
+    when the database cannot be read (fail closed). Read from the swapped database only, never from the state or the clock."""
+    print_section(f"(h) B5-1d token watermark: {shape}")
+    apply = apply_module()
+    assert "token_watermark" in apply.RestoreState.model_fields, "[new] B5-1d: RestoreState.token_watermark (int | None, default None)"
+    instance = build(tmp_path / "instance", databases, checked)
+    database = instance.copy / DATABASE_ENTRY
+    if shape == "restored-links":
+        links = await written(database, RESTORED_LINKS, instance.report.staged_at)
+        expected: int | None = max(link.token_id for link in links)
+        assert cases.rows_of(database, "SELECT MAX(id) FROM account_tokens") == [(expected,)], "precondition: the largest id of the backup"
+    elif shape == "no-tokens":
+        assert cases.rows_of(database, "SELECT COUNT(*) FROM account_tokens") == [(0,)], "precondition: the backup holds no token"
+        expected = 0
+    elif shape == "no-table":
+        _no_table(database)
+        expected = 0
+    else:
+        _unreadable(database)
+        expected = None
+    state = swapped(apply, instance)
+    assert state.token_watermark == expected, f"{shape}: the watermark in the state returned: {state.token_watermark!r}, not {expected!r}"
+    assert raw_state(instance).get("token_watermark", "<missing>") == expected, f"{shape}: and in restore.json: {raw_state(instance)}"
+    assert apply.read_restore(instance.root).token_watermark == expected, f"{shape}: and in what read_restore reads"
+    print_success(f"{shape}: watermark {expected!r}")
+
+
+def test_a_state_has_no_watermark_until_the_swap(tmp_path, databases, checked):
+    """(h) B5-1d: a confirmed restore not yet applied holds ``token_watermark`` ``None``: only the swap sets it."""
+    apply = apply_module()
+    assert "token_watermark" in apply.RestoreState.model_fields, "[new] B5-1d: RestoreState.token_watermark (int | None, default None)"
+    instance = build(tmp_path / "instance", databases, checked)
+    state = confirm(apply, instance)
+    assert state.token_watermark is None, f"pending: no watermark: {state.token_watermark!r}"
+    print_success("pending: None")
+
+
+@pytest.mark.parametrize(
+    "created_at",
+    [pytest.param(FAR_FUTURE, id="issued-in-the-far-future"), pytest.param(FAR_PAST, id="issued-in-the-far-past"), pytest.param(None, id="issued-at-the-restore-time")],
+)
+def test_a_token_the_same_start_issues_after_the_swap_survives_the_commit(tmp_path, databases, checked, created_at):
+    """(h) B5-1d: a token written into the swapped database between the swap and the commit (admin-bootstrap's /setup link)
+    has an id above the watermark: ``revoked_at`` stays ``NULL`` whatever its ``created_at`` says; the backup's live tokens
+    are revoked. Every account still gets the restore time as its session version."""
+    apply = apply_module()
+    instance = build(tmp_path / "instance", databases, checked)
+    backup = backup_tokens_into(instance)
+    now = restore_time_of(instance, "utc")
+    state = swapped(apply, instance)
+    assert state.token_watermark == HUGE_TOKEN_ID, f"precondition: the watermark is the backup's largest id: {state.token_watermark!r}"
+    _user, issued = bootstrap_after_the_swap(instance, created_at or now)
+    assert issued > state.token_watermark, f"precondition: the new token is above the watermark: {issued} / {state.token_watermark}"
+    with logs() as events:
+        committed = apply.finish_pending_restore(instance.root, boot=never_ran(apply), now=now)
+    assert committed.status == "committed" and committed.session_version == millis(now), f"committed, every account at the restore time: {committed}"
+    rows = token_rows(instance.root / DATABASE_ENTRY)
+    assert rows[issued] == (None, None), f"the token this start issued is untouched: {rows[issued]}"
+    stored = now.astimezone(UTC).strftime(SQLALCHEMY_DATETIME)
+    assert [rows[backup[name]][1] for name in ("live", "live-future", "live-huge-id")] == [stored] * 3, f"the backup's live tokens revoked at the restore time: {rows}"
+    assert revoked_count_logged(events) == [3], f"links_revoked counts only what was revoked: {revoked_count_logged(events)}"
+    print_success("a token above the watermark survives")
+
+
+@pytest.mark.parametrize("created_at", [pytest.param(FAR_FUTURE, id="issued-in-the-far-future"), pytest.param(FAR_PAST, id="issued-in-the-far-past")])
+def test_a_restore_whose_data_has_no_account_keeps_the_bootstrap_link(tmp_path, databases, checked, created_at):
+    """(h) B5-1d, the case: the restored data has no account and no token; the start's admin-bootstrap then creates the
+    first administrator and its /setup link before the commit. The watermark is ``0``, the link survives the commit and
+    nothing was counted as revoked; the administrator gets the restore time as its session version."""
+    apply = apply_module()
+    instance = build(tmp_path / "instance", databases, checked)
+    database = instance.copy / DATABASE_ENTRY
+    cases.execute(database, "DELETE FROM users", "DELETE FROM account_tokens")
+    now = restore_time_of(instance, "utc")
+    state = swapped(apply, instance)
+    assert state.token_watermark == 0, f"no token in the backup: the watermark is 0: {state.token_watermark!r}"
+    user_id, issued = bootstrap_after_the_swap(instance, created_at)
+    with logs() as events:
+        committed = apply.finish_pending_restore(instance.root, boot=never_ran(apply), now=now)
+    assert committed.status == "committed", f"committed: {committed}"
+    assert token_rows(instance.root / DATABASE_ENTRY) == {issued: (None, None)}, "the /setup link of the first administrator is live"
+    assert cases.rows_of(instance.root / DATABASE_ENTRY, f"SELECT session_version FROM users WHERE id = {user_id}") == [(millis(now),)], "its session version is the restore time"
+    assert revoked_count_logged(events) == [0], f"nothing revoked: {revoked_count_logged(events)}"
+    print_success("no account in the backup: the bootstrap link lives")
+
+
+def test_the_commit_revokes_the_backup_s_live_tokens_even_when_planted_to_look_new(tmp_path, databases, checked):
+    """(h) B5-1d, security: the criterion comes from this process (the id against the watermark), never from the restored
+    database. Live tokens of the backup — one with a ``created_at`` in the future, one with the largest id (equal to the
+    watermark) — are revoked at the restore time; the consumed one and the one revoked before keep what they had."""
+    apply = apply_module()
+    instance = build(tmp_path / "instance", databases, checked)
+    backup = backup_tokens_into(instance)
+    before = token_rows(instance.copy / DATABASE_ENTRY)
+    now = restore_time_of(instance, "utc")
+    swapped(apply, instance)
+    with logs() as events:
+        apply.finish_pending_restore(instance.root, boot=never_ran(apply), now=now)
+    rows = token_rows(instance.root / DATABASE_ENTRY)
+    stored = now.astimezone(UTC).strftime(SQLALCHEMY_DATETIME)
+    live = ("live", "live-future", "live-huge-id")
+    assert {name: rows[backup[name]][1] for name in live} == dict.fromkeys(live, stored), f"live, future-dated and largest-id tokens revoked at the restore time: {rows}"
+    assert rows[backup["consumed"]] == before[backup["consumed"]] and rows[backup["revoked"]] == before[backup["revoked"]], f"consumed and already revoked tokens untouched: {rows}"
+    assert rows[backup["consumed"]][1] is None and rows[backup["revoked"]][1] is not None, "precondition: they differ in what they had"
+    assert revoked_count_logged(events) == [len(live)], f"links_revoked counts only what was revoked: {revoked_count_logged(events)}"
+    print_success("the backup's live tokens revoked, planted dates or not")
+
+
+@pytest.mark.parametrize("created_at", [pytest.param(FAR_FUTURE, id="issued-in-the-far-future"), pytest.param(None, id="issued-at-the-restore-time")])
+def test_a_state_without_a_watermark_revokes_every_live_token_as_before(tmp_path, databases, checked, created_at):
+    """(h) B5-1d: an ``applied`` state written without the key (as an older server leaves it) reads ``token_watermark``
+    ``None``: the commit revokes every live token of the database, one issued after the swap included."""
+    apply = apply_module()
+    instance = build(tmp_path / "instance", databases, checked)
+    backup = backup_tokens_into(instance)
+    now = restore_time_of(instance, "utc")
+    swapped(apply, instance)
+    record = raw_state(instance)
+    assert "token_watermark" in record, "[new] B5-1d: the swap wrote token_watermark (the next lines remove it by hand)"
+    del record["token_watermark"]
+    state_file(instance.root).write_text(json.dumps(record), encoding="utf-8")
+    state_file(instance.root).chmod(0o600)
+    assert apply.read_restore(instance.root).token_watermark is None, "a state without the key reads None"
+    _user, issued = bootstrap_after_the_swap(instance, created_at or now)
+    with logs() as events:
+        apply.finish_pending_restore(instance.root, boot=never_ran(apply), now=now)
+    rows = token_rows(instance.root / DATABASE_ENTRY)
+    stored = now.astimezone(UTC).strftime(SQLALCHEMY_DATETIME)
+    revoked = {token_id for token_id, (_consumed, revoked_at) in rows.items() if revoked_at == stored}
+    assert revoked == {backup["live"], backup["live-future"], backup["live-huge-id"], issued}, f"every live token revoked, the new one too: {rows}"
+    assert revoked_count_logged(events) == [4], f"links_revoked: {revoked_count_logged(events)}"
+    print_success("no watermark: all live tokens revoked")
+
+
+def test_an_unreadable_database_at_the_swap_fails_closed_at_the_commit(tmp_path, databases, checked):
+    """(h) B5-1d: the watermark is ``None`` when the swapped database could not be read; the commit then revokes every live
+    token (here, the database became readable again before the commit: a copy of the backup's, with a token issued after)."""
+    apply = apply_module()
+    instance = build(tmp_path / "instance", databases, checked)
+    _unreadable(instance.copy / DATABASE_ENTRY)
+    swapped(apply, instance)
+    assert raw_state(instance).get("token_watermark", "<missing>") is None, "precondition: the swap could not read the database: None"
+    database = instance.root / DATABASE_ENTRY
+    shutil.copyfile(databases.head, database)
+    now = restore_time_of(instance, "utc")
+    issued = put_token(database, "b5d-after", created_at=now)
+    with logs() as events:
+        apply.finish_pending_restore(instance.root, boot=never_ran(apply), now=now)
+    stored = now.astimezone(UTC).strftime(SQLALCHEMY_DATETIME)
+    assert token_rows(database)[issued][1] == stored, "no watermark: the live token is revoked"
+    assert revoked_count_logged(events) == [1], f"links_revoked: {revoked_count_logged(events)}"
+    print_success("unreadable at the swap: fail closed")
 
 
 @pytest.mark.asyncio
@@ -4643,9 +4892,11 @@ def but_the_apply_lock(root: Path) -> dict[str, tuple]:
     return {name: value for name, value in restore_items(root).items() if name != APPLY_LOCK_NAME}
 
 
-def on_disk_owner(root: Path) -> tuple[object, object, object]:
+def on_disk_owner(root: Path) -> tuple[object, object]:
+    """The owner's keys of ``restore.json``: id, outcome. The file never holds an ``owner_reset_path`` key."""
     record = json.loads(state_file(root).read_text(encoding="utf-8"))
-    return tuple(record.get(name, "<missing>") for name in ("owner_user_id", "owner_outcome", "owner_reset_path"))
+    assert "owner_reset_path" not in record, f"no owner_reset_path key in the state: {sorted(record)}"
+    return tuple(record.get(name, "<missing>") for name in ("owner_user_id", "owner_outcome"))
 
 
 #: (the candidates, the owner's email, the id chosen, the code of the refusal).
@@ -4705,15 +4956,15 @@ ALLOWED_CHOICES = [
 @pytest.mark.parametrize(("candidates", "chosen"), ALLOWED_CHOICES)
 def test_a_managed_confirmation_with_a_valid_owner_choice_records_it(tmp_path, databases, checked, monkeypatch, candidates, chosen):
     """(s) B5-1: the choice the candidates allow is confirmed: ``pending``, ``owner_user_id`` the id chosen in the state
-    returned, in ``restore.json`` and in what ``read_restore`` reads; ``owner_outcome`` and ``owner_reset_path`` ``None``
-    (only the first start writes them)."""
+    returned, in ``restore.json`` and in what ``read_restore`` reads; ``owner_outcome`` ``None``
+    (only the first start writes it), and no ``owner_reset_path`` key in the file."""
     print_section("(s) B5-1 an owner choice recorded")
     apply = apply_module()
     b51_parameter(apply.confirm_restore, "owner_user_id")
     instance = owner_case(tmp_path, databases, checked, monkeypatch, profile="managed", owner_email=OWNER_EMAIL, candidates=candidates)
     state = apply.confirm_restore(instance.stage_id, confirmed_by=CONFIRMED_BY, confirmed_via="admin", owner_user_id=chosen, data_dir=instance.root, now=instance.confirm_at)
-    assert (state.status, state.owner_user_id, state.owner_outcome, state.owner_reset_path) == ("pending", chosen, None, None), f"pending, the owner {chosen} recorded: {state}"
-    assert on_disk_owner(instance.root) == (chosen, None, None), f"restore.json records the owner {chosen}: {on_disk_owner(instance.root)}"
+    assert (state.status, state.owner_user_id, state.owner_outcome) == ("pending", chosen, None), f"pending, the owner {chosen} recorded: {state}"
+    assert on_disk_owner(instance.root) == (chosen, None), f"restore.json records the owner {chosen}: {on_disk_owner(instance.root)}"
     assert apply.read_restore(instance.root).owner_user_id == chosen, "read_restore reads it back"
     print_success(f"owner {chosen} recorded")
 
@@ -4726,7 +4977,7 @@ def test_a_self_hosted_confirmation_asks_no_owner(tmp_path, databases, checked, 
     instance = owner_case(tmp_path, databases, checked, monkeypatch, profile="selfhosted", owner_email=OWNER_EMAIL, candidates=[ADA, OWEN, ZOE])
     state = apply.confirm_restore(instance.stage_id, confirmed_by=CONFIRMED_BY, confirmed_via="admin", owner_user_id=None, data_dir=instance.root, now=instance.confirm_at)
     assert (state.status, state.owner_user_id) == ("pending", None), f"self-hosted: pending, no owner: {state}"
-    assert on_disk_owner(instance.root) == (None, None, None), f"restore.json: no owner: {on_disk_owner(instance.root)}"
+    assert on_disk_owner(instance.root) == (None, None), f"restore.json: no owner: {on_disk_owner(instance.root)}"
     print_success("selfhosted: no owner asked")
 
 
@@ -4740,7 +4991,7 @@ def test_a_managed_confirmation_via_the_panel_or_the_command_line_never_needs_an
     instance = owner_case(tmp_path, databases, checked, monkeypatch, profile="managed", owner_email=owner_email, candidates=[ADA, OWEN, ZOE])
     state = apply.confirm_restore(instance.stage_id, confirmed_by=via, confirmed_via=via, data_dir=instance.root, now=instance.confirm_at)
     assert (state.status, state.confirmed_via, state.owner_user_id) == ("pending", via, None), f"managed via {via}: pending, no owner: {state}"
-    assert on_disk_owner(instance.root) == (None, None, None), f"restore.json: no owner: {on_disk_owner(instance.root)}"
+    assert on_disk_owner(instance.root) == (None, None), f"restore.json: no owner: {on_disk_owner(instance.root)}"
     print_success(f"managed via {via}: no owner needed")
 
 
@@ -4757,7 +5008,7 @@ def test_confirm_check_hands_the_owner_choice_to_confirm_restore(tmp_path, datab
 
 def test_a_state_written_before_b5_1_reads_no_owner(tmp_path):
     """(s) B5-1: ``restore.json`` without the owner's keys — every state written before B5-1 — still reads, its
-    ``owner_user_id``, ``owner_outcome`` and ``owner_reset_path`` ``None``."""
+    ``owner_user_id`` and ``owner_outcome`` ``None``, and it has no ``owner_reset_path`` at all."""
     apply = apply_module()
     root = tmp_path / "instance"
     root.mkdir(mode=0o700)
@@ -4779,8 +5030,9 @@ def test_a_state_written_before_b5_1_reads_no_owner(tmp_path):
     state_file(root).chmod(0o600)
     state = apply.read_restore(root)
     assert state is not None, "precondition: a state of before B5-1 is read"
-    owner = tuple(getattr(state, name, "<missing>") for name in ("owner_user_id", "owner_outcome", "owner_reset_path"))
-    assert owner == (None, None, None), f"no owner: {owner}"
+    owner = tuple(getattr(state, name, "<missing>") for name in ("owner_user_id", "owner_outcome"))
+    assert owner == (None, None), f"no owner: {owner}"
+    assert not hasattr(state, "owner_reset_path"), "the state has no owner_reset_path"
     print_success("no keys: no owner")
 
 
