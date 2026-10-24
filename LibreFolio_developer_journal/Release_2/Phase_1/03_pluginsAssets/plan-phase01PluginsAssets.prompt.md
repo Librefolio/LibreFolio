@@ -9170,3 +9170,57 @@ revisioni) aspettano i loro segnali (Y5-1 committato; il via del coordinatore).
    `fx-unit` **165/165**, `front-asset asset-detail` **56/56**; Prettier `--check` pulito sui file toccati.
 5. ✅ 23/10 · Doc (EN): `user/fx/detail/chart.en.md` («Rolling Return»), `signals.en.md`, `developer/frontend/components/charts.md` (sezione
    del cambio; corretto il paragrafo dell'asset, che diceva ancora «mai persistita»). Debito di traduzione: `chart` e `signals` it/fr/es.
+
+### X5-F4b · `is_benchmark` nella pagina del cambio e test di cablaggio delle quattro pagine (24/10, base `9e7c65ab1`)
+
+Nata dalla mia revisione di Y5-F4 (`cf9d58ec0`): il commit di Y porta `currency` e `is_benchmark` ad `availableAssets` di tre pagine su
+quattro; il dettaglio del cambio (`fx/[pair]/+page.svelte`) no, quindi lì il selettore di confronto non mostra mai la sezione «Benchmark».
+
+1. ✅ 24/10 · Rosso: `lib/charts/__tests__/comparisonAssetsFeed.wiring.test.ts` (16 casi, 4 pagine × 4 proprietà), registrato in
+   `_frontend_utility.py`. Sul mio ramo (senza il commit di Y): **5 rossi** — `is_benchmark` su tutte e quattro le pagine, `currency` sulla lista
+   degli asset. Il rosso del dettaglio del cambio è il difetto reale.
+2. ✅ 24/10 · Cura: `fx/[pair]/+page.svelte` tipo di `allAssets` e mappa di `loadAssetList` con `is_benchmark: a.is_benchmark === true`.
+   Sul mio ramo restano 4 rossi, tutti per il codice di Y non ancora dentro; sui sorgenti di `cf9d58ec0` (copiati in una cartella
+   temporanea, poi tolta) il test dà 15/16 e l'unico rosso è proprio il dettaglio del cambio, curato qui: dopo il merge è tutto verde.
+   `front check` 0/0, Prettier pulito, `chartPageSignals` + `fxDetailRollingReturn.wiring` 119/119.
+
+### X5-3 · N68: il cambio di valuta non è più bloccato; «Ricollega eventi» (24/10, base `9e7c65ab1`)
+
+Decisione del developer (19/10): niente blocco al cambio di valuta, gli split sopravvivono, un bottone «Ricollega eventi» in Transazioni. Le due scelte
+che il brief non scriveva le ha confermate il coordinatore il 24/10 (registrate come sue, il developer può cambiarle): **(A)** la PATCH passa sempre e,
+nella stessa transazione, cancella i prezzi e gli eventi non-SPLIT, scollega le transazioni di quegli eventi e conserva gli SPLIT con le loro
+rettifiche; **candidato** = stesso asset, **stessa data**, tipo corrispondente (nessuna finestra di date, nessun collegamento automatico: `TODO_FUTURI`).
+
+1. ✅ 24/10 · Rossi (`test-author`, backend): `test_asset_currency_change.py` riscritto (8), `test_market_data_wipe.py` (7), `test_assets_crud.py`
+   (flusso summary/wipe con SPLIT), `test_asset_source.py` (wipe e p05: le SELECT non crescono con gli asset), `test_routes_generic_500.py`
+   (via il ramo 409 del wipe), `test_provider_core_cache.py` (+3, la PATCH svuota le cache del provider), nuovi `test_market_data_wipe_keeps_splits.py`
+   (13, al posto di `test_market_data_wipe_split_guard.py`) e `test_event_reconciliation_api.py` (10). Primo giro: tutti rossi per il motivo giusto
+   (PATCH bloccata dal token, 409 del wipe, `splits_kept` assente, rotta 404), le guardie verdi.
+2. ✅ 24/10 · Cura backend. `currency_change.py`: `events_that_go`, `delete_market_data_of_assets` (3 istruzioni, qualunque numero di asset),
+   `provider_cache_keys`, `drop_provider_caches`; il wipe non cancella più gli SPLIT, riepilogo con `splits_kept`, via `_reject_wipe_of_costless_split_adjustments`
+   (resta `split_guard` per X-R49). `crud.py` `patch_assets_bulk`: via il blocco e il token, gli asset la cui valuta è davvero cambiata (confronto prima/dopo il ciclo,
+   quindi anche se un campo successivo dell'elemento fallisce) perdono prezzi ed eventi non-SPLIT nella stessa transazione; cache del provider dopo il commit.
+   `api/v1/assets/crud.py`: via il 409 «tutti bloccati». `market_data.py`: via il 409 X-R48. NUOVO `GET /transactions/event-reconciliation` (`TXEventReconciliationItem`,
+   `TransactionEventSuggestionsMixin.event_reconciliation`, che riusa `suggest_events_bulk` con `tolerance_days=0`; solo broker dove il chiamante è almeno Editor).
+   `api sync` rigenerato.
+   > **⚠️ Fuori pista**: il collegamento non è un `PATCH /transactions` (non esiste): è `POST /transactions/commit` con `updates: [{id, asset_event_id}]`. La mappa degli
+   > ADJUSTMENT è quella già esistente di `suggest_events_bulk` (PRICE_ADJUSTMENT **o** SPLIT), più larga del «ADJUSTMENT↔SPLIT» che avevo scritto nella domanda.
+3. ✅ 24/10 · Rossi frontend (`test-author`): `currencyImpact.test.ts`, `eventReconciliation.test.ts`, `EventReconciliationModal.test.ts`, `AssetCurrencyChangeModal.test.ts` riscritto,
+   `AssetModal.currencyChange.test.ts` (nuovo), `currencyChangeErrors.test.ts`, wiring del bottone; E2E `tx-event-reconciliation.spec.ts` (6), `asset-currency-change.spec.ts` (1)
+   e `tx-import-asset-inspector` adattato. Vitest: 7 file rossi (47 test) prima della cura.
+4. ✅ 24/10 · Cura frontend. `currencyImpact.ts` (il riepilogo a vuoto è un **cancello**: se fallisce il salvataggio fallisce, a differenza del dry-run dei fornitori che è un consiglio),
+   `AssetModal.saveEdit` lo chiede prima di ogni PATCH e apre la modale solo se c'è qualcosa da perdere (gli split da soli non bastano), `AssetCurrencyChangeModal` fa **una** PATCH
+   poi la sincronizzazione (niente passo «wipe», `data-step` sul progresso, riga `currency-change-summary-splits`), via `currencyBlocker.ts` e il ramo X-R48 di `currencyChangeErrors.ts`;
+   `eventReconciliation.ts` + `EventReconciliationModal.svelte`; bottone `tx-reconcile-events-button` in `transactions/+page.svelte` (l'`onlinked` ricarica la pagina). i18n in 4 lingue:
+   `assetDetail.currencyChange.*` (stesso vocabolario di X5-1) e `transactions.reconcile.*`; Vitest dalle cartelle toccate 3783/3786 (i 3 rossi sono `GapFixStep.test.ts`, formattazione
+   per locale, non toccato).
+5. ✅ 24/10 · Prove (un solo lucchetto, `X-n68-verify`): `api assets-crud` 35, `asset-currency-change` 8, `market-data-wipe` 7, `event-reconciliation` 10, `services
+   market-data-wipe-keeps-splits` 13, `asset-source` 61/62 (il rosso era `test_yfinance_history_uses_native_max_for_min_start`, **un avanzo di X5-2**: la chiamata ora porta
+   `auto_adjust=False`; test corretto, verde), `routes-generic-500` 34, `provider-core-cache` 49; `core-unit` 10513/10517 (i 4 rossi sono `comparisonAssetsFeed.wiring` di X5-F4b,
+   che chiede il codice di Y: attesi fino al merge), `component-unit` 5631/5631; E2E `asset-modal` 22, `asset-detail` 56, **nuovi** `tx-event-reconciliation` 6, `asset-currency-change` 1,
+   `tx-import-asset-inspector` 5 (tutti verdi; i rossi li ho visti solo come Vitest: gli E2E sono andati in coda dopo la cura). `front check` 0/0, `i18n check`/`audit` puliti, Prettier pulito.
+   > **⚠️ Fuori pista**: dopo `api sync` la rotta nuova ha fatto superare al compilatore il limite di profondità dei tipi in 6 test che fanno `vi.spyOn(zodiosApi, alias)`
+   > («Type instantiation is excessively deep»). Ho messo `frontend/src/__tests__/spyOnApi.ts` (stesso spy, tipo largo) e l'ho usato nei 5 file toccati; tornerà a capitare
+   > a ogni aggiunta di operazioni: chi scrive un nuovo spy sul client usi l'aiuto.
+6. ⏳ Doc in inglese scritta (docs-writer: `create-edit`, `transactions/index`, `events`, `architecture`, `service`, `wac`…), ma `mkdocs build` e `check-links` sono ancora in coda
+   sul lucchetto: log `/tmp/libreFolio_docs_n68_build.log` e `…_links.log`. Debito di traduzione: `user/assets/create-edit` e `user/transactions/index` (it/fr/es).

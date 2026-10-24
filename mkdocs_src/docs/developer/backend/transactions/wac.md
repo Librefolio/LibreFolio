@@ -605,18 +605,20 @@ unknown cost therefore comes from:
   [Split-linked adjustment skip](#split-linked-adjustment-skip)), so without the
   split its units would have an unknown cost. Since P-10 the app refuses to take
   the split away while such a row has no cost: the retype answers 409
-  `EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST`, the market-data wipe of a currency change
-  409 `MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST`, and new parameters for a
+  `EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST`, and new parameters for a
   Scheduled Investment plan, or leaving the plan for another provider, 409
   `PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST` when the split is one the plan
   generated (see
   [Parametric Provider Change](../assets/events.md#parametric-provider-change));
-  once the row has a cost, 0 included, all three go through
+  once the row has a cost, 0 included, both go through
   (`test_forward_split_whose_adjustment_has_no_cost_is_retyped_only_once_the_adjustment_has_one`
   in `backend/test_scripts/test_api/test_portfolio_wac.py` for the retype;
-  `test_market_data_wipe_split_guard.py` and `test_provider_wipe_split_guard.py` in
-  `backend/test_scripts/test_services/` for the two wipes). Removing the provider
-  altogether never takes such a split away either: **No Provider**
+  `test_provider_wipe_split_guard.py` in `backend/test_scripts/test_services/` for
+  the provider change). The market-data wipe of a currency change needs no such
+  refusal since N68: it never deletes a `SPLIT`, so the adjustments keep their link
+  and their cost whatever it was (`test_market_data_wipe_keeps_splits.py`, same
+  folder; see [Market-Data Wipe](../assets/events.md#market-data-wipe)). Removing the provider
+  altogether never takes such a split away: **No Provider**
   (`DELETE /api/v1/assets/provider`) answers the same 409
   `PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST` while a split the provider
   generated has such an adjustment (see

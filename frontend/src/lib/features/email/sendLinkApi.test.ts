@@ -40,8 +40,9 @@ vi.mock('$lib/features/instance/instanceConfig.svelte', () => ({
     },
 }));
 
-import {ApiError, axiosInstance, zodiosApi} from '$lib/api';
+import {ApiError, axiosInstance} from '$lib/api';
 import {readLinkSendFailure, sendByEmailVisible, sendLinkByEmail, tokenFromLink, type LinkSendFailure} from './sendLinkApi';
+import {spyOnApi} from '$test/spyOnApi';
 
 const ALIAS = 'send_link_api_v1_email_links_post';
 const TOKEN = 'inv-Token_0123';
@@ -135,7 +136,7 @@ describe('sendLinkByEmail — through its alias', () => {
         {label: 'an invitation with an empty address', request: {purpose: 'invite', token: TOKEN, to: ''}, body: {purpose: 'invite', token: TOKEN}},
         {label: 'a reset link', request: {purpose: 'password_reset', token: TOKEN}, body: {purpose: 'password_reset', token: TOKEN}},
     ])('SLA-03: $label — posts exactly its body, once', async ({request, body}) => {
-        const alias = vi.spyOn(zodiosApi, ALIAS).mockResolvedValueOnce(ANSWER);
+        const alias = spyOnApi(ALIAS).mockResolvedValueOnce(ANSWER);
 
         await sendLinkByEmail(request);
 
@@ -144,11 +145,11 @@ describe('sendLinkByEmail — through its alias', () => {
     });
 
     it('SLA-04: answers {to, language} alone, and a refusal reaches the caller as raised', async () => {
-        vi.spyOn(zodiosApi, ALIAS).mockResolvedValueOnce(ANSWER);
+        spyOnApi(ALIAS).mockResolvedValueOnce(ANSWER);
         await expect(sendLinkByEmail({purpose: 'invite', token: TOKEN})).resolves.toStrictEqual({to: 'zq-guest@example.com', language: 'it'});
 
         const refusal = axiosRefusal(409, {detail: {error_code: 'EMAIL_LINK_INVALID', status: 'expired'}});
-        vi.spyOn(zodiosApi, ALIAS).mockRejectedValueOnce(refusal);
+        spyOnApi(ALIAS).mockRejectedValueOnce(refusal);
         await expect(sendLinkByEmail({purpose: 'invite', token: TOKEN})).rejects.toBe(refusal);
     });
 
@@ -166,7 +167,7 @@ describe('sendLinkByEmail — through its alias', () => {
             body: {purpose: 'invite', token: TOKEN, to: 'zq-guest@example.com'},
         },
     ])('SLA-15: $label — posts exactly its body, language only when one is given, once', async ({request, body}) => {
-        const alias = vi.spyOn(zodiosApi, ALIAS).mockResolvedValueOnce(ANSWER);
+        const alias = spyOnApi(ALIAS).mockResolvedValueOnce(ANSWER);
 
         await sendLinkByEmail(request);
 

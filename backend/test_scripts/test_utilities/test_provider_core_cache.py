@@ -61,6 +61,7 @@ from backend.app.services.assets import refresh as refresh_operations
 from backend.app.services.assets import search as search_operations
 from backend.app.services.assets.base import AssetSourceError, AssetSourceProvider
 from backend.app.services.assets.core import _asset_current_cache, _asset_history_cache, _asset_metadata_cache, _run_provider_in_thread, _search_query_cache, _search_result_cache
+from backend.app.services.assets.crud import AssetCRUDService
 from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.plugin_settings.fields import PluginSettingField, SettingOption, SettingScope, SettingType, env_name
@@ -1019,6 +1020,50 @@ class TestAssetCacheKeysAcrossPaths:
         assert (summary["prices"], summary["dry_run"]) == (2, False)
         assert await _stored_days(private_engine, asset_id) == []
         print_success("wiped, nothing raised")
+
+    # -- N68: the currency PATCH drops the entries, as the wipe does --------------------------------------------------
+
+    @pytest.mark.parametrize(("identifier_type", "has_identifier"), _ASSIGNMENT_SHAPES)
+    async def test_n68_currency_patch_drops_the_history_and_current_value_the_refresh_cached(self, private_engine, quotes, identifier_type, has_identifier):
+        """N68: the currency PATCH of an asset that has prices does what the wipe did before it, caches included.
+
+        After the PATCH, the next refresh asks the provider again for both the history and the current value: what the
+        provider answered in the old currency must not be served for up to 15 and 2 minutes in the new one. Red today:
+        the PATCH of an asset with prices is refused (CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA), so nothing is dropped.
+        """
+        print_section(f"N68: the currency PATCH drops the refresh's entries ({identifier_type.value})")
+        identifier = _unique("N68") if has_identifier else None
+        today = date.today()
+        start = today - timedelta(days=3)
+        asset_id = await _new_asset(private_engine, quotes, identifier=identifier, identifier_type=identifier_type, prices=((start, Decimal("10")),))
+
+        await _refresh(private_engine, asset_id, start, today)
+        assert _calls(quotes) == (1, 1), f"precondition: the first refresh asks the provider once for each, got (history, current) = {_calls(quotes)}"
+        await _refresh(private_engine, asset_id, start, today)
+        assert _calls(quotes) == (1, 1), f"precondition: a second refresh is answered from the caches, got (history, current) = {_calls(quotes)}"
+
+        async with AsyncSession(private_engine, expire_on_commit=False) as session:
+            response = await AssetCRUDService.patch_assets_bulk([FAAssetPatchItem(asset_id=asset_id, currency="EUR")], session)
+        assert [(result.asset_id, result.success) for result in response.results] == [(asset_id, True)], f"the currency PATCH answered {[(r.asset_id, r.success, r.message) for r in response.results]}: expected success (N68: never blocked by market data)"
+        quotes.currency = "EUR"  # what the provider quotes after the change
+        await _refresh(private_engine, asset_id, start, today)
+
+        assert _calls(quotes) == (2, 2), f"after the currency PATCH the refresh was still answered from the caches, provider asked (history, current) = {_calls(quotes)} instead of (2, 2): the PATCH did not drop the history and current value the refresh cached for this assignment"
+        print_success("the refresh after the PATCH asked the provider again for both")
+
+    async def test_n68_currency_patch_of_an_asset_without_provider_succeeds_and_clears_its_prices(self, private_engine):
+        """N68, guard on the cache path: an asset without a provider assignment has nothing cached and nothing to drop; the
+        PATCH does not fail because of it, its prices are gone and the currency is changed. Red today: refused (it has prices)."""
+        print_section("N68: the currency PATCH of an asset without a provider")
+        today = date.today()
+        asset_id = await _new_asset(private_engine, prices=((today - timedelta(days=2), Decimal("10")), (today - timedelta(days=1), Decimal("11"))))
+
+        async with AsyncSession(private_engine, expire_on_commit=False) as session:
+            response = await AssetCRUDService.patch_assets_bulk([FAAssetPatchItem(asset_id=asset_id, currency="EUR")], session)
+
+        assert [(result.asset_id, result.success) for result in response.results] == [(asset_id, True)], f"the currency PATCH answered {[(r.asset_id, r.success, r.message) for r in response.results]}"
+        assert await _stored_days(private_engine, asset_id) == []
+        print_success("patched, prices gone, nothing raised")
 
     # -- X-R28: the current-price path keys without the provider params ------------------------------------------------
 

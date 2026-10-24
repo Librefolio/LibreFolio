@@ -15,8 +15,8 @@ responsibility:
 | `provider_management.py` | Provider assignment, removal and lookup; parametric-provider data invalidation and the removal, which unlink the transactions linked to the events they delete and are refused, nothing written, while a `SPLIT` they would delete has linked incoming adjustments without a cost ([Parametric Provider Change](events.md#parametric-provider-change), [Provider Removal](events.md#provider-removal)); the dry run of both, `provider_change_impact()` ([Provider Change Impact](events.md#provider-change-impact)); and the non-persisting provider probe. |
 | `metadata.py` | Explicit provider metadata refresh, metadata caching, and application of returned patches through `AssetCRUDService`. |
 | `price_store.py` | Price upserts/deletes, OHLC integrity checks, the digit limits of prices (a manual price or volume refused; a provider's truncated, and a provider's date with a value no column can keep skipped and reported), the [last storable date](#stored-date-bounds) of a stored price (a manual date after it refused, a provider's skipped and reported), the [currency](#price-currency-coherence) of a manual call's prices (refused before any write), and bounded write chunks. |
-| `currency_change.py` | Currency-change market-data wipes: every price and event of the asset, with the transactions linked to those events unlinked; refused, nothing written, while a `SPLIT` of the asset has linked incoming adjustments without a cost ([Market-Data Wipe](events.md#market-data-wipe)). |
-| `split_guard.py` | The `SPLIT`s among the events a wipe would delete that have linked incoming adjustments without a cost, named as the caller may see them (`splits_with_costless_adjustments()`, `adjustments_count()`): the refusal of the currency-change wipe, of the parametric provider change and of the provider removal, and the dry run's `blocking_splits`. |
+| `currency_change.py` | What a currency change deletes (N68): the asset's prices and every event except the `SPLIT`s, with `asset_event_id` set to `NULL` on the transactions linked to the deleted events; the helpers `PATCH /assets` calls and the counters behind the market-data summary and wipe endpoints; never refused ([Market-Data Wipe](events.md#market-data-wipe)). |
+| `split_guard.py` | The `SPLIT`s among the events a provider change would delete that have linked incoming adjustments without a cost, named as the caller may see them (`splits_with_costless_adjustments()`, `adjustments_count()`): the refusal of the parametric provider change and of the provider removal, and the provider dry run's `blocking_splits`. Not used by the currency change since N68, which keeps the splits. |
 | `event_links.py` | The transactions linked to asset events, as a refusal names them for its caller: `visible_transaction_ids()`, the ids on a broker the caller holds an access to, none without a caller (the rule `split_guard.py` imports), and `events_with_linked_transactions()`, the events among those given that transactions are linked to, each with the caller's view: the count of transactions the provider-change dry run reports. |
 | `event_store.py` | Event upserts (rows updated in place: a provider refresh commits them in the same bounded chunks as prices, the manual upsert once for the whole request, all or nothing, after deleting the events its items list in `delete_ids`) and deletes scoped to one asset, plus the event queries and reads by id behind `/assets/events`. |
 | `price_query.py` | DB-backed history/event queries, backward fill, FX and signal preparation, plus current-price lookup and today's OHLC write-back. |
@@ -405,9 +405,9 @@ The remedy, for a user who asks: delete both events, then sync their dates again
 to a transaction is deleted only once unlinked (`EVENT_IN_USE`). A clean price history takes the
 [market-data wipe](events.md#market-data-wipe)
 (`POST /api/v1/assets/{asset_id}/market-data/wipe`), then a sync of the whole history. The wipe
-also deletes the asset's manual events and unlinks every transaction from its events, and is
-refused (409, X-R48) while a split of the asset has linked incoming `ADJUSTMENT` rows without a
-purchase cost.
+also deletes the asset's events that are not `SPLIT`s, manual ones included, and unlinks the
+transactions from them; the `SPLIT`s stay with their linked transactions, and the wipe is never
+refused since N68.
 
 **Unknown timezone** (Z-36). `_exchange_zone()`, private to the plugin, gives the name's
 `ZoneInfo`, or None. On a server whose timezone database lacks the name (Windows outside Docker
@@ -1166,13 +1166,13 @@ cost unknown it stays `MISSING`.
 | Endpoint | Method | Description |
 |---|---|---|
 | `POST /api/v1/assets` | POST | Bulk create assets |
-| `PATCH /api/v1/assets` | PATCH | Bulk update assets |
+| `PATCH /api/v1/assets` | PATCH | Bulk update assets. An item that changes the currency deletes, in the same call and transaction, the asset's prices and non-`SPLIT` events and unlinks their transactions; never refused (N68) |
 | `GET /api/v1/assets` | GET | Bulk read by IDs (with metadata) |
 | `GET /api/v1/assets/all` | GET | All active assets |
 | `GET /api/v1/assets/query` | GET | Filtered list (search, type, currency, active) |
 | `DELETE /api/v1/assets` | DELETE | Bulk delete (cascade provider+prices) |
-| `GET /api/v1/assets/{asset_id}/market-data/summary` | GET | What the market-data wipe would delete and unlink (prices with their date range, manual and provider events, linked transactions), without writing |
-| `POST /api/v1/assets/{asset_id}/market-data/wipe` | POST | First step of a currency change: unlink the transactions from the asset's events, then delete every event and price of the asset. A 409 `MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST`, nothing written, while a `SPLIT` of the asset has linked incoming adjustments without a cost; `params.splits` names only the transactions the caller can see ([Market-Data Wipe](events.md#market-data-wipe)) |
+| `GET /api/v1/assets/{asset_id}/market-data/summary` | GET | Dry run of what a currency change deletes: `{prices, events_manual, events_provider, splits_kept, linked_tx, oldest, newest, dry_run}`; the `events_*` count the non-`SPLIT` events that go, `splits_kept` the `SPLIT`s that stay; without writing |
+| `POST /api/v1/assets/{asset_id}/market-data/wipe` | POST | The same deletion on its own, for a caller that wants it without a `PATCH`: prices and non-`SPLIT` events deleted, their transactions unlinked, `SPLIT`s and their transactions kept; same keys as the summary; never a 409 ([Market-Data Wipe](events.md#market-data-wipe)) |
 | `GET /api/v1/assets/provider` | GET | List providers (with `params_schema`) |
 | `GET /api/v1/assets/provider/search` | GET | Multi-provider parallel search |
 | `GET /api/v1/assets/provider/search/stream` | GET | SSE streaming search results |

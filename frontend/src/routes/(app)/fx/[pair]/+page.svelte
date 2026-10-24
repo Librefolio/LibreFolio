@@ -244,7 +244,7 @@
     let allConfiguredSlugs: string[] = $state([]);
 
     // All assets (for asset comparison signals in ChartSignalsSection)
-    let allAssets: Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null; currency?: string}> = $state([]);
+    let allAssets: Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null; currency?: string; is_benchmark?: boolean}> = $state([]);
 
     // Comparison events (asset-comparison signals)
     let comparisonEvents = $state<Map<number, any[]>>(new Map());
@@ -1003,6 +1003,8 @@
                 asset_type: a.asset_type ?? null,
                 // N64b: a comparison series is cached over the peer's price store, named by the asset's own currency.
                 currency: a.currency ?? undefined,
+                // The comparison picker lists the benchmarks first (Y5-F4, X5-F4b).
+                is_benchmark: a.is_benchmark === true,
             }));
         } catch (e) {
             console.error('Failed to load asset list:', e);

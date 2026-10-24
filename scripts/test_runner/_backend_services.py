@@ -1219,13 +1219,13 @@ def services_test_only_providers(verbose: bool = False, test_names: list = None)
     return run_command(cmd, "Test-only provider tests", verbose=verbose)
 
 
-def services_market_data_wipe_split_guard(verbose: bool = False, test_names: list = None) -> bool:
-    """Run X-R48: the market-data wipe refuses while a SPLIT of the asset has incoming adjustments without a purchase cost."""
-    print_section("Services: Market Data Wipe Split Guard")
-    print_info("Testing: backend/app/services/assets/currency_change.py (wipe_market_data_for_currency_change), backend/app/api/v1/assets/market_data.py")
-    print_info("Tests: the wipe refused with MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST (HTTP 409) naming each such split by date and only the caller's adjustments, nothing written; with a cost, an outgoing row, no link or a dry run the wipe is as before")
-    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_market_data_wipe_split_guard.py", test_names)
-    return run_command(cmd, "Market data wipe split guard tests", verbose=verbose)
+def services_market_data_wipe_keeps_splits(verbose: bool = False, test_names: list = None) -> bool:
+    """Run N68: the market-data wipe and the currency change keep the SPLIT events."""
+    print_section("Services: Market Data Wipe Keeps Splits")
+    print_info("Testing: backend/app/services/assets/currency_change.py (wipe_market_data_for_currency_change), backend/app/services/assets/crud.py (patch_assets_bulk), backend/app/api/v1/assets/market_data.py")
+    print_info("Tests: the wipe and the currency PATCH delete the prices and the non-split events, unlink their transactions and keep every SPLIT with the transactions linked to it, never refusing; summary keys incl. splits_kept")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_market_data_wipe_keeps_splits.py", test_names)
+    return run_command(cmd, "Market data wipe keeps splits tests", verbose=verbose)
 
 
 def services_routes_generic_500(verbose: bool = False, test_names: list = None) -> bool:
@@ -2816,10 +2816,10 @@ Note: No backend server required.
     )
     add_test(
         cat,
-        "market-data-wipe-split-guard",
-        services_market_data_wipe_split_guard,
-        name="Market Data Wipe Split Guard",
-        desc="X-R48: POST /assets/{id}/market-data/wipe refused before any write with MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST (409) while a SPLIT of the asset, manual or provider, has linked incoming ADJUSTMENTs without a purchase cost; details list every such SPLIT by date then id with the caller's visible transaction_ids and hidden_transactions_count (none named without a caller); a cost of 0, an outgoing row, a SPLIT without links, another asset's SPLIT and the dry run leave the wipe as before",
+        "market-data-wipe-keeps-splits",
+        services_market_data_wipe_keeps_splits,
+        name="Market Data Wipe Keeps Splits",
+        desc="N68 (X5-3, policy A): the market-data wipe (POST /assets/{id}/market-data/wipe) and the currency PATCH delete the prices and every NON-SPLIT event (manual and provider), set asset_event_id to NULL on the transactions linked to those, and keep every SPLIT event, manual or provider, with the transactions linked to it (a costless incoming ADJUSTMENT stays linked and costless); never a refusal for it (X-R48's MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST and the token CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA are gone). Answer and summary keys: prices, events_manual, events_provider (non-split), splits_kept, linked_tx, oldest, newest, dry_run",
         # WRITE-SCOPED, the category default: every row is this unit's own (assets, brokers, users and accesses under a
         # unique marker), wiped by asset and broker id; the route runs in process on an app of the call's own.
     )

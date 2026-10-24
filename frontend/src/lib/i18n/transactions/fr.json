@@ -318,6 +318,22 @@
       "spread": "Spread",
       "stale": "obsolète {days}j",
       "marketNotAvailable": "Taux de marché non disponible"
+    },
+    "reconcile": {
+      "button": "Relier les événements",
+      "buttonTitle": "Relier dividendes, intérêts et ajustements à l'événement de l'actif du même jour",
+      "title": "Relier les événements",
+      "intro": "Dividendes, intérêts et ajustements sans événement de l'actif. Un événement n'est proposé que s'il est du même actif, du même jour et du type correspondant : un dividende crédité quelques jours après l'événement n'est pas proposé, et vous le reliez à la main dans la transaction.",
+      "loading": "Recherche des transactions sans événement…",
+      "loadError": "Impossible de lire les transactions sans événement.",
+      "empty": "Chaque transaction qui peut avoir un événement de l'actif en a un.",
+      "statusUnique": "Un événement ce jour-là",
+      "statusNone": "Aucun événement ce jour-là",
+      "statusSeveral": "{n} événements ce jour-là : choisissez dans la transaction",
+      "link": "Relier",
+      "linkAll": "Relier toutes les lignes avec un seul événement",
+      "linkError": "Rien n'a été relié : le serveur a refusé la modification.",
+      "close": "Fermer"
     }
   }
 }
