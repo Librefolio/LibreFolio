@@ -143,7 +143,7 @@ vi.mock('$lib/api', () => ({
     ),
 }));
 
-import {flushSync, tick} from 'svelte';
+import {flushSync, tick, type ComponentProps} from 'svelte';
 import {get} from 'svelte/store';
 import {locale, waitLocale} from 'svelte-i18n';
 
@@ -151,7 +151,7 @@ import {render, setupI18n, waitFor} from '$test/component';
 import {_} from '$lib/i18n';
 import {currentLanguage} from '$lib/stores/app/language';
 import {getSectorEmoji, sectorEmojiVersion} from '$lib/stores/reference/sectorStore';
-import {categoryColor} from '$lib/theme/chartCategories';
+import {categoryColor, CATEGORY_SEQUENCE, sequenceColor} from '$lib/theme/chartCategories';
 import {familyShade, shadePoles} from '$lib/theme/chartShades';
 import {chartRoles, setRoleReader} from '$lib/theme/roleColors';
 import {notifyChartColorsChange} from '$lib/theme/themeMode';
@@ -915,5 +915,84 @@ describe('AllocationPieChart — redrawn in the interface language (M-18)', {tim
             },
             {timeout: 2_000},
         );
+    });
+});
+
+// =============================================================================
+// The asset pie (Y5-2, #48) — one slice per asset, coloured by the asset's weight rank
+// =============================================================================
+
+/**
+ * The «By Asset» tab of the allocation panel draws this pie in `mode="asset"`: one ring, one slice per asset, sorted by
+ * value, the name as the backend sent it (an asset's name is nobody's translation key: `ETF` and `ETF_STOCK` here are
+ * assets, not types, and must neither be translated nor folded into a family with a second ring).
+ *
+ * The colour of an asset is not a function of its name but of its rank (`colorRanks`, asset id -> 0 for the heaviest
+ * held asset): the rank-th colour of the designer's sequence, `sequenceColor(CATEGORY_SEQUENCE, rank, …)`, so the pie, the
+ * history and the lines of the Dashboard agree. The cash slice (`Liquidity`, no id) keeps the type colour of the cash.
+ * The expectations call the same exported colour functions as the component, with the pie's own element as scope.
+ */
+describe('AllocationPieChart — the asset pie: one ring, the asset names as sent, each slice in the colour of its rank', () => {
+    /** An entry of the asset pie: `id` is the asset's; the cash slice has none. */
+    interface AssetSlice extends Slice {
+        id?: number | null;
+    }
+    const assetSlice = (name: string, value: number, id: number | null): AssetSlice => ({...slice(name, value), id});
+
+    /** An asset named like a type, a subtype of it, a sector and the cash, listed out of value order. Value order: ETF, ETF_STOCK, Technology, Liquidity. */
+    const ASSETS: AssetSlice[] = [assetSlice('Technology', 20, 33), assetSlice('ETF_STOCK', 30, 32), assetSlice(CASH_BUCKET, 10, null), assetSlice('ETF', 40, 31)];
+    /** Ranks that follow neither the list order nor the value order, so a colour handed out by position would show. */
+    const RANKS = new Map<number, number>([
+        [31, 2],
+        [32, 0],
+        [33, 5],
+    ]);
+
+    async function drawAssetPie(data: AssetSlice[], colorRanks: ReadonlyMap<number, number> = RANKS) {
+        const props = {data, mode: 'asset', legendPosition: 'bottom', currency: 'EUR', colorRanks} as unknown as ComponentProps<PieComponent>;
+        const view = render(AllocationPieChart, {props});
+        await waitFor(() => expect(chartInstances[0]?.setOptionCalls.length ?? 0).toBeGreaterThan(0), {timeout: 5_000});
+        return Object.assign(drawing(), {view});
+    }
+
+    /** The pie's own element, which the colours are read on. */
+    const container = (): Element => chartInstances[0].getDom() as Element;
+    const poles = (dark: boolean) => shadePoles(dark, chartRoles(dark, container()).color('--lf-surface-card'));
+    const rankColour = (rank: number, dark: boolean) => sequenceColor(CATEGORY_SEQUENCE, rank, dark, poles(dark), container());
+
+    it('draws one ring, sorted by value, the names, values and amounts as sent — an asset named ETF or ETF_STOCK is neither translated nor split into rings', async () => {
+        const drawn = await drawAssetPie(ASSETS);
+
+        expect(drawn.rings, 'a pie of assets has a single ring').toBe(false);
+        expect(drawn.inner.map(({name, value, amount}) => ({name, value, amount}))).toEqual([
+            {name: 'ETF', value: 40, amount: 4000},
+            {name: 'ETF_STOCK', value: 30, amount: 3000},
+            {name: 'Technology', value: 20, amount: 2000},
+            {name: CASH_BUCKET, value: 10, amount: 1000},
+        ]);
+    });
+
+    it.each(THEMES)('$theme theme: an asset takes the colour of its rank in the designer’s sequence, not of its position; the cash keeps the colour of the Liquidity type', async ({dark}) => {
+        document.documentElement.classList.toggle('dark', dark);
+        const drawn = await drawAssetPie(ASSETS);
+        const colourOf = new Map(drawn.inner.map((arc) => [arc.name, arc.itemStyle?.color]));
+
+        expect({ETF: colourOf.get('ETF'), ETF_STOCK: colourOf.get('ETF_STOCK'), Technology: colourOf.get('Technology')}).toEqual({ETF: rankColour(2, dark), ETF_STOCK: rankColour(0, dark), Technology: rankColour(5, dark)});
+        expect(colourOf.get(CASH_BUCKET)).toBe(categoryColor('type', 'Liquidity', dark, container()));
+        // Control: the three ranks are three colours, so "by rank" cannot pass as "one colour for all".
+        expect(new Set([2, 0, 5].map((rank) => rankColour(rank, dark))).size).toBe(3);
+        expect(callsWithAColourList(), 'an option handing ECharts a palette to paint a slice by its index').toEqual([]);
+    });
+
+    it('ranks 0 to 7 are categoryColor of the sequence’s eight types; the ranks past it are the sequence one shade further, never a repeat', async () => {
+        const ranks = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+        const many = ranks.map((rank) => assetSlice(`Asset ${rank}`, 50 - rank, 100 + rank));
+        const drawn = await drawAssetPie(many, new Map(ranks.map((rank) => [100 + rank, rank])));
+        const colours = drawn.inner.map((arc) => arc.itemStyle?.color);
+
+        expect(CATEGORY_SEQUENCE).toHaveLength(8);
+        expect(colours.slice(0, 8)).toEqual(CATEGORY_SEQUENCE.map(({kind, key}) => categoryColor(kind, key, false, container())));
+        expect(colours.slice(8)).toEqual([rankColour(8, false), rankColour(9, false)]);
+        expect(new Set(colours).size, 'two assets in one colour').toBe(ranks.length);
     });
 });
