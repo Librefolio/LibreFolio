@@ -8,8 +8,9 @@ import math
 from collections.abc import Sequence
 from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
+from typing import Protocol
 
 from backend.app.schemas.common import Currency, DateRangeModel
 from backend.app.schemas.portfolio import (
@@ -250,6 +251,165 @@ def prepare_asset_series_set(  # noqa: C901 — sequential pipeline stages with 
             )
         )
 
+    return _prepare_from_inputs(
+        active,
+        unusable_assets,
+        warnings,
+        missing_fx_pairs,
+        requested_range=requested_range,
+        requested_end=requested_end,
+        target_currency=target_currency,
+    )
+
+
+class AssetPriceReading(Protocol):
+    """What the price query answers for one asset when only its observations are read (``assets.observed_prices.ObservedPrices``).
+
+    ``point_on(day)`` is the point the dense series has on ``day``: the close of the last observation up to it, converted at
+    that day's rate, with the same ``backward_fill_info``; None before the first point. While the asset has no rate the
+    point is in its own currency (not the target's). ``first_point_date`` is the first day with a point, in any currency,
+    ``observation_dates`` the days of its stored rows inside the window read.
+    """
+
+    asset_id: int
+    errors: Sequence[str]
+    first_point_date: date | None
+    observation_dates: Sequence[date]
+
+    def point_on(self, day: date) -> FAPricePoint | None: ...
+
+
+def _first_converted_day(reading: AssetPriceReading, target_currency: str, end: date) -> date | None:
+    """The first day the asset has a point in the target currency: its series has none before its rate starts, so the days
+    without a point in the target run from ``first_point_date`` up to the day before it. None when it never has one."""
+    first = reading.first_point_date
+    if first is None or first > end:
+        return None
+    last = reading.point_on(end)
+    if last is None or last.currency != target_currency:
+        return None
+    low, high = first, end
+    while low < high:
+        middle = low + (high - low) // 2
+        point = reading.point_on(middle)
+        if point is not None and point.currency == target_currency:
+            high = middle
+        else:
+            low = middle + timedelta(days=1)
+    return low
+
+
+def prepare_asset_series_set_from_readings(  # noqa: C901 — one pass per stage: stored rows, usable assets, the days the preparation needs
+    readings: Sequence[AssetPriceReading],
+    *,
+    requested_range: DateRangeModel,
+    target_currency: str,
+    market_holidays: AbstractSet[date] = frozenset(),
+) -> PreparedAssetSeriesSet:
+    """``prepare_asset_series_set`` without a point for every calendar day: the same ``PreparedAssetSeriesSet``.
+
+    The risk reads ``[start - 1, end]`` and the dense series gives one point a day, but the preparation uses only a few: the
+    baseline day, the days some asset quotes, each asset's first day with a rate, and the stored rows with the day before
+    each (the chain that reads a repeated close as a carry). Those are the only points built here, from each reading's
+    ``point_on``; everything after is the dense preparation (``_prepare_from_inputs``).
+    """
+    target_currency = Currency.validate_code(target_currency)
+    requested_end = requested_range.end or requested_range.start
+    asset_ids = [reading.asset_id for reading in readings]
+    if len(asset_ids) != len(set(asset_ids)):
+        raise ValueError("price_results must contain unique asset IDs")
+    load_start = requested_range.start - timedelta(days=1) if requested_range.start > date.min else requested_range.start
+
+    warnings: set[str] = set()
+    missing_fx_pairs: set[str] = set()
+    unusable_assets: list[DataQualityExcludedAsset] = []
+    stored_by_asset: dict[int, dict[date, FAPricePoint]] = {}
+    first_converted_by_asset: dict[int, date] = {}
+    usable: list[AssetPriceReading] = []
+    for reading in readings:
+        observed = sorted({day for day in reading.observation_dates if load_start <= day <= requested_end})
+        wanted = set(observed) | {day - timedelta(days=1) for day in observed if day > load_start}
+        stored = {day: point for day in sorted(wanted) if (point := reading.point_on(day)) is not None}
+        marked = mark_market_closed_carries(stored, market_holidays)
+        warnings.update(reading.errors)
+        # A day of the range on which the asset has a point that is not in the target currency: its rate is missing until
+        # it starts, so the days run from the first row to the day before its first converted point.
+        probes = [requested_range.start, *observed[:1]] if requested_range.start <= requested_end else []
+        for probe in probes:
+            point = reading.point_on(probe) if requested_range.start <= probe <= requested_end else None
+            if point is not None and point.currency is not None and point.currency != target_currency:
+                missing_fx_pairs.add(f"{point.currency}/{target_currency}")
+        first_converted = _first_converted_day(reading, target_currency, requested_end)
+        if first_converted is None:
+            last = reading.point_on(requested_end)
+            if last is None:
+                reason = DataQualityExclusionReason.MISSING_PRICE
+            elif last.currency is None:
+                reason = DataQualityExclusionReason.INVALID_CURRENCY
+            elif last.currency != target_currency:
+                reason = DataQualityExclusionReason.MISSING_FX
+            else:
+                reason = DataQualityExclusionReason.MISSING_PRICE
+            unusable_assets.append(DataQualityExcludedAsset(asset_id=reading.asset_id, reason=reason))
+            if reason == DataQualityExclusionReason.MISSING_FX:
+                warnings.add(f"missing_fx:{reading.asset_id}")
+            continue
+        stored_by_asset[reading.asset_id] = marked
+        first_converted_by_asset[reading.asset_id] = first_converted
+        usable.append(reading)
+
+    # The days the preparation reads a point on, besides the stored rows: the baseline candidate (the day before the range),
+    # every day some asset quotes, and the day each asset gets its first converted point (the first day all of them have one).
+    needed = {load_start}
+    for reading in usable:
+        needed.update(day for day, point in stored_by_asset[reading.asset_id].items() if requested_range.start <= day <= requested_end and _price_is_fresh(point))
+    needed.update(max(requested_range.start, first_converted_by_asset[reading.asset_id]) for reading in usable)
+
+    active: list[_AssetSeriesInput] = []
+    for reading in usable:
+        all_points = dict(stored_by_asset[reading.asset_id])
+        for day in sorted(needed - set(all_points)):
+            point = reading.point_on(day) if day <= requested_end else None
+            if point is not None:
+                all_points[day] = point
+        all_points = dict(sorted(all_points.items()))
+        target_points = {day: point for day, point in all_points.items() if point.currency == target_currency}
+        active.append(
+            _AssetSeriesInput(
+                asset_id=reading.asset_id,
+                all_points=all_points,
+                target_points=target_points,
+                warnings=tuple(reading.errors),
+                quote_dates=tuple(day for day, point in target_points.items() if requested_range.start <= day <= requested_end and _price_is_fresh(point)),
+            )
+        )
+    return _prepare_from_inputs(
+        active,
+        unusable_assets,
+        warnings,
+        missing_fx_pairs,
+        requested_range=requested_range,
+        requested_end=requested_end,
+        target_currency=target_currency,
+    )
+
+
+def _prepare_from_inputs(  # noqa: C901 — sequential pipeline stages with early-return special cases
+    active: list[_AssetSeriesInput],
+    unusable_assets: list[DataQualityExcludedAsset],
+    warnings: set[str],
+    missing_fx_pairs: set[str],
+    *,
+    requested_range: DateRangeModel,
+    requested_end: date,
+    target_currency: str,
+) -> PreparedAssetSeriesSet:
+    """The joint calendar, the returns and the data quality of the assets that have a usable series.
+
+    The stage both entry points share: one from the dense points of the price query, one from readings that hold only
+    the observations. It reads, per asset, its marked points (``all_points``), those in the target currency
+    (``target_points``) and its fresh quote days, and nothing between the days it needs.
+    """
     if not active:
         data_quality = DataQualityReport(
             unusable_assets=sorted(unusable_assets, key=lambda item: item.asset_id),
@@ -436,4 +596,5 @@ __all__ = [
     "gap_slots",
     "mark_market_closed_carries",
     "prepare_asset_series_set",
+    "prepare_asset_series_set_from_readings",
 ]

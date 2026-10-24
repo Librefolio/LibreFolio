@@ -43,10 +43,15 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engin
 from sqlalchemy.pool import NullPool
 
 from backend.app.db.base import SQLModel  # imports every model, and backend.app.db.session with its PRAGMA listener
-from backend.app.db.models import Asset, AssetType, PriceHistory
+from backend.app.db.models import Asset, AssetType, FxRate, PriceHistory
+from backend.app.schemas.common import DateRangeModel
+from backend.app.schemas.prices import FAPriceQueryItem
 from backend.app.schemas.risk import RiskErrorCode, RiskQueryRequest, RiskQueryResponse, RiskResultStatus
 from backend.app.services.assets import price_query
+from backend.app.services.assets.manager import AssetSourceManager
+from backend.app.services.market_series import prepare_asset_series_set
 from backend.app.services.risk import service as risk_service_module
+from backend.app.services.risk.scope import prepare_asset_series
 from backend.app.services.risk.service import RiskService
 from backend.app.utils.date_range_limits import BulkTooManyDaysError
 
@@ -245,3 +250,64 @@ async def test_guard_within_the_budget_the_request_completes_as_today(private_db
     response = await _execute(private_db, request)
 
     assert _results(response) == {analytic.instance_id: (OK, None, None) for analytic in request.analytics}
+
+
+# --------------------------------------------------------------------------- #
+# R1 — the risk reads the prices by observation: the prepared series are the dense ones
+# --------------------------------------------------------------------------- #
+
+
+async def _three_assets_with_a_rate(engine: AsyncEngine) -> list[int]:
+    """An EUR asset quoted every weekday of Q1 2024 (its weekend rows repeating Friday's close), a USD asset quoted every weekday but a
+    gap in February, a USD asset quoted weekly; EUR/USD stored every Monday but for a gap, the first one on 8 January."""
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        eur = Asset(display_name="R1 eur", currency="EUR", asset_type=AssetType.STOCK)
+        usd = Asset(display_name="R1 usd", currency="USD", asset_type=AssetType.STOCK)
+        weekly = Asset(display_name="R1 weekly", currency="USD", asset_type=AssetType.STOCK)
+        session.add_all([eur, usd, weekly])
+        await session.flush()
+        day, n = date(2023, 12, 28), 0
+        while day <= date(2024, 3, 31):
+            if day.weekday() < 5:
+                session.add(PriceHistory(asset_id=eur.id, date=day, close=Decimal(100) + Decimal(n % 5), currency="EUR", source_plugin_key="MANUAL"))
+                if not date(2024, 2, 12) <= day <= date(2024, 2, 16):
+                    session.add(PriceHistory(asset_id=usd.id, date=day, close=Decimal(50) + Decimal(n % 7) / 2, currency="USD", source_plugin_key="MANUAL"))
+                if day.weekday() == 2:
+                    session.add(PriceHistory(asset_id=weekly.id, date=day, close=Decimal(20) + Decimal(n) / 10, currency="USD", source_plugin_key="MANUAL"))
+            elif day.weekday() == 5:
+                session.add(PriceHistory(asset_id=eur.id, date=day, close=Decimal(100) + Decimal((n - 1) % 5), currency="EUR", source_plugin_key="MANUAL"))
+            day += timedelta(days=1)
+            n += 1
+        monday = date(2024, 1, 8)
+        while monday <= date(2024, 3, 25):
+            if not date(2024, 2, 19) <= monday <= date(2024, 2, 26):
+                session.add(FxRate(date=monday, base="EUR", quote="USD", rate=Decimal("1.05") + Decimal((monday - date(2024, 1, 8)).days) / 1000, source="ECB"))
+            monday += timedelta(days=7)
+        await session.commit()
+        return [eur.id, usd.id, weekly.id]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("start", "end"),
+    [
+        pytest.param(date(2024, 2, 1), date(2024, 3, 15), id="inside-the-quotes"),
+        pytest.param(date(2023, 12, 1), date(2024, 1, 31), id="starts-before-the-first-price-and-the-first-rate"),
+        pytest.param(date(2024, 1, 3), date(2024, 1, 3), id="one-day-before-any-rate"),
+        pytest.param(date(2024, 3, 20), date(2024, 3, 31), id="after-the-last-rate"),
+    ],
+)
+async def test_r1_the_prepared_series_from_observations_are_those_from_the_dense_prices(private_db, start, end):
+    """The risk's preparation, from ``observed_prices`` and ``prepare_asset_series_set_from_readings``, gives the same
+    ``PreparedAssetSeriesSet`` — every field — as the dense prices of ``get_prices_bulk`` through ``prepare_asset_series_set``, on stored
+    prices and rates with weekend rows, a gap in the quotes of one listing, a gap in the rates and a start before the first rate."""
+    asset_ids = await _three_assets_with_a_rate(private_db)
+    window = DateRangeModel(start=start, end=end)
+    load_start = start - timedelta(days=1)
+    async with AsyncSession(private_db, expire_on_commit=False) as session:
+        dense_results = await AssetSourceManager.get_prices_bulk([FAPriceQueryItem(asset_id=asset_id, date_range=DateRangeModel(start=load_start, end=end), target_currency="EUR") for asset_id in asset_ids], session)
+        dense = prepare_asset_series_set(dense_results, requested_range=window, target_currency="EUR", market_holidays=frozenset())
+        observed = await prepare_asset_series(session, asset_ids=tuple(asset_ids), date_range=window, target_currency="EUR", market_holidays=frozenset())
+
+    assert observed.model_dump(mode="json") == dense.model_dump(mode="json")
+    assert dense.n_observations > 0 or start == end, "precondition: the window has returns to compare"

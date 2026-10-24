@@ -41,7 +41,6 @@ from backend.app.schemas.signals import (  # noqa: E402
 from backend.app.services.assets import market_calendar  # noqa: E402
 from backend.app.services.assets import price_query as price_query_module  # noqa: E402
 from backend.app.services.assets.manager import AssetSourceManager  # noqa: E402
-from backend.app.services.assets.price_query import PriceQueryOperations  # noqa: E402
 from backend.app.services.signals.registry import SignalPluginRegistry  # noqa: E402
 
 
@@ -1671,15 +1670,15 @@ async def test_a_bulk_call_without_signals_never_awaits_the_holiday_table(
 
 
 def spy_load_starts(monkeypatch) -> list[date]:
-    """Record the first calendar day of every price series the adapter builds."""
+    """Record the first calendar day of every price series the adapter reads (X-Q1: ``observe``, the one reading)."""
     starts: list[date] = []
-    real = PriceQueryOperations._build_backward_filled_series
+    real = price_query_module.observe
 
-    def spy(price_map, start_date, end_date, seed_price=None):
-        starts.append(start_date)
-        return real(price_map, start_date, end_date, seed_price=seed_price)
+    async def spy(session, asset_id, rows, seed, start, end, target):
+        starts.append(start)
+        return await real(session, asset_id, rows, seed, start, end, target)
 
-    monkeypatch.setattr(PriceQueryOperations, "_build_backward_filled_series", staticmethod(spy))
+    monkeypatch.setattr(price_query_module, "observe", spy)
     return starts
 
 
