@@ -19,7 +19,7 @@ The **Positions** tab shows what you hold, what each position earned in the peri
 
 - **[Portfolio](#holdings) / [Period](#performance)** switches between what you own and what each position earned; **Table / Map** (the two icons) between a table and a chart.
 - **The eye icon** (in Table) shows, hides or reorders the columns; **Reset layout** restores them. **See all →** opens the Assets page.
-- **To dig into a position**, open its **⋮** menu in a table, or right-click it in any view: **Analyze Lots** opens the [FIFO Lots Analysis](#fifo-lots-analysis) below, **View Asset** the asset's page.
+- **To dig into a position**, open its **⋮** menu in a table, or right-click it in any view: **Analyze Lots** opens the [FIFO Lots Analysis](#fifo-lots-analysis) (on the Dashboard it takes the place of the view, on a broker's page it opens below the list), **View Asset** the asset's page.
 
 LibreFolio remembers your choices.
 
@@ -57,6 +57,20 @@ What do you own on the end date, and how is each position doing? **Portfolio** l
     - **`—` in Unrealized P&L, P&L % or Avg. Cost**: part of what you paid is unknown — an exchange rate missing on a purchase date, or a transfer or adjustment without a cost basis —, or, for Unrealized P&L and P&L % only, the price cannot be converted because the end date's exchange rate is missing. The [Data Quality banner](index.md#data-quality-banner) names what to fix.
     - **`—` in Price, with an Unrealized P&L of `0`**: the asset has no price at all — no market price and no purchase or sale, as when you received it through an adjustment or a transfer — so its Value is what it cost you.
     - **Δ1** and **Δ1%** need a market price; **Annualized** needs a position old enough for a yearly rate to mean anything.
+
+### 📉 Return of the positions {: #return-of-the-positions }
+
+Which of your positions did better than the portfolio, and which worse? On the Dashboard, **Portfolio** in **Table** view puts a tick box on every row and, under the table, a **Return of the positions** chart.
+
+- **Nothing ticked**: the chart shows the portfolio line only. **Tick a row** to add a line for that position, and tick more to compare them.
+- **The legend** under the title has one button per line: click it to turn the line off and on. A **flag** marks a position that closed, and a **warning mark** one with a missing price or exchange rate, whose line leaves those days out.
+- **Abs / %** switch the view. **Abs** is the position's profit or loss in money, from the start of the period. **%** is its return in *base 100*: every line starts at 100 on the first day of the period, so 112 means +12%. LibreFolio remembers the view.
+- **A closed position's line ends on the day it closed**; hover the legend button for the date.
+- **Up to 50 positions** can be drawn at once.
+
+??? info "📐 Why the portfolio line can differ from the positions"
+
+    The portfolio line is the return the Dashboard measures, the [time-weighted return](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md), not the profit of your positions on the capital they employed. The two can therefore differ, even when every position is ticked; the legend says so.
 
 ### 💸 Yield on Cost (YOC) {: #yield-on-cost-yoc }
 
@@ -106,7 +120,7 @@ Which positions made or lost money in the period, and how? **Period** lists ever
 
 Which purchases make up a position, where are they held, and how has each one done? The **FIFO Lots Analysis** answers lot by lot: each purchase opens a *lot*, and each sale closes the **oldest** open lots first — First-In, First-Out.
 
-Choose **Analyze Lots** on a position and the panel opens below, for the brokers of the page: your broker filter on the Dashboard, the broker itself on its own page. **View Asset** (↗) opens the asset, **✕** closes the panel.
+Choose **Analyze Lots** on a position and the panel opens, for the brokers of the page: your broker filter on the Dashboard, the broker itself on its own page. On the Dashboard it **replaces** the whole Portfolio / Period view, with a **← Portfolio** button above it that brings you back; the browser's back button does the same. On a broker's page it opens below the list. **View Asset** (↗) opens the asset, **✕** closes the panel.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-fifo-lots-analysis" data-carousel-interval="6000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
   <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="fifo-lots-panel" data-title="🔍 Overview" alt="FIFO Lots Analysis Overview">

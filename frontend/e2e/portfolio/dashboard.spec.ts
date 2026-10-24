@@ -3,6 +3,7 @@ import {schemas} from '../../src/lib/api/generated';
 import {waitForSettled} from '../fixtures/app-events';
 import {login} from '../fixtures/auth-helpers';
 import {showChartTooltip} from '../fixtures/charts';
+import {optionsClosed} from '../fixtures/probe';
 import {focusHeaderControlByKeyboard} from '../fixtures/headerKeyboardFocus';
 import {TEST_USER} from '../fixtures/test-users';
 
@@ -355,6 +356,63 @@ test.describe('Dashboard charts and view matrix', () => {
 
         await expect(panel).toHaveAttribute('data-busy', 'false', {timeout: 30_000});
         await expect(page.getByTestId('exposure-table')).toBeVisible({timeout: 15_000});
+    });
+
+    test('Dashboard, Positions: the lot detail replaces the portfolio view and «← Portfolio» brings it back (Y5-2)', async ({page}) => {
+        test.setTimeout(90_000);
+        await openPositionsTab(page);
+
+        // Holdings × table, whatever preference this context holds (both controls are setters, not toggles).
+        await page.getByTestId('positions-toggle-holdings').click();
+        await page.getByTestId('positions-toggle-table').click();
+        const positions = page.getByTestId('positions-panel');
+        const lots = page.getByTestId('lots-analysis-panel');
+        const table = page.getByTestId('exposure-table');
+        await expect(table).toBeVisible({timeout: 15_000});
+
+        // A position to open, read from the table and checked: the id is `{assetId}-{brokerId}`, the table of a shared
+        // dashboard changes under any test, so nothing here counts rows or names one.
+        await expect.poll(() => table.locator('tbody tr[data-row-id]').count(), {message: 'the holdings table lists no position: check populate_mock_data.py', timeout: 15_000}).toBeGreaterThan(0);
+        const rowIds = await table.locator('tbody tr[data-row-id]').evaluateAll((rows) => rows.map((row) => row.getAttribute('data-row-id') ?? ''));
+        const rowId = rowIds.find((id) => /^\d+-\d+$/.test(id));
+        if (!rowId) throw new Error(`No holdings row with an {assetId}-{brokerId} id (rows: ${rowIds.join(', ')})`);
+        const assetId = Number(rowId.split('-')[0]);
+        const row = table.locator(`tbody tr[data-row-id="${rowId}"]`);
+        const assetInUrl = new RegExp(`[?&]asset=${assetId}(?:&|$)`);
+
+        /** The lot detail of the position, the way a user opens it: right click on its row, then the menu action. */
+        const openDetail = async () => {
+            await row.click({button: 'right'});
+            await page.getByTestId('context-menu-action-analyze-lots').click();
+            await expectDetail();
+        };
+        /** The lot detail is the view: lots panel and «← Portfolio» on screen, no positions panel, the asset in the URL. */
+        const expectDetail = async () => {
+            await expect(lots).toBeVisible({timeout: 15_000});
+            await expect(page.getByTestId('positions-back-to-portfolio')).toBeVisible();
+            await expect(positions, 'the lot detail replaces the portfolio view: the positions panel is not on the page').toHaveCount(0);
+            await expect(page).toHaveURL(assetInUrl);
+        };
+        /** The portfolio is the view: positions panel on screen, no lots panel, no «← Portfolio», no asset in the URL. */
+        const expectPortfolio = async () => {
+            await expect(positions).toBeVisible({timeout: 15_000});
+            await expect(lots).toBeHidden();
+            await expect(page.getByTestId('positions-back-to-portfolio')).toHaveCount(0);
+            await expect(page).not.toHaveURL(/[?&]asset=/);
+        };
+
+        // The detail replaces the portfolio; «← Portfolio» brings it back.
+        await openDetail();
+        await page.getByTestId('positions-back-to-portfolio').click();
+        await expectPortfolio();
+
+        // The detail is a step of the history: the browser's Back returns to the portfolio view, Forward to the detail.
+        await expect(positions).toHaveAttribute('data-busy', 'false', {timeout: 30_000});
+        await openDetail();
+        await page.goBack();
+        await expectPortfolio();
+        await page.goForward();
+        await expectDetail();
     });
 });
 
@@ -2216,5 +2274,382 @@ test.describe('Dashboard display currency menu (D8)', () => {
         } finally {
             await page.unrouteAll({behavior: 'ignoreErrors'});
         }
+    });
+});
+
+/**
+ * Dashboard, the return chart of the positions (Y5-2, #48) — on REAL data.
+ *
+ * What is proven here and nowhere else: the page, the generated client and the backend agree on
+ * `POST /portfolio/positions-series`. Nothing is stubbed (but the one failure of the last test): the
+ * rows come from the live holdings table, the answer from the engine, and every check reads the
+ * request the page actually sent and the answer it actually got.
+ *
+ * Shared-DB rules: no row is named, no count is assumed — the rows ticked are read off the table,
+ * each is checked against the answer (`key.asset_id`) and the ones the chart draws are computed from
+ * that same answer, never from a literal. Each test owns its browser context, so the chart view
+ * (user storage) starts at its default; the tests write nothing to the database.
+ *
+ * Ids: a table row is `{assetId}-{brokerId}` (`0` for an asset summed over brokers), and the chart's
+ * legend entry `positions-chart-legend-{id}` carries the same id.
+ */
+const POSITIONS_SERIES_PATH = '/api/v1/portfolio/positions-series';
+const REPORT_API_PATH = '/api/v1/portfolio/report';
+
+type SeriesKey = {asset_id: number; broker_id?: number | null};
+type SeriesBody = {positions: SeriesKey[]; broker_ids?: number[]; date_range?: {start?: string; end?: string}; target_currency?: string};
+type SeriesPoint = {pnl?: string | null; pnl_percent?: string | null};
+type SeriesEntry = {key: SeriesKey; points?: SeriesPoint[]};
+type SeriesAnswer = {currency?: string; series?: SeriesEntry[]};
+type SeriesCall = {body: SeriesBody; status: number; json: SeriesAnswer | null};
+
+/** What the page sent to the series endpoint, and what came back, in order. */
+interface SeriesTraffic {
+    sent: SeriesBody[];
+    answered: SeriesCall[];
+}
+
+/** The chart id of a position key — the table's row id, `makePositionKey`'s format. */
+function lineIdOf(key: SeriesKey): string {
+    return `${key.asset_id}-${key.broker_id ?? 0}`;
+}
+
+/** Every request to the series endpoint, and every answer to one (status and body, read when it lands). */
+function recordSeriesTraffic(page: Page): SeriesTraffic {
+    const traffic: SeriesTraffic = {sent: [], answered: []};
+    page.on('request', (request) => {
+        if (request.method() === 'POST' && new URL(request.url()).pathname === POSITIONS_SERIES_PATH) traffic.sent.push(request.postDataJSON() as SeriesBody);
+    });
+    page.on('response', async (response) => {
+        const request = response.request();
+        if (request.method() !== 'POST' || new URL(response.url()).pathname !== POSITIONS_SERIES_PATH) return;
+        const json = await response.json().catch(() => null);
+        traffic.answered.push({body: request.postDataJSON() as SeriesBody, status: response.status(), json: json as SeriesAnswer | null});
+    });
+    return traffic;
+}
+
+/** The answered calls asking for `lineId`, as a count: the number `expect.poll` watches. */
+function answeredFor(traffic: SeriesTraffic, lineId: string, match: (call: SeriesCall) => boolean = () => true): SeriesCall[] {
+    return traffic.answered.filter((call) => call.body.positions.some((key) => lineIdOf(key) === lineId) && match(call));
+}
+
+/** The series of `lineId` in an answer. */
+function seriesOf(call: SeriesCall, lineId: string): SeriesEntry | undefined {
+    return call.json?.series?.find((entry) => lineIdOf(entry.key) === lineId);
+}
+
+/** Whether the answer gives `lineId` a point to draw in a view — the chart draws a line only with one known value. */
+function drawableIn(call: SeriesCall, lineId: string, view: 'absolute' | 'percentage'): boolean {
+    const field = view === 'absolute' ? 'pnl' : 'pnl_percent';
+    return (seriesOf(call, lineId)?.points ?? []).some((point) => point[field] !== null && point[field] !== undefined);
+}
+
+/** The rows of the holdings table the chart can be asked about: `{assetId}-{brokerId}`, in table order. */
+async function holdingRowIds(page: Page): Promise<string[]> {
+    const table = page.getByTestId('exposure-table');
+    await expect.poll(() => table.locator('tbody tr[data-row-id]').count(), {message: 'the holdings table lists no position: check populate_mock_data.py', timeout: 15_000}).toBeGreaterThan(0);
+    const ids = await table.locator('tbody tr[data-row-id]').evaluateAll((rows) => rows.map((row) => row.getAttribute('data-row-id') ?? ''));
+    return ids.filter((id) => /^\d+-\d+$/.test(id));
+}
+
+/** Holdings × table, settled, with the chart under it: the view a user ticks rows in. */
+async function openHoldingsChart(page: Page): Promise<Locator> {
+    await openPositionsTab(page);
+    // Both controls are setters, not toggles: whatever this context remembers.
+    await page.getByTestId('positions-toggle-holdings').click();
+    await page.getByTestId('positions-toggle-table').click();
+    await expect(page.getByTestId('exposure-table')).toBeVisible({timeout: 15_000});
+    const chart = page.getByTestId('positions-return-chart');
+    await expect(chart, 'the return chart sits under the holdings table').toBeVisible({timeout: 15_000});
+    return chart;
+}
+
+/** Tick (or untick) a row through its own box, and wait for the box to say so. */
+async function setRowTicked(page: Page, rowId: string, ticked: boolean): Promise<void> {
+    const box = page.getByTestId(`dt-row-checkbox-${rowId}`);
+    const state = ticked ? 'checked' : 'unchecked';
+    if ((await box.getAttribute('data-state')) !== state) await box.click();
+    await expect(box).toHaveAttribute('data-state', state);
+}
+
+async function lineCount(chart: Locator): Promise<number> {
+    return Number((await chart.getAttribute('data-line-count')) ?? '-1');
+}
+
+test.describe('Dashboard: the return chart of the positions on real data (Y5-2, #48)', () => {
+    test.describe.configure({timeout: 120_000});
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('ticking rows asks the series of exactly those positions, draws a line each, and Abs/% keep the lines', async ({page}) => {
+        const traffic = recordSeriesTraffic(page);
+        const chart = await openHoldingsChart(page);
+        const rowIds = await holdingRowIds(page);
+        if (rowIds.length < 2) throw new Error(`The holdings table has ${rowIds.length} position row(s): two are needed to tick two. Check populate_mock_data.py. (rows: ${rowIds.join(', ')})`);
+        const [first, second] = rowIds;
+        const firstAsset = Number(first.split('-')[0]);
+        const lineOf = (id: string) => page.getByTestId(`positions-chart-legend-${id}`);
+
+        // Nothing ticked yet: nothing asked, and the portfolio's own line (the Dashboard's history) is the chart.
+        expect(traffic.sent, 'the page asked for a series before any row was ticked').toEqual([]);
+        await expect(chart).toHaveAttribute('data-view', 'percentage');
+        const baseline = await lineCount(chart);
+        await expect(lineOf('portfolio'), 'the portfolio line is in the legend before any row is ticked').toBeVisible();
+
+        // 1. One row: one request, for that position; the answer is 200 and holds its series.
+        await setRowTicked(page, first, true);
+        await expect.poll(() => answeredFor(traffic, first).length, {message: `no answer to the series request of ${first}`, timeout: 30_000}).toBeGreaterThan(0);
+        const call1 = answeredFor(traffic, first)[0];
+        expect(call1.status, 'POST /portfolio/positions-series').toBe(200);
+        expect(call1.body.positions.map(lineIdOf), 'the request asks exactly the ticked position').toEqual([first]);
+        expect(call1.body.positions[0].asset_id).toBe(firstAsset);
+        const series1 = seriesOf(call1, first);
+        expect(series1, `the answer holds the series of ${first}`).toBeDefined();
+        expect(series1!.key.asset_id, 'the series is the ticked row’s asset').toBe(firstAsset);
+        for (const view of ['percentage', 'absolute'] as const) {
+            expect(drawableIn(call1, first, view), `the series of ${first} has no known point in the ${view} view: the chart cannot draw it (check the mock data)`).toBe(true);
+        }
+
+        await expect(chart).toHaveAttribute('data-state', 'ready', {timeout: 30_000});
+        await expect(lineOf(first), 'a legend entry for the ticked row').toBeVisible();
+        await expect(lineOf('portfolio'), 'and the portfolio line is still there').toBeVisible();
+        await expect(chart).toHaveAttribute('data-line-count', String(baseline + 1));
+        await expect(page.getByTestId('positions-chart-canvas')).toHaveAttribute('data-chart-ready', 'true', {timeout: 15_000});
+
+        // 2. A second row: the next request carries both positions.
+        await setRowTicked(page, second, true);
+        await expect.poll(() => answeredFor(traffic, second, (call) => call.body.positions.length === 2).length, {message: `no answer to a series request with both ${first} and ${second}`, timeout: 30_000}).toBeGreaterThan(0);
+        const call2 = answeredFor(traffic, second, (call) => call.body.positions.length === 2)[0];
+        expect(call2.status).toBe(200);
+        expect(call2.body.positions.map(lineIdOf).sort(), 'the request carries both keys').toEqual([first, second].sort());
+        expect(drawableIn(call2, second, 'percentage') && drawableIn(call2, second, 'absolute'), `the series of ${second} has no known point to draw (check the mock data)`).toBe(true);
+        await expect(chart).toHaveAttribute('data-state', 'ready', {timeout: 30_000});
+        await expect(lineOf(second)).toBeVisible();
+        await expect(lineOf(first)).toBeVisible();
+        await expect(chart).toHaveAttribute('data-line-count', String(baseline + 2));
+
+        // 3. Unticking the second drops its entry and its line; what is already on screen answers the first, so nothing is asked.
+        const sentBefore = traffic.sent.length;
+        await setRowTicked(page, second, false);
+        await expect(lineOf(second), 'the unticked row leaves the legend').toHaveCount(0);
+        await expect(lineOf(first)).toBeVisible();
+        await expect(chart).toHaveAttribute('data-line-count', String(baseline + 1));
+        expect(traffic.sent.length, 'unticking asked the series again although the answer on screen covers the rest').toBe(sentBefore);
+
+        // 4. Abs / %: the view changes, the lines do not (same answer, another reading of it), and nothing is asked.
+        await page.getByTestId('positions-chart-view-absolute').click();
+        await expect(chart).toHaveAttribute('data-view', 'absolute');
+        await expect(chart).toHaveAttribute('data-state', 'ready');
+        await expect(lineOf(first)).toBeVisible();
+        await expect(lineOf('portfolio')).toBeVisible();
+        await expect(chart).toHaveAttribute('data-line-count', String(baseline + 1));
+        await page.getByTestId('positions-chart-view-percentage').click();
+        await expect(chart).toHaveAttribute('data-view', 'percentage');
+        await expect(lineOf(first)).toBeVisible();
+        await expect(chart).toHaveAttribute('data-line-count', String(baseline + 1));
+        expect(traffic.sent.length, 'a change of view asked the series again').toBe(sentBefore);
+
+        // 5. Unticking the last row leaves the portfolio line alone.
+        await setRowTicked(page, first, false);
+        await expect(lineOf(first)).toHaveCount(0);
+        await expect(chart).toHaveAttribute('data-line-count', String(baseline));
+    });
+
+    test('a change of period or of currency asks the series again, for the same positions', async ({page}) => {
+        const traffic = recordSeriesTraffic(page);
+        const chart = await openHoldingsChart(page);
+        const [rowId] = await holdingRowIds(page);
+        if (!rowId) throw new Error('The holdings table has no position row: check populate_mock_data.py');
+        const lineOf = page.getByTestId(`positions-chart-legend-${rowId}`);
+
+        await setRowTicked(page, rowId, true);
+        await expect.poll(() => answeredFor(traffic, rowId).length, {message: `no answer to the series request of ${rowId}`, timeout: 30_000}).toBeGreaterThan(0);
+        const opening = answeredFor(traffic, rowId)[0];
+        expect(opening.status).toBe(200);
+        await expect(chart).toHaveAttribute('data-state', 'ready', {timeout: 30_000});
+        await expect(lineOf).toBeVisible();
+
+        // Period: the Dashboard opens on 3M, so 6M is a change.
+        const sixMonths = page.getByTestId('date-preset-6m');
+        await expect(sixMonths, 'precondition: 6M is a change of period (the Dashboard opens on 3M)').toHaveAttribute('data-active', 'false');
+        await sixMonths.click();
+        await expect(sixMonths).toHaveAttribute('data-active', 'true');
+        await expect
+            .poll(() => answeredFor(traffic, rowId, (call) => JSON.stringify(call.body.date_range ?? null) !== JSON.stringify(opening.body.date_range ?? null)).length, {
+                message: 'choosing 6M asked no series for another window',
+                timeout: 30_000,
+            })
+            .toBeGreaterThan(0);
+        const periodCall = answeredFor(traffic, rowId, (call) => JSON.stringify(call.body.date_range ?? null) !== JSON.stringify(opening.body.date_range ?? null))[0];
+        expect(periodCall.status).toBe(200);
+        expect(periodCall.body.positions.map(lineIdOf), 'the new window asks the same position').toEqual([rowId]);
+        expect(periodCall.body.target_currency ?? null, 'a period change keeps the currency').toBe(opening.body.target_currency ?? null);
+        // The page settles on the new window with the position still drawn.
+        await waitForSettled(page.getByTestId('dashboard-page'), 30_000);
+        await expect(chart).toHaveAttribute('data-state', 'ready', {timeout: 30_000});
+        await expect(lineOf, 'the ticked row is still in the legend after the period moved').toBeVisible();
+
+        // Currency: USD must be a change.
+        const currency = page.getByTestId('dashboard-target-currency-trigger');
+        await expect(currency, 'precondition: the Dashboard does not open in USD already').not.toContainText('USD');
+        await currency.click();
+        await page.getByTestId('dashboard-target-currency').getByTestId('search-select-option-USD').click();
+        await optionsClosed(page);
+        await expect(currency).toContainText('USD');
+        await expect.poll(() => answeredFor(traffic, rowId, (call) => call.body.target_currency === 'USD').length, {message: 'choosing USD asked no series in USD', timeout: 30_000}).toBeGreaterThan(0);
+        const currencyCall = answeredFor(traffic, rowId, (call) => call.body.target_currency === 'USD')[0];
+        expect(currencyCall.status).toBe(200);
+        expect(currencyCall.json?.currency, 'the answer is in the currency asked').toBe('USD');
+        expect(currencyCall.body.positions.map(lineIdOf)).toEqual([rowId]);
+        expect(JSON.stringify(currencyCall.body.date_range ?? null), 'a currency change keeps the 6M window').toBe(JSON.stringify(periodCall.body.date_range ?? null));
+        await waitForSettled(page.getByTestId('dashboard-page'), 30_000);
+        await expect(chart).toHaveAttribute('data-state', 'ready', {timeout: 30_000});
+        await expect(lineOf, 'the ticked row is still in the legend after the currency moved').toBeVisible();
+    });
+
+    test('a failed series request shows the failure state, and ticking again without the fault recovers', async ({page}) => {
+        const traffic = recordSeriesTraffic(page);
+        let injected = 0;
+        const fault = async (route: import('@playwright/test').Route) => {
+            injected += 1;
+            await route.fulfill({status: 500, contentType: 'application/json', body: JSON.stringify({detail: 'synthetic fault of the E2E: the series cannot be computed'})});
+        };
+        await page.route(`**${POSITIONS_SERIES_PATH}`, fault);
+        try {
+            const chart = await openHoldingsChart(page);
+            const [rowId] = await holdingRowIds(page);
+            if (!rowId) throw new Error('The holdings table has no position row: check populate_mock_data.py');
+            const lineOf = page.getByTestId(`positions-chart-legend-${rowId}`);
+
+            await setRowTicked(page, rowId, true);
+            await expect.poll(() => injected, {message: 'the series request never reached the fault', timeout: 30_000}).toBe(1);
+            await expect(page.getByTestId('positions-chart-failed'), 'a 500 shows the failure state').toBeVisible({timeout: 15_000});
+            await expect(chart).toHaveAttribute('data-state', 'failed');
+            await expect(page.getByTestId('positions-chart-skeleton')).toHaveCount(0);
+
+            // The fault is gone. Unticking leaves nothing to fail, ticking again asks again.
+            await page.unroute(`**${POSITIONS_SERIES_PATH}`, fault);
+            await setRowTicked(page, rowId, false);
+            await expect(page.getByTestId('positions-chart-failed'), 'with nothing ticked there is nothing that failed').toHaveCount(0);
+            await setRowTicked(page, rowId, true);
+            await expect.poll(() => traffic.answered.filter((call) => call.status === 200 && call.body.positions.some((key) => lineIdOf(key) === rowId)).length, {message: 'ticking again asked no series', timeout: 30_000}).toBeGreaterThan(0);
+            await expect(chart).toHaveAttribute('data-state', 'ready', {timeout: 30_000});
+            await expect(page.getByTestId('positions-chart-failed')).toHaveCount(0);
+            await expect(lineOf, 'the position is drawn after the recovery').toBeVisible();
+            expect(injected, 'the fault was served once only').toBe(1);
+        } finally {
+            await page.unrouteAll({behavior: 'ignoreErrors'});
+        }
+    });
+});
+
+/**
+ * Dashboard, Allocation «By Asset» (Y5-2, #48) on real data.
+ *
+ * The pie of «now» is drawn from `summary.allocation_by_asset` (read here off the very reports the page
+ * asked), and the history view from `allocation_history.asset`. The chart is a canvas: the instance every
+ * allocation chart exposes as `__lfChart` is the only place to read what it drew. Nothing here assumes which
+ * assets the portfolio holds: the arcs are compared with the report's own list.
+ */
+test.describe('Dashboard: Allocation by asset on real data (Y5-2, #48)', () => {
+    test.describe.configure({timeout: 90_000});
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    type AssetItem = {id?: number | null; value?: string | number | null};
+
+    /** The ids of the assets the page's reports put in `summary.allocation_by_asset` with a positive share. */
+    function recordHeldAssetIds(page: Page): Set<number> {
+        const held = new Set<number>();
+        page.on('response', async (response) => {
+            if (response.request().method() !== 'POST' || new URL(response.url()).pathname !== REPORT_API_PATH) return;
+            const json = (await response.json().catch(() => null)) as {summary?: {allocation_by_asset?: AssetItem[]}} | null;
+            for (const item of json?.summary?.allocation_by_asset ?? []) {
+                if (typeof item.id === 'number' && Number(item.value) > 0) held.add(item.id);
+            }
+        });
+        return held;
+    }
+
+    /** The asset ids of the arcs the allocation pie drew, read off its ECharts instance. */
+    async function pieAssetIds(panel: Locator): Promise<number[]> {
+        return panel.evaluate((root) => {
+            for (const node of Array.from(root.querySelectorAll('*'))) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const chart = (node as any).__lfChart;
+                if (!chart || chart.isDisposed?.()) continue;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const pies = ((chart.getOption().series as any[]) ?? []).filter((entry) => entry?.type === 'pie');
+                if (pies.length === 0) continue;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                return pies.flatMap((entry) => ((entry.data as any[]) ?? []).map((datum) => datum?.assetId)).filter((id) => typeof id === 'number') as number[];
+            }
+            return [];
+        });
+    }
+
+    /** How many series the history chart draws. */
+    async function historySeriesCount(history: Locator): Promise<number> {
+        return history.evaluate((node) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const chart = (node as any).__lfChart;
+            if (!chart || chart.isDisposed?.()) return 0;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            return ((chart.getOption().series as any[]) ?? []).length;
+        });
+    }
+
+    test('By Asset draws the pie of the assets held, switches to the history and back, and is remembered across a reload', async ({page}) => {
+        const held = recordHeldAssetIds(page);
+        await page.goto('/dashboard');
+        await expect(page.getByTestId('dashboard-page')).toBeVisible({timeout: 15_000});
+        await expect(page.getByTestId('dashboard-page')).toHaveAttribute('data-busy', 'false', {timeout: 30_000});
+        const panel = page.getByTestId('allocation-panel');
+        await expect(panel).toBeVisible({timeout: 15_000});
+
+        // View and tab persist per user: select both, never assume a default.
+        const nowView = page.getByTestId('allocation-view-now');
+        await nowView.click();
+        await expect(nowView).toHaveAttribute('aria-pressed', 'true');
+        const assetTab = page.getByTestId('allocation-tab-asset');
+        await assetTab.click();
+        await expect(assetTab).toHaveAttribute('aria-pressed', 'true');
+
+        // The pie is drawn: arcs that are assets, every one of them in the report's own list of holdings.
+        await expect.poll(async () => (await pieAssetIds(panel)).length, {message: 'the By Asset pie drew no asset arc', timeout: 15_000}).toBeGreaterThan(0);
+        expect(held.size, 'the report lists no asset with a positive share: the portfolio holds nothing (check populate_mock_data.py)').toBeGreaterThan(0);
+        const drawn = await pieAssetIds(panel);
+        expect(
+            drawn.filter((id) => !held.has(id)),
+            'arcs of assets the report does not hold',
+        ).toEqual([]);
+        expect(new Set(drawn).size, 'an asset has more than one arc').toBe(drawn.length);
+
+        // History: the asset history chart draws, with at least a series.
+        const history = page.getByTestId('allocation-history-chart');
+        await page.getByTestId('allocation-view-history').click();
+        await expect(page.getByTestId('allocation-view-history')).toHaveAttribute('aria-pressed', 'true');
+        await expect(history).toBeVisible({timeout: 15_000});
+        await expect(history).toHaveAttribute('data-chart-ready', 'true', {timeout: 15_000});
+        await expect.poll(() => historySeriesCount(history), {message: 'the asset history drew no series', timeout: 15_000}).toBeGreaterThan(0);
+
+        // Back to «now»: the history leaves, the pie draws again, the tab is still By Asset.
+        await nowView.click();
+        await expect(nowView).toHaveAttribute('aria-pressed', 'true');
+        await expect(history).toBeHidden();
+        await expect(assetTab).toHaveAttribute('aria-pressed', 'true');
+        await expect.poll(async () => (await pieAssetIds(panel)).length, {message: 'the pie did not come back', timeout: 15_000}).toBeGreaterThan(0);
+
+        // The dimension is the user's choice and lasts (user storage, written on click, as the other tabs).
+        await page.reload();
+        await expect(page.getByTestId('dashboard-page')).toHaveAttribute('data-busy', 'false', {timeout: 30_000});
+        await expect(page.getByTestId('allocation-panel')).toBeVisible({timeout: 15_000});
+        await expect(page.getByTestId('allocation-tab-asset'), 'the By Asset tab came back after a reload').toHaveAttribute('aria-pressed', 'true');
+        await expect.poll(async () => (await pieAssetIds(page.getByTestId('allocation-panel'))).length, {message: 'after the reload the By Asset pie drew no asset arc', timeout: 15_000}).toBeGreaterThan(0);
     });
 });

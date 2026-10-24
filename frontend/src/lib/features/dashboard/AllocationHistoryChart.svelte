@@ -40,7 +40,7 @@
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {withHexAlpha} from '$lib/theme/colorAlpha';
     import {chartNeutrals} from '$lib/theme/chartTheme';
-    import {categoryColor, COUNTRY_SEQUENCE, isUnclassifiedCountry, sequenceColor} from '$lib/theme/chartCategories';
+    import {CATEGORY_SEQUENCE, categoryColor, COUNTRY_SEQUENCE, isUnclassifiedCountry, sequenceColor} from '$lib/theme/chartCategories';
     import {shadePoles} from '$lib/theme/chartShades';
     import {chartRoles} from '$lib/theme/roleColors';
     import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
@@ -49,6 +49,8 @@
         name: string;
         value: string;
         amount: string;
+        /** The asset id, on the asset dimension; the cash slice has none. */
+        id?: number | null;
     }
 
     interface AllocationHistoryPoint {
@@ -61,7 +63,9 @@
         height?: string;
         loading?: boolean;
         /** Which allocation dimension is being displayed — affects label localization. */
-        dimension?: 'type' | 'sector' | 'geo';
+        dimension?: 'type' | 'sector' | 'geo' | 'asset';
+        /** Asset dimension only: the colour rank of each asset id (computed by the caller, as for the pie). */
+        colorRanks?: ReadonlyMap<number, number>;
     }
 
     interface LogicalRange {
@@ -104,7 +108,7 @@
     // https://github.com/apache/echarts/issues/8230
     const CHART_SERIES_UPDATE_OPTS: {notMerge: boolean; replaceMerge: string[]} = {notMerge: false, replaceMerge: ['series', 'dataZoom', 'xAxis']};
 
-    let {data = [], height = '100%', loading = false, dimension = 'type'}: Props = $props();
+    let {data = [], height = '100%', loading = false, dimension = 'type', colorRanks}: Props = $props();
 
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | undefined = undefined;
@@ -177,6 +181,7 @@
     $effect(() => {
         void data;
         void dimension;
+        void colorRanks;
         void refDataVersion;
         void uiLocale();
         if (chartContainer) {
@@ -579,11 +584,29 @@
     }
 
     /**
+     * One entry per asset, named as sent. An asset takes the colour of its rank in `colorRanks` (the pie's rule: the
+     * designer's sequence, a shade of it past the last); the cash slice, which has no id, keeps the Liquidity colour,
+     * and an id without a rank the Unknown one.
+     */
+    function assetStyling(dataset: AggregatedAllocationDataset, isDark: boolean): SeriesStyle[] {
+        const idByName = new Map<string, number | null>();
+        for (const point of data) for (const component of point.components) if (!idByName.has(component.name) || idByName.get(component.name) == null) idByName.set(component.name, component.id ?? null);
+        const poles = shadePoles(isDark, chartRoles(isDark, chartContainer).color('--lf-surface-card'));
+        return dataset.sortedNames.map((name) => {
+            const id = idByName.get(name) ?? null;
+            const rank = id == null ? undefined : colorRanks?.get(id);
+            const color = id == null ? categoryColor('type', 'Liquidity', isDark, chartContainer) : rank === undefined ? categoryColor('type', 'Unknown', isDark, chartContainer) : sequenceColor(CATEGORY_SEQUENCE, rank, isDark, poles, chartContainer);
+            return {id: name, color, members: [name]};
+        });
+    }
+
+    /**
      * One entry per sector, or per country, each with its colour. A sector wears its own; a country has none: it takes
      * the country sequence (§1.4) by rank among the classified countries, a GR4 shade of it past the fourteenth (GR5),
      * while the unclassified one keeps its own colour.
      */
     function keyedStyling(dataset: AggregatedAllocationDataset, isDark: boolean): SeriesStyle[] {
+        if (dimension === 'asset') return assetStyling(dataset, isDark);
         if (dimension === 'sector') return dataset.sortedNames.map((name) => ({id: name, color: categoryColor('sector', name, isDark, chartContainer), members: [name]}));
         const poles = shadePoles(isDark, chartRoles(isDark, chartContainer).color('--lf-surface-card'));
         const rounds = COUNTRY_SEQUENCE.length * 7;

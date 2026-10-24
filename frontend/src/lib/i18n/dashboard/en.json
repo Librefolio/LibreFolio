@@ -152,6 +152,22 @@
     "allocationNegativeCash": "Negative cash: {amount}",
     "startValueTooltip": "The position's value at the start of the period, worked out as the Value column of the Portfolio; 0 if the position did not exist yet. It is the base of the period's percentages.",
     "endValueTooltip": "The position's value at the end of the period, worked out as the Value column of the Portfolio; 0 if the position was already closed.",
-    "transfersAtMarketValue": "Transfers at market value"
+    "transfersAtMarketValue": "Transfers at market value",
+    "assetAllocation": "By Asset",
+    "backToPortfolio": "Portfolio",
+    "positionsChart": {
+      "title": "Return of the positions",
+      "viewAbsolute": "Abs",
+      "viewPercentage": "%",
+      "viewAbsoluteHint": "Profit or loss in money, from the start of the period",
+      "viewPercentageHint": "Return, base 100 at the start of the period",
+      "portfolio": "Portfolio (Dashboard return)",
+      "portfolioNote": "The portfolio line is the return the Dashboard measures, not the profit of the positions on the capital they employed: the two can differ.",
+      "hint": "Tick rows in the table to compare their return with the portfolio.",
+      "failed": "The series of the positions could not be loaded.",
+      "closedOn": "Closed on {date}",
+      "incomplete": "Some values are missing (a price or a rate): the line leaves them out.",
+      "rowSelect": "Select the row to draw its return"
+    }
   }
 }
