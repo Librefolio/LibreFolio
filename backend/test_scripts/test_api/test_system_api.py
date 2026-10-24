@@ -845,8 +845,8 @@ class TestConnectionSecurityInProcess:
 
 INSTANCE_URL = f"{API_BASE}/system/instance"
 #: The public configuration, exactly these fields.
-# H-62 (contract L3 §6): ``mode``, normal or awaiting_restore. B-33 (22/10): ``restore_interrupted``; red until B-33
-INSTANCE_KEYS = {"profile", "accounts", "email", "support_url", "legal", "client_log_level", "mode", "restore_interrupted"}
+# H-62 (contract L3 §6): ``mode``, normal or awaiting_restore. B-33 (22/10): ``restore_interrupted``; H5-3 (24/10): ``restore_interrupted_reason``
+INSTANCE_KEYS = {"profile", "accounts", "email", "support_url", "legal", "client_log_level", "mode", "restore_interrupted", "restore_interrupted_reason"}
 #: accounts, exactly these fields.
 ACCOUNTS_KEYS = {"registration_mode", "registration_locked", "first_account_open", "password_rules"}
 #: Decision 37 (lot A6c): accounts.password_rules as (code, value) — a value left out and a null one read alike.
