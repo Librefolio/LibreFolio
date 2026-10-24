@@ -12,6 +12,8 @@
     import {resolveBrimTodoMessage} from '$lib/features/transactions/resolveBrimNotice';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import TransactionResultBanner from './TransactionResultBanner.svelte';
+    import PossibleSplitRow from './PossibleSplitRow.svelte';
+    import type {PossibleSplitEntry} from './bulkTodos';
     import {getTransactionTypeIconUrl, getTypeRule} from '$lib/features/transactions/transactionTypeStore';
     import {resolveIssueMessage, type ResolverContext} from '$lib/features/transactions/resolveValidationMessage';
     import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
@@ -63,6 +65,9 @@
         jumpToIssue: (issue: ValidationIssue) => void;
         jumpToTodoRow: (rowId: string) => void;
         triggerPromoteFromSuggestion: (sug: SuggestEntry) => void;
+        possibleSplitEntries: PossibleSplitEntry[];
+        onSplitCreate: (entry: PossibleSplitEntry) => void;
+        onSplitLink: (tempId: string, eventId: number) => void;
     }
 
     let {
@@ -102,6 +107,9 @@
         jumpToIssue,
         jumpToTodoRow,
         triggerPromoteFromSuggestion,
+        possibleSplitEntries,
+        onSplitCreate,
+        onSplitLink,
     }: Props = $props();
 </script>
 
@@ -227,6 +235,17 @@
                 </ul>
             {/if}
         </div>
+    {/if}
+    {#if possibleSplitEntries.length > 0}
+        <InfoBanner variant="warning">
+            <div data-testid="tx-bulk-possible-split">
+                <p class="font-medium">{$t('transactions.bulk.possibleSplit.title', {values: {n: possibleSplitEntries.length}})}</p>
+                <p>{$t('transactions.bulk.possibleSplit.explain')}</p>
+                {#each possibleSplitEntries as entry (entry.tempId)}
+                    <PossibleSplitRow {entry} onCreate={onSplitCreate} onLink={(eventId) => onSplitLink(entry.tempId, eventId)} onGoto={jumpToTodoRow} />
+                {/each}
+            </div>
+        </InfoBanner>
     {/if}
     {#if todoWarningRowCount > 0}
         <InfoBanner variant="warning">

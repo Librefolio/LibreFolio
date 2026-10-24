@@ -129,7 +129,20 @@
       "issueRowsHidden": "Les lignes concernées sont masquées par les filtres du tableau.",
       "unseenSuggestionsTitle": "Suggestions pas encore consultées",
       "unseenSuggestionsMessage": "{n, plural, one {# suggestion de fusion n’a pas encore été consultée} other {# suggestions de fusion n’ont pas encore été consultées}}. Fusionner les deux moitiés d’un transfert évite qu’elles comptent comme un dépôt et un retrait séparés. Enregistrer quand même ?",
-      "unseenSuggestionsReview": "Afficher les suggestions"
+      "unseenSuggestionsReview": "Afficher les suggestions",
+      "possibleSplit": {
+        "title": "{n, plural, one {# ligne pourrait être un split} other {# lignes pourraient être des splits}}",
+        "explain": "Ces actions sont entrées à coût nul. S'il s'agit d'un split, liez un événement SPLIT : le coût se répartit sur toutes vos actions. Sinon, le coût moyen de la position baisse.",
+        "create": "Créer l'événement SPLIT et lier",
+        "link": "Lier à un événement existant",
+        "goto": "Aller à la ligne",
+        "assetNeeded": "Choisissez d'abord l'actif de cette ligne.",
+        "quantityAdded": "+{quantity} actions",
+        "ratioLabel": "Ratio du split (actions nouvelles par action ancienne)",
+        "ratioHint": "Saisissez 3 pour un split 3 pour 1, 0.25 pour un split inversé 1 pour 4. Les actions détenues sont multipliées par ce nombre.",
+        "ratio": "Ratio {ratio} (d'après vos {held} actions détenues)",
+        "rounding": "Le courtier a arrondi la quantité : avec le ratio {ratio}, cette ligne diffère de {delta} actions de votre détention multipliée par le ratio. Les Lots et le Tableau de bord peuvent montrer un petit écart."
+      }
     },
     "commit": {
       "serverError": "Sauvegarde impossible — erreur serveur"

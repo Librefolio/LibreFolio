@@ -129,7 +129,20 @@
       "issueRowsHidden": "Le righe coinvolte sono nascoste dai filtri della tabella.",
       "unseenSuggestionsTitle": "Suggerimenti non ancora visti",
       "unseenSuggestionsMessage": "{n, plural, one {# suggerimento di unione non è ancora stato visto} other {# suggerimenti di unione non sono ancora stati visti}}. Unire le due metà di un trasferimento evita che contino come un deposito e un prelievo separati. Salvare comunque?",
-      "unseenSuggestionsReview": "Mostra i suggerimenti"
+      "unseenSuggestionsReview": "Mostra i suggerimenti",
+      "possibleSplit": {
+        "title": "{n, plural, one {# riga potrebbe essere uno split} other {# righe potrebbero essere split}}",
+        "explain": "Queste azioni sono entrate a costo zero. Se è uno split, collega un evento SPLIT: il costo si distribuisce su tutte le tue azioni. Se non lo è, il costo medio della posizione si abbassa.",
+        "create": "Crea l'evento SPLIT e collega",
+        "link": "Collega a un evento esistente",
+        "goto": "Vai alla riga",
+        "assetNeeded": "Scegli prima l'asset di questa riga.",
+        "quantityAdded": "+{quantity} azioni",
+        "ratioLabel": "Rapporto dello split (azioni nuove per azione vecchia)",
+        "ratioHint": "Scrivi 3 per uno split 3 per 1, 0.25 per uno split inverso 1 a 4. Le azioni che possiedi si moltiplicano per questo numero.",
+        "ratio": "Rapporto {ratio} (dalle {held} azioni che tenevi)",
+        "rounding": "Il broker ha arrotondato la quantità: con rapporto {ratio} questa riga differisce di {delta} azioni da quelle che tenevi per il rapporto. Lotti e Dashboard possono mostrare un piccolo scarto."
+      }
     },
     "commit": {
       "serverError": "Salvataggio impossibile — errore del server"

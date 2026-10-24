@@ -459,7 +459,7 @@ class Trading212BrokerProvider(BRIMProvider):
                 if added <= 0:
                     listed.extend([(close[0], close[1], SPLIT_CLOSE), (partner[1][0], partner[1][1], SPLIT_OPEN)])
                     continue
-                self._emit_split(partner[1][0], partner[1][1], added, headers, broker_id, transactions, validation_issues, field_todos, extracted_assets, asset_to_fake_id, key)
+                self._emit_split(partner[1][0], partner[1][1], added, close[3], headers, broker_id, transactions, validation_issues, field_todos, extracted_assets, asset_to_fake_id, key)
             listed.extend((o[0], o[1], SPLIT_OPEN) for o in free_opens)
 
         for row_num, row, action in sorted(listed, key=lambda item: item[0]):
@@ -470,6 +470,7 @@ class Trading212BrokerProvider(BRIMProvider):
         row_num: int,
         row: Dict[str, str],
         added: Decimal,
+        held_before: Decimal,
         headers: List[str],
         broker_id: int,
         transactions: List[TXCreateItem],
@@ -511,7 +512,7 @@ class Trading212BrokerProvider(BRIMProvider):
             tags=["import", "trading212"],
         )
         if created is not None:
-            field_todos.append(io.possible_split_todo(len(transactions) - 1, row_num, headers, row, ticker=ticker or key, added_quantity=added, isin=isin or None))
+            field_todos.append(io.possible_split_todo(len(transactions) - 1, row_num, headers, row, ticker=ticker or key, added_quantity=added, isin=isin or None, held_before=held_before))
 
     @property
     def plugin_version(self) -> str:

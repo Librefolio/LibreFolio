@@ -204,7 +204,8 @@
       "fineco_not_yet_settled": "{count, plural, one {# fila aún no está liquidada (su fecha valor es posterior a hoy) y no se importó: llegará con la próxima exportación.} other {# filas aún no están liquidadas (su fecha valor es posterior a hoy) y no se importaron: llegarán con la próxima exportación.}}",
       "fineco_incomplete_rows": "Esta importación podría ser incorrecta: {count, plural, one {# fila no tiene} other {# filas no tienen}} un número necesario (cantidad o importe). Revisa las filas de abajo; si el archivo es correcto, probablemente sea un error de la importación, y puedes ayudarnos a corregirlo:",
       "rows_not_recognized": "{count, plural, one {# fila se excluyó o se importó solo en parte} other {# filas se excluyeron o se importaron solo en parte}}: la importación no reconoce, o aún no importa, lo que describen. Revisa las filas de abajo; si afecta a tus participaciones o a tu efectivo, notifica el caso para que podamos tratarlo:",
-      "rows_unreadable": "{count, plural, one {# fila se excluyó} other {# filas se excluyeron}} porque un valor necesario no se puede leer. Revisa las filas de abajo; si el archivo es correcto, notifica el caso para que podamos tratarlo:"
+      "rows_unreadable": "{count, plural, one {# fila se excluyó} other {# filas se excluyeron}} porque un valor necesario no se puede leer. Revisa las filas de abajo; si el archivo es correcto, notifica el caso para que podamos tratarlo:",
+      "possible_split": "Posible split de {ticker}: {added_quantity} acciones nuevas a coste cero. Vincula un evento SPLIT o crea uno."
     },
     "evidenceRowsTitle": "Filas del archivo",
     "evidenceRowCount": "{n} filas",
@@ -538,6 +539,7 @@
     "previewFailed": {
       "preview_unsupported": "Este tipo de archivo no tiene vista previa.",
       "preview_unreadable": "El archivo parece dañado o no es lo que indica su extensión: no se puede mostrar la vista previa."
-    }
+    },
+    "reviewPossibleSplitNote": "{n, plural, one {# fila parece un split: las acciones nuevas entran a coste cero.} other {# filas parecen splits: las acciones nuevas entran a coste cero.}} En el editor puedes vincular o crear el evento SPLIT."
   }
 }

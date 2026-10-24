@@ -40,9 +40,10 @@
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 import {flushSync, tick} from 'svelte';
-import {writable} from 'svelte/store';
-import {cleanup, fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
+import {get, writable} from 'svelte/store';
+import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import {zodiosApi} from '$lib/api';
+import {_} from '$lib/i18n';
 import {schemas} from '$lib/api/generated';
 import {currentLanguage} from '$lib/stores/app/language';
 import {ensureCurrenciesLoaded} from '$lib/stores/reference/currencyStore';
@@ -76,6 +77,10 @@ vi.mock('../import/ImportWizardModal.svelte', () => ({
         return {};
     },
 }));
+// W-B87: the possible-split banner links an existing event through the shared AssetEventPicker; its stand-in publishes the
+// props it is given and answers event 555 (`$test/harness/AssetEventPickerStub.svelte`). Nothing else of the editor draws one:
+// the Form that does is the probe above.
+vi.mock('$lib/features/transactions/events/AssetEventPicker.svelte', async () => ({default: (await import('$test/harness/AssetEventPickerStub.svelte')).default}));
 
 vi.mock('$lib/api', () => {
     const cache = new Map<string, ReturnType<typeof vi.fn>>();
@@ -795,5 +800,222 @@ describe('TransactionBulkModal — N78-1: an outgoing ADJUSTMENT has no cost mod
         const item = (formProbe().items as TXReadItem[] | null)?.[0] as (TXReadItem & {cost_basis_mode?: unknown}) | undefined;
         expect(item?.id, 'the Form is on the saved ADJUSTMENT').toBe(saved.id);
         expect(item?.cost_basis_mode ?? null, `N78-1: ${_label} — an ADJUSTMENT of quantity ${quantity} takes a cost mode only when it adds units`).toBe(expectedMode);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// W-B87 — a stock split an import flagged `possible_split`: its own banner, its own way out
+// ---------------------------------------------------------------------------
+
+/**
+ * An importer enters a stock split as an incoming ADJUSTMENT at no cost and attaches a todo `{field: 'asset_event_id',
+ * severity: 'warning', reasonCode: 'possible_split', context: {ticker, added_quantity, isin?}}`. The editor shows it where the
+ * user can act on it:
+ *
+ *   - `tx-bulk-possible-split` lists one `possible-split-row` per such row, keyed by the visible row (`data-row-id`);
+ *   - the generic «fields to verify» banner (`tx-bulk-todo-warnings`) neither counts nor lists those todos any more;
+ *   - the save gate still counts them: a batch whose only warning is a possible split asks for the confirmation
+ *     (`confirm-modal-confirm`) before it saves;
+ *   - «link an existing event» (`possible-split-link`, then the picker): the row gets that `asset_event_id`, its todo is
+ *     recomputed (`remainingTodos`) and gone, so the row leaves the banner and the editor stops asking;
+ *   - «create the SPLIT event and link it» (`possible-split-create`): the real EventCreateMiniModal opens for the row's asset on
+ *     the row's date, on SPLIT; a ratio typed and created sends `upsert_events_bulk` as `mode: 'create'`, `type: 'SPLIT'`, with
+ *     the ratio as typed; the event it returns is linked the same way.
+ *
+ * Rows come in the way an import brings them (the wizard probe's `onImportBatch`); the nested Form and wizard stay probes, the
+ * picker is the shared stand-in. Rows are found by the description the test gave them, never by position; the language is the
+ * real English catalogue, read only through the keys of the labels it compares (`assetDetail.eventType.SPLIT`).
+ */
+describe('TransactionBulkModal — W-B87: the possible-split banner', () => {
+    const PICKED_EVENT_ID = 555;
+    const CREATED_EVENT_ID = 901;
+    const SPLIT_DATE = '2022-08-25';
+
+    type Handed = {tx: TransactionCreateItem; todos: Array<Record<string, unknown>>};
+
+    const splitTodo = (context: Record<string, unknown> = {}): Record<string, unknown> => ({
+        field: 'asset_event_id',
+        severity: 'warning',
+        reasonCode: 'possible_split',
+        message: 'Invented possible split',
+        context: {ticker: 'TSLA', added_quantity: '0.16431924', ...context},
+    });
+    const otherTodo = (): Record<string, unknown> => ({field: 'asset_event_id', severity: 'warning', reasonCode: 'probe_other_reason', message: 'Invented other todo'});
+
+    /** An incoming ADJUSTMENT as an import hands it over: the split of asset 101 on broker 77. */
+    function importedSplit(description: string, todos: Array<Record<string, unknown>>): Handed {
+        return {tx: {broker_id: 77, type: 'ADJUSTMENT', date: SPLIT_DATE, asset_id: 101, quantity: '0.16431924', tags: [], description} as TransactionCreateItem, todos};
+    }
+
+    async function importIntoNewEditor(batch: Handed[]): Promise<void> {
+        mountEditor({action: 'import'});
+        await waitFor(() => expect(wizardProbe().open, 'the import intent opens the wizard').toBe(true));
+        const handOver = wizardProbe().onImportBatch as (creates: Handed[]) => void;
+        handOver(batch);
+        await settle();
+        expect(wizardProbe().open, 'the hand-over closes the wizard').toBe(false);
+        for (const {tx} of batch) expect(rowStatus(gridRowDescribed(String(tx.description))), `premise: ${tx.description} is a new row`).toBe('new');
+    }
+
+    /** The `data-row-id` of the grid row described `description`: what the banner's row must name. */
+    const rowIdOf = (description: string): string => gridRowDescribed(description).getAttribute('data-row-id') ?? '';
+
+    /** The rows of the possible-split banner, by the visible row they name. */
+    const bannerRowIds = (): string[] => screen.queryAllByTestId('possible-split-row').map((row) => row.getAttribute('data-row-id') ?? '');
+
+    function bannerRowOf(description: string): HTMLElement {
+        const id = rowIdOf(description);
+        const row = screen.queryAllByTestId('possible-split-row').find((candidate) => candidate.getAttribute('data-row-id') === id);
+        if (!row) throw new Error(`the possible-split banner has no row for ${JSON.stringify(description)} (it names: ${JSON.stringify(bannerRowIds())})`);
+        return row;
+    }
+
+    /** The text of the event cell of a grid row. */
+    const eventCellOf = (description: string): string => (gridRowDescribed(description).querySelector('td[data-column-id="asset_event_id"]')?.textContent ?? '').trim();
+
+    const upsert = () => vi.mocked(zodiosApi.upsert_events_bulk_api_v1_assets_events_post);
+
+    beforeEach(() => {
+        upsert().mockResolvedValue(
+            schemas.FABulkEventUpsertResponse.parse({
+                results: [{asset_id: 101, count: 1, message: 'ok', event_ids: [CREATED_EVENT_ID]}],
+                success_count: 1,
+            }),
+        );
+    });
+
+    // --- the banner ---------------------------------------------------------------------------------------------
+
+    it('lists a row that carries the todo, by its visible row, and no row that does not', async () => {
+        await importIntoNewEditor([importedSplit('W-B87 split', [splitTodo()]), importedSplit('W-B87 plain', [])]);
+
+        expect(screen.queryByTestId('tx-bulk-possible-split'), 'the banner is on screen').not.toBeNull();
+        expect(bannerRowIds(), 'one row, the split').toEqual([rowIdOf('W-B87 split')]);
+    });
+
+    it('is absent when no row carries the todo', async () => {
+        await importIntoNewEditor([importedSplit('W-B87 plain only', [])]);
+
+        expect(screen.queryByTestId('tx-bulk-possible-split')).toBeNull();
+    });
+
+    it('a todo with another reason on the same field is not a split', async () => {
+        await importIntoNewEditor([importedSplit('W-B87 other reason', [otherTodo()])]);
+
+        expect(screen.queryByTestId('tx-bulk-possible-split')).toBeNull();
+        expect(screen.queryByTestId('tx-bulk-todo-warnings'), 'it stays a generic todo').not.toBeNull();
+    });
+
+    it('keeps the split rows out of the generic «fields to verify» banner, which still lists its own', async () => {
+        await importIntoNewEditor([importedSplit('W-B87 split', [splitTodo()]), importedSplit('W-B87 generic', [otherTodo()])]);
+
+        const generic = await screen.findByTestId('tx-bulk-todo-warnings');
+        await fireEvent.click(screen.getByTestId('tx-bulk-todo-warnings-toggle'));
+        const listed = [...generic.querySelectorAll('[data-testid="tx-bulk-todo-goto"]')].map((goto) => goto.getAttribute('data-row-id'));
+        expect(listed, 'the generic banner lists the other row only').toEqual([rowIdOf('W-B87 generic')]);
+        expect(bannerRowIds(), 'and the split banner the split row only').toEqual([rowIdOf('W-B87 split')]);
+    });
+
+    it('draws no generic banner when the split is the only warning', async () => {
+        await importIntoNewEditor([importedSplit('W-B87 split', [splitTodo()])]);
+
+        expect(screen.queryByTestId('tx-bulk-possible-split')).not.toBeNull();
+        expect(screen.queryByTestId('tx-bulk-todo-warnings'), 'the split is counted by its own banner').toBeNull();
+    });
+
+    // --- the save gate ------------------------------------------------------------------------------------------
+
+    // Guard, green today: the gate counts every row with a warning, the split included — and it must keep doing so once the
+    // generic banner stops counting it.
+    it('guard: a batch whose only warning is a possible split still asks for the confirmation before saving', async () => {
+        const {commitTransactions} = await import('$lib/features/transactions/txCommitApi');
+        await importIntoNewEditor([importedSplit('W-B87 split', [splitTodo()])]);
+
+        await fireEvent.click(screen.getByTestId('tx-bulk-commit'));
+
+        expect(await screen.findByTestId('confirm-modal-confirm'), 'the save gate asks about the fields to verify').toBeInTheDocument();
+        expect(commitTransactions, 'and nothing is saved yet').not.toHaveBeenCalled();
+    });
+
+    // --- link an existing event ---------------------------------------------------------------------------------
+
+    it('linking an event writes it on the row, closes its todo, and the row leaves the banner', async () => {
+        await importIntoNewEditor([importedSplit('W-B87 split', [splitTodo()]), importedSplit('W-B87 other split', [splitTodo({ticker: 'OTH'})])]);
+        expect(eventCellOf('W-B87 split'), 'premise: no event on the row yet').not.toMatch(/\d/);
+        const row = bannerRowOf('W-B87 split');
+
+        await fireEvent.click(within(row).getByTestId('possible-split-link'));
+        await fireEvent.click(within(row).getByTestId('event-picker-stub-pick'));
+        await settle();
+
+        expect(bannerRowIds(), 'only the other split is still listed').toEqual([rowIdOf('W-B87 other split')]);
+        expect(eventCellOf('W-B87 split'), 'the row shows the event it is linked to').toMatch(new RegExp(`${PICKED_EVENT_ID}|✂`));
+        expect(eventCellOf('W-B87 other split'), 'the other row is untouched').not.toMatch(/\d/);
+    });
+
+    it('with its last split linked the banner is gone and the save gate no longer asks', async () => {
+        const {commitTransactions} = await import('$lib/features/transactions/txCommitApi');
+        await importIntoNewEditor([importedSplit('W-B87 split', [splitTodo()])]);
+        const row = bannerRowOf('W-B87 split');
+        await fireEvent.click(within(row).getByTestId('possible-split-link'));
+        await fireEvent.click(within(row).getByTestId('event-picker-stub-pick'));
+        await settle();
+        expect(screen.queryByTestId('tx-bulk-possible-split'), 'the last row left: no banner').toBeNull();
+
+        await fireEvent.click(screen.getByTestId('tx-bulk-commit'));
+        await settle();
+
+        expect(screen.queryByTestId('confirm-modal-confirm'), 'nothing left to verify: no confirmation').toBeNull();
+        expect(commitTransactions, 'the batch goes straight to the save').toHaveBeenCalled();
+    });
+
+    // --- create the event ---------------------------------------------------------------------------------------
+
+    it('«create» opens the mini modal for the row on SPLIT, and a typed ratio creates the event and links it', async () => {
+        await importIntoNewEditor([importedSplit('W-B87 split', [splitTodo()])]);
+
+        await fireEvent.click(within(bannerRowOf('W-B87 split')).getByTestId('possible-split-create'));
+
+        const modal = await screen.findByTestId('event-create-mini-modal');
+        expect(within(modal).getByTestId('event-create-type-button'), 'the modal starts on SPLIT').toHaveTextContent(get(_)('assetDetail.eventType.SPLIT'));
+        expect(within(modal).queryByTestId('event-create-ratio-hint'), 'a SPLIT amount is a ratio, and says so').not.toBeNull();
+        const date = within(within(modal).getByTestId('single-date-picker-root')).getByRole('textbox');
+        await waitFor(() => expect(date, 'premise: the modal is seeded with the row date').toHaveValue(SPLIT_DATE));
+        const ratio = within(modal).getByTestId('event-create-amount');
+        await fireEvent.input(ratio, {target: {value: '3'}});
+        await fireEvent.blur(ratio);
+        await fireEvent.click(within(modal).getByTestId('event-create-submit'));
+
+        await waitFor(() => expect(upsert()).toHaveBeenCalledTimes(1));
+        const item = upsert().mock.calls[0]?.[0]?.[0];
+        expect(item, 'the event is created on the row asset').toMatchObject({asset_id: 101, mode: 'create'});
+        const point = item?.events?.[0];
+        expect(point).toMatchObject({type: 'SPLIT', date: SPLIT_DATE});
+        expect(String(point?.value.amount), 'the ratio as typed').toBe('3');
+        await waitFor(() => expect(screen.queryByTestId('tx-bulk-possible-split'), 'the created event is linked: the row left the banner').toBeNull());
+        expect(eventCellOf('W-B87 split')).toMatch(new RegExp(`${CREATED_EVENT_ID}|✂`));
+    });
+
+    it('a ratio the importer suggested is prefilled in the mini modal as given', async () => {
+        await importIntoNewEditor([importedSplit('W-B87 split', [splitTodo({held_before: '0.08215962', ratio: '3', suggested_ratio: '3', rounding_delta: '0'})])]);
+
+        await fireEvent.click(within(bannerRowOf('W-B87 split')).getByTestId('possible-split-create'));
+
+        const modal = await screen.findByTestId('event-create-mini-modal');
+        const date = within(within(modal).getByTestId('single-date-picker-root')).getByRole('textbox');
+        await waitFor(() => expect(date).toHaveValue(SPLIT_DATE));
+        expect(within(modal).getByTestId('event-create-amount'), 'the suggestion, not 3.00').toHaveValue('3');
+    });
+
+    it('closing the mini modal without creating leaves the row in the banner, unlinked', async () => {
+        await importIntoNewEditor([importedSplit('W-B87 split', [splitTodo()])]);
+        await fireEvent.click(within(bannerRowOf('W-B87 split')).getByTestId('possible-split-create'));
+        const modal = await screen.findByTestId('event-create-mini-modal');
+
+        await fireEvent.click(within(modal).getByRole('button', {name: get(_)('common.cancel')}));
+        await settle();
+
+        expect(upsert()).not.toHaveBeenCalled();
+        expect(bannerRowIds()).toEqual([rowIdOf('W-B87 split')]);
     });
 });

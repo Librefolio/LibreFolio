@@ -129,7 +129,20 @@
       "issueRowsHidden": "Las filas afectadas están ocultas por los filtros de la tabla.",
       "unseenSuggestionsTitle": "Sugerencias aún sin revisar",
       "unseenSuggestionsMessage": "{n, plural, one {# sugerencia de unión aún no se ha revisado} other {# sugerencias de unión aún no se han revisado}}. Unir las dos mitades de una transferencia evita que cuenten como un depósito y una retirada por separado. ¿Guardar de todos modos?",
-      "unseenSuggestionsReview": "Mostrar las sugerencias"
+      "unseenSuggestionsReview": "Mostrar las sugerencias",
+      "possibleSplit": {
+        "title": "{n, plural, one {# fila podría ser un split} other {# filas podrían ser splits}}",
+        "explain": "Estas acciones entraron a coste cero. Si es un split, vincula un evento SPLIT: el coste se reparte entre todas tus acciones. Si no, el coste medio de la posición baja.",
+        "create": "Crear el evento SPLIT y vincular",
+        "link": "Vincular a un evento existente",
+        "goto": "Ir a la fila",
+        "assetNeeded": "Elige primero el activo de esta fila.",
+        "quantityAdded": "+{quantity} acciones",
+        "ratioLabel": "Proporción del split (acciones nuevas por acción antigua)",
+        "ratioHint": "Escribe 3 para un split 3 por 1, 0.25 para un split inverso 1 por 4. Las acciones que tienes se multiplican por este número.",
+        "ratio": "Proporción {ratio} (según tus {held} acciones)",
+        "rounding": "El bróker redondeó la cantidad: con la proporción {ratio} esta fila difiere en {delta} acciones de tu posición por la proporción. Lotes y Panel pueden mostrar una pequeña diferencia."
+      }
     },
     "commit": {
       "serverError": "Guardado imposible — error del servidor"

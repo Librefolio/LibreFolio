@@ -33,7 +33,8 @@
     import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import BrimEvidenceTable from '$lib/features/transactions/import/BrimEvidenceTable.svelte';
-    import {initialCostBasisMode, remainingTodos} from '$lib/features/transactions/bulk/bulkTodos';
+    import {initialCostBasisMode, remainingTodos, withoutPossibleSplit, possibleSplitEntries as buildSplitEntries, type PossibleSplitEntry} from './bulkTodos';
+    import EventCreateMiniModal from '../events/EventCreateMiniModal.svelte';
     import {resolveBrimTodoMessage} from '$lib/features/transactions/resolveBrimNotice';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import TransactionResultBanner from './TransactionResultBanner.svelte';
@@ -1519,7 +1520,7 @@
 
     /** The rest of the save gate, once the suggestions are seen or waived: the fields to verify, then the commit. */
     function requestCommitPastSuggestions() {
-        if (todoWarningRowCount > 0) {
+        if (todoWarningRowCountAll > 0) {
             confirmWarningsOpen = true;
             return;
         }
@@ -2237,12 +2238,27 @@
      *  Without this the user only sees a red row and a disabled Save, never the reason. */
     let todoBlockerEntries = $derived(ops.flatMap((op) => (op.todos ?? []).filter((t) => t.severity === 'blocker').map((todo) => ({rowId: op.pairedWith ?? op.tempId, rowNumber: visualRowLabels.get(op.tempId) ?? '—', date: op.fields.date, todo}))));
     /** Warning todos with their row, so the banner can lead to each of them (D4). */
-    let todoWarningEntries = $derived(ops.flatMap((op) => (op.todos ?? []).filter((t) => t.severity === 'warning').map((todo) => ({rowId: op.pairedWith ?? op.tempId, rowNumber: visualRowLabels.get(op.tempId) ?? '—', todo}))));
+    let todoWarningEntries = $derived(ops.flatMap((op) => withoutPossibleSplit((op.todos ?? []).filter((t) => t.severity === 'warning')).map((todo) => ({rowId: op.pairedWith ?? op.tempId, rowNumber: visualRowLabels.get(op.tempId) ?? '—', todo}))));
     let todoWarningsExpanded = $state(false);
     // Folded by default: with evidence tables attached, an expanded banner can be taller
     // than the viewport and push the grid — the thing the user has to fix — off-screen.
     let todoBlockersExpanded = $state(false);
-    let todoWarningRowCount = $derived(ops.filter((op) => op.todos?.some((t) => t.severity === 'warning')).length);
+    let todoWarningRowCountAll = $derived(ops.filter((op) => op.todos?.some((t) => t.severity === 'warning')).length);
+    let todoWarningRowCount = $derived(ops.filter((op) => withoutPossibleSplit((op.todos ?? []).filter((t) => t.severity === 'warning')).length > 0).length);
+    let possibleSplitEntries = $derived(buildSplitEntries(ops, (tempId) => visualRowLabels.get(tempId) ?? '—'));
+    let splitCreateEntry = $state<PossibleSplitEntry | null>(null);
+    function linkSplitEvent(tempId: string, eventId: number) {
+        ops = ops.map((d) => {
+            if (d.tempId !== tempId) return d;
+            const merged = {...d, fields: {...d.fields, asset_event_id: eventId}};
+            if (merged.todos?.length) {
+                merged.todos = remainingTodos(merged.todos, merged.fields);
+                if (merged.todos.length === 0) delete merged.todos;
+            }
+            return merged;
+        });
+    }
+    let splitCreateAsset = $derived(splitCreateEntry?.assetId != null ? getAssetInfo(splitCreateEntry.assetId) : null);
     /** Human-readable list of the auto-derived fields still awaiting verification (for the Save-gate dialog). */
     let todoWarningItems = $derived(ops.flatMap((op) => (op.todos ?? []).filter((todo) => todo.severity === 'warning').map((todo) => resolveBrimTodoMessage(todo, $t) || todo.field)));
     let commitDisabled = $derived(committing || ops.length === 0 || actionCount === 0 || hasTodoBlockers);
@@ -3275,6 +3291,9 @@
             {jumpToIssue}
             {jumpToTodoRow}
             {triggerPromoteFromSuggestion}
+            {possibleSplitEntries}
+            onSplitCreate={(entry) => (splitCreateEntry = entry)}
+            onSplitLink={linkSplitEvent}
         />
 
         <!-- Toolbar (Bugfix-2 §U9: action buttons right-aligned, most important first
@@ -3373,7 +3392,7 @@
 <ConfirmModal
     open={confirmWarningsOpen}
     title={$t('importWizard.todoWarningConfirmTitle')}
-    message={$t('importWizard.todoWarningConfirmMessage', {values: {n: todoWarningRowCount}})}
+    message={$t('importWizard.todoWarningConfirmMessage', {values: {n: todoWarningRowCountAll}})}
     items={todoWarningItems}
     itemsLabel={$t('importWizard.todoWarningConfirmItemsLabel', {values: {n: todoWarningItems.length}})}
     confirmText={$t('importWizard.todoWarningConfirmProceed')}
@@ -3495,4 +3514,18 @@
 />
 
 <!-- Phase 07 Part 5 v5 M1: BRIM Import Wizard -->
+<EventCreateMiniModal
+    open={splitCreateEntry !== null}
+    assetId={splitCreateEntry?.assetId ?? 0}
+    assetName={splitCreateAsset?.display_name ?? splitCreateEntry?.ticker ?? ''}
+    assetCurrency={splitCreateAsset?.currency ?? 'USD'}
+    defaultDate={splitCreateEntry?.date ?? ''}
+    suggestedAmount={splitCreateEntry?.suggestedRatio ?? ''}
+    defaultEventType="ADJUSTMENT"
+    zIndex={80}
+    oncreated={(eventId) => {
+        if (splitCreateEntry) linkSplitEvent(splitCreateEntry.tempId, eventId);
+    }}
+    onclose={() => (splitCreateEntry = null)}
+/>
 <ImportWizardModal open={importWizardOpen} zIndex={70} {defaultBrokerId} {pendingCreateTransactions} {pendingDeleteTxIds} onClose={() => (importWizardOpen = false)} {onImportBatch} />
