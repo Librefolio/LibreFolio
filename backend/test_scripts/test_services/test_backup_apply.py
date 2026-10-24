@@ -5455,3 +5455,216 @@ async def test_the_owner_s_password_changes_with_the_sessions_and_the_links_or_n
         outcome = exc
     assert rows_by_table(database) == snapshot, f"the owner's password refused: neither the sessions nor the links may have changed ({type(outcome).__name__})"
     print_success("the password refused: nothing changed")
+
+
+# =============================================================================
+# (u) Lot B5-1g: the owner's flag of the backup, the commit's connection, a pending administrator
+# =============================================================================
+#
+# ``users.is_instance_owner`` (A's migration 006) marks the one account that is the instance's owner, and a partial unique
+# index allows one. A backup carries its author's flag. The restored instance's owner is the account the restore
+# assigns, so the commit clears the flag of EVERY account first, then sets it on the chosen account only when that
+# account was assigned. A restore that assigns nobody (the hosting panel, the command line, an owner whose address another
+# account holds, an address no longer set, an account the database does not hold) ends with no account flagged: the
+# owner's account does not exist yet, and A's call (or the next admin-bootstrap) creates it.
+
+
+def flags_of(database: Path) -> dict[str, int]:
+    """``is_instance_owner`` of every account of ``database``, by username."""
+    return {name: row[OWNER_COLUMN] for name, row in accounts_of(database).items()}
+
+
+def flag_the_backups_owner(database: Path, username: str) -> None:
+    """The backup's author's flag: ``username`` marked as the instance owner in the copy. Barrier: it is the only one."""
+    cases.execute(database, f"UPDATE users SET {OWNER_COLUMN} = 1 WHERE username = '{username}'")
+    assert sorted(name for name, value in flags_of(database).items() if value) == [username], f"precondition: the copy flags {username} only: {flags_of(database)}"
+
+
+@pytest.mark.parametrize(("profile", "via"), [("managed", "cli"), ("managed", "panel"), ("selfhosted", "admin")])
+def test_a_restore_naming_no_owner_ends_with_no_account_flagged_as_the_instance_owner(tmp_path, databases, checked, monkeypatch, profile, via):
+    """(u) B5-1g: the hosting panel, the command line and a self-hosted instance name no owner: the commit clears
+    ``is_instance_owner`` of every account, so the backup author's flag does not survive. Committed. Red before B5-1g: the
+    flag stayed on the account it was on."""
+    print_section("(u) B5-1g no owner named: no flag")
+    apply = apply_module()
+    instance = owner_case(tmp_path, databases, checked, monkeypatch, profile=profile, owner_email=OWNER_EMAIL, candidates=[ADA, ZOE])
+    flag_the_backups_owner(instance.copy / DATABASE_ENTRY, "zoe_admin")
+    state, _events = committed_after(apply, instance, via=via)
+    assert (state.status, state.owner_user_id) == ("committed", None), f"{profile} via {via}: committed, no owner: {state}"
+    flags = flags_of(instance.root / DATABASE_ENTRY)
+    assert set(flags.values()) == {0}, f"no account is the instance owner: {sorted(name for name, value in flags.items() if value)}"
+    print_success(f"{profile} via {via}: no flag")
+
+
+def holder_of_the_address(instance: Instance, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Another account of the copy (``zoe_admin``) holds the owner's address, after the check: the confirmation allows
+    ada, the commit reads the database."""
+    del monkeypatch
+    cases.execute(instance.copy / DATABASE_ENTRY, "UPDATE users SET email = 'OWNER.b51@EXAMPLE.com' WHERE username = 'zoe_admin'")
+
+
+#: (the name of the case, what changes between the confirmation and the commit); the backup flags ``zoe_admin`` in each.
+NOT_ASSIGNED_CASES = ["another-account-holds-the-address", "the-address-is-no-longer-set", "the-database-has-no-such-account"]
+
+
+@pytest.mark.parametrize("case", NOT_ASSIGNED_CASES)
+def test_an_owner_who_was_not_assigned_leaves_no_account_flagged(tmp_path, databases, checked, monkeypatch, case):
+    """(u) B5-1g: an owner IS chosen but the commit cannot assign them (another account holds the address, the address is
+    no longer set, the database does not hold the account): the flag of the backup's author is cleared all the same and
+    nobody is set, so no account is flagged. Committed. Red before B5-1g: the others kept their flag."""
+    print_section(f"(u) B5-1g owner not assigned: {case}")
+    apply = apply_module()
+    instance = owner_case(tmp_path, databases, checked, monkeypatch, profile="managed", owner_email=OWNER_EMAIL, candidates=[ADA, ZOE])
+    copy_database = instance.copy / DATABASE_ENTRY
+    flag_the_backups_owner(copy_database, "zoe_admin")
+    before = accounts_of(copy_database)
+    options: dict[str, Any] = {}
+    if case == "another-account-holds-the-address":
+        holder_of_the_address(instance, monkeypatch)
+    elif case == "the-address-is-no-longer-set":
+        options["before_commit"] = lambda: owner_email_is(monkeypatch, None)
+    else:
+        options["before_apply"] = lambda: state_owner_is(instance.root, NO_SUCH_USER)
+    state, events = committed_after(apply, instance, owner_user_id=ADA["user_id"], **options)
+    assert state.status == "committed", f"committed all the same: {state}"
+    after = accounts_of(instance.root / DATABASE_ENTRY)
+    flags = {name: row[OWNER_COLUMN] for name, row in after.items()}
+    assert set(flags.values()) == {0}, f"no account is the instance owner: {sorted(name for name, value in flags.items() if value)}"
+    assert after["ada_admin"]["email"] == before["ada_admin"]["email"], "the chosen account did not take the owner's address (it was not assigned)"
+    nothing_secret_logged(events, OWNER_EMAIL, "OWNER.b51@EXAMPLE.com", *before)
+    print_success(f"{case}: no flag")
+
+
+def test_the_assigned_owner_is_the_only_account_flagged_whatever_the_backup_flagged(tmp_path, databases, checked, monkeypatch):
+    """(u) B5-1g, the guard: the backup flags ``zoe_admin``, the owner chooses ``ada_admin`` and it is assigned: ada is
+    flagged and zoe is not — the flag of the chosen account is not lost when every flag is cleared first. Green before
+    B5-1g, and it must stay so."""
+    apply = apply_module()
+    instance = owner_case(tmp_path, databases, checked, monkeypatch, profile="managed", owner_email=OWNER_EMAIL, candidates=[ADA, ZOE])
+    flag_the_backups_owner(instance.copy / DATABASE_ENTRY, "zoe_admin")
+    state, events = committed_after(apply, instance, owner_user_id=ADA["user_id"])
+    assert (state.status, state.owner_user_id) == ("committed", ADA["user_id"]), f"committed, the owner ada: {state}"
+    assert owner_line(events, instance.stage_id, ADA["user_id"]) == [True], f"ada was assigned: {logged(events)}"
+    flags = flags_of(instance.root / DATABASE_ENTRY)
+    assert flags == {name: int(name == "ada_admin") for name in flags}, f"{OWNER_COLUMN}: ada only: {flags}"
+    print_success("ada flagged, zoe not")
+
+
+@pytest.mark.parametrize("owner_chosen", [True, False], ids=["owner-chosen", "no-owner"])
+def test_a_database_without_the_owner_column_still_commits(tmp_path, databases, checked, monkeypatch, owner_chosen):
+    """(u) B5-1g, the guard: a backup whose database has no ``is_instance_owner`` column (a schema before A's migration 006,
+    here the head's index and column dropped after the check) is committed as before: no error, the sessions and the
+    links closed, the chosen account closed and given the owner's address. Green before B5-1g, and it must stay so."""
+    apply = apply_module()
+    instance = owner_case(tmp_path, databases, checked, monkeypatch, profile="managed", owner_email=OWNER_EMAIL, candidates=[ADA, ZOE])
+    copy_database = instance.copy / DATABASE_ENTRY
+    cases.execute(copy_database, "DROP INDEX ux_users_instance_owner", f"ALTER TABLE users DROP COLUMN {OWNER_COLUMN}")
+    assert OWNER_COLUMN not in accounts_of(copy_database)["ada_admin"], "precondition: the copy has no owner column"
+    state, _events = committed_after(apply, instance, owner_user_id=ADA["user_id"] if owner_chosen else None, via="admin" if owner_chosen else "cli")
+    assert state.status == "committed", f"committed: {state}"
+    after = accounts_of(instance.root / DATABASE_ENTRY)
+    assert OWNER_COLUMN not in after["ada_admin"], "the column is still absent: the commit added nothing"
+    if owner_chosen:
+        assert (after["ada_admin"]["email"], after["ada_admin"]["is_superuser"], after["ada_admin"]["is_active"]) == (configured_address(), 1, 1), "the chosen account took the owner's address, an active administrator"
+    print_success(f"no column, {'owner chosen' if owner_chosen else 'no owner'}: committed")
+
+
+# -----------------------------------------------------------------------------
+# (u) B5-1g: the connection the commit opens runs with trusted_schema off, like every other reader of a copy
+# -----------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("owner_chosen", [False, True], ids=["no-owner", "owner-chosen"])
+def test_the_connection_the_commit_opens_on_the_restored_database_turns_trusted_schema_off_first(tmp_path, databases, checked, monkeypatch, owner_chosen):
+    """(u) B5-1g: the read-write connection of ``_close_the_way_in`` on the restored database runs ``PRAGMA trusted_schema =
+    OFF`` before any other statement (B-37: the schema of a copy may call a function in a view, a trigger, a CHECK or
+    a default; with the setting off it can reach none that is not harmless). Recorded as test_backup_staging.py records
+    the connections of a check. Red before B5-1g: the first statement is the busy timeout."""
+    print_section("(u) B5-1g trusted_schema off first at the commit")
+    apply = apply_module()
+    instance = owner_case(tmp_path, databases, checked, monkeypatch, profile="managed", owner_email=OWNER_EMAIL, candidates=[ADA, ZOE])
+    opened: list[Any] = []
+    live = (instance.root / DATABASE_ENTRY).resolve()
+
+    def record_connections() -> None:
+        monkeypatch.setattr(apply, "sqlite3", cases.RecordingConnect(sqlite3, "apply", opened))
+
+    if owner_chosen:
+        state, _events = committed_after(apply, instance, owner_user_id=ADA["user_id"], before_commit=record_connections)
+    else:
+        state, _events = committed_after(apply, instance, via="cli", before_commit=record_connections)
+    assert state.status == "committed", f"committed: {state}"
+    on_live = [record for record in opened if record.path == live]
+    assert on_live, f"precondition: the commit opened the restored database through apply.sqlite3: {[(record.by, record.target) for record in opened]}"
+    trusting = [record for record in on_live if not cases.turns_trust_off_first(record)]
+    assert not trusting, f"every connection of the commit to the restored database turns trusted_schema off first: {cases.first_statements(trusting)}"
+    print_success(f"{len(on_live)} connection(s), trusted_schema=OFF first")
+
+
+# -----------------------------------------------------------------------------
+# (u) B5-1g: a pending administrator of the backup refuses the owner's confirmation
+# -----------------------------------------------------------------------------
+
+PENDING_ADMIN = "pend_admin"
+INSERT_PENDING_ADMIN = "INSERT INTO users (username, email, hashed_password, is_active, is_superuser, created_at, updated_at) VALUES (?, 'pend.b51@example.com', 'x', 0, 1, ?, ?)"
+
+
+def plant_pending_administrator(database: Path) -> None:
+    """An administrator waiting for its setup in the copy: inactive, with an admin-setup link nobody used."""
+    with closing(sqlite3.connect(database)) as conn, conn:
+        conn.execute(INSERT_PENDING_ADMIN, (PENDING_ADMIN, cases.CREATED, cases.CREATED))
+    cases.add_tokens(database, [(PENDING_ADMIN, "admin_setup", False)])
+
+
+def checked_report_of(instance: Instance) -> list[str]:
+    """What the check says of the owner's conflicts for the copy as it is now (``staging._owner_check``), written into the
+    report as the check writes it; the codes."""
+    from backend.app.services.platform.instance_backup import staging  # noqa: PLC0415
+
+    _address, _candidates, conflicts = staging._owner_check(instance.copy / DATABASE_ENTRY)
+    with_candidates(instance, [ADA, ZOE], owner_conflicts=conflicts)
+    return conflicts
+
+
+@pytest.mark.parametrize("chosen", [None, ADA["user_id"]], ids=["none-chosen", "a-valid-choice"])
+def test_a_managed_confirmation_of_a_copy_with_a_pending_administrator_is_refused_as_owner_conflict(tmp_path, databases, checked, monkeypatch, chosen):
+    """(u) B5-1g: the copy holds a pending administrator and nobody holds the owner's address: the check reports
+    ``pending_administrator`` and the confirmation via ``admin`` on ``managed`` is refused ``owner_conflict``
+    (``RestoreOwnerConflictError``) whatever the choice, naming the code; nothing written. Red before B5-1g: the check
+    reported no conflict and the confirmation went through."""
+    print_section("(u) B5-1g a pending administrator refuses the confirmation")
+    apply = apply_module()
+    instance = owner_case(tmp_path, databases, checked, monkeypatch, profile="managed", owner_email=OWNER_EMAIL, candidates=[ADA, ZOE])
+    plant_pending_administrator(instance.copy / DATABASE_ENTRY)
+    conflicts = checked_report_of(instance)
+    assert conflicts == ["pending_administrator"], f"the check reports the pending administrator: {conflicts}"
+    error = refused_with(apply, instance, chosen)
+    assert (type(error).__name__, error.code) == ("RestoreOwnerConflictError", "owner_conflict"), f"owner_conflict, not {type(error).__name__} {error.code}: {error}"
+    assert "pending_administrator" in str(error), f"the refusal names the code: {error}"
+    print_success(f"choice {chosen}: owner_conflict")
+
+
+def test_a_pending_administrator_does_not_refuse_when_another_account_holds_the_owner_s_address(tmp_path, databases, checked, monkeypatch):
+    """(u) B5-1g, the guard: the same pending administrator, but another account of the copy holds the owner's address:
+    no conflict, the forced choice is confirmed. Green before B5-1g, and it must stay so."""
+    apply = apply_module()
+    instance = owner_case(tmp_path, databases, checked, monkeypatch, profile="managed", owner_email=OWNER_EMAIL, candidates=[ADA, OWEN, ZOE])
+    holder_of_the_address(instance, monkeypatch)
+    plant_pending_administrator(instance.copy / DATABASE_ENTRY)
+    assert checked_report_of(instance) == [], "no conflict: an account holds the owner's address"
+    with_candidates(instance, [ADA, OWEN, ZOE], owner_conflicts=[])
+    state = apply.confirm_restore(instance.stage_id, confirmed_by=CONFIRMED_BY, confirmed_via="admin", owner_user_id=OWEN["user_id"], data_dir=instance.root, now=instance.confirm_at)
+    assert (state.status, state.owner_user_id) == ("pending", OWEN["user_id"]), f"confirmed: {state}"
+    print_success("another holder: confirmed")
+
+
+@pytest.mark.parametrize("conflicts", [["pending_administrator"], ["duplicate_email", "pending_administrator"], [*OWNER_CONFLICTS, "pending_administrator"]], ids=["pending-alone", "duplicate-email-and-pending", "every-code"])
+def test_every_conflict_code_still_refuses_and_is_named(tmp_path, databases, checked, monkeypatch, conflicts):
+    """(u) B5-1g, the guard: a report whose ``owner_conflicts`` holds the earlier codes, alone or with the new one, is refused
+    ``owner_conflict`` as before, and the refusal names every code. Green before B5-1g, and it must stay so."""
+    apply = apply_module()
+    instance = owner_case(tmp_path, databases, checked, monkeypatch, profile="managed", owner_email=OWNER_EMAIL, candidates=[ADA, ZOE], owner_conflicts=conflicts)
+    error = refused_with(apply, instance, ADA["user_id"])
+    assert (type(error).__name__, error.code) == ("RestoreOwnerConflictError", "owner_conflict"), f"owner_conflict: {type(error).__name__} {error.code}"
+    assert all(code in str(error) for code in conflicts), f"the refusal names every code {conflicts}: {error}"
+    print_success(f"{conflicts}: owner_conflict")

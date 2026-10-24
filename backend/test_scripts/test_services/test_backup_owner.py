@@ -85,6 +85,7 @@ from typing import Any
 
 import pytest
 from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 from structlog.testing import capture_logs
 
@@ -420,6 +421,169 @@ async def test_an_unexpected_failure_leaves_the_owner_pending_for_the_next_start
     assert recorded(data_dir.root) == (data_dir.owner_id, "link_only"), f"the next start records what A answered: {recorded(data_dir.root)}"
     no_secret_in(events)
     print_success("RuntimeError: pending, logged by type; then A called again and link_only recorded")
+
+
+# -----------------------------------------------------------------------------
+# (b) B5-1g: a database that is busy for a moment is waited for, a few times, and nothing else is retried
+# -----------------------------------------------------------------------------
+#
+# A's call writes the account and the link in one transaction. Another worker of the same start (admin-bootstrap, the
+# scheduler) may hold SQLite's write lock for a moment: the call then fails with ``database is locked``, which
+# SQLAlchemy raises as ``OperationalError``. That is not a reason to leave the owner without their link until the next
+# start: the step tries a few more times, with a short pause (``_RETRY_PAUSE_SECONDS``, patched to zero here), and only
+# for that error. ``_ATTEMPTS`` is the bound: a lock that never frees ends the step with nothing recorded.
+
+
+@dataclass
+class ScriptedA(FakeA):
+    """A ``FakeA`` that raises each of ``failures`` in turn, one per call, then does what ``FakeA`` does."""
+
+    failures: list[BaseException] = field(default_factory=list)
+
+    async def __call__(self, session: Any, user_id: int, *, now: datetime | None = None) -> FakeResult:
+        self.raises = self.failures.pop(0) if self.failures else None
+        return await super().__call__(session, user_id, now=now)
+
+
+def a_locked_database(kind: str) -> BaseException:
+    """The error a busy SQLite gives, as the three layers can show it."""
+    if kind == "wrapped-locked":
+        return OperationalError("INSERT INTO account_tokens (purpose) VALUES (?)", {}, sqlite3.OperationalError("database is locked"))
+    if kind == "wrapped-table-locked":
+        return OperationalError("UPDATE users SET email = ?", {}, sqlite3.OperationalError("database table is locked"))
+    return sqlite3.OperationalError("database is locked")
+
+
+LOCK_KINDS = ["wrapped-locked", "wrapped-table-locked", "bare-locked"]
+
+
+def attempts_of(owner: ModuleType) -> int:
+    """``owner._ATTEMPTS``, the bound of the tries; before B5-1g a failure that says so."""
+    attempts = getattr(owner, "_ATTEMPTS", None)
+    if attempts is None:
+        pytest.fail("[new] B5-1g: owner._ATTEMPTS (the bound of the tries on a locked database, 3 or more) does not exist yet", pytrace=False)
+    assert isinstance(attempts, int) and attempts >= 3, f"_ATTEMPTS is 3 or more: {attempts!r}"
+    return attempts
+
+
+def no_pause(monkeypatch: pytest.MonkeyPatch, owner: ModuleType) -> None:
+    """The pause between two tries made zero: a test never waits. ``raising=False``: a red test must fail on what it
+    asserts, not on the missing name."""
+    monkeypatch.setattr(owner, "_RETRY_PAUSE_SECONDS", 0, raising=False)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", LOCK_KINDS)
+async def test_a_locked_database_is_waited_for_and_the_owner_is_assigned_all_the_same(owner, data_dir, monkeypatch, kind):
+    """(b) B5-1g: A's call fails twice with ``database is locked`` (wrapped by SQLAlchemy or not) and then answers: the step
+    called A three times, each time with the owner's id and a session on the data directory's database, and records
+    what A answered (``sent``), as if nothing had happened. Nothing raised; no address, name or link in the log. Red
+    before B5-1g: the first failure ended the step with nothing recorded."""
+    print_section(f"(b) B5-1g a locked database retried: {kind}")
+    no_pause(monkeypatch, owner)
+    fake = ScriptedA(outcome=FakeOutcome.SENT, failures=[a_locked_database(kind), a_locked_database(kind)])
+    use_fake(monkeypatch, owner, fake)
+    write_state(data_dir.root, owner_user_id=data_dir.owner_id)
+    returned, raised, events = await assigned(owner, data_dir.root)
+    assert raised is None, f"the step never raises: {type(raised).__name__}: {raised}"
+    assert len(fake.calls) == 3, f"A called until it got through, three times: {len(fake.calls)}"
+    assert all(call["user_id"] == data_dir.owner_id and call["async_session"] and call["now"] is None and call["username"] == OWNER_USERNAME for call in fake.calls), f"each try with the owner's id and a session on the database: {fake.calls}"
+    assert recorded(data_dir.root) == (data_dir.owner_id, "sent"), f"restore.json records what A answered after the lock freed: {recorded(data_dir.root)}"
+    assert returned is not None and returned.owner_outcome == "sent", f"the state returned says it too: {returned}"
+    no_secret_in(events)
+    print_success(f"{kind}: two locks waited for, then sent")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", LOCK_KINDS)
+async def test_a_lock_that_never_frees_ends_after_the_bounded_tries_and_leaves_the_owner_pending(owner, data_dir, monkeypatch, kind):
+    """(b) B5-1g: A's call always fails with ``database is locked``: it is called exactly ``_ATTEMPTS`` times (3 or more),
+    then the step returns ``None`` with nothing recorded and ``restore.json`` as it was — the next start tries again —,
+    nothing raised, the failure logged by its type, no address, name or link in the log. Red before B5-1g: A was called
+    once and ``_ATTEMPTS`` did not exist."""
+    no_pause(monkeypatch, owner)
+    attempts = attempts_of(owner)
+    fake = FakeA(raises=a_locked_database(kind))
+    use_fake(monkeypatch, owner, fake)
+    before = write_state(data_dir.root, owner_user_id=data_dir.owner_id)
+    returned, raised, events = await assigned(owner, data_dir.root)
+    assert raised is None, f"the step never raises: {type(raised).__name__}: {raised}"
+    assert len(fake.calls) == attempts, f"A called exactly _ATTEMPTS ({attempts}) times, no more: {len(fake.calls)}"
+    assert returned is None and recorded(data_dir.root) == (data_dir.owner_id, None), f"nothing recorded: {returned}, {recorded(data_dir.root)}"
+    assert state_bytes(data_dir.root) == before, "restore.json as it was: the next start calls A again"
+    assert levels(events) & {"warning", "error", "critical"}, f"the failure is logged: {events}"
+    no_secret_in(events)
+    # The next start, the lock gone: A is called again and whatever it answers is recorded.
+    fake.raises, fake.outcome = None, FakeOutcome.SENT
+    _returned, raised, _events = await assigned(owner, data_dir.root)
+    assert raised is None and len(fake.calls) == attempts + 1, f"the next start calls A again: {raised}, {len(fake.calls)}"
+    assert recorded(data_dir.root) == (data_dir.owner_id, "sent"), f"the next start records what A answered: {recorded(data_dir.root)}"
+    print_success(f"{kind}: {attempts} tries, nothing recorded, then sent at the next start")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "failure",
+    [
+        pytest.param(RuntimeError(UNEXPECTED_TEXT), id="runtime-error"),
+        pytest.param(OperationalError("SELECT 1 FROM users", {}, sqlite3.OperationalError("no such table: users")), id="operational-error-not-a-lock"),
+        pytest.param(sqlite3.IntegrityError("UNIQUE constraint failed: users.email"), id="integrity-error"),
+    ],
+)
+async def test_only_a_locked_database_is_retried(owner, data_dir, monkeypatch, failure):
+    """(b) B5-1g, the guard: any other failure of A's call — not an ``OperationalError`` of a lock — is not retried: A is
+    called once, the step returns ``None``, nothing is recorded, ``restore.json`` as it was, the failure logged by its
+    type only. Green before B5-1g, and it must stay so."""
+    no_pause(monkeypatch, owner)
+    fake = FakeA(raises=failure)
+    use_fake(monkeypatch, owner, fake)
+    before = write_state(data_dir.root, owner_user_id=data_dir.owner_id)
+    returned, raised, events = await assigned(owner, data_dir.root)
+    assert raised is None, f"the step never raises: {type(raised).__name__}: {raised}"
+    assert len(fake.calls) == 1, f"A called once, not retried: {len(fake.calls)}"
+    assert returned is None and state_bytes(data_dir.root) == before, "nothing recorded, restore.json as it was"
+    assert levels(events) & {"warning", "error", "critical"}, f"the failure is logged: {events}"
+    no_secret_in(events, UNEXPECTED_TEXT, "users.email")
+    print_success(f"{type(failure).__name__}: one call, not retried")
+
+
+@pytest.mark.asyncio
+async def test_a_refusal_of_a_is_recorded_at_once_never_retried(owner, data_dir, monkeypatch):
+    """(b) B5-1g, the guard: A's own refusal (``OwnerAssignmentError``) is an answer, not a lock: one call, recorded as
+    ``error:<CODE>`` at once. Green before B5-1g, and it must stay so."""
+    no_pause(monkeypatch, owner)
+    fake = FakeA(raises=FakeOwnerAssignmentError("EMAIL_TAKEN"))
+    use_fake(monkeypatch, owner, fake)
+    write_state(data_dir.root, owner_user_id=data_dir.owner_id)
+    _returned, raised, _events = await assigned(owner, data_dir.root)
+    assert raised is None and len(fake.calls) == 1, f"one call: {raised}, {len(fake.calls)}"
+    assert recorded(data_dir.root) == (data_dir.owner_id, "error:EMAIL_TAKEN"), f"recorded at once: {recorded(data_dir.root)}"
+    print_success("EMAIL_TAKEN: one call, recorded")
+
+
+@dataclass
+class BusyTimeoutProbe(FakeA):
+    """A ``FakeA`` that also reads ``PRAGMA busy_timeout`` of the session it is given, in milliseconds."""
+
+    timeouts: list[int] = field(default_factory=list)
+
+    async def __call__(self, session: Any, user_id: int, *, now: datetime | None = None) -> FakeResult:
+        self.timeouts.append(int((await session.execute(text("PRAGMA busy_timeout"))).scalar_one()))
+        return await super().__call__(session, user_id, now=now)
+
+
+@pytest.mark.asyncio
+async def test_the_session_a_is_given_waits_for_a_busy_database_before_it_fails(owner, data_dir, monkeypatch):
+    """(b) B5-1g: the engine the step builds for A's session carries a busy timeout of at least 5000 ms (SQLite then waits
+    for a lock before it raises ``database is locked``, so the retries above are for a lock held longer than that)."""
+    no_pause(monkeypatch, owner)
+    fake = BusyTimeoutProbe(outcome=FakeOutcome.SENT)
+    use_fake(monkeypatch, owner, fake)
+    write_state(data_dir.root, owner_user_id=data_dir.owner_id)
+    _returned, raised, _events = await assigned(owner, data_dir.root)
+    assert raised is None and len(fake.calls) == 1, f"A called once: {raised}, {len(fake.calls)}"
+    assert fake.timeouts and fake.timeouts[0] >= 5000, f"the session waits at least 5000 ms for a lock: {fake.timeouts}"
+    print_success(f"busy_timeout {fake.timeouts[0]} ms")
 
 
 @pytest.mark.asyncio

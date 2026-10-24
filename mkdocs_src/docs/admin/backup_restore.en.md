@@ -285,7 +285,10 @@ On an instance a hosting provider runs for its users (the `managed` profile, see
     - the password of the chosen account stops working: nobody signs in with the password it had in the backup, and whoever prepared the backup cannot sign in as the owner. As for every account, its sessions end and every link of the backup is revoked;
     - the account takes the owner's address and becomes an active administrator;
     - then the owner receives by email a link to choose a new password, valid 30 minutes, and signs in with it. Starting again after a crash is harmless: a new link replaces the old one, which stops working.
+    - if the database is locked at that moment (by another worker of the start, or a backup running), LibreFolio waits and tries again, up to 4 times, 1 second apart, each try waiting up to 30 seconds for the lock. Only if it is still locked after that does the owner's account stay for the next start (`⏳` below).
 - 📮 **Without email.** When the instance cannot send email ([Email](email.md)), no message goes out: LibreFolio writes the link in the log of the instance, and whoever runs the server gives it **only to the owner**: whoever has it sets the password of the owner's account. The link is never in the report of the restore, in `backup pending` or in any answer of the server, because every administrator reads them, including whoever prepared the backup. If the 30 minutes pass before the owner uses it, the owner chooses the password with **Forgot Password?** on the sign-in page, with the owner's address, which is now the account's.
+- 🛡️ **The owner's protection is derived again.** The mark that says which account is the instance's owner, which a backup carries from the instance it was made on, is cleared at every restore. After it, the owner is the account the restore assigns or, in a restore with no choice of owner (from the hosting panel or the command line), the account the instance derives from `LIBREFOLIO_ADMIN_EMAIL` at its start.
+- 🚫 **No administrator, no restore.** A backup without an active administrator cannot be restored, here as on any instance: the report shows it as a blocker.
 - 🔑 The sentence of the report, *After the restore you sign in with one of them, with the password of then*, holds for the other administrators of the backup: the account chosen for the owner signs in only with the password set through its link.
 
 After a restore that was kept, `backup pending` adds one line about the owner's account (`backup pending --recover owner` prints the same ones):
@@ -294,7 +297,7 @@ After a restore that was kept, `backup pending` adds one line about the owner's 
 | --- | --- |
 | `✉️ The owner's account is set: a link to choose its password went to the owner's address` | Done: the owner chooses the password from the email |
 | `⚠️ The owner's account is set, but no email could be sent: the link to choose its password is in the log of the instance; give it only to the owner` | No email went out: the line carries no link, which is in the log of the instance; give it only to the owner, and to nobody else |
-| `⏳ The owner's account is set at the next start of the server` | The start has not given the owner the account yet: the next start does it |
+| `⏳ The owner's account is set at the next start of the server` | The start has not given the owner the account yet, for instance because the database stayed locked through the tries: the next start does it |
 | `❌ The owner's account could not be set (<CODE>): the server log has the cause` | The account could not be given to the owner: the log of the start names the cause |
 
 `backup pending --json` does not carry this line.
@@ -307,7 +310,7 @@ When the confirmation is refused, nothing is confirmed and the data stays as it 
 | `owner_choice_invalid` | The account chosen is not one the restore offers: not an active administrator of the backup, or another one than the account that already has the owner's address | Choose one of the accounts offered |
 | `owner_email_not_set` | The instance has no owner's address: `LIBREFOLIO_ADMIN_EMAIL` is not set | Ask the hosting provider to set it and restart LibreFolio, then choose the archive again to check it |
 | `restore_stage_outdated` | LibreFolio was updated since the check, or the owner's address changed since then: the accounts offered were read for the old address | Choose the archive again: a new check offers the accounts for the current address |
-| `owner_conflict` | The backup holds two accounts on one address or one name (the capitals of the letters aside), or an account named with the owner's address that does not have that address. The owner's account could not be set safely | Such a backup cannot be restored on a hosted instance. On the installation it comes from, give the accounts at fault their own name and address, then make a new backup |
+| `owner_conflict` | The backup holds two accounts on one address or one name (the capitals of the letters aside), or an account named with the owner's address that does not have that address; or an administrator that still waits for its first-setup link (the initial administrator, never completed) while no account holds the owner's address: the start would give that account the owner's address. The owner's account could not be set safely | For the first causes, such a backup cannot be restored on a hosted instance: on the installation it comes from, give the accounts at fault their own name and address, then make a new backup. For the waiting administrator, in the source instance complete that account's setup or delete it, then make a new backup; or have an account hold the owner's address there |
 
 ### ⌨️ Restore from the Command Line {: #restore-command }
 

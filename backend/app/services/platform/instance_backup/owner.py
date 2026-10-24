@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import os
+import sqlite3
 from pathlib import Path
 
 from backend.app.config import get_data_dir, get_settings
@@ -44,6 +45,14 @@ def configured_owner_email() -> str | None:
     except Exception:  # noqa: BLE001 — a probe: an unusable value means no address here, the startup audit says why
         return None
     return config.email if config is not None else None
+
+
+#: A's call is tried this many times when the database is locked by another writer (the other workers of the start, a
+#: backup running), with this pause between two tries; any other failure is not retried. Repeating the call is harmless.
+_ATTEMPTS = 4
+_RETRY_PAUSE_SECONDS = 1.0
+#: How long a connection waits for a lock before SQLite gives up, in seconds (the busy timeout).
+_BUSY_TIMEOUT_SECONDS = 30
 
 
 #: Held by the worker that gives the owner their account: the others of the same start leave it to that one.
@@ -117,6 +126,28 @@ async def assign_restored_owner(data_dir: Path | None = None):
             os.close(lock)
 
 
+def _is_lock_error(exc: BaseException) -> bool:
+    """Whether ``exc`` is SQLite saying the database or a table is locked or busy: the one failure that is waited out."""
+    cause = getattr(exc, "orig", None) or exc
+    return isinstance(cause, sqlite3.OperationalError) and any(word in str(cause).lower() for word in ("locked", "busy"))
+
+
+async def _assign_with_retries(assign, engine, user_id: int):
+    """A's call on a fresh session, tried again (a few times, after a pause) while the database is locked."""
+    from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415
+
+    for attempt in range(1, _ATTEMPTS + 1):
+        try:
+            async with AsyncSession(engine, expire_on_commit=False) as session:
+                return await assign(session, user_id)
+        except Exception as exc:  # noqa: BLE001 — only a lock error is waited out; the rest is re-raised unchanged
+            if not _is_lock_error(exc) or attempt == _ATTEMPTS:
+                raise
+            logger.warning("The database is locked: the owner's assignment is tried again", attempt=attempt, attempts=_ATTEMPTS)
+            await asyncio.sleep(_RETRY_PAUSE_SECONDS)
+    raise AssertionError("unreachable")  # pragma: no cover — the loop returns or raises
+
+
 async def _assign_locked(data_dir: Path):
     """``assign_restored_owner`` once its lock is held: the pending owner read again, A called, its outcome recorded."""
     from backend.app.services.platform.instance_backup.apply import owner_pending, record_owner_outcome  # noqa: PLC0415
@@ -130,15 +161,14 @@ async def _assign_locked(data_dir: Path):
     except ImportError as exc:
         logger.error("The owner of the restored data cannot be set: this LibreFolio lacks the function", stage_id=stage_id, error=type(exc).__name__)
         return None
-    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine  # noqa: PLC0415
+    from sqlalchemy.ext.asyncio import create_async_engine  # noqa: PLC0415
     from sqlalchemy.pool import NullPool  # noqa: PLC0415
 
     from backend.app.services.platform.instance_backup.paths import database_path  # noqa: PLC0415
 
-    engine = create_async_engine(f"sqlite+aiosqlite:///{database_path(data_dir)}", poolclass=NullPool)
+    engine = create_async_engine(f"sqlite+aiosqlite:///{database_path(data_dir)}", poolclass=NullPool, connect_args={"timeout": _BUSY_TIMEOUT_SECONDS})
     try:
-        async with AsyncSession(engine, expire_on_commit=False) as session:
-            result = await assign(session, user_id)
+        result = await _assign_with_retries(assign, engine, user_id)
     except refusal as exc:
         outcome = f"error:{getattr(exc, 'code', 'UNKNOWN')}"
         logger.error("The owner of the restored data could not be set", stage_id=stage_id, user_id=user_id, code=getattr(exc, "code", None))

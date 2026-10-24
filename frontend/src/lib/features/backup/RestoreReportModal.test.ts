@@ -755,6 +755,23 @@ describe('B5-1b — RestoreReportModal: the owner to choose (managed)', () => {
         expect(onConfirm).not.toHaveBeenCalled();
     });
 
+    it.each<[string, () => OwnerChoice]>([
+        ['an owner to choose among administrators', () => ownerChoice()],
+        ['the owner account forced (a plain user holding the owner address, no active administrator)', () => forcedChoice()],
+    ])('the blocker no_administrator with an owner choice (%s): the blocker is shown, the word cannot be typed, nothing confirms and no owner modal opens (B5-1g: green today, a guard)', async (_case, choice) => {
+        const {onConfirm} = mount(report({blockers: ['no_administrator'], administrators: [], restorable: false, owner_choice: choice()}));
+
+        expect(section('restore-report-blocker')).toBeInTheDocument();
+        expect(field(), 'the field is closed while the archive cannot be restored').toBeDisabled();
+        await type('violet');
+        expect(confirmButton()).toBeDisabled();
+        await fireEvent.click(confirmButton());
+        await fireEvent.keyDown(field(), {key: 'Enter'});
+
+        expect(screen.queryByTestId('owner-choice-modal'), 'the owner is never asked for an archive that cannot be restored').toBeNull();
+        expect(onConfirm).not.toHaveBeenCalled();
+    });
+
     it('forced_user_id null: the users are the administrators among the candidates, in their order — nothing locked', async () => {
         await ownerModalOpen();
 
