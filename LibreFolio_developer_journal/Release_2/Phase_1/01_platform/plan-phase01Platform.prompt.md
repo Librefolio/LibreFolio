@@ -10746,3 +10746,11 @@ DOC-2 (ricerca per lingua), DOC-1 (riordino della guida admin, con le guide Tail
    > **⚠️ Fuori pista**: nessuno. Resta un ritardo fino a 2 s tra la scrittura dell'esito e la prima richiesta servita su un worker che aspettava
    > (la limitazione serve a non leggere il file a ogni richiesta); non lo tocco senza decisione. Il punto 1 di A (errore passeggero di B che lascia `pending`
    > fino al riavvio) è di B.
+8. ✅ **H5-3b · le liste di chiavi di `/system/instance` dopo `restore_interrupted_reason`** (24/10). Il cancello del treno 11 trovò 27 rossi API:
+   H5-3 aveva aggiunto il campo alla configurazione pubblica senza aggiornare i test a chiavi esatte.
+   > **Note implementazione**: `restore_interrupted_reason` aggiunto agli insiemi dichiarati di `test_system_api.py` (`INSTANCE_KEYS`),
+   > `test_instance_config_legal_api.py` (`INSTANCE_KEYS`) e `test_registration_api.py` (`keys`, con il messaggio), e ai loro commenti (via il
+   > «red until B-33» ormai falso). Nessun cambiamento di prodotto. Cercate altre liste esatte nei test backend e nel frontend: nessuna (le
+   > fixture Vitest di `instanceConfig` non elencano le chiavi). Selettori su corsia 6197: `api instance-legal` 19, `api registration` 102,
+   > `api system` 122, `services restore-owner-guard` 46, `api restore-owner-guard` 33.
+   > **⚠️ Fuori pista**: nessuno. Lezione: un campo nuovo di una risposta pubblica va cercato per nome in tutti i `*_KEYS` e `set(body) ==` dei test.
