@@ -22,6 +22,7 @@
     import type {FilterValue} from '$lib/components/table/types';
     import PromoteMergeModal from '$lib/features/transactions/bulk/PromoteMergeModal.svelte';
     import TransactionActionModal from '$lib/features/transactions/TransactionActionModal.svelte';
+    import EventReconciliationModal from '$lib/features/transactions/EventReconciliationModal.svelte';
     import TransactionBulkModal from '$lib/features/transactions/bulk/TransactionBulkModal.svelte';
     import TransactionFormModal from '$lib/features/transactions/form/TransactionFormModal.svelte';
     import TransactionsTable from '$lib/features/transactions/TransactionsTable.svelte';
@@ -135,6 +136,9 @@
         await ensurePluginIconsLoaded();
         pluginIconsReady = true;
     }
+
+    /** «Relink events» (N68): the transactions without their asset event, with the event of the same day to link. */
+    let reconcileOpen = $state(false);
 
     async function reload(opts?: {soft?: boolean}): Promise<void> {
         const sessionGeneration = getClientSessionGeneration();
@@ -780,6 +784,10 @@
             >
                 <RefreshCw size={15} class={pageBusy.busy ? 'animate-spin' : ''} />
             </button>
+            <button class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-all" data-testid="tx-reconcile-events-button" title={$_('transactions.reconcile.buttonTitle')} onclick={() => (reconcileOpen = true)}>
+                <Link2 size={15} />
+                <span class="hidden sm:inline">{$_('transactions.reconcile.button')}</span>
+            </button>
             <button class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-all" data-testid="tx-import-button" use:guideAnchor={'transactions.page.import'} onclick={onImportFromBroker}>
                 <Upload size={15} />
                 <span class="hidden sm:inline">{$_('common.import')}</span>
@@ -874,6 +882,7 @@
         promoteMergeData = null;
     }}
 />
+<EventReconciliationModal bind:open={reconcileOpen} onlinked={() => void pageBusy.track('tx-reconcile', () => reload({soft: true}))} />
 <TransactionActionModal
     open={splitConfirmOpen}
     mode="split"

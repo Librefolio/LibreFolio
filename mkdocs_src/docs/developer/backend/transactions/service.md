@@ -9,7 +9,7 @@ Transaction batch execution is split across these source modules, in `backend/ap
 | `backend/app/services/transactions/validation.py` | `TransactionValidationMixin`: asset event links, the rows that require a cost basis, linked-pair rules |
 | `backend/app/services/transactions/queries.py` | `TransactionQueryMixin`: the transaction query, partner brokers, rows by id |
 | `backend/app/services/transactions/balances.py` | `TransactionBalancesMixin`: the balance replay and the balances at a date |
-| `backend/app/services/transactions/event_suggestions.py` | `TransactionEventSuggestionsMixin`: asset events a transaction can link to |
+| `backend/app/services/transactions/event_suggestions.py` | `TransactionEventSuggestionsMixin`: asset events a transaction can link to (`suggest_events_bulk()`) and the list of transactions that have none (`event_reconciliation()`) |
 | `backend/app/services/transactions/promotion.py` | `TransactionPromotionMixin`: transfer promotion, the split and promote type maps, promote suggestions |
 | `backend/app/services/transactions/auto_cost.py` | `TransactionAutoCostMixin`: WAC dispatch for the Auto cost basis |
 | `backend/app/services/transactions/unreadable_rows.py` | `count_unreadable_rows()` and `UnreadableLedgerError`: the transactions whose stored value cannot be read, counted before the Auto cost's pool (W-B69) and a broker's balances (W-B74) |
@@ -411,6 +411,77 @@ broker arrives at the other, and no unit is created or lost. The first rule that
 fails is the group's only issue, on operation `create` at the first leg's index, and
 the two rows stay unlinked. Pair description and tags are checked separately by
 `_validate_pair_description_tags()`.
+
+---
+
+## 🔁 Event Reconciliation {: #event-reconciliation }
+
+A transaction of type `DIVIDEND`, `INTEREST` or `ADJUSTMENT` can point at an asset event
+(`asset_event_id`). It loses the pointer when a [currency change](../assets/events.md#market-data-wipe)
+deletes the events that are not `SPLIT`s (N68), and it never had one when the dividend was booked before the
+event was synced. `GET /api/v1/transactions/event-reconciliation` lists those transactions with the event
+each could take, so the user can link them again. It is the read half of the flow: **it writes nothing and
+never links by itself**.
+
+```mermaid
+sequenceDiagram
+    actor U as User
+    participant P as Transactions page (EventReconciliationModal)
+    participant API as Backend
+
+    U->>P: Relink events
+    P->>API: GET /transactions/event-reconciliation
+    API-->>P: rows: unique / none / several
+    U->>P: Link (one row) or Link every row with one event
+    P->>API: POST /transactions/commit  updates: [{id, asset_event_id}]
+    API-->>P: committed, or issues and nothing linked
+    P-->>U: linked rows leave the list; the page reloads
+```
+
+**Rows** (`TransactionEventSuggestionsMixin.event_reconciliation()`, `services/transactions/event_suggestions.py`):
+the caller's transactions with an `asset_id`, no `asset_event_id` and an event-compatible type
+(`event_compatible_types()` of `schemas/transactions/type_metadata.py`), on the brokers where the caller holds
+a `BrokerUserAccess` row of role `EDITOR` or `OWNER`: the ones they could link on, so a viewer's brokers never
+appear. Optional query parameters `broker_id` and `asset_id` (both above 0) narrow the list. Order: date
+descending, then id descending.
+
+**Candidates** reuse `suggest_events_bulk()` with `tolerance_days=0`: the same asset, the **same date**, and
+the event type that corresponds to the transaction type, with no window of dates:
+
+| Transaction type | Event types it can take |
+|------------------|-------------------------|
+| `DIVIDEND` | `DIVIDEND` |
+| `INTEREST` | `INTEREST` |
+| `ADJUSTMENT` | `PRICE_ADJUSTMENT`, `SPLIT` |
+
+The mixin asks once per distinct `(asset, date, type)`, so a day with several dividends of one asset costs one
+query. The answer is a list of `TXEventReconciliationItem` (`schemas/transactions/event_suggest.py`):
+`transaction_id`, `broker_id`, `asset_id`, `date`, `type`, `status` and `candidates` (the same
+`TXEventSuggestCandidate` the suggest endpoint returns: `id`, `date`, `type`, `value`, `currency`, `is_auto`,
+`distance_days`).
+
+| `status` | Candidates | What the interface does |
+|----------|------------|-------------------------|
+| `unique` | exactly one | Proposes it: **Link** on the row, and the row counts for **Link every row with one event** |
+| `none` | zero | Says no event exists that day |
+| `several` | two or more, all listed | Proposes nothing, never guesses: the user picks the event in the transaction form |
+
+The `tolerance_days=0` is deliberate: a dividend credited a few days after the event is not matched, and the
+user links it by hand. Automatic linking is not done; it is on the list of future work.
+
+**Frontend.** The **Relink events** button (`data-testid="tx-reconcile-events-button"`) of the Transactions
+page opens `EventReconciliationModal.svelte` (`frontend/src/lib/features/transactions/`). The module
+`eventReconciliation.ts` reads the list (`loadEventReconciliation()`), selects the rows that are safe to link
+(`uniqueRows()`: `status` `unique` **and** exactly one candidate, a double check of the server) and links them
+with `linkReconciliation()`, which sends **one** `POST /transactions/commit` with
+`updates: [{id, asset_event_id}]` (`commitTransactions()` of `txCommitApi.ts`). The commit is atomic like every
+batch: any issue and nothing is linked, and the rows are not retried with fewer. With nothing to link there is
+no request. On success the page reloads its transactions softly (`onlinked`).
+
+Tests: `backend/test_scripts/test_api/test_event_reconciliation_api.py`
+(`./dev.py test api event-reconciliation`); in the frontend `eventReconciliation.test.ts` and
+`EventReconciliationModal.test.ts` (`frontend/src/lib/features/transactions/`) and
+`e2e/transactions/tx-event-reconciliation.spec.ts`.
 
 ---
 

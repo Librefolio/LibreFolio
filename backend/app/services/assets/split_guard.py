@@ -1,10 +1,11 @@
-"""The SPLITs a deletion of asset events would take from incoming adjustments without a purchase cost (X-R48, X-R49).
+"""The SPLITs a deletion of asset events would take from incoming adjustments without a purchase cost (X-R49).
 
 Linked to a SPLIT, an incoming ADJUSTMENT without a cost only rescales the position; with the SPLIT deleted it would be an
 acquisition of unknown cost (MISSING_COST_BASIS) — the rule of P-10, read through ``financial_math.splits``. A wipe that
-deletes events (the currency change, a parametric provider's change) refuses while one exists and names it as the
-caller may see it: an asset is global, so only the transactions on a broker the caller holds an access to are named and
-the others counted; without a caller none is named (R13-SEC7, X-R47b): ``event_links.visible_transaction_ids``.
+deletes SPLIT events (a parametric provider's change, the removal of a provider) refuses while one exists and names it as
+the caller may see it. The currency change does not need it since N68: it keeps the SPLIT events. An asset is global, so
+only the transactions on a broker the caller holds an access to are named and the others counted; without a caller none is
+named (R13-SEC7, X-R47b): ``event_links.visible_transaction_ids``.
 """
 
 from __future__ import annotations

@@ -7,7 +7,7 @@ from decimal import Decimal
 from typing import List, Optional
 
 import structlog
-from sqlalchemy import String, and_, case, cast, func, or_, select, update
+from sqlalchemy import String, and_, cast, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -41,6 +41,7 @@ from backend.app.schemas.common import (
     OldNew,
 )
 from backend.app.services.assets.base import AssetSourceError, AssetSourceProvider
+from backend.app.services.assets.currency_change import delete_market_data_of_assets, drop_provider_caches, provider_cache_keys
 from backend.app.services.financial_math.ledger_totals import position_quantities
 from backend.app.services.platform.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
 from backend.app.utils.asset.identifier import merge_other_identifiers
@@ -473,10 +474,7 @@ class AssetCRUDService:
 
         results: list[FAAssetPatchResult] = []
 
-        # P0-5 (audit 08): no N+1. Preload every patched asset in ONE query and
-        # compute the currency-change guard data with per-asset aggregates.
-        # Before: 1 SELECT per patch + up to 6 per currency-changing patch.
-        # After: 1 SELECT + 3 constant aggregate queries.
+        # P0-5 (audit 08): no N+1. Preload every patched asset in ONE query.
         patch_ids = [patch.asset_id for patch in patches]
         asset_rows = (await session.execute(select(Asset).where(Asset.id.in_(patch_ids)))).scalars().all() if patch_ids else []
         assets_by_id = {asset.id: asset for asset in asset_rows}
@@ -493,32 +491,9 @@ class AssetCRUDService:
                 patch_dict["classification_params"] = patch.classification_params.model_dump(mode="json", exclude_unset=True) if patch.classification_params is not None else None
             prepared.append((patch, patch_dict))
 
-        # Currency-change guard data (Policy D below), batched per asset.
-        currency_change_ids = [patch.asset_id for patch, patch_dict in prepared if patch_dict.get("currency") and patch.asset_id in assets_by_id and patch_dict["currency"] != assets_by_id[patch.asset_id].currency]
-        price_agg: dict[int, tuple[int, object, object]] = {}
-        event_manual_agg: dict[int, int] = {}
-        event_provider_agg: dict[int, int] = {}
-        linked_tx_agg: dict[int, int] = {}
-        if currency_change_ids:
-            price_rows = (await session.execute(select(PriceHistory.asset_id, func.count(), func.min(PriceHistory.date), func.max(PriceHistory.date)).where(PriceHistory.asset_id.in_(currency_change_ids)).group_by(PriceHistory.asset_id))).all()
-            price_agg = {row[0]: (int(row[1]), row[2], row[3]) for row in price_rows}
-
-            event_rows = (
-                await session.execute(
-                    select(
-                        AssetEvent.asset_id,
-                        func.sum(case((AssetEvent.provider_assignment_id.is_(None), 1), else_=0)),
-                        func.sum(case((AssetEvent.provider_assignment_id.is_not(None), 1), else_=0)),
-                    )
-                    .where(AssetEvent.asset_id.in_(currency_change_ids))
-                    .group_by(AssetEvent.asset_id)
-                )
-            ).all()
-            event_manual_agg = {row[0]: int(row[1] or 0) for row in event_rows}
-            event_provider_agg = {row[0]: int(row[2] or 0) for row in event_rows}
-
-            linked_rows = (await session.execute(select(AssetEvent.asset_id, func.count(Transaction.id)).join(Transaction, Transaction.asset_event_id == AssetEvent.id).where(AssetEvent.asset_id.in_(currency_change_ids)).group_by(AssetEvent.asset_id))).all()
-            linked_tx_agg = {row[0]: int(row[1]) for row in linked_rows}
+        # The currency each asset had before the loop: the assets whose currency differs after it lose their prices and
+        # non-SPLIT events (N68), whatever the later fields of the item did.
+        currency_before = {asset_id: asset.currency for asset_id, asset in assets_by_id.items()}
 
         for patch, patch_dict in prepared:
             try:
@@ -541,60 +516,6 @@ class AssetCRUDService:
 
                 # Track updated fields
                 updated_fields: List[OldNew[str]] = []
-
-                # I.3 + R3-3 Policy D — guard against currency change on assets with
-                # any residual market data (prices, events, or transactions still
-                # linked to those events).
-                #
-                # Rationale: changing ``asset.currency`` while rows exist in any of
-                # ``price_history`` / ``asset_events`` / ``transactions.asset_event_id``
-                # creates a silent inconsistency — old-currency values would be
-                # scaled against a new base via FX conversion producing wrong
-                # numbers or semantically-mismatched displays. The agreed policy
-                # is "wipe totally symmetric + disconnect linked transactions"
-                # (see phase-07 closure plan, §"Issue #R3-3 Policy D"):
-                # the frontend must POST to ``/assets/{id}/market-data/wipe``
-                # first, then re-PATCH, then re-sync.
-                #
-                # Here we emit a structured failure so the frontend can parse it
-                # and open the destructive-confirmation modal. Token format:
-                #   CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA|
-                #     prices=N|events_manual=M|events_provider=K|linked_tx=L|
-                #     oldest=YYYY-MM-DD|newest=YYYY-MM-DD|from=X|to=Y
-                # ``oldest``/``newest`` reflect the price range; they are empty
-                # strings when only events exist. Parser must tolerate missing
-                # fields.
-                if "currency" in patch_dict:
-                    new_currency = patch_dict["currency"]
-                    if new_currency and new_currency != asset.currency:
-                        # P0-5: all four counts + the price date range come from
-                        # the batched aggregates computed before the loop.
-                        price_count, oldest_date, newest_date = price_agg.get(patch.asset_id, (0, None, None))
-                        event_manual_count = event_manual_agg.get(patch.asset_id, 0)
-                        event_provider_count = event_provider_agg.get(patch.asset_id, 0)
-                        linked_tx_count = linked_tx_agg.get(patch.asset_id, 0)
-
-                        if price_count > 0 or event_manual_count > 0 or event_provider_count > 0:
-                            blocker_msg = (
-                                "CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA"
-                                f"|prices={price_count}"
-                                f"|events_manual={event_manual_count}"
-                                f"|events_provider={event_provider_count}"
-                                f"|linked_tx={linked_tx_count}"
-                                f"|oldest={oldest_date.isoformat() if oldest_date else ''}"
-                                f"|newest={newest_date.isoformat() if newest_date else ''}"
-                                f"|from={asset.currency}"
-                                f"|to={new_currency}"
-                            )
-                            results.append(
-                                FAAssetPatchResult(
-                                    asset_id=patch.asset_id,
-                                    success=False,
-                                    message=blocker_msg,
-                                    updated_fields=None,
-                                )
-                            )
-                            continue
 
                 for field, value in patch_dict.items():
                     logger.debug(f"Patching field '{field}': '{value}'")
@@ -661,8 +582,18 @@ class AssetCRUDService:
                     )
                 )
 
+        # N68 (developer decision of 19/10/2026): a currency change is never blocked. The prices and the events that are
+        # not SPLITs carry the old currency, so they go with it, in the same transaction as the change; the SPLIT events
+        # and the transactions linked to them stay. The interface shows the counts first
+        # (``GET /assets/{id}/market-data/summary``) and asks.
+        currency_changed_ids = [asset_id for asset_id, asset in assets_by_id.items() if asset.currency != currency_before[asset_id]]
+        cache_keys = await provider_cache_keys(session, currency_changed_ids)
+        await delete_market_data_of_assets(session, currency_changed_ids)
+
         # Commit all successful patches
         await session.commit()
+
+        await drop_provider_caches(cache_keys, asset_ids=currency_changed_ids)
 
         success_count = sum(1 for r in results if r.success)
 

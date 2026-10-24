@@ -1,27 +1,26 @@
 /**
- * currencyChangeErrors.ts — The refusals of the wipes that delete an asset's events, as one sentence in the interface
- * language: the currency change's market-data wipe (X-R48) and a change or removal of a provider (X-R49, X5-1, the asset modal).
+ * currencyChangeErrors.ts — The refusals of the changes that delete an asset's events, as one sentence in the interface
+ * language: a change or removal of a provider (X-R49, X5-1, the asset modal).
  *
- * X-R48: `POST /assets/{id}/market-data/wipe` deletes every event of the asset, so it refuses while a SPLIT of the asset
- * has linked incoming adjustments without a purchase cost: with the split gone, those units would count as bought at an
- * unknown price. The answer is a 409 `MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST`, whose `params.splits` lists each such
+ * X-R49: `POST /assets/provider` refuses with a 409 `PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST` when a parametric
+ * provider's new parameters (or leaving it) would delete a split it generated that has linked incoming adjustments without a
+ * purchase cost: with the split gone, those units would count as bought at an unknown price. `params.splits` lists each such
  * split by date with the adjustments the user can see (`transaction_ids`) and the others (`hidden_transactions_count`).
- * Every other refusal of the wipe keeps the modal's generic sentence.
- *
- * X-R49: `POST /assets/provider` refuses the same way, `PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST`, when a parametric
- * provider's new parameters (or leaving it) would delete such a split it generated; the values are the same.
  *
  * X5-1: `DELETE /assets/provider` («No provider» in the asset modal) refuses with that same code and the same `params.splits`
  * when the events it deletes include such a split; any other linked transaction is disconnected, after the dialog that
  * counts them (`providerImpact.ts`), so the old removal refusal (X-R62, `PROVIDER_REMOVAL_LINKED_TRANSACTIONS`) is gone.
  * `PROVIDER_REMOVAL_CONFLICT`, a link made meanwhile, has a sentence of its own that names nothing.
+ *
+ * N68: the currency change's market-data wipe (X-R48, `MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST`) no longer refuses: it keeps
+ * the SPLIT events and the transactions linked to them, so its sentence is gone and the code is unknown here. Every other
+ * refusal keeps the caller's generic sentence.
  */
 
 type Translate = (key: string, options?: {values?: Record<string, string | number>}) => string;
 
 /** The refusals this module says, by code: their sentence's key. Own keys only: a prototype name is no code. */
 const SENTENCE_KEYS: Readonly<Record<string, string>> = {
-    MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST: 'assetDetail.currencyChange.splitAdjustmentsWithoutCost',
     PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST: 'assets.modal.planSplitAdjustmentsWithoutCost',
     PROVIDER_REMOVAL_CONFLICT: 'assets.modal.providerRemovalConflict',
 };
@@ -38,7 +37,7 @@ function count(value: unknown): number {
     return Number.isInteger(n) && n > 0 ? n : 0;
 }
 
-/** The sentence for a refused wipe this module knows, or `null` for any other error (the caller keeps its generic one). */
+/** The sentence for a refused provider change this module knows, or `null` for any other error (the caller keeps its generic one). */
 export function wipeRefusalMessage(err: unknown, t: Translate, dateLabel: (iso: string) => string = (iso) => iso): string | null {
     const refusal = asRecord(asRecord(asRecord(asRecord(err)?.response)?.data)?.detail);
     const code = refusal?.error_code;

@@ -16,8 +16,9 @@
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {AxiosError, AxiosHeaders, type AxiosAdapter, type AxiosResponse, type InternalAxiosRequestConfig} from 'axios';
-import {ApiError, axiosInstance, zodiosApi} from '$lib/api';
+import {ApiError, axiosInstance} from '$lib/api';
 import {readForgotFailure, requestPasswordResetEmail, type ForgotFailure} from './forgotPasswordApi';
+import {spyOnApi} from '$test/spyOnApi';
 
 const ALIAS = 'request_password_reset_email_api_v1_email_password_reset_post';
 const ACCEPTED = {message: 'If an active account matches, its owner gets an email with a link to choose a new password'};
@@ -49,7 +50,7 @@ afterEach(() => {
 // =====================================================================================================================
 describe('requestPasswordResetEmail — through its alias', () => {
     it('FPA-01: posts {identifier} alone, once, and resolves with nothing', async () => {
-        const alias = vi.spyOn(zodiosApi, ALIAS).mockResolvedValueOnce(ACCEPTED);
+        const alias = spyOnApi(ALIAS).mockResolvedValueOnce(ACCEPTED);
 
         await expect(requestPasswordResetEmail('zq_alice')).resolves.toBeUndefined();
         expect(alias).toHaveBeenCalledTimes(1);
@@ -58,7 +59,7 @@ describe('requestPasswordResetEmail — through its alias', () => {
 
     it('FPA-02: a refusal reaches the caller as raised', async () => {
         const refusal = axiosRefusal(409, {detail: {error_code: 'EMAIL_UNAVAILABLE'}});
-        vi.spyOn(zodiosApi, ALIAS).mockRejectedValueOnce(refusal);
+        spyOnApi(ALIAS).mockRejectedValueOnce(refusal);
 
         await expect(requestPasswordResetEmail('zq_alice')).rejects.toBe(refusal);
     });

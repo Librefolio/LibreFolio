@@ -46,6 +46,7 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {AxiosError, AxiosHeaders, type AxiosAdapter, type AxiosResponse, type InternalAxiosRequestConfig} from 'axios';
 import {ApiError, axiosInstance, zodiosApi} from '$lib/api';
 import {fetchEmailStatus, issueProbeNonce, readTestFailure, refusalBody, refusalDetail, refusalStatus, retryAfterOf, sendTestEmail, type EmailBudget, type EmailCheck, type EmailLinks, type EmailStatus, type EmailTestFailure} from './emailApi';
+import {spyOnApi} from '$test/spyOnApi';
 
 /** What `GET /email/status` answers, as the generated client types it: wider than its schema. */
 type StatusAnswer = Awaited<ReturnType<typeof zodiosApi.get_email_status_api_v1_email_status_get>>;
@@ -118,7 +119,7 @@ describe('fetchEmailStatus — GET /email/status, normalized into EmailStatus', 
             status: {state: 'invalid', problem: 'SMTP_PORT_INVALID', variable: 'LIBREFOLIO_SMTP_PORT', checks: [SMTP_INVALID, ENCRYPTION_OK], budget: null, links: {ready: false, base: null, problem: 'PUBLIC_URL_MISSING'}},
         },
     ])('a full answer ($label) is kept as answered, asked once through its alias', async ({answer, status}) => {
-        const alias = vi.spyOn(zodiosApi, 'get_email_status_api_v1_email_status_get').mockResolvedValueOnce(answer);
+        const alias = spyOnApi('get_email_status_api_v1_email_status_get').mockResolvedValueOnce(answer);
 
         await expect(fetchEmailStatus()).resolves.toStrictEqual(status);
         expect(alias).toHaveBeenCalledTimes(1);
@@ -126,13 +127,13 @@ describe('fetchEmailStatus — GET /email/status, normalized into EmailStatus', 
     });
 
     it('a minimal answer ({state: off}) gets every key: problem, variable and budget null, no checks, no links', async () => {
-        vi.spyOn(zodiosApi, 'get_email_status_api_v1_email_status_get').mockResolvedValueOnce({state: 'off'});
+        spyOnApi('get_email_status_api_v1_email_status_get').mockResolvedValueOnce({state: 'off'});
 
         await expect(fetchEmailStatus()).resolves.toStrictEqual({state: 'off', problem: null, variable: null, checks: [], budget: null, links: NO_LINKS});
     });
 
     it('an empty problem or variable names nothing: null', async () => {
-        vi.spyOn(zodiosApi, 'get_email_status_api_v1_email_status_get').mockResolvedValueOnce({state: 'invalid', problem: '', variable: '', checks: [SMTP_OK], budget: null});
+        spyOnApi('get_email_status_api_v1_email_status_get').mockResolvedValueOnce({state: 'invalid', problem: '', variable: '', checks: [SMTP_OK], budget: null});
 
         await expect(fetchEmailStatus()).resolves.toStrictEqual({state: 'invalid', problem: null, variable: null, checks: [SMTP_OK], budget: null, links: NO_LINKS});
     });
@@ -159,14 +160,14 @@ describe('fetchEmailStatus — GET /email/status, normalized into EmailStatus', 
             status: {state: 'ready', problem: null, variable: null, checks: [SMTP_OK], budget: null, links: NO_LINKS},
         },
     ])('$label — the generated type admits it, the schema does not — is dropped: null', async ({answer, status}) => {
-        vi.spyOn(zodiosApi, 'get_email_status_api_v1_email_status_get').mockResolvedValueOnce(answer);
+        spyOnApi('get_email_status_api_v1_email_status_get').mockResolvedValueOnce(answer);
 
         await expect(fetchEmailStatus()).resolves.toStrictEqual(status);
     });
 
     it('a refusal reaches the caller as the client raised it', async () => {
         const refusal = axiosRefusal(403, 'Forbidden', {detail: 'Admin privileges required'});
-        vi.spyOn(zodiosApi, 'get_email_status_api_v1_email_status_get').mockRejectedValueOnce(refusal);
+        spyOnApi('get_email_status_api_v1_email_status_get').mockRejectedValueOnce(refusal);
 
         await expect(fetchEmailStatus()).rejects.toBe(refusal);
     });
@@ -194,7 +195,7 @@ describe('fetchEmailStatus — links narrowed to what the tab can trust (lot E3p
         {label: 'a string', links: PUBLIC_URL, expected: NO_LINKS},
     ])('EAP-01: links $label', async ({links, expected}) => {
         // Through the spied alias, past the generated schema: what the narrowing must survive is a shape the schema refuses.
-        vi.spyOn(zodiosApi, 'get_email_status_api_v1_email_status_get').mockResolvedValueOnce({state: 'ready', checks: [SMTP_OK], budget: BUDGET, links} as unknown as StatusAnswer);
+        spyOnApi('get_email_status_api_v1_email_status_get').mockResolvedValueOnce({state: 'ready', checks: [SMTP_OK], budget: BUDGET, links} as unknown as StatusAnswer);
 
         const status = await fetchEmailStatus();
 
@@ -206,7 +207,7 @@ describe('fetchEmailStatus — links narrowed to what the tab can trust (lot E3p
 // =====================================================================================================================
 describe('issueProbeNonce — POST /users/address-probe (lot E3p)', () => {
     it('EAP-02: posts once, through its alias, with no body, and answers the nonce alone', async () => {
-        const alias = vi.spyOn(zodiosApi, 'issue_address_probe_api_v1_users_address_probe_post').mockResolvedValueOnce({nonce: 'zq-nonce_0123', expires_at: '2026-10-15T20:00:00Z'});
+        const alias = spyOnApi('issue_address_probe_api_v1_users_address_probe_post').mockResolvedValueOnce({nonce: 'zq-nonce_0123', expires_at: '2026-10-15T20:00:00Z'});
 
         await expect(issueProbeNonce()).resolves.toBe('zq-nonce_0123');
         expect(alias).toHaveBeenCalledTimes(1);
@@ -215,7 +216,7 @@ describe('issueProbeNonce — POST /users/address-probe (lot E3p)', () => {
 
     it('EAP-03: a refusal reaches the caller as the client raised it', async () => {
         const refusal = axiosRefusal(403, 'Forbidden', {detail: 'Admin privileges required'});
-        vi.spyOn(zodiosApi, 'issue_address_probe_api_v1_users_address_probe_post').mockRejectedValueOnce(refusal);
+        spyOnApi('issue_address_probe_api_v1_users_address_probe_post').mockRejectedValueOnce(refusal);
 
         await expect(issueProbeNonce()).rejects.toBe(refusal);
     });
@@ -225,7 +226,7 @@ describe('issueProbeNonce — POST /users/address-probe (lot E3p)', () => {
 describe('sendTestEmail — POST /email/test', () => {
     it('posts once, through its alias, with no body, and answers what the client answered', async () => {
         const answer = {language: 'it' as const, message: 'Test email sent'};
-        const alias = vi.spyOn(zodiosApi, 'send_test_api_v1_email_test_post').mockResolvedValueOnce(answer);
+        const alias = spyOnApi('send_test_api_v1_email_test_post').mockResolvedValueOnce(answer);
 
         await expect(sendTestEmail()).resolves.toBe(answer);
         expect(alias).toHaveBeenCalledTimes(1);
@@ -234,7 +235,7 @@ describe('sendTestEmail — POST /email/test', () => {
 
     it('a refusal reaches the caller as the client raised it', async () => {
         const refusal = axiosRefusal(429, 'Too Many Requests', {detail: {error_code: 'EMAIL_RATE_LIMITED', retry_after: 1800}});
-        vi.spyOn(zodiosApi, 'send_test_api_v1_email_test_post').mockRejectedValueOnce(refusal);
+        spyOnApi('send_test_api_v1_email_test_post').mockRejectedValueOnce(refusal);
 
         await expect(sendTestEmail()).rejects.toBe(refusal);
     });

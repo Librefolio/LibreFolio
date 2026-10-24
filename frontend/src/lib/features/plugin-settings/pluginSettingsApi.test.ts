@@ -37,12 +37,13 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {AxiosError, AxiosHeaders, type AxiosAdapter, type AxiosResponse, type InternalAxiosRequestConfig} from 'axios';
 import {ApiError, axiosInstance, zodiosApi} from '$lib/api';
 import {entryOf, fetchPluginEntry, fetchPluginSettings, fieldOf, savePluginSettings, type PluginSettingsEntry, type PluginSettingWriteItem, type SaveOutcome, type SettingField} from './pluginSettingsApi';
+import {spyOnApi} from '$test/spyOnApi';
 
 /** What `GET /settings/plugins` answers, as the generated client types it. */
 type CatalogAnswer = Awaited<ReturnType<typeof zodiosApi.get_plugin_settings_api_v1_settings_plugins_get>>;
 
-const readAlias = () => vi.spyOn(zodiosApi, 'get_plugin_settings_api_v1_settings_plugins_get');
-const writeAlias = () => vi.spyOn(zodiosApi, 'update_plugin_settings_api_v1_settings_plugins_bulk_patch');
+const readAlias = () => spyOnApi('get_plugin_settings_api_v1_settings_plugins_get');
+const writeAlias = () => spyOnApi('update_plugin_settings_api_v1_settings_plugins_bulk_patch');
 
 /** An answer of the wrong shape, handed to the alias as the client would hand it over. */
 const answered = (value: unknown) => value as CatalogAnswer;

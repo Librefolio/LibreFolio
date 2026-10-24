@@ -508,8 +508,8 @@ def api_prices_currency_coherence(verbose: bool = False, test_names: list = None
 
 def api_asset_currency_change(verbose: bool = False, test_names: list = None) -> bool:
     """Run asset currency-change flow tests."""
-    print_section("Asset Currency Change (I.3 + I-bis #7) API Tests")
-    print_info("Testing PATCH /assets currency change: 409 when blocked, wipe + retry happy path")
+    print_section("Asset Currency Change (N68) API Tests")
+    print_info("Testing PATCH /assets currency change: never blocked, prices + non-split events removed, SPLITs and their transactions kept, mixed batch partial")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_asset_currency_change.py", test_names)
     return run_command(cmd, "Asset currency change tests", verbose=verbose)
@@ -536,10 +536,20 @@ def api_prices_sync_delta(verbose: bool = False, test_names: list = None) -> boo
 def api_market_data_wipe(verbose: bool = False, test_names: list = None) -> bool:
     """Run market-data wipe endpoint tests."""
     print_section("Market-Data Wipe (R3-3) API Tests")
-    print_info("Testing GET /assets/{id}/market-data/summary + POST /wipe (Policy D)")
+    print_info("Testing GET /assets/{id}/market-data/summary + POST /wipe (N68: SPLITs survive, splits_kept)")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_market_data_wipe.py", test_names)
     return run_command(cmd, "Market-data wipe tests", verbose=verbose)
+
+
+def api_event_reconciliation(verbose: bool = False, test_names: list = None) -> bool:
+    """Run GET /transactions/event-reconciliation tests (N68)."""
+    print_section("Event Reconciliation (N68) API Tests")
+    print_info("Testing GET /transactions/event-reconciliation: unique/none/several candidates, roles, filters, order, read-only, link flow")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_event_reconciliation_api.py", test_names)
+    return run_command(cmd, "Event reconciliation tests", verbose=verbose)
 
 
 def api_backup_export_extras(verbose: bool = False, test_names: list = None) -> bool:
@@ -1266,10 +1276,23 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "ohlc-sentinel", api_ohlc_sentinel, name="OHLC Sentinel", desc="F.4 merge on POST /assets/prices (N92): null or absent keeps the stored value, 'clear' empties it, a number writes it; -1, any other text and a close not above 0 refused with 422, nothing written")
     add_test(api, "current-price-persistence", api_current_price_persistence, name="Current Price Persistence", desc="/current endpoint OHLC upsert")
     add_test(api, "prices-currency-coherence", api_prices_currency_coherence, name="Prices Currency Coherence", desc="Hard reject on currency mismatch; X-R71: 422 price_currency_mismatch (items per asset at fault, count), the whole upload refused, no asset written; an unknown asset still reported")
-    add_test(api, "asset-currency-change", api_asset_currency_change, name="Asset Currency Change", desc="409 blocked, wipe + retry")
+    add_test(
+        api,
+        "asset-currency-change",
+        api_asset_currency_change,
+        name="Asset Currency Change",
+        desc="N68 policy A: the currency PATCH is never blocked; prices and non-split events go, their transactions are unlinked, SPLITs and their transactions stay; same currency and nothing-to-lose unchanged; mixed batch 200 partial",
+    )
     add_test(api, "asset-prices-export", api_asset_prices_export, name="Asset Prices Export", desc="CSV/JSON export + round-trip")
     add_test(api, "prices-sync-delta", api_prices_sync_delta, name="Prices Sync Delta", desc="changed_points payload")
-    add_test(api, "market-data-wipe", api_market_data_wipe, name="Market Data Wipe", desc="Summary + wipe (Policy D)")
+    add_test(api, "market-data-wipe", api_market_data_wipe, name="Market Data Wipe", desc="Summary + wipe; N68: SPLITs survive, summary/wipe keys include splits_kept, never a 409")
+    add_test(
+        api,
+        "event-reconciliation",
+        api_event_reconciliation,
+        name="Event Reconciliation",
+        desc="N68: GET /transactions/event-reconciliation lists the caller's unlinked DIVIDEND/INTEREST/ADJUSTMENT on brokers where it is EDITOR+ with same-day candidates (unique/none/several), filters, newest first, read-only; link via commit updates",
+    )
     add_test(api, "backup-export-extras", api_backup_export_extras, name="Backup Export Extras", desc="Events + FX rates export")
     add_test(api, "uploads-serve-file", api_uploads_serve_file, name="Uploads Serve File", desc="Preview, download, MIME")
     add_test(api, "brokers", api_brokers, name="Brokers API", desc="CRUD broker endpoints")
