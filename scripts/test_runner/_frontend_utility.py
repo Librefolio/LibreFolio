@@ -213,6 +213,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/i18n/catalogIcuLocale.test.ts",
             "src/lib/i18n/riskGlossary.test.ts",
             "src/lib/i18n/importWizardAssetsCount.test.ts",
+            "src/lib/i18n/ownerEmailChangeChecks.test.ts",
             "src/lib/features/support/supportLinks.test.ts",
             "src/lib/features/settings/settingsTabs.test.ts",
             "src/lib/features/settings/security/securityChecksApi.test.ts",

@@ -100,6 +100,11 @@
         "ok": "Los inicios de sesión fallidos están limitados: tras 10 en 15 minutos para un nombre de usuario o un correo, o 50 desde una dirección, el inicio de sesión espera.",
         "off": "El límite de inicios de sesión fallidos está desactivado (LIBREFOLIO_LOGIN_LIMIT=off): las contraseñas pueden probarse sin pausa. Vuelve a activarlo, salvo que sea una instancia de prueba.",
         "invalid": "LIBREFOLIO_LOGIN_LIMIT vale «{value}», que no es ni on ni off: el servidor no arranca con este valor."
+      },
+      "ownerEmailChange": {
+        "ok": "No hay ningún cambio del correo del titular pendiente.",
+        "pending": "El proveedor de alojamiento cambió el correo del titular: se envió un enlace de confirmación a la nueva dirección y la cuenta conserva la anterior hasta que se confirme.",
+        "blocked": "El proveedor de alojamiento cambió el correo del titular por uno que ya usa otra cuenta: no se cambió nada. Elige otra dirección y reinicia."
       }
     },
     "askAdminToResetPassword": "Pide a tu administrador un enlace para restablecer la contraseña: puede crear uno para tu cuenta."

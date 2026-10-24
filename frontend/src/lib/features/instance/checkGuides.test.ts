@@ -16,7 +16,7 @@
  *     the guide of an own key only (`Object.hasOwn`), so `undefined` for an unknown id and for `constructor`,
  *     `__proto__`, `toString` and `hasOwnProperty`.
  *   - A guide is `admin/<page>/#<anchor>`, matching `^admin/[a-z0-9_]+/#[a-z0-9-]+$`: no language prefix (`DocsLink`
- *     adds it), no leading `/`, no `.md`, a folder URL, an explicit anchor. The 21 guides are `EXPECTED_GUIDES` below.
+ *     adds it), no leading `/`, no `.md`, a folder URL, an explicit anchor. The 22 guides are `EXPECTED_GUIDES` below.
  *
  * The cases: §2's five — the shape, the anchors exist, the lookup, the browser half, the translation ratchet — and §1's
  * table pinned whole, so that a changed guide is a visible change of this file.
@@ -54,6 +54,13 @@
  * its place among the checks. Red until `checkGuides.json` holds it (§1 pinned whole) and `hosting_providers.en.md`
  * writes `{: #panel-api }` (§2.2, the docs step of the lot). `hosting_providers` has no translation, so the ratchet does
  * not move.
+ *
+ * H5-4 (24/10, A's request A5-1b): the new check `accounts.owner_email_change` (the host changed the owner's email address:
+ * pending its confirmation, or blocked by another account) has its guide, `admin/hosting_providers/#owner-email-change`, in
+ * the table right after `accounts.login_limit`, its place among the checks. Red until `checkGuides.json` holds it (§1 pinned
+ * whole). The anchor already exists in `hosting_providers.en.md` (§2.2 stays green). `hosting_providers` has no translation
+ * (the docs publish its English page in every language), so, as for `#panel-api`, the pair joins no ratchet and
+ * `TRANSLATION_DEBT` does not move: it would be reported as new the day a translation of the page appears without the anchor.
  *
  * H-55 v2 (step 4, 21/10): the browser's second finding, `platform.blockedScript` — a script the enforced
  * Content-Security-Policy blocked and this instance did not send —, has its guide, `admin/configuration_security/#csp` (`admin/configuration/#csp` until DOC-1 moved it), in the
@@ -94,7 +101,7 @@ vi.mock('$lib/api', () => {
 // =============================================================================
 
 /**
- * The 21 guides of §1, whole: check id → guide. A changed guide is a change of this table. Written in the order of the
+ * The 22 guides of §1, whole: check id → guide. A changed guide is a change of this table. Written in the order of the
  * checks (`CONFIG_CHECKS`, then `platform.plugin_secrets`), then the browser's finding, and compared as a record: the
  * order is pinned by §3, against the checks themselves.
  */
@@ -116,6 +123,8 @@ const EXPECTED_GUIDES: Readonly<Record<string, string>> = {
     // L3 (B, 22/10): the recipients of the hosting panel's sealed backups.
     'backup.recipients': 'admin/backup_restore/#sealed',
     'accounts.login_limit': 'admin/configuration_accounts/#login-limit',
+    // H5-4 (A's request A5-1b): the host-started change of the owner's email, right after the login limit's
+    'accounts.owner_email_change': 'admin/hosting_providers/#owner-email-change',
     'email.smtp': 'admin/email/#variables',
     'email.smtp_encryption': 'admin/email/#encryption-modes',
     'email.links': 'admin/email/#links-check',
@@ -429,7 +438,8 @@ describe('checkGuides — the guide of each finding of the Security tab (N69d)',
     // red until N69d §1: checkGuides.ts does not exist
     // H-61: red until checkGuides.json holds platform.hosting_panel (contract §5)
     // H-55 v2: red until checkGuides.json holds platform.blockedScript → admin/configuration_security/#csp
-    it('§1 pinned whole: CHECK_GUIDES is the table of the 21 guides — a changed guide is a change of this file', async () => {
+    // H5-4: red until checkGuides.json holds accounts.owner_email_change → admin/hosting_providers/#owner-email-change
+    it('§1 pinned whole: CHECK_GUIDES is the table of the 22 guides — a changed guide is a change of this file', async () => {
         expect((await checkGuides()).CHECK_GUIDES, 'CHECK_GUIDES, check id → guide').toEqual(EXPECTED_GUIDES);
     });
 });
