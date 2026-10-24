@@ -36,6 +36,7 @@ from sqlalchemy import (
     UniqueConstraint,
     event,
     func,
+    text,
 )
 from sqlmodel import Field, Relationship, SQLModel
 
@@ -366,6 +367,9 @@ class AccountTokenPurpose(StrEnum):
     PASSWORD_RESET = "password_reset"
     EMAIL_VERIFICATION = "email_verification"
     ADMIN_SETUP = "admin_setup"
+    #: The owner of a managed instance moves to the address the host put in ``LIBREFOLIO_ADMIN_EMAIL`` (A5-1b): the link is
+    #: emailed to the NEW address, and the change happens only when it is clicked.
+    EMAIL_CHANGE = "email_change"
 
 
 # ============================================================================
@@ -404,6 +408,10 @@ class User(SQLModel, table=True):
     email_verified_at: Optional[datetime] = Field(default=None, nullable=True, sa_type=DateTime)
     # The release whose changelog this user last saw.
     last_seen_version: Optional[str] = Field(default=None, max_length=40, nullable=True)
+    # The account that owns this (managed) instance: the paying administrator (A5-1b, migration 006). At most one account
+    # holds it (``ux_users_instance_owner``, partial). Never in an API schema: only ``user_service.account_protection`` and
+    # ``instance_owner`` read it. Set by the managed bootstrap and the startup sync, never in another profile.
+    is_instance_owner: bool = Field(default=False, nullable=False, sa_column_kwargs={"server_default": text("0")})
 
     created_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
     updated_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
@@ -412,6 +420,9 @@ class User(SQLModel, table=True):
 # Email addresses are unique regardless of case (P18, migration 005, step 6). SQLite's lower() folds A–Z only, so letters outside
 # ASCII compare as written; user_service.email_fold() is the same rule in Python.
 Index("ux_users_email_lower", func.lower(User.__table__.c.email), unique=True)  # type: ignore[attr-defined]
+# At most one instance owner (A5-1b, migration 006). The query that reads it, ``SELECT id FROM users WHERE is_instance_owner = 1``,
+# plans ``SEARCH users USING COVERING INDEX ux_users_instance_owner`` (MIG6-004).
+Index("ux_users_instance_owner", User.__table__.c.is_instance_owner, unique=True, sqlite_where=text("is_instance_owner = 1"))  # type: ignore[attr-defined]
 
 
 class UserSettings(SQLModel, table=True):
@@ -534,7 +545,7 @@ class AccountToken(SQLModel, table=True):
     __table_args__ = (
         UniqueConstraint("token_hash", name="uq_account_tokens_token_hash"),
         CheckConstraint(
-            "purpose IN ('invite', 'password_reset', 'email_verification', 'admin_setup')",
+            "purpose IN ('invite', 'password_reset', 'email_verification', 'admin_setup', 'email_change')",
             name="ck_account_tokens_purpose",
         ),
         Index("ix_account_tokens_purpose_expires_at", "purpose", "expires_at"),

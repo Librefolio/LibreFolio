@@ -337,6 +337,7 @@ Each kind of email has a keyword-only builder that returns an `EmailContent`, a 
 | `invite` | `build_invite()` | `language`, `link`, `ttl`, `instance`, `inviter=None`, `grants_admin=False` | Anonymous | Yes |
 | `email_verification` | `build_verification()` | `language`, `link`, `ttl`, `instance` | Anonymous | Yes |
 | `admin_setup` | `build_admin_setup()` | `language`, `username`, `link`, `ttl`, `instance` | By username | Yes |
+| `email_change_confirmation` | `build_email_change_confirmation()` | `language`, `username`, `link`, `ttl`, `instance` | By username | Yes |
 | `test` | `build_test_message()` | `language`, `username`, `instance` | By username | No |
 | `email_changed` | `build_email_changed()` | `language`, `instance` | Anonymous | No |
 

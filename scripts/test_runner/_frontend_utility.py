@@ -416,6 +416,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/routes/reset-password/page.test.ts",
             "src/routes/setup/page.test.ts",
             "src/routes/verify-email/page.test.ts",
+            "src/routes/confirm-email-change/page.test.ts",
             "src/lib/features/support/DonationPopupModal.test.ts",
             "src/lib/features/support/SupportActions.test.ts",
             "src/lib/features/support/SupportActions.managed.test.ts",

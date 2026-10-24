@@ -44,5 +44,12 @@
     "subject": "La dirección de correo de tu cuenta de LibreFolio ha cambiado",
     "intro": "La dirección de correo de tu cuenta en $instance se ha cambiado. Este mensaje va a la dirección que tenía antes.",
     "advice": "Si hiciste tú el cambio, no tienes que hacer nada. Si no, puede que alguien esté usando tu cuenta: cambia tu contraseña enseguida si aún puedes iniciar sesión y avisa al administrador de $instance."
+  },
+  "email_change_confirmation": {
+    "subject": "Confirma la nueva dirección de correo de tu cuenta de administrador de LibreFolio",
+    "intro": "Esta dirección de correo se ha indicado como la dirección de la cuenta de administrador de tu instancia de LibreFolio $instance. Confirma que es tuya para completar el cambio: hasta que lo hagas no cambia nada y la cuenta conserva su dirección actual.",
+    "action": "Confirmar esta dirección",
+    "expiry": "El enlace funciona una sola vez y caduca en $duration. Una vez confirmado, la cuenta inicia sesión con esta dirección y sus sesiones abiertas terminan.",
+    "ignore": "Si no esperabas este correo, puedes ignorarlo: no cambia nada."
   }
 }

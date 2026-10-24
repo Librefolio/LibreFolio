@@ -151,6 +151,22 @@
         "EMAIL_RATE_LIMITED": "Too many requests for now: try again in {minutes} min.",
         "generic": "The request could not be sent: try again."
       }
+    },
+    "emailChange": {
+      "page": {
+        "ready": "Confirm the new email address of your account. From now on you will sign in and receive emails with it.",
+        "checking": "Checking the link…",
+        "expired": "This link has expired. A new one is sent the next time the host restarts your instance with the new address: ask the host if you need it now.",
+        "consumed": "This link has already been used: if your address was changed, sign in with the new one.",
+        "revoked": "This link no longer works: the address was changed again, or another account already uses it. Ask the host of this instance.",
+        "unknown": "This link is not valid: open it again, whole, from the email. If it still fails, ask the host of this instance.",
+        "blocked": "This instance is blocked by its hosting provider, so the link cannot be checked now. Open it again once the instance is unblocked.",
+        "missing": "This link is incomplete: open it again from the email.",
+        "error": "The link could not be checked: try again.",
+        "confirm": "Confirm the new address",
+        "notExpected": "If you did not expect this change, close this page: nothing happens."
+      },
+      "changed": "Your email address was changed: sign in again."
     }
   }
 }
