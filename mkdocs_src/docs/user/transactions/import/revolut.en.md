@@ -28,7 +28,21 @@ To export your stock/crypto transaction history from Revolut:
 
 - Supports stock trades, crypto purchases, dividends paid, custody fees, and cash transfers.
 - Handles multi-currency amounts in the same file automatically.
-- **Stock splits are not imported yet** (Invest statements): the rows are listed in an amber warning, with a link to open an issue on GitHub. Add the split by hand. Transfers between your own accounts are left out quietly, since they change nothing.
+- Transfers between your own accounts are left out quietly, since they change nothing.
+
+## 🔀 Stock Splits
+
+In an **Invest** file, a **STOCK SPLIT** row with a positive **Quantity** is imported as an incoming **Adjustment** of the shares added (the **Quantity** of the row is the number of new shares, not the total after the split), at no cost. The Bulk editor will mark it as *may be a stock split*, so you can create the **Split** event and link it, or link an existing one: see [Asset Events](../../assets/detail/events.md).
+
+!!! warning "Link the split to a Split event"
+
+    Until the row is linked to a **Split** event, the new shares enter without cost and dilute the average cost of the asset. Linking it makes the cost follow the old shares, which is right for a split. The file does not say whether the shares come from a split, a gift or a spin-off, so the choice stays with you.
+
+## 🚧 Known limitations
+
+- **Reverse splits are not imported.** A **STOCK SPLIT** row with a negative, zero or missing **Quantity** (or without a ticker) is listed in an amber warning, with a link to open an issue on GitHub: add it by hand.
+- **Invest files only.** Stock splits are read in Invest statements, not in Crypto ones.
+- **Something is off?** Please [open an issue](https://github.com/Librefolio/LibreFolio/issues) with an anonymised example file.
 
 ## 🔗 Developer Reference
 

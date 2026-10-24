@@ -31,12 +31,14 @@ LibreFolio reads the **Account Activity** sheet of eToro's account statement, sa
 | Deposit | **Deposit** |
 | Withdraw Request | **Withdrawal** |
 | Withdraw Fee, Withdrawal Conversion Fee, Conversion Fee | **Fee**, when the amount is not zero |
+| Overnight fee (CFD financing) | **Fee**, when the amount is not zero: a cost of money, with no asset |
+| SDRT (UK stamp duty) | **Tax**, on the instrument of the row |
 
 The instrument comes from **Details** (for example `NKE/USD`) and the quantity from **Units**.
 
-**Not imported yet**: **Overnight fee** and **Overnight refund** (CFD financing) and **SDRT** (UK stamp
-duty). They are listed in an amber warning, with a link to open an issue on GitHub: add them by hand if
-you track them. Any other type is skipped with a warning.
+**Not imported**: **Overnight refund**, the refund of an overnight fee. It is listed in an amber warning,
+with a link to open an issue on GitHub (see [Known limitations](#known-limitations)). Any other type is
+skipped with a warning.
 
 ## ⚠️ Common Pitfalls
 
@@ -51,8 +53,21 @@ you track them. Any other type is skipped with a warning.
 - **Withdrawal conversion fees.** A non-zero fee becomes a separate **Fee**, next to the full
   **Withdraw Request**. Compare both with your statement: if the fee was already taken out of the
   withdrawn money, untick it in [Review](how-to.md#review).
-- **CFDs** become ordinary buys and sells of the instrument, like real shares, without their
-  overnight fees: check those positions and their costs.
+- **CFDs** become ordinary buys and sells of the instrument, like real shares. Their **overnight
+  fees** are imported as separate **Fee** transactions, with no asset: check those positions and
+  their costs against your statement.
+- **Overnight fees and refunds.** The fees are imported, the refunds are not (see below), so the
+  total of overnight costs in LibreFolio can be higher than on your statement.
+
+## 🚧 Known limitations {: #known-limitations }
+
+- **Overnight refunds are not imported.** A refund of an overnight fee has no honest transaction type
+  yet: a **Fee** or a **Tax** is a cost, and a **Deposit** is capital you put in. The rows are listed
+  in the amber warning, with the link to open an issue: add them by hand.
+- **Amounts in your account currency.** See the warning above: check the currency of instruments not
+  quoted in USD before saving.
+- **Something is off?** Please [open an issue](https://github.com/Librefolio/LibreFolio/issues) with
+  an anonymised example file.
 
 ## 🔗 Developer Reference
 

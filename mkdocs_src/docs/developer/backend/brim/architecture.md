@@ -428,11 +428,11 @@ What each plugin sends there (`plugin_version` is the one that introduced it; ch
 | Scalable (both accounts) | 1.1.0 | a `status` not known | an empty `status` | `pending`, `cancelled`, `canceled`, `expired`, `rejected` |
 | Fineco | 1.5.0 | a `Descrizione` the plugin does not map (also a `compravendita` with another `Segno`) | too few cells, no readable date, an empty `Descrizione` | — |
 | Directa | 1.1.0 | a type not known | too few columns, an unreadable date, a missing type | — |
-| Revolut (Invest layout) | 1.2.0 | `Stock split` | — | `Transfer` |
-| Trading 212 | 1.1.0 | `stock split`, `stock distribution`, `currency conversion` | — | `transfer` |
-| eToro | 1.2.0 | `overnight fee`, `overnight refund`, `sdrt` | — | — |
+| Revolut (Invest layout) | 1.3.0 | a `Stock split` with no readable positive `Quantity` (a reverse split), or with no ticker | — | `Transfer` |
+| Trading 212 | 1.2.0 | `stock distribution`, `currency conversion`; a `stock split close`/`open` that is a reverse split (fewer shares after), has equal shares, or has no partner | — | `transfer` |
+| eToro | 1.3.0 | `overnight refund` | — | — |
 | Trade Republic | 1.1.0 | an unknown type; a row whose `Kosten` or `Belasting` is not zero (the row is imported, the fee and tax are not) | an unreadable date or amount, a missing ISIN | — |
-| Swissquote | 1.1.0 | forex credit and debit legs, an unknown transaction | an unreadable date, a missing or zero net amount, a missing currency, a missing ISIN and symbol, a quantity not positive on a trade | — |
+| Swissquote | 1.2.0 | a forex leg without its partner, with costs, or in an order of more than two legs; an unknown transaction | an unreadable date, a missing or zero net amount, a missing currency, a missing ISIN and symbol, a quantity not positive on a trade | — |
 | Interactive Brokers | 1.1.0 | an unknown direction, a trade without an ISIN (a currency trade) | an unreadable date | — |
 
 Danske Bank has its own cure for the same rule (`excluded_status`, [Finnish notices](danske_bank.md#finnish-notices)).
@@ -602,9 +602,10 @@ eToro itself downloads the statement as XLS.
 - **Type**, by lower-cased substring: `open position` → `BUY`, `position closed` → `SELL`,
   `dividend` → `DIVIDEND`, `interest payment` → `INTEREST`, `withdraw request` → `WITHDRAWAL`,
   `deposit` → `DEPOSIT`. `withdraw fee`, `withdrawal conversion fee` and `conversion fee` are a
-  `FEE` when the amount is not zero and skipped silently when it is; `overnight fee`,
-  `overnight refund` and `sdrt` are not imported yet and go to the shared notice `rows_not_recognized`
-  (`NOT_IMPORTED_TYPES`, version 1.2.0: [Rows left out](#brim-row-skips)); any other type → warning.
+  `FEE` when the amount is not zero and skipped silently when it is, and so is `overnight fee`
+  (version 1.3.0); `sdrt` (UK stamp duty reserve tax) is a `TAX` on the row's asset. `overnight refund` has no honest
+  type (a `FEE` or `TAX` is a cost, a `DEPOSIT` is capital) and goes to the shared notice `rows_not_recognized`
+  (`NOT_IMPORTED_TYPES`: [Rows left out](#brim-row-skips)); any other type → warning.
 - **Asset and currency** come from `Details` (`SYMBOL/CCY`, such as `NKE/USD`): the symbol is the
   fake asset's `extracted_symbol` (no ISIN, no name), and the three letters after the slash are the
   currency of the row's `Amount`. Without that shape, the whole text is the symbol and the currency

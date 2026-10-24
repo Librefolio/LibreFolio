@@ -68,16 +68,15 @@ TYPE_MAPPINGS: Dict[str, TransactionType] = {
     "interest payment": TransactionType.INTEREST,
     "withdraw request": TransactionType.WITHDRAWAL,
     "deposit": TransactionType.DEPOSIT,
+    "sdrt": TransactionType.TAX,  # UK stamp duty reserve tax, on the asset of the row (Details: SYMBOL/CURRENCY)
 }
 
-FEE_TYPES = ("withdraw fee", "withdrawal conversion fee", "conversion fee")
+FEE_TYPES = ("withdraw fee", "withdrawal conversion fee", "conversion fee", "overnight fee")
 
-# Types left out that carry a cost or a tax: the plugin does not import them yet, so a notice with the link to open an issue lists
-# them (W-B87, D-W85-4).
+# Types left out that give money back: an overnight refund has no honest type (a FEE or TAX is a cost, a DEPOSIT is capital), so a
+# notice with the link to open an issue lists it until the developer decides (W-B87, D-W85-4).
 NOT_IMPORTED_TYPES = [
-    "overnight fee",
     "overnight refund",
-    "sdrt",  # UK stamp duty
 ]
 
 
@@ -274,7 +273,7 @@ class EtoroBrokerProvider(BRIMProvider):
                         TransactionType.DIVIDEND,
                     ]
 
-                    if asset_required:
+                    if asset_required or (tx_type == TransactionType.TAX and ticker):
                         if not ticker:
                             warnings.append(f"Row {row_num}: {tx_type.value} requires asset, skipping")
                             continue
@@ -303,7 +302,7 @@ class EtoroBrokerProvider(BRIMProvider):
                         quantity = -quantity
                     if tx_type == TransactionType.BUY and amount and amount > 0:
                         amount = -amount
-                    if tx_type == TransactionType.FEE and amount and amount > 0:
+                    if tx_type in (TransactionType.FEE, TransactionType.TAX) and amount and amount > 0:
                         amount = -amount
 
                     # Create transaction
@@ -360,8 +359,9 @@ class EtoroBrokerProvider(BRIMProvider):
 
     @property
     def plugin_version(self) -> str:
+        # 1.3.0 — overnight fees become FEE and SDRT becomes TAX; only the overnight refunds are still listed (W-B87).
         # 1.2.0 — overnight fees, their refunds and SDRT are listed in a notice with the link to open an issue (W-B87).
-        return "1.2.0"
+        return "1.3.0"
 
     @property
     def test_file_pattern(self) -> Optional[str]:
