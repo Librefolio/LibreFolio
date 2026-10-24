@@ -308,7 +308,7 @@
         "LAST_ADMIN": "L'ultimo amministratore attivo non si può disattivare né declassare.",
         "USER_LIMIT_REACHED": "L'istanza è piena: prima libera un posto (disattiva o elimina un account, o revoca un invito).",
         "REGISTRATION_DISABLED": "La registrazione è chiusa: non si possono creare inviti.",
-        "ACCOUNT_PROTECTED": "Questo account è protetto: nessuno può disattivarlo, declassarlo o eliminarlo.",
+        "ACCOUNT_PROTECTED": "Questo account è protetto: da qui nessuno può disattivarlo, declassarlo, eliminarlo, reimpostarne la password né chiuderne le sessioni. Se qualcosa deve cambiare, chiedi a chi ospita l'istanza.",
         "SELF_DELETION": "Il tuo account si elimina dalla scheda Profilo.",
         "DEMOTE_FIRST": "Un amministratore va declassato prima di poterlo eliminare.",
         "NOT_FOUND": "Questo account non esiste più: la lista si ricarica.",
@@ -419,6 +419,11 @@
       },
       "blockedScript": "Questa scheda del browser ha bloccato uno script che LibreFolio non ha inviato ({sources}): lo aggiunge un proxy, una CDN o un'estensione del browser. Spegni quell'iniezione per questo sito.",
       "guide": "Guida"
+    },
+    "protectedEmail": {
+      "title": "Qui non puoi cambiare l'email",
+      "message": "È l'indirizzo email del titolare dell'abbonamento, quindi non si può cambiare da LibreFolio. Chiedi di cambiarlo a chi ospita questa istanza.",
+      "support": "Contatta l'assistenza"
     }
   }
 }

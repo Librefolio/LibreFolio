@@ -89,7 +89,8 @@ INVITE = AccountTokenPurpose.INVITE
 PASSWORD_RESET = AccountTokenPurpose.PASSWORD_RESET
 EMAIL_VERIFICATION = AccountTokenPurpose.EMAIL_VERIFICATION
 ADMIN_SETUP = AccountTokenPurpose.ADMIN_SETUP
-USER_PURPOSES = (PASSWORD_RESET, EMAIL_VERIFICATION, ADMIN_SETUP)
+EMAIL_CHANGE = AccountTokenPurpose.EMAIL_CHANGE
+USER_PURPOSES = (PASSWORD_RESET, EMAIL_VERIFICATION, ADMIN_SETUP, EMAIL_CHANGE)
 
 NOW = datetime(2026, 10, 15, 9, 30, 0, 123456, tzinfo=UTC)
 MICROSECOND = timedelta(microseconds=1)
@@ -207,7 +208,7 @@ async def _plaintext_in_database(engine: AsyncEngine, plaintexts: list[str]) -> 
 
 
 def test_the_purposes_and_the_statuses_have_their_values() -> None:
-    """Contract 1: the four purposes and the five statuses, as StrEnums with lowercase values — the values are what the database stores and the API speaks."""
+    """Contract 1: the five purposes (the owner's email change, A5-1b, the fifth) and the five statuses, as StrEnums with lowercase values — the values are what the database stores and the API speaks."""
     print_section("Contract 1: purposes and statuses")
 
     assert issubclass(AccountTokenPurpose, StrEnum) and issubclass(TokenStatus, StrEnum)
@@ -216,6 +217,7 @@ def test_the_purposes_and_the_statuses_have_their_values() -> None:
         "PASSWORD_RESET": "password_reset",
         "EMAIL_VERIFICATION": "email_verification",
         "ADMIN_SETUP": "admin_setup",
+        "EMAIL_CHANGE": "email_change",
     }
     assert {status.name: status.value for status in TokenStatus} == {
         "VALID": "valid",
@@ -224,11 +226,11 @@ def test_the_purposes_and_the_statuses_have_their_values() -> None:
         "REVOKED": "revoked",
         "UNKNOWN": "unknown",
     }
-    print_success("4 purposes, 5 statuses")
+    print_success("5 purposes, 5 statuses")
 
 
 def test_each_purpose_has_its_default_ttl() -> None:
-    """Contract 1: invite 7 days, password reset 30 minutes, admin setup 72 hours, e-mail verification 24 hours — and no purpose without one."""
+    """Contract 1: invite 7 days, password reset 30 minutes, admin setup 72 hours, e-mail verification 24 hours, the owner's email change 7 days — and no purpose without one."""
     print_section("Contract 1: DEFAULT_TTL")
 
     assert DEFAULT_TTL == {
@@ -236,6 +238,7 @@ def test_each_purpose_has_its_default_ttl() -> None:
         PASSWORD_RESET: timedelta(minutes=30),
         ADMIN_SETUP: timedelta(hours=72),
         EMAIL_VERIFICATION: timedelta(hours=24),
+        EMAIL_CHANGE: timedelta(days=7),
     }
     print_success("one TTL per purpose")
 
@@ -253,7 +256,7 @@ def test_hash_token_is_the_sha256_hex_digest_of_the_utf8_token() -> None:
 
 @pytest.mark.parametrize(
     ("purpose", "page"),
-    [(INVITE, "/invite"), (PASSWORD_RESET, "/reset-password"), (ADMIN_SETUP, "/setup"), (EMAIL_VERIFICATION, "/verify-email")],
+    [(INVITE, "/invite"), (PASSWORD_RESET, "/reset-password"), (ADMIN_SETUP, "/setup"), (EMAIL_VERIFICATION, "/verify-email"), (EMAIL_CHANGE, "/confirm-email-change")],
 )
 def test_token_path_sends_each_purpose_to_its_page_with_the_token_in_the_fragment(purpose: AccountTokenPurpose, page: str) -> None:
     """Contract 1 (review of 15/10): ``token_path`` is the page of the purpose with the token in the URL fragment, ``#token=…``, and no query string.

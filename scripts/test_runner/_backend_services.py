@@ -626,6 +626,28 @@ def services_admin_bootstrap(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Initial administrator tests", verbose=verbose)
 
 
+def services_owner_email_change(verbose: bool = False, test_names: list = None) -> bool:
+    """Test A5-1b part 2: the instance owner's flag, the startup sync and the confirmation link of its new address."""
+    print_section("Services: Instance Owner Email Change (A5-1b)")
+    print_info("Testing: services/accounts/instance_owner.py (run_owner_sync, deliver_owner_change_link, startup_owner_sync, owner_change_status), user_service.account_protection, bootstrap_admin_service, email messages, the owner-sync startup step")
+    print_info("Tests: the owner flag and the protection rule, each branch of the sync (heal, same, conflict, live link, new link by email, link in the log), the status, the four-language email, the step order")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_owner_email_change.py", test_names)
+    return run_command(cmd, "Instance owner email change tests", verbose=verbose)
+
+
+def services_owner_assignment(verbose: bool = False, test_names: list = None) -> bool:
+    """Test A5-2: a restore on a managed instance gives the instance to the owner the administrator chose."""
+    print_section("Services: Owner Assignment after a Restore (A5-2)")
+    print_info("Testing: services/accounts/instance_owner.py assign_owner_and_send_reset, auth_service.unusable_password_hash, user_service.create_password_reset(email=)")
+    print_info(
+        "Tests: the four precondition codes, the owner flag moved, an unusable password and ended sessions, the planted tokens of a backup neutralised (the four attacks), one new reset link (sent; link_only with the link in the instance's log, never in the result), a second call starting again, two calls at once"
+    )
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_owner_assignment.py", test_names)
+    return run_command(cmd, "Owner assignment tests", verbose=verbose)
+
+
 def services_email_case(verbose: bool = False, test_names: list = None) -> bool:
     """Test P18: email addresses unique regardless of A–Z case, in the rule, the index, the lookups and the writes."""
     print_section("Services: Email Addresses Regardless of Case (P18)")
@@ -644,6 +666,16 @@ def services_username_rules(verbose: bool = False, test_names: list = None) -> b
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_username_rules.py", test_names)
     return run_command(cmd, "Username rules tests", verbose=verbose)
+
+
+def services_account_protection(verbose: bool = False, test_names: list = None) -> bool:
+    """Test A5-1: on a managed instance the account of LIBREFOLIO_ADMIN_EMAIL is protected; the command line is not bound by it."""
+    print_section("Services: Account Protection (A5-1)")
+    print_info("Testing: config/accounts.py owner_admin_email, user_service.account_protection, scripts/user_cli.py deactivate and demote")
+    print_info("Tests: the reader never raises, the managed profile protects the address of the variable in any A-Z case, any other profile or an unusable variable protects nobody, the command line and the deleting service stay above the protection")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_account_protection.py", test_names)
+    return run_command(cmd, "Account protection tests", verbose=verbose)
 
 
 def services_username_lookup(verbose: bool = False, test_names: list = None) -> bool:
@@ -2309,6 +2341,36 @@ Note: No backend server required.
         desc="No @ in a new username (user create, LIBREFOLIO_ADMIN_USERNAME), spaces, accents and punctuation still taken, legacy names left as they are; no address equal to another account's username, A–Z case aside (register_user, user set-email, user create)",
         # PURE: every database is a private file under tmp_path built with create_all; the command line runs in this
         # process on that file, get_async_engine a tripwire; variables removed with monkeypatch. No lane DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "owner-email-change",
+        services_owner_email_change,
+        name="Instance Owner Email Change (A5-1b)",
+        desc="users.is_instance_owner and the protection rule (the click not made: the owner stays protected; a stranger holding the new address is not), the startup sync owner-sync (pending administrator untouched, heal, same address, conflict blocked, live link not resent, new link emailed to the NEW address, link in the log only when the email did not go, expired and changed-again links, two workers), owner_change_status, build_email_change_confirmation in four languages, the step after admin-bootstrap",
+        # PURE: every database is a private file under tmp_path built with create_all; profile and variables set with
+        # monkeypatch; the email faked in this process (outbox); no lane DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "owner-assignment",
+        services_owner_assignment,
+        name="Owner Assignment after a Restore (A5-2)",
+        desc="assign_owner_and_send_reset: nothing in a restored database is trusted, so every call gives the full treatment: the account the owner chose gets the address of LIBREFOLIO_ADMIN_EMAIL, becomes an active administrator and the one instance owner (the flag of the others cleared), its password becomes an unusable bcrypt hash, its sessions end, its password_reset rows are deleted (planted consumed/revoked/expired/live/future-dated ones included) and its other live tokens revoked, one new reset link is emailed or, if the email cannot go, written in the instance log (link_only; never in the result or its repr); NOT_MANAGED / OWNER_EMAIL_NOT_SET / USER_NOT_FOUND / EMAIL_TAKEN change nothing; a second call kills the first link; two calls at once leave one live link",
+        # PURE: every database is a private file under tmp_path built with create_all; profile and variables set with
+        # monkeypatch; the email faked in this process (outbox); no lane DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "account-protection",
+        services_account_protection,
+        name="Account Protection (A5-1)",
+        desc="The paying administrator of a managed instance (LIBREFOLIO_ADMIN_EMAIL, any A-Z case) is protected, no one in another profile or with an unusable variable, the reader never raises; the command line and the deleting service stay above it",
+        # PURE: users built in memory, the command line on a private file under tmp_path, get_settings() read from the
+        # environment with monkeypatch. No lane DB, no server.
         isolation="pure",
     )
     add_test(

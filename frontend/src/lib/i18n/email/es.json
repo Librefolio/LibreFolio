@@ -151,6 +151,22 @@
         "EMAIL_RATE_LIMITED": "Demasiadas solicitudes por ahora: inténtalo de nuevo en {minutes} min.",
         "generic": "No se pudo enviar la solicitud: inténtalo de nuevo."
       }
+    },
+    "emailChange": {
+      "page": {
+        "ready": "Confirma la nueva dirección de correo de tu cuenta. A partir de ahora iniciarás sesión y recibirás los correos con ella.",
+        "checking": "Comprobando el enlace…",
+        "expired": "Este enlace ha caducado. Se envía uno nuevo en el próximo reinicio de la instancia con la nueva dirección: si lo necesitas ya, pídeselo a quien aloja la instancia.",
+        "consumed": "Este enlace ya se ha usado: si tu dirección se cambió, inicia sesión con la nueva.",
+        "revoked": "Este enlace ya no funciona: la dirección se cambió de nuevo, o ya la usa otra cuenta. Pregunta a quien aloja la instancia.",
+        "unknown": "Este enlace no es válido: ábrelo de nuevo, entero, desde el correo. Si sigue fallando, pregunta a quien aloja la instancia.",
+        "blocked": "Esta instancia está bloqueada por quien la aloja, así que el enlace no se puede comprobar ahora. Ábrelo de nuevo cuando se desbloquee.",
+        "missing": "Este enlace está incompleto: ábrelo de nuevo desde el correo.",
+        "error": "No se pudo comprobar el enlace: inténtalo de nuevo.",
+        "confirm": "Confirmar la nueva dirección",
+        "notExpected": "Si no esperabas este cambio, cierra esta página: no pasa nada."
+      },
+      "changed": "Tu dirección de correo se cambió: inicia sesión de nuevo."
     }
   }
 }

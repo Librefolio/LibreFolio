@@ -1,69 +1,132 @@
 <!--
-  STAND-IN for workstream A's OwnerChoiceModal (A5-2), with A's props and data-testid only. At the merge of A's branch
-  this file is replaced whole by A's component: take A's version. It calls no server and returns only the chosen id.
+  OwnerChoiceModal — which user of an uploaded backup becomes the paying administrator (lot A5-2; mounted by the restore of
+  workstream B, on a managed instance only).
+
+  The chosen account gets the owner's email (`LIBREFOLIO_ADMIN_EMAIL`), is made an administrator and protected, and its password
+  is reset through a link sent to that email: the notice says so. A user who already has the owner's email is selected at once
+  and the choice is forced; otherwise the person chooses. The modal calls no server: it answers with the user's id.
 -->
-<script lang="ts" module>
+<script lang="ts">
+    import {untrack} from 'svelte';
+    import {Crown, ShieldCheck, UserX} from 'lucide-svelte';
+    import {_} from '$lib/i18n';
+    import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
+    import {sameEmail} from '$lib/features/auth/emailCase';
+
+    /** A user of the backup. `id` is the one in the restored database. */
     export interface OwnerCandidate {
-        /** The account's id in the restored database. */
         id: number;
         username: string;
         email: string;
         is_superuser: boolean;
         is_active: boolean;
     }
-</script>
-
-<script lang="ts">
-    import ModalBase from '$lib/components/ui/modals/ModalBase.svelte';
-    import {_} from '$lib/i18n';
 
     interface Props {
         open: boolean;
+        /** The owner's email (`LIBREFOLIO_ADMIN_EMAIL`): the notice names it. */
         ownerEmail: string;
         users: OwnerCandidate[];
+        /** «Confirm» with a choice made: the id of the user. */
         onConfirm: (userId: number) => void;
+        /** «Cancel», Escape, a click outside: the restore does not go on. */
         onCancel: () => void;
+        /** The restore is working: every control is off. */
         busy?: boolean;
     }
 
     let {open, ownerEmail, users, onConfirm, onCancel, busy = false}: Props = $props();
 
-    const fold = (email: string) => email.replace(/[A-Z]/g, (letter) => letter.toLowerCase());
-    const forced = $derived(users.find((user) => fold(user.email) === fold(ownerEmail)) ?? null);
-    let picked = $state<number | null>(null);
-    const selected = $derived(forced?.id ?? picked);
+    const uid = $props.id();
+    let chosen = $state<number | null>(null);
+
+    // The account that already has the owner's email, in any A–Z case: the choice is forced
+    const holder = $derived(users.find((user) => sameEmail(user.email, ownerEmail)) ?? null);
+    const locked = $derived(holder !== null);
+    const selected = $derived(holder ? holder.id : chosen);
+
+    $effect(() => {
+        if (open) {
+            untrack(() => {
+                chosen = null;
+            });
+        }
+    });
+
+    function choose(user: OwnerCandidate): void {
+        if (busy || locked) {
+            return;
+        }
+        chosen = user.id;
+    }
+
+    function confirm(): void {
+        if (busy || selected === null) {
+            return;
+        }
+        onConfirm(selected);
+    }
 </script>
 
-<ModalBase {open} zIndex={60} maxWidth="md" onRequestClose={() => !busy && onCancel()} testId="owner-choice-modal-frame" trapFocus restoreFocus>
-    <div class="space-y-3 p-5 text-sm text-lf-primary" data-testid="owner-choice-modal" data-locked={forced !== null ? 'true' : 'false'}>
-        <p class="text-lf-secondary" data-testid="owner-choice-notice">{$_('backup.restore.report.signInAgain')}</p>
+<ModalBase closeOnBackdropClick={!busy} closeOnEscape={!busy} labelledBy="{uid}-title" maxWidth="lg" {open} onRequestClose={onCancel}>
+    <div class="space-y-4 p-6 text-lf-primary" data-locked={String(locked)} data-testid="owner-choice-modal">
+        <div class="space-y-1">
+            <h2 class="text-lg font-semibold" id="{uid}-title">{$_('backup.ownerChoice.title')}</h2>
+            <p class="text-sm text-lf-secondary">{$_('backup.ownerChoice.intro')}</p>
+            {#if locked}
+                <p class="text-xs text-lf-muted">{$_('backup.ownerChoice.locked')}</p>
+            {/if}
+        </div>
+
         {#if users.length === 0}
-            <p class="text-lf-muted" data-testid="owner-choice-empty">{$_('common.noResults')}</p>
+            <p class="rounded-md border border-lf-subtle bg-lf-panel px-3 py-2 text-sm text-lf-muted" data-testid="owner-choice-empty">{$_('backup.ownerChoice.empty')}</p>
         {:else}
-            <ul class="space-y-1">
+            <div aria-labelledby="{uid}-title" class="max-h-72 space-y-2 overflow-y-auto" role="radiogroup">
                 {#each users as user (user.id)}
-                    <li>
-                        <button
-                            class="w-full rounded-lg border border-lf-subtle px-3 py-2 text-left enabled:hover:bg-lf-hover disabled:cursor-not-allowed"
-                            type="button"
-                            disabled={busy || (forced !== null && forced.id !== user.id)}
-                            data-testid="owner-choice-option"
-                            data-user-id={user.id}
-                            data-matches-owner={forced?.id === user.id ? 'true' : 'false'}
-                            data-selected={selected === user.id ? 'true' : 'false'}
-                            onclick={() => (picked = user.id)}
-                        >
-                            {user.username}
-                        </button>
-                    </li>
+                    {@const matches = holder !== null && user.id === holder.id}
+                    <button
+                        aria-checked={selected === user.id}
+                        class="flex w-full items-center gap-3 rounded-md border px-3 py-2 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50 {selected === user.id ? 'border-lf-focus bg-lf-selected' : 'border-lf-input bg-lf-card hover:bg-lf-hover'}"
+                        data-active={String(user.is_active)}
+                        data-admin={String(user.is_superuser)}
+                        data-matches-owner={String(matches)}
+                        data-selected={String(selected === user.id)}
+                        data-testid="owner-choice-option"
+                        data-user-id={user.id}
+                        disabled={busy || (locked && !matches)}
+                        onclick={() => choose(user)}
+                        role="radio"
+                        type="button"
+                    >
+                        <span class="min-w-0 flex-1">
+                            <span class="block truncate font-medium">{user.username}</span>
+                            <span class="block truncate text-xs text-lf-muted">{user.email}</span>
+                        </span>
+                        {#if matches}
+                            <span class="inline-flex items-center gap-1 rounded-full border border-lf-subtle bg-lf-neutral px-2 py-0.5 text-xs text-lf-secondary"><Crown aria-hidden="true" class="h-3 w-3" />{$_('backup.ownerChoice.ownerBadge')}</span>
+                        {/if}
+                        {#if user.is_superuser}
+                            <span class="inline-flex items-center gap-1 rounded-full border border-lf-info-line bg-lf-info-soft px-2 py-0.5 text-xs text-lf-info-on-soft"><ShieldCheck aria-hidden="true" class="h-3 w-3" />{$_('backup.ownerChoice.adminBadge')}</span>
+                        {/if}
+                        {#if !user.is_active}
+                            <span class="inline-flex items-center gap-1 rounded-full border border-lf-subtle bg-lf-neutral px-2 py-0.5 text-xs text-lf-secondary"><UserX aria-hidden="true" class="h-3 w-3" />{$_('backup.ownerChoice.inactiveBadge')}</span>
+                        {/if}
+                    </button>
                 {/each}
-            </ul>
+            </div>
         {/if}
-        <footer class="flex justify-end gap-2">
-            <button class="rounded-lg border border-lf-subtle px-4 py-2 text-lf-secondary disabled:opacity-50" type="button" disabled={busy} data-testid="owner-choice-cancel" onclick={onCancel}>{$_('common.cancel')}</button>
-            <button class="rounded-lg bg-lf-danger-solid px-4 py-2 font-medium text-lf-on-danger-solid disabled:opacity-50" type="button" disabled={busy || selected === null} data-testid="owner-choice-confirm" onclick={() => selected !== null && onConfirm(selected)}>
-                {$_('common.confirm')}
+
+        <div class="rounded-md border border-lf-warning-line bg-lf-warning-soft px-3 py-2 text-sm text-lf-warning-on-soft" data-testid="owner-choice-notice" role="note">
+            {$_('backup.ownerChoice.notice', {values: {email: ownerEmail}})}
+        </div>
+
+        <div class="flex flex-wrap justify-end gap-2">
+            <button class="rounded-md border border-lf-input px-3 py-1.5 text-sm font-medium text-lf-secondary hover:bg-lf-hover disabled:cursor-not-allowed disabled:opacity-50" data-testid="owner-choice-cancel" disabled={busy} onclick={onCancel} type="button">
+                {$_('backup.ownerChoice.cancel')}
             </button>
-        </footer>
+            <button class="rounded-md bg-lf-action px-3 py-1.5 text-sm font-medium text-lf-on-action hover:bg-lf-action-hover disabled:cursor-not-allowed disabled:opacity-50" data-testid="owner-choice-confirm" disabled={busy || selected === null} onclick={confirm} type="button">
+                {$_('backup.ownerChoice.confirm')}
+            </button>
+        </div>
     </div>
 </ModalBase>

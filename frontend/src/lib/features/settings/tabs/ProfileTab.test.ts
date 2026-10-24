@@ -1298,6 +1298,24 @@ describe('ProfileTab — changing the e-mail asks for the current password (A6e)
             expect(hint()).toBeNull();
         });
 
+        // A5-1 (23/10/2026): the account of a managed instance's paying administrator may not change its address from the app
+        it.each(EMAIL_SAVES)('a 409 ACCOUNT_PROTECTED, through $via: no bare error but the modal of the host (protected-email-modal), the stored address put back with no password asked, and a machine event', async ({save}) => {
+            profilePut().mockRejectedValue(axiosError({error_code: 'ACCOUNT_PROTECTED', message: 'The email address of this account can only be changed by the host of this instance', reason: 'paying_administrator'}));
+            await mountUnlocked();
+            await type(email(), 'new@example.com');
+            await typeEmailPassword(CURRENT_PASSWORD);
+
+            await fireEvent.click(save());
+
+            expect(await screen.findByTestId('protected-email-modal')).toHaveTextContent('settings.protectedEmail.message');
+            expect(error(), 'the modal is the message: no banner beside it').toBeNull();
+            await waitFor(() => expect(email()).toHaveValue('alice@example.com'));
+            expect(emailPassword(), 'back at the stored address: no password is asked for').toBeNull();
+            expect(notify).toHaveBeenCalledWith(expect.objectContaining({name: 'settings.profile.save.refused', detail: expect.objectContaining({field: 'email', code: 'ACCOUNT_PROTECTED'})}));
+            await fireEvent.click(screen.getByTestId('protected-email-close'));
+            await waitFor(() => expect(screen.queryByTestId('protected-email-modal')).toBeNull());
+        });
+
         it.each(EMAIL_SAVES)('a code the tab does not know, through $via: a generic text, never «[object Object]», and no code published', async ({save}) => {
             profilePut().mockRejectedValue(axiosError({error_code: 'SOMETHING_NEW', message: 'Something the tab has never heard of'}));
             await mountUnlocked();
