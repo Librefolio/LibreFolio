@@ -267,6 +267,18 @@
         "invalid": "LIBREFOLIO_BACKUP_RECIPIENTS non si può usare ({reason}): uno o due destinatari age1…, separati da virgola. I backup del pannello del fornitore rispondono 503 finché non si corregge.",
         "missingManaged": "LIBREFOLIO_BACKUP_RECIPIENTS non è impostata: un'istanza gestita non consegna mai un backup in chiaro al pannello del fornitore, i cui backup rispondono 503 finché non si imposta."
       }
+    },
+    "ownerChoice": {
+      "title": "Chi è il titolare di questa istanza?",
+      "intro": "Scegli quale utente di questo backup diventa l'amministratore che paga l'istanza.",
+      "notice": "A questo utente verrà messa l'email del titolare ({email}) e diventerà amministratore protetto. La sua password verrà reimpostata: un link per sceglierne una nuova viene inviato a quell'indirizzo.",
+      "locked": "Un utente di questo backup ha già l'email del titolare: è lui il titolare.",
+      "adminBadge": "Amministratore",
+      "inactiveBadge": "Disattivato",
+      "ownerBadge": "Email del titolare",
+      "empty": "Questo backup non ha utenti tra cui scegliere.",
+      "confirm": "Conferma e ripristina",
+      "cancel": "Annulla"
     }
   }
 }

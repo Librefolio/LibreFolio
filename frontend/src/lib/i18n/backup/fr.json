@@ -267,6 +267,18 @@
         "invalid": "LIBREFOLIO_BACKUP_RECIPIENTS ne peut pas être utilisée ({reason}) : un ou deux destinataires age1…, séparés par une virgule. Les sauvegardes du panneau de l'hébergeur répondent 503 tant qu'elle n'est pas corrigée.",
         "missingManaged": "LIBREFOLIO_BACKUP_RECIPIENTS n'est pas définie : une instance gérée ne remet jamais une sauvegarde en clair au panneau de l'hébergeur, dont les sauvegardes répondent 503 tant qu'elle n'est pas définie."
       }
+    },
+    "ownerChoice": {
+      "title": "Qui est le titulaire de cette instance ?",
+      "intro": "Choisissez quel utilisateur de cette sauvegarde devient l'administrateur qui paie l'instance.",
+      "notice": "Cet utilisateur recevra l'adresse e-mail du titulaire ({email}) et deviendra administrateur protégé. Son mot de passe sera réinitialisé : un lien pour en choisir un nouveau est envoyé à cette adresse.",
+      "locked": "Un utilisateur de cette sauvegarde a déjà l'adresse e-mail du titulaire : c'est lui le titulaire.",
+      "adminBadge": "Administrateur",
+      "inactiveBadge": "Désactivé",
+      "ownerBadge": "E-mail du titulaire",
+      "empty": "Cette sauvegarde n'a aucun utilisateur à choisir.",
+      "confirm": "Confirmer et restaurer",
+      "cancel": "Annuler"
     }
   }
 }
