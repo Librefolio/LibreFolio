@@ -1329,7 +1329,7 @@ describe('B-32 — RestoreCard: a refused cancel of a pending restore', () => {
  * `owner_choice_invalid`, `owner_email_not_set` keep the check (`restore-retry` brings the report back),
  * `owner_conflict` forgets it (`restore-retry` → idle).
  *
- * OwnerChoiceModal is workstream A's (a stand-in until the merge): driven only through `owner-choice-option`
+ * OwnerChoiceModal is workstream A's (its real component since the merge): driven only through `owner-choice-option`
  * (`data-user-id`), `owner-choice-confirm` and `owner-choice-cancel`.
  *
  * Red today: the report modal confirms at once with no owner modal, and the card drops the argument.

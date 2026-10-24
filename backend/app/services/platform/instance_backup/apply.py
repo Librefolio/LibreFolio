@@ -49,7 +49,6 @@ from __future__ import annotations
 import contextlib
 import functools
 import os
-import secrets
 import shutil
 import sqlite3
 import stat
@@ -1089,7 +1088,7 @@ def _close_the_way_in(data_dir: Path, now: datetime, owner_user_id: int | None =
     - The account the owner chose (a restore confirmed from the app of a managed instance, B5-1) is closed:
       ``_close_owner_account``.
     """
-    unusable = _unusable_password_hash() if owner_user_id is not None else None
+    unusable = _unusable_hash() if owner_user_id is not None else None
     owner_email = None
     if owner_user_id is not None:
         from backend.app.services.platform.instance_backup.owner import configured_owner_email  # noqa: PLC0415 — owner imports this module
@@ -1119,12 +1118,11 @@ def _close_the_way_in(data_dir: Path, now: datetime, owner_user_id: int | None =
     return value, revoked
 
 
-def _unusable_password_hash() -> str:
-    """A real bcrypt hash of a secret nobody ever sees: no password signs in, and an attempt costs what it costs for any
-    account. Workstream A's ``auth_service.unusable_password_hash`` once merged."""
-    from backend.app.services.accounts.auth_service import hash_password  # noqa: PLC0415
+def _unusable_hash() -> str:
+    """The hash that no password produces, workstream A's (``auth_service.unusable_password_hash``): one home for it."""
+    from backend.app.services.accounts import auth_service  # noqa: PLC0415 — accounts import the platform services
 
-    return hash_password(secrets.token_urlsafe(32))
+    return auth_service.unusable_password_hash()
 
 
 def _close_owner_account(conn: sqlite3.Connection, user_id: int, unusable: str, owner_email: str | None, stage_id: str | None) -> None:
