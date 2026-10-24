@@ -7,7 +7,7 @@ core resolves them, stores them, protects the secret ones and hands them to the 
 - **Plugin side**: `PluginSettingsMixin` (`settings_fields`, `test_only`, `self.settings`) and
   `BoundSettings`, in `backend/app/services/plugin_settings/contract.py`
 - **Families**: asset providers (`AssetSourceProvider`), FX providers (`FXRateProvider`) and the
-  broker-import plugins (`BRIMProvider`, `brim`: prepared, no plugin declares a field yet:
+  broker-import plugins (`BRIMProvider`, `brim`: the generic CSV declares the order of day and month:
   [BRIM settings](../../backend/brim/architecture.md#brim-settings)). Tools are still to come
 - **API**: `GET /api/v1/settings/plugins` and `PATCH /api/v1/settings/plugins/bulk`
 - **Interface**: the **Plugins** tab of Settings, and **Configure** in the asset dialog and in the

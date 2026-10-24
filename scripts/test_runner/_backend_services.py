@@ -1001,6 +1001,16 @@ def services_brim_field_contract(verbose: bool = False, test_names: list = None)
     return run_command(cmd, "BRIM field contract tests", verbose=verbose)
 
 
+def services_brim_file_settings(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the wiring of a BRIM plugin's settings: the value reaches the pool worker, the fingerprint is stored, a changed setting makes a parse stale."""
+    print_section("Services: BRIM File Settings")
+    print_info("Testing: brim_parse_pool.parse_file_offloaded (bound), brim_provider.save_parse_result (settings_fingerprint), services/brim/brim_file_settings.py (apply_settings_staleness)")
+    print_info("Tests: the value reaches the subprocess, the fingerprint is stored and never served, stale by the user's own value")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_file_settings.py", test_names)
+    return run_command(cmd, "BRIM file settings tests", verbose=verbose)
+
+
 def services_settings(verbose: bool = False, test_names: list = None) -> bool:
     """Test settings service: user settings CRUD, get_effective_base_currency."""
     print_section("Services: Settings Service")
@@ -2666,6 +2676,13 @@ Note: No backend server required.
         name="BRIM Field Contract",
         desc="A field in a BRIM plugin (CP12): declaration, default = the behaviour before the field, the importing user's value, and the stale-parse rule (settings_changed_since)",
         isolation="pure",
+    )
+    add_test(
+        cat,
+        "brim-file-settings",
+        services_brim_file_settings,
+        name="BRIM File Settings",
+        desc="W5-8 (CP12): parse_file_offloaded(bound=) reaches the real pool worker, save_parse_result stores parsed_settings_fingerprint (never served), apply_settings_staleness marks a PARSED file stale when the looking user's values moved",
     )
     add_test(cat, "settings", services_settings, name="Settings Service", desc="User settings CRUD, get_effective_base_currency")
     add_test(cat, "current-price-bootstrap", services_current_price_bootstrap, name="Current Price Bootstrap", desc="OHLC widening helper (F.2/F.3)")

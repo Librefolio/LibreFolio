@@ -949,6 +949,7 @@ def _build_file_info_from_metadata(meta_path: Path) -> Optional[BRIMFileInfo]:
             last_parse_result=metadata.get("last_parse_result"),
             parsed_plugin_code=parsed_plugin_code,
             parsed_plugin_version=parsed_plugin_version,
+            parsed_settings_fingerprint=metadata.get("parsed_settings_fingerprint"),
             parse_is_stale=parse_is_stale,
             batch_id=metadata.get("batch_id"),
             kind=kind,
@@ -1607,6 +1608,7 @@ def save_parse_result(
     file_id: str,
     parse_result: dict,
     plugin_code: Optional[str] = None,
+    settings_fingerprint: Optional[str] = None,
 ) -> bool:
     """
     Save the parse result to the file's metadata for caching.
@@ -1624,6 +1626,9 @@ def save_parse_result(
         file_id: UUID of the file
         parse_result: Dictionary containing transactions, warnings, etc.
         plugin_code: Plugin code used to produce ``parse_result``
+        settings_fingerprint: ``BoundSettings.fingerprint`` of the values the parse received (CP12), saved as
+            ``parsed_settings_fingerprint`` so that a changed setting makes the file stale; ``None`` (a plugin without
+            fields) removes the one a previous parse left
 
     Returns:
         True if saved successfully, False otherwise
@@ -1651,6 +1656,10 @@ def save_parse_result(
             if plugin is not None:
                 plugin_version = plugin.plugin_version
                 metadata["parsed_plugin_version"] = plugin_version
+        if settings_fingerprint is not None:
+            metadata["parsed_settings_fingerprint"] = settings_fingerprint
+        else:
+            metadata.pop("parsed_settings_fingerprint", None)
         _write_metadata_atomic(meta_path, metadata)
 
     logger.info(
