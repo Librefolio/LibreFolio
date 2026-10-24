@@ -83,13 +83,13 @@ ROW_SKIPS_PENDING = frozenset(
 )
 
 # The version each plugin bumps to (the output for the same file changes: its notices). DEGIRO and Scalable pin theirs in their own files.
-# W-B87 block 1 (rows with an economic effect imported): Revolut 1.3.0, Trading 212 1.2.0, eToro 1.3.0, Swissquote 1.2.0 (their output now holds the new transactions).
+# W-B87 block 1 (rows with an economic effect imported): Revolut 1.3.0, Trading 212 1.2.0, eToro 1.3.0, Swissquote 1.2.0 (their output now holds the new transactions); eToro 1.4.0 (lot W5-2c: the overnight refund is an INTEREST).
 NEW_VERSIONS = {
     "broker_credit_agricole": "1.5.0",
     "broker_directa": "1.1.0",
     "broker_revolut": "1.3.0",
     "broker_trading212": "1.2.0",
-    "broker_etoro": "1.3.0",
+    "broker_etoro": "1.4.0",
     "broker_traderepublic": "1.1.0",
     "broker_swissquote": "1.2.0",
     "broker_ibkr": "1.1.0",
@@ -383,10 +383,7 @@ SKIP_CASES: Tuple[SkipCase, ...] = (
         reason_has="stock distribution",
     ),
     SkipCase("trading212-currency-conversion", "broker_trading212", "trading212-export.csv", {"Action": "Currency conversion", "Time": "2025-01-24 10:00:00", "Total": "10.00", "Currency (Total)": "EUR"}, ROWS_NOT_RECOGNIZED, delimiter=",", reason_has="currency conversion"),
-    # --- eToro: an overnight fee and an SDRT row are imported (W-B87 block 1, test_brim_economic_rows.py); an overnight refund stays listed (the developer's question is pending)
-    SkipCase(
-        "etoro-overnight-refund", "broker_etoro", "etoro-export.csv", {"Date": "20/05/2025 01:31:04", "Type": "Overnight refund", "Details": "Daily", "Amount": "0,21", "Units": "-", "Position ID": "624957573", "Asset type": "CFD"}, ROWS_NOT_RECOGNIZED, delimiter=",", reason_has="overnight refund"
-    ),
+    # --- eToro: an overnight fee, an overnight refund and an SDRT row are all imported (W-B87 block 1 and lot W5-2c, test_brim_economic_rows.py): no row is left out, so no case
     # --- Trade Republic: a fee or a tax column is not imported (the row is); the strings become two codes
     SkipCase("traderepublic-fee-column", "broker_traderepublic", "traderepublic-export.csv", _with(_TR_ROW, c6="-1.0"), ROWS_NOT_RECOGNIZED, extra_transactions=1),
     SkipCase("traderepublic-tax-column", "broker_traderepublic", "traderepublic-export.csv", _with(_TR_ROW, c7="-0.5"), ROWS_NOT_RECOGNIZED, extra_transactions=1),
@@ -562,8 +559,8 @@ SAMPLE_LISTINGS: Tuple[SampleListing, ...] = (
     SampleListing("broker_revolut", "revolut-crypto-export.csv"),
     # A stock distribution (11) and a stock split (13, 14); the transfer (12) is silent
     SampleListing("broker_trading212", "trading212-export.csv", not_recognized={11: "Stock distribution", 13: "Stock split close", 14: "Stock split open"}),
-    # The overnight fees (24, 26) and the SDRT row (29) are imported (W-B87 block 1); the overnight refund (27) stays listed
-    SampleListing("broker_etoro", "etoro-export.csv", not_recognized={27: "Overnight refund"}),
+    # The overnight fees (24, 26), the overnight refund (27) and the SDRT row (29) are imported (W-B87 block 1, lot W5-2c): the sample lists nothing
+    SampleListing("broker_etoro", "etoro-export.csv"),
     # The two rows with a fee: they are imported, their fee is not
     SampleListing("broker_traderepublic", "traderepublic-export.csv", not_recognized={9: "Sell", 10: "Buy"}),
     # The two forex pairs (lines 3-4 and 10-11) are imported as linked FX_CONVERSION legs (W-B87 block 1): the sample lists nothing
@@ -591,7 +588,7 @@ SAMPLE_TRANSACTIONS = {
     ("broker_revolut", "revolut-invest-export.csv"): 9,  # 8 + the stock split (W-B87 block 1)
     ("broker_revolut", "revolut-crypto-export.csv"): 10,
     ("broker_trading212", "trading212-export.csv"): 12,
-    ("broker_etoro", "etoro-export.csv"): 26,  # 23 + two overnight fees + the SDRT row (W-B87 block 1)
+    ("broker_etoro", "etoro-export.csv"): 27,  # 23 + two overnight fees + the SDRT row (W-B87 block 1) + the overnight refund (lot W5-2c)
     ("broker_traderepublic", "traderepublic-export.csv"): 9,
     ("broker_swissquote", "swissquote-export.csv"): 21,  # 17 + two forex pairs, two legs each (W-B87 block 1)
     ("broker_ibkr", "ibkr-trades-export.csv"): 16,
@@ -698,7 +695,7 @@ ROW_SKIPS_BY_PLUGIN: Dict[str, PluginSkips] = {
     "broker_directa": PluginSkips("directa-unknown-type", "directa-unreadable-date"),
     "broker_revolut": PluginSkips("revolut-stock-split", None, f"no unreadable row is reported: {_ONLY_SKIPPED_TYPES}"),
     "broker_trading212": PluginSkips("trading212-stock-split", None, f"no unreadable row is reported: {_ONLY_SKIPPED_TYPES}"),
-    "broker_etoro": PluginSkips("etoro-overnight-refund", None, f"no unreadable row is reported: {_ONLY_SKIPPED_TYPES}"),
+    "broker_etoro": PluginSkips(None, None, "no row type is left out any more (the overnight refund is an INTEREST since lot W5-2c); its other warnings stay plain strings", own_test="test_brim_economic_rows.py"),
     "broker_traderepublic": PluginSkips("traderepublic-unknown-type", "traderepublic-invalid-date"),
     "broker_swissquote": PluginSkips("swissquote-unknown-transaction", "swissquote-invalid-date"),
     "broker_ibkr": PluginSkips("ibkr-unknown-direction", "ibkr-invalid-date"),

@@ -6,8 +6,8 @@ Until now ``broker_etoro``, ``broker_swissquote``, ``broker_revolut`` and ``brok
 in beta, a plugin never creates an asset event) that these rows become real transactions:
 
 - A. eToro: an ``Overnight fee`` is one FEE (cash negative, no asset, quantity 0); an ``SDRT`` row is one TAX on the asset of the ticker in
-  ``Details`` (the same fake asset id a dividend of that ticker has); an ``Overnight refund`` STAYS a listed row (the developer's question
-  on it is pending), so the notice counts only the refund;
+  ``Details`` (the same fake asset id a dividend of that ticker has); an ``Overnight refund`` is one INTEREST (money given back: cash is the
+  absolute amount, positive, no asset, quantity 0; developer decision D1, 24/10/2026, lot W5-2c), so the sample has no notice at all;
 - B. Swissquote: a ``Forex credit`` + ``Forex debit`` pair (same ``Order #`` and timestamp, nothing in ``Costs``) is two FX_CONVERSION legs
   sharing a ``link_uuid``, cash = ``Net Amount`` signed, in the row's currency; a lone leg, an order with more than two legs and a leg that
   carries ``Costs`` are still listed;
@@ -294,32 +294,42 @@ class TestEtoroSdrt:
 
 
 class TestEtoroOvernightRefund:
-    """A — guard: the refund is not imported yet (the developer's question is pending); it is the only row the notice counts."""
+    """A — an ``Overnight refund`` is money given back: one INTEREST of the absolute amount, positive, in the file's currency, no asset."""
 
-    def test_the_refund_is_not_a_transaction(self):
+    def test_the_refund_is_one_interest_without_an_asset(self):
         out = _sample(ETORO, ETORO_SAMPLE)
 
-        refunded = [tx for tx in out.transactions if tx.date == date(2020, 5, 20) and tx.cash is not None and tx.cash.amount == Decimal("0.21")]
+        refunds = _find(out, TransactionType.INTEREST, code=ETORO_FILE_CURRENCY, amount=Decimal("0.21"), day=date(2020, 5, 20))
 
-        assert refunded == [], f"the refund of 0,21 on 20/05/2020 is imported as {[(t.type, t.cash) for t in refunded]}"
+        assert len(refunds) == 1, f"the refund of 0,21 on 20/05/2020 gives {len(refunds)} INTEREST transaction(s): {[(t.type, t.cash) for t in out.transactions if t.date == date(2020, 5, 20)]}"
+        refund = refunds[0]
+        assert (refund.quantity, refund.asset_id, refund.broker_id) == (Decimal("0"), None, BROKER_ID)
+        assert refund.cash == Currency(code=ETORO_FILE_CURRENCY, amount=Decimal("0.21"))
+        assert "overnight refund" in (refund.description or "").lower()
+        assert {"import", "etoro"} <= set(refund.tags or [])
 
-    def test_the_refund_stays_in_the_notice(self):
-        """Guard (green today and after): the refund line is listed, with a reason that names it."""
-        out = _sample(ETORO, ETORO_SAMPLE)
-        refund_line = next(number for number, line in enumerate(_physical_lines(ETORO_SAMPLE), start=1) if "Overnight refund" in line)
-
-        assert refund_line in _lines_of(out, ROWS_NOT_RECOGNIZED), f"presence barrier: the refund (line {refund_line}) is in no notice"
-        notice = _notices(out, ROWS_NOT_RECOGNIZED)[0]
-        evidence = notice.evidence[0]
-        reason = evidence.rows[evidence.row_numbers.index(refund_line)][-1].lower()
-        assert "overnight refund" in reason
-
-    def test_the_notice_counts_only_the_refund(self):
-        """The fees and the SDRT row are transactions now: the notice lists the refund alone, and its count says so."""
+    def test_the_refund_is_not_listed_and_the_sample_has_no_notice_left(self):
         out = _sample(ETORO, ETORO_SAMPLE)
         refund_line = next(number for number, line in enumerate(_physical_lines(ETORO_SAMPLE), start=1) if "Overnight refund" in line)
+        assert _find(out, TransactionType.INTEREST, amount=Decimal("0.21"), day=date(2020, 5, 20)), "presence barrier: the refund is imported"
 
-        _assert_listed(out, [refund_line])
+        _assert_not_listed(out, refund_line)
+
+        assert _notices(out, ROWS_NOT_RECOGNIZED) == [], f"the sample still lists {_lines_of(out, ROWS_NOT_RECOGNIZED)}"
+        assert [(notice.code, notice.message) for notice in out.warnings] == [], "the sample gives no warning at all"
+
+    @pytest.mark.parametrize("written", ["0,25", "(0,25)", "-0,25"], ids=["positive", "brackets", "minus sign"])
+    def test_the_refund_is_positive_whatever_sign_the_file_gives(self, tmp_path: Path, written: str):
+        """The type decides the sign, as for the fees: a refund is money back, so the cash is the absolute amount."""
+        rows = [_etoro_row("21/04/2021 01:02:03", "Overnight refund", "Daily", written, **{"Asset type": "CFD"})]
+        path, (line,) = _write_rows(tmp_path, ETORO_SAMPLE, rows, ",")
+
+        out = _plugin(ETORO).parse(path, broker_id=BROKER_ID)
+
+        refunds = _find(out, TransactionType.INTEREST, code=ETORO_FILE_CURRENCY, amount=Decimal("0.25"), day=date(2021, 4, 21))
+        assert len(refunds) == 1, f"line {line} ({written}) gives {len(refunds)} INTEREST transaction(s): {[(t.type, t.cash) for t in out.transactions]}"
+        _assert_not_listed(out, line)
+        assert _notices(out, ROWS_NOT_RECOGNIZED) == []
 
 
 # =============================================================================
