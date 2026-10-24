@@ -10,14 +10,22 @@ command line, through environment variables, or in the app's **Settings › Admi
 ### 🐳 Deployment & Exposure
 - 📦 **[Host Installation](host_installation.md)**: Manual setup using Python, Node.js, and Pipenv directly on the host machine.
 - 🐳 **[Advanced Docker](docker_advanced.md)**: Containerized deployment using Docker Compose, volume bindings, and user GID/UID ownership configuration.
-- 🌐 **[Expose Securely](service_exposure.md)**: Securely expose your private LibreFolio instance over the internet.
-- 🔍 **[Check Connection Security](connection_checks.md)**: Verify that your users connect securely, and fix the session cookie or the reverse proxy when they do not.
+- 🌐 **[Expose Securely](service_exposure.md)**: Securely expose your private LibreFolio instance with Tailscale, no router port opened: why it beats port forwarding, and the private levels, a VPN for your own devices or a subnet router for your whole home network.
+    - 🌍 **[Expose Securely: Public Access with Funnel](service_exposure_funnel.md)**: A public HTTPS address with Tailscale Funnel: enabling Funnel and the ACLs, one address for LibreFolio, or one for each service with Docker.
+- 🔍 **[Check Connection Security](connection_checks.md)**: Verify that your users connect securely: the checklist, the indicator, the server's view and the session cookie, and what to do when a check fails.
+    - 🧰 **[Check Connection Security: Behind a Reverse Proxy](connection_proxy.md)**: Run LibreFolio behind Nginx, Caddy, Traefik or Tailscale: the headers to send, the proxy LibreFolio trusts and the visitor's address.
 - 🏢 **[Hosting for Others](hosting_providers.md)**: Run LibreFolio for other people: the managed profile, the initial administrator, how to block an instance, backups for your hosting panel, the upload limit of a restore and your legal pages.
-- 💤 **[Sleep and Wake](sleep_wake.md)**: Let an unused Fly.io machine suspend itself, and wake it on a schedule: a hosting panel or a cron job brings prices and exchange rates up to date.
+- 💤 **[Sleep and Wake](sleep_wake.md)**: Let an unused Fly.io machine suspend itself, check that it works, and see how a price provider that answers «too many requests» is paused.
+    - ⏰ **[Sleep and Wake: Scheduled Wake-up](wake_sync.md)**: Wake the instance on a schedule: a hosting panel or a cron job calls one route with a token, and prices and exchange rates are brought up to date.
 
 ### ⚙️ System Configuration
-- 📝 **[Environment Variables](configuration.md)**: Full list of supported `.env` variables (`PORT`, `JWT_SECRET`, `LIBREFOLIO_DATA_DIR`, etc.) and variable resolution precedence.
-- 📧 **[Email](email.md)**: Optional SMTP email: the variables, the test email in Settings › Administration › Email, links sent by email, forgotten passwords, email verification, the notice of an email change, and what to check when it fails.
+- 📝 **[Environment Variables](configuration.md)**: Create the `.env` file and read the main supported variables (`PORT`, `JWT_SECRET`, `LIBREFOLIO_DATA_DIR`, etc.), with the precedence that decides which value wins.
+    - 🔐 **[Configuration: Secrets and Plugin Settings](configuration_secrets.md)**: Secrets and how to read them from files such as Docker secrets, the instance key, and the settings and API keys of the plugins.
+    - 🛡️ **[Configuration: Checks and Protections](configuration_security.md)**: What LibreFolio checks at startup, the Content-Security-Policy and frame protection, and how the server stops.
+    - 👥 **[Configuration: Accounts and Asset Search](configuration_accounts.md)**: Who can sign up, the limits on accounts and failed sign-ins, the initial administrator, and the order of the price providers in the asset search.
+- 📧 **[Email](email.md)**: Optional SMTP email: the variables, examples for the usual servers, and the **Email** tab of Settings › Administration with its test email.
+    - 📬 **[Email: Links and Messages](email_flows.md)**: The emails with a link, invitations and password resets, forgotten passwords and their limits, email verification and the notice of an email change.
+    - 🛠️ **[Email: When It Does Not Work](email_troubleshooting.md)**: The errors, what the log says, and the security notes of the SMTP setup.
 - ⚙️ **[Global Settings](settings.md)**: Configure system-wide runtime settings (session TTL, upload limits, market data sync intervals), find your way in the **Administration** tabs of Settings, and read the **Security** checks of the instance.
 - 👥 **[Users & Invitations](users.md)**: Manage the accounts of the instance from the app's **Users** tab: invitations, password-reset links, administrator rights, deactivation and deletion.
 
@@ -95,7 +103,7 @@ knows it can forge a session.
 
     Save the key in a file, such as a Docker secret, and set `JWT_SECRET_FILE` to its path instead of
     `JWT_SECRET`, for example `JWT_SECRET_FILE=/run/secrets/jwt_secret`. The rules and a Docker
-    Compose example are in [Secrets](configuration.md#secrets).
+    Compose example are in [Secrets](configuration_secrets.md#secrets).
 
 The workers of a single `./dev.py server --workers …` share one key on their own. How long a
 session lasts is the **Session Duration** in [Global Settings](settings.md). For the details, see

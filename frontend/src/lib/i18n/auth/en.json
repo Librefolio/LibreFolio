@@ -100,6 +100,11 @@
         "ok": "Failed sign-ins are limited: after 10 in 15 minutes for one user name or email, or 50 from one address, the sign-in waits.",
         "off": "The limit on failed sign-ins is off (LIBREFOLIO_LOGIN_LIMIT=off): passwords can be tried without pause. Turn it back on unless this is a test instance.",
         "invalid": "LIBREFOLIO_LOGIN_LIMIT is set to «{value}», which is neither on nor off: the server will not start with it."
+      },
+      "ownerEmailChange": {
+        "ok": "No change of the owner's email address is waiting.",
+        "pending": "The hosting provider changed the owner's email address: the new address was sent a confirmation link, and the account keeps the old one until it is confirmed.",
+        "blocked": "The hosting provider changed the owner's email address to one that another account already uses: nothing was changed. Choose another address and restart."
       }
     },
     "askAdminToResetPassword": "Ask your administrator for a password-reset link: they can create one for your account."

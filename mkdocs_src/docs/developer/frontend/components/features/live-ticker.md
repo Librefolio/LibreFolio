@@ -380,7 +380,7 @@ portfolio views stale and reloads the Dashboard or a broker's page on screen.
 `lib/features/price-refresh/priceRefresh.ts` does it, on the
 `startActivePolling()` of the live prices. The server's side — what a catch-up is, the header, the
 route — is in [Catch-up Progress](../../../backend/scheduler.md#price-refresh); what users see, in
-[While Prices Catch Up](../../../../admin/sleep_wake.md#price-refresh).
+[While Prices Catch Up](../../../../admin/wake_sync.md#price-refresh).
 
 ### 📥 The header {: #price-refresh-header }
 
@@ -651,7 +651,7 @@ sequenceDiagram
 - ⏱️ [Scheduler](../../../backend/scheduler.md) — The server-side current-price refresh
 - ⏳ [Catch-up Progress](../../../backend/scheduler.md#price-refresh) — The server's side of
   **Updating prices…**: the tracker, the header and the route
-- 🛠️ [While Prices Catch Up](../../../../admin/sleep_wake.md#price-refresh) — What users see
+- 🛠️ [While Prices Catch Up](../../../../admin/wake_sync.md#price-refresh) — What users see
   during a catch-up
 - 📢 [Instance notices](../../state/app-state.md#instance-notices) — The registry that shows the
   notice

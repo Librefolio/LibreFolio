@@ -250,7 +250,7 @@ const CANONICAL_ORIGIN = /^https?:\/\/(?:[a-z0-9-]+(?:\.[a-z0-9-]+)*|\[[0-9a-f:]
 /** The tab's note of the sources of the scripts the policy blocked (`cspNotice.ts`): a JSON array of distinct strings. */
 const NOTICE_KEY = 'librefolio-csp-blocked';
 /** The one console line of the notice, `(<source>)` captured; the guide's address is the docs', its path the contract's. */
-const NOTICE_LINE = /^LibreFolio blocked a script it did not send \((.+)\): a proxy, a CDN or a browser extension adds it\. Guide: \S*\/admin\/configuration\/#csp$/;
+const NOTICE_LINE = /^LibreFolio blocked a script it did not send \((.+)\): a proxy, a CDN or a browser extension adds it\. Guide: \S*\/admin\/configuration_security\/#csp$/;
 /** The first 40 characters of the injected script of test 9, which `'report-sample'` puts in the violation. */
 const INJECTED_MARK = 'window.__lfInjected';
 
