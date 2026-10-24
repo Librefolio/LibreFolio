@@ -1,7 +1,7 @@
 {
   "brimPlugins": {
     "broker_swissquote": {
-      "description": "Importa las exportaciones CSV de Swissquote: operaciones de compraventa, dividendos, movimientos de efectivo, comisiones, impuestos e intereses. Las operaciones de cambio de divisas se omiten.",
+      "description": "Importa las exportaciones CSV de Swissquote: operaciones de compraventa, dividendos, movimientos de efectivo, comisiones, impuestos, intereses y cambios de divisa.",
       "name": "Swissquote"
     }
   }

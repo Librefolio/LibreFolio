@@ -38,7 +38,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Union
 
-from backend.app.schemas.brim import BRIMEvidence, BRIMNotice
+from backend.app.schemas.brim import BRIMEvidence, BRIMFieldTodo, BRIMNotice
 from backend.app.services.brim.brim_provider import BRIMProvider
 
 try:
@@ -421,6 +421,35 @@ _SKIP_MESSAGES = {
     ROWS_NOT_RECOGNIZED: "{n} rows were left out, or only partly imported, because the importer does not recognise them or does not import them yet. If they change your shares or cash, report them so the case can be handled.",
     ROWS_UNREADABLE: "{n} rows were left out because a value they need cannot be read. Check them and, if the file is right, report them so the case can be handled.",
 }
+
+
+# The managed todo of a share change that may be a stock split (W-B87): the Bulk editor answers it with a SPLIT event.
+POSSIBLE_SPLIT = "possible_split"
+
+
+def possible_split_todo(tx_index: int, row_number: int, headers: Sequence[Any], row: Union[Sequence[Any], Mapping[str, Any]], *, ticker: str, added_quantity: Decimal, isin: Optional[str] = None) -> BRIMFieldTodo:
+    """The todo of an incoming ADJUSTMENT that a broker's multiplicative split row became.
+
+    The shares enter without cost, which is right for a split, and wrong for a gift or a spin-off: the broker's file does not say
+    which. The row stays flagged until the user links a SPLIT event (the todo is on ``asset_event_id``), which makes the cost
+    follow the old shares. ``context`` gives the ticker, the shares added (a string, as the file wrote it) and the ISIN when
+    the file has one; the evidence is the source row.
+    """
+    names = [cell_str(header) for header in headers]
+    cells = [cell_str(row.get(name)) for name in names] if isinstance(row, Mapping) else [cell_str(cell) for cell in row]
+    context: Dict[str, Any] = {"ticker": ticker, "added_quantity": format(added_quantity.normalize(), "f")}
+    if isin:
+        context["isin"] = isin
+    evidence = BRIMEvidence(title="Source row", headers=names, rows=[cells], row_numbers=[row_number], comment="The broker reports a stock split. The new shares enter at no cost; link a SPLIT event so the cost follows the old shares.")
+    return BRIMFieldTodo(
+        tx_index=tx_index,
+        field="asset_event_id",
+        severity="warning",
+        reason_code=POSSIBLE_SPLIT,
+        message=f"Line {row_number}: {ticker} may be a stock split of {format(added_quantity.normalize(), 'f')} new shares — link a SPLIT event.",
+        context=context,
+        evidence=[evidence],
+    )
 
 
 class RowSkips:
