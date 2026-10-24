@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -15,10 +15,12 @@ from starlette.types import Message, Receive, Scope
 from backend.app.api.v1.auth import get_current_user
 from backend.app.db.models import User
 from backend.app.schemas.tools import ToolCatalogResponse, ToolComputeBatchRequest, ToolComputeBatchResponse, ToolDiagnosticsResponse, ToolPlatformPolicy
+from backend.app.services.plugin_settings.contract import BoundSettings
 from backend.app.services.tools.base import ToolExecutionError
 from backend.app.services.tools.catalog import effective_catalog_entries
 from backend.app.services.tools.catalog import get_tool_catalog as build_tool_catalog
 from backend.app.services.tools.executor import get_tool_executor
+from backend.app.services.tools.settings import bound_settings_for_batch
 from backend.app.services.tools.wire import parse_json, validate_json_value
 
 # Request budget of the catalogue and diagnostics routes, capped by the platform's request_timeout_ms.
@@ -129,8 +131,8 @@ async def _client_disconnected(request: Request) -> None:
             return
 
 
-async def _compute_until_disconnect(batch: ToolComputeBatchRequest, request: _ToolRequest, principal_key: str) -> ToolComputeBatchResponse | Response:
-    work = asyncio.create_task(get_tool_executor().compute(batch, principal_key=principal_key, request_started=request.started))
+async def _compute_until_disconnect(batch: ToolComputeBatchRequest, request: _ToolRequest, principal_key: str, settings: Mapping[str, BoundSettings] | None = None) -> ToolComputeBatchResponse | Response:
+    work = asyncio.create_task(get_tool_executor().compute(batch, principal_key=principal_key, request_started=request.started, settings=settings))
     disconnect = asyncio.create_task(_client_disconnected(request))
     try:
         completed, _pending = await asyncio.wait((work, disconnect), return_when=asyncio.FIRST_COMPLETED)
@@ -162,7 +164,9 @@ async def compute_tools(batch: ToolComputeBatchRequest, request: Request, curren
     if current_user.id is None:
         raise HTTPException(status_code=401, detail="Not authenticated")
     try:
-        return await _compute_until_disconnect(batch, bounded_request, str(current_user.id))
+        # The values of the tools' settings are resolved here, in the parent, for the user who asks (CP12): the worker has no database.
+        settings = await bound_settings_for_batch(batch, user_id=current_user.id)
+        return await _compute_until_disconnect(batch, bounded_request, str(current_user.id), settings)
     except ToolExecutionError as exc:
         status_code = 429 if exc.code == "queue_full" else 503
         raise HTTPException(status_code=status_code, detail={"code": exc.code, "retryable": exc.retryable}) from exc

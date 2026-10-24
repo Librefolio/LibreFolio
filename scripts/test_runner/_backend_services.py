@@ -2000,6 +2000,33 @@ def services_tools_lifecycle(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Tool lifecycle tests", verbose=verbose)
 
 
+def services_tool_settings_contract(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the settings of the Tool family: rules, quarantine, tool-code keys, worker binding, refusal of an unconfigured Tool."""
+    print_section("Services: Tool Settings Contract")
+    print_info("Testing: plugin_settings/fields.py (FAMILY_RULES['tool']), tools/base.py, registry.py, worker.py (settings), executor.py (settings), api/v1/tools.py (compute_tools)")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_tool_settings_contract.py", test_names)
+    return run_command(cmd, "Tool settings contract tests", verbose=verbose)
+
+
+def services_tool_settings_runtime(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the values of a Tool on a private database: configure_instance, bound_settings_for_batch, the catalogue and the writes."""
+    print_section("Services: Tool Settings Resolution and Catalogue")
+    print_info("Testing: plugin_settings/runtime.py (plugin_code), tools/settings.py (bound_settings_for_batch), plugin_settings/service.py (family tool)")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_tool_settings_runtime.py", test_names)
+    return run_command(cmd, "Tool settings runtime tests", verbose=verbose)
+
+
+def services_tool_settings_lifecycle(verbose: bool = False, test_names: list = None) -> bool:
+    """Test a Tool's settings through the real executor and the real spawn worker."""
+    print_section("Services: Tool Settings Lifecycle")
+    print_info("Testing: real POSIX spawn workers receive the values the parent resolved (ToolWorkerJob.settings), per tool code and per caller")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_tool_settings_lifecycle.py", test_names)
+    return run_command(cmd, "Tool settings lifecycle tests", verbose=verbose)
+
+
 def services_all(verbose: bool = False) -> bool:
     """Run all backend service tests."""
     if _common.nothing_left_to_run("services"):
@@ -3394,6 +3421,30 @@ Note: No backend server required.
         name="Tool Lifecycle",
         desc="Owned spawn workers, quotas, ready/ACK, cancellation, PID identity and full-tree cleanup",
         exclusive_because=("owns native POSIX process groups and exercises forceful teardown and executor quarantine; " "requires an explicitly leased lifecycle run rather than concurrent shared-backend manual review"),
+    )
+    add_test(
+        cat,
+        "tool-settings-contract",
+        services_tool_settings_contract,
+        name="Tool Settings Contract",
+        desc="CP12 X5-4b: FAMILY_RULES['tool'] (personal ok, secret refused), ToolPlugin inherits the settings mixin, the registry validates the declaration when it builds the definition (invalid_settings quarantine, siblings untouched, claims per tool code, test_only withheld outside test mode), the default is the old behaviour, ToolWorkerJob.settings pickles and the worker binds it, an unconfigured Tool is service_unavailable without a worker, compute_tools resolves bound_settings_for_batch for the caller",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "tool-settings-runtime",
+        services_tool_settings_runtime,
+        name="Tool Settings Resolution",
+        desc="CP12 X5-4b on a private DB: configure_instance(plugin_code), bound_settings_for a tool code, bound_settings_for_batch (instance and user values, per tool code, no read for a Tool without fields), the catalogue lists Tools by tool code, writes with family=tool (scopes, bounds, env lock, all or nothing)",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "tool-settings-lifecycle",
+        services_tool_settings_lifecycle,
+        name="Tool Settings Lifecycle",
+        desc="CP12 X5-4b with real spawn workers: the plugin sees the value the parent delivered, the defaults when none, the values of its own tool code, never another caller's; an unconfigured Tool starts no worker while its sibling runs",
+        exclusive_because=("starts real multiprocessing spawn workers that own native POSIX process sessions and the executor's process-wide pool, " "like tools-lifecycle; run it in the same leased resource slot, never beside other process-owning units"),
     )
     add_test(cat, "all", services_all, test_names=False, name="All Services Tests", desc="Run all service tests")
     registry["services"] = cat

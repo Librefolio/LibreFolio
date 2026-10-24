@@ -89,7 +89,7 @@ class FamilyRules:
     secrets: bool
 
 
-#: The families whose plugins may declare settings. Tools join with CP12.
+#: The families whose plugins may declare settings.
 FAMILY_RULES: dict[str, FamilyRules] = {
     "asset": FamilyRules(user_scope=True, secrets=True),
     # The import plugins (W-BS, prepared, no field declared yet): the same rules as the price sources. A parse runs for the user
@@ -97,6 +97,9 @@ FAMILY_RULES: dict[str, FamilyRules] = {
     "brim": FamilyRules(user_scope=True, secrets=True),
     # An FX sync serves every user: only the instance's values reach an FX provider.
     "fx": FamilyRules(user_scope=False, secrets=True),
+    # A Tool is computed on behalf of the user who asks, so a personal value reaches it; it calls no external source, so it has
+    # nothing to keep secret (CP12, X5-4b). A tool's settings are keyed by its tool code.
+    "tool": FamilyRules(user_scope=True, secrets=False),
 }
 
 

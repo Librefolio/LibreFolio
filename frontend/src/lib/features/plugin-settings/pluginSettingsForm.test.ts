@@ -3,11 +3,12 @@
  *
  * `PluginSettingsForm.svelte` only draws what these functions decide, so the rules are pinned here, once:
  *   - `groupByFamily`: the entries by family, the price sources (`asset`) before the exchange-rate sources (`fx`) before
- *     the import sources (`brim`, W-BS) whatever the order of the answer, each family in the answer's order, a family
+ *     the import sources (`brim`, W-BS) before the tools (`tool`, X5-4b) whatever the order of the answer, each family in the answer's order, a family
  *     without entries left out;
  *   - `FAMILY_ICONS`: one icon per family of `FAMILY_ORDER`, no more and no fewer, the one the family has on the
  *     documentation's home — lucide's `ChartColumn` for the price sources, `Coins` for the exchange-rate sources — and
- *     an icon of its own for the import sources, which is neither of those;
+ *     an icon of its own for the import sources and another for the tools, none of them the same as another;
+ *   - the catalogues: the family's title key, `pluginSettings.families.tool` included, reads in the four languages;
  *   - the texts: `fieldLabel`, `fieldDescription` and `optionLabel` say the plugin's key when it is translated and the
  *     plugin's English text otherwise (a key answered with itself, or with nothing, is no translation), and never ask
  *     for a key the plugin did not declare; `displayValue` writes the value in force of a field the caller cannot
@@ -34,6 +35,10 @@
  */
 import {describe, expect, it, vi} from 'vitest';
 import {ChartColumn, Coins} from 'lucide-svelte';
+import en from '$lib/i18n/en.json';
+import itCatalogue from '$lib/i18n/it.json';
+import fr from '$lib/i18n/fr.json';
+import es from '$lib/i18n/es.json';
 import type {PluginSettingsEntry, PluginSettingWriteResult, SettingField, SettingOption} from './pluginSettingsApi';
 import {
     chosen,
@@ -157,9 +162,41 @@ describe('groupByFamily — the groups of the Plugins tab', () => {
         expect(groupByFamily([])).toStrictEqual([]);
     });
 
-    it('names the three families, asset first and the import sources last, each with a whole key for its title', () => {
-        expect(FAMILY_ORDER).toEqual(['asset', 'fx', 'brim']);
-        expect(FAMILY_TITLE_KEYS).toStrictEqual({asset: 'pluginSettings.families.asset', fx: 'pluginSettings.families.fx', brim: 'pluginSettings.families.brim'});
+    it('names the four families, asset first and the tools last, each with a whole key for its title', () => {
+        expect(FAMILY_ORDER).toEqual(['asset', 'fx', 'brim', 'tool']);
+        expect(FAMILY_TITLE_KEYS).toStrictEqual({
+            asset: 'pluginSettings.families.asset',
+            fx: 'pluginSettings.families.fx',
+            brim: 'pluginSettings.families.brim',
+            tool: 'pluginSettings.families.tool',
+        });
+    });
+
+    it('puts the tools after the import sources, the exchange-rate sources and the price sources, whatever the order of the answer, each family in the answer’s order', () => {
+        const IMPORTER = entry([], {family: 'brim', plugin_code: 'broker_x'});
+        const TOOL = entry([], {family: 'tool', plugin_code: 'fx_converter'});
+        const OTHER_TOOL = entry([], {family: 'tool', plugin_code: 'compound_growth'});
+
+        expect(groupByFamily(frozen([TOOL, IMPORTER, OTHER_TOOL, ECB, JUSTETF]))).toStrictEqual([
+            {family: 'asset', entries: [JUSTETF]},
+            {family: 'fx', entries: [ECB]},
+            {family: 'brim', entries: [IMPORTER]},
+            {family: 'tool', entries: [TOOL, OTHER_TOOL]},
+        ]);
+        expect(groupByFamily([ECB, JUSTETF]), 'no tool: no tool group').toStrictEqual([
+            {family: 'asset', entries: [JUSTETF]},
+            {family: 'fx', entries: [ECB]},
+        ]);
+        expect(groupByFamily([TOOL]), 'tools only: the tool group alone, not read as another family').toStrictEqual([{family: 'tool', entries: [TOOL]}]);
+    });
+
+    it('lists, as groups, exactly the families that have entries: the family filter of the tab', () => {
+        const IMPORTER = entry([], {family: 'brim', plugin_code: 'broker_x'});
+        const TOOL = entry([], {family: 'tool', plugin_code: 'fx_converter'});
+
+        expect(groupByFamily([TOOL, JUSTETF]).map((group) => group.family)).toEqual(['asset', 'tool']);
+        expect(groupByFamily([IMPORTER, TOOL]).map((group) => group.family)).toEqual(['brim', 'tool']);
+        expect(groupByFamily([TOOL, IMPORTER, ECB, JUSTETF]).map((group) => group.family)).toEqual([...FAMILY_ORDER]);
     });
 
     it('puts the import sources after the exchange-rate sources and the price sources, whatever the order of the answer', () => {
@@ -186,6 +223,13 @@ describe('groupByFamily — the groups of the Plugins tab', () => {
         expect(FAMILY_ICONS.brim, 'a component, not an empty row').toBeTypeOf('function');
         expect(FAMILY_ICONS.brim).not.toBe(ChartColumn);
         expect(FAMILY_ICONS.brim).not.toBe(Coins);
+    });
+
+    it('gives the tools an icon of their own: neither the price sources’, the exchange-rate sources’ nor the import sources’', () => {
+        expect(FAMILY_ICONS.tool, 'a component, not an empty row').toBeTypeOf('function');
+        expect(FAMILY_ICONS.tool).not.toBe(ChartColumn);
+        expect(FAMILY_ICONS.tool).not.toBe(Coins);
+        expect(FAMILY_ICONS.tool).not.toBe(FAMILY_ICONS.brim);
     });
 
     it('gives each family the icon of the documentation’s home: lucide’s ChartColumn to the price sources, Coins to the exchange-rate sources', () => {
@@ -555,6 +599,30 @@ describe('writeItems — one item per edit, in the order the plugin declares its
         ]);
     });
 
+    it('names the family of a tool plugin as it is, and a tool’s fields are never secrets: user and system, each its own scope (X5-4b)', () => {
+        const toolEntry = entry([field({key: 'workers', type: 'integer', scope: 'system', value: 2, default: 2, source: 'default'}), field({key: 'precision', type: 'integer', value: 2, default: 2, source: 'default'})], {
+            family: 'tool',
+            plugin_code: 'fx_converter',
+        });
+
+        expect(writeItems(toolEntry, {workers: {kind: 'text', text: '4'}, precision: {kind: 'text', text: '6'}})).toStrictEqual([
+            {family: 'tool', plugin_code: 'fx_converter', field_key: 'workers', scope: 'system', value: 4},
+            {family: 'tool', plugin_code: 'fx_converter', field_key: 'precision', scope: 'user', value: 6},
+        ]);
+    });
+
+    it('a tool’s user field is editable by a non-admin, a system one is read-only for them: draftOf edits only the first (X5-4b)', () => {
+        const toolEntry = entry([field({key: 'precision', type: 'integer', scope: 'user', value: 2, default: 2, source: 'default', editable: true}), field({key: 'workers', type: 'integer', scope: 'system', value: 2, default: 2, source: 'default', editable: false})], {
+            family: 'tool',
+            plugin_code: 'fx_converter',
+        });
+        const form = typed(typed(EMPTY_FORM, 'precision', '6'), 'workers', '8');
+
+        expect(readOnlyReason(toolEntry.fields[0]!), 'a user field: nothing prevents the caller').toBeNull();
+        expect(readOnlyReason(toolEntry.fields[1]!), 'a system field, the caller is not an administrator').toBe('adminOnly');
+        expect(draftOf(toolEntry, form)).toStrictEqual({precision: {kind: 'text', text: '6'}});
+    });
+
     it('writes nothing for a field without an edit, nor for an edit of a field the plugin does not declare', () => {
         expect(writeItems(PLUGIN, {})).toStrictEqual([]);
         expect(writeItems(PLUGIN, {ghost: {kind: 'clear'}})).toStrictEqual([]);
@@ -652,5 +720,32 @@ describe('a field named constructor — a name every object inherits — is a fi
         expect(Object.entries(draftOf(saved, form))).toStrictEqual([['constructor', {kind: 'clear'}]]);
         expect(writeItems(saved, draftOf(saved, form))).toStrictEqual([{family: 'asset', plugin_code: 'mockprov', field_key: 'constructor', scope: 'user', clear: true}]);
         expect(draftOf(saved, restored(form, 'constructor')), 'restored: nothing to write').toStrictEqual({});
+    });
+});
+
+// --- The catalogues --------------------------------------------------------------------------------------------------
+
+describe('the family titles read in the four languages (X5-4b: tool joins asset, fx and brim)', () => {
+    const CATALOGUES: Record<string, unknown> = {en, it: itCatalogue, fr, es};
+
+    /** `catalogue.pluginSettings.families.<family>`, or undefined when any step is missing. */
+    function familyTitle(catalogue: unknown, family: string): unknown {
+        const families = ((catalogue as {pluginSettings?: {families?: Record<string, unknown>}}).pluginSettings ?? {}).families ?? {};
+        return Object.hasOwn(families, family) ? families[family] : undefined;
+    }
+
+    it.each(Object.keys(CATALOGUES))('%s: every family of FAMILY_ORDER has a title, written under the key FAMILY_TITLE_KEYS names', (lang) => {
+        for (const family of FAMILY_ORDER) {
+            expect(FAMILY_TITLE_KEYS[family]).toBe(`pluginSettings.families.${family}`);
+            const title = familyTitle(CATALOGUES[lang], family);
+            expect(title, `${lang}: pluginSettings.families.${family}`).toBeTypeOf('string');
+            expect((title as string).trim(), `${lang}: ${family} is not empty`).not.toBe('');
+        }
+    });
+
+    it.each(Object.keys(CATALOGUES))('%s: the literal key pluginSettings.families.tool exists (the i18n audit reads whole literals)', (lang) => {
+        const title = familyTitle(CATALOGUES[lang], 'tool');
+        expect(title, `${lang}: pluginSettings.families.tool`).toBeTypeOf('string');
+        expect((title as string).trim()).not.toBe('');
     });
 });

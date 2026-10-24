@@ -118,7 +118,8 @@
         "invalid_input_model": "Invalid input model",
         "invalid_output_model": "Invalid output model",
         "invalid_schema": "Schema cannot be published",
-        "invalid_operation_policy": "Invalid operation policy"
+        "invalid_operation_policy": "Invalid operation policy",
+        "invalid_settings": "Invalid settings declaration"
       }
     },
     "version": "Version",
