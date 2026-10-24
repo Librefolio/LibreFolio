@@ -8507,6 +8507,17 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   contro i prezzi densi (puri) e 4 sul DB con Q1 vero, tetto J-50 invariato. Il pavimento SEC8-1b (`bounded_range`) si toglie
   adesso (MF).
 
+- **J5-4 · La serie dell'asset sommato non ha base per le quote in viaggio all'inizio del periodo** — basso, numeri
+  della serie delle posizioni (#48); J, 24/10 (nata dalla domanda 3 di MF su J5-1). Con `broker_id` None e un trasferimento
+  tra broker partito prima di `date_from` e arrivato dopo, le quote non sono di nessun broker all'inizio e non si
+  comprano dopo: il destinatario le tiene (pnl dal costo), ma la somma toglie dalla base ciò che il trasferimento «porta
+  dentro» (`brought_in`), quindi la base dell'asset è 0 e `pnl_percent` è None mentre il pnl c'è. Nelle serie per singolo
+  broker il caso è giusto (base = costo spostato, dopo J5-3). Cura da decidere: nella somma, non togliere `brought_in`
+  per i trasferimenti non contati (`counted_tract` falso), che sono capitale entrato prima dell'inizio. Prova: un caso
+  puro in `test_position_series.py` con date_from dopo la partenza e arrivo dopo. Collegata: in un trasferimento
+  parziale il mittente mostra un avvallo di qualche giorno in viaggio (limite dichiarato in J5-1). Dettagli:
+  [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), passo 10 dell'ondata 5.
+
 ## Z · Sospensione e risveglio (fase 01)
 
 Piano: [`06_sleepWake`](../Phase_1/06_sleepWake/plan-phase01SleepWake.prompt.md).
