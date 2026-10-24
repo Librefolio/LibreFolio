@@ -218,7 +218,7 @@ class StagingReport(BaseModel):
     #: B5-1: the accounts the owner may choose; a report written before reads none. The owner's address the check used
     #: (the confirmation refuses a report whose address is not the current one), and what in the copy would let a
     #: crafted backup defeat the owner's assignment: ``duplicate_email``, ``duplicate_username``,
-    #: ``address_is_a_username``.
+    #: ``address_is_a_username``, ``pending_administrator``.
     owner_candidates: list[OwnerCandidate] = []
     owner_email_checked: str | None = None
     owner_conflicts: list[str] = []
@@ -858,6 +858,17 @@ def _owner_check(database: Path) -> tuple[str | None, list[OwnerCandidate], list
         # assignment would be refused after the swap.
         if owner_email is not None and conn.execute("SELECT 1 FROM users WHERE lower(username) = lower(?) AND (email IS NULL OR lower(email) != lower(?)) LIMIT 1", (owner_email, owner_email)).fetchone():
             conflicts.append("address_is_a_username")
+        # An inactive account with a setup link not yet used (the initial administrator waiting for it): the start's
+        # admin bootstrap runs before the restore is committed and gives it the owner's address, unless an account holds it
+        # already, so the owner's assignment would then be refused (EMAIL_TAKEN).
+        if (
+            owner_email is not None
+            and conn.execute(
+                "SELECT 1 FROM users u WHERE u.is_active = 0 AND EXISTS (SELECT 1 FROM account_tokens t WHERE t.user_id = u.id AND t.purpose = 'admin_setup')" " AND NOT EXISTS (SELECT 1 FROM account_tokens t WHERE t.user_id = u.id AND t.purpose = 'admin_setup' AND t.consumed_at IS NOT NULL) LIMIT 1"
+            ).fetchone()
+            and not conn.execute("SELECT 1 FROM users WHERE lower(email) = lower(?) LIMIT 1", (owner_email,)).fetchone()
+        ):
+            conflicts.append("pending_administrator")
     candidates = []
     for user_id, username, email, is_superuser, is_active in rows:
         if type(user_id) is not int or username is None:

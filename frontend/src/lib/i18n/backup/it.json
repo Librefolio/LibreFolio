@@ -232,7 +232,7 @@
         "owner_choice_required": "Scegli l'account che diventa del titolare prima di confermare.",
         "owner_choice_invalid": "L'account scelto non può diventare del titolare: scegline uno fra quelli proposti.",
         "owner_email_not_set": "LIBREFOLIO_ADMIN_EMAIL non è impostata: non si può scegliere l'account del titolare. Chiedi al fornitore dell'hosting.",
-        "owner_conflict": "Il backup contiene due account con lo stesso indirizzo o lo stesso nome, oppure l'indirizzo del titolare come nome di un altro account: qui non si può ripristinare."
+        "owner_conflict": "Il backup contiene due account con lo stesso indirizzo o lo stesso nome, l'indirizzo del titolare come nome di un altro account, oppure un amministratore che aspetta ancora il suo link di configurazione: qui non si può ripristinare."
       },
       "password": {
         "intro": "Un backup sicuro: scrivi la password con cui è stato fatto.",
@@ -271,7 +271,7 @@
     "ownerChoice": {
       "title": "Chi è il titolare di questa istanza?",
       "intro": "Scegli quale utente di questo backup diventa l'amministratore che paga l'istanza.",
-      "notice": "A questo utente verrà messa l'email del titolare ({email}) e diventerà amministratore protetto. La sua password verrà reimpostata: un link per sceglierne una nuova viene inviato a quell'indirizzo.",
+      "notice": "A questo utente verrà messa l'email del titolare ({email}) e diventerà amministratore protetto. La sua password verrà reimpostata: un link per sceglierne una nuova viene inviato a quell'indirizzo. Se l'email non può partire, il link è scritto nel log dell'istanza, perché chi la gestisce lo consegni al titolare.",
       "locked": "Un utente di questo backup ha già l'email del titolare: è lui il titolare.",
       "adminBadge": "Amministratore",
       "inactiveBadge": "Disattivato",
