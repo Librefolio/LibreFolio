@@ -470,13 +470,14 @@ plugin's notices and refusals (`importWizard.brimNotice.<code>`, `importWizard.b
 How to write the folder and its keys: [BRIM Plugin Guide → Auto-Discovery](../../architecture/patterns/brim_plugin_guide.md#auto-discovery)
 and [Register the name and description](../../architecture/patterns/brim_plugin_guide.md#plugin-name-i18n).
 
-### 🎛️ Settings (prepared, not used yet) {: #brim-settings }
+### 🎛️ Settings {: #brim-settings }
 
 The import plugins belong to the `brim` family of the [plugin settings](../../architecture/patterns/plugin_settings.md),
 with the same rules as the price sources: personal (`user`) and instance-wide (`system`) fields, and
-secrets of both scopes, encrypted with the instance key. **This is a preparation: no real plugin
-declares a field**, so nothing changes for users today. When one does, its card appears by itself
-in **Settings › Plugins**, under **Broker imports**, and a secret never comes back in clear.
+secrets of both scopes, encrypted with the instance key. A plugin that declares a field gets its card by
+itself in **Settings › Plugins**, under **Broker imports**, and a secret never comes back in clear. The first
+real field is `date_order` of the generic CSV plugin ([the contract](#brim-field-contract)); every other plugin
+declares none, so nothing changes for its users.
 
 What is in place:
 
@@ -510,18 +511,18 @@ A plugin reads its values as `self.settings.get("key")` and `self.settings.secre
 field (`PluginSettingField`, scopes, defaults, translations, environment variables) is in
 [Plugin Settings → Declaring Fields](../../architecture/patterns/plugin_settings.md#declaring-fields).
 
-**Not connected yet** (to do with the first real field): the places that create a plugin without
+**Not connected** (`date_order` does not need it): the places that create a plugin without
 the values, `BRIMProviderRegistry.auto_detect_plugin()`, `get_compatible_plugins()` and
 `list_plugin_info()` (plugin detection), the report sets (`brim_report_sets.py`) and the gap fix
 (`brim_gap_fix.py`), each of which calls `get_provider_instance()`. A plugin that needs a value in
-`can_parse()`, `combine()` or the gap fix would find it unset today. The
+`can_parse()`, `combine()` or the gap fix would find it unset. The
 [i18n ownership gate](../../architecture/patterns/registry_pattern.md#plugin-i18n-gate) reads the
 settings texts of asset and FX plugins only, so the keys of a BRIM field are not checked by it yet.
 
 #### A field in a BRIM plugin: the contract {: #brim-field-contract }
 
-The first real field is the order of the day and the month in the generic CSV plugin (CP12). This is what any
-field of a BRIM plugin follows; `test_brim_field_contract.py` (`./dev.py test services brim-field-contract`) runs
+The first real field is `date_order`, the order of the day and the month in the generic CSV plugin (CP12). This is
+what any field of a BRIM plugin follows; `test_brim_field_contract.py` (`./dev.py test services brim-field-contract`) runs
 this very example.
 
 **1. Declare it** with the same `PluginSettingField` as every family ([Declaring
@@ -586,16 +587,32 @@ flowchart TD
 The fingerprint is a hash of the plain values, and for a secret an HMAC under the instance key: it never shows a
 value, and a token set after the parse makes the file stale too.
 
-**To do for W (W5-8), not yet in the code.** The rule and its test are written; wiring them is in files W owns:
+**How it is wired.** The rule is applied in these places, one file each:
 
-1. `brim_provider.save_parse_result()` and the parse route (`api/v1/brokers.py`): save `bound.fingerprint` (from
-   `parse_file_offloaded`, which already resolves the values) in the file's metadata, for example as
-   `parsed_settings_fingerprint`; nothing is saved for a plugin without fields.
-2. The file listing and file info, **in the async route**, not in `_build_file_info_from_metadata` (it is synchronous and
-   knows no user): resolve `current` for the signed-in user and set
-   `parse_is_stale = parse_is_stale or settings_changed_since(saved, current, plugin.settings_fields)`.
-3. The existing stale banner already tells the user to parse again; no new text is needed for the rule.
-4. An end-to-end test: parse with the default, change the user's value, the file is stale; parse again, it is not.
+- `backend/app/services/brim_providers/broker_generic_csv/plugin.py`: the field `date_order`
+  (`DAY_FIRST` by default, `MONTH_FIRST`), read in `parse()` as `self.settings.get("date_order", DAY_FIRST)` and
+  passed to `parse_date(value, order)`. `day_first` tries `DATE_FORMATS` in their order (`%d/%m/%Y` then `%m/%d/%Y`;
+  dash and dot are day-first only), exactly as before the field. `month_first` uses `MONTH_FIRST_DATE_FORMATS`: month
+  first for slash, dash and dot, the day order as the fallback (25/12/2025 is always 25 December); ISO, compact and
+  text dates never move. There is no «auto» value.
+- `backend/app/services/brim/brim_parse_pool.py`: `parse_file_offloaded(..., bound=...)`. A caller that resolved the
+  values itself passes them and the database is not read again; `None` means «no settings».
+- `backend/app/api/v1/brokers.py`, the parse route: resolves `bound = bound_settings_for(...)` once, hands it to
+  `parse_file_offloaded` and saves `bound.fingerprint` with the result.
+- `backend/app/services/brim/brim_provider.py`, `save_parse_result(..., settings_fingerprint=...)`: stores it in
+  the file's metadata as `parsed_settings_fingerprint`; `None` (a plugin without fields) removes the one a previous
+  parse left.
+- `backend/app/schemas/brim.py`, `BRIMFileInfo.parsed_settings_fingerprint`: filled from the metadata, with
+  `exclude=True`, so it is compared in memory and never serialised in the API.
+- `backend/app/services/brim/brim_file_settings.py`, `apply_settings_staleness(files, user_id)`: called by
+  `GET /brokers/import/files` and `GET /brokers/import/files/{file_id}` in `brokers.py`, in the async route, for the
+  signed-in user. It resolves `current` once per plugin and sets `parse_is_stale = True` through
+  `settings_changed_since(...)`; a file that is not `PARSED`, a plugin without fields and a file already stale are
+  left alone. The existing stale banner already tells the user to parse again.
+
+The setting is personal (scope `user`): each user changes it in **Settings › Plugins › Broker imports**. After a
+change, a file already parsed shows the banner; a parse drawn before the field existed is not stale until the value
+moves away from the default.
 
 **The test plugin.** The family is exercised by a plugin that lives in a test module,
 `backend/test_scripts/test_services/_brim_settings_lab.py`, never under `brim_providers/`: the

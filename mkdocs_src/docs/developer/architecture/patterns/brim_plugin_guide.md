@@ -1418,6 +1418,25 @@ def test_file_patterns(self) -> List[str]:
 
 The test suite loops over every matching sample, so each variant is exercised.
 
+## 🎛️ A plugin with a setting {: #plugin-with-setting }
+
+A plugin may declare a setting the user (or the admin) can change in **Settings › Plugins › Broker imports**:
+the first one is `date_order` of the generic CSV plugin, the order of day and month of a date such as
+`03/04/2025`. The contract, the wiring and the staleness rule are written once, in
+[BRIM Architecture → A field in a BRIM plugin](../../backend/brim/architecture.md#brim-field-contract); how to
+declare a field is in [Plugin Settings → Declaring Fields](plugin_settings.md#declaring-fields). Do not copy them
+here. Four rules for the author of the plugin:
+
+1. **The default is the old behaviour.** A plugin that already imports files must give the same result as before
+   the field existed when nobody configured it.
+2. **Read it inside `parse()` only**, as `self.settings.get("key", <default>)`, never in `__init__`, `can_parse()` or
+   `combine()`: those run without the values.
+3. **The parse stores the fingerprint**: nothing to write in the plugin. `parse_file_offloaded()` takes the values
+   the parse route resolved, and the route saves their fingerprint with the result, so a file parsed under another
+   value shows the «parsed again» banner. Do not keep a copy of the value in the result.
+4. **Translations under `pluginSettings.brim.<code>…`** (`label`, `description` and `option` keys, four languages,
+   in the plugin's own `i18n/` fragment). The ownership gate does not check them yet.
+
 ## 🧺 Multi-report plugins (report sets) {: #report-sets }
 
 Some banks split one account across several exports that only make sense together. Danske Bank

@@ -92,7 +92,7 @@ class FamilyRules:
 #: The families whose plugins may declare settings. Tools join with CP12.
 FAMILY_RULES: dict[str, FamilyRules] = {
     "asset": FamilyRules(user_scope=True, secrets=True),
-    # The import plugins (W-BS, prepared, no field declared yet): the same rules as the price sources. A parse runs for the user
+    # The import plugins (W-BS; the first field is the generic CSV's date_order): the same rules as the price sources. A parse runs for the user
     # who imports, so a personal value reaches it; an instance value is the administrator's.
     "brim": FamilyRules(user_scope=True, secrets=True),
     # An FX sync serves every user: only the instance's values reach an FX provider.
