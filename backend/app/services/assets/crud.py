@@ -41,7 +41,6 @@ from backend.app.schemas.common import (
     OldNew,
 )
 from backend.app.services.assets.base import AssetSourceError, AssetSourceProvider
-from backend.app.services.assets.currency_change import delete_market_data_of_assets, drop_provider_caches, provider_cache_keys
 from backend.app.services.financial_math.ledger_totals import position_quantities
 from backend.app.services.platform.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
 from backend.app.utils.asset.identifier import merge_other_identifiers
@@ -586,6 +585,10 @@ class AssetCRUDService:
         # not SPLITs carry the old currency, so they go with it, in the same transaction as the change; the SPLIT events
         # and the transactions linked to them stay. The interface shows the counts first
         # (``GET /assets/{id}/market-data/summary``) and asks.
+        # Imported here, not at the top: ``currency_change`` imports ``core``, whose theine cache starts a thread at import, and this
+        # module is in the import chain of the BRIM parse pool's forkserver preload, which must stay single-threaded.
+        from backend.app.services.assets.currency_change import delete_market_data_of_assets, drop_provider_caches, provider_cache_keys  # noqa: PLC0415 — keeps the forkserver preload single-threaded
+
         currency_changed_ids = [asset_id for asset_id, asset in assets_by_id.items() if asset.currency != currency_before[asset_id]]
         cache_keys = await provider_cache_keys(session, currency_changed_ids)
         await delete_market_data_of_assets(session, currency_changed_ids)
