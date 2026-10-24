@@ -1182,6 +1182,7 @@ def _largest_session_version(database: Path) -> int:
         if not stat.S_ISREG(database.lstat().st_mode):
             return 0
         with closing(sqlite3.connect(f"{database.resolve().as_uri()}?mode=ro", uri=True)) as conn:
+            conn.execute("PRAGMA trusted_schema = OFF")
             return int(conn.execute("SELECT COALESCE(MAX(session_version), 0) FROM users").fetchone()[0])
     except (OSError, sqlite3.Error, TypeError, ValueError):
         return 0
