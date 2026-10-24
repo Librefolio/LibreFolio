@@ -971,3 +971,42 @@ class TestMovementUnitCosts:
         with pytest.raises(dataclasses.FrozenInstanceError):
             costs[0].report = Decimal("1")
         assert average_cost.movement_unit_costs(()) == ()
+
+
+# =============================================================================
+# J5-3 (MF's review of J5-1, point 2): the period's realized sales, one function
+# =============================================================================
+
+
+def _period_realized_sales_today(sales: list[Any], date_from: date | None, date_to: date | None) -> list[Any]:
+    """``_period_realized_sales``, ``portfolio_service.py:335-343``, as written."""
+    return [sale for sale in sales if (date_from is None or sale.date > date_from) and (date_to is None or sale.date <= date_to) and sale.proceeds is not None and sale.cost_complete]
+
+
+def _sale(on: date, *, proceeds: str | None = "120", cost_complete: bool = True, transaction_id: int = 1) -> SimpleNamespace:
+    return SimpleNamespace(transaction_id=transaction_id, date=on, proceeds=None if proceeds is None else Decimal(proceeds), cost=Decimal("100"), cost_complete=cost_complete)
+
+
+class TestPeriodRealizedSales:
+    """``period.period_realized_sales(sales, date_from, date_to)``: the engine's realized sales in ``(date_from, date_to]`` whose proceeds
+    and cost are both known. The Performance table, the summary and the position series (#48) all read it. Red by absence until it moves
+    from ``portfolio_service`` to ``period.py``."""
+
+    SALES = [
+        _sale(D1, transaction_id=1),
+        _sale(D3, transaction_id=2),
+        _sale(D5, transaction_id=3),
+        _sale(D5, proceeds=None, transaction_id=4),
+        _sale(D6, cost_complete=False, transaction_id=5),
+        _sale(D8, transaction_id=6),
+    ]
+
+    @pytest.mark.parametrize("date_from", [None, D1, D3, D5, D9])
+    @pytest.mark.parametrize("date_to", [None, D3, D5, D8, D9])
+    def test_it_keeps_what_todays_function_keeps(self, date_from, date_to):
+        assert _period().period_realized_sales(self.SALES, date_from, date_to) == _period_realized_sales_today(self.SALES, date_from, date_to)
+
+    def test_the_start_is_excluded_the_end_included_and_an_unknown_amount_left_out(self):
+        kept = _period().period_realized_sales(self.SALES, D3, D8)
+
+        assert [sale.transaction_id for sale in kept] == [3, 6]

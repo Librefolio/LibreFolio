@@ -369,4 +369,59 @@ describe('signal problem mapping', () => {
             }),
         ).toBe('warning');
     });
+
+    describe('the days an undefined metric window leaves out (Z5-F1)', () => {
+        /** A calendar-return result as the backend sends it: `reasonCode` on its availability, `details` on its warning. */
+        function undefinedWindowItem(status: 'partial' | 'unavailable', reasonCode: string, details?: Record<string, unknown>): SignalInstanceResult {
+            const result = backendSignalSchemas.result.parse({
+                instance_id: config.id,
+                signal_code: 'ASSET_CALENDAR_ROLLING_RETURN',
+                status,
+                availability: {
+                    domain_compatible: true,
+                    can_compute: status === 'partial',
+                    input_coverage: inputCoverage(),
+                    required_points: 30,
+                    warmup_complete: true,
+                    reason_code: reasonCode,
+                },
+                warmup: {requirement: {minimum_points: 1, stabilization_points: 29, total_points: 30}, loaded_points: 100, used_points: 100, complete: true},
+                warnings: [{code: 'undefined_metric_window', message: 'One or more calendar-return points are unavailable', ...(details ? {details} : {})}],
+                ...(status === 'partial' ? {series: [{kind: 'line', key: 'calendar_return', label_key: 'k', semantic_id: 's', semantic_description: 'd', unit: 'percentage', axis: {key: 'calendar_return', role: 'independent'}, points: [{date: '2026-01-01', value: 1}]}]} : {}),
+            });
+            return {config, source: 'backend', status, result, error: null};
+        }
+
+        const DETAILS = {unavailable_points: 3, reasons: {missing_reference: 3}, unavailable_start: '2026-02-03', unavailable_end: '2026-02-05', resync_start: '2025-12-01', resync_end: '2026-02-05'};
+
+        it('reads the count, the undefined days and the period to sync again from the warning of a partial result', () => {
+            expect(getSignalProblem(undefinedWindowItem('partial', 'partial_undefined_metric', DETAILS))).toMatchObject({
+                code: 'partial_undefined_metric',
+                unavailablePoints: 3,
+                unavailableStart: '2026-02-03',
+                unavailableEnd: '2026-02-05',
+                resyncStart: '2025-12-01',
+                resyncEnd: '2026-02-05',
+            });
+        });
+
+        it('reads them from the warning of an unavailable result too', () => {
+            expect(getSignalProblem(undefinedWindowItem('unavailable', 'undefined_metric', DETAILS))).toMatchObject({
+                code: 'undefined_metric',
+                unavailablePoints: 3,
+                unavailableStart: '2026-02-03',
+                resyncStart: '2025-12-01',
+            });
+        });
+
+        it('leaves them null when the warning has no details, as the other signals’ do not', () => {
+            expect(getSignalProblem(undefinedWindowItem('partial', 'partial_undefined_metric'))).toMatchObject({unavailablePoints: null, unavailableStart: null, unavailableEnd: null, resyncStart: null, resyncEnd: null});
+        });
+
+        it('ignores a detail that is not a day or a count', () => {
+            const problem = getSignalProblem(undefinedWindowItem('partial', 'partial_undefined_metric', {...DETAILS, unavailable_start: 20260203, resync_end: null, unavailable_points: 'many'}));
+
+            expect(problem).toMatchObject({unavailablePoints: null, unavailableStart: null, resyncEnd: null, unavailableEnd: '2026-02-05'});
+        });
+    });
 });

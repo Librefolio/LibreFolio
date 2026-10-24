@@ -20,6 +20,7 @@ from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency, DateRangeModel
 from backend.app.schemas.fx import FXConversionRequest
 from backend.app.schemas.signals import SignalStatus
+from backend.test_scripts.fx_steps_double import steps_double
 from backend.test_scripts.test_server_helper import _TestingServerManager
 
 settings = get_settings()
@@ -152,6 +153,7 @@ async def test_handler_uses_one_combined_convert_bulk_call(
         "convert_bulk",
         fake_convert_bulk,
     )
+    monkeypatch.setattr(fx_api, "unit_rate_steps", steps_double())
     start = date(2026, 1, 10)
     response = await fx_api.convert_currency_bulk(
         request=[
@@ -160,7 +162,7 @@ async def test_handler_uses_one_combined_convert_bulk_call(
                     code="EUR",
                     amount=Decimal("100"),
                 ),
-                to="EUR",
+                to="USD",  # a pair: an identity is never handed to convert_bulk (X-Q3)
                 date_range=DateRangeModel(
                     start=start,
                     end=start + timedelta(days=2),
@@ -243,6 +245,7 @@ async def test_signal_rates_load_twice_the_sessions_in_calendar_days(monkeypatch
     """T7 — an SMA 5 warms up on five published days: ten calendar days are loaded for it."""
     calls: list[list] = []
     monkeypatch.setattr(fx_api, "convert_bulk", weekend_backfilling_convert_bulk(calls))
+    monkeypatch.setattr(fx_api, "unit_rate_steps", steps_double())  # a rate row on every day: each day is its own stretch (X-Q3)
     start = date(2026, 3, 5)  # a Thursday
     end = start + timedelta(days=17)
 
@@ -259,6 +262,7 @@ async def test_fx_indicator_computes_on_published_days_only(monkeypatch):
     """T7 — the weekend days carried from Friday are neither computed on nor dated."""
     calls: list[list] = []
     monkeypatch.setattr(fx_api, "convert_bulk", weekend_backfilling_convert_bulk(calls))
+    monkeypatch.setattr(fx_api, "unit_rate_steps", steps_double(lambda _source, _destination, day: day - timedelta(days=max(0, day.weekday() - 4))))  # weekends read Friday's row
     start = date(2026, 3, 5)  # a Thursday: three published days end on it with either warm-up
     end = date(2026, 3, 22)  # a Sunday
 
