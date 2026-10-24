@@ -35,6 +35,7 @@ from dataclasses import dataclass
 from datetime import date as date_type
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
+from fractions import Fraction
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Union
 
@@ -427,19 +428,73 @@ _SKIP_MESSAGES = {
 POSSIBLE_SPLIT = "possible_split"
 
 
-def possible_split_todo(tx_index: int, row_number: int, headers: Sequence[Any], row: Union[Sequence[Any], Mapping[str, Any]], *, ticker: str, added_quantity: Decimal, isin: Optional[str] = None) -> BRIMFieldTodo:
+# A ratio is «round» when a fraction with a denominator of at most 5 lies within half a percent of it: 3, 2, 3/2, 5/4…
+_ROUND_RATIO_MAX_DENOMINATOR = 5
+_ROUND_RATIO_TOLERANCE = Decimal("0.005")
+_RATIO_EXACT_PLACES = Decimal("0.00000001")  # the ratio shown as implied by the file
+_RATIO_EVENT_PLACES = Decimal("0.000001")  # what an asset event keeps (AssetEvent.value, 6 decimals)
+
+
+def _plain(value: Decimal) -> str:
+    """A decimal as plain text, trailing zeros dropped, never in scientific notation (``0`` for zero)."""
+    return format(value.normalize(), "f") if value != 0 else "0"
+
+
+def split_ratio_hint(held_before: Decimal, added: Decimal) -> Dict[str, str]:
+    """What a split row says about its ratio, given the shares held just before it; {} when that cannot be read.
+
+    ``ratio`` is the ratio the file implies, ``(held + added) / held``, to 8 decimals. ``suggested_ratio`` is the ratio the
+    user should give the SPLIT event: the round fraction closest to it when one lies within half a percent, else the implied
+    ratio cut to the 6 decimals an event keeps. ``rounding_delta`` is the shares the row differs by from the position times
+    the suggested ratio, ``held * (suggested - 1) - added`` (0 when they agree): a broker that rounds its quantity leaves a
+    gap there, and the average cost follows the row while the FIFO lots follow the event's ratio (MF review of W-B87).
+
+    This is a hint that labels a todo, not a ledger figure: the ledger always reads the event's ratio and the row's quantity.
+    """
+    if held_before <= 0 or added <= 0:
+        return {}
+    ratio = (held_before + added) / held_before
+    near = Fraction(ratio).limit_denominator(_ROUND_RATIO_MAX_DENOMINATOR)
+    candidate = Decimal(near.numerator) / Decimal(near.denominator)
+    if abs(candidate - ratio) / ratio <= _ROUND_RATIO_TOLERANCE:
+        suggested = candidate.quantize(_RATIO_EVENT_PLACES)
+    else:
+        suggested = ratio.quantize(_RATIO_EVENT_PLACES)
+    delta = (held_before * (suggested - 1) - added).quantize(_RATIO_EXACT_PLACES)
+    return {
+        "held_before": _plain(held_before),
+        "ratio": _plain(ratio.quantize(_RATIO_EXACT_PLACES)),
+        "suggested_ratio": _plain(suggested),
+        "rounding_delta": _plain(delta),
+    }
+
+
+def possible_split_todo(
+    tx_index: int,
+    row_number: int,
+    headers: Sequence[Any],
+    row: Union[Sequence[Any], Mapping[str, Any]],
+    *,
+    ticker: str,
+    added_quantity: Decimal,
+    isin: Optional[str] = None,
+    held_before: Optional[Decimal] = None,
+) -> BRIMFieldTodo:
     """The todo of an incoming ADJUSTMENT that a broker's multiplicative split row became.
 
     The shares enter without cost, which is right for a split, and wrong for a gift or a spin-off: the broker's file does not say
     which. The row stays flagged until the user links a SPLIT event (the todo is on ``asset_event_id``), which makes the cost
     follow the old shares. ``context`` gives the ticker, the shares added (a string, as the file wrote it) and the ISIN when
-    the file has one; the evidence is the source row.
+    the file has one; with the shares held just before the split (``held_before``, when the plugin can read them) it also gives
+    the implied ratio and the rounding gap (``split_ratio_hint``). The evidence is the source row.
     """
     names = [cell_str(header) for header in headers]
     cells = [cell_str(row.get(name)) for name in names] if isinstance(row, Mapping) else [cell_str(cell) for cell in row]
     context: Dict[str, Any] = {"ticker": ticker, "added_quantity": format(added_quantity.normalize(), "f")}
     if isin:
         context["isin"] = isin
+    if held_before is not None:
+        context.update(split_ratio_hint(held_before, added_quantity))
     evidence = BRIMEvidence(title="Source row", headers=names, rows=[cells], row_numbers=[row_number], comment="The broker reports a stock split. The new shares enter at no cost; link a SPLIT event so the cost follows the old shares.")
     return BRIMFieldTodo(
         tx_index=tx_index,

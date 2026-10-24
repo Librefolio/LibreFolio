@@ -37,6 +37,9 @@ def front_tx_unit(verbose: bool = False, ui: bool = False, headed: bool = False,
            "src/lib/features/transactions/import/NoticeCounts.test.ts",
            "src/lib/features/transactions/import/AnalyzeStep.test.ts",
            "src/lib/features/transactions/bulk/bulkTodos.test.ts",
+           "src/lib/features/transactions/bulk/PossibleSplitRow.test.ts",
+           "src/lib/features/transactions/bulk/TxBulkBanners.possibleSplit.test.ts",
+           "src/lib/features/transactions/import/ReviewStep.possibleSplit.test.ts",
            "src/lib/features/transactions/transactionTypeStore.test.ts",
            "src/routes/(app)/transactions/filterState.test.ts"]
     print(f"\n{Colors.BLUE}Running: TX Vitest unit tests{Colors.NC}")
@@ -591,6 +594,18 @@ def front_tx_bulk_import_handoff(verbose: bool = False, ui: bool = False, headed
     return _run_playwright("transactions/tx-bulk-import-handoff.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_bulk_possible_split(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the Bulk editor's possible-split banner (W-B87): Revolut STOCK SPLIT -> banner -> create or link the SPLIT event."""
+    print_section("Frontend TX Bulk Possible Split Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-bulk-possible-split.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_tx_import_file_selection(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run owned-file pagination, selection and uploaded-broker folding regressions."""
     print_section("Frontend TX Import File Selection Tests")
@@ -821,6 +836,14 @@ def populate_registry(registry: dict) -> None:
         name="TX Bulk Import Handoff Tests",
         desc="F1 (D5) every import hand-over runs ONE validation, above the 50-row threshold too, an edit above it none, the next import one more; (D4) every entry of the todo banners (blockers and warnings) is a tx-bulk-todo-goto that pages the grid to its row and highlights it; owned broker, synthetic cash-only CSVs, nothing saved",
         tests="transactions/tx-bulk-import-handoff.spec.ts",
+    )
+    add_test(
+        cat,
+        "tx-bulk-possible-split",
+        front_tx_bulk_possible_split,
+        name="TX Bulk Possible Split Tests",
+        desc="W-B87: a real Revolut STOCK SPLIT imported through the wizard (review note, ticker resolved to an owned asset) reaches the editor's tx-bulk-possible-split banner; SC1 create the SPLIT event from the mini modal (ratio) and link it, SC2 link a SPLIT created through the API; owned asset/broker/file, nothing saved",
+        tests="transactions/tx-bulk-possible-split.spec.ts",
     )
     add_test(cat, "tx-import-file-selection", front_tx_import_file_selection, name="TX Import File Selection Tests", desc="Owned broker files: five-row pagination, cross-page selection and upload-only panel expansion", tests="transactions/tx-import-file-selection.spec.ts")
     add_test(cat, "tx-import-flow", front_tx_import_flow, name="TX Import Flow Tests", desc="Analyze step (detail modal, view-all, re-parse), step navigation, review selection toolbar + discard guard", tests="transactions/tx-import-flow.spec.ts")

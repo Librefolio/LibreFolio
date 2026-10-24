@@ -204,7 +204,8 @@
       "fineco_not_yet_settled": "{count, plural, one {# ligne n’est pas encore réglée (sa date de valeur est après aujourd’hui) et n’a pas été importée : elle arrivera avec le prochain export.} other {# lignes ne sont pas encore réglées (leur date de valeur est après aujourd’hui) et n’ont pas été importées : elles arriveront avec le prochain export.}}",
       "fineco_incomplete_rows": "Cet import pourrait être faux : {count, plural, one {# ligne n’a pas} other {# lignes n’ont pas}} un nombre nécessaire (quantité ou montant). Vérifiez les lignes ci-dessous ; si le fichier est correct, c’est probablement une erreur de l’import, et vous pouvez nous aider à la corriger :",
       "rows_not_recognized": "{count, plural, one {# ligne a été exclue ou importée en partie seulement} other {# lignes ont été exclues ou importées en partie seulement}} : l’import ne reconnaît pas, ou n’importe pas encore, ce qu’elles décrivent. Vérifiez les lignes ci-dessous ; si cela compte pour vos parts ou votre trésorerie, signalez le cas pour que nous le traitions :",
-      "rows_unreadable": "{count, plural, one {# ligne a été exclue} other {# lignes ont été exclues}} car une valeur nécessaire est illisible. Vérifiez les lignes ci-dessous ; si le fichier est correct, signalez le cas pour que nous le traitions :"
+      "rows_unreadable": "{count, plural, one {# ligne a été exclue} other {# lignes ont été exclues}} car une valeur nécessaire est illisible. Vérifiez les lignes ci-dessous ; si le fichier est correct, signalez le cas pour que nous le traitions :",
+      "possible_split": "Split possible de {ticker} : {added_quantity} actions nouvelles à coût nul. Liez un événement SPLIT ou créez-en un."
     },
     "evidenceRowsTitle": "Lignes du fichier",
     "evidenceRowCount": "{n} lignes",
@@ -538,6 +539,7 @@
     "previewFailed": {
       "preview_unsupported": "Ce type de fichier n'a pas d'aperçu.",
       "preview_unreadable": "Le fichier semble endommagé ou ne correspond pas à son extension : l'aperçu est impossible."
-    }
+    },
+    "reviewPossibleSplitNote": "{n, plural, one {# ligne ressemble à un split : les actions nouvelles entrent à coût nul.} other {# lignes ressemblent à des splits : les actions nouvelles entrent à coût nul.}} Dans l'éditeur, vous pouvez lier ou créer l'événement SPLIT."
   }
 }

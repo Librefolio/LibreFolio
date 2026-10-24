@@ -69,6 +69,7 @@ The workspace is a grid of draft rows — marked **new**, **edit** or **del** �
 
     - **red** — rows the importer did not fully understand: **Save All** stays disabled until you complete them;
     - **amber** — auto-derived fields to verify: **Save All** first asks you to **Review** them or **Save anyway**.
+    - **amber** — rows that may be stock splits (Revolut and Trading212 imports): link a Split event to each, or create it from the banner; see [Revolut](import/revolut.md#stock-splits).
 
     Click a banner to unfold its list, then an entry: the grid turns to that row's page and highlights it. Balance problems list the rows that cause them (*Workspace rows: …*), and a click opens the first one in the current sort order. If your column filters hide the row, a message tells you so.
 

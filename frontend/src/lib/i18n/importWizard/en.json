@@ -204,7 +204,8 @@
       "fineco_not_yet_settled": "{count, plural, one {# row is not settled yet (its value date is after today) and was not imported: it arrives with the next export.} other {# rows are not settled yet (their value date is after today) and were not imported: they arrive with the next export.}}",
       "fineco_incomplete_rows": "This import may be wrong: {count, plural, one {# row lacks} other {# rows lack}} a required number (quantity or amount). Check the rows below; if the file is right, it is likely an importer bug, and you can help us fix it:",
       "rows_not_recognized": "{count, plural, one {# row was} other {# rows were}} left out, or only partly imported, because the importer does not recognise or does not yet import what {count, plural, one {it describes} other {they describe}}. Check the rows below; if this matters for your shares or cash, report it so we can handle the case:",
-      "rows_unreadable": "{count, plural, one {# row was} other {# rows were}} left out because a value {count, plural, one {it needs} other {they need}} cannot be read. Check the rows below; if the file is right, report it so we can handle the case:"
+      "rows_unreadable": "{count, plural, one {# row was} other {# rows were}} left out because a value {count, plural, one {it needs} other {they need}} cannot be read. Check the rows below; if the file is right, report it so we can handle the case:",
+      "possible_split": "Possible stock split of {ticker}: {added_quantity} new shares at no cost. Link a SPLIT event, or create one."
     },
     "evidenceRowsTitle": "Source rows",
     "evidenceRowCount": "{n} rows",
@@ -538,6 +539,7 @@
     "previewFailed": {
       "preview_unsupported": "This file type has no preview.",
       "preview_unreadable": "The file looks damaged or is not what its extension says: it cannot be previewed."
-    }
+    },
+    "reviewPossibleSplitNote": "{n, plural, one {# row looks like a stock split: the new shares come in at no cost.} other {# rows look like stock splits: the new shares come in at no cost.}} In the editor you can link or create the SPLIT event."
   }
 }

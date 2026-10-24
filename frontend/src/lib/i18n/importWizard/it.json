@@ -204,7 +204,8 @@
       "fineco_not_yet_settled": "{count, plural, one {# riga non è ancora regolata (la data valuta è dopo oggi) e non è stata importata: arriverà con il prossimo export.} other {# righe non sono ancora regolate (la data valuta è dopo oggi) e non sono state importate: arriveranno con il prossimo export.}}",
       "fineco_incomplete_rows": "Questo import potrebbe essere sbagliato: {count, plural, one {# riga non ha} other {# righe non hanno}} un numero necessario (quantità o controvalore). Controlla le righe qui sotto; se il file è giusto, è probabilmente un errore dell'importazione, e puoi aiutarci a correggerlo:",
       "rows_not_recognized": "{count, plural, one {# riga è stata esclusa o importata solo in parte} other {# righe sono state escluse o importate solo in parte}}: l'importazione non riconosce, o non importa ancora, ciò che descrivono. Controlla le righe qui sotto; se contano per le tue quote o la tua liquidità, segnala il caso così possiamo gestirlo:",
-      "rows_unreadable": "{count, plural, one {# riga è stata esclusa} other {# righe sono state escluse}} perché un valore necessario non è leggibile. Controlla le righe qui sotto; se il file è giusto, segnala il caso così possiamo gestirlo:"
+      "rows_unreadable": "{count, plural, one {# riga è stata esclusa} other {# righe sono state escluse}} perché un valore necessario non è leggibile. Controlla le righe qui sotto; se il file è giusto, segnala il caso così possiamo gestirlo:",
+      "possible_split": "Possibile split di {ticker}: {added_quantity} azioni nuove a costo zero. Collega un evento SPLIT o creane uno."
     },
     "evidenceRowsTitle": "Righe del file",
     "evidenceRowCount": "{n} righe",
@@ -538,6 +539,7 @@
     "previewFailed": {
       "preview_unsupported": "Questo tipo di file non ha un'anteprima.",
       "preview_unreadable": "Il file sembra danneggiato o non è quello che dice l'estensione: non si può mostrare l'anteprima."
-    }
+    },
+    "reviewPossibleSplitNote": "{n, plural, one {# riga sembra uno split: le azioni nuove entrano a costo zero.} other {# righe sembrano split: le azioni nuove entrano a costo zero.}} Nell'editor puoi collegare o creare l'evento SPLIT."
   }
 }

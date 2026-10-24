@@ -1078,6 +1078,16 @@ def services_orphan_transfer_numbers(verbose: bool = False, test_names: list = N
     return run_command(cmd, "Orphan transfer numbers tests", verbose=verbose)
 
 
+def services_split_adjustment_ledger(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Lots and the Dashboard numbers of the incoming ADJUSTMENT a broker's split row becomes (W5-2b)."""
+    print_section("Services: Split Adjustment Ledger (W5-2b numbers)")
+    print_info("Testing: LotsAnalysisService (FIFO lots, average-cost lines) and PortfolioService.get_summary over a SPLIT event and its linked incoming ADJUSTMENT rows")
+    print_info("Tests: a row at cost 0 against a row without cost, a rounded row (FIFO follows the ratio, the average cost the row), a sale before the split, an unlinked row, two brokers, two splits on one day")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial/test_split_adjustment_ledger.py", test_names)
+    return run_command(cmd, "Split adjustment ledger tests", verbose=verbose)
+
+
 def services_lone_transfer_legs(verbose: bool = False, test_names: list = None) -> bool:
     """Test decision 47's conversion of the lone giving TRANSFER legs a broker deletion left before 1.3."""
     print_section("Services: Lone Transfer Legs (decision 47)")
@@ -2659,6 +2669,17 @@ Note: No backend server required.
         # The file sits in test_financial/, which roi-fifo-utils runs whole: the derived "all"
         # skips this action so that the file runs once there.
         in_all=False,
+    )
+    add_test(
+        cat,
+        "split-adjustment-ledger",
+        services_split_adjustment_ledger,
+        name="Split Adjustment Ledger",
+        desc="W5-2b: a SPLIT event with its linked incoming ADJUSTMENT row read by Lots (FIFO lots, average-cost lines) and the Dashboard: a row at cost 0 reads as a row without cost (20 shares, cost 1000, average 50), a row rounded off the ratio makes FIFO and the average cost differ by the rounding, a split after a sale, a row not linked, two brokers on one event, two splits on one day",
+        # The file sits in test_financial/, which roi-fifo-utils runs whole: the derived "all"
+        # skips this action so that the file runs once there.
+        in_all=False,
+        # Write-scoped (the category default): a user, brokers and an asset under a unique marker, every reading by their ids, the session rolled back.
     )
     add_test(
         cat,
