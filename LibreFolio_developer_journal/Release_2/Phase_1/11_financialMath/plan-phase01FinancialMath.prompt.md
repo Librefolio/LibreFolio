@@ -4824,3 +4824,19 @@ motore e il rosso del bordo, a pavimento invariato. Revisione W2 #47: inviata a 
   > **Effetto misurato** (copia `typo0001`, pavimento abbassato all'anno 1 nel solo processo): motore 1,7 → **0,11 s**,
   > report 1M 2,2 → **0,6 s**, 1A 2,3 → **0,67 s** (uguale al caso col pavimento: 0,7 s). Resta solo il volume d'uscita di
   > «tutto» (D-P4) e i cammini dei lotti. **CHECKPOINT READY** inviato, FROZEN.
+
+#### MF5-5 · una casa sola per il prezzo unitario di un'operazione (24/10)
+Base `9fa856f68` (merge di W2 #47 nel ramo MF, padri `d8cb1852c` + `0aeebbd6a`). Seguito della revisione di W2:
+`price_marks.py:306-307` e `trade_amount.unit_price_from_amount` scrivevano due volte la stessa formula.
+- ✅ **Rossi** (test-author): `test_financial_math/test_unit_price_single_home.py` (46): su HEAD 37 rossi (l'aiuto non
+  esiste; `price_marks` non lo importa), 9 guardie di parità verdi; con l'ordine «prima moltiplica» 12 rossi (a 28 cifre,
+  base 3: 0,999…9 contro 1). I 54 test di W2 restano verdi.
+- ✅ **Cura**: `trade_amount.unit_price_on_quote_axis` (importo / quantità × base, non arrotondato, nel contesto di chi
+  chiama: l'ordine di `price_marks`); `price_marks` lo usa per il segno delle operazioni (tolta la `scale` locale);
+  `unit_price_from_amount` lo arrotonda a 80 cifre. Mappe della casa: `financial-math.instructions.md`,
+  `backend.instructions.md`, `developer/backend/financial_math.md`.
+  > **Note implementazione**: 46 + 54 = 100 verdi.
+- ✅ **Porte e parità** (slot 01:47–02:09, carico 2,7 → 1,6; `ondata5/MF-up-verify.log`): `financial-math` **2916**,
+  `portfolio-engine` **41**, `roi-fifo-utils` **1970**, `api portfolio` **55**, `api transactions` **58** (l'endpoint di
+  W2); parità contro `9fa856f68` su 6 copie: **220 casi, 0 differenze**; `mkdocs build` 0, `check-links` 0.
+  **CHECKPOINT READY** inviato, FROZEN.
