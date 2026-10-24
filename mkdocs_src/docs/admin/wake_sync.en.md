@@ -90,7 +90,7 @@ The rules of the token:
 - **Only in the `Authorization: Bearer` header**, never in the URL: addresses end up in the logs of
   servers and proxies, and a token in the URL is refused with `401`.
 - **The rules of the hosting panel.** The wake-up is the `wake` scope of the
-  [Hosting Panel API](hosting_providers.md#panel-api), whose shared rules hold for it too: after too
+  [Hosting Panel API](hosting_panel_api.md#panel-api), whose shared rules hold for it too: after too
   many wrong tokens from one address, to any of its scopes, that address gets `429` for a while,
   and each call writes a `Hosting panel request` line in the log.
 
@@ -98,7 +98,7 @@ LibreFolio checks the token at startup, and reads it again at every call. A toke
 (too short, with a space or a character outside ASCII, or a `LIBREFOLIO_WAKE_TOKEN_FILE` that is
 missing, unreadable or empty) does not stop the server: the start log has an error that names the
 variable (`check` is `platform.hosting_panel`: see
-[The Startup Check](hosting_providers.md#panel-api-check)), the route answers `503` to every call,
+[The Startup Check](hosting_panel_api.md#panel-api-check)), the route answers `503` to every call,
 and each call logs this error, with the variable and what is wrong, never the token:
 
 ```text
@@ -190,8 +190,8 @@ The report's `status`:
 | `disabled` | The scheduler is off: no job ran |
 | `not_leader` | No job ran for this call. Either the call waited ten minutes for another run of the scheduler, in the same server process or in another one, and gave up, with a warning in the server log; or, on Windows with several server processes, the process that received the call does not run the jobs. See [Several Workers](#wake-sync-workers) |
 | `blocked` | The hosting provider blocked the instance, and no job ran: see [A Blocked Instance](#wake-sync-blocked) |
-| `awaiting_restore` | The hosting panel is restoring the instance, and no job ran: see [The Awaiting Restore Mode](hosting_providers.md#await-restore) |
-| `restore_interrupted` | The state of a restore cannot be read, so the instance serves no data, and no job ran: see [When the State of a Restore Cannot Be Read](hosting_providers.md#restore-interrupted) |
+| `awaiting_restore` | The hosting panel is restoring the instance, and no job ran: see [The Awaiting Restore Mode](hosting_panel_backups.md#await-restore) |
+| `restore_interrupted` | The state of a restore cannot be read, so the instance serves no data, and no job ran: see [When the State of a Restore Cannot Be Read](hosting_panel_backups.md#restore-interrupted) |
 
 !!! tip "🧑‍💻 Writing the caller"
 
@@ -234,7 +234,7 @@ runs. There, run the server with one process when you use the scheduled wake-up,
 
 ### 🔒 A Blocked Instance {: #wake-sync-blocked }
 
-On an instance that its hosting provider has [blocked](hosting_providers.md#instance-block), the
+On an instance that its hosting provider has [blocked](hosting_instances.md#instance-block), the
 route still answers. The token is checked as usual, and the right one gets `200` with
 `status: "blocked"`: no job runs, because a blocked instance does not update its prices and exchange
 rates. Once the block is lifted, the next run catches up the history sync missed in the meantime.

@@ -1559,7 +1559,7 @@ def services_hosting_panel_access_tickets(verbose: bool = False, test_names: lis
 def services_hosting_panel_vectors(verbose: bool = False, test_names: list = None) -> bool:
     """Test the hosting panel's ticket test vectors in the admin guide (H-61, L2): the key, the ticket and every verdict, checked against the code."""
     print_section("Services: Hosting Panel Ticket Test Vectors")
-    print_info("Testing: mkdocs_src/docs/admin/hosting_providers.en.md (#panel-api-test-vectors) against backend/app/services/platform/hosting_panel/tickets.py")
+    print_info("Testing: mkdocs_src/docs/admin/hosting_panel_api.en.md (#panel-api-test-vectors) against backend/app/services/platform/hosting_panel/tickets.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_hosting_panel_vectors.py", test_names)
     return run_command(cmd, "Hosting panel ticket vector tests", verbose=verbose)
 

@@ -46,8 +46,8 @@
     const ownerAssignment = $derived(reason === 'owner_assignment');
 
     /** The admin page of the recovery, in the interface language (the docs' rule: English at the root): the CLI's section for an
-     *  unreadable state, the restore's page (no anchor) for the owner's account. */
-    const docsHref = $derived(`/mkdocs/${$currentLanguage && $currentLanguage !== 'en' ? `${$currentLanguage}/` : ''}admin/${ownerAssignment ? 'backup_restore/' : 'cli_tools/#backup-pending-unreadable'}`);
+     *  unreadable state, the panel guide's section on the owner's account for the owner's. */
+    const docsHref = $derived(`/mkdocs/${$currentLanguage && $currentLanguage !== 'en' ? `${$currentLanguage}/` : ''}admin/${ownerAssignment ? 'hosting_panel_backups/#restore-owner-pending' : 'cli_backup/#backup-pending-unreadable'}`);
 
     async function defaultFetchInterrupted(): Promise<boolean | undefined> {
         return (await zodiosApi.get_instance_config_api_v1_system_instance_get()).restore_interrupted;
