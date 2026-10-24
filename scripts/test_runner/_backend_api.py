@@ -875,6 +875,14 @@ def api_restore_interrupted(verbose: bool = False, test_names: list[str] | None 
     return run_command(cmd, "Restore interrupted API tests", verbose=verbose)
 
 
+def api_restore_owner_guard(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the owner guard's API tests: 423 while the restored owner has no account, its recheck, the reason in /system/instance (H5-3, H)."""
+    print_section("Restore Owner Guard API")
+    print_info("Testing: 423 instance_restore_interrupted while the owner has no account (pending or a code), the allowed set, the recheck of a pending state through the dependency, restore_interrupted_reason in /system/instance, the panel's backup 409, wake-sync restore_interrupted")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_restore_owner_guard_api.py", test_names)
+    return run_command(cmd, "Restore owner guard API tests", verbose=verbose)
+
+
 def api_panel_status(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run the hosting panel's status route tests: GET /panel/status (H-61, R1)."""
     print_section("Hosting Panel Status API")
@@ -1438,6 +1446,16 @@ Tests for REST API endpoints (server auto-started):
         desc="B-33 (H, 22/10): while restore_guard.restore_interrupted() every /api/v1 route but ALLOWED_WHEN_RESTORE_INTERRUPTED (= ALLOWED_WHEN_AWAITING_RESTORE, pinned by name and route) answers 423 instance_restore_interrupted to anyone, login, registration, setup, me and data included; refuse_when_restore_interrupted the third router dependency after block and mode; /system/instance restore_interrupted; wake-sync restore_interrupted with nothing past the switches; GET /panel/status still allowed (restore unreadable with its reason, D7); the panel's backup start 409 backup_restore_interrupted after its credential (D7), its poll, download and delete allowed",
         # PURE: the app of main.py in this process (ASGI), every request's session on a private SQLite file under
         # tmp_path, the interruption and the switches by monkeypatch: the lane's backend and DB are never reached.
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "restore-owner-guard",
+        api_restore_owner_guard,
+        name="Restore Owner Guard API",
+        desc="H5-3 (H): while restore_guard has an owner problem (pending, or the code of A's refusal) every /api/v1 route but the allowed set answers 423 instance_restore_interrupted to anyone, the panel's backup start 409 backup_restore_interrupted after its credential; refuse_when_restore_interrupted first awaits refresh_restore_state: a pending state asked again after OWNER_RECHECK_SECONDS (patched clock, fake hook) heals and serves, a code never does, nothing is asked when not due; GET /system/instance restore_interrupted_reason (restore_state wins, owner_assignment, null); wake-sync restore_interrupted",
+        # PURE: the app of main.py in this process (ASGI), every request's session on a private SQLite file under
+        # tmp_path, the guard's variables, clock and B's hook by monkeypatch: the lane's backend and DB are never reached.
         isolation="pure",
     )
     add_test(api, "broker-multiuser", api_broker_multiuser, name="Broker Multi-User", desc="Role-based permissions")

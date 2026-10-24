@@ -56,7 +56,7 @@ SKIPPED_IN_THE_MODE = {
 #: the mode alone.
 SKIPPED_ONLY_WHEN_INTERRUPTED = ("post-migration-fixes", "lone-transfer-legs")
 #: Steps the mode keeps (§6): a guard that they are there and carry no skip.
-KEPT_IN_THE_MODE = ("database", "pending-restore", "restore-commit", "idle-monitor")
+KEPT_IN_THE_MODE = ("database", "pending-restore", "restore-commit", "restore-owner", "idle-monitor")
 
 _MISSING = object()
 

@@ -11,7 +11,7 @@ Everyone has four tabs; administrators also have the **Administration** group, w
 - 🗂️ **Administration** — The tabs of the instance, for administrators only, on the right of the bar on a wide screen:
     - ⚙️ **[Global Settings](../../admin/settings.md)** — Instance-wide configuration, which applies to every user.
     - 👥 **[Users](../../admin/users.md)** — The accounts of the instance, invitations and password-reset links.
-    - 💾 **[Backup](../../admin/cli_tools.md#backup)** — The data of the whole instance in one archive, to download.
+    - 💾 **[Backup](../../admin/cli_backup.md#backup)** — The data of the whole instance in one archive, to download.
     - ✉️ **[Email](../../admin/email.md#email-tab)** — Whether LibreFolio can send emails, and a test email.
     - 🛡️ **Security** — How the instance is configured, with what needs attention first: see «Security» in [Global Settings](../../admin/settings.md).
 

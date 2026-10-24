@@ -757,7 +757,7 @@ titles; a front-matter `title:`, which the hook leaves as written, replaces them
 header and the browser tab.
 
 Measured on two builds, with and without the hook: every English, Italian and Spanish file
-is byte-identical (only the shared search index differs, as it holds the French text); the
+is byte-identical (only the search indexes differ, as they hold the French text); the
 322 French pages differ only in whitespace, with identical start tags and identical code
 and formula content; plain whitespace before `: ; ? ! %` in their French text (sidebar
 included) drops from 6,580 to 0, while the 28 in the English text of the English fallback
@@ -795,6 +795,83 @@ Tests: `./dev.py test utils docs-fr-typography`
 `./dev.py test front-utility core-unit` for the changelog
 (`frontend/src/lib/features/changelog/changelog.test.ts`, with the hook's `typeset()` cases
 ported as tables).
+
+---
+
+## 🔎 Search by Language {: #search-by-language }
+
+MkDocs builds one search index, `search/search_index.json`, for every language of the site,
+so a visitor reading Italian downloaded the English, French and Spanish pages too (10.58 MB
+on the current build) and found the four versions of a page together in the results. Two
+pieces make the search follow the language of the page being read:
+
+- **The hook** `mkdocs_src/hooks/search_language_split.py`, listed under `hooks:` in
+  `mkdocs_src/mkdocs.yml`. Its `on_post_build` (`event_priority(-100)`, after the search
+  plugin and the merge of `mkdocs-static-i18n`) reads the full index and writes one file per
+  language next to it: `search/search_index.en.json`, `.it.json`, `.fr.json` and `.es.json`.
+  Each has the same `config` as the full index and only the entries written in that language.
+  The full `search_index.json` is left as it is.
+- **The script** `mkdocs_src/docs/javascripts/search-language.js`, loaded from `<head>` by
+  `mkdocs_src/overrides/main.html` (block `extrahead`), not through `extra_javascript`: it
+  must run **before** Material's bundle, which starts loading the index as soon as it loads.
+  Material 9.7.7 loads it with `XMLHttpRequest` (the browser lists the request as `xmlhttprequest`,
+  not `fetch`), so the script wraps `XMLHttpRequest.prototype.open`, and `fetch` too in case a later
+  Material changes. The wrapped call sends the request for `search/search_index.json` to
+  `search/search_index.<lang>.json`, where `<lang>` is the primary subtag of `<html lang>`
+  (English when the site has no such language). Any other request is untouched.
+
+A page belongs to the language its address starts with (`it/`, `fr/`, `es/`); every other
+address, the default language having no prefix, is English. A page that exists only in
+English, such as the whole Developer Manual, has therefore **no copy in the other languages'
+index**: a reader of Italian finds it only with the checkbox below. The hook skips the
+intermediate builds that `mkdocs-static-i18n` runs for each non-default language (their
+index is merged into the main one afterwards, and the main one is what is split); if the
+full index is missing or unreadable it logs a warning and writes nothing.
+
+**The checkbox.** The script adds a checkbox as the first child of the result area of the
+search dialog (`data-testid="docs-search-all-languages"`), labelled «Search the other
+languages too» in the language of the page (`LABELS`, English, Italian, French and Spanish).
+Checking or unchecking it stores the choice in `localStorage` (key
+`lf-docs-search-all-languages`, value `1`, removed when off), keeps the typed query in
+`sessionStorage` (key `lf-docs-search-query`) and reloads the page, because Material prepares
+its search once per page. After the reload the search opens again with the query in the
+field. With the choice on, the script leaves the request for the full index alone, so the
+results come from all four languages, on every page. Every access to a storage is in a `try`:
+where there is none (a private window, a blocked storage) the page searches its own language
+only. The style is the `.lf-search-language` rule at the end of
+`mkdocs_src/docs/static/extra.css`.
+
+| Index | Entries | Size |
+|-------|--------:|-----:|
+| English (`search_index.en.json`) | 3911 | 5.98 MB |
+| Italian | 1843 | 1.36 MB |
+| French | 1840 | 1.44 MB |
+| Spanish | 1844 | 1.38 MB |
+| Full (`search_index.json`) | all | 10.58 MB |
+
+Measured on the build of 23 October 2026. By default a reader of Italian, French or Spanish
+downloads about 1.4 MB, a reader of English about 6 MB, instead of 10.5 MB.
+
+**Adding a language.** Add it to the `LANGUAGES` tuple of the hook and to the `LANGUAGES`
+array and the `LABELS` table of the script (the label in the new language), keeping the
+default language first in the tuple. The site's own language list in `mkdocs.yml` is the
+other place that must already know it.
+
+**Tests**:
+
+- `./dev.py test utils docs-search-split`
+  (`backend/test_scripts/test_utilities/test_docs_search_split.py`): the language of an entry,
+  the split (every entry in exactly one file, the input untouched), the files `on_post_build`
+  writes, the real built index, the hook and the script in the configuration and in
+  `main.html`, and the built site (four files, the script in the head before Material's
+  bundle).
+- `./dev.py test front-utility core-unit`: the Vitest files `searchLanguage.test.ts` and
+  `searchLanguage.dom.test.ts` in `frontend/src/lib/utils/docs/` (the rewriting of the
+  request, the storage failures, the checkbox and the reopening of the search).
+- `./dev.py test front-utility docs-search-language`: the Playwright spec
+  `frontend/e2e/docs/search-language.spec.ts`, which searches the built documentation in the
+  four languages and with the checkbox on and off. It needs `./dev.py mkdocs build` first: a
+  site built before this feature answers 404 for `search_index.<lang>.json`.
 
 ---
 
