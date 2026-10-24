@@ -42,7 +42,7 @@ from enum import StrEnum
 from typing import Literal, Optional
 
 import structlog
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
@@ -50,12 +50,12 @@ from backend.app.config import get_settings
 from backend.app.config.accounts import owner_admin_email
 from backend.app.db.models import AccountToken, AccountTokenPurpose, User
 from backend.app.db.session import get_async_engine
-from backend.app.services.accounts import registration_service, token_service, user_service
+from backend.app.services.accounts import auth_service, registration_service, token_service, user_service
 from backend.app.services.accounts.bootstrap_admin_service import pending_admin
 from backend.app.services.email.delivery import EmailError, send_email
 from backend.app.services.email.flows import account_language, require_email
 from backend.app.services.email.links import email_link, require_links
-from backend.app.services.email.messages import build_email_change_confirmation
+from backend.app.services.email.messages import build_email_change_confirmation, build_password_reset
 from backend.app.utils.datetime_utils import ensure_utc, utcnow
 
 logger = structlog.get_logger(__name__)
@@ -419,3 +419,146 @@ async def confirm_email_change(session: AsyncSession, token: str, *, now: Option
     await session.commit()
     logger.info("Owner email change link refused and revoked", token_id=token_id, reason=reason)
     raise OwnerEmailChangeLinkInvalidError(token_service.TokenStatus.REVOKED.value)
+
+
+# =============================================================================
+# A5-2: a restore on a managed instance gives the instance to the owner the administrator chose
+# =============================================================================
+
+
+class OwnerResetOutcome(StrEnum):
+    """Where the owner's password link went: by email, or into the instance's log."""
+
+    SENT = "sent"
+    LINK_ONLY = "link_only"
+
+
+@dataclass(frozen=True)
+class OwnerResetResult:
+    """The outcome of ``assign_owner_and_send_reset``. It holds nothing secret and its ``repr`` shows no address or name:
+    the link is in the email or, when the email could not go, in the instance's log (``link_only``)."""
+
+    outcome: OwnerResetOutcome
+    user_id: int
+    username: str = field(repr=False)
+    email: str = field(repr=False)
+    expires_at: Optional[datetime] = None
+
+
+class OwnerAssignmentError(Exception):
+    """A precondition of the assignment is missing; nothing was written. ``code``: ``NOT_MANAGED``, ``OWNER_EMAIL_NOT_SET``, ``USER_NOT_FOUND`` or ``EMAIL_TAKEN``."""
+
+    def __init__(self, code: Literal["NOT_MANAGED", "OWNER_EMAIL_NOT_SET", "USER_NOT_FOUND", "EMAIL_TAKEN"]) -> None:
+        super().__init__(code)
+        self.code = code
+
+
+async def _assign_account(session: AsyncSession, user: User, owner_email: str, moment: datetime) -> None:
+    """Make ``user`` the owner: every other account loses the mark first (the unique index allows one), then ``user`` gets the
+    owner's address, administrator and active, the mark, and a verified address."""
+    users = User.__table__  # type: ignore[attr-defined]
+    await session.execute(users.update().where(users.c.is_instance_owner == 1, users.c.id != user.id).values(is_instance_owner=False))
+    user.email = owner_email
+    user.is_superuser = True
+    user.is_active = True
+    user.is_instance_owner = True
+    user.email_verified_at = moment
+    user.updated_at = moment
+    session.add(user)
+    await session.flush()
+
+
+async def _neutralise_tokens(session: AsyncSession, user_id: int, moment: datetime) -> None:
+    """Whoever prepared a backup also wrote its tokens: the account's ``password_reset`` rows are DELETED (their history is
+    unreliable, and a row dated in the future would hold «forgot password» back for ever), its live tokens of every other
+    purpose are revoked."""
+    await session.execute(delete(AccountToken).where(AccountToken.user_id == user_id, AccountToken.purpose == AccountTokenPurpose.PASSWORD_RESET).execution_options(synchronize_session=False))
+    for purpose in AccountTokenPurpose:
+        if purpose != AccountTokenPurpose.PASSWORD_RESET:
+            await token_service.revoke_tokens(session, user_id=user_id, purpose=purpose, now=moment)
+
+
+async def _deliver_reset_link(session: AsyncSession, user_id: int, owner_email: str, token: str, token_id: int, expires_at: datetime, moment: datetime) -> bool:
+    """Email the reset link to the owner's address; when it cannot go — in any way — write the link in the instance's log (a
+    warning, the hoster's channel, as ``deliver_owner_change_link`` does) and say False. Never raises. When the email went
+    the link is in no log."""
+    try:
+        await require_email()
+        links = require_links()
+        content = build_password_reset(
+            language=await account_language(session, user_id),
+            link=email_link(AccountTokenPurpose.PASSWORD_RESET, token),
+            ttl=max(ensure_utc(expires_at) - ensure_utc(moment), timedelta(0)),
+            instance=links.instance,
+        )
+        await send_email(content, to=owner_email, user_id=user_id)
+    except Exception as exc:  # noqa: BLE001 — after the commit nothing may raise: the link goes to the log below
+        logger.warning("Owner reset link not emailed: it is in the log of the instance", user_id=user_id, token_id=token_id, reason=type(exc).__name__, code=getattr(exc, "code", None))
+        path = token_service.token_path(AccountTokenPurpose.PASSWORD_RESET, token)
+        url = registration_service.public_link(path)
+        logger.warning(
+            "Password-reset link for the instance owner, single use: send it to the owner so that it chooses its password",
+            link=url or path,
+            expires_at=expires_at.isoformat(),
+            note=None if url else "LIBREFOLIO_PUBLIC_URL is not set: put the address of your server in front of the path",
+        )
+        return False
+    logger.info("Owner reset link emailed", user_id=user_id, token_id=token_id)
+    return True
+
+
+async def assign_owner_and_send_reset(session: AsyncSession, user_id: int, *, now: Optional[datetime] = None) -> OwnerResetResult:
+    """Give a managed instance restored from a backup to the account the owner chose (A5-2); commits once, then sends.
+
+    Called by the restore (B), ONCE, at the first start after the database swap, with the id of the chosen account in the
+    restored database. NOTHING in that database is trusted — a backup may come from anywhere, and whoever prepared it wrote
+    its tokens too — so every call gives the full treatment, in one transaction under SQLite's write lock: the preconditions;
+    the owner mark of every other account cleared, then the chosen account gets the owner's address, administrator, active,
+    the mark; its password made unusable and its sessions ended; its ``password_reset`` rows deleted and its live tokens of
+    every other purpose revoked (``_neutralise_tokens``); one new reset link, marked with the owner's address. Then the link
+    is emailed to that address; if the email cannot go the outcome is ``link_only`` and the link is in the log of the
+    instance (a warning), never in the result. The protection follows (``note_recorded_owner``).
+
+    A second call repeats the treatment: the previous link dies and a new one is sent (one more email, no harm). At-most-once
+    is the caller's, kept in the restore's own state, never in the database.
+
+    The caller must know three things. (1) The first statement is a ``commit`` of the caller's session, which commits any
+    work the session had pending: pass a session with nothing else in it. (2) The caller must repeat on the server the check
+    of the choice the owner made in the restore's dialog — if an account already has the owner's address, the only valid
+    choice is that account; this function answers ``EMAIL_TAKEN`` for any other — and must FAIL CLOSED: a restore on a
+    managed instance whose call did not happen, or raised ``OwnerAssignmentError``, is not complete, and must not serve the
+    restored accounts. (3) The password hash is never read.
+
+    Raises ``OwnerAssignmentError`` before writing anything: ``NOT_MANAGED``, ``OWNER_EMAIL_NOT_SET``, ``USER_NOT_FOUND``,
+    ``EMAIL_TAKEN`` (another account has the address, or has it as its username).
+    """
+    moment = now or utcnow()
+    if get_settings().LIBREFOLIO_PROFILE != "managed":
+        raise OwnerAssignmentError("NOT_MANAGED")
+    owner_email = owner_admin_email()
+    if owner_email is None:
+        raise OwnerAssignmentError("OWNER_EMAIL_NOT_SET")
+    # The reads before this end here; the first write takes the lock, and what follows sees what another call committed.
+    await session.commit()
+    users = User.__table__  # type: ignore[attr-defined]
+    locked = await session.execute(users.update().where(users.c.id == user_id).values(updated_at=users.c.updated_at))
+    if locked.rowcount == 0:
+        await session.rollback()
+        raise OwnerAssignmentError("USER_NOT_FOUND")
+    user = (await session.execute(select(User).where(User.id == user_id).execution_options(populate_existing=True))).scalar_one()
+    if await _address_taken(session, owner_email, user_id):
+        await session.rollback()
+        raise OwnerAssignmentError("EMAIL_TAKEN")
+    username = user.username
+    await _assign_account(session, user, owner_email, moment)
+    # The preparer of the backup knows the password it carries: unusable until the owner chooses its own with the link
+    user.hashed_password = await asyncio.to_thread(auth_service.unusable_password_hash)
+    await user_service.end_sessions(session, user)
+    await _neutralise_tokens(session, user_id, moment)
+    issued = await user_service.create_password_reset(session, user, now=moment, email=owner_email)
+    token, token_id, expires_at = issued.token, issued.record.id, ensure_utc(issued.record.expires_at)
+    await session.commit()
+    user_service.note_recorded_owner(user_id)
+    logger.info("Instance owner assigned after a restore, reset link issued", user_id=user_id, token_id=token_id)
+    outcome = OwnerResetOutcome.SENT if await _deliver_reset_link(session, user_id, owner_email, token, token_id, expires_at, moment) else OwnerResetOutcome.LINK_ONLY
+    return OwnerResetResult(outcome, user_id, username, owner_email, expires_at=expires_at)

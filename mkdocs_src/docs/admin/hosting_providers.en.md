@@ -445,6 +445,29 @@ you is recorded from the start.
     Security (`info` while pending, `warning` when blocked), and the startup log. A *blocked* change asks you to
     act: change the variable to an address no other account uses and restart.
 
+### 🔁 Restoring a Backup on a Managed Instance: the Owner {: #restore-owner }
+
+A backup can come from any instance, and whoever prepared it can write anything in it, so on a managed instance nothing in its
+accounts, passwords or one-time links is trusted. When an administrator restores a backup from the app, the restore asks which
+account of that backup is the owner, and then, in one step:
+
+1. that account gets the address of `LIBREFOLIO_ADMIN_EMAIL`, becomes an active administrator and the **only** owner: the
+   owner mark of every other account is removed, so the owner the backup had is no longer protected;
+2. its password becomes unusable (nobody can sign in with the password the backup carried, whoever prepared it) and its
+   open sessions end;
+3. every one-time link of that account that the backup carried is cancelled: its password-reset links are deleted and its
+   other links (email verification, setup, email change) are revoked, whatever they said;
+4. one new password-reset link is emailed to the address of `LIBREFOLIO_ADMIN_EMAIL`, so the real owner chooses a password.
+
+If the email cannot go (email off or unusable, no `LIBREFOLIO_PUBLIC_URL`, the hourly limit, a refusal by the SMTP server), the
+link is written in the **log of the instance** as a `warning`, *Password-reset link for the instance owner*, and nowhere else:
+the report of the restore says only that the link is in the log, and never contains it, because the report can be read by any
+administrator. Pass the link to the owner. When the email went, the link is in no log.
+
+If the first start after the restore is repeated, the step is repeated too: the previous link stops working and a new one is
+sent. A restore made from the hosting panel does none of this. The whole restore is described in
+[Backup & Restore](backup_restore.md).
+
 ---
 
 ## 🔒 Blocking an Instance {: #instance-block }
