@@ -3,11 +3,11 @@ only the indexes a query uses
 
 Revision ID: 005_release_1_3_0_schema
 Revises: 004_release_1_2_0_schema
-Create Date: 2026-10-19
+Create Date: 2026-10-19 (the owner of the instance folded in on 2026-10-24)
 
 CONSOLIDATION NOTE — what this file replaces.
 
-One migration per release, as 004 is for 1.2 (the developer's decision, 19/10/2026). This revision replaces the seven
+One migration per release, as 004 is for 1.2 (the developer's decision, 19/10/2026). This revision replaces the eight
 written during the 1.3 cycle, none of which was ever released:
 
     005_accounts_invites                steps 1 and 2 below
@@ -17,6 +17,12 @@ written during the 1.3 cycle, none of which was ever released:
     009_email_unique_ignoring_case      step 6
     010_provider_reported_currency      not kept: no ``asset_provider_assignments.reported_currency`` (developer)
     011_provider_exchange_timezone      removed earlier (Z-33r)
+    006_owner_email_change              the fourth ``users`` column and the CHECK of step 2 below (folded in 24/10/2026)
+
+The last one lived for two days on top of this file (A5-1b), and a nightly build (train 10) carried this revision
+without it: that database is stamped ``005_release_1_3_0_schema`` and lacks ``users.is_instance_owner``, its partial
+index and the ``email_change`` purpose. ``upgrade`` does not run again on it (Alembic sees the head), so nothing here
+repairs it; the developer's one-off script does (developer journal, «Procedura manuale», 005 senza proprietario).
 
 A database stamped with one of those ids was made by an unreleased build only. No code handles it (the developer:
 no one-off code): the developer journal gives the manual procedure that brings one at 011 or 010 here (plan H,
@@ -30,13 +36,19 @@ original would fire the foreign-key action of every row that points at it. ``DRO
 downgrade changes the table in place and fires none.
 
 ────────────────────────────────────────────────────────────────────────────────
-1. **Three columns of ``users``** (workstream A): ``session_version`` (``0``), the session generation the server
+1. **Four columns of ``users``** (workstream A): ``session_version`` (``0``), the session generation the server
    checks on every request; ``email_verified_at`` (``NULL``: existing accounts are not verified, which is true; how
    they are treated once verification is required is decided in the logic, not in the data, coordinator decision of
-   15/10/2026); ``last_seen_version`` (``NULL``), the release whose changelog the user last saw.
+   15/10/2026); ``last_seen_version`` (``NULL``), the release whose changelog the user last saw;
+   ``is_instance_owner`` (``BOOLEAN NOT NULL DEFAULT 0``), the account that owns a managed instance, and the partial
+   unique index ``ux_users_instance_owner ON users (is_instance_owner) WHERE is_instance_owner = 1``: at most one
+   owner. Every account the upgrade finds gets ``0``: the owner is recorded by the startup sync, which finds it by the
+   address of ``LIBREFOLIO_ADMIN_EMAIL``. The query that reads the index is ``SELECT id FROM users WHERE
+   is_instance_owner = 1``; its plan is ``SEARCH users USING COVERING INDEX ux_users_instance_owner`` (pinned by
+   ``test_migration_005_release_1_3``).
 
 2. **``account_tokens``** (workstream A): the single-use links — invitations, password resets, email verification, the
-   initial administrator's setup link (``services/accounts/token_service.py``). Only the SHA-256 of a token is stored.
+   initial administrator's setup link, the owner's email-change link (``services/accounts/token_service.py``). Only the SHA-256 of a token is stored.
    ``purpose`` binds a token to one use, ``expires_at`` bounds its life, ``consumed_at`` and ``revoked_at`` end it.
    ``user_id`` is the account a token acts on, and its tokens go with it (``CASCADE``); ``created_by_user_id`` and
    ``consumed_by_user_id`` only record who (``SET NULL``). A plain ``INTEGER PRIMARY KEY``, without AUTOINCREMENT: not
@@ -107,8 +119,8 @@ as before, ``10.000000`` included. On the developer's demo data every stored qua
 
 The downgrade goes back step by step: the thirteen indexes again with their ``001`` definitions, then
 ``ux_users_email_lower``, the plugin tables, ``enable_registration`` from ``registration_mode`` (``open`` is ``true``,
-``invite`` and ``disabled`` are ``false``: the old setting had no middle ground), ``account_tokens`` and the three
-columns. Tokens, plugin settings and the values of the columns are lost.
+``invite`` and ``disabled`` are ``false``: the old setting had no middle ground), ``account_tokens``, the owner's index
+and the four columns. Tokens, plugin settings and the values of the columns are lost.
 """
 
 import string
@@ -131,7 +143,11 @@ _USER_COLUMNS: tuple[tuple[str, str], ...] = (
     ("session_version", "INTEGER NOT NULL DEFAULT 0"),
     ("email_verified_at", "DATETIME DEFAULT NULL"),
     ("last_seen_version", "VARCHAR(40) DEFAULT NULL"),
+    ("is_instance_owner", "BOOLEAN NOT NULL DEFAULT 0"),
 )
+_OWNER_INDEX = "ux_users_instance_owner"
+#: What ``account_tokens.purpose`` accepts: one use per token.
+_TOKEN_PURPOSES: tuple[str, ...] = ("invite", "password_reset", "email_verification", "admin_setup", "email_change")
 _TOKEN_INDEXES: tuple[tuple[str, str], ...] = (
     ("ix_account_tokens_purpose_expires_at", "purpose, expires_at"),
     ("ix_account_tokens_user_id", "user_id"),
@@ -203,11 +219,12 @@ def _refuse_email_duplicates(conn: sa.engine.Connection) -> None:
 
 
 def _upgrade_user_columns(conn: sa.engine.Connection) -> None:
-    """Step 1: add the new columns of ``users`` that are not there yet."""
+    """Step 1: add the new columns of ``users`` that are not there yet, then the owner's index."""
     existing = _columns(conn, "users")
     for name, declaration in _USER_COLUMNS:
         if name not in existing:
             conn.execute(sa.text(f"ALTER TABLE users ADD COLUMN {name} {declaration}"))
+    conn.execute(sa.text(f"CREATE UNIQUE INDEX IF NOT EXISTS {_OWNER_INDEX} ON users (is_instance_owner) WHERE is_instance_owner = 1"))
 
 
 def _upgrade_account_tokens(conn: sa.engine.Connection) -> None:
@@ -228,7 +245,7 @@ def _upgrade_account_tokens(conn: sa.engine.Connection) -> None:
             sa.Column("revoked_at", sa.DateTime(), nullable=True),
             sa.Column("consumed_by_user_id", sa.Integer(), nullable=True),
             sa.CheckConstraint(
-                "purpose IN ('invite', 'password_reset', 'email_verification', 'admin_setup')",
+                "purpose IN (" + ", ".join(f"'{purpose}'" for purpose in _TOKEN_PURPOSES) + ")",
                 name="ck_account_tokens_purpose",
             ),
             sa.UniqueConstraint("token_hash", name="uq_account_tokens_token_hash"),
@@ -331,6 +348,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     """Back to 1.2, step by step: tokens, plugin settings and the values of the new columns are lost."""
     conn = op.get_bind()
+    conn.execute(sa.text(f"DROP INDEX IF EXISTS {_OWNER_INDEX}"))
     present = _indexes(conn)
     for name, definition in _REDUNDANT_INDEXES:
         if name not in present:

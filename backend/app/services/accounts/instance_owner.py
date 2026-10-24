@@ -1,7 +1,7 @@
 """The owner of a managed instance, and the change of its address from the host (release 1.3, workstream A, lot A5-1b part 2).
 
 On a managed instance (``LIBREFOLIO_PROFILE=managed``) the hoster names the paying administrator in
-``LIBREFOLIO_ADMIN_EMAIL``; that account is the *owner*, recorded in ``users.is_instance_owner`` (migration 006, at most
+``LIBREFOLIO_ADMIN_EMAIL``; that account is the *owner*, recorded in ``users.is_instance_owner`` (migration 005, at most
 one row) because the variable's address cannot identify it once the variable has changed. The owner cannot change its
 own address from the app (409 ``ACCOUNT_PROTECTED``): the real change starts from the host.
 

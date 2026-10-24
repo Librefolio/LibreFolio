@@ -51,6 +51,10 @@ The contract pinned here:
 10. The downgrade gives a new database the schema of a new ``004`` one, the 13 indexes with their ``001`` definitions;
     it converts ``registration_mode`` back as the old 006 did; one stopped half way completes; the populated install
     goes down to its own 1.2 schema with every other row, and up again.
+11. The owner of a managed instance (A5-1b, folded in on 24/10/2026, once ``006_owner_email_change``): ``users.is_instance_owner``
+    ``BOOLEAN NOT NULL DEFAULT 0`` with its partial unique index (at most one owner, used by the owner query), ``email_change``
+    among the purposes of ``account_tokens``; a 1.2 install gets 0 for everyone. The frozen snapshot is the retired chain's
+    and is never regenerated: the ``frozen`` fixture lays these additions over it.
 
 Safety and fidelity: ``alembic_harness``. Every database is a file under ``tmp_path``; Alembic runs in this process on
 that file alone — a connect listener refuses any other — with ``PRAGMA foreign_keys`` asserted 1 at every step, as
@@ -174,7 +178,16 @@ ADD_USER_COLUMNS = tuple(f"ALTER TABLE users ADD COLUMN {name} {declaration}" fo
 #: included (the developer's decision of 15/10/2026).
 EXISTING_USER_VALUES = (0, None, None)
 
-PURPOSES = ("invite", "password_reset", "email_verification", "admin_setup")
+PURPOSES = ("invite", "password_reset", "email_verification", "admin_setup", "email_change")
+#: The owner of a managed instance (A5-1b), folded into the revision on 24/10/2026: a fourth ``users`` column, its partial
+#: unique index, and the ``email_change`` purpose. The snapshot is the retired chain's and is never regenerated, so the
+#: ``frozen`` fixture lays these over it (``_with_owner``).
+OWNER_COLUMN = "is_instance_owner"
+OWNER_COLUMN_DECLARATION = "BOOLEAN NOT NULL DEFAULT 0"
+OWNER_INDEX = "ux_users_instance_owner"
+OWNER_INDEX_SQL = "CREATE UNIQUE INDEX ux_users_instance_owner ON users (is_instance_owner) WHERE is_instance_owner = 1"
+OWNER_QUERY = "SELECT id FROM users WHERE is_instance_owner = 1"
+OLD_PURPOSES = ("invite", "password_reset", "email_verification", "admin_setup")
 #: column: (target table, target column, ON DELETE)
 TOKEN_FOREIGN_KEYS = {
     "user_id": ("users", "id", "CASCADE"),
@@ -915,10 +928,26 @@ def user_cli() -> ModuleType:
     return importlib.import_module(USER_CLI_MODULE)
 
 
+def _with_owner(snapshot: dict[str, Any]) -> dict[str, Any]:
+    """The snapshot of the retired chain with what the owner of the instance adds to it: ``users.is_instance_owner`` appended as ``ALTER TABLE ADD COLUMN`` writes it, its partial index, ``email_change`` in the CHECK of ``account_tokens``."""
+    objects = [list(entry) for entry in snapshot["objects"]]
+    for entry in objects:
+        if entry[1] == "users" and entry[0] == "table":
+            assert entry[3].endswith(")"), entry[3]
+            entry[3] = f"{entry[3][:-1]}, {OWNER_COLUMN} {OWNER_COLUMN_DECLARATION})"
+        if entry[1] == "account_tokens" and entry[0] == "table":
+            old = "CHECK (purpose IN (" + ", ".join(f"'{purpose}'" for purpose in OLD_PURPOSES) + "))"
+            assert old in entry[3], entry[3]
+            entry[3] = entry[3].replace(old, "CHECK (purpose IN (" + ", ".join(f"'{purpose}'" for purpose in PURPOSES) + "))")
+    objects.append(["index", OWNER_INDEX, "users", OWNER_INDEX_SQL])
+    objects.sort(key=lambda entry: (entry[0], entry[1]))
+    return {**snapshot, "objects": objects}
+
+
 @pytest.fixture(scope="module")
 def frozen() -> dict[str, Any]:
-    """The frozen snapshot of the retired chain, as written: ``about``, ``objects``, ``rows``."""
-    return json.loads(SNAPSHOT.read_text(encoding="utf-8"))
+    """The frozen snapshot of the retired chain with the owner of the instance laid over it (``_with_owner``): ``about``, ``objects``, ``rows``."""
+    return _with_owner(json.loads(SNAPSHOT.read_text(encoding="utf-8")))
 
 
 @pytest.fixture(scope="module")
@@ -1125,6 +1154,48 @@ def test_a_user_written_without_the_new_columns_gets_their_defaults(fresh_005: P
             conn.execute("UPDATE users SET session_version = NULL WHERE id = ?", (user_id,))
 
     assert _new_user_columns(db) == {user_id: EXISTING_USER_VALUES}
+
+
+def test_the_owner_column_is_not_null_and_defaults_to_not_the_owner(fresh_005: Path | str, tmp_path: Path) -> None:
+    """``users.is_instance_owner`` is ``BOOLEAN NOT NULL DEFAULT 0`` (A5-1b): a user written without it reads back 0, and NULL is refused."""
+    db = _copy(_ran(fresh_005), tmp_path / "app.db")
+    column = _table_info(db, "users")[OWNER_COLUMN]
+    assert column.type.upper() in ("BOOLEAN", "INTEGER") and column.not_null and column.default == "0", column
+    with _foreign_keys_on(db) as conn:
+        conn.execute(INSERT_ACCOUNT, (1, "alice", "alice@example.test", "h", STAMP, STAMP))
+        assert conn.execute(f"SELECT {OWNER_COLUMN}, typeof({OWNER_COLUMN}) FROM users WHERE id = 1").fetchone() == (0, "integer")
+        with pytest.raises(sqlite3.IntegrityError, match=rf"users\.{OWNER_COLUMN}"):
+            conn.execute(f"UPDATE users SET {OWNER_COLUMN} = NULL WHERE id = 1")
+        conn.rollback()
+
+
+def test_at_most_one_owner_and_the_owner_query_uses_the_partial_index(fresh_005: Path | str, tmp_path: Path) -> None:
+    """Two accounts at 0 and one at 1 are fine, a second at 1 is refused by ``ux_users_instance_owner``; ``SELECT id FROM users WHERE is_instance_owner = 1`` plans that index (the index exists for this query)."""
+    db = _copy(_ran(fresh_005), tmp_path / "app.db")
+    with _connect(db) as conn:
+        assert _collapsed(conn.execute("SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?", (OWNER_INDEX,)).fetchone()[0]) == OWNER_INDEX_SQL
+    with _foreign_keys_on(db) as conn:
+        for number in (1, 2, 3):
+            conn.execute(INSERT_ACCOUNT, (number, f"u{number}", f"u{number}@example.test", "h", STAMP, STAMP))
+        conn.execute(f"UPDATE users SET {OWNER_COLUMN} = 1 WHERE id = 1")
+        with pytest.raises(sqlite3.IntegrityError, match="UNIQUE"):
+            conn.execute(f"UPDATE users SET {OWNER_COLUMN} = 1 WHERE id = 2")
+        conn.rollback()
+        conn.execute(f"UPDATE users SET {OWNER_COLUMN} = 1 WHERE id = 1")
+        plan = " ".join(str(row[3]) for row in conn.execute(f"EXPLAIN QUERY PLAN {OWNER_QUERY}"))
+        conn.rollback()
+    assert OWNER_INDEX in plan, plan
+
+
+def test_the_owner_index_is_the_one_the_models_declare(fresh_head: Path, created_by_models: Path) -> None:
+    """``db create-clean`` (the models) and the migration build the same partial unique index, its SQL with whitespace and quotes aside."""
+    sqls = []
+    for db in (fresh_head, created_by_models):
+        with _connect(db) as conn:
+            row = conn.execute("SELECT sql FROM sqlite_master WHERE type = 'index' AND name = ?", (OWNER_INDEX,)).fetchone()
+        assert row is not None, f"{db.parent.name} has no {OWNER_INDEX}"
+        sqls.append(_collapsed(row[0]).replace('"', ""))
+    assert sqls[0] == sqls[1] == OWNER_INDEX_SQL, sqls
 
 
 def test_account_tokens_points_at_users_with_its_indexes_and_named_constraints(fresh_005: Path | str) -> None:
@@ -1617,6 +1688,13 @@ def test_a_1_2_install_keeps_every_row_of_every_table(upgraded_1_2: Upgrade | st
     print_success(f"{len(before)} tables, every row as it was")
 
 
+def test_a_1_2_install_has_no_owner_until_the_startup_sync_records_one(upgraded_1_2: Upgrade | str) -> None:
+    """Every account of the 1.2 install gets ``is_instance_owner`` 0: the owner is recorded by the startup sync, which finds it by the address of ``LIBREFOLIO_ADMIN_EMAIL``."""
+    up = _ran(upgraded_1_2)
+    columns, rows = up.rows_after["users"]
+    assert rows and {row[columns.index(OWNER_COLUMN)] for row in rows} == {0}, f"no existing account may be the owner: {columns}"
+
+
 def test_a_1_2_install_gives_every_existing_user_the_defaults(upgraded_1_2: Upgrade | str) -> None:
     """Every user of the 1.2 install has ``session_version`` 0 and NULL ``email_verified_at`` and ``last_seen_version``: no backfill (the developer's decision); how a verification requirement treats them is decided in the logic, not in the data."""
     up = _ran(upgraded_1_2)
@@ -1718,12 +1796,6 @@ def test_the_non_ascii_pair_does_not_stop_the_upgrade(at_004: Path, tmp_path: Pa
     assert refused is not None and EMAIL_INDEX in refused, f"{capital.email.upper()!r} is Émile's address but for A–Z: {EMAIL_INDEX} must refuse it: {refused}"
 
 
-# A5-1b part 2: 006_owner_email_change adds ``users.is_instance_owner`` to the model. The database this test refuses at 004 is
-# stopped BEFORE 006 can run, so the remedy (``user set-email``, which selects ``User`` through the model) finds no such
-# column. Known and temporary: 1.3 ships ONE migration (the fold of 006 into 005 puts the column among the ``users`` columns that
-# the stop leaves behind, and this test is green again). Strict: when the fold is done the test XPASSes and fails, which is the
-# reminder to delete this marker. Until then the remedy of a refused 1.2 -> 1.3 upgrade does not work on an unfolded 005 + 006.
-@pytest.mark.xfail(strict=True, raises=pytest.fail.Exception, reason="006_owner_email_change is not folded into 005 yet: the model has a column the refused database lacks (A5-1b)")
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("quiet_environment")
 async def test_the_remedy_the_refusal_names_works_on_the_database_it_refused(at_004: Path, frozen: dict[str, Any], tmp_path: Path, user_cli: ModuleType, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture) -> None:
@@ -1731,7 +1803,7 @@ async def test_the_remedy_the_refusal_names_works_on_the_database_it_refused(at_
 
     The remedy reads and writes the accounts through the 1.3 ``User`` model (``select(User)``, the session version, the
     password-reset and setup links in ``account_tokens``): it runs because the stop comes after the ``users`` columns
-    and ``account_tokens``. Red until the cure only.
+    (``is_instance_owner`` among them) and ``account_tokens``.
     """
     print_section("The remedy the refusal names, on the database it refused")
     _require_005()

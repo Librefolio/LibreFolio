@@ -140,7 +140,7 @@ Step 1 of migration `005_release_1_3_0_schema` adds three columns:
   running version named no release (`unknown`, or a checkout with no tag): it sees the running release's chapter once
   ([What's new](../../frontend/onboarding.md#whats-new)).
 
-- 👑 **`is_instance_owner`** (`BOOLEAN NOT NULL DEFAULT 0`, migration `006_owner_email_change`): the account that owns a
+- 👑 **`is_instance_owner`** (`BOOLEAN NOT NULL DEFAULT 0`, migration `005_release_1_3_0_schema`): the account that owns a
   managed instance, the paying administrator. At most one row holds `1`: the partial unique index
   `ux_users_instance_owner ON users (is_instance_owner) WHERE is_instance_owner = 1`, read by
   `SELECT id FROM users WHERE is_instance_owner = 1` (`SEARCH users USING COVERING INDEX ux_users_instance_owner`).
@@ -327,8 +327,7 @@ row holds the SHA-256 of the token, never the token itself. How tokens are issue
 [Single-use Account Tokens](../security.md#account-tokens).
 
 - 🎯 **`purpose`** (`VARCHAR(32)`): an `AccountTokenPurpose` value — `invite`, `password_reset`,
-  `email_verification`, `admin_setup` or `email_change` (migration `006_owner_email_change` rebuilt the table with
-  `batch_alter_table` to add it) — enforced by `CHECK` (`ck_account_tokens_purpose`). A token is looked up
+  `email_verification`, `admin_setup` or `email_change` — enforced by `CHECK` (`ck_account_tokens_purpose`). A token is looked up
   by hash *and* purpose, so a token of one purpose is never accepted for another.
 - 🔐 **`token_hash`** (`VARCHAR(64)`): the SHA-256 of the token, 64 lowercase hex characters, `UNIQUE`
   (`uq_account_tokens_token_hash`). Its unique index serves the lookups.
