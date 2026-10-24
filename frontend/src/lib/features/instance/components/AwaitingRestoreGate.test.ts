@@ -40,8 +40,8 @@
  * null | undefined`, by default `instanceConfig.config.restore_interrupted_reason ?? null`, and passes it to the page as
  * `reason`. The precedence is unchanged (interrupted wins over awaiting, else the routes); a reason on its own, with
  * `restore_interrupted` false, shows nothing. Which page variant is on screen is read from the docs link
- * (`instance-restore-interrupted-docs`), an untranslated contract: the owner reason links `/mkdocs/admin/backup_restore/`
- * (no anchor), the restore-state one (also absent and null) the `#backup-pending-unreadable` anchor. Red until H5-3:
+ * (`instance-restore-interrupted-docs`), an untranslated contract: the owner reason links `/mkdocs/admin/hosting_panel_backups/#restore-owner-pending`,
+ * the restore-state one (also absent and null) the `#backup-pending-unreadable` anchor. Red until H5-3:
  * the gate ignores the prop and the field, so the owner cases still show the restore-state link.
  *
  * Registered in `front_component_unit` (`scripts/test_runner/_frontend_utility.py`, action `component-unit`).
@@ -301,8 +301,8 @@ describe('AwaitingRestoreGate — an unreadable restore state (B-33)', () => {
 describe('AwaitingRestoreGate — the reason of an interrupted restore (H5-3)', () => {
     const INTERRUPTED = 'instance-restore-interrupted';
     const DOCS = 'instance-restore-interrupted-docs';
-    const RESTORE_STATE_HREF = '/mkdocs/admin/cli_tools/#backup-pending-unreadable';
-    const OWNER_HREF = '/mkdocs/admin/backup_restore/';
+    const RESTORE_STATE_HREF = '/mkdocs/admin/cli_backup/#backup-pending-unreadable';
+    const OWNER_HREF = '/mkdocs/admin/hosting_panel_backups/#restore-owner-pending';
 
     type Reason = 'restore_state' | 'owner_assignment' | null | undefined;
 
@@ -324,7 +324,7 @@ describe('AwaitingRestoreGate — the reason of an interrupted restore (H5-3)', 
     }
 
     describe('injected reason', () => {
-        it('passes owner_assignment to the page: the docs link is the backup and restore guide, whole', () => {
+        it('passes owner_assignment to the page: the docs link is the owner section of the panel guide', () => {
             const {mounts} = mountReasonGate({interrupted: true, reason: 'owner_assignment'});
 
             expect(screen.getByTestId(INTERRUPTED), 'the interrupted page').toBeInTheDocument();

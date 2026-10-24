@@ -558,7 +558,7 @@ scripted install, names the administrator of a new instance in the environment. 
 it, inactive, with a single-use setup link; whoever spends the link chooses the password, activates
 the account and is signed in. The variables are read in `backend/app/config/accounts.py`, the rest
 is in `backend/app/services/accounts/bootstrap_admin_service.py`. Administrator side:
-[Hosting for Others](../../admin/hosting_providers.md#initial-admin), and «The Initial
+[Hosting for Others](../../admin/hosting_instances.md#initial-admin), and «The Initial
 Administrator» in [Configuration](../../admin/configuration.md).
 
 **The variables.** `admin_bootstrap_config()` returns an `AdminBootstrapConfig(email, username, token)`,

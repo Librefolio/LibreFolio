@@ -50,13 +50,13 @@
  * action `core-unit`).
  *
  * H-61 (checkpoint 1, contract §5, 20/10): the new startup check of the hosting panel's tokens, `platform.hosting_panel`,
- * has its guide, `admin/hosting_providers/#panel-api`, in the table between `platform.log_level` and `platform.test_mode`,
+ * has its guide, `admin/hosting_panel_api/#panel-api`, in the table between `platform.log_level` and `platform.test_mode`,
  * its place among the checks. Red until `checkGuides.json` holds it (§1 pinned whole) and `hosting_providers.en.md`
  * writes `{: #panel-api }` (§2.2, the docs step of the lot). `hosting_providers` has no translation, so the ratchet does
  * not move.
  *
  * H5-4 (24/10, A's request A5-1b): the new check `accounts.owner_email_change` (the host changed the owner's email address:
- * pending its confirmation, or blocked by another account) has its guide, `admin/hosting_providers/#owner-email-change`, in
+ * pending its confirmation, or blocked by another account) has its guide, `admin/hosting_instances/#owner-email-change`, in
  * the table right after `accounts.login_limit`, its place among the checks. Red until `checkGuides.json` holds it (§1 pinned
  * whole). The anchor already exists in `hosting_providers.en.md` (§2.2 stays green). `hosting_providers` has no translation
  * (the docs publish its English page in every language), so, as for `#panel-api`, the pair joins no ratchet and
@@ -115,16 +115,16 @@ const EXPECTED_GUIDES: Readonly<Record<string, string>> = {
     'platform.csp_report_only': 'admin/configuration_security/#csp-report-only',
     'platform.log_level': 'admin/configuration_security/#startup-checks',
     // H-61: the hosting panel's wake-up and status tokens, right before the test mode check
-    'platform.hosting_panel': 'admin/hosting_providers/#panel-api',
+    'platform.hosting_panel': 'admin/hosting_panel_api/#panel-api',
     'platform.test_mode': 'admin/configuration_security/#startup-checks',
-    'backup.panel_token': 'admin/hosting_providers/#panel-token',
-    'backup.upload_limit': 'admin/hosting_providers/#restore-upload-limit',
-    'backup.restore_limit': 'admin/hosting_providers/#restore-upload-limit',
+    'backup.panel_token': 'admin/hosting_panel_backups/#panel-token',
+    'backup.upload_limit': 'admin/hosting_panel_backups/#restore-upload-limit',
+    'backup.restore_limit': 'admin/hosting_panel_backups/#restore-upload-limit',
     // L3 (B, 22/10): the recipients of the hosting panel's sealed backups.
-    'backup.recipients': 'admin/backup_restore/#sealed',
+    'backup.recipients': 'admin/backup_sealed/#sealed',
     'accounts.login_limit': 'admin/configuration_accounts/#login-limit',
     // H5-4 (A's request A5-1b): the host-started change of the owner's email, right after the login limit's
-    'accounts.owner_email_change': 'admin/hosting_providers/#owner-email-change',
+    'accounts.owner_email_change': 'admin/hosting_instances/#owner-email-change',
     'email.smtp': 'admin/email/#variables',
     'email.smtp_encryption': 'admin/email/#encryption-modes',
     'email.links': 'admin/email/#links-check',
@@ -438,7 +438,7 @@ describe('checkGuides — the guide of each finding of the Security tab (N69d)',
     // red until N69d §1: checkGuides.ts does not exist
     // H-61: red until checkGuides.json holds platform.hosting_panel (contract §5)
     // H-55 v2: red until checkGuides.json holds platform.blockedScript → admin/configuration_security/#csp
-    // H5-4: red until checkGuides.json holds accounts.owner_email_change → admin/hosting_providers/#owner-email-change
+    // H5-4: red until checkGuides.json holds accounts.owner_email_change → admin/hosting_instances/#owner-email-change
     it('§1 pinned whole: CHECK_GUIDES is the table of the 22 guides — a changed guide is a change of this file', async () => {
         expect((await checkGuides()).CHECK_GUIDES, 'CHECK_GUIDES, check id → guide').toEqual(EXPECTED_GUIDES);
     });

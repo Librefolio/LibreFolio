@@ -198,6 +198,12 @@ plugins:
             "Setup": "Impostazione"
             "Links and Messages": "Link e messaggi"
             "Troubleshooting": "Risoluzione dei problemi"
+            "Your Instances": "Le tue istanze"
+            "Panel API": "API del pannello"
+            "Backups and Restores": "Backup e ripristini"
+            "Backups": "Backup"
+            "Sealed Backups": "Backup sigillati"
+            "Moving and Troubleshooting": "Trasloco e risoluzione dei problemi"
             "📚 Financial Theory": "📚 Teoria Finanziaria"
             "🏷️ Asset Types": "🏷️ Tipi di Asset"
             "🔄 Transaction Types": "🔄 Tipi di Transazione"
@@ -457,6 +463,12 @@ plugins:
             "Setup": "Mise en place"
             "Links and Messages": "Liens et messages"
             "Troubleshooting": "Dépannage"
+            "Your Instances": "Vos instances"
+            "Panel API": "API du panneau"
+            "Backups and Restores": "Sauvegardes et restaurations"
+            "Backups": "Sauvegardes"
+            "Sealed Backups": "Sauvegardes scellées"
+            "Moving and Troubleshooting": "Déménagement et dépannage"
             "📚 Financial Theory": "📚 Théorie Financière"
             "🏷️ Asset Types": "🏷️ Types d'Actifs"
             "🔄 Transaction Types": "🔄 Types de Transactions"
@@ -716,6 +728,12 @@ plugins:
             "Setup": "Puesta en marcha"
             "Links and Messages": "Enlaces y mensajes"
             "Troubleshooting": "Solución de problemas"
+            "Your Instances": "Tus instancias"
+            "Panel API": "API del panel"
+            "Backups and Restores": "Copias y restauraciones"
+            "Backups": "Copias de seguridad"
+            "Sealed Backups": "Copias selladas"
+            "Moving and Troubleshooting": "Traslado y solución de problemas"
             "📚 Financial Theory": "📚 Teoría Financiera"
             "🏷️ Asset Types": "🏷️ Tipos de Activos"
             "🔄 Transaction Types": "🔄 Tipos de Transacciones"
@@ -1011,7 +1029,11 @@ nav:
           - Check Connection Security:
               - Overview: admin/connection_checks.md
               - Reverse Proxy: admin/connection_proxy.md
-          - Hosting for Others: admin/hosting_providers.md
+          - Hosting for Others:
+              - Overview: admin/hosting_providers.md
+              - Your Instances: admin/hosting_instances.md
+              - Panel API: admin/hosting_panel_api.md
+              - Backups and Restores: admin/hosting_panel_backups.md
           - Sleep and Wake:
               - Overview: admin/sleep_wake.md
               - Scheduled Wake-up: admin/wake_sync.md
@@ -1028,8 +1050,13 @@ nav:
           - Global Settings: admin/settings.md
           - Users & Invitations: admin/users.md
       - 🧹 Maintenance & Operations:
-          - CLI Admin Tools: admin/cli_tools.md
-          - Backup, Restore & Moving: admin/backup_restore.md
+          - CLI Admin Tools:
+              - Overview: admin/cli_tools.md
+              - Backups: admin/cli_backup.md
+          - Backup, Restore & Moving:
+              - Overview: admin/backup_restore.md
+              - Sealed Backups: admin/backup_sealed.md
+              - Moving and Troubleshooting: admin/backup_moving.md
           - Filesystem Structure: admin/filesystem.md
   - 📚 Financial Theory:
       - Overview: financial-theory/index.md

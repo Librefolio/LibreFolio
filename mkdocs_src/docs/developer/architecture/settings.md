@@ -191,7 +191,7 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       raises `BrimConfigError` on a value it cannot use) and `hosting_panel.py` (H:
       `panel_status_token()`, the token of the hosting panel's status route, also as `_FILE`, with
       the rules of the backup token, raising `HostingPanelConfigError`; see
-      [Hosting Panel API](../../admin/hosting_providers.md#panel-api)). Unlike a `Settings` field, an
+      [Hosting Panel API](../../admin/hosting_panel_api.md#panel-api)). Unlike a `Settings` field, an
       invalid `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_MAX_USERS`, `LIBREFOLIO_PUBLIC_URL` or
       `LIBREFOLIO_BILLING_URL` never stops the startup: its accessor raises `ValueError`, and
       `registration_service.py` logs it and falls back safely — registration closed for the first

@@ -66,7 +66,7 @@ username in a plain circle.
 | **You** | Your own account |
 | **Admin** | An administrator: it manages the instance, its settings, its users and its invitations |
 | **Deactivated** | The account cannot sign in, and takes no place. An account [waiting for its email](#waiting) has a badge of its own, below |
-| **Waiting for setup** | The [initial administrator](hosting_providers.md#initial-admin), not active yet: nobody has used its setup link, nor set the account up another way. Shown instead of **Deactivated**: see [Waiting for Its Setup Link](#pending-setup) |
+| **Waiting for setup** | The [initial administrator](hosting_instances.md#initial-admin), not active yet: nobody has used its setup link, nor set the account up another way. Shown instead of **Deactivated**: see [Waiting for Its Setup Link](#pending-setup) |
 | **Waiting for verification** | An account that has not opened the verification link LibreFolio emailed to its address yet, even once that link has expired. It cannot sign in, and takes a place while its link is live. Shown instead of **Deactivated**: see [Accounts Waiting for Their Email](#waiting) |
 | **Protected** | Nobody can deactivate, demote or delete it: see [When an Action Is Off](#action-off) |
 
@@ -140,7 +140,7 @@ How the verification works, and its limits: [Email Verification](email_flows.md#
 When LibreFolio creates the administrator of `LIBREFOLIO_ADMIN_EMAIL` at its first start, the
 account waits, not yet active, until someone opens its setup link and chooses the password, or sets
 it up another way (below): see
-[The Initial Administrator](hosting_providers.md#initial-admin). Until then:
+[The Initial Administrator](hosting_instances.md#initial-admin). Until then:
 
 - its row shows **Waiting for setup** instead of **Deactivated**, even once its link has expired or
   been [cancelled](#cancel-setup);
@@ -204,7 +204,7 @@ What happens:
 - 🔁 to let the administrator in, give a new link: on the server, `user setup-link` prints one (see
   «A New Setup Link for the Initial Administrator» in [Command-Line Tools](cli_tools.md)); on an
   instance a hosting provider runs, ask the provider for a new one
-  ([A New Link](hosting_providers.md#initial-admin-new-link)). Restarting the server with the same
+  ([A New Link](hosting_instances.md#initial-admin-new-link)). Restarting the server with the same
   `LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN` gives no new link, since the instance has already seen that
   token: each start logs a warning that the setup link was withdrawn, and asks to run
   `dev.py user setup-link`, or to set a new token.

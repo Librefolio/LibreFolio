@@ -19,7 +19,7 @@
  *   - the docs link is an anchor to the admin CLI page's anchor `#backup-pending-unreadable`, built by the app's docs-URL
  *     rule — the one of `DocsLink` and of `connectionSecurityDocsUrl` (`$lib/utils/security/connectionSecurity`):
  *     `/mkdocs/` + the language prefix (none in English, `<lang>/` otherwise, from `currentLanguage`) + the path
- *     `admin/cli_tools/#backup-pending-unreadable` — opened in a new tab (`target="_blank"`,
+ *     `admin/cli_backup/#backup-pending-unreadable` — opened in a new tab (`target="_blank"`,
  *     `rel="noopener noreferrer"`);
  *   - nothing else to act on: the retry is the only button, no form, no field, no logout; the docs link is the only
  *     link, and, when the instance has a usable support address, the support link (D7) is the other one;
@@ -63,10 +63,10 @@
  * Lot H5-3 (the owner's choice after a restore from the app on a managed instance): `GET /system/instance` also answers
  * `restore_interrupted_reason: 'restore_state' | 'owner_assignment' | null`. The page gains the prop
  * `reason?: 'restore_state' | 'owner_assignment' | null`. Absent, null and `'restore_state'` are today's page (same keys,
- * same docs link `admin/cli_tools/#backup-pending-unreadable`). `'owner_assignment'` reads
+ * same docs link `admin/cli_backup/#backup-pending-unreadable`). `'owner_assignment'` reads
  * `instance.restoreInterrupted.ownerTitle` (the h1), `.ownerMessage` (`instance-restore-interrupted-message`) and
- * `.ownerAdminHint` (`instance-restore-interrupted-admin`), and its docs link is the page-level
- * `admin/backup_restore/` (the same language-prefix rule, NO anchor). Support link, retry button and the polling are the
+ * `.ownerAdminHint` (`instance-restore-interrupted-admin`), and its docs link is the section
+ * `admin/hosting_panel_backups/#restore-owner-pending` (the same language-prefix rule). Support link, retry button and the polling are the
  * same for both reasons. The three keys exist in the `instance` subsystem source of all four languages (the generated
  * catalogue fills a missing translation from English, so the sources themselves are read: no generic parity gate
  * would catch a missing it/fr/es entry). Red until H5-3: the page has no `reason` prop (the owner cases read today's
@@ -128,10 +128,10 @@ const DEFAULT_POLL_MS = 30_000;
 const POLL_MS = 1_000;
 
 /** The admin guide's section on an unreadable restore state: a path below `/mkdocs/`, no language, no leading `/`. */
-const DOCS_PATH = 'admin/cli_tools/#backup-pending-unreadable';
+const DOCS_PATH = 'admin/cli_backup/#backup-pending-unreadable';
 const DOCS_ANCHOR = '#backup-pending-unreadable';
-/** H5-3: the owner reason's docs path, the page of the backup and restore guide (no anchor). */
-const OWNER_DOCS_PATH = 'admin/backup_restore/';
+/** H5-3: the owner reason's docs path, the section of the panel guide on an owner with no account. */
+const OWNER_DOCS_PATH = 'admin/hosting_panel_backups/#restore-owner-pending';
 
 /**
  * The app's docs-URL rule (`DocsLink`'s `getDocsUrl`, `connectionSecurityDocsUrl`): `/mkdocs/`, the language prefix,
@@ -219,11 +219,11 @@ function sourceGaps(key: string): string[] {
     });
 }
 
-/** The docs link of the owner reason: an anchor to the page-level `href` (no `#`), in a new tab. */
+/** The docs link of the owner reason: an anchor to the owner section of the panel guide, in a new tab. */
 function expectOwnerDocsLink(link: HTMLElement, href: string): void {
     expect(link.tagName, 'the docs link is an anchor').toBe('A');
-    expect(link.getAttribute('href'), 'the backup and restore guide, the whole page').toBe(href);
-    expect(link.getAttribute('href') ?? '', 'no anchor').not.toContain('#');
+    expect(link.getAttribute('href'), 'the panel guide, the section on the owner').toBe(href);
+    expect(link.getAttribute('href') ?? '', 'the anchor of the section').toContain('#restore-owner-pending');
     expect(link, 'in a new tab').toHaveAttribute('target', '_blank');
     const rel = (link.getAttribute('rel') ?? '').split(/\s+/);
     expect(rel, 'without a window.opener').toContain('noopener');
@@ -314,7 +314,7 @@ describe('InstanceRestoreInterruptedPage — what it shows', () => {
         const link = within(screen.getByTestId('instance-restore-interrupted')).getByTestId('instance-restore-interrupted-docs');
 
         expectDocsLink(link, docsUrl('en', DOCS_PATH));
-        expect(docsUrl('en', DOCS_PATH), 'the expected English href, spelled out').toBe(`/mkdocs/admin/cli_tools/${DOCS_ANCHOR}`);
+        expect(docsUrl('en', DOCS_PATH), 'the expected English href, spelled out').toBe(`/mkdocs/admin/cli_backup/${DOCS_ANCHOR}`);
     });
 
     it('the docs link follows the current language', async () => {
@@ -327,7 +327,7 @@ describe('InstanceRestoreInterruptedPage — what it shows', () => {
             const link = within(screen.getByTestId('instance-restore-interrupted')).getByTestId('instance-restore-interrupted-docs');
 
             expectDocsLink(link, docsUrl('it', DOCS_PATH));
-            expect(docsUrl('it', DOCS_PATH), 'the expected Italian href, spelled out').toBe(`/mkdocs/it/admin/cli_tools/${DOCS_ANCHOR}`);
+            expect(docsUrl('it', DOCS_PATH), 'the expected Italian href, spelled out').toBe(`/mkdocs/it/admin/cli_backup/${DOCS_ANCHOR}`);
         } finally {
             currentLanguage.set('en');
             await waitLocale('en');
@@ -688,7 +688,7 @@ describe('InstanceRestoreInterruptedPage — H5-3, the reason', () => {
             expect(within(root).getByTestId('instance-restore-interrupted-retry')).toHaveAccessibleName(marked(RETRY_KEY));
         });
 
-        it('links the backup and restore guide, the whole page, in English, by the app’s docs-URL rule', () => {
+        it('links the owner section of the panel guide in English, by the app’s docs-URL rule', () => {
             expect(docsUrl('en', CONNECTION_SECURITY_DOCS_PATH), 'premise: the rule is the exported helper’s').toBe(connectionSecurityDocsUrl('en'));
             expect(get(currentLanguage), 'premise: the documentation language is English').toBe('en');
             mountPolling(neverAnswers, POLL_MS, OWNER);
@@ -696,7 +696,7 @@ describe('InstanceRestoreInterruptedPage — H5-3, the reason', () => {
             const link = within(screen.getByTestId('instance-restore-interrupted')).getByTestId('instance-restore-interrupted-docs');
 
             expectOwnerDocsLink(link, docsUrl('en', OWNER_DOCS_PATH));
-            expect(docsUrl('en', OWNER_DOCS_PATH), 'the expected English href, spelled out').toBe('/mkdocs/admin/backup_restore/');
+            expect(docsUrl('en', OWNER_DOCS_PATH), 'the expected English href, spelled out').toBe('/mkdocs/admin/hosting_panel_backups/#restore-owner-pending');
         });
 
         it('the owner docs link follows the current language', async () => {
@@ -708,7 +708,7 @@ describe('InstanceRestoreInterruptedPage — H5-3, the reason', () => {
                 const link = within(screen.getByTestId('instance-restore-interrupted')).getByTestId('instance-restore-interrupted-docs');
 
                 expectOwnerDocsLink(link, docsUrl('it', OWNER_DOCS_PATH));
-                expect(docsUrl('it', OWNER_DOCS_PATH), 'the expected Italian href, spelled out').toBe('/mkdocs/it/admin/backup_restore/');
+                expect(docsUrl('it', OWNER_DOCS_PATH), 'the expected Italian href, spelled out').toBe('/mkdocs/it/admin/hosting_panel_backups/#restore-owner-pending');
             } finally {
                 currentLanguage.set('en');
                 await waitLocale('en');

@@ -2,8 +2,8 @@
 anchor, and every anchor the long pages had before they were split is still reachable (DOC-1, lot of workstream H).
 
 DOC-1 split the long English admin pages by section (``configuration`` into four, ``email`` into three, ``service_exposure``,
-``sleep_wake`` and ``connection_checks`` into two each; pass 2 will do ``hosting_providers``, ``backup_restore`` and
-``cli_tools``). The address of the guide is data the app spells in code (``checkGuides.json``, ``cspNotice.ts``, a ``DocsLink``,
+``sleep_wake`` and ``connection_checks`` into two each; pass 2 did ``hosting_providers`` into four, ``backup_restore`` into
+three and ``cli_tools`` into two). The address of the guide is data the app spells in code (``checkGuides.json``, ``cspNotice.ts``, a ``DocsLink``,
 the README), and a split moves anchors from one page to another without any compiler noticing. Three halves:
 
 (a) **The references scan.** Every ``admin/<page>/#<anchor>`` and ``admin/<page>/`` of the NON-test sources of
@@ -16,7 +16,7 @@ the README), and a split moves anchors from one page to another without any comp
     fence and a link are not taken for definitions) and against MkDocs' own render of every admin page (an anchor the reader
     defines is an id of the render: a reader that accepts everything fails there). A control: the scan finds at least 20
     references, those of ``checkGuides.json`` among them.
-(b) **The anchors that moved.** ``backend/test_scripts/fixtures/docs_admin/old_anchors.json`` lists every anchor the five
+(b) **The anchors that moved.** ``backend/test_scripts/fixtures/docs_admin/old_anchors.json`` lists every anchor the eight
     old pages had before the split. Each is still defined by its page, or ``MOVED_ANCHORS[page][anchor]`` of
     ``mkdocs_src/docs/javascripts/moved-anchors.js`` names a page that exists and defines it; no entry for an anchor the old
     page still defines; no entry for an anchor the old page never had; no entry that points back at its own page. The map is read from
@@ -56,7 +56,7 @@ SITE_ADMIN = SITE / "admin"
 CHECK_GUIDES = PROJECT_ROOT / "frontend" / "src" / "lib" / "features" / "instance" / "checkGuides.json"
 PAGE_ANCHORS_DIR = MKDOCS_SRC / "aphra-pipeline"
 
-#: The pages DOC-1 pass 1 added; every one must exist in the source and in the built site.
+#: The pages DOC-1 added (pass 1 and pass 2); every one must exist in the source and in the built site.
 NEW_PAGES = [
     "configuration_secrets",
     "configuration_security",
@@ -66,6 +66,12 @@ NEW_PAGES = [
     "service_exposure_funnel",
     "wake_sync",
     "connection_proxy",
+    "hosting_instances",
+    "hosting_panel_api",
+    "hosting_panel_backups",
+    "backup_sealed",
+    "backup_moving",
+    "cli_backup",
 ]
 
 # ---------------------------------------------------------------------------
@@ -466,12 +472,12 @@ class TestMovedAnchors:
 
     def test_the_map_is_read_from_the_script(self) -> None:
         moved = read_moved_anchors(MOVED_JS.read_text(encoding="utf-8"))
-        assert sum(len(entries) for entries in moved.values()) >= 20, "the script moves anchors of the five split pages"
+        assert sum(len(entries) for entries in moved.values()) >= 20, "the script moves anchors of the eight split pages"
         assert set(moved) <= set(FIXTURE_PAGES)
         assert all(isinstance(target, str) for entries in moved.values() for target in entries.values())
 
-    def test_the_fixture_is_the_five_old_pages(self) -> None:
-        assert sorted(FIXTURE_PAGES) == ["configuration", "connection_checks", "email", "service_exposure", "sleep_wake"]
+    def test_the_fixture_is_the_eight_old_pages(self) -> None:
+        assert sorted(FIXTURE_PAGES) == ["backup_restore", "cli_tools", "configuration", "connection_checks", "email", "hosting_providers", "service_exposure", "sleep_wake"]
         assert all(anchors == sorted(anchors) and len(anchors) == len(set(anchors)) for anchors in FIXTURE_PAGES.values())
         assert sum(len(anchors) for anchors in FIXTURE_PAGES.values()) >= 100, "the fixture lists the old anchors, not a sample"
 
