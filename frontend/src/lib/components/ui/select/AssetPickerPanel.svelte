@@ -182,8 +182,9 @@
 
     let currencyItems = $derived.by((): CheckMenuItem[] => {
         void $currencyStoreVersion;
-        const counts = countBy((asset) => asset.currency);
-        const values = [...new Set(assets.map((asset) => asset.currency))].sort();
+        // A missing currency (empty, blank, undefined) is not a value to filter by: it adds no entry.
+        const counts = countBy((asset) => asset.currency?.trim() ?? '');
+        const values = [...new Set(assets.map((asset) => asset.currency?.trim() ?? ''))].filter(Boolean).sort();
         return values.map((item) => ({value: item, label: item, glyph: getCurrencyInfo(item).flag_emoji, count: counts.get(item) ?? 0}));
     });
 
@@ -479,7 +480,7 @@
                                 <span use:scrollOnOverflow class="{overflowScrollTextClass} min-w-0 flex-1">{asset.display_name}</span>
                                 {@render warningMark(asset, verdict)}
                                 <span class="shrink-0 text-[10px] text-lf-muted">{typeLabel(asset.asset_type)}</span>
-                                <span class="w-8 shrink-0 text-right font-mono text-[10px] text-lf-muted">{asset.currency}</span>
+                                <span class="w-8 shrink-0 text-right font-mono text-[10px] text-lf-muted">{asset.currency?.trim() ?? ''}</span>
                             </button>
                         {/each}
                     </div>
@@ -611,7 +612,7 @@
                                     {/if}
                                     {@render warningMark(asset, verdict)}
                                     <span class="shrink-0 text-[10px] text-lf-muted">{typeLabel(asset.asset_type)}</span>
-                                    <span class="w-8 shrink-0 text-right font-mono text-[10px] text-lf-muted">{asset.currency}</span>
+                                    <span class="w-8 shrink-0 text-right font-mono text-[10px] text-lf-muted">{asset.currency?.trim() ?? ''}</span>
                                 </button>
                             {/if}
                         {/each}
