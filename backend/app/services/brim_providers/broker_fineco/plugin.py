@@ -315,7 +315,7 @@ class FinecoBrokerProvider(BRIMProvider):
                     break
 
             if header_idx is None:
-                raise BRIMParseError("Could not locate the 'Operazione' header row")
+                raise BRIMParseError("Could not locate the 'Operazione' header row", details={"code": "header_row_not_found"})
 
             header = [cell.strip() for cell in rows[header_idx]]
             # W-B86: a row the plugin cannot read or does not recognise is left out with the shared notices and the link to open an issue.
@@ -456,9 +456,9 @@ class FinecoBrokerProvider(BRIMProvider):
         except BRIMParseError:
             raise
         except FileNotFoundError:
-            raise BRIMParseError(f"File not found: {file_path}") from None
+            raise BRIMParseError(f"File not found: {file_path}", details={"code": "file_not_found", "context": {"file": file_path.name}}) from None
         except Exception as e:
-            raise BRIMParseError(f"Error parsing file: {e}") from e
+            raise BRIMParseError(f"Error parsing file: {e}", details={"code": "file_unreadable", "context": {"error": str(e)}}) from e
 
         if not transactions and not not_settled:
             warnings.append("No valid transactions found in file")

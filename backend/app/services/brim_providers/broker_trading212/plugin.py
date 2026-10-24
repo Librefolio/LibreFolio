@@ -387,12 +387,12 @@ class Trading212BrokerProvider(BRIMProvider):
             self._import_splits(split_rows, reader.fieldnames or [], broker_id, transactions, validation_issues, field_todos, extracted_assets, asset_to_fake_id, skips)
 
         except FileNotFoundError:
-            raise BRIMParseError(f"File not found: {file_path}") from None
+            raise BRIMParseError(f"File not found: {file_path}", details={"code": "file_not_found", "context": {"file": file_path.name}}) from None
         except Exception as e:
-            raise BRIMParseError(f"Error parsing file: {e}") from e
+            raise BRIMParseError(f"Error parsing file: {e}", details={"code": "file_unreadable", "context": {"error": str(e)}}) from e
 
         if not transactions:
-            raise BRIMParseError("No valid transactions found in file")
+            raise BRIMParseError("No valid transactions found in file", details={"code": "no_valid_transactions"})
 
         # Convert raw dict to BRIMExtractedAssetInfo
         extracted_assets_typed: Dict[int, BRIMExtractedAssetInfo] = {

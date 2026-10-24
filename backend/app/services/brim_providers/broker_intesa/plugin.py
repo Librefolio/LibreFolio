@@ -162,16 +162,16 @@ class IntesaSanpaoloBrokerProvider(BRIMProvider):
         try:
             rows = io.read_rows(file_path)
         except FileNotFoundError:
-            raise BRIMParseError(f"File not found: {file_path}") from None
+            raise BRIMParseError(f"File not found: {file_path}", details={"code": "file_not_found", "context": {"file": file_path.name}}) from None
         except Exception as exc:
-            raise BRIMParseError(f"Error reading file: {exc}") from exc
+            raise BRIMParseError(f"Error reading file: {exc}", details={"code": "file_unreadable", "context": {"error": str(exc)}}) from exc
 
         blob = " \n ".join(io.cell_str(c).lower() for row in rows[:40] for c in row)
         if _SNAPSHOT_MARKER in blob:
             return self._parse_patrimonio(rows, broker_id)
         if io.find_header_row(rows, ["Operazione", "Dettagli", "Importo"]) is not None:
             return self._parse_movements(rows, broker_id)
-        raise BRIMParseError("Unrecognised Intesa Sanpaolo layout (neither movements nor patrimonio)")
+        raise BRIMParseError("Unrecognised Intesa Sanpaolo layout (neither movements nor patrimonio)", details={"code": "intesa_layout_unknown"})
 
     # ------------------------------------------------------------------
     # Movements list
@@ -187,7 +187,7 @@ class IntesaSanpaoloBrokerProvider(BRIMProvider):
 
         header_idx = io.find_header_row(rows, ["Operazione", "Dettagli", "Importo"])
         if header_idx is None:
-            raise BRIMParseError("Movements header row not found")
+            raise BRIMParseError("Movements header row not found", details={"code": "header_row_not_found", "context": {"layout": "movements"}})
         col = io.build_col_index(
             rows[header_idx],
             {

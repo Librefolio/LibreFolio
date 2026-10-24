@@ -50,7 +50,7 @@
     import ParseDetailModal from '$lib/features/transactions/import/ParseDetailModal.svelte';
     import ImportBrokerMismatchModal, {type BrokerMismatchBroker, type BrokerMismatchPlugin, type BrokerMismatchTarget} from '$lib/features/transactions/import/ImportBrokerMismatchModal.svelte';
     import {findDefaultPluginMismatch, resolveParseRefusalMessage, type ParseRefusal} from '$lib/features/transactions/import/defaultPluginCheck';
-    import {resolveParseFailureMessage} from '$lib/features/transactions/import/parseFailure';
+    import {resolveGapFixFailureMessage, resolveParseFailureMessage} from '$lib/features/transactions/import/parseFailure';
     import {brimPluginName} from '$lib/utils/brim/pluginText';
     import {isFallbackPlugin} from '$lib/utils/brim/pluginKind';
     import {fetchFilePreview} from '$lib/utils/files/filePreview';
@@ -1381,7 +1381,7 @@
                 const response = await zodiosApi.gap_fix_api_v1_brokers_import_gap_fix_post(request as unknown as Parameters<typeof zodiosApi.gap_fix_api_v1_brokers_import_gap_fix_post>[0]);
                 outcomes.push({brokerId: request.broker_id, pluginCode: request.plugin_code, response});
             } catch (error) {
-                outcomes.push({brokerId: request.broker_id, pluginCode: request.plugin_code, error: extractErrorMessage(error, $t('importWizard.reportSet.gapFix.error'))});
+                outcomes.push({brokerId: request.broker_id, pluginCode: request.plugin_code, error: resolveGapFixFailureMessage(error, $t, $t('importWizard.reportSet.gapFix.error'))});
             }
         }
         return buildGapFixView(outcomes, localizeGapFixTodo);

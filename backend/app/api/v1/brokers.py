@@ -88,7 +88,7 @@ from backend.app.services.accounts.global_settings_service import get_max_upload
 from backend.app.services.brim import brim_gap_fix, brim_provider, brim_report_sets
 from backend.app.services.brim.brim_parse_pool import parse_file_offloaded
 from backend.app.services.brim.brim_provider import BRIMCannotParseError, BRIMParseError, BRIMProvider, BRIMSetRequiredError, detect_tx_duplicates, search_asset_candidates, search_asset_candidates_bulk
-from backend.app.services.brim.brim_report_sets import BRIMSetError, BRIMSetIncomplete
+from backend.app.services.brim.brim_report_sets import BRIMLedgerUnreadable, BRIMSetError, BRIMSetIncomplete
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brokers.broker_service import BROKER_NAME_RECOVERY, BrokerService
 from backend.app.services.files.file_preview import (
@@ -1122,6 +1122,10 @@ def _set_error_detail(error: BRIMSetError) -> dict:
     detail = {"code": error.code, "message": error.message}
     if isinstance(error, BRIMSetIncomplete):
         detail["missing_roles"] = error.missing_roles
+    if isinstance(error, BRIMLedgerUnreadable):
+        # E-21: the wizard shows ``importWizard.reportSet.gapFix.ledgerUnreadable.<reason>`` with ``params``; ``message`` stays English.
+        detail["reason"] = error.reason
+        detail["params"] = error.params
     return detail
 
 

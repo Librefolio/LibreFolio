@@ -90,10 +90,19 @@ class BRIMSetExcludeUnknown(BRIMSetError):
 
 class BRIMLedgerUnreadable(BRIMSetError):
     """LibreFolio's side of a gap-fix cannot be computed: transactions of the broker hold a value that is no number
-    (W-B74, ``unreadable_rows.UnreadableLedgerError``)."""
+    (W-B74, ``unreadable_rows.UnreadableLedgerError``) or a cash currency that is no ISO 4217 code (E-19a).
+
+    ``reason`` and ``params`` let the wizard show the refusal in the user's language (E-21): ``values`` with ``{count}``,
+    ``currency_codes`` with ``{codes, more}`` (the codes named, as in ``message``, and how many more there are). ``message``
+    stays the English sentence."""
 
     status_code = 409
     code = "ledger_unreadable"
+
+    def __init__(self, message: str, *, reason: str, params: Optional[Dict[str, Any]] = None):
+        super().__init__(message)
+        self.reason = reason
+        self.params: Dict[str, Any] = dict(params or {})
 
 
 class BRIMSetIncomplete(BRIMSetError):
