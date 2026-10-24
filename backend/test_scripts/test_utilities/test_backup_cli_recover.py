@@ -31,6 +31,23 @@ codes already on a ❌ line (``restore_nothing_to_recover``, ``restore_in_use``,
     (``nothing_to_recover``, ``choice_not_valid``, ``restore_in_use``, ``restore_apply_failed``, ``failed``) when the exit
     code is not 0. (f) Without ``--json`` the same codes, today's human text (a ✅ line when done, a ❌ line when not).
 
+(g) Lot B5-1b (interface ``B-b51-interface.md`` §9.2; written RED before it): ``--recover owner``, the way out of an
+    ``owner_outcome`` of ``error:<CODE>`` (a committed restore confirmed from the app, an owner named). The snapshot of
+    exactly that state is ``reason: "owner_assignment"``, ``choices: ["owner"]`` (no code, name, id or link anywhere); every
+    other committed state keeps ``reason: null``, ``choices: []``. ``--recover owner`` where the state does not offer it:
+    exit 4 ``choice_not_valid`` (no state at all: exit 3), nothing changes — and a second run after a success is such a
+    state (exit 4); a race lost to another reset (``RestoreOwnerNotFailedError``): exit 3; ``owner.lock`` held: exit 5
+    ``restore_in_use``; ``OSError``/``BackupPathError``: exit 5 ``failed``. Offered: the outcome is cleared; a server
+    serves the data directory: nothing else, A not called, exit 0 and one ✅ line; nobody serves: the step runs at once
+    (A's function played by a fake behind ``owner._assign_owner``): outcome recorded (``sent`` or ``link_only``), not
+    ``error:`` -> exit 0 and the lines ``_print_owner_outcome`` prints for it (R13: for ``link_only`` one ⚠️ line saying
+    the link is in the instance log, never a link, a path or a token anywhere: the fake result carries a stray
+    ``reset_path`` canary and a stale state may carry an ``owner_reset_path`` key, neither reaches the state file, the
+    output or the log); ``error:`` again ->
+    exit 5 ``owner_assignment_failed`` and a ❌ line with the code; nothing recorded (A missing, a transient failure) ->
+    exit 0 and a ⏳ line. With ``--json`` one line that names no code, name, address, id or link, and the log lines of the
+    modules never reach standard output.
+
 Pure, as ``test_backup_cli_restore.py``, whose fixtures and helpers are imported: data directories under ``tmp_path`` seen
 through ``LIBREFOLIO_DATA_DIR`` (production mode, checked); the commands run in this process through the parser
 ``register_subparser`` builds, standard output and standard error told apart by ``capsys``; the cases that must not hang
@@ -42,6 +59,8 @@ from __future__ import annotations
 
 import argparse
 import errno
+import fcntl
+import importlib
 import json
 import logging
 import os
@@ -49,9 +68,11 @@ import re
 import sys
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager, nullcontext
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta, timezone
+from enum import StrEnum
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -786,3 +807,572 @@ def test_recover_previous_moves_nothing_when_the_move_fails_and_claims_nothing(t
     again = go(capsys, "pending", "--json", "--recover", "previous")
     assert (again.code, the_line(again)["state"]) == (0, "none"), f"the fault gone, the next run recovers: exit {again.code}: {again.out}"
     print_success("move fails: exit 5, state kept, the next run recovers")
+
+
+# =============================================================================
+# (g) B5-1b §9.2: --recover owner
+# =============================================================================
+
+OWNER_MODULE = "backend.app.services.platform.instance_backup.owner"
+APPLY_MODULE = "backend.app.services.platform.instance_backup.apply"
+#: The chosen account, a distinctive number: it must never be in a line (a plain 42 could be a minute of a timestamp).
+OWNER_ID = 4217
+OWNER_EMAIL = "owner.b51c@example.com"
+#: A stray ``reset_path`` on A's ``link_only`` result and the value of a stale ``owner_reset_path`` key in a state file
+#: of an older LibreFolio: a canary that must reach no state file, no standard stream and no log line (A writes the real
+#: link in the instance log itself).
+LINK_CANARY = "/reset-password#token=b51c-canary-0123456789abcdef"
+#: The owner's chosen-account codes that must never reach the line.
+FAILED_CODE = "EMAIL_TAKEN"
+OTHER_CODE = "USER_NOT_FOUND"
+
+
+class Outcome(StrEnum):
+    """A's ``OwnerResetOutcome``: ``sent`` or ``link_only`` only."""
+
+    SENT = "sent"
+    LINK_ONLY = "link_only"
+
+
+class FakeOwnerAssignmentError(Exception):
+    """A's ``OwnerAssignmentError``: its ``code`` is all that is recorded."""
+
+    def __init__(self, code: str) -> None:
+        super().__init__(f"the owner {OWNER_EMAIL} cannot be assigned: {code}")
+        self.code = code
+
+
+@dataclass
+class FakeA:
+    """A's ``assign_owner_and_send_reset(session, user_id, *, now=None)``: each call's user id recorded, then ``outcome``
+    answered or ``raises`` raised; a ``since=`` is a ``TypeError``, as for the real function. It reads no database: the
+    commands under test never give it more than a session object."""
+
+    outcome: Outcome | None = None
+    raises: BaseException | None = None
+    calls: list[int] = field(default_factory=list)
+
+    async def __call__(self, session: Any, user_id: int, *, now: Any = None) -> Any:
+        self.calls.append(user_id)
+        if self.raises is not None:
+            raise self.raises
+        assert self.outcome is not None, "a FakeA answers an outcome or raises"
+        result = SimpleNamespace(outcome=self.outcome, user_id=user_id, username="b51c_owner", email=OWNER_EMAIL, expires_at=None)
+        if self.outcome is Outcome.LINK_ONLY:
+            result.reset_path = LINK_CANARY  # a stray attribute: the restore must never read it
+        return result
+
+
+@dataclass
+class Wired:
+    """What ``owner._assign_owner`` was asked: the fake, and each lookup."""
+
+    fake: FakeA | None
+    lookups: list[str] = field(default_factory=list)
+
+
+def wire(monkeypatch, fake: FakeA | None) -> Wired:
+    """``owner._assign_owner`` replaced, as ``test_backup_owner.py`` does: it returns ``(fake, FakeOwnerAssignmentError)``,
+    or raises ``ImportError`` (A not merged) for ``fake`` ``None``. The command must reach A's function only through it."""
+    owner = importlib.import_module(OWNER_MODULE)
+    assert callable(getattr(owner, "_assign_owner", None)), "precondition: owner._assign_owner() is the lazy lookup of A's function (B5-1)"
+    wired = Wired(fake)
+
+    def lookup() -> tuple[Any, type[Exception]]:
+        wired.lookups.append("_assign_owner")
+        if fake is None:
+            raise ImportError("cannot import name 'assign_owner_and_send_reset' from 'backend.app.services.accounts.instance_owner'")
+        return fake, FakeOwnerAssignmentError
+
+    monkeypatch.setattr(owner, "_assign_owner", lookup)
+    return wired
+
+
+def owner_state(status: str = "committed", *, code: str | None = FAILED_CODE, outcome: str | None = None, **extra: Any) -> Arrange:
+    """A restore confirmed from the app with the owner named, its outcome ``error:<code>`` (or ``outcome`` as given)."""
+    recorded = outcome if outcome is not None else (f"error:{code}" if code else None)
+    fields: dict[str, Any] = {"confirmed_by": "b51c-admin", "confirmed_via": "admin", "owner_user_id": OWNER_ID, "owner_outcome": recorded, **extra}
+    return lambda monkeypatch, root: base.write_state(root, status, **fields)
+
+
+def recorded_owner(root: Path) -> tuple[Any, Any]:
+    """What ``restore.json`` says of the owner: id, outcome. The file never holds an ``owner_reset_path`` key nor a link."""
+    raw = base.state_path(root).read_text(encoding="utf-8")
+    record = json.loads(raw)
+    assert "owner_reset_path" not in record, f"the state has no owner_reset_path key: {sorted(record)}"
+    assert LINK_CANARY not in raw, "no link in restore.json"
+    return tuple(record.get(name, "<missing>") for name in ("owner_user_id", "owner_outcome"))
+
+
+def with_stale_link(root: Path) -> None:
+    """``owner_reset_path`` written into the state file as raw JSON, as a state of an older LibreFolio holds it."""
+    path = base.state_path(root)
+    record = json.loads(path.read_text(encoding="utf-8"))
+    path.write_text(json.dumps({**record, "owner_reset_path": LINK_CANARY}), encoding="utf-8")
+    path.chmod(0o600)
+
+
+def outcome_lines(capsys, outcome: str | None) -> list[str]:
+    """The lines ``_print_owner_outcome`` prints for a state recording ``outcome``: what a recovery that ends with that
+    outcome must say, whatever the words are."""
+    capsys.readouterr()
+    backup_cli._print_owner_outcome(SimpleNamespace(owner_user_id=OWNER_ID, owner_outcome=outcome))
+    lines = [line for line in capsys.readouterr().out.splitlines() if line.strip()]
+    assert lines, f"precondition: _print_owner_outcome says something for {outcome!r}"
+    return lines
+
+
+@contextmanager
+def owner_lock_held(root: Path) -> Iterator[None]:
+    """``.restore/owner.lock`` held by another holder, as the startup step of a server (or a second command) holds it: an
+    exclusive ``flock`` on a descriptor of the test's own, which conflicts with the product's."""
+    fd = os.open(restore_dir(root) / "owner.lock", os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            yield
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+    finally:
+        os.close(fd)
+
+
+def never_in(ran: Ran, *secrets: str) -> None:
+    shown = [secret for secret in secrets if secret in ran.out]
+    assert shown == [], f"standard output holds {shown}: {ran.out}"
+
+
+# --- the snapshot ---------------------------------------------------------------
+
+#: (how the state is written, its ``state``, ``reason``, ``choices``).
+OWNER_SNAPSHOTS = [
+    pytest.param(owner_state(code=FAILED_CODE), "committed", "owner_assignment", ["owner"], id="committed-admin-owner-error"),
+    pytest.param(owner_state(code=OTHER_CODE), "committed", "owner_assignment", ["owner"], id="committed-admin-owner-other-error"),
+    pytest.param(owner_state(code=None), "committed", None, [], id="committed-owner-pending"),
+    *(pytest.param(owner_state(outcome=value), "committed", None, [], id=f"committed-{value}") for value in ("sent", "link_only")),
+    pytest.param(owner_state(confirmed_by="cli", confirmed_via="cli"), "committed", None, [], id="committed-cli-error"),
+    pytest.param(owner_state(confirmed_by="panel", confirmed_via="panel"), "committed", None, [], id="committed-panel-error"),
+    pytest.param(owner_state(owner_user_id=None), "committed", None, [], id="committed-no-owner-error"),
+    pytest.param(owner_state("pending"), "pending", None, ["cancel"], id="pending-owner-error"),
+    pytest.param(owner_state("applying"), "in_progress", None, [], id="applying-owner-error"),
+    pytest.param(owner_state("rolled_back"), "rolled_back", "first_start_failed", [], id="rolled_back-owner-error"),
+]
+
+
+@pytest.mark.parametrize(("arrange", "state", "reason", "choices"), OWNER_SNAPSHOTS)
+def test_pending_json_offers_owner_only_for_a_failed_owner_assignment(tmp_path, monkeypatch, capsys, arrange, state, reason, choices):
+    """(g) §9.2: ``reason: "owner_assignment"`` and ``choices: ["owner"]`` only for a committed restore confirmed from the
+    app with an owner named and an ``error:`` outcome; every other state is as today. A read: nothing written."""
+    print_section("(g) B5-1b pending --json: the owner's choice")
+    root = instance(tmp_path, monkeypatch)
+    arrange(monkeypatch, root)
+    before = base.everything(root)
+    ran = go(capsys, "pending", "--json")
+    line = the_line(ran)
+    assert ran.code == 0, f"exit 0: {ran.out}"
+    assert (line["state"], line["reason"], line["choices"]) == (state, reason, choices), f"state, reason, choices: {line}"
+    assert base.everything(root) == before, "a read writes nothing"
+    print_success(f"{state}/{reason}: {choices}")
+
+
+@pytest.mark.parametrize("code", [FAILED_CODE, OTHER_CODE])
+def test_the_owner_assignment_snapshot_names_no_code_name_address_id_or_link(tmp_path, monkeypatch, capsys, code):
+    """(g) §9.2: the line of a failed owner assignment has the usual keys and no other, and none of the code, the owner's
+    id, its address, the link of a stale state (an ``owner_reset_path`` key an older LibreFolio wrote), the administrator, the stage or the data directory; standard error is as
+    clean."""
+    monkeypatch.setenv("LIBREFOLIO_ADMIN_EMAIL", OWNER_EMAIL)
+    root = instance(tmp_path, monkeypatch, CANARY_FOLDER)
+    owner_state(code=code, confirmed_by=CANARY_USER, stage_id=CANARY_STAGE)(monkeypatch, root)
+    with_stale_link(root)
+    ran = go(capsys, "pending", "--json")
+    line = the_line(ran)
+    assert set(line) == KEYS and line["choices"] == ["owner"], f"only the usual keys: {line}"
+    secrets = (*CANARIES, code, str(OWNER_ID), OWNER_EMAIL, LINK_CANARY, "reset-password", "owner_user_id", "owner_outcome", "owner_reset_path")
+    shown = [secret for secret in secrets if secret in ran.out or secret in ran.err]
+    assert shown == [], f"the line and standard error hold {shown}: {ran.out}{ran.err}"
+    print_success("owner_assignment: names nothing")
+
+
+def test_the_help_and_the_choices_name_owner():
+    """(g) §9.2: ``RECOVER_CHOICES`` is ``("previous", "cancel", "owner")``."""
+    assert backup_cli.RECOVER_CHOICES == ("previous", "cancel", "owner"), f"the choices: {backup_cli.RECOVER_CHOICES}"
+    print_success("RECOVER_CHOICES")
+
+
+def test_pending_help_names_the_owner_choice(monkeypatch, capsys):
+    """(g) §9.2: the help of ``--recover`` names ``owner``."""
+    text = cli.help_of(monkeypatch, capsys, "backup", "pending")
+    recover = text[text.rindex("--recover") :].split(" --json ")[0]
+    assert recover.startswith("--recover CHOICE") and "owner" in recover, f"--recover's own entry of the help names owner: {recover}"
+    print_success("pending --help: owner")
+
+
+# --- --recover owner where the state does not offer it ----------------------------
+
+NOT_OFFERED = [
+    pytest.param(_none, 3, "nothing_to_recover", "none", id="no-state"),
+    pytest.param(owner_state(code=None), 4, NOT_VALID, "committed", id="committed-owner-pending"),
+    *(pytest.param(owner_state(outcome=value), 4, NOT_VALID, "committed", id=f"committed-{value}") for value in ("sent", "link_only")),
+    pytest.param(owner_state(confirmed_by="cli", confirmed_via="cli"), 4, NOT_VALID, "committed", id="committed-cli-error"),
+    pytest.param(owner_state(confirmed_by="panel", confirmed_via="panel"), 4, NOT_VALID, "committed", id="committed-panel-error"),
+    pytest.param(owner_state(owner_user_id=None), 4, NOT_VALID, "committed", id="committed-no-owner-error"),
+    pytest.param(lambda mp, root: base.write_state(root, "committed"), 4, NOT_VALID, "committed", id="committed-no-owner-at-all"),
+    pytest.param(owner_state("pending"), 4, NOT_VALID, "pending", id="pending-owner-error"),
+    pytest.param(owner_state("applying"), 4, NOT_VALID, "in_progress", id="applying-owner-error"),
+    pytest.param(owner_state("rolled_back"), 4, NOT_VALID, "rolled_back", id="rolled_back-owner-error"),
+    pytest.param(_unreadable("invalid"), 4, NOT_VALID, "unreadable", id="unreadable"),
+]
+
+
+@pytest.mark.parametrize("as_json", [False, True], ids=["human", "json"])
+@pytest.mark.parametrize(("arrange", "code", "error", "after"), NOT_OFFERED)
+def test_recover_owner_where_the_state_does_not_offer_it_changes_nothing(tmp_path, monkeypatch, capsys, arrange, code, error, after, as_json):
+    """(g) §9.2: anything but a failed owner assignment (no outcome yet, an outcome of A, the panel or the command line, no
+    owner, another phase, an unreadable state): exit 4 ``choice_not_valid``, and with no state at all exit 3
+    ``nothing_to_recover``; a ❌ line; nothing on disk changes; A's function is never looked up."""
+    print_section("(g) B5-1b --recover owner: not offered")
+    root = instance(tmp_path, monkeypatch)
+    arrange(monkeypatch, root)
+    wired = wire(monkeypatch, FakeA(outcome=Outcome.SENT))
+    before = base.everything(root)
+    argv = ("pending", *(("--json",) if as_json else ()), "--recover", "owner")
+    ran = go(capsys, *argv)
+    assert ran.code == code, f"{' '.join(argv)}: exit {code}, not {ran.code}\n{ran.out}{ran.err}"
+    if as_json:
+        line = the_line(ran)
+        assert line["state"] == after and "owner" not in line["choices"], f"the state after is {after}, owner not offered: {line}"
+        assert (line["recover"], line["error"]) == ({"choice": "owner", "done": False}, error), f"recover not done, error {error}: {line}"
+    else:
+        assert ran.refused and not any(line.startswith("✅") for line in ran.lines), f"not done: a ❌ line, no ✅: {ran.out}"
+    assert base.everything(root) == before, "a refused --recover owner changes nothing"
+    assert (wired.lookups, wired.fake.calls) == ([], []), f"A's function never reached: {wired.lookups}, {wired.fake.calls}"
+    print_success(f"exit {code} {error}")
+
+
+@pytest.mark.parametrize("choice", ["previous", "cancel"])
+def test_the_other_choices_are_not_valid_while_the_owner_assignment_failed(tmp_path, monkeypatch, capsys, choice):
+    """(g) §9.2: a failed owner assignment offers ``owner`` only: ``--recover previous`` and ``--recover cancel`` are exit 4
+    ``choice_not_valid`` there, the line saying ``["owner"]`` is what is valid, nothing changed."""
+    root = instance(tmp_path, monkeypatch)
+    owner_state()(monkeypatch, root)
+    before = base.everything(root)
+    ran = go(capsys, "pending", "--json", "--recover", choice)
+    line = the_line(ran)
+    assert (ran.code, line["error"], line["choices"], line["reason"]) == (4, NOT_VALID, ["owner"], "owner_assignment"), f"{choice}: exit 4, owner still offered: {line}"
+    assert base.everything(root) == before, "nothing changed"
+    print_success(f"{choice}: exit 4, owner still offered")
+
+
+# --- --recover owner, offered -------------------------------------------------------
+
+
+def run_owner(capsys, as_json: bool) -> Ran:
+    return go(capsys, "pending", *(("--json",) if as_json else ()), "--recover", "owner")
+
+
+def text_of(ran: Ran, as_json: bool) -> str:
+    """What the command said in words: standard output, or with ``--json`` standard error."""
+    return ran.err if as_json else ran.out
+
+
+@pytest.mark.parametrize("as_json", [False, True], ids=["human", "json"])
+@pytest.mark.parametrize("outcome", [Outcome.SENT, Outcome.LINK_ONLY])
+def test_recover_owner_clears_the_outcome_and_assigns_the_owner_at_once_when_nobody_serves(tmp_path, monkeypatch, capsys, caplog, outcome, as_json):
+    """(g) §9.2: nobody serves the data directory: the outcome is cleared, A's function called once for the chosen account,
+    its outcome recorded, exit 0 and the lines ``_print_owner_outcome`` prints for it — for ``link_only`` the ⚠️ line that
+    says the link is in the instance log, never a link: the stray ``reset_path`` of A's result is in no stream, no log
+    line and no state file. A ``--json`` line: committed, no reason, no choice left, ``recover`` done."""
+    print_section(f"(g) B5-1b --recover owner: {outcome.value}")
+    root = instance(tmp_path, monkeypatch)
+    owner_state()(monkeypatch, root)
+    fake = FakeA(outcome=outcome)
+    wire(monkeypatch, fake)
+    expected = outcome_lines(capsys, outcome.value)
+    ran = run_owner(capsys, as_json)
+    assert ran.code == 0, f"exit 0: exit {ran.code}\n{ran.out}{ran.err}"
+    assert fake.calls == [OWNER_ID], f"A called once, for the chosen account: {fake.calls}"
+    assert recorded_owner(root) == (OWNER_ID, outcome.value), f"the new outcome recorded, no link key: {recorded_owner(root)}"
+    said_lines = text_of(ran, as_json).splitlines()
+    missing = [line for line in expected if line not in said_lines]
+    assert missing == [], f"the lines of the new outcome are said: {missing}\n{text_of(ran, as_json)}"
+    assert not any(line.startswith("❌") for line in said_lines), f"nothing failed: {ran.out}{ran.err}"
+    both = ran.out + ran.err
+    assert LINK_CANARY not in both and "reset-password" not in both, f"no link in any stream: {both}"
+    assert LINK_CANARY not in caplog.text, "no link in any log line"
+    if outcome is Outcome.LINK_ONLY:
+        warned = [line for line in said_lines if line.startswith("⚠️")]
+        assert len(warned) == 1 and "log" in warned[0].lower(), f"link_only: one ⚠️ line that sends to the instance log: {said_lines}"
+    if as_json:
+        line = the_line(ran)
+        assert (line["state"], line["reason"], line["choices"], line["recover"]) == ("committed", None, [], {"choice": "owner", "done": True}), f"the line: {line}"
+        assert "error" not in line, f"no error when done: {line}"
+        never_in(ran, LINK_CANARY, str(OWNER_ID), FAILED_CODE, OWNER_EMAIL, "reset-password")
+    print_success(f"{outcome.value}: exit 0")
+
+
+def test_the_link_only_line_sends_to_the_instance_log_and_prints_no_link(capsys):
+    """(g) R13: the ``link_only`` line of ``_print_owner_outcome`` is one ⚠️ line that says the account is set, no email
+    could be sent and the link is in the instance log: no link, path or token, even when the state object still carries
+    an ``owner_reset_path`` attribute (a stale one is never read)."""
+    capsys.readouterr()
+    backup_cli._print_owner_outcome(SimpleNamespace(owner_user_id=OWNER_ID, owner_outcome="link_only", owner_reset_path=LINK_CANARY))
+    out = capsys.readouterr().out
+    lines = [line for line in out.splitlines() if line.strip()]
+    assert len(lines) == 1 and lines[0].startswith("⚠️") and "log" in lines[0].lower(), f"[new] R13: one ⚠️ line that names the instance log: {out!r}"
+    assert LINK_CANARY not in out and "reset-password" not in out, f"no link, no path: {out!r}"
+    print_success("link_only: one ⚠️ line, the log, no link")
+
+
+@pytest.mark.parametrize("outcome", ["already_issued", "already_done"])
+def test_the_outcomes_a_no_longer_answers_are_not_said_as_a_success(capsys, outcome):
+    """(g) R13: ``already_issued`` and ``already_done`` are gone from A: a state that still records one (never written by
+    this LibreFolio) is not reported as an account that is set — it falls in the generic ❌ line."""
+    capsys.readouterr()
+    backup_cli._print_owner_outcome(SimpleNamespace(owner_user_id=OWNER_ID, owner_outcome=outcome))
+    lines = [line for line in capsys.readouterr().out.splitlines() if line.strip()]
+    assert len(lines) == 1 and lines[0].startswith("❌"), f"[new] R13: {outcome} is no known outcome: {lines}"
+    print_success(f"{outcome}: not a success")
+
+
+def test_recover_owner_drops_a_stale_link_key_from_the_state(tmp_path, monkeypatch, capsys, caplog):
+    """(g) R13: a state of an older LibreFolio that still holds ``owner_reset_path``: after ``--recover owner`` the file has
+    no such key and the old link is in no stream and no log line."""
+    root = instance(tmp_path, monkeypatch)
+    owner_state()(monkeypatch, root)
+    with_stale_link(root)
+    wire(monkeypatch, FakeA(outcome=Outcome.SENT))
+    ran = run_owner(capsys, False)
+    assert ran.code == 0, f"exit 0: exit {ran.code}\n{ran.out}{ran.err}"
+    assert recorded_owner(root) == (OWNER_ID, "sent"), f"recorded, the stale key and its link gone: {recorded_owner(root)}"
+    assert LINK_CANARY not in ran.out + ran.err + caplog.text, "the old link is in no stream and no log"
+    print_success("stale link dropped")
+
+
+@pytest.mark.parametrize("as_json", [False, True], ids=["human", "json"])
+def test_recover_owner_says_the_new_error_and_exits_5_when_a_refuses_again(tmp_path, monkeypatch, capsys, as_json):
+    """(g) §9.2: A refuses again (another code): the new ``error:<CODE>`` is recorded, exit 5 ``owner_assignment_failed``,
+    a ❌ line with the code and no ✅ line; the snapshot offers ``owner`` again, still without the code."""
+    root = instance(tmp_path, monkeypatch)
+    owner_state(code=FAILED_CODE)(monkeypatch, root)
+    fake = FakeA(raises=FakeOwnerAssignmentError(OTHER_CODE))
+    wire(monkeypatch, fake)
+    ran = run_owner(capsys, as_json)
+    assert ran.code == 5, f"exit 5: exit {ran.code}\n{ran.out}{ran.err}"
+    assert fake.calls == [OWNER_ID], f"A called once: {fake.calls}"
+    assert recorded_owner(root) == (OWNER_ID, f"error:{OTHER_CODE}"), f"the new code recorded: {recorded_owner(root)}"
+    said_lines = text_of(ran, as_json).splitlines()
+    failed = [line for line in said_lines if line.startswith("❌")]
+    assert failed and OTHER_CODE in " ".join(failed) and not any(line.startswith("✅") for line in said_lines), f"a ❌ line with the code, no ✅: {ran.out}{ran.err}"
+    if as_json:
+        line = the_line(ran)
+        assert (line["state"], line["reason"], line["choices"], line["recover"], line["error"]) == ("committed", "owner_assignment", ["owner"], {"choice": "owner", "done": False}, "owner_assignment_failed"), f"the line: {line}"
+        never_in(ran, OTHER_CODE, FAILED_CODE, str(OWNER_ID), OWNER_EMAIL)
+    print_success("refused again: exit 5")
+
+
+@pytest.mark.parametrize("as_json", [False, True], ids=["human", "json"])
+def test_recover_owner_can_be_run_again_after_a_new_failure(tmp_path, monkeypatch, capsys, as_json):
+    """(g) §9.2: after exit 5 the same state offers ``owner`` again: a second run, A answering now, exits 0."""
+    root = instance(tmp_path, monkeypatch)
+    owner_state()(monkeypatch, root)
+    with monkeypatch.context() as first:
+        wire(first, FakeA(raises=FakeOwnerAssignmentError(OTHER_CODE)))
+        assert run_owner(capsys, as_json).code == 5, "precondition: the first run fails again"
+    fake = FakeA(outcome=Outcome.SENT)
+    wire(monkeypatch, fake)
+    ran = run_owner(capsys, as_json)
+    assert ran.code == 0 and fake.calls == [OWNER_ID], f"the second run assigns the owner: exit {ran.code}, {fake.calls}\n{ran.out}{ran.err}"
+    assert recorded_owner(root) == (OWNER_ID, "sent"), f"sent: {recorded_owner(root)}"
+    print_success("fail then succeed")
+
+
+@pytest.mark.parametrize("as_json", [False, True], ids=["human", "json"])
+@pytest.mark.parametrize("missing", ["a-missing", "a-transient-failure"])
+def test_recover_owner_says_it_is_set_at_the_next_start_when_nothing_is_recorded(tmp_path, monkeypatch, capsys, missing, as_json):
+    """(g) §9.2: A's function missing (``ImportError``) or failing with something that is not its refusal: no outcome is
+    recorded, exit 0, a ⏳ line (the account is set at the next start), no ❌ line; the outcome stays cleared and the
+    snapshot offers nothing."""
+    root = instance(tmp_path, monkeypatch)
+    owner_state()(monkeypatch, root)
+    with_stale_link(root)
+    wired = wire(monkeypatch, None if missing == "a-missing" else FakeA(raises=RuntimeError("b51c transient failure text")))
+    expected = outcome_lines(capsys, None)
+    ran = run_owner(capsys, as_json)
+    assert ran.code == 0, f"exit 0: exit {ran.code}\n{ran.out}{ran.err}"
+    assert wired.lookups == ["_assign_owner"], f"A's function looked up once, through owner._assign_owner: {wired.lookups}"
+    assert recorded_owner(root) == (OWNER_ID, None), f"nothing recorded, the old outcome and a stale link gone: {recorded_owner(root)}"
+    said_lines = text_of(ran, as_json).splitlines()
+    assert [line for line in expected if line not in said_lines] == [] and any(line.startswith("⏳") for line in said_lines), f"the ⏳ line: {ran.out}{ran.err}"
+    assert not any(line.startswith("❌") for line in said_lines), f"not a failure: {ran.out}{ran.err}"
+    if as_json:
+        line = the_line(ran)
+        assert (line["state"], line["reason"], line["choices"], line["recover"]) == ("committed", None, [], {"choice": "owner", "done": True}), f"the line: {line}"
+        assert "error" not in line, f"no error: {line}"
+    print_success(f"{missing}: exit 0, pending")
+
+
+@pytest.mark.parametrize("as_json", [False, True], ids=["human", "json"])
+def test_recover_owner_while_a_server_serves_clears_the_outcome_and_calls_nothing(tmp_path, monkeypatch, capsys, as_json):
+    """(g) §9.2: a server serves the data directory: the outcome is cleared and nothing else changes (the file has no
+    ``owner_reset_path`` key before nor after), A's function is not even looked up, exit 0 and one ✅ line saying the
+    account is set when LibreFolio starts again."""
+    root = instance(tmp_path, monkeypatch)
+    owner_state()(monkeypatch, root)
+    wired = wire(monkeypatch, FakeA(outcome=Outcome.SENT))
+    before = json.loads(base.state_path(root).read_text(encoding="utf-8"))
+    with serving(root):
+        ran = run_owner(capsys, as_json)
+    assert ran.code == 0, f"exit 0: exit {ran.code}\n{ran.out}{ran.err}"
+    assert (wired.lookups, wired.fake.calls) == ([], []), f"a running server only retries at its start: A not reached: {wired.lookups}, {wired.fake.calls}"
+    after = json.loads(base.state_path(root).read_text(encoding="utf-8"))
+    assert "owner_reset_path" not in before and "owner_reset_path" not in after, f"no owner_reset_path key before nor after: {sorted(before)} / {sorted(after)}"
+    assert after["owner_outcome"] is None, f"cleared: {after}"
+    assert {key: value for key, value in after.items() if key != "owner_outcome"} == {key: value for key, value in before.items() if key != "owner_outcome"}, "nothing else changed"
+    said_lines = text_of(ran, as_json).splitlines()
+    done = [line for line in said_lines if line.startswith("✅")]
+    assert len(done) == 1 and "start" in done[0].lower() and not any(line.startswith("❌") for line in said_lines), f"one ✅ line about the next start: {ran.out}{ran.err}"
+    if as_json:
+        line = the_line(ran)
+        assert (line["state"], line["reason"], line["choices"], line["recover"]) == ("committed", None, [], {"choice": "owner", "done": True}), f"the line: {line}"
+        never_in(ran, LINK_CANARY, str(OWNER_ID), FAILED_CODE)
+    print_success("served: cleared, A not called")
+
+
+@pytest.mark.parametrize("as_json", [False, True], ids=["human", "json"])
+def test_recover_owner_while_the_owner_lock_is_held_is_exit_5_restore_in_use(tmp_path, monkeypatch, capsys, as_json):
+    """(g) §9.2: another process holds ``.restore/owner.lock``: exit 5 ``restore_in_use``, a ❌ line (naming it), no ✅ line,
+    the state byte for byte, A not reached; the snapshot still offers ``owner``."""
+    root = instance(tmp_path, monkeypatch)
+    owner_state()(monkeypatch, root)
+    wired = wire(monkeypatch, FakeA(outcome=Outcome.SENT))
+    with owner_lock_held(root):
+        before = base.everything(root)
+        ran = run_owner(capsys, as_json)
+        after = base.everything(root)
+    assert ran.code == 5, f"exit 5: exit {ran.code}\n{ran.out}{ran.err}"
+    assert after == before, "the state and the folder as they were"
+    assert (wired.lookups, wired.fake.calls) == ([], []), f"A not reached: {wired.lookups}"
+    said_lines = text_of(ran, as_json).splitlines()
+    failed = [line for line in said_lines if line.startswith("❌")]
+    assert failed and "restore_in_use" in " ".join(failed) and not any(line.startswith("✅") for line in said_lines), f"a ❌ line with restore_in_use: {ran.out}{ran.err}"
+    if as_json:
+        line = the_line(ran)
+        assert (line["state"], line["reason"], line["choices"], line["recover"], line["error"]) == ("committed", "owner_assignment", ["owner"], {"choice": "owner", "done": False}, "restore_in_use"), f"the line: {line}"
+    print_success("owner lock held: exit 5")
+
+
+@pytest.mark.parametrize("as_json", [False, True], ids=["human", "json"])
+@pytest.mark.parametrize(
+    ("raised", "code", "error"),
+    [
+        pytest.param("not-failed", 3, "nothing_to_recover", id="reset-meanwhile"),
+        pytest.param("oserror", 5, "failed", id="oserror"),
+        pytest.param("path", 5, "failed", id="backup-path-error"),
+    ],
+)
+def test_recover_owner_maps_what_the_reset_raises(tmp_path, monkeypatch, capsys, raised, code, error, as_json):
+    """(g) §9.2: ``RestoreOwnerNotFailedError`` (someone reset it meanwhile): exit 3 ``nothing_to_recover``;
+    ``OSError`` or ``BackupPathError``: exit 5 ``failed``. A ❌ line, no ✅ line, A not reached, nothing claimed done."""
+    apply = importlib.import_module(APPLY_MODULE)
+    paths = importlib.import_module("backend.app.services.platform.instance_backup.paths")
+    root = instance(tmp_path, monkeypatch)
+    owner_state()(monkeypatch, root)
+    wired = wire(monkeypatch, FakeA(outcome=Outcome.SENT))
+    errors = {
+        "not-failed": lambda: getattr(apply, "RestoreOwnerNotFailedError", None) and apply.RestoreOwnerNotFailedError("someone reset it"),
+        "oserror": lambda: OSError(errno.EIO, os.strerror(errno.EIO)),
+        "path": lambda: paths.BackupPathError(root),
+    }
+    error_to_raise = errors[raised]()
+    assert error_to_raise is not None, "[new] B5-1b §9.1: apply.RestoreOwnerNotFailedError does not exist yet"
+
+    def refused(*args: Any, **kwargs: Any) -> bool:
+        raise error_to_raise
+
+    monkeypatch.setattr(apply, "reset_owner_assignment", refused, raising=False)
+    before = base.everything(root)
+    ran = run_owner(capsys, as_json)
+    assert ran.code == code, f"{raised}: exit {code}, not {ran.code}\n{ran.out}{ran.err}"
+    said_lines = text_of(ran, as_json).splitlines()
+    assert any(line.startswith("❌") for line in said_lines) and not any(line.startswith("✅") for line in said_lines), f"a ❌ line, no ✅: {ran.out}{ran.err}"
+    assert (wired.lookups, wired.fake.calls) == ([], []), f"A not reached: {wired.lookups}"
+    assert base.everything(root) == before, "nothing changed"
+    if as_json:
+        line = the_line(ran)
+        assert (line["recover"], line["error"]) == ({"choice": "owner", "done": False}, error), f"recover not done, error {error}: {line}"
+    print_success(f"{raised}: exit {code}")
+
+
+@pytest.mark.parametrize("as_json", [False, True], ids=["human", "json"])
+@pytest.mark.parametrize("path", ["served", "assigned"])
+def test_a_second_recover_owner_finds_a_state_that_does_not_offer_it(tmp_path, monkeypatch, capsys, path, as_json):
+    """(g) §9.2 idempotence: once the outcome is cleared (a server served) or replaced (A answered) the state offers no
+    ``owner``: the second run is exit 4 ``choice_not_valid`` and changes nothing, A is not called again."""
+    root = instance(tmp_path, monkeypatch)
+    owner_state()(monkeypatch, root)
+    fake = FakeA(outcome=Outcome.SENT)
+    wire(monkeypatch, fake)
+    with serving(root) if path == "served" else nullcontext():
+        assert run_owner(capsys, as_json).code == 0, "precondition: the first run is done"
+    calls = list(fake.calls)
+    after_first = base.everything(root)
+    second = run_owner(capsys, as_json)
+    assert second.code == 4, f"the second run: exit 4, not {second.code}\n{second.out}{second.err}"
+    assert base.everything(root) == after_first and fake.calls == calls, "the second run changed nothing and called nothing"
+    if as_json:
+        assert the_line(second)["error"] == NOT_VALID, f"choice_not_valid: {second.out}"
+    print_success(f"{path}: second run exit 4")
+
+
+# --- --json: one line that names nothing, no log line on standard output -----------
+
+#: How each scenario of ``--recover owner --json`` is set up: the fake, whether a server serves or the lock is held, and
+#: what the line must say happened (barrier: the recovery really ran, so that "names nothing" is not true of a refusal).
+SCENARIOS = [
+    pytest.param(FakeA(outcome=Outcome.SENT), "free", True, None, id="sent"),
+    pytest.param(FakeA(outcome=Outcome.LINK_ONLY), "free", True, None, id="link_only"),
+    pytest.param(FakeA(raises=FakeOwnerAssignmentError(OTHER_CODE)), "free", False, "owner_assignment_failed", id="refused-again"),
+    pytest.param(FakeA(outcome=Outcome.SENT), "served", True, None, id="served"),
+    pytest.param(FakeA(outcome=Outcome.SENT), "locked", False, "restore_in_use", id="locked"),
+]
+
+
+@pytest.mark.parametrize(("fake", "where", "done", "error"), SCENARIOS)
+def test_recover_owner_json_is_one_line_that_names_nothing(tmp_path, monkeypatch, capsys, fake, where, done, error):
+    """(g) §9.2: whatever happened, standard output is the one line, whose keys are the usual ones plus ``recover`` (and
+    ``error``), and it holds none of the owner's id, address, link, either code, the administrator, the stage or the data
+    directory."""
+    monkeypatch.setenv("LIBREFOLIO_ADMIN_EMAIL", OWNER_EMAIL)
+    root = instance(tmp_path, monkeypatch, CANARY_FOLDER)
+    owner_state(confirmed_by=CANARY_USER, stage_id=CANARY_STAGE)(monkeypatch, root)
+    with_stale_link(root)
+    wire(monkeypatch, FakeA(outcome=fake.outcome, raises=fake.raises))
+    with serving(root) if where == "served" else owner_lock_held(root) if where == "locked" else nullcontext():
+        ran = run_owner(capsys, True)
+    line = the_line(ran)
+    assert line.get("recover") == {"choice": "owner", "done": done} and line.get("error") == error, f"barrier: the recovery ran as the scenario says (done {done}, error {error}): {line}"
+    assert set(line) <= KEYS | {"recover", "error"} and KEYS <= set(line), f"the usual keys, recover and error: {line}"
+    never_in(ran, *CANARIES, str(OWNER_ID), OWNER_EMAIL, LINK_CANARY, "reset-password", FAILED_CODE, OTHER_CODE, "owner_user_id", "owner_reset_path")
+    assert os.fspath(root) not in ran.out, "no path on standard output"
+    print_success(f"{where}: one line, names nothing")
+
+
+def test_log_lines_of_the_owner_recovery_never_reach_standard_output(tmp_path, monkeypatch, capsys):
+    """(g) §9.2: the reset and the step log (the reset one line, the step one more); a logging handler writing to standard
+    output must not put them before the line: with ``--json`` standard output is that one line alone."""
+    root = instance(tmp_path, monkeypatch)
+    owner_state()(monkeypatch, root)
+    wire(monkeypatch, FakeA(outcome=Outcome.SENT))
+    other = cli.make_data_dir(tmp_path / "other")
+    base.unreadable_as(monkeypatch, other, "invalid")
+    with logs_to_stdout() as handler:
+        # Control: this handler would show the log line of a module on standard output.
+        base.apply_module().restore_state_problem(other)
+        control = capsys.readouterr().out
+        assert handler.messages and control, f"precondition: a module's log line reaches this handler's standard output: {handler.messages}: {control!r}"
+        seen = len(handler.messages)
+        ran = run_owner(capsys, True)
+    line = the_line(ran)
+    assert ran.code == 0 and line["recover"]["done"] is True, f"exit 0, done: {ran.out}"
+    assert len(handler.messages) > seen, f"barrier: the recovery logged (the reset's line), so the check proves something: {handler.messages}"
+    print_success("no log line on standard output")
