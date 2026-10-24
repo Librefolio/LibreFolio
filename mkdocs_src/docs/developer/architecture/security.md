@@ -2203,6 +2203,7 @@ never an invitation.
 | `password_reset` | 30 minutes | Required | Refused | `/reset-password#token=…` |
 | `email_verification` | 24 hours | Required | Refused | `/verify-email#token=…` |
 | `admin_setup` | 72 hours | Required | Refused | `/setup#token=…` |
+| `email_change` | 7 days | Required (the owner) | Refused | `/confirm-email-change#token=…` |
 
 `expires_at` is `created_at` plus the lifetime; a `ttl` argument replaces the default. `issue_token()` raises
 `ValueError` on a refused or missing `user_id`, on a refused `grants_admin` and on a lifetime that is not

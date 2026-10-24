@@ -1,4 +1,4 @@
-"""Single-use account tokens: invitations, password-reset links, email verification, admin setup.
+"""Single-use account tokens: invitations, password-reset links, email verification, admin setup, the owner's email change.
 
 A token is 32 random bytes in URL-safe text, shown once to whoever asked for it; the database keeps
 only its SHA-256. Each token serves one purpose — a reset link is never an invitation — and has an
@@ -32,6 +32,8 @@ DEFAULT_TTL: dict[AccountTokenPurpose, timedelta] = {
     AccountTokenPurpose.PASSWORD_RESET: timedelta(minutes=30),
     AccountTokenPurpose.ADMIN_SETUP: timedelta(hours=72),
     AccountTokenPurpose.EMAIL_VERIFICATION: timedelta(hours=24),
+    # The host changed the owner's address: a week, as an invitation. The restart that issues it may be days before the click.
+    AccountTokenPurpose.EMAIL_CHANGE: timedelta(days=7),
 }
 
 # The page of the web interface that receives each kind of link. The API client's `LINK_PAGES`
@@ -42,6 +44,7 @@ _TOKEN_PATHS: dict[AccountTokenPurpose, str] = {
     AccountTokenPurpose.PASSWORD_RESET: "/reset-password",
     AccountTokenPurpose.ADMIN_SETUP: "/setup",
     AccountTokenPurpose.EMAIL_VERIFICATION: "/verify-email",
+    AccountTokenPurpose.EMAIL_CHANGE: "/confirm-email-change",
 }
 
 

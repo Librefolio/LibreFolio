@@ -44,5 +44,12 @@
     "subject": "L'indirizzo email del tuo account LibreFolio è cambiato",
     "intro": "L'indirizzo email del tuo account su $instance è stato cambiato. Questo messaggio va all'indirizzo che aveva prima.",
     "advice": "Se il cambio l'hai fatto tu, non devi fare niente. Se no, qualcuno potrebbe usare il tuo account: cambia subito la password, se riesci ancora ad accedere, e avvisa l'amministratore di $instance."
+  },
+  "email_change_confirmation": {
+    "subject": "Conferma il nuovo indirizzo email del tuo account amministratore di LibreFolio",
+    "intro": "Questo indirizzo email è stato indicato come indirizzo dell'account amministratore della tua istanza LibreFolio $instance. Conferma che è tuo per completare il cambio: finché non lo fai non cambia nulla e l'account mantiene il suo indirizzo attuale.",
+    "action": "Conferma questo indirizzo",
+    "expiry": "Il link funziona una sola volta e scade tra $duration. Dopo la conferma l'account accede con questo indirizzo e le sue sessioni aperte terminano.",
+    "ignore": "Se non aspettavi questa email puoi ignorarla: non cambia nulla."
   }
 }

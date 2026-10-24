@@ -125,7 +125,7 @@ axiosInstance.interceptors.request.use(
  * The same pages as `_TOKEN_PATHS` in `backend/app/services/accounts/token_service.py`, the pages a link opens:
  * `test_account_tokens.py` checks that the two lists agree.
  */
-const LINK_PAGES = new Set(['/setup', '/invite', '/reset-password', '/verify-email']);
+const LINK_PAGES = new Set(['/setup', '/invite', '/reset-password', '/verify-email', '/confirm-email-change']);
 
 function isLinkPage(pathname: string): boolean {
     return LINK_PAGES.has(pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname);

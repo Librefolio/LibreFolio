@@ -25,6 +25,7 @@ from backend.app.config.platform import awaiting_restore
 from backend.app.db.session import get_async_engine
 from backend.app.logging_config import get_logger
 from backend.app.services.accounts.bootstrap_admin_service import startup_admin_bootstrap
+from backend.app.services.accounts.instance_owner import startup_owner_sync
 from backend.app.services.accounts.settings_service import initialize_global_settings
 from backend.app.services.assets.market_calendar import shutdown_market_holidays, start_market_holiday_prewarm
 from backend.app.services.assets.registry import AssetProviderRegistry
@@ -270,6 +271,10 @@ STARTUP_STEPS: tuple[Step, ...] = (
     # (or while it could not) this process serves no data (restore_guard.py), and the steps after this one that warm up
     # or run jobs on the data are skipped. It never raises: the probe that follows it only reads the state.
     Step("restore-owner", lambda: _assign_restored_owner()),
+    # The owner of a managed instance against LIBREFOLIO_ADMIN_EMAIL (A5-1b): recorded, or its new address confirmed by a link.
+    # After restore-commit: the commit of a restore revokes every live one-time link, and a change link issued before it would
+    # reach the customer already dead.
+    Step("owner-sync", lambda: startup_owner_sync(), skip_when=_serving_no_data),
     # What runs killed outright left in clear: a check's decrypted archive, an inspect's folder, a backup's work files
     # (B-23, N66). Once the restore is settled; it never raises: after restore-commit, a step that raises stops every start
     Step("backup-leftovers", lambda: asyncio.to_thread(sweep_backup_leftovers)),
