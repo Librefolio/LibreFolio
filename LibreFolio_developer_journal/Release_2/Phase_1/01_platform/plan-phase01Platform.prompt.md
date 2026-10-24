@@ -10691,3 +10691,14 @@ DOC-2 (ricerca per lingua), DOC-1 (riordino della guida admin, con le guide Tail
    > **⚠️ Fuori pista**: il test-author ha scoperto che `hosting_providers.{it,fr,es}.md` non esistono (la pagina inglese è pubblicata in ogni lingua): la
    > voce nuova non entra in `TRANSLATION_DEBT`. Analisi (senza codice) del link `/setup` emesso da `admin-bootstrap` prima di `restore-commit` mandata
    > al coordinatore: reale ma stretto, la cura è di B (B5-1d).
+7. ✅ **H5-5 · la guardia del titolare legge lo stato che cambia** (24/10, dalla revisione di sicurezza di A, punto 2). Verifica: la guardia non
+   memorizza la prima lettura. Il passo `restore-owner` sonda DOPO l'assegnazione (non prima), e un worker rimasto in `pending` rilegge lo stato
+   (`refresh_restore_state`, al più ogni `OWNER_RECHECK_SECONDS` = 2 s) finché non diventa `None` o un codice; un codice resta chiuso fino al riavvio.
+   > **Note implementazione**: nessuna modifica a `restore_guard.py`. Mancava solo la prova su file veri a livello API (i test esistenti usavano un
+   > finto `owner_assignment_problem` oppure stavano al livello del servizio): due test nuovi in `test_restore_owner_guard_api.py`, con un `restore.json`
+   > committato vero e la vera sonda: `pending` all'avvio → 423; `record_owner_outcome(..., "sent")` → la richiesta dopo l'intervallo passa (200);
+   > `pending` → `error:EMAIL_TAKEN` → continua a chiudere con il codice, e un `reset_owner_assignment` del solo file non la apre (serve il riavvio).
+   > Selettore `api restore-owner-guard`: 33 test (31 + 2). Descrizione del selettore aggiornata.
+   > **⚠️ Fuori pista**: nessuno. Resta un ritardo fino a 2 s tra la scrittura dell'esito e la prima richiesta servita su un worker che aspettava
+   > (la limitazione serve a non leggere il file a ogni richiesta); non lo tocco senza decisione. Il punto 1 di A (errore passeggero di B che lascia `pending`
+   > fino al riavvio) è di B.
