@@ -239,10 +239,8 @@ reverse one by `test_reverse_split_relabelled_as_price_adjustment_becomes_a_redu
 
 Manual events are **never deleted** by the sync process. They survive provider re-syncs, provider
 changes, and bulk refreshes. Only an explicit user deletion removes them, or the market-data wipe
-of a currency change (`POST /api/v1/assets/{asset_id}/market-data/wipe`), which deletes every event
-of the asset, except while a `SPLIT` of the asset has linked incoming adjustments without a cost:
-then it refuses with a 409 and deletes nothing ([Market-Data Wipe](#market-data-wipe)). A user
-deletes events in two ways:
+of a currency change, which deletes every event of the asset except the `SPLIT`s, manual ones
+included ([Market-Data Wipe](#market-data-wipe)). A user deletes events in two ways:
 
 - **`delete_ids` of `POST /api/v1/assets/events`**, the data editor's save: all or nothing, so an
   event a transaction uses stops the whole request (`EVENT_IN_USE`). Until 1.3 the editor sent the
@@ -260,41 +258,110 @@ asset answers `not_found` and leaves its event alone; in `delete_ids`, such an i
 
 ### 🧹 Market-Data Wipe {: #market-data-wipe }
 
-The first step of a currency change, `POST /api/v1/assets/{asset_id}/market-data/wipe`
-(`wipe_market_data_for_currency_change()` in `assets/currency_change.py`), unlinks every
-transaction from the asset's events (`asset_event_id = NULL`), deletes every event of the asset,
-manual and from a provider, and every price, commits, then drops the history and current cache
-entries of the asset's provider assignment. Its dry run,
-`GET /api/v1/assets/{asset_id}/market-data/summary`, returns the same counts without writing, and
-the rule below never refuses it.
+Changing an asset's currency deletes its market data, because prices and events are stored in the old
+currency: mixing them with new-currency rows would be worse than starting again. Since N68 (lot X5-3,
+decided by the developer on 19/10/2026) the change is **never refused**; policy D is now «the splits
+stay». The rule lives in `assets/currency_change.py`:
 
-The wipe refuses while a `SPLIT` of the asset, manual or from a provider, has a linked incoming
-`ADJUSTMENT` (quantity above 0) without a `cost_basis_override`; a cost of 0 is a cost. Linked to
-the split, such a row only rescales the position; unlinked and with the split deleted, it would be
-an acquisition of unknown cost (`MISSING_COST_BASIS`). This is the rule of P-10, which refuses a
-retype of such a split (`EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST`, above).
-`_reject_wipe_of_costless_split_adjustments()` finds and names the rows through
-`splits_with_costless_adjustments()` of `assets/split_guard.py`, built on the retype's own
-function, `costless_incoming_split_adjustments()`, and shared with the
-[parametric provider change](#parametric-provider-change). It runs before any write, so a refused
-wipe writes nothing. It answers HTTP 409 with `detail = {error_code, message, params}`:
+| Function | Role |
+|----------|------|
+| `events_that_go()` | The condition of the events a currency change deletes: every event of the assets except `SPLIT`. A dividend or an interest carries a currency; a split is a ratio, it means the same in any currency, and the `ADJUSTMENT`s linked to it keep their meaning |
+| `delete_market_data_of_assets()` | Three statements whatever the number of assets, no commit: `UPDATE transactions SET asset_event_id = NULL` for the transactions linked to an event that goes, `DELETE` of those events, `DELETE` of the assets' prices |
+| `provider_cache_keys()` / `drop_provider_caches()` | The cache keys of the assets' provider assignments, read before the commit (it expires the rows' attributes), and the drop of their history and current-price entries after it. A cache that fails to drop is logged and skipped: the data is already committed |
+| `CurrencyChangeOperations.wipe_market_data_for_currency_change()` | The counters and the same deletion for one asset, behind the two endpoints below |
 
-- `error_code`: `MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST`;
-- `params.splits`: one `{event_id, date, transaction_ids, hidden_transactions_count}` per such
-  split, ordered by date, then id. An asset is shared by every user, so `transaction_ids` lists,
-  sorted, only the adjustments the caller can see (a `BrokerUserAccess` row for the transaction's
-  broker), and `hidden_transactions_count` counts the others. The route passes the caller; the
-  service called without `current_user_id` names none and counts them all;
-- `message`: the English text, which starts with the code and gives only the totals, how many
-  splits and how many adjustments.
+What goes and what stays:
 
-The wipe's other errors keep their answer, as the summary's: 404 `ASSET_NOT_FOUND` for an unknown
-asset, with a string `detail`. The currency-change dialog the asset form opens
-(`AssetCurrencyChangeModal.svelte`, in `frontend/src/lib/components/assets/`) shows the refusal as
-an error toast, one sentence in the interface language built by `wipeRefusalMessage()`
-(`currencyChangeErrors.ts`): the first split's date, its adjustments without a cost, the hidden
-ones among them, and how many more splits have some. Then it stops: no `PATCH /assets`, no sync,
-and the dialog stays open. Any other error keeps the dialog's generic message.
+| Row | After a currency change |
+|-----|-------------------------|
+| Every price of the asset | Deleted |
+| Every manual event that is not a `SPLIT` | Deleted |
+| Every event generated by the provider that is not a `SPLIT` | Deleted |
+| The transactions linked to a deleted event | **Kept**, with `asset_event_id` set to `NULL` (the FK is `RESTRICT`, so the `UPDATE` comes first) |
+| Every `SPLIT` event, manual or from a provider | **Kept** |
+| The transactions linked to a `SPLIT` | **Kept, still linked**: the adjustments of the split keep their link and their cost basis |
+
+Where it happens:
+
+- **`PATCH /api/v1/assets`** (`AssetCRUDService.patch_assets_bulk()`). It remembers the currency of
+  every patched asset before the loop; after the loop, for the assets whose currency now differs, it
+  reads the cache keys, calls `delete_market_data_of_assets()`, and commits **once**, so the change and
+  the deletion are one transaction. Then it drops the caches. There is no blocker token any more:
+  `CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA` is gone from the per-item `message` and from the route, which
+  no longer answers 409 when every item failed. The deletion follows the *result* (the stored currency
+  changed), so it runs for any caller of the API, not only the interface.
+- **`GET /api/v1/assets/{asset_id}/market-data/summary`**, the dry run, counts without writing. It answers
+  `{prices, events_manual, events_provider, splits_kept, linked_tx, oldest, newest, dry_run}`:
+  `events_manual` and `events_provider` count the events that go, `SPLIT`s **not** included;
+  `splits_kept` counts the `SPLIT` events that stay; `linked_tx` counts the transactions linked to the events
+  that go; `oldest` and `newest` are the price range (ISO dates, `null` without prices).
+- **`POST /api/v1/assets/{asset_id}/market-data/wipe`** stays for a caller who wants to wipe on its own.
+  Same rule, same keys (`dry_run` is `false`), it commits and drops the caches. It never answers 409: the
+  refusal for costless split adjustments (X-R48, `MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST`) was removed
+  together with the reason for it, because the splits are no longer deleted. A 404 `ASSET_NOT_FOUND`
+  (string `detail`) for an unknown asset is the only answer other than 200 and the generic 500.
+
+!!! note "The refusal that remains is the provider's"
+
+    The rule of P-10 (a `SPLIT` deleted under linked incoming `ADJUSTMENT`s without a cost would turn them
+    into acquisitions of unknown cost) is still enforced where a split *can* be deleted: the retype of a
+    split (`EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST`, above) and the changes of provider below
+    (`PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST`, X-R49). `assets/split_guard.py` serves those, not the
+    currency change.
+
+The transactions that lost their link can be linked again: `GET /api/v1/transactions/event-reconciliation`
+proposes the event of the same day for each, and the user confirms (see
+[Event Reconciliation](../transactions/service.md#event-reconciliation)). Nothing relinks by itself.
+
+In the asset form (`AssetModal.svelte`, in `frontend/src/lib/components/assets/`) the flow is:
+
+```mermaid
+sequenceDiagram
+    actor U as User
+    participant M as AssetModal (saveEdit)
+    participant C as AssetCurrencyChangeModal
+    participant API as Backend
+
+    U->>M: Save Changes with a new currency
+    M->>API: GET /assets/{id}/market-data/summary (dry run)
+    alt the dry run fails
+        API-->>M: error
+        M-->>U: error banner, nothing is sent
+    else nothing would be lost
+        M->>API: PATCH /assets
+        API-->>M: 200, currency changed
+    else prices, events or links would be lost
+        M->>C: open with the counts
+        U->>C: optional backup (CSV / JSON)
+        U->>C: Delete & change currency
+        C->>API: PATCH /assets (one call)
+        API-->>C: 200, currency changed and data deleted
+        opt a provider is assigned and there were prices
+            C->>API: POST /assets/prices/sync (oldest price date to today)
+        end
+        C-->>U: toasts, the modal closes
+    end
+```
+
+`saveEdit()` asks the dry run first through `loadCurrencyChangeImpact()` (`currencyImpact.ts`) whenever the
+form's currency differs from the stored one. The dry run is a **gate**: when it fails the save fails and
+nothing is sent, because the PATCH deletes without any other check. `hasSomethingToLose()` decides whether
+to ask: prices, events or linked transactions above zero; the kept splits alone are information, not a
+loss, and the PATCH then goes on its own. The confirmation (`AssetCurrencyChangeModal.svelte`, props
+`impact`, `patchPayload`, `providerAssigned`) lists the price points with their date range, the manual
+events, the events generated by the provider, the transactions that lose their link to a deleted event and
+the split events that stay, and offers the backups (prices and events, CSV or JSON). The wording is shared
+with the [provider-change dialog](#provider-change-impact): «price points», «events generated by the
+provider», «lose their link to a deleted event». The sync after the PATCH runs only if the asset has a
+provider assignment **and** the dry run found prices (its start is the oldest deleted price); a failed sync
+is only an error toast: the change is already made. `currencyBlocker.ts` and the 409 handling of the
+old flow are deleted.
+
+Tests: `backend/test_scripts/test_services/test_market_data_wipe_keeps_splits.py`
+(`./dev.py test services market-data-wipe-keeps-splits`), `test_scripts/test_api/test_market_data_wipe.py`
+(`./dev.py test api market-data-wipe`), `test_asset_currency_change.py`; in the frontend
+`currencyImpact.test.ts`, `AssetModal.currencyChange.test.ts` and `AssetCurrencyChangeModal.test.ts`, in the
+same folder, and `e2e/assets/asset-currency-change.spec.ts`.
 
 ### 🔁 Parametric Provider Change {: #parametric-provider-change }
 
@@ -316,8 +383,9 @@ only Interest, Price Adjustment and Maturity Settlement events, but the schema
 (`FAScheduledInvestmentSchedule.asset_events`) accepts a `SPLIT`, so a plan's split comes through
 the API; the sync stores it under the assignment, as the plan's other events. Its linked incoming
 `ADJUSTMENT`s (quantity above 0) without a `cost_basis_override` (a cost of 0 is a cost) would be
-acquisitions of unknown cost once the wipe deletes it: the rule of P-10, as in the
-[Market-Data Wipe](#market-data-wipe). Before the request's first write,
+acquisitions of unknown cost once the wipe deletes it: the rule of P-10, enforced here and in
+the retype of a split, but no longer in the [currency change](#market-data-wipe), which keeps the
+splits. Before the request's first write,
 `_reject_wipes_of_costless_split_adjustments()` follows the items in order, as the write loop does
 (an asset named twice is compared with its previous item), and for each item that would wipe reads
 the events of that assignment and passes them to `split_guard.splits_with_costless_adjustments()`.
@@ -327,8 +395,8 @@ included. The route answers HTTP 409 with `detail = {error_code, message, params
 
 - `error_code`: `PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST`;
 - `params.asset_id` and `params.item_index`: the refused item's asset and its position in the
-  request, from 0. The market-data wipe has neither: its request names a single asset;
-- `params.splits`: exactly as the market-data wipe's, one
+  request, from 0;
+- `params.splits`: one
   `{event_id, date, transaction_ids, hidden_transactions_count}` per such split, ordered by date,
   then id; `transaction_ids` lists, sorted, only the adjustments the caller can see (a
   `BrokerUserAccess` row for the transaction's broker), and `hidden_transactions_count` counts the
@@ -343,9 +411,9 @@ In the asset form (`AssetModal.svelte`, in `frontend/src/lib/components/assets/`
 first PATCHes the asset's fields (step 1), then assigns the provider (step 2). A step-2 refusal with this code is shown inline, in the form's
 error banner (`formError`, `data-form-error`): one sentence in the interface language built by
 `wipeRefusalMessage()` (`currencyChangeErrors.ts`, which maps each code to its key:
-`MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST` to
-`assetDetail.currencyChange.splitAdjustmentsWithoutCost`,
-`PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST` to `assets.modal.planSplitAdjustmentsWithoutCost`):
+`PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST` to `assets.modal.planSplitAdjustmentsWithoutCost`,
+`PROVIDER_REMOVAL_CONFLICT` to `assets.modal.providerRemovalConflict`; the currency change's own
+code is unknown to it since N68):
 the first split's date, its adjustments without a cost, the hidden ones among them, and how many
 more splits have some. Then it stops: no toast, no automatic sync, the form stays open, and the
 next save asks its confirmation again. What step 1 saved stays saved: only the provider and its
@@ -394,7 +462,7 @@ and nothing of it is removed, the assets before the refused one included. The ro
 - `params.asset_id` and `params.item_index`: the refused asset and its first position in
   `asset_ids`, from 0;
 - `params.splits`: one `{event_id, date, transaction_ids, hidden_transactions_count}` per such
-  split, as in the market-data wipe: `transaction_ids` lists, sorted, only the adjustments the
+  split, as in the parametric change: `transaction_ids` lists, sorted, only the adjustments the
   caller can see (a `BrokerUserAccess` row for the transaction's broker), and
   `hidden_transactions_count` counts the others. The route passes
   `current_user_id=_current_user.id`; the service called without it names none and counts them all;

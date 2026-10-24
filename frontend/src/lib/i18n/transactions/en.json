@@ -318,6 +318,22 @@
       "spread": "Spread",
       "stale": "stale {days}d",
       "marketNotAvailable": "Market rate not available"
+    },
+    "reconcile": {
+      "button": "Relink events",
+      "buttonTitle": "Link dividends, interest and adjustments to the asset event of the same day",
+      "title": "Relink events",
+      "intro": "Dividends, interest and adjustments that have no asset event. An event is proposed only when it is of the same asset, on the same day and of the matching type: a dividend credited a few days after the event is not proposed, and you link it by hand in the transaction.",
+      "loading": "Looking for transactions without an event…",
+      "loadError": "Could not read the transactions without an event.",
+      "empty": "Every transaction that can have an asset event has one.",
+      "statusUnique": "One event that day",
+      "statusNone": "No event that day",
+      "statusSeveral": "{n} events that day: choose it in the transaction",
+      "link": "Link",
+      "linkAll": "Link every row with one event",
+      "linkError": "Nothing was linked: the server refused the change.",
+      "close": "Close"
     }
   }
 }

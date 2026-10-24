@@ -318,6 +318,22 @@
       "spread": "Spread",
       "stale": "obsoleto {days}d",
       "marketNotAvailable": "Tipo de cambio de mercado no disponible"
+    },
+    "reconcile": {
+      "button": "Reenlazar eventos",
+      "buttonTitle": "Vincular dividendos, intereses y ajustes al evento del activo del mismo día",
+      "title": "Reenlazar eventos",
+      "intro": "Dividendos, intereses y ajustes sin evento del activo. Solo se propone un evento si es del mismo activo, del mismo día y del tipo correspondiente: un dividendo abonado unos días después del evento no se propone, y lo vinculas a mano en la transacción.",
+      "loading": "Buscando transacciones sin evento…",
+      "loadError": "No se pudieron leer las transacciones sin evento.",
+      "empty": "Cada transacción que puede tener un evento del activo lo tiene.",
+      "statusUnique": "Un evento ese día",
+      "statusNone": "Ningún evento ese día",
+      "statusSeveral": "{n} eventos ese día: elige en la transacción",
+      "link": "Vincular",
+      "linkAll": "Vincular todas las filas con un solo evento",
+      "linkError": "No se vinculó nada: el servidor rechazó el cambio.",
+      "close": "Cerrar"
     }
   }
 }

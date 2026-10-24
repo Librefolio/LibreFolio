@@ -379,6 +379,18 @@ def front_tx_event_picker(verbose: bool = False, ui: bool = False, headed: bool 
     return _run_playwright("transactions/tx-event-picker.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_tx_event_reconciliation(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run TX Event Reconciliation E2E tests (N68: re-link the transactions that lost their event)."""
+    print_section("Frontend TX Event Reconciliation Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("transactions/tx-event-reconciliation.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_tx_event_create_exists(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run «+ New event» never-overwrites E2E tests (release 1.3, decision 20; I-10 S4)."""
     print_section("Frontend TX «+ New event» Exists Tests")
@@ -741,6 +753,14 @@ def populate_registry(registry: dict) -> None:
         tests="transactions/tx-auto-cost-refusal.spec.ts",
     )
     add_test(cat, "tx-event-picker", front_tx_event_picker, name="TX Event Picker Tests", desc="Event picker card-style dropdown, delta, slider range, type visibility", tests="transactions/tx-event-picker.spec.ts")
+    add_test(
+        cat,
+        "tx-event-reconciliation",
+        front_tx_event_reconciliation,
+        name="TX Event Reconciliation Tests",
+        desc="N68, each test on a disposable account with its own broker, asset and events: the Transactions page's reconcile button opens the modal, which lists the unlinked event-type transactions with the server's verdict (unique / none / several) and offers the link on the unique rows only; linking one sends the commit, removes the row and reloads the page (API read-back), link all links every unique row with ONE commit and leaves none/several, the empty state, closing links nothing",
+        tests="transactions/tx-event-reconciliation.spec.ts",
+    )
     add_test(
         cat,
         "tx-event-create-exists",

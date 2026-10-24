@@ -48,7 +48,7 @@
     import {columnsToIdentifierRows, fieldToIdType, identifierValue, withIdentifier, mergeOtherIdentifierValues, withElectedPrimary} from './assetIdentifiers';
     import {searchResultAssetType, searchResultIdentifier, searchResultProviderParams} from './assetSearchSelection';
     import {compareMetadata, type ComparisonAction, type ComparisonSnapshot} from './assetMetadataComparison';
-    import {isCurrencyChangeBlockedMessage, parseCurrencyChangeBlocker} from './currencyBlocker';
+    import {hasSomethingToLose, loadCurrencyChangeImpact, type CurrencyChangeImpact} from './currencyImpact';
     import {buildClassificationParams, buildCreateItem, buildPatchItem, buildProviderAssignItem, type AssetFormFields, type ClassificationParams, type ProviderAssignment} from './assetPayload';
     import {isQuoteBaseQuantityInvalid, quoteBaseQuantityErrorKey, defaultQuoteBaseQuantity, proposeQuoteBase, quoteBaseNote, computeHasProvider, computeProviderDirty, groupImportNotices, type QuoteBaseSource, type QuoteBaseSuggestion} from './assetFormState';
     import {ensureAssetProvidersCached, getAssetProviderName, isParametricProvider} from '$lib/utils/providerHelpers';
@@ -296,19 +296,9 @@
     let initialProviderIdentifier: string = $state('');
     let initialProviderIdentifierType: string = $state('TICKER');
 
-    // I.6 — destructive currency-change modal state.
+    // I.6 + N68 — the confirm modal of a currency change that would delete something.
     let currencyChangeModalOpen = $state(false);
-    let currencyChangeBlocker = $state<{
-        assetId: number;
-        prices: number;
-        eventsManual: number;
-        eventsProvider: number;
-        linkedTx: number;
-        oldest: string;
-        newest: string;
-        from: string;
-        to: string;
-    } | null>(null);
+    let currencyChangeImpact = $state<CurrencyChangeImpact | null>(null);
     let currencyChangePatchPayload: Record<string, unknown> | null = $state(null);
     let currencyChangeProviderAssigned = $state(false);
     let pendingSearchResult: any = $state(null);
@@ -1202,11 +1192,9 @@
         // I-bis #22 (Batch 4.d-part2) — route the orchestrator through
         // ``trySave`` for uniform error extraction. Two custom
         // semantics are preserved:
-        //   (a) **409 currency-change** is NOT handled here: it's intercepted
-        //       deeper in ``saveEdit`` (see the patch_assets_bulk try/catch
-        //       around the PATCH call) which rewrites the ``patchResp`` from
-        //       ``detail.results[]`` and opens the destructive
-        //       ``AssetCurrencyChangeModal``. That path never throws to us.
+        //   (a) **currency change** (N68): never refused. ``saveEdit`` asks the server's dry run first and,
+        //       when the change would delete something, opens ``AssetCurrencyChangeModal`` and returns without
+        //       throwing; if the dry run itself fails, the error lands in the inline banner like any other.
         //   (b) **409 duplicate-name** (create path) still maps to the
         //       dedicated ``duplicateName`` i18n key via the ``onError``
         //       hook below.
@@ -1342,40 +1330,24 @@
         const patchItem = buildPatchItem(assetId, formFields(), initialClassification);
         const patchPayload = [patchItem];
 
-        // I.3 + R3-3 Policy D — PATCH returns a per-item failure with the structured
-        // blocker token when the user changed the currency on an asset that still has
-        // *any* market data (prices, events or linked transactions). Token format:
-        //   CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA|prices=N|events_manual=M|
-        //     events_provider=K|linked_tx=L|oldest=...|newest=...|from=X|to=Y
-        // The modal turns this into the destructive-confirm dialog.
-        //
-        // I-bis #7 — the backend now also returns HTTP 409 when *every* item in
-        // the batch is blocked by market data (single-asset edits always fall in
-        // this case). Axios throws on non-2xx; we catch below and re-extract the
-        // ``results[]`` from the response body so the UX is identical.
-        let patchResp: any;
-        try {
-            patchResp = await zodiosApi.patch_assets_bulk_api_v1_assets_patch(patchPayload as any);
-        } catch (err: any) {
-            const status = err?.response?.status;
-            const detail = err?.response?.data?.detail;
-            if (status === 409 && detail && typeof detail === 'object' && Array.isArray(detail.results)) {
-                patchResp = {results: detail.results, success_count: 0};
-            } else {
-                throw err;
+        // N68 — a currency change is never refused, but the PATCH that makes it deletes, in the same call, the asset's prices and
+        // its events that are not SPLITs, and disconnects the transactions linked to them (the SPLITs stay). So the server's
+        // dry run comes first: when something would go, the user is told how much and confirms (the modal sends the PATCH);
+        // when nothing would, the PATCH goes on its own. The dry run is a gate: when it fails the save fails, nothing is sent.
+        const storedCurrency = editData?.currency;
+        if (storedCurrency && currency !== storedCurrency) {
+            const impact = await loadCurrencyChangeImpact(assetId, storedCurrency, currency);
+            if (hasSomethingToLose(impact)) {
+                currencyChangeImpact = impact;
+                currencyChangePatchPayload = patchItem;
+                currencyChangeProviderAssigned = hasProvider && !providerNoProvider;
+                currencyChangeModalOpen = true;
+                return; // abort save — the modal sends the PATCH on confirm, or the user cancels
             }
         }
+
+        const patchResp = await zodiosApi.patch_assets_bulk_api_v1_assets_patch(patchPayload as any);
         const resultItem = patchResp?.results?.[0];
-        if (resultItem && resultItem.success === false && isCurrencyChangeBlockedMessage(resultItem.message)) {
-            currencyChangeBlocker = {
-                assetId,
-                ...parseCurrencyChangeBlocker(resultItem.message),
-            };
-            currencyChangePatchPayload = patchItem;
-            currencyChangeProviderAssigned = hasProvider && !providerNoProvider;
-            currencyChangeModalOpen = true;
-            return; // abort save — the modal will either finish the flow or the user cancels
-        }
         if (!resultItem?.success) throw new Error(resultItem?.message || $t('assets.modal.saveFailed'));
 
         // PATCH succeeded — sync the patched fields into the shared cache so
@@ -1771,10 +1743,10 @@
     }}
 />
 
-<!-- I.6 + R3-3 Policy D — Destructive currency-change modal. Triggered by the CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA marker. -->
+<!-- I.6 + R3-3 Policy D + N68 — confirm modal of a currency change that deletes market data. Opened by the dry run of saveEdit. -->
 <AssetCurrencyChangeModal
     bind:open={currencyChangeModalOpen}
-    blocker={currencyChangeBlocker}
+    impact={currencyChangeImpact}
     patchPayload={currencyChangePatchPayload}
     providerAssigned={currencyChangeProviderAssigned}
     zIndex={zIndex + 20}
@@ -1786,7 +1758,7 @@
         handleCurrencyChangeConfirmed();
     }}
     oncanceled={() => {
-        currencyChangeBlocker = null;
+        currencyChangeImpact = null;
         currencyChangePatchPayload = null;
     }}
 />
