@@ -100,6 +100,11 @@
         "ok": "Gli accessi sbagliati sono limitati: dopo 10 in 15 minuti per un nome utente o un'email, o 50 da un indirizzo, l'accesso aspetta.",
         "off": "Il limite degli accessi sbagliati è spento (LIBREFOLIO_LOGIN_LIMIT=off): le password si possono provare senza pause. Riaccendilo, a meno che questa non sia un'istanza di prova.",
         "invalid": "LIBREFOLIO_LOGIN_LIMIT vale «{value}», che non è né on né off: il server non si avvia con questo valore."
+      },
+      "ownerEmailChange": {
+        "ok": "Nessun cambio dell'email del titolare è in attesa.",
+        "pending": "Il provider ha cambiato l'email del titolare: al nuovo indirizzo è stato inviato un link di conferma e l'account tiene il vecchio finché non viene confermato.",
+        "blocked": "Il provider ha cambiato l'email del titolare con una già usata da un altro account: non è cambiato nulla. Scegli un altro indirizzo e riavvia."
       }
     },
     "askAdminToResetPassword": "Chiedi all'amministratore un link per reimpostare la password: può crearne uno per il tuo account."

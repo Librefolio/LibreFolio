@@ -1,6 +1,7 @@
 """Configuration checks of the accounts section, in the shape of the platform's (``config_audit.ConfigCheck``).
 
-One check so far: whether the limit on failed sign-ins (F15) is on. Like every configuration check it reads the
+Two checks: whether the limit on failed sign-ins (F15) is on, and where the change of the owner's address that a hosting
+provider started stands (A5-1b, the check of lot H5-4). Like every configuration check it reads the
 configuration, changes nothing, never raises and never puts a secret in its result. The i18n keys are ``auth.checks.*``.
 
 They are part of the platform's ``CONFIG_CHECKS``: the startup audit logs them, and ``GET /security/checks`` returns
@@ -18,6 +19,7 @@ if TYPE_CHECKING:
     from backend.app.services.platform.config_audit import ConfigCheck
 
 CHECK_LOGIN_LIMIT = "accounts.login_limit"
+CHECK_OWNER_EMAIL_CHANGE = "accounts.owner_email_change"
 
 
 def check_login_limit() -> ConfigCheck:
@@ -46,4 +48,32 @@ def check_login_limit() -> ConfigCheck:
     )
 
 
-ACCOUNTS_CONFIG_CHECKS = (check_login_limit,)
+def check_owner_email_change() -> ConfigCheck:
+    """The change of the owner's address a hosting provider started with ``LIBREFOLIO_ADMIN_EMAIL``, as this process found it
+    at its start (memory only, no database): ``ok`` when none waits, ``info`` while the new address has not confirmed it,
+    ``warning`` when another account holds the new address and nothing changes. Never an address or a user name; never raises."""
+    from backend.app.services.accounts import instance_owner  # noqa: PLC0415 — it imports the email and platform services
+    from backend.app.services.platform.config_audit import ConfigCheck  # noqa: PLC0415 — config_audit imports this module
+
+    try:
+        state = instance_owner.startup_change_state()
+    except Exception:  # noqa: BLE001 — a check never raises: a state that cannot be read is no change waiting
+        state = None
+    if state == "pending":
+        return ConfigCheck(
+            CHECK_OWNER_EMAIL_CHANGE,
+            "info",
+            "auth.checks.ownerEmailChange.pending",
+            summary="The hosting provider changed the owner's email address: the new address was sent a confirmation link, and the account keeps the old one until it is confirmed",
+        )
+    if state == "blocked":
+        return ConfigCheck(
+            CHECK_OWNER_EMAIL_CHANGE,
+            "warning",
+            "auth.checks.ownerEmailChange.blocked",
+            summary="The hosting provider changed the owner's email address to one that another account already uses: nothing was changed; choose another address and restart",
+        )
+    return ConfigCheck(CHECK_OWNER_EMAIL_CHANGE, "ok", "auth.checks.ownerEmailChange.ok")
+
+
+ACCOUNTS_CONFIG_CHECKS = (check_login_limit, check_owner_email_change)

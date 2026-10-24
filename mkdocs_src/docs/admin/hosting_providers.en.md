@@ -389,7 +389,7 @@ visible in the app or in the API), so changing the variable never makes it lose 
 1. Update your registry, set `LIBREFOLIO_ADMIN_EMAIL=new.contact@customer.example` and restart the
    instance.
 2. At that start LibreFolio emails a confirmation link, valid for **7 days**, to the *new* address
-   (it needs [email and `LIBREFOLIO_PUBLIC_URL`](email.md#public-url)). It is sent once: a restart
+   (it needs [email and `LIBREFOLIO_PUBLIC_URL`](email_flows.md#public-url)). It is sent once: a restart
    while that link is still valid sends nothing more, and a link that expired is replaced at the next
    start.
 3. Your customer opens it from the new address. The account moves to the new address, which counts as
@@ -439,9 +439,11 @@ you is recorded from the start.
 !!! note "State of a change"
 
     The instance knows whether a change is *pending* (waiting for the click, or for a new link at the next start)
-    or *blocked* (another account holds the address), and never carries an address. Today this state is not shown
-    anywhere in the app or in the hosting panel API: connecting it to the panel's status and to a security check is
-    planned work, and until then the startup log is where to look.
+    or *blocked* (another account holds the address), and never carries an address. You see it in three places:
+    the `owner_email_change` key of the panel's [status](#panel-status) (`pending`, `blocked` or `null`), the
+    security check `accounts.owner_email_change` that an administrator reads in Settings › Administration ›
+    Security (`info` while pending, `warning` when blocked), and the startup log. A *blocked* change asks you to
+    act: change the variable to an address no other account uses and restart.
 
 ---
 
@@ -906,8 +908,8 @@ checks, and logs an error for each one that fails. The **Security** tab of Setti
 `GET /api/v1/panel/status` tells your panel where the setup of the
 [initial administrator](#initial-admin) stands: whether your customer has used the setup link, and
 until when the link works. It also gives the instance's `mode` and its `restore`
-([Restoring an Instance from Your Panel](#panel-restore)), and how many places its users take, with the
-limit. Turn it on with a token of its own in
+([Restoring an Instance from Your Panel](#panel-restore)), how many places its users take, with the
+limit, and whether the owner's [new address](#owner-email-change) waits for its confirmation. Turn it on with a token of its own in
 `LIBREFOLIO_PANEL_STATUS_TOKEN`, as in [A Token per Scope](#panel-api-tokens), then:
 
 ```bash
@@ -916,7 +918,7 @@ curl -sS -H "Authorization: Bearer $LIBREFOLIO_PANEL_STATUS_TOKEN" \
 ```
 
 ```json
-{"admin_setup": "pending", "setup_expires_at": "2026-10-23T09:12:44.512312Z", "mode": "normal", "restore": null, "users_used": 3, "users_limit": 10}
+{"admin_setup": "pending", "setup_expires_at": "2026-10-23T09:12:44.512312Z", "mode": "normal", "restore": null, "users_used": 3, "users_limit": 10, "owner_email_change": null}
 ```
 
 | `admin_setup` | What it means | `setup_expires_at` |
@@ -932,10 +934,11 @@ curl -sS -H "Authorization: Bearer $LIBREFOLIO_PANEL_STATUS_TOKEN" \
 | `restore` | `null` when no restore was ever recorded on this instance; otherwise `state` (`pending`, `in_progress`, `committed`, `rolled_back`, or `unreadable` when the state of the restore cannot be read), `reason` (why a restore was rolled back: `first_start_failed`, `swap_interrupted`, `swap_failed` or `stage_missing`; for `unreadable`, why the state cannot be read: `io`, `not_a_file` or `invalid`), `waiting` (why a confirmed restore still waits: `backup_running`, `other_data_directory`, `server_running` or `instance_blocked`), `backup_created_at` and `stage_id`. Each is `null` when it does not apply. It never says who confirmed the restore |
 | `users_used` | The places the users take, a whole number from `0`: the active accounts, the invitations not yet used, revoked or expired, and the deactivated accounts that wait for their email verification while its link is live or, for the [initial administrator](#initial-admin), for the setup. Each account or invitation counts once. It is what `LIBREFOLIO_MAX_USERS` limits |
 | `users_limit` | The value of `LIBREFOLIO_MAX_USERS`, a whole number from `1`; `null` when it is not set, which means no limit |
+| `owner_email_change` | Where a [change of the owner's address](#owner-email-change) stands: `pending` (the new address was sent a confirmation link and the account keeps the old one until it is clicked), `blocked` (another account already holds the new address, so nothing changes: change the variable again to a free address) or `null` (no change is waiting, the instance is not managed, or its initial administrator has not set up yet). Never the address |
 
-- The answer holds these six keys and nothing else: `admin_setup`, `setup_expires_at`, `mode`,
-  `restore`, `users_used` and `users_limit`. The two last are counts only, never a username, an email
-  address or an id. Ignore the keys you do not know: a later version may add some.
+- The answer holds these seven keys and nothing else: `admin_setup`, `setup_expires_at`, `mode`,
+  `restore`, `users_used`, `users_limit` and `owner_email_change`. The two counts are numbers only,
+  never a username, an email address or an id; the last key never carries the address either. Ignore the keys you do not know: a later version may add some.
 - 📏 Compare `users_used` with `users_limit` to know when an instance is full. At the limit, nobody
   can sign up without an invitation and administrators cannot create invitations: see
   «When the Instance Is Full» in [Environment Variables](configuration.md), and

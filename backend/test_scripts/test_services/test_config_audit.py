@@ -160,6 +160,7 @@ from backend.app.api.v1.system import health as health_api
 from backend.app.config import PROFILE_DEFAULTS, SECRET_FILE_MAX_BYTES, SecretFileError, get_data_dir, get_settings, is_test_mode
 from backend.app.config import platform as platform_config
 from backend.app.config.platform import instance_blocked
+from backend.app.services.accounts import checks as accounts_checks
 from backend.app.services.accounts.checks import ACCOUNTS_CONFIG_CHECKS, check_login_limit
 from backend.app.services.email.checks import EMAIL_CONFIG_CHECKS, check_email_links, check_smtp_configuration, check_smtp_encryption
 from backend.app.services.platform import config_audit, plugin_secrets_check
@@ -201,6 +202,10 @@ _HOSTING_PANEL_CHECK: Callable[[], ConfigCheck] | None = getattr(config_audit, "
 #: test of the whole tuple in (c) fails naming L3 (``_l3``).
 _RECIPIENTS_CHECK: Callable[[], ConfigCheck] | None = getattr(backup_checks, "check_recipients", None)
 
+#: H5-4: A's check of the owner's email change (``accounts.owner_email_change``), listed right after the login limit's, read by
+#: name in the same way. ``None`` until then: ``CHECK_IDS`` leaves it out, and the test of the whole tuple in (c) fails naming H5-4.
+_OWNER_EMAIL_CHANGE_CHECK: Callable[[], ConfigCheck] | None = getattr(accounts_checks, "check_owner_email_change", None)
+
 #: The id of every check, in the order of ``CONFIG_CHECKS`` (c): the platform's, then workstream B's, A's and E's.
 CHECK_IDS: dict[Callable[[], ConfigCheck], str] = {
     check_jwt_secret: "platform.jwt_secret",
@@ -223,6 +228,8 @@ CHECK_IDS: dict[Callable[[], ConfigCheck], str] = {
     # L3: the instance's age recipients, the last of B's checks; left out while the module has no check_recipients
     **({_RECIPIENTS_CHECK: "backup.recipients"} if _RECIPIENTS_CHECK is not None else {}),
     check_login_limit: "accounts.login_limit",
+    # H5-4: the owner's email change, right after the login limit's; left out while the module has no check_owner_email_change
+    **({_OWNER_EMAIL_CHANGE_CHECK: "accounts.owner_email_change"} if _OWNER_EMAIL_CHANGE_CHECK is not None else {}),
     check_smtp_configuration: "email.smtp",
     check_smtp_encryption: "email.smtp_encryption",
     check_email_links: "email.links",
@@ -400,6 +407,13 @@ def _l3(name: str) -> Any:
     """``instance_backup.checks.<name>``, a name lot L3 checkpoint 2 adds, read when the test runs, as ``_h46`` reads H-46's: until the module has it, the test fails naming L3, while the rest of this file collects and runs."""
     value = getattr(backup_checks, name, None)
     assert value is not None, f"L3: instance_backup.checks has no {name}, the check of LIBREFOLIO_BACKUP_RECIPIENTS (backup.recipients), the last of BACKUP_CONFIG_CHECKS"
+    return value
+
+
+def _h54(name: str) -> Any:
+    """``accounts.checks.<name>``, a name H5-4 adds, read when the test runs, as ``_h46`` reads H-46's: until the module has it, the test fails naming H5-4, while the rest of this file collects and runs."""
+    value = getattr(accounts_checks, name, None)
+    assert value is not None, f"H5-4: accounts.checks has no {name}, the check of the owner's email change (accounts.owner_email_change), right after check_login_limit in ACCOUNTS_CONFIG_CHECKS"
     return value
 
 
@@ -704,7 +718,7 @@ def test_run_config_checks_evaluates_every_check_in_order_and_changes_nothing(co
 
 
 def test_config_checks_holds_every_check_in_its_place_with_its_id(configuration):
-    """(c) ``CONFIG_CHECKS`` is the platform's checks, the hosting panel check (H-61) then the test mode check last (H-46), then workstream B's ``BACKUP_CONFIG_CHECKS``, then workstream A's ``ACCOUNTS_CONFIG_CHECKS``, then E's three, which end it (``test_email_checks.py``, EMK-010); it holds every check with an id here, in the order of ``CHECK_IDS``, and no other — a new check comes with its tests —; ``run_config_checks`` gives each result the id of its check."""
+    """(c) ``CONFIG_CHECKS`` is the platform's checks, the hosting panel check (H-61) then the test mode check last (H-46), then workstream B's ``BACKUP_CONFIG_CHECKS``, then workstream A's ``ACCOUNTS_CONFIG_CHECKS`` (the login limit's, then H5-4's owner email change), then E's three, which end it (``test_email_checks.py``, EMK-010); it holds every check with an id here, in the order of ``CHECK_IDS``, and no other — a new check comes with its tests —; ``run_config_checks`` gives each result the id of its check."""
     print_section("Configuration checks: CONFIG_CHECKS whole")
     # H-46: CHECK_IDS holds the test mode check, the platform's last, only once the module has it
     _h46("check_test_mode")
@@ -712,6 +726,9 @@ def test_config_checks_holds_every_check_in_its_place_with_its_id(configuration)
     _h61("check_hosting_panel")
     # L3: and the recipients' check, the last of B's, only once the module has it
     _l3("check_recipients")
+    # H5-4: and the owner's email change check, right after the login limit's, only once A's module has it
+    _h54("check_owner_email_change")
+    assert tuple(ACCOUNTS_CONFIG_CHECKS) == (check_login_limit, _h54("check_owner_email_change")), "H5-4: ACCOUNTS_CONFIG_CHECKS is the login limit's check, then the owner's email change's"
     sections = (*BACKUP_CONFIG_CHECKS, *ACCOUNTS_CONFIG_CHECKS, *EMAIL_CONFIG_CHECKS)
     platform = tuple(check for check in CHECK_IDS if check not in sections)
 
