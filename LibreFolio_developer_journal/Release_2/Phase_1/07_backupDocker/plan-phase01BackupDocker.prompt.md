@@ -8032,3 +8032,9 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >    (15 casi API + 2 Vitest), nessuna cura.
 > **⚠️ Fuori pista**: `_largest_session_version` (lettura di `previous/`) non imposta `trusted_schema=OFF`: fuori dal percorso vivo, non
 > toccata. `black --check` fallisce già su `_backend_api.py` in HEAD (righe non mie).
+
+#### B5-1h — `trusted_schema = OFF` nella lettura di `previous/` ✅ 2026-10-24
+
+> **Note implementazione**: `apply._largest_session_version` apre la connessione a sola lettura e come primo comando dà
+> `PRAGMA trusted_schema = OFF`, come tutte le altre letture di una copia. Rosso prima (test con `RecordingConnect`, anche 0 per
+> percorso mancante o cartella), poi una riga. `backup-apply` 420, `backup-owner` 98, su data dir nuova `/tmp/librefolio-r13-b51h`.
