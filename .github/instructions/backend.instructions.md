@@ -84,7 +84,7 @@ layer — its boundaries, imports and guards — are in `financial-math.instruct
 | Day count conventions (ACT/365, ACT/360, ACT/ACT, 30/360), simple interest, daily compounding over a span in closed form | `services/financial_math/interest.py` |
 | Daily price mark of an asset for valuation | `services/financial_math/price_marks.py` |
 | Yield on Cost | `services/financial_math/yield_on_cost.py` |
-| Stock splits linked to the ledger: their rows, the usable ratio, and the incoming adjustments without a cost a SPLIT may not lose by a retype | `services/financial_math/splits.py` |
+| Stock splits linked to the ledger: their rows, the usable ratio, the incoming adjustments without a cost a SPLIT may not lose by a retype, and the ratio a share change implies (`implied_split_ratio`, an import's «possible split») | `services/financial_math/splits.py` |
 | Weights and concentration: a share of a total, allocation slices, gross weights, largest weight and Herfindahl index | `services/financial_math/weights.py` |
 | Holding window of a position: oldest lot still open, a closed position's flight time | `services/financial_math/holding_window.py` |
 | FX conversion | `services/fx/conversion.py` (`convert_bulk`) |
