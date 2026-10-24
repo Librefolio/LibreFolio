@@ -270,6 +270,16 @@ def _is_crypto_header(fieldnames: Optional[List[str]]) -> bool:
 # =============================================================================
 
 
+def _most_frequent_currency(rows: List[Dict[str, str]]) -> Optional[str]:
+    """The currency most rows of the file name in their ``Currency`` column, None when none does."""
+    counts: Dict[str, int] = {}
+    for row in rows:
+        code = (row.get(COL_CURRENCY) or "").strip().upper()
+        if len(code) == 3 and code.isalpha():
+            counts[code] = counts.get(code, 0) + 1
+    return max(counts, key=lambda code: counts[code]) if counts else None
+
+
 @register_provider(BRIMProviderRegistry)
 class RevolutBrokerProvider(BRIMProvider):
     """Revolut Trading CSV export import plugin."""
@@ -355,10 +365,13 @@ class RevolutBrokerProvider(BRIMProvider):
         skips = io.RowSkips(reader.fieldnames)
         field_todos: List[BRIMFieldTodo] = []
         quiet = 0
+        rows = list(reader)
+        file_currency = _most_frequent_currency(rows)
+        held: Dict[str, Decimal] = {}  # shares per ticker, from the rows above: what a split row multiplies
 
         row_num = 1
 
-        for row in reader:
+        for row in rows:
             row_num += 1
 
             tx_type_raw = row.get(COL_TYPE, "").strip().lower()
@@ -434,6 +447,9 @@ class RevolutBrokerProvider(BRIMProvider):
 
             if is_split:
                 quantity = split_quantity  # the shares added, as the file wrote them
+                # A zero cost needs a currency but no rate: the row's own, else the file's usual one, else the symbol's.
+                cost_currency = row.get(COL_CURRENCY, "").strip().upper() or file_currency or currency
+            held_before = held.get(ticker) if ticker else None
             created = self._create_transaction(
                 row_num=row_num,
                 transactions=transactions,
@@ -445,12 +461,14 @@ class RevolutBrokerProvider(BRIMProvider):
                 date=tx_date,
                 quantity=quantity,
                 cash=None if is_split else (Currency(code=currency, amount=amount) if amount else None),
-                cost_basis_override=Currency(code=currency or "USD", amount=Decimal("0")) if is_split else None,
+                cost_basis_override=Currency(code=cost_currency, amount=Decimal("0")) if is_split else None,
                 description=f"{tx_type_raw}: {ticker}" if ticker else tx_type_raw,
                 tags=["import", "revolut"],
             )
+            if created is not None and asset_id is not None and quantity:
+                held[ticker] = held.get(ticker, Decimal("0")) + quantity
             if is_split and created is not None:
-                field_todos.append(io.possible_split_todo(len(transactions) - 1, row_num, reader.fieldnames or [], row, ticker=ticker, added_quantity=quantity))
+                field_todos.append(io.possible_split_todo(len(transactions) - 1, row_num, reader.fieldnames or [], row, ticker=ticker, added_quantity=quantity, held_before=held_before))
 
         if not transactions:
             warnings.append("No valid transactions found in file")

@@ -189,6 +189,32 @@ def _assert_possible_split(out: BRIMParseOutput, tx_index: int, context: Mapping
     _assert_evidence_holds(todo, *evidence_texts)
 
 
+RATIO_KEYS = ("held_before", "ratio", "suggested_ratio", "rounding_delta")
+
+
+def _split_context(out: BRIMParseOutput, tx_index: int) -> Mapping[str, str]:
+    """The ``context`` of the one ``possible_split`` todo of the transaction (the todo itself is pinned by ``_assert_possible_split``)."""
+    todos = _todos_of(out, tx_index)
+    assert len(todos) == 1, f"transaction {tx_index} has {len(todos)} field todo(s)"
+    assert todos[0].context is not None
+    return todos[0].context
+
+
+def _assert_ratio_context(out: BRIMParseOutput, tx_index: int, *, held_before: str, ratio: str, suggested_ratio: str, rounding_delta: str) -> None:
+    """The four decimal strings of the split's ``context`` (W5-2b): the shares held before, the exact ratio (8 decimals), the round ratio
+    (6 decimals) and what the round ratio leaves over in the shares added. The expected strings are written by hand in each test."""
+    context = _split_context(out, tx_index)
+    got = {key: context.get(key) for key in RATIO_KEYS}
+    assert got == {"held_before": held_before, "ratio": ratio, "suggested_ratio": suggested_ratio, "rounding_delta": rounding_delta}, f"context {dict(context)}"
+
+
+def _assert_no_ratio_context(out: BRIMParseOutput, tx_index: int) -> None:
+    """The shares held before the split are unknown (or not positive): none of the four keys is there, the rest of the todo is."""
+    context = _split_context(out, tx_index)
+    assert not set(RATIO_KEYS) & set(context), f"the keys {sorted(set(RATIO_KEYS) & set(context))} must be absent, the context is {dict(context)}"
+    assert "ticker" in context and "added_quantity" in context
+
+
 # =============================================================================
 # A. eToro
 # =============================================================================
@@ -550,6 +576,143 @@ class TestRevolutStockSplit:
         _assert_not_listed(out, good)
 
 
+_REVOLUT_SAMPLE_TSLA_SPLIT = ["2022-08-25T08:27:46.419568Z", "TSLA", "STOCK SPLIT", "0.16431924", "", "$0", "USD", "0.0947"]
+_CURRENCY_SYMBOL = {"USD": "$", "EUR": "€", "GBP": "£"}
+
+
+def _revolut_trade(kind: str, quantity: str, *, ticker: str = "AAPL", stamp: str = "2024-01-10T10:00:00.000Z", currency: str = "USD") -> List[str]:
+    """A ``BUY - MARKET`` / ``SELL - MARKET`` row of 100 per share in ``currency`` (the quantity as the file writes it, positive)."""
+    symbol = _CURRENCY_SYMBOL[currency]
+    return [stamp, ticker, f"{kind} - MARKET", quantity, f"{symbol}100", f"{symbol}1000", currency, "1.0"]
+
+
+def _revolut_split_row(quantity: str, *, ticker: str = "AAPL", currency: str = "USD", total: str = "$0") -> List[str]:
+    return ["2024-01-15T10:00:00.000Z", ticker, "STOCK SPLIT", quantity, "", total, currency, "1.0"]
+
+
+def _revolut_parse(tmp_path: Path, rows: Sequence[Row]) -> Tuple[BRIMParseOutput, List[int]]:
+    path, lines = _write_rows(tmp_path, REVOLUT_SAMPLE, rows, ",")
+    return _plugin(REVOLUT).parse(path, broker_id=BROKER_ID), lines
+
+
+def _revolut_the_split(out: BRIMParseOutput, quantity: str) -> Tuple[int, TXCreateItem]:
+    found = [(index, tx) for index, tx in _adjustments(out) if tx.quantity == Decimal(quantity)]
+    assert len(found) == 1, f"the split of {quantity} shares gives {len(found)} ADJUSTMENT(s); the output has {[(t.type.value, t.quantity) for t in out.transactions]}"
+    return found[0]
+
+
+class TestRevolutSplitRatio:
+    """C (W5-2b) — the ``possible_split`` context says how many shares were held before the split and the ratio they imply, so the Bulk editor can
+    check the row against the SPLIT event: ``held_before``, ``ratio``, ``suggested_ratio``, ``rounding_delta`` (decimal strings, normalised).
+    The shares held are the signed sum of the ticker's rows ABOVE the split row in the file's order."""
+
+    def test_the_sample_split_is_the_first_row_of_tsla_so_the_holding_is_unknown(self):
+        """Guard (green today and after): in the SAMPLE the split is line 9 and the TSLA rows of lines 10 and 11 come AFTER it in the file, so no
+        holding is known and none of the four keys may be invented."""
+        out = _sample(REVOLUT, REVOLUT_SAMPLE)
+        lines = _physical_lines(REVOLUT_SAMPLE)
+        assert [index + 1 for index, line in enumerate(lines) if ",TSLA," in line][0] == REVOLUT_SPLIT_LINE, "fixture guard: the split is the first TSLA row"
+        index, _ = _revolut_split_adjustment(out)
+
+        _assert_no_ratio_context(out, index)
+
+    def test_the_sample_split_row_after_a_holding_of_tsla_gives_ratio_three(self, tmp_path: Path):
+        """The sample's own split row (0.16431924 added) after a TSLA buy of 0.08215962: 0.24647886 / 0.08215962 = 3, nothing left over."""
+        out, _ = _revolut_parse(tmp_path, [_revolut_trade("BUY", "0.08215962", ticker="TSLA", stamp="2022-08-01T08:00:00.000Z"), _REVOLUT_SAMPLE_TSLA_SPLIT])
+
+        index, _ = _revolut_the_split(out, "0.16431924")
+
+        _assert_ratio_context(out, index, held_before="0.08215962", ratio="3", suggested_ratio="3", rounding_delta="0")
+        _assert_possible_split(out, index, {"ticker": "TSLA", "added_quantity": "0.16431924"}, "STOCK SPLIT")
+
+    def test_a_rounded_row_has_a_round_ratio_and_a_rounding_delta(self, tmp_path: Path):
+        """10 shares held, 19.99 added: ratio 2.999, the round ratio is 3, which would add 20: 0.01 more than the row."""
+        out, _ = _revolut_parse(tmp_path, [_revolut_trade("BUY", "10"), _revolut_split_row("19.99")])
+
+        index, _ = _revolut_the_split(out, "19.99")
+
+        _assert_ratio_context(out, index, held_before="10", ratio="2.999", suggested_ratio="3", rounding_delta="0.01")
+
+    def test_the_holding_is_the_signed_sum_of_the_rows_above(self, tmp_path: Path):
+        """12 bought, 2 sold = 10 held; a buy of ANOTHER ticker does not count. 10 held, 10 added: ratio 2."""
+        rows = [_revolut_trade("BUY", "12"), _revolut_trade("SELL", "2"), _revolut_trade("BUY", "7", ticker="MSFT"), _revolut_split_row("10")]
+
+        out, _ = _revolut_parse(tmp_path, rows)
+
+        index, _ = _revolut_the_split(out, "10")
+        _assert_ratio_context(out, index, held_before="10", ratio="2", suggested_ratio="2", rounding_delta="0")
+
+    def test_a_ratio_without_a_round_fraction_stays_as_it_is_at_six_decimals(self, tmp_path: Path):
+        """7 held, 10.3 added: ratio 2.47142857; no p/q with q <= 5 is within 0.5 % of it (5/2 is 1.2 % off), so the suggestion is the ratio to 6
+        decimals, 2.471429, and the delta is 7 x 1.471429 - 10.3 = 0.000003."""
+        out, _ = _revolut_parse(tmp_path, [_revolut_trade("BUY", "7"), _revolut_split_row("10.3")])
+
+        index, _ = _revolut_the_split(out, "10.3")
+
+        _assert_ratio_context(out, index, held_before="7", ratio="2.47142857", suggested_ratio="2.471429", rounding_delta="0.000003")
+
+    def test_a_split_without_history_has_none_of_the_four_keys(self, tmp_path: Path):
+        """The split is the first row of its ticker (a buy of another ticker above it does not help): the todo stays, with the old context only."""
+        out, _ = _revolut_parse(tmp_path, [_revolut_trade("BUY", "7", ticker="MSFT"), _revolut_split_row("10", ticker="AAPL")])
+
+        index, _ = _revolut_the_split(out, "10")
+
+        _assert_no_ratio_context(out, index)
+        _assert_possible_split(out, index, {"ticker": "AAPL", "added_quantity": "10"}, "STOCK SPLIT")
+
+    def test_a_holding_that_is_not_positive_has_none_of_the_four_keys(self, tmp_path: Path):
+        """Bought 5, sold 5: nothing held above the split, so no ratio can be told."""
+        out, _ = _revolut_parse(tmp_path, [_revolut_trade("BUY", "5"), _revolut_trade("SELL", "5"), _revolut_split_row("10")])
+
+        index, _ = _revolut_the_split(out, "10")
+
+        _assert_no_ratio_context(out, index)
+
+
+class TestRevolutSplitCostCurrency:
+    """C (W5-2b) — the currency of the zero cost: the ``Currency`` cell of the row; else the currency most rows of the file have; else the one of
+    the symbol of ``Total Amount``."""
+
+    def test_a_row_with_its_own_currency_uses_it(self, tmp_path: Path):
+        """Guard (green today and after): the cell says GBP, the other rows are EUR, the cost is in GBP."""
+        out, _ = _revolut_parse(tmp_path, [_revolut_trade("BUY", "10", currency="EUR"), _revolut_split_row("10", currency="GBP", total="£0")])
+
+        _, adjustment = _revolut_the_split(out, "10")
+
+        assert adjustment.cost_basis_override == Currency(code="GBP", amount=Decimal("0"))
+
+    def test_an_empty_currency_takes_the_currency_of_the_file(self, tmp_path: Path):
+        """Every other row is EUR, the split row has no ``Currency`` and no ``Total Amount``: EUR, not the USD fallback."""
+        out, _ = _revolut_parse(tmp_path, [_revolut_trade("BUY", "10", currency="EUR"), _revolut_trade("BUY", "5", currency="EUR", stamp="2024-01-11T10:00:00.000Z"), _revolut_split_row("15", currency="", total="")])
+
+        _, adjustment = _revolut_the_split(out, "15")
+
+        assert adjustment.cost_basis_override == Currency(code="EUR", amount=Decimal("0"))
+
+    def test_an_empty_currency_takes_the_most_frequent_currency_of_the_file(self, tmp_path: Path):
+        """Two EUR rows and one GBP row: the most frequent currency, EUR."""
+        rows = [
+            _revolut_trade("BUY", "10", currency="EUR"),
+            _revolut_trade("BUY", "5", currency="GBP", stamp="2024-01-11T10:00:00.000Z"),
+            _revolut_trade("BUY", "3", currency="EUR", stamp="2024-01-12T10:00:00.000Z"),
+            _revolut_split_row("18", currency="", total=""),
+        ]
+
+        out, _ = _revolut_parse(tmp_path, rows)
+
+        _, adjustment = _revolut_the_split(out, "18")
+        assert adjustment.cost_basis_override == Currency(code="EUR", amount=Decimal("0"))
+
+    @pytest.mark.parametrize(("total", "code"), [("$0", "USD"), ("£0", "GBP"), ("€0", "EUR")], ids=["dollar", "pound", "euro"])
+    def test_a_file_with_no_currency_at_all_takes_the_symbol_of_the_total(self, total: str, code: str, tmp_path: Path):
+        """Guard (green today and after): no row of the file has a ``Currency``: the symbol of the row's ``Total Amount`` decides."""
+        out, _ = _revolut_parse(tmp_path, [_revolut_split_row("10", currency="", total=total)])
+
+        _, adjustment = _revolut_the_split(out, "10")
+
+        assert adjustment.cost_basis_override == Currency(code=code, amount=Decimal("0"))
+
+
 # =============================================================================
 # D. Trading 212
 # =============================================================================
@@ -698,6 +861,48 @@ class TestTrading212SplitPair:
         assert adjustment.cost_basis_override == Currency(code="EUR", amount=Decimal("0"))
         _assert_possible_split(out, index, {"ticker": T212_TICKER, "added_quantity": "20", "isin": T212_ISIN}, "Stock split open")
         _assert_not_listed(out, 3, 4)
+
+
+class TestTrading212SplitRatio:
+    """D (W5-2b) — the ``possible_split`` context of a pair: the shares held are those of the ``close`` row, the ratio is open / close."""
+
+    def test_a_multiplicative_pair_gives_ratio_three(self, tmp_path: Path):
+        out, _ = _t212_parse(tmp_path, [_t212_split("close", "10"), _t212_split("open", "30")])
+
+        index, _ = _t212_split_adjustment(out)
+
+        _assert_ratio_context(out, index, held_before="10", ratio="3", suggested_ratio="3", rounding_delta="0")
+        _assert_possible_split(out, index, {"ticker": T212_TICKER, "added_quantity": "20", "isin": T212_ISIN}, "Stock split open")
+
+    def test_a_ratio_with_no_round_fraction_within_the_threshold_keeps_six_decimals(self, tmp_path: Path):
+        """3 close, 7.1 open: 4.1 added, ratio 2.36666667. The round fractions with q <= 5 nearest to it, 7/3 and 12/5, are 1.4 % away, outside the
+        0.5 % threshold (19/8 would be inside, but q = 8 is not a round ratio: the developer set the limit at 5), so the suggestion is 2.366667
+        and the delta is 3 x 1.366667 - 4.1 = 0.000001."""
+        out, _ = _t212_parse(tmp_path, [_t212_split("close", "3"), _t212_split("open", "7.1")])
+
+        index, adjustment = _t212_split_adjustment(out)
+
+        assert adjustment.quantity == Decimal("4.1")
+        _assert_ratio_context(out, index, held_before="3", ratio="2.36666667", suggested_ratio="2.366667", rounding_delta="0.000001")
+
+    def test_a_ratio_without_a_round_fraction_stays_as_it_is_at_six_decimals(self, tmp_path: Path):
+        """7 close, 17.3 open: 10.3 added, ratio 2.47142857, no fraction with q <= 5 within 0.5 %: suggestion 2.471429, delta 0.000003."""
+        out, _ = _t212_parse(tmp_path, [_t212_split("close", "7"), _t212_split("open", "17.3")])
+
+        index, _ = _t212_split_adjustment(out)
+
+        _assert_ratio_context(out, index, held_before="7", ratio="2.47142857", suggested_ratio="2.471429", rounding_delta="0.000003")
+
+    def test_two_pairs_of_two_isins_each_have_their_own_ratio(self, tmp_path: Path):
+        other = {"isin": "US0000000002", "ticker": "OTHR", "name": "Other Corp"}
+        rows = [_t212_split("close", "10"), _t212_split("close", "5", **other), _t212_split("open", "10", **other), _t212_split("open", "30")]
+
+        out, _ = _t212_parse(tmp_path, rows)
+
+        index_a, _ = _t212_split_adjustment(out, T212_ISIN)
+        index_b, _ = _t212_split_adjustment(out, "US0000000002")
+        _assert_ratio_context(out, index_a, held_before="10", ratio="3", suggested_ratio="3", rounding_delta="0")
+        _assert_ratio_context(out, index_b, held_before="5", ratio="2", suggested_ratio="2", rounding_delta="0")
 
 
 class TestTrading212SplitsLeftOut:

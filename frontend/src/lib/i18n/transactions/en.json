@@ -129,7 +129,20 @@
       "issueRowsHidden": "The affected rows are hidden by the table filters.",
       "unseenSuggestionsTitle": "Suggestions you have not looked at",
       "unseenSuggestionsMessage": "{n, plural, one {# suggestion to merge two transactions has} other {# suggestions to merge two transactions have}} not been looked at yet. Merging the two halves of a transfer keeps them from counting as a separate deposit and withdrawal. Save anyway?",
-      "unseenSuggestionsReview": "Show the suggestions"
+      "unseenSuggestionsReview": "Show the suggestions",
+      "possibleSplit": {
+        "title": "{n, plural, one {# row may be a stock split} other {# rows may be stock splits}}",
+        "explain": "These shares came in at no cost. If it is a split, link a SPLIT event so the cost is spread over all your shares. If not, the average cost of your position goes down.",
+        "create": "Create the SPLIT event and link",
+        "link": "Link to an existing event",
+        "goto": "Go to row",
+        "assetNeeded": "Choose the asset of this row first.",
+        "quantityAdded": "+{quantity} shares",
+        "ratioLabel": "Split ratio (new shares per old share)",
+        "ratioHint": "Type 3 for a 3-for-1 split, 0.25 for a 1-for-4 reverse split. The shares you hold are multiplied by this number.",
+        "ratio": "Ratio {ratio} (from your holding of {held})",
+        "rounding": "The broker rounded the quantity: with ratio {ratio} this row differs by {delta} shares from your holding times the ratio. Lots and the Dashboard can show a small gap."
+      }
     },
     "commit": {
       "serverError": "Save failed — server error"

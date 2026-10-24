@@ -32,11 +32,24 @@ To export your transaction statement from Trading212:
 
 ## 🔀 Stock Splits
 
-Trading212 writes a split as two rows, **Stock split close** (the old shares leave) and **Stock split open** (the new shares arrive), for the same ISIN at the same instant. When the shares after the split are **more** than before, LibreFolio imports the pair as one incoming **Adjustment** of the difference, at no cost. The Bulk editor will mark it as *may be a stock split*, so you can create the **Split** event and link it, or link an existing one: see [Asset Events](../../assets/detail/events.md).
+Trading212 writes a split as two rows, **Stock split close** (the old shares leave) and **Stock split open** (the new shares arrive), for the same ISIN at the same instant. When the shares after the split are **more** than before, LibreFolio imports the pair as one incoming **Adjustment** of the difference, at no cost.
+
+The importer cannot tell a split from a gift or a spin-off, so it flags the row. The end of the import wizard (the **Review** step) tells you how many rows look like splits, and the Bulk editor shows a banner, *N rows may be stock splits*. For each row it lists the ticker, the shares added and the date. Since the **Stock split close** row holds the shares you had before, it also shows the **ratio** that results (for example 3 for a 3-for-1 split) and the shares held.
+
+Two buttons let you settle it:
+
+- **Create the SPLIT event and link** opens the small event form with the type already set to **Split** and the ratio filled in with the suggested one. You can change it: type `3` for a 3-for-1 split, `0.25` for a 1-for-4 reverse split.
+- **Link to an existing event** lets you pick one of the asset's events, if you already created the split.
+
+Once the row is linked, the banner entry goes away. If the row's asset is not chosen yet, the banner asks you to choose it first. For more on events, see [Asset Events](../../assets/detail/events.md).
+
+!!! note "🔢 When the broker rounds the quantity"
+
+    Brokers sometimes round the shares they write (for example 0.1643 instead of 0.16431924). If the quantity of the row differs from your holding times the ratio minus one, the banner says so and gives the difference in shares. The **Lots** view follows the ratio of the event, while the **Dashboard** and the average cost follow the quantity of the row. The gap is small, but after selling the whole position a tiny lot that cannot be sold may be left over.
 
 !!! warning "Link the split to a Split event"
 
-    Until the row is linked to a **Split** event, the new shares enter without cost and dilute the average cost of the asset. Linking it makes the cost follow the old shares, which is right for a split. The file does not say whether the shares come from a split, a gift or a spin-off, so the choice stays with you.
+    Until the row is linked to a **Split** event, the new shares enter without cost and dilute the average cost of the asset. The **Lots** view shows a lot with a cost of 0. If you sell part of the position, LibreFolio first sells the old, expensive lots at the price after the split, so you see a loss, and later a gain when the zero-cost lot is used up. An asset without quotations also stays overvalued: the new shares count at full value, even though the price has not been divided. Linking the event makes the cost follow the old shares, which is right for a split. The file does not say whether the shares come from a split, a gift or a spin-off, so the choice stays with you.
 
 ## 🚧 Known limitations
 
