@@ -1169,20 +1169,22 @@ async def test_a_brim_plugin_is_listed_in_its_family_with_its_name_and_its_icon(
 
 @pytest.mark.asyncio
 async def test_a_test_only_brim_plugin_is_never_in_the_unnamed_catalogue(engine: AsyncEngine, people: dict[str, User], brim_plugin: type):
-    """7: the lab plugin is registered and declares fields, and is still hidden unless named; no real BRIM plugin declares
-    a field, so the BRIM group of the unnamed catalogue is empty. The count is the subject: nothing else is in the family."""
+    """7: the lab plugin is registered and declares fields, and is still hidden unless named; the only real BRIM plugin that
+    declares a field is ``broker_generic_csv`` (``date_order``, W5-8), so the BRIM group of the unnamed catalogue is that one
+    alone. The group is the subject: nothing else is in the family."""
     everything = await _catalogue(engine, people["admin"])
     brim_only = await _catalogue(engine, people["admin"], family="brim")
 
     assert BRIM_CODE in BRIMProviderRegistry.list_plugin_codes(), "barrier: registered and served in test mode"
-    assert [plugin.plugin_code for plugin in everything.plugins if plugin.family == "brim"] == []
-    assert brim_only.plugins == []
+    assert [plugin.plugin_code for plugin in everything.plugins if plugin.family == "brim"] == ["broker_generic_csv"]
+    assert [plugin.plugin_code for plugin in brim_only.plugins] == ["broker_generic_csv"]
 
 
 @pytest.mark.asyncio
-async def test_the_real_brim_plugins_are_absent_from_the_catalogue(engine: AsyncEngine, people: dict[str, User]):
-    """7, guard: they declare nothing, so none is listed, named or not, under any family."""
-    codes = BRIMProviderRegistry.list_plugin_codes()
+async def test_the_real_brim_plugins_without_fields_are_absent_from_the_catalogue(engine: AsyncEngine, people: dict[str, User]):
+    """7, guard: a real plugin that declares nothing is not listed, named or not, under any family; only
+    ``broker_generic_csv`` (``date_order``) is."""
+    codes = [code for code in BRIMProviderRegistry.list_plugin_codes() if code != "broker_generic_csv"]
     assert codes, "barrier: the BRIM registry holds plugins"
     everything = await _catalogue(engine, people["admin"])
 

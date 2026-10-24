@@ -4,5 +4,23 @@
       "name": "Generic CSV",
       "description": "Import transactions from a generic CSV file. Auto-detects columns based on header names. Supports various date and number formats."
     }
+  },
+  "pluginSettings": {
+    "brim": {
+      "broker_generic_csv": {
+        "label": {
+          "date_order": "Order of day and month"
+        },
+        "description": {
+          "date_order": "How a date such as 03/04/2025 is read in a generic CSV: the day first (3 April) or the month first (4 March). A date that cannot be read the first way is read the other way (25/12/2025 is always 25 December)."
+        },
+        "option": {
+          "date_order": {
+            "day_first": "Day first (03/04 = 3 April)",
+            "month_first": "Month first (03/04 = 4 March)"
+          }
+        }
+      }
+    }
   }
 }
