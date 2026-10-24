@@ -379,10 +379,15 @@ async def create_password_reset(
     *,
     created_by_user_id: Optional[int] = None,
     now: Optional[datetime] = None,
+    email: Optional[str] = None,
 ) -> token_service.IssuedToken:
-    """Issue a password-reset link for ``user``, revoking the live ones issued before; flushed, not committed."""
+    """Issue a password-reset link for ``user``, revoking the live ones issued before; flushed, not committed.
+
+    ``email`` marks the link with an address, which nothing else reads: the restore's owner assignment (A5-2,
+    ``instance_owner.assign_owner_and_send_reset``) finds its own link by the owner's address.
+    """
     await token_service.revoke_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.PASSWORD_RESET, now=now)
-    issued = await token_service.issue_token(session, AccountTokenPurpose.PASSWORD_RESET, user_id=user.id, created_by_user_id=created_by_user_id, now=now)
+    issued = await token_service.issue_token(session, AccountTokenPurpose.PASSWORD_RESET, user_id=user.id, email=email, created_by_user_id=created_by_user_id, now=now)
     logger.info("Password reset link created", user_id=user.id, token_id=issued.record.id, created_by_user_id=created_by_user_id)
     return issued
 
