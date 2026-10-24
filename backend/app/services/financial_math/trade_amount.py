@@ -34,6 +34,17 @@ def amount_from_unit_price(quantity: Decimal, unit_price: Decimal, quote_base_qu
         return _round_to_scale(compute_holding_value(quantity, unit_price, quote_base_quantity), scale)
 
 
+def unit_price_on_quote_axis(quantity: Decimal, amount: Decimal, quote_base_quantity: int | None) -> Decimal:
+    """The unit price per ``quote_base_quantity`` units that ``amount`` paid for ``quantity`` units: ``amount / quantity ×
+    base``, unrounded, in the caller's decimal context — the one home of a trade's price on the quote's axis.
+
+    The division comes first, then the base: the order the trade marks of ``price_marks`` always used, which at the
+    default 28 digits decides the last digit for a base other than a power of ten. Signs follow the inputs; a zero
+    quantity raises (``ZeroDivisionError``, or ``InvalidOperation`` for 0 / 0).
+    """
+    return amount / quantity * Decimal(normalize_quote_base_quantity(quote_base_quantity))
+
+
 def unit_price_from_amount(quantity: Decimal, amount: Decimal, quote_base_quantity: int | None, *, scale: int) -> Decimal:
     """The unit price (per ``quote_base_quantity`` units) that ``amount`` paid for ``quantity`` units, rounded to ``scale`` decimals.
 
@@ -44,5 +55,4 @@ def unit_price_from_amount(quantity: Decimal, amount: Decimal, quote_base_quanti
     with localcontext() as context:
         context.prec = _WORKING_PRECISION
         context.rounding = ROUND_HALF_EVEN
-        base = Decimal(normalize_quote_base_quantity(quote_base_quantity))
-        return _round_to_scale(amount * base / quantity, scale)
+        return _round_to_scale(unit_price_on_quote_axis(quantity, amount, quote_base_quantity), scale)
