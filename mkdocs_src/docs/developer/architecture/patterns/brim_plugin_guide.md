@@ -1110,6 +1110,7 @@ BRIMFieldTodo(
 | `blocker` | anything else (e.g. `cost_basis_override`) | Carried on the transaction, but **not** shown in the correction step — that screen cannot fix it. |
 | `warning` | `asset_id` | Correction step, **"charges" panel** — a fee or an income with no instrument. |
 | `warning` | any, with `context.split_hint` | Correction step, **"split" panel** — see below. |
+| `warning` | `asset_event_id`, `reason_code="possible_split"` | Not in the correction step: it is carried to the Bulk editor, which marks the row «may be a split» and answers it with a SPLIT event (`_brim_io.possible_split_todo`, Revolut and Trading 212: [Possible splits](#possible-split)). |
 
 A row is filed by its **worst** todo: a `blocker` that also carries `split_hint` lands in the
 trades panel, and its split zone appears there as soon as the user types the row into a
@@ -1123,6 +1124,17 @@ one, and its total is bundled for exactly the same reason.
     purchase the plugin could only record as a cash withdrawal gets compared against cash
     withdrawals — a real duplicate is missed, an imaginary one invented. Correcting after
     the comparison cannot repair that; correcting before it can.
+
+### ✂️ A broker's split row: the possible split {: #possible-split }
+
+A broker that reports a **multiplicative** split as a row (Revolut `STOCK SPLIT`, Trading 212 `Stock split close` + `open`) does not say how
+the position is meant to be read. The plugin imports the **shares added** as an incoming `ADJUSTMENT` with `cost_basis_override` of `0`
+(the new shares of a split cost nothing; a positive adjustment requires a cost) and sends `_brim_io.possible_split_todo(...)`: a
+`BRIMFieldTodo` on `asset_event_id`, `severity="warning"`, `reason_code="possible_split"`, with `context` `{ticker, added_quantity, isin?}`
+and the source row as evidence. Without an event, those shares would dilute the average cost like a gift; linked to a SPLIT event,
+`financial_math/splits.py` makes the cost follow the old shares. **A plugin never creates the event**: the user does, in the Bulk editor.
+A split with no readable positive quantity (a reverse split), equal shares or no partner row is **not imported**: `skips.unknown(...)`,
+the notice with the link to open an issue. Pair rows by a key the file gives (the ISIN) and the time, never by position.
 
 ### 🗝️ `context` keys the frontend understands
 

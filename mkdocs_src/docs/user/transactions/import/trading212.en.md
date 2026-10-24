@@ -26,9 +26,23 @@ To export your transaction statement from Trading212:
 
 ## 📝 Notes
 
-- Supports stock/ETF buys and sells, dividends, interest on cash, deposits, withdrawals, and FX conversion fees.
+- Supports stock/ETF buys and sells, dividends, interest on cash, deposits and withdrawals.
 - Multi-currency accounts are supported.
-- **Stock splits, share distributions and currency conversions are not imported yet**: the rows are listed in an amber warning, with a link to open an issue on GitHub. Add them by hand. Transfers between your own accounts are left out quietly, since they change nothing.
+- Transfers between your own accounts are left out quietly, since they change nothing.
+
+## 🔀 Stock Splits
+
+Trading212 writes a split as two rows, **Stock split close** (the old shares leave) and **Stock split open** (the new shares arrive), for the same ISIN at the same instant. When the shares after the split are **more** than before, LibreFolio imports the pair as one incoming **Adjustment** of the difference, at no cost. The Bulk editor will mark it as *may be a stock split*, so you can create the **Split** event and link it, or link an existing one: see [Asset Events](../../assets/detail/events.md).
+
+!!! warning "Link the split to a Split event"
+
+    Until the row is linked to a **Split** event, the new shares enter without cost and dilute the average cost of the asset. Linking it makes the cost follow the old shares, which is right for a split. The file does not say whether the shares come from a split, a gift or a spin-off, so the choice stays with you.
+
+## 🚧 Known limitations
+
+- **Splits that are not imported.** A reverse split (fewer shares after than before), a split with the same number of shares, and a split row without its pair are listed in an amber warning, with a link to open an issue on GitHub: add them by hand.
+- **Share distributions and currency conversions are not imported.** The **Stock distribution** and **Currency conversion** rows are listed in the same warning: add them by hand.
+- **Something is off?** Please [open an issue](https://github.com/Librefolio/LibreFolio/issues) with an anonymised example file.
 
 ## 🔗 Developer Reference
 

@@ -20,9 +20,10 @@ This plugin parses Swissquote semicolon-separated CSV exports.
 - Tax / Withholding → TAX
 
 **Limitations:**
-- Forex credit/debit legs are skipped with warnings. LibreFolio requires paired
-  FX_CONVERSION transactions with non-zero cash and link_uuid; standalone
-  Swissquote forex legs have no ISIN/Symbol and are not imported by this plugin.
+- Forex credit/debit legs with the same ``Order #`` become one linked FX_CONVERSION pair (a
+  credit and a debit, in two currencies, no costs). A leg without its partner, an order with
+  more than two legs, a leg that carries costs, or two legs in one currency are not imported:
+  they are listed with the link to open an issue.
 - Costs and accrued interest are folded into the transaction description rather
   than emitted as separate transactions to avoid double-counting Net Amount.
 """
@@ -30,11 +31,12 @@ This plugin parses Swissquote semicolon-separated CSV exports.
 from __future__ import annotations
 
 import csv
+import uuid
 from datetime import date as date_type
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import structlog
 
@@ -109,6 +111,38 @@ def _parse_swissquote_number(value: str) -> Optional[Decimal]:
         return None
 
 
+# Namespace of the link ids of the forex pairs: the same file always gives the same ids.
+_LINK_NAMESPACE = uuid.UUID("5d2a0c0e-6f43-4c53-9a35-3b6a8c1e2f10")
+
+
+def _forex_pair(order: str, legs: List[Tuple[int, Dict[str, str]]]) -> Optional[List[Tuple[Tuple[int, Dict[str, str]], Tuple[date_type, str, Decimal]]]]:
+    """The two legs of a currency conversion, each with its (date, currency, signed Net Amount); ``None`` when they are not a clean pair.
+
+    A clean pair is an order number that names exactly two legs: one ``Forex credit`` (money in, positive) and one ``Forex debit``
+    (money out, negative), in two different currencies, each with a date, an amount and no costs: a cost on a leg would be
+    inside or outside its Net Amount, which the file does not say.
+    """
+    if not order or len(legs) != 2:
+        return None
+    parsed = []
+    for leg in legs:
+        row = leg[1]
+        tx_date = _parse_swissquote_date(row.get(COL_DATE, ""))
+        amount = _parse_swissquote_number(row.get(COL_NET_AMOUNT, ""))
+        currency = row.get(COL_CURRENCY, "").strip().upper()
+        costs = _parse_swissquote_number(row.get(COL_COSTS, ""))
+        if tx_date is None or amount is None or amount == 0 or not currency or (costs is not None and costs != 0):
+            return None
+        is_credit = row.get(COL_TRANSACTION, "").strip().lower() == "forex credit"
+        if (amount > 0) != is_credit:
+            return None
+        parsed.append((leg, (tx_date, currency, amount)))
+    first, second = parsed[0][1], parsed[1][1]
+    if first[1] == second[1] or (first[2] > 0) == (second[2] > 0):
+        return None  # one currency, or two credits / two debits
+    return parsed
+
+
 def _map_swissquote_transaction(value: str) -> Optional[TransactionType]:
     """Map Swissquote transaction labels to TransactionType."""
     tx = value.strip().lower()
@@ -145,7 +179,7 @@ class SwissquoteBrokerProvider(BRIMProvider):
 
     @property
     def description(self) -> str:
-        return "Import Swissquote CSV exports for trades, dividends, cash movements, fees, taxes, and interest. Forex legs are skipped."
+        return "Import Swissquote CSV exports for trades, dividends, cash movements, fees, taxes, interest and currency exchanges."
 
     @property
     def supported_extensions(self) -> List[str]:
@@ -161,8 +195,9 @@ class SwissquoteBrokerProvider(BRIMProvider):
 
     @property
     def plugin_version(self) -> str:
+        # 1.2.0 — the two forex legs of an order are imported as one linked FX_CONVERSION pair (W-B87).
         # 1.1.0 — the rows left out (forex legs, unknown or unreadable rows) are listed in shared notices with the link to open an issue (W-B87).
-        return "1.1.0"
+        return "1.2.0"
 
     def can_parse(self, file_path: Path) -> bool:
         """Detect Swissquote format by checking the exact distinctive header."""
@@ -177,6 +212,39 @@ class SwissquoteBrokerProvider(BRIMProvider):
         except Exception:
             return False
 
+    def _pair_forex_legs(
+        self,
+        forex_legs: Dict[str, List[Tuple[int, Dict[str, str]]]],
+        broker_id: int,
+        transactions: List[TXCreateItem],
+        validation_issues: List[BRIMValidationIssue],
+        skips: io.RowSkips,
+    ) -> None:
+        """One linked FX_CONVERSION pair per order of exactly two legs, a credit and a debit; every other leg is listed (W-B87)."""
+        for order, legs in forex_legs.items():
+            pair = _forex_pair(order, legs)
+            if pair is None:
+                for row_num, row in legs:
+                    skips.unknown(row_num, row, f"forex leg not imported: '{row.get(COL_TRANSACTION, '').strip()}'")
+                continue
+            link_uuid = str(uuid.uuid5(_LINK_NAMESPACE, f"swissquote:{order}:{legs[0][1].get(COL_DATE, '').strip()}"))
+            for (row_num, row), (tx_date, currency, amount) in pair:
+                self._create_transaction(
+                    row_num=row_num,
+                    transactions=transactions,
+                    validation_issues=validation_issues,
+                    context=row.get(COL_TRANSACTION, "").strip(),
+                    broker_id=broker_id,
+                    asset_id=None,
+                    type=TransactionType.FX_CONVERSION,
+                    date=tx_date,
+                    quantity=Decimal("0"),
+                    cash=Currency(code=currency, amount=amount),
+                    description=f"Forex order {order}",
+                    link_uuid=link_uuid,
+                    tags=["import", "swissquote"],
+                )
+
     def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:  # noqa: C901 — flat row loop: validation guards and per-type sign dispatch, no nested logic
         """Parse Swissquote CSV export file."""
         transactions: List[TXCreateItem] = []
@@ -186,6 +254,7 @@ class SwissquoteBrokerProvider(BRIMProvider):
         asset_to_fake_id: Dict[str, int] = {}
         next_fake_id = FAKE_ASSET_ID_BASE
         skips = io.RowSkips()
+        forex_legs: Dict[str, List[Tuple[int, Dict[str, str]]]] = {}
 
         detected_delim = self.detect_csv_delimiter(file_path)
 
@@ -202,8 +271,8 @@ class SwissquoteBrokerProvider(BRIMProvider):
                     raw_tx = row.get(COL_TRANSACTION, "").strip()
                     tx_label = raw_tx.lower()
                     if tx_label in {"forex credit", "forex debit"}:
-                        # A currency conversion the plugin does not import yet (W-B87): listed, so the user adds it by hand.
-                        skips.unknown(row_num, row, f"forex leg not imported: '{raw_tx}'")
+                        # A currency conversion is two rows: it is paired after the loop (W-B87).
+                        forex_legs.setdefault(row.get(COL_ORDER, "").strip(), []).append((row_num, row))
                         continue
 
                     tx_type = _map_swissquote_transaction(raw_tx)
@@ -302,6 +371,8 @@ class SwissquoteBrokerProvider(BRIMProvider):
                         description=description,
                         tags=["import", "swissquote"],
                     )
+
+            self._pair_forex_legs(forex_legs, broker_id, transactions, validation_issues, skips)
 
         except FileNotFoundError:
             raise BRIMParseError(f"File not found: {file_path}") from None

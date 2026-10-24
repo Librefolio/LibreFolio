@@ -282,6 +282,17 @@ def external_brim_operation_date(verbose: bool = False, test_names: list = None)
     return run_command(cmd, "BRIM operation date tests", verbose=verbose)
 
 
+def external_brim_economic_rows(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that eToro, Swissquote, Revolut and Trading 212 import the rows with an economic effect they used to leave out (W-B87)."""
+    print_section("External: BRIM Economic Rows Tests")
+    print_info("Testing: overnight fees, SDRT, forex pairs and stock splits become transactions; the rows that cannot are still listed")
+    print_info("Tests: eToro FEE and TAX, Swissquote FX_CONVERSION pairs, Revolut and Trading 212 ADJUSTMENT with a possible_split todo")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_economic_rows.py",
+                            test_names or None)
+    return run_command(cmd, "BRIM economic rows tests", verbose=verbose)
+
+
 def external_all(verbose: bool = False,
                  providers: list = None, exclude_providers: list = None) -> bool:
     """Run all external tests (network-dependent)."""
@@ -339,6 +350,9 @@ These tests verify external API integrations:
     add_test(cat, "brim-operation-date", external_brim_operation_date, name="BRIM Operation Date",
              desc="Test that BRIM plugins date a transaction with the operation date, never the value / settlement date", prereq="Sample files in test fixtures",
              tests="Directa, DEGIRO, InvestEngine, Saxo, Credit Agricole, Schwab, Disnat (incl. settlement fallback)")
+    add_test(cat, "brim-economic-rows", external_brim_economic_rows, name="BRIM Economic Rows",
+             desc="Test that eToro, Swissquote, Revolut and Trading 212 import the rows with an economic effect", prereq="Sample files in test fixtures",
+             tests="eToro overnight fee and SDRT, Swissquote forex pairs, Revolut and Trading 212 stock splits, rows still listed")
     add_test(cat, "all", external_all, test_names=False, name="All External Tests",
              desc="Run all external tests")
     registry["external"] = cat
