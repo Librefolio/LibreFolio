@@ -5601,6 +5601,38 @@ def test_the_connection_the_commit_opens_on_the_restored_database_turns_trusted_
     print_success(f"{len(on_live)} connection(s), trusted_schema=OFF first")
 
 
+def test_the_read_only_connection_that_reads_the_largest_session_version_turns_trusted_schema_off_first(tmp_path, monkeypatch):
+    """(u) B5-1h: ``_largest_session_version`` (the ``previous/`` database at the commit) opens a read-only connection
+    and runs ``PRAGMA trusted_schema = OFF`` before its SELECT, as every other reader of a copy does (B-37). Recorded as
+    the test above records the commit's connection. The value is pinned too: the largest ``session_version`` of the
+    accounts, and 0 for a file that is missing or is no file (no connection opened for either). Red before B5-1h only
+    for the first statement: it is the SELECT."""
+    print_section("(u) B5-1h trusted_schema off first in _largest_session_version")
+    apply = apply_module()
+    database = tmp_path / "previous.db"
+    with closing(sqlite3.connect(database)) as conn, conn:
+        conn.execute("CREATE TABLE users (id INTEGER PRIMARY KEY, session_version INTEGER NOT NULL DEFAULT 0)")
+        conn.executemany("INSERT INTO users (session_version) VALUES (?)", [(3,), (9,), (5,)])
+    opened: list[Any] = []
+    monkeypatch.setattr(apply, "sqlite3", cases.RecordingConnect(sqlite3, "apply", opened))
+
+    largest = apply._largest_session_version(database)
+    assert largest == 9, f"the largest session version of the accounts: {largest}"
+    on_database = [record for record in opened if record.path == database.resolve()]
+    assert len(on_database) == 1, f"one connection opened on the database: {[(record.by, record.target) for record in opened]}"
+    assert on_database[0].opened_read_only, f"read only, as a mode=ro URI: {on_database[0].target}"
+    assert cases.turns_trust_off_first(on_database[0]), f"the first statement of the connection turns trusted_schema off: {cases.first_statements(on_database)}"
+    assert any("session_version" in statement for statement in on_database[0].statements[1:]), f"the SELECT follows the PRAGMA: {on_database[0].statements}"
+
+    opened.clear()
+    folder = tmp_path / "a-folder"
+    folder.mkdir()
+    for absent in (tmp_path / "missing.db", folder):
+        assert apply._largest_session_version(absent) == 0, f"{absent.name}: 0, no database to read"
+    assert opened == [], f"no connection opened for a missing database or a folder: {[(record.by, record.target) for record in opened]}"
+    print_success("trusted_schema=OFF first; 9 for the database, 0 for a missing file and a folder")
+
+
 # -----------------------------------------------------------------------------
 # (u) B5-1g: a pending administrator of the backup refuses the owner's confirmation
 # -----------------------------------------------------------------------------
