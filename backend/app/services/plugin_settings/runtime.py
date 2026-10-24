@@ -65,12 +65,15 @@ async def bound_settings_for(registry: type[AbstractProviderRegistry], plugin_co
     if family is None or plugin_class is None or not getattr(plugin_class, "settings_fields", ()):
         return None
     instance = plugin_class()
-    await configure_instance(instance, family, user_id=user_id)
+    await configure_instance(instance, family, user_id=user_id, plugin_code=plugin_code)
     return instance.settings
 
 
-async def configure_instance[PluginT: PluginSettingsMixin](instance: PluginT, family: str, *, user_id: int | None = None) -> PluginT:
+async def configure_instance[PluginT: PluginSettingsMixin](instance: PluginT, family: str, *, user_id: int | None = None, plugin_code: str | None = None) -> PluginT:
     """Bind to ``instance`` the values of its fields: the instance's, and the user's when ``user_id`` is given.
+
+    ``plugin_code`` names the plugin the values are stored under; when omitted it is the instance's ``provider_code`` (asset and FX
+    providers, BRIM plugins). A Tool has no such attribute: its settings are keyed by the tool code, which the caller passes.
 
     An object that declares no field — a plugin without settings, or a test double that is not a plugin — is returned
     as it is, as the family boundaries let it through.
@@ -78,7 +81,8 @@ async def configure_instance[PluginT: PluginSettingsMixin](instance: PluginT, fa
     fields = getattr(type(instance), "settings_fields", ())
     if not fields:
         return instance
-    plugin_code = instance.provider_code  # type: ignore[attr-defined] — asset and FX providers both have it
+    if plugin_code is None:
+        plugin_code = instance.provider_code  # type: ignore[attr-defined] — asset and FX providers both have it
     wants_system = any(declared.scope is SettingScope.SYSTEM for declared in fields)
     wants_user = user_id is not None and any(declared.scope is SettingScope.USER for declared in fields)
     system_rows: dict[str, StoredValue] = {}

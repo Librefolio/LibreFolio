@@ -10,7 +10,8 @@
     "families": {
       "asset": "Precios",
       "fx": "Tipos de cambio",
-      "brim": "Importaciones de brókeres"
+      "brim": "Importaciones de brókeres",
+      "tool": "Herramientas"
     },
     "status": {
       "configured": "Configurado",

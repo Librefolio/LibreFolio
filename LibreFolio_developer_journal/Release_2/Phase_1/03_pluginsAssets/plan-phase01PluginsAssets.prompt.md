@@ -9224,3 +9224,28 @@ rettifiche; **candidato** = stesso asset, **stessa data**, tipo corrispondente (
    > a ogni aggiunta di operazioni: chi scrive un nuovo spy sul client usi l'aiuto.
 6. ⏳ Doc in inglese scritta (docs-writer: `create-edit`, `transactions/index`, `events`, `architecture`, `service`, `wac`…), ma `mkdocs build` e `check-links` sono ancora in coda
    sul lucchetto: log `/tmp/libreFolio_docs_n68_build.log` e `…_links.log`. Debito di traduzione: `user/assets/create-edit` e `user/transactions/index` (it/fr/es).
+
+### X5-4b · CP12: la famiglia `tool` e la consegna al runtime (24/10, base `6472fe901`)
+
+Decisioni di progetto (nel contratto, non nel brief): le impostazioni di un tool sono **per tool code** (un plugin con più servizi ne ha una serie per servizio);
+`FAMILY_RULES["tool"] = FamilyRules(user_scope=True, secrets=False)` (un tool si calcola per l'utente che lo chiede; non chiama fonti esterne, niente segreti);
+i valori li risolve il **genitore** e viaggiano col lavoro, come per il parse BRIM (il `compute` resta puro: niente database).
+
+1. ✅ 24/10 · Rossi (`test-author`): backend 77 test nuovi (`test_tool_settings_contract/runtime/lifecycle.py` + `_tool_settings_fixtures.py`, 71 rossi e 6 guardie verdi;
+   `test_plugin_settings_contract.py` aggiornato); frontend +21 test in `features/plugin-settings` (15 rossi). Nessun tool di prodotto di prova: registri privati.
+2. ✅ 24/10 · Cura backend: `ToolPlugin(PluginSettingsMixin)`; `ToolPluginRegistry.settings_family() == "tool"`, `build_tool_definition` valida la dichiarazione e
+   reclama le variabili d'ambiente per tool code (motivo di quarantena nuovo `invalid_settings`); lo snapshot lascia fuori i `test_only` fuori dalla modalità di test
+   (X-R44; il registro dei tool entra in `TEST_ONLY_FAMILIES`); `configure_instance(..., plugin_code=)`; nuovo `tools/settings.py` `bound_settings_for_batch`;
+   `ToolWorkerJob.settings` e `bind_settings` nel worker; `ToolExecutor.compute(..., settings=)` con `service_unavailable` per un campo obbligatorio senza valore
+   (nessun lavoro avviato, gli altri elementi vanno); `api/v1/tools.py` risolve e passa; catalogo: `FAMILY_REGISTRIES["tool"]`, nome del servizio, nessuna icona
+   (`FAMILIES_WITHOUT_ICON`, guardia aggiornata). `api sync`.
+   > **⚠️ Fuori pista**: l'API del catalogo è `GET /api/v1/settings/plugins`, non `/plugin-settings`. Il compilatore ha ancora una volta superato il limite di profondità
+   > dei tipi in un test con `vi.spyOn(zodiosApi, …)` (risolto con `spyOnApi`, che ora è quello di J byte per byte).
+3. ✅ 24/10 · Cura frontend: `'tool'` in `pluginSettingsApi.ts` e `pluginSettingsForm.ts` (titolo `pluginSettings.families.tool`, icona `Wrench`, dopo `brim`);
+   `invalid_settings` nel pannello di diagnostica dei tool (`tools.diagnostics.reason.invalid_settings`, 4 lingue). i18n in 4 lingue.
+4. ✅ 24/10 · Prove (un solo lucchetto, `X-x54-verify`): `services tool-settings-contract` 35, `tool-settings-runtime` 31, `tool-settings-lifecycle` 10 (processi veri), `plugin-settings-contract` 254,
+   `plugin-settings-service` 113, `plugin-settings-guards` 25, `tools-registry` 109, `tools-lifecycle` 98, `test-only-providers` 31, `api plugin-settings` 19, `api tools` 10/12 (i 2 rossi erano
+   due finti di `test_tools_api.py` con la firma vecchia di `compute`: aggiornati, verdi); `component-unit` 5639/5639; `core-unit` 10530/10534 (i 4 rossi sono `comparisonAssetsFeed.wiring` di X5-F4b,
+   attesi fino al merge di Y). `front check` 0/0, Prettier e `i18n check` puliti. Doc in inglese: `mkdocs build` (strict) e `check-links` exit 0.
+5. **Revisione di W5-8** (sola lettura): il campo `date_order` di W non è ancora nel worktree di W (HEAD `86c014295`, nessun `settings_fields` nei plugin BRIM): da fare quando c'è.
+   Backlog: dove vivono le traduzioni di un campo di un tool (il gate dei nomi i18n legge le chiavi di asset e fx; oggi si vede l'inglese `label`/`description`).

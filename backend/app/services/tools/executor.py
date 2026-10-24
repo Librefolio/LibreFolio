@@ -10,6 +10,7 @@ import struct
 import threading
 import time
 import uuid
+from collections.abc import Mapping
 from contextlib import ExitStack
 from dataclasses import dataclass, field
 from multiprocessing.connection import Connection
@@ -34,6 +35,7 @@ from backend.app.schemas.tools import (
     ToolPoolSnapshot,
     ToolResourceCapabilities,
 )
+from backend.app.services.plugin_settings.contract import BoundSettings
 from backend.app.services.tools.base import ToolDefinitionError, ToolExecutionError
 from backend.app.services.tools.catalog import effective_operation
 from backend.app.services.tools.process_tree import OwnedProcessTree
@@ -426,12 +428,15 @@ class ToolExecutor:
                     job.quarantined = True
             raise
 
-    async def _run_item(self, item: ToolComputeItem, snapshot: ToolRegistrySnapshot, ticket: _ItemTicket, admitted_at: float, request_deadline: float) -> ToolComputeResult:
+    async def _run_item(self, item: ToolComputeItem, snapshot: ToolRegistrySnapshot, ticket: _ItemTicket, admitted_at: float, request_deadline: float, bound: BoundSettings | None = None) -> ToolComputeResult:
         job: _OwnedJob | None = None
         lane: int | None = None
         queued = False
         try:
             operation = self._operation(item, snapshot)
+            if bound is not None and bound.missing:
+                # A required field of the tool has no value: nothing is started for it (the other items of the batch run).
+                raise ToolExecutionError("service_unavailable")
             try:
                 parameters = encode_json(item.parameters, max_depth=self.policy.max_json_depth, max_bytes=operation.max_parameter_bytes)
             except ValueError as exc:
@@ -446,7 +451,7 @@ class ToolExecutor:
                 queued = False
             if time.monotonic() >= queue_deadline:
                 raise ToolExecutionError("queue_timeout", retryable=True)
-            job = self._start_job(item, operation, parameters, ticket.principal_key, lane, admitted_at, request_deadline)
+            job = self._start_job(item, operation, parameters, ticket.principal_key, lane, admitted_at, request_deadline, bound)
             ticket.job = job
             outcome = await self._await_job(job)
             identity = _identity(item, job.spec.execution_id, outcome.metrics)
@@ -478,6 +483,7 @@ class ToolExecutor:
         lane: int,
         admitted_at: float,
         request_deadline: float,
+        bound: BoundSettings | None = None,
     ) -> _OwnedJob:
         with self._lock:
             if self._closed:
@@ -501,6 +507,7 @@ class ToolExecutor:
             max_json_depth=self.policy.max_json_depth,
             engine_timeout_ms=operation.engine_timeout_ms,
             memory_limit_bytes=operation.memory_limit_bytes,
+            settings=bound,
         )
         job = _OwnedJob(spec, principal_key, lane, admitted_at, granted_at, operation.cleanup_timeout_ms, metrics=ToolItemMetrics(queue_wait_ms=_milliseconds(admitted_at)))
         with self._lock:
@@ -509,7 +516,7 @@ class ToolExecutor:
         job.io_task.add_done_callback(lambda task: self._job_finished(job, task))
         return job
 
-    async def compute(self, batch: ToolComputeBatchRequest, *, principal_key: str, request_started: float | None = None) -> ToolComputeBatchResponse:
+    async def compute(self, batch: ToolComputeBatchRequest, *, principal_key: str, request_started: float | None = None, settings: Mapping[str, BoundSettings] | None = None) -> ToolComputeBatchResponse:
         started = time.monotonic() if request_started is None else request_started
         snapshot = await asyncio.to_thread(self.registry_class.get_snapshot)
         admitted_at = self._admit(principal_key, len(batch.items))
@@ -517,7 +524,7 @@ class ToolExecutor:
         tasks: list[asyncio.Task[ToolComputeResult]] = []
         for item in batch.items:
             ticket = _ItemTicket(principal_key)
-            task = asyncio.create_task(self._run_item(item, snapshot, ticket, admitted_at, deadline))
+            task = asyncio.create_task(self._run_item(item, snapshot, ticket, admitted_at, deadline, settings.get(item.tool_code) if settings else None))
             with self._lock:
                 self._items[task] = ticket
             task.add_done_callback(self._item_finished)

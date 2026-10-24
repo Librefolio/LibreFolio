@@ -118,7 +118,8 @@
         "invalid_input_model": "Modèle d'entrée invalide",
         "invalid_output_model": "Modèle de sortie invalide",
         "invalid_schema": "Le schéma ne peut pas être publié",
-        "invalid_operation_policy": "Politique d'opération invalide"
+        "invalid_operation_policy": "Politique d'opération invalide",
+        "invalid_settings": "Déclaration des paramètres invalide"
       }
     },
     "version": "Version",

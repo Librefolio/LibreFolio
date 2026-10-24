@@ -25,6 +25,7 @@ class PluginSettingFamily(StrEnum):
     ASSET = "asset"
     FX = "fx"
     BRIM = "brim"
+    TOOL = "tool"
 
 
 class PluginSettingScope(StrEnum):

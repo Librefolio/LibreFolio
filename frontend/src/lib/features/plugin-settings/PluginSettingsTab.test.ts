@@ -11,6 +11,8 @@
  *     order, a family without entries left out; one form `plugin-settings-form-{code}` per entry, inside its family;
  *   - the import sources (`brim`, W-BS) are a family like the other two, shown after them: one group with its own title
  *     (`FAMILY_TITLE_KEYS.brim`), icon and forms when the answer holds a brim plugin, no group, title or icon when it does not;
+ *   - the tools (`tool`, X5-4b) are a family too, the last: after `brim`, with their own title (`FAMILY_TITLE_KEYS.tool`),
+ *     icon and forms; no group, title or icon when the answer holds none;
  *   - each family's title (`h3`) starts with the family's icon, `plugin-settings-family-icon` (`aria-hidden`): one per
  *     family shown, each its own, none for a family left out. Which icon is which is pinned by
  *     `pluginSettingsForm.test.ts` (`FAMILY_ICONS`);
@@ -94,6 +96,7 @@ const BORSA = plugin('asset', 'borsa_italiana', {configured: true});
 const ECB = plugin('fx', 'ecb', {configured: true});
 const MOCKFX = plugin('fx', 'mockfx');
 const IMPORTER = plugin('brim', 'broker_x', {configured: true});
+const TOOL = plugin('tool', 'fx_converter', {configured: true});
 
 // --- Helpers ---------------------------------------------------------------------------------------------------------
 
@@ -365,5 +368,86 @@ describe('PluginSettingsTab — the import sources (brim)', () => {
         await loaded();
         expect(groups()).toEqual([{family: 'brim', plugins: ['broker_x', 'broker_y']}]);
         expect(screen.queryByTestId('plugin-settings-empty'), 'a brim plugin is an entry like another: the tab is not empty').toBeNull();
+    });
+});
+
+// =====================================================================================================================
+describe('PluginSettingsTab — the tools (tool)', () => {
+    it('PST-14: a tool plugin gets a group of its own, after the other three, with its form, its title and its icon', async () => {
+        fake.fetchAll.mockResolvedValueOnce([TOOL, IMPORTER, ECB, JUSTETF]);
+
+        render(PluginSettingsTab);
+
+        await loaded();
+        expect(groups(), 'the price sources, the exchange-rate sources, the import sources, then the tools').toEqual([
+            {family: 'asset', plugins: ['justetf']},
+            {family: 'fx', plugins: ['ecb']},
+            {family: 'brim', plugins: ['broker_x']},
+            {family: 'tool', plugins: ['fx_converter']},
+        ]);
+        const section = familySection('tool');
+        const title = within(section).getByRole('heading', {level: 3});
+        const icons = within(section).getAllByTestId('plugin-settings-family-icon');
+        expect(icons, 'tool: one icon').toHaveLength(1);
+        expect(title, 'the icon is in the title').toContainElement(icons[0]!);
+        expect(icons[0]).toHaveAttribute('aria-hidden', 'true');
+        expect(textAround(title, icons[0]!), 'the icon first, then the title of the family').toEqual({before: '', after: FAMILY_TITLE_KEYS.tool});
+        expect(FAMILY_TITLE_KEYS.tool).toBe('pluginSettings.families.tool');
+        expect(within(section).getByTestId('plugin-settings-form-fx_converter'), 'the form of the entry, with the neutral icon: a tool has no icon_url').toHaveAttribute('data-family', 'tool');
+        expect(within(section).getByTestId('plugin-settings-plugin-icon-fallback')).toBeInTheDocument();
+    });
+
+    it('PST-15: the tools draw an icon of their own, none of the other three’s', async () => {
+        fake.fetchAll.mockResolvedValueOnce([JUSTETF, ECB, IMPORTER, TOOL]);
+
+        render(PluginSettingsTab);
+
+        await loaded();
+        const drawing = (family: SettingsFamily) => within(familySection(family)).getByTestId('plugin-settings-family-icon').innerHTML;
+        expect(drawing('tool'), 'premise: the icon draws something').not.toBe('');
+        for (const other of ['asset', 'fx', 'brim'] as const) expect(drawing('tool'), `not the ${other} icon`).not.toBe(drawing(other));
+    });
+
+    it('PST-16: with no tool plugin in the answer there is no tool group, title or icon', async () => {
+        fake.fetchAll.mockResolvedValueOnce([ECB, JUSTETF, IMPORTER]);
+
+        render(PluginSettingsTab);
+
+        await loaded();
+        expect(groups().map((group) => group.family)).toEqual(['asset', 'fx', 'brim']);
+        expect(screen.queryAllByTestId('plugin-settings-family').filter((section) => section.getAttribute('data-family') === 'tool')).toEqual([]);
+        expect(screen.queryByText('pluginSettings.families.tool')).toBeNull();
+        expect(screen.getAllByTestId('plugin-settings-family-icon'), 'one icon for each of the three families shown').toHaveLength(3);
+    });
+
+    it('PST-17: an answer with tool plugins only shows the tool group alone, the tab not empty', async () => {
+        fake.fetchAll.mockResolvedValueOnce([TOOL, plugin('tool', 'compound_growth')]);
+
+        render(PluginSettingsTab);
+
+        await loaded();
+        expect(groups()).toEqual([{family: 'tool', plugins: ['fx_converter', 'compound_growth']}]);
+        expect(screen.queryByTestId('plugin-settings-empty')).toBeNull();
+    });
+
+    it('PST-18: a save in a tool’s form is written with the family tool, and the tab shows the fresh state in place of the old one', async () => {
+        const fresh: PluginSettingsEntry = {...TOOL, fields: [{...nickname(), value: 'someone', is_set: true, source: 'db'}]};
+        fake.fetchAll.mockResolvedValueOnce([ECB, TOOL]);
+        fake.save.mockResolvedValueOnce({kind: 'saved'});
+        fake.fetchEntry.mockResolvedValueOnce(fresh);
+
+        render(PluginSettingsTab);
+
+        await loaded();
+        const toolForm = form('fx_converter');
+        await fireEvent.input(within(toolForm).getByTestId('plugin-setting-input'), {target: {value: 'someone'}});
+        await fireEvent.click(within(toolForm).getByTestId('plugin-settings-save'));
+
+        await waitFor(() => expect(fake.fetchEntry).toHaveBeenCalledWith('tool', 'fx_converter'));
+        expect(fake.save.mock.calls).toStrictEqual([[[{family: 'tool', plugin_code: 'fx_converter', field_key: 'nickname', scope: 'user', value: 'someone'}]]]);
+        expect(groups(), 'the other plugins untouched, the tool still in its group').toEqual([
+            {family: 'fx', plugins: ['ecb']},
+            {family: 'tool', plugins: ['fx_converter']},
+        ]);
     });
 });
