@@ -90,11 +90,13 @@ from backend.app.services.financial_math.portfolio.contributions import (
     closed_position_annualized,
     closed_position_base,
     period_return_on_start,
+    position_period_pnl,
     transfer_costs_moved_out,
     transfer_tract_adjustments,
     transfer_tracts_moved_in,
     window_start,
 )
+from backend.app.services.financial_math.portfolio.models import DailyStates
 from backend.app.services.financial_math.returns import (
     annualized_to_cumulative,
     calculate_simple_roi,
@@ -344,13 +346,22 @@ def _engine_missing_fx_pairs(engine_result: Any, period_from: date_type | None, 
     dates_by_pair: dict[str, set[date_type]] = defaultdict(set)
     for pair, dates in (getattr(engine_result, "missing_fx", None) or {}).items():
         dates_by_pair[pair].update(dates)
-    for state in getattr(engine_result, "daily_states", None) or []:
-        if not state.missing_fx_pairs:
-            continue
-        if (period_from is not None and state.date < period_from) or (period_to is not None and state.date > period_to):
-            continue
-        for pair in state.missing_fx_pairs:
-            dates_by_pair[pair].add(state.date)
+    daily_states = getattr(engine_result, "daily_states", None) or []
+    if isinstance(daily_states, DailyStates):
+        # Every day of a segment reads its state's pairs (P4): the days are listed, no state is built
+        for segment in daily_states.iter_segments(period_from, period_to):
+            if segment.state.missing_fx_pairs:
+                days = [segment.start + timedelta(days=offset) for offset in range((segment.end - segment.start).days + 1)]
+                for pair in segment.state.missing_fx_pairs:
+                    dates_by_pair[pair].update(days)
+    else:
+        for state in daily_states:
+            if not state.missing_fx_pairs:
+                continue
+            if (period_from is not None and state.date < period_from) or (period_to is not None and state.date > period_to):
+                continue
+            for pair in state.missing_fx_pairs:
+                dates_by_pair[pair].add(state.date)
     return [WACMissingPairInfo(pair=pair, dates=sorted(dates)) for pair, dates in sorted(dates_by_pair.items())]
 
 
@@ -882,6 +893,9 @@ class PortfolioService:
 
         # ── 4. Allocation from engine (scope-aware, includes in-transit) ──
         alloc_type, alloc_sector, alloc_geo = views.build_allocation_current()
+        last_by_asset = views.daily_states[-1].by_asset if views.daily_states else {}
+        alloc_asset_names = {asset_id: asset.display_name for asset_id, asset in (await self._get_assets_map(set(last_by_asset))).items()}
+        alloc_asset = views.build_asset_allocation_current(alloc_asset_names)
 
         def _alloc_from_engine(items: list[dict]) -> list[AllocationItem]:
             return [AllocationItem(**item) for item in items]
@@ -1162,6 +1176,7 @@ class PortfolioService:
             allocation_by_type=_alloc_from_engine(alloc_type),
             allocation_by_sector=_alloc_from_engine(alloc_sector),
             allocation_by_geography=_alloc_from_engine(alloc_geo),
+            allocation_by_asset=_alloc_from_engine(alloc_asset),
             holdings=all_holdings,
             holding_groups=holding_groups,
             by_broker=by_broker_list if include_breakdown else None,
@@ -1330,7 +1345,8 @@ class PortfolioService:
         if not by_broker:
             # A window holding no state: the whole-history build still listed every broker, with no point. Otherwise
             # the window lists them all, in the same order: every state carries every broker of the scope (DailyStateBuilder)
-            by_broker = {broker_id: [] for state in result.daily_states for broker_id in state.broker_contributions}
+            states = (segment.state for segment in result.daily_states.segments) if isinstance(result.daily_states, DailyStates) else result.daily_states
+            by_broker = {broker_id: [] for state in states for broker_id in state.broker_contributions}
 
         broker_pnl_history: list[BrokerPnlHistory] = []
         for broker_id, points in by_broker.items():
@@ -1719,29 +1735,23 @@ class PortfolioService:
                 ug_end = end_state.unrealized_pnl
                 cb_end = end_state.cost_basis if end_state.cost_complete else None
 
-            # Not held at a boundary counts as zero; held with an unknown unrealized (no rate, incomplete cost) makes
-            # the change unknown — never a figure that hides the missing part.
-            adjustment = tract_adjustments.get(pos_key)
-            unknown_boundary = (qty_at_start > _QUANTITY_DUST_THRESHOLD and start_state is not None and ug_start is None) or (qty_at_end > _QUANTITY_DUST_THRESHOLD and ug_end is None)
-            unrealized_delta = None
-            if not unknown_boundary and (ug_end is not None or ug_start is not None or adjustment is not None):
-                unrealized_delta = (ug_end or Decimal("0")) - (ug_start or Decimal("0")) + (adjustment or Decimal("0"))
-
-            # Assemble period P&L
+            # The period P&L of the row (financial_math.portfolio.contributions, the one home of the formula)
             realized = per_realized.get(pos_key)
             income = per_income.get(pos_key)
             fees = per_fees_taxes.get(pos_key)
+            row_pnl = position_period_pnl(
+                held_at_start=qty_at_start > _QUANTITY_DUST_THRESHOLD and start_state is not None,
+                held_at_end=qty_at_end > _QUANTITY_DUST_THRESHOLD,
+                unrealized_start=ug_start,
+                unrealized_end=ug_end,
+                transfer_adjustment=tract_adjustments.get(pos_key),
+                realized=realized,
+                income=income,
+                fees=fees,
+            )
+            unrealized_delta, period_pnl = row_pnl.unrealized_delta, row_pnl.period_pnl
             has_period_activity = any(value is not None and value != 0 for value in (realized, income, fees))
             has_boundary_position = qty_at_start > _QUANTITY_DUST_THRESHOLD or qty_at_end > _QUANTITY_DUST_THRESHOLD
-
-            pnl_parts = [
-                unrealized_delta,
-                realized,
-                income,
-                Decimal("0") - fees if fees else None,
-            ]
-            non_none = [p for p in pnl_parts if p is not None]
-            period_pnl = sum(non_none, Decimal("0")) if non_none else None
 
             if not has_period_activity and not has_boundary_position and period_pnl is None:
                 continue
@@ -1908,6 +1918,24 @@ class PortfolioService:
                     )
                 )
                 residual -= exchange_result
+            # B5 (financial_math.portfolio.period): the gain securities accrued at a broker outside the view before they
+            # crossed its boundary, a row per broker in the same order; the residual drops by the same amount.
+            transfer_results = period_math.market_value_transfer_results(getattr(engine_result, "market_value_transfers", None) or [], date_from, effective_end)
+            for bid in sorted(transfer_results, key=lambda broker_id: access_order.get(broker_id, len(access_order))):
+                transfer_result = transfer_results[bid]
+                if abs(transfer_result) < CONVERSION_DUST:
+                    continue
+                broker = await self._get_broker(bid)
+                other_effects.append(
+                    OtherPeriodEffect(
+                        description="Transfers at market value",
+                        category="Other",
+                        period_pnl=transfer_result,
+                        broker_id=bid,
+                        broker_name=broker.name if broker else f"Broker {bid}",
+                    )
+                )
+                residual -= transfer_result
             show_residual = abs(residual) >= CONVERSION_DUST if native_cash.foreign_cash_broker_ids else residual != 0
             if show_residual:
                 other_effects.append(
@@ -2075,14 +2103,16 @@ class PortfolioService:
                 _precomputed_engine_result=engine_result,
             )
 
-        # ── 4. Allocation history (all 3 dimensions from same engine result) ──
+        # ── 4. Allocation history (all 4 dimensions from same engine result) ──
         alloc_history: AllocationHistoryDimensions | None = None
         if query.include_allocation_history:
             included.append("allocation_history")
+            history_asset_names = {asset_id: asset.display_name for asset_id, asset in (await self._get_assets_map(views.allocation_asset_ids(date_from))).items()}
             alloc_history = AllocationHistoryDimensions(
                 type=[AllocationHistoryPoint(**p) for p in views.build_allocation_history("type", date_from=date_from)],
                 sector=[AllocationHistoryPoint(**p) for p in views.build_allocation_history("sector", date_from=date_from)],
                 geography=[AllocationHistoryPoint(**p) for p in views.build_allocation_history("geography", date_from=date_from)],
+                asset=[AllocationHistoryPoint(**p) for p in views.build_asset_allocation_history(history_asset_names, date_from=date_from)],
             )
 
         # ── 4b. Positions contribution (per-asset period P&L attribution) ──

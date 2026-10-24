@@ -55,6 +55,7 @@ from typing import Optional, Sequence
 
 from backend.app.db.models import Transaction
 from backend.app.schemas.common import BackwardFillInfo
+from backend.app.services.financial_math.trade_amount import unit_price_on_quote_axis
 
 
 class MarkSource(StrEnum):
@@ -284,7 +285,6 @@ def build_asset_price_series(
     Mirrors the historical ``_build_market_price_map`` / ``_build_trade_price_points`` math so
     adoption is behaviour-preserving; the added value here is the unified series + staleness.
     """
-    scale = Decimal(quote_base_quantity if quote_base_quantity and quote_base_quantity > 0 else 1)
     observations: list[PriceObservation] = []
 
     for price_date, close, currency in price_rows:
@@ -303,7 +303,8 @@ def build_asset_price_series(
         tx_type = str(getattr(tx.type, "value", tx.type))
         if tx_type not in ("BUY", "SELL") or not tx.amount:
             continue
-        unit_native = abs(tx.amount) / abs(quantity)
-        observations.append(PriceObservation(date=tx.date, unit_price=unit_native * scale, currency=tx.currency or asset_currency, kind=ObservationKind.TRADE))
+        # Per-unit trade price lifted onto the market ×quote_base_quantity axis (financial_math.trade_amount, one home)
+        unit_price = unit_price_on_quote_axis(abs(quantity), abs(tx.amount), quote_base_quantity)
+        observations.append(PriceObservation(date=tx.date, unit_price=unit_price, currency=tx.currency or asset_currency, kind=ObservationKind.TRADE))
 
     return AssetPriceSeries(observations)
