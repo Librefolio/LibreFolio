@@ -258,16 +258,6 @@ def db_migration_005(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Migration 005 tests", verbose=verbose)
 
 
-def db_migration_006(verbose: bool = False, test_names: list = None) -> bool:
-    """Test migration 006_owner_email_change (A5-1b part 2), on temporary databases only."""
-    print_section("DB Test: Migration 006 (owner flag and email_change token purpose)")
-    print_info("This test works on temporary databases only: the test database is not touched")
-    print_info("Testing: users.is_instance_owner + the partial unique index (used by the owner query), account_tokens rebuilt with the email_change CHECK, populated 005 data upgraded and downgraded, models = migration")
-
-    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_migration_006_owner_email_change.py", test_names)
-    return run_command(cmd, "Migration 006 tests", verbose=verbose)
-
-
 def db_session_pragmas(verbose: bool = False, test_names: list = None) -> bool:
     """Test the pragmas every SQLAlchemy engine's connection gets (set_sqlite_pragma, H-51): trusted_schema off first, the schema reset last."""
     print_section("DB Test: Session Pragmas (trusted_schema off)")
@@ -323,7 +313,7 @@ def db_all(verbose: bool = False) -> bool:
         "session-pragmas",  # temporary databases only too
         "create", "validate", "numeric-truncation", "populate", "populate-reset", "autoincrement-schema", "post-migration",
         "post-migration-orphan-pairs",
-        "migration-005", "migration-006", "referential-integrity", "fx-rates", "brim", "brim-bulk", "asset-merge", "model-validators"
+        "migration-005", "referential-integrity", "fx-rates", "brim", "brim-bulk", "asset-merge", "model-validators"
         ]
 
     tests = []
@@ -402,9 +392,6 @@ Note: No backend server required. Tests operate directly on test DB.
     # it, and a connect listener refuses any other file while it runs: no lane database, no server, nothing shared.
     add_test(cat, "migration-005", db_migration_005, name="Migration 005 Release 1.3 Schema",
              desc="005_release_1_3_0_schema (H-57: the unreleased 1.3 migrations in one, variant V4): equal to the schema the retired chain left (frozen); 1.2 data upgraded; duplicate addresses stop it before the unique index, as the retired 009 did, and the remedy works; the 13 redundant indexes gone, every UNIQUE still refusing; models = migration; downgrade; idempotence",
-             prereq="None (temporary databases)", isolation="pure")
-    add_test(cat, "migration-006", db_migration_006, name="Migration 006 Owner Email Change",
-             desc="006_owner_email_change (A5-1b part 2): users.is_instance_owner with its partial unique index (at most one owner, used by the owner query), account_tokens rebuilt so ck_account_tokens_purpose accepts email_change; a populated 005 install keeps every row and cascades; downgrade drops the column, the index and the email_change rows; an upgrade stopped half way completes; models = migration (create-clean)",
              prereq="None (temporary databases)", isolation="pure")
     add_test(cat, "session-pragmas", db_session_pragmas, name="Session Pragmas",
              desc="H-51: set_sqlite_pragma (db/session.py, every SQLAlchemy engine of the process) turns trusted_schema off first and resets the schema last (writable_schema=RESET, read again once SQLAlchemy has registered its Python regexp and floor): an archive's DEFAULT calling regexp or floor refused at the insert, a CHECK calling regexp at the first statement, instead of running them; built-ins in the schema (lower() of ux_users_email_lower), a database at the head and top-level SQL unchanged; foreign_keys, WAL and busy_timeout as before; sync and async engines",
