@@ -152,6 +152,22 @@
     "allocationNegativeCash": "Liquidità negativa: {amount}",
     "startValueTooltip": "Valore della posizione a inizio periodo, calcolato come la colonna Valore del Portafoglio; 0 se la posizione non c'era ancora. È la base delle percentuali del periodo.",
     "endValueTooltip": "Valore della posizione a fine periodo, calcolato come la colonna Valore del Portafoglio; 0 se la posizione era già chiusa.",
-    "transfersAtMarketValue": "Trasferimenti al valore di mercato"
+    "transfersAtMarketValue": "Trasferimenti al valore di mercato",
+    "assetAllocation": "Per Asset",
+    "backToPortfolio": "Portafoglio",
+    "positionsChart": {
+      "title": "Rendimento delle posizioni",
+      "viewAbsolute": "Abs",
+      "viewPercentage": "%",
+      "viewAbsoluteHint": "Guadagno o perdita in denaro, dall'inizio del periodo",
+      "viewPercentageHint": "Rendimento, base 100 all'inizio del periodo",
+      "portfolio": "Portafoglio (rendimento della Dashboard)",
+      "portfolioNote": "La linea del portafoglio è il rendimento che misura la Dashboard, non il guadagno delle posizioni sul capitale impiegato: i due possono differire.",
+      "hint": "Spunta le righe della tabella per confrontare il loro rendimento con quello del portafoglio.",
+      "failed": "Non è stato possibile caricare le serie delle posizioni.",
+      "closedOn": "Chiusa il {date}",
+      "incomplete": "Mancano alcuni valori (un prezzo o un cambio): la linea li lascia fuori.",
+      "rowSelect": "Seleziona la riga per disegnarne il rendimento"
+    }
   }
 }

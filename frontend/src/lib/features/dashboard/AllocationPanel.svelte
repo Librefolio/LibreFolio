@@ -18,10 +18,12 @@
     import AllocationHistoryChart from '$lib/features/dashboard/AllocationHistoryChart.svelte';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
+    import {rankAssetsByWeight} from './positionsSeries';
 
-    type AllocationTab = 'type' | 'sector' | 'geo';
+    type AllocationTab = 'type' | 'sector' | 'geo' | 'asset';
     type AllocationView = 'now' | 'history';
-    type AllocEntry = {name: string; value: number; amount: number};
+    /** `id` is the asset id of a slice of the asset dimension (its colour key); null for the Liquidity slice. */
+    type AllocEntry = {name: string; value: number; amount: number; id?: number | null};
 
     interface Props {
         summary: PortfolioSummary | null;
@@ -39,6 +41,7 @@
         ['type', 'dashboard.typeAllocation'],
         ['sector', 'dashboard.sectorAllocation'],
         ['geo', 'dashboard.geoAllocation'],
+        ['asset', 'dashboard.assetAllocation'],
     ] as const satisfies readonly [AllocationTab, string][];
 
     const VIEW_STORAGE_KEY = 'dashboard-allocation-view';
@@ -63,7 +66,7 @@
         return (items as any[]).flatMap((i) => {
             const v = parseFloat(i?.value ?? '0');
             if (v <= 0) return [];
-            return [{name: i.name ?? '', value: v, amount: parseFloat(i?.amount ?? '0')}];
+            return [{name: i.name ?? '', value: v, amount: parseFloat(i?.amount ?? '0'), id: i?.id ?? null}];
         });
     }
 
@@ -98,13 +101,27 @@
     const allocationByType = $derived(toAllocEntries(summary?.allocation_by_type as any));
     const allocationBySector = $derived(toAllocEntries(summary?.allocation_by_sector as any));
     const allocationByGeo = $derived(toAllocEntries(summary?.allocation_by_geography as any));
+    // The asset dimension (Y5-2, #48): today's weight per asset, and its history with the assets that left the portfolio.
+    const allocationByAssetItems = $derived((summary?.allocation_by_asset ?? []) as any[]);
+    const allocationByAsset = $derived(toAllocEntries(allocationByAssetItems));
+    const allocationHistoryAsset = $derived((allocationHistory?.asset ?? []) as Array<{date: string; components: any[]}>);
+    /** One colour rank per asset, shared by the pie and the history: the heaviest today first, then the closed ones, the latest closed first. */
+    const assetColorRanks = $derived(
+        rankAssetsByWeight(
+            allocationByAssetItems.map((item) => ({id: item?.id ?? null, amount: parseFloat(item?.amount ?? '0')})),
+            allocationHistoryAsset.map((point) => ({date: point.date, components: (point.components ?? []).map((component) => ({id: component?.id ?? null, amount: parseFloat(component?.amount ?? '0')}))})),
+        ),
+    );
     // Type and sector carry the cash; geography never does. The history chart draws it below zero by itself.
-    const shownNegativeCash = $derived(allocationView !== 'now' ? null : allocationTab === 'type' ? negativeCash(summary?.allocation_by_type as any) : allocationTab === 'sector' ? negativeCash(summary?.allocation_by_sector as any) : null);
+    const shownNegativeCash = $derived(
+        allocationView !== 'now' ? null : allocationTab === 'type' ? negativeCash(summary?.allocation_by_type as any) : allocationTab === 'sector' ? negativeCash(summary?.allocation_by_sector as any) : allocationTab === 'asset' ? negativeCash(allocationByAssetItems) : null,
+    );
     const allocationByGeoMap = $derived(Object.fromEntries(allocationByGeo.map((e) => [e.name, e.value / 100])));
     const allocationByGeoAmounts = $derived(Object.fromEntries(allocationByGeo.filter((e) => e.amount > 0).map((e) => [e.name, e.amount])));
     const allocationHistoryData = $derived.by(() => {
         if (!allocationHistory) return [];
-        const dimMap: Record<AllocationTab, keyof AllocationHistoryDimensions> = {type: 'type', sector: 'sector', geo: 'geography'};
+        if (allocationTab === 'asset') return allocationHistoryAsset;
+        const dimMap: Record<Exclude<AllocationTab, 'asset'>, keyof AllocationHistoryDimensions> = {type: 'type', sector: 'sector', geo: 'geography'};
         const dim = dimMap[allocationTab] ?? 'type';
         return allocationHistory[dim] ?? [];
     });
@@ -149,7 +166,7 @@
             <div class="absolute inset-0 z-10 bg-lf-neutral rounded animate-pulse"></div>
         {/if}
         <div class="w-full h-full" class:invisible={allocationView !== 'history' || loading || allocationHistoryLoading}>
-            <AllocationHistoryChart data={allocationHistoryData} dimension={allocationTab} height="100%" loading={false} />
+            <AllocationHistoryChart data={allocationHistoryData} dimension={allocationTab} colorRanks={assetColorRanks} height="100%" loading={false} />
         </div>
         {#if allocationView === 'now'}
             {#if !summary}
@@ -163,6 +180,10 @@
             {:else if allocationTab === 'sector'}
                 <div class="absolute inset-0">
                     <AllocationPieChart data={allocationBySector} height="100%" legendPosition="bottom" currency={displayCurrency} />
+                </div>
+            {:else if allocationTab === 'asset'}
+                <div class="absolute inset-0">
+                    <AllocationPieChart data={allocationByAsset} height="100%" mode="asset" colorRanks={assetColorRanks} legendPosition="bottom" currency={displayCurrency} />
                 </div>
             {:else}
                 <div class="absolute inset-0">

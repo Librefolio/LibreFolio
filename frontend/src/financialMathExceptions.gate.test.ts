@@ -14,7 +14,10 @@
  *     user chooses: the footer of the lots table — a table, not a chart — over the rows the user selects, else those the
  *     filters leave visible (`unifiedLotsTableHelpers.ts`, fed by `DataTable.svelte`); the aggregate of the lots
  *     selected in the comparison chart (`lotComparisonChartHelpers.ts`); and the WAC chart's percentage view, its value
- *     series rebased on the first known value (`lotWacPriceChartHelpers.ts`).
+ *     series rebased on the first known value (`lotWacPriceChartHelpers.ts`);
+ *   - the return chart of the positions the user ticks (Y5-2, #48, `positionsSeries.ts`): the backend's fraction in
+ *     «base 100» (a change of unit), and the Dashboard's own history moved to the left edge of the user's window. No
+ *     new calculation: a number the backend computed, shifted or re-expressed for the chart.
  *
  * Each exception must be declared where it lives. The documentation named the four files while the code declared none
  * of them (plan 43, `plan-phase00FinancialMathHome.prompt.md:1494`): this gate was written red against that state, and
@@ -107,6 +110,7 @@ const SINE = 'src/lib/charts/signals/SineSignal.ts';
 const LOTS_TABLE = 'src/lib/features/brokers/lots/unifiedLotsTableHelpers.ts';
 const LOT_COMPARISON = 'src/lib/features/brokers/lots/lotComparisonChartHelpers.ts';
 const LOT_WAC = 'src/lib/features/brokers/lots/lotWacPriceChartHelpers.ts';
+const POSITIONS_SERIES = 'src/lib/features/dashboard/positionsSeries.ts';
 
 interface DeclaredException {
     /** Relative to `frontend/`. */
@@ -133,6 +137,7 @@ const DECLARED_EXCEPTIONS: readonly DeclaredException[] = [
     {file: LOTS_TABLE, annualizes: false, measure: 'D-MF6(b), the lots table footer: sums, weighted averages and returns over the rows the user selects, else those left visible'},
     {file: LOT_COMPARISON, annualizes: false, measure: 'D-MF6(b), the lot comparison aggregate: value and return of the lots the user selects'},
     {file: LOT_WAC, annualizes: false, measure: "D-MF6(b), the WAC chart's percentage view: the value series rebased on its first known value"},
+    {file: POSITIONS_SERIES, annualizes: false, measure: "Y5-2, the positions return chart: the backend's fraction in base 100, and the Dashboard history moved to the left edge of the window the user picks"},
 ];
 
 const DECLARED_FILES: ReadonlySet<string> = new Set(DECLARED_EXCEPTIONS.map((entry) => entry.file));

@@ -151,7 +151,7 @@ In **Candles** and **Income**, the buttons in the top-right corner of the plot, 
 
 ## 🥧 Allocation Panel {: #allocation-panel }
 
-The **Asset Allocation** panel shows how your portfolio is split, today and over time. Pick a dimension with the **By Type**, **By Sector**, and **Geographic** tabs, and a view with the two buttons in the top-right corner: the pie for **Now**, the area chart for **History**.
+The **Asset Allocation** panel shows how your portfolio is split, today and over time. Pick a dimension with the **By Type**, **By Sector**, **Geographic** and **By Asset** tabs, and a view with the two buttons in the top-right corner: the pie for **Now**, the area chart for **History**.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-alloc" data-carousel-interval="5000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
   <div class="lf-screenshot-carousel-item is-active alloc-crop-container" data-title="By Type (Current)" alt="Allocation by Type — Current">
@@ -181,6 +181,7 @@ The **Asset Allocation** panel shows how your portfolio is split, today and over
 | **By Type** | What each holding is — its [asset type](../../financial-theory/instruments/asset-types/index.md), such as Stock, ETF, Bond, Fund, or Crypto — plus **Liquidity** for your cash. Subtypes count with their [family](../../financial-theory/instruments/asset-types/index.md#families-and-subtypes), such as an **Equity ETF** with your other ETFs. |
 | **By Sector** | Industry sector: 💻 Technology, 🏦 Financials, 💊 Health Care, etc. |
 | **Geographic** | Where your assets are invested, country by country, according to each asset's geographic distribution |
+| **By Asset** | How much each single asset weighs: one slice per asset, with **Liquidity** for your cash. See [By Asset](#allocation-by-asset). |
 
 ### 🕰️ Now and History
 
@@ -188,6 +189,14 @@ The **Asset Allocation** panel shows how your portfolio is split, today and over
 - **History** — a 100% stacked area chart of how the allocation shifted over time, handy to see rebalancing. By type, each family is one area; hovering a date lists its subtypes, such as *Generic ETF* and *Equity ETF*.
 
 The panel remembers the view and the tab in this browser, for each user, and shares them with the broker pages.
+
+### 🧩 By Asset {: #allocation-by-asset }
+
+Which single assets weigh most? **By Asset** splits the portfolio asset by asset instead of by category.
+
+- **Now** — a pie with the weight of every asset on the last day of the selected range.
+- **History** — how the distribution by asset changed over time. **Closed positions are included**, so an asset you sold still shows in the days you held it.
+- **Colours** follow the weight today: the heaviest asset gets the first colour, then the others by weight, then the closed assets, the most recently closed first. The pie and the history use the same colour for the same asset.
 
 ### 🍩 Two rings by type {: #allocation-type-rings }
 
@@ -202,7 +211,7 @@ With no subtype at all, the donut keeps a single ring.
 
 ### 💵 Cash as Liquidity
 
-Your cash is the **Liquidity** slice of **By Type** and **By Sector**; the **Geographic** map leaves it out, as cash belongs to no country. With the broker filter on, the panel shows only the selected brokers' assets and cash.
+Your cash is the **Liquidity** slice of **By Type**, **By Sector** and **By Asset**; the **Geographic** map leaves it out, as cash belongs to no country. With the broker filter on, the panel shows only the selected brokers' assets and cash.
 
 ---
 

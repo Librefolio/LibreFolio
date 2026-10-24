@@ -9,6 +9,9 @@
   - Performance / Map: stacked diverging bar chart (positive components right of zero, negative
     left of zero) + Other Period Effects rows
 
+  Holdings / Table also carries the return chart of the positions (Y5-2, #48): the rows the user ticks are
+  drawn as lines over the portfolio's own (Abs or «base 100»); the legend turns them on and off.
+
   Data sources:
   - Holdings: summary.holdings from portfolioStore (engine snapshot at date_to)
   - Performance: positions_contribution from portfolioStore (fetched on demand)
@@ -18,7 +21,12 @@
 <script lang="ts">
     import {_} from '$lib/i18n';
     import {Table2, Grid2x2} from 'lucide-svelte';
-    import {getUserStorageKey} from '$lib/utils/storage';
+    import {getUserStorage, getUserStorageKey, setUserStorage} from '$lib/utils/storage';
+    import {onDestroy} from 'svelte';
+    import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
+    import {themed} from '$lib/theme/themePair';
+    import {GROWTH_SERIES} from '$lib/theme/chartTheme';
+    import {growthBrokerColor} from '$lib/theme/chartPalettes';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import type DataTable from '$lib/components/table/DataTable.svelte';
 
@@ -27,6 +35,8 @@
     import ContributionTable from './ContributionTable.svelte';
     import OtherPeriodEffectsTable from './OtherPeriodEffectsTable.svelte';
     import PerformanceChart from './PerformanceChart.svelte';
+    import PositionsReturnChart from './PositionsReturnChart.svelte';
+    import {PORTFOLIO_LINE_ID, portfolioLine, positionLines, selectionKeys, type HistoryPointLike, type PositionKey, type PositionsChartView, type PositionsSeriesResponse} from './positionsSeries';
 
     import type {PortfolioSummary, PositionsContribution} from '$lib/stores/portfolio/portfolioStore.svelte';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
@@ -51,9 +61,32 @@
         /** Asset whose lot-analysis panel is open — its table row stays tinted (F9).
          *  Forwarded to the table sub-views. */
         analyzedAssetId?: number | null;
+        /** The daily series of the ticked positions (Y5-2): the answer of the last request. */
+        positionsSeries?: PositionsSeriesResponse | null;
+        positionsSeriesLoading?: boolean;
+        positionsSeriesFailed?: boolean;
+        /** Asks the series of the ticked positions; called once per change of the selection, never with an empty one. */
+        onRequestPositionsSeries?: (keys: PositionKey[]) => void;
+        /** The Dashboard's own history: the chart's portfolio line (its return, not the positions' P&L). */
+        portfolioHistory?: ReadonlyArray<HistoryPointLike>;
     }
 
-    let {summary = null, contribution = null, loading = false, contributionLoading = false, assetsHref = '/assets', brokers = [], onRequestContribution, onAnalyze, analyzedAssetId = null}: Props = $props();
+    let {
+        summary = null,
+        contribution = null,
+        loading = false,
+        contributionLoading = false,
+        assetsHref = '/assets',
+        brokers = [],
+        onRequestContribution,
+        onAnalyze,
+        analyzedAssetId = null,
+        positionsSeries = null,
+        positionsSeriesLoading = false,
+        positionsSeriesFailed = false,
+        onRequestPositionsSeries,
+        portfolioHistory = [],
+    }: Props = $props();
 
     // =========================================================================
     // Toggle state (persisted in localStorage)
@@ -113,6 +146,66 @@
         if (semanticMode === 'performance' && !contribution && !contributionLoading) {
             onRequestContribution?.();
         }
+    });
+
+    // =========================================================================
+    // The return chart of the positions (Y5-2)
+    // =========================================================================
+
+    const CHART_VIEW_KEY = 'dashboard-positions-chart-view';
+
+    function readChartView(): PositionsChartView {
+        return getUserStorage(CHART_VIEW_KEY, 'percentage') === 'absolute' ? 'absolute' : 'percentage';
+    }
+
+    type SelectedRow = {key: string; assetId: number; brokerId: number | null};
+
+    let chartView = $state<PositionsChartView>(readChartView());
+    let selectedRows = $state<SelectedRow[]>([]);
+    let hiddenIds = $state<ReadonlySet<string>>(new Set());
+    let isDark = $state(isDarkTheme());
+
+    const themeWatcher = onThemeClassChange(() => (isDark = isDarkTheme()));
+    const colourWatcher = onChartColorsChange(() => (isDark = isDarkTheme()));
+    onDestroy(() => {
+        themeWatcher.disconnect();
+        colourWatcher.disconnect();
+    });
+
+    function handleSelectionChange(rows: SelectedRow[]) {
+        selectedRows = rows;
+        if (rows.length > 0) onRequestPositionsSeries?.(selectionKeys(rows));
+    }
+
+    function handleChartViewChange(view: PositionsChartView) {
+        chartView = view;
+        setUserStorage(CHART_VIEW_KEY, view);
+    }
+
+    function toggleLine(id: string) {
+        const next = new Set(hiddenIds);
+        if (!next.delete(id)) next.add(id);
+        hiddenIds = next;
+    }
+
+    /** A line keeps its colour while the selection changes: ids get their number in the order they are first drawn. */
+    const colourSlots = new Map<string, number>();
+    function colourOf(id: string): string {
+        if (id === PORTFOLIO_LINE_ID) return themed(GROWTH_SERIES.nav, isDark);
+        let slot = colourSlots.get(id);
+        if (slot === undefined) {
+            slot = colourSlots.size;
+            colourSlots.set(id, slot);
+        }
+        return growthBrokerColor(slot, isDark);
+    }
+
+    let selectedKeys = $derived(selectedRows.map((row) => row.key));
+    let chartLines = $derived.by(() => {
+        const portfolio = portfolioLine(portfolioHistory, chartView, $_('dashboard.positionsChart.portfolio'));
+        const picked = new Set(selectedKeys);
+        const positions = positionLines(positionsSeries, chartView).filter((line) => picked.has(line.id));
+        return portfolio ? [portfolio, ...positions] : positions;
     });
 
     // =========================================================================
@@ -200,7 +293,22 @@
     {:else}
         <div class="flex-1 {visualMode === 'table' ? 'overflow-x-auto' : ''}">
             {#if semanticMode === 'holdings' && visualMode === 'table'}
-                <ExposureTable bind:this={exposureTableComponent} {holdings} {displayCurrency} {brokers} {onAnalyze} {analyzedAssetId} />
+                <ExposureTable bind:this={exposureTableComponent} {holdings} {displayCurrency} {brokers} {onAnalyze} {analyzedAssetId} selectable {selectedKeys} onSelectionChange={handleSelectionChange} />
+                <div class="mt-4" data-testid="positions-chart-section">
+                    <PositionsReturnChart
+                        lines={chartLines}
+                        view={chartView}
+                        onviewchange={handleChartViewChange}
+                        {hiddenIds}
+                        ontoggle={toggleLine}
+                        colorOf={colourOf}
+                        currency={displayCurrency}
+                        loading={positionsSeriesLoading && selectedRows.length > 0}
+                        failed={positionsSeriesFailed && selectedRows.length > 0}
+                        portfolioLabel={$_('dashboard.positionsChart.portfolio')}
+                        note={$_('dashboard.positionsChart.portfolioNote')}
+                    />
+                </div>
             {:else if semanticMode === 'holdings' && visualMode === 'map'}
                 <ExposureTreemap {holdings} holdingGroups={summary?.holding_groups ?? []} {displayCurrency} {onAnalyze} />
             {:else if semanticMode === 'performance' && visualMode === 'table' && contribution}

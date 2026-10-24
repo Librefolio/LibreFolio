@@ -464,6 +464,28 @@ async function showCostColumns(page: Page, scope: Locator, row: Locator): Promis
 }
 
 /**
+ * «← Portfolio»: the lot detail replaced the portfolio view (Y5-2), so pressing it takes the lots panel off the page and
+ * puts the positions panel back. Ends on both facts.
+ */
+async function backToPortfolio(page: Page): Promise<void> {
+    await page.getByTestId('positions-back-to-portfolio').click();
+    await expect(page.getByTestId('lots-analysis-panel')).toBeHidden({timeout: 15_000});
+    await expect(page.getByTestId('positions-panel')).toBeVisible({timeout: 15_000});
+}
+
+/**
+ * The lot detail of the position, opened the way a user does it: right click on its row of the holdings table, then the
+ * menu action. The positions panel goes, the lots panel comes (Y5-2): ends on the lots panel visible, the asset in the URL.
+ */
+async function openLotDetail(page: Page, row: Locator, assetId: number): Promise<void> {
+    await row.click({button: 'right'});
+    await page.getByTestId('context-menu-action-analyze-lots').click();
+    await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 15_000});
+    await expect(page).toHaveURL(new RegExp(`[?&]asset=${assetId}(?:&|$)`));
+    await expect(page.getByTestId('positions-panel'), 'the lot detail replaces the portfolio view: no positions panel beside it').toHaveCount(0);
+}
+
+/**
  * The lots panel the URL opened shows the issue `code`.
  *
  * The panel publishes no busy state and starts with `loading` false, so the lots of the answer are the witness
@@ -499,17 +521,7 @@ async function expectNoUnknownCost(page: Page, load: DashboardLoad, assetId: num
 
     const dashboard = page.getByTestId('dashboard-page');
     await waitForSettled(dashboard, 25_000);
-    const row = positionRow(dashboard, assetId, brokerId);
-    await showCostColumns(page, dashboard, row);
-    for (const columnId of COST_COLUMNS) await expect(costCell(row, columnId), `${columnId}: a figure, never a dash`).toHaveText(/\d/);
-    // Decided by the report, not by a probe; the figures above prove that report is on screen.
-    if (issues.length === 0) {
-        await expect(page.getByTestId('data-quality-banner'), 'nothing to report: no banner').toHaveCount(0);
-    } else {
-        await expandStrict(page.getByTestId('data-quality-toggle'));
-        await expect(page.getByTestId('data-quality-issue-MISSING_COST_BASIS'), 'no row for a cost nobody knows').toHaveCount(0);
-    }
-
+    // The URL opened the lot detail alone (Y5-2): the lots panel first, then «← Portfolio» for the positions and the banner.
     const lotIssuesNow = lotIssues(load.lots);
     expect(
         lotIssuesNow.filter((issue) => issue.code === 'MISSING_COST_BASIS'),
@@ -527,6 +539,18 @@ async function expectNoUnknownCost(page: Page, load: DashboardLoad, assetId: num
     } else {
         await expandStrict(lotsPanel.getByTestId('lot-data-quality-toggle'));
         await expect(lotsPanel.getByTestId('lot-data-quality-issue-MISSING_COST_BASIS'), 'no lots row for a cost nobody knows').toHaveCount(0);
+    }
+
+    await backToPortfolio(page);
+    const row = positionRow(dashboard, assetId, brokerId);
+    await showCostColumns(page, dashboard, row);
+    for (const columnId of COST_COLUMNS) await expect(costCell(row, columnId), `${columnId}: a figure, never a dash`).toHaveText(/\d/);
+    // Decided by the report, not by a probe; the figures above prove that report is on screen.
+    if (issues.length === 0) {
+        await expect(page.getByTestId('data-quality-banner'), 'nothing to report: no banner').toHaveCount(0);
+    } else {
+        await expandStrict(page.getByTestId('data-quality-toggle'));
+        await expect(page.getByTestId('data-quality-issue-MISSING_COST_BASIS'), 'no row for a cost nobody knows').toHaveCount(0);
     }
 }
 
@@ -606,13 +630,19 @@ test.describe('Data quality on real data — items 21, 22, 23 (issue #32)', () =
             await expect(fxRow).toHaveAttribute('data-severity', 'warning');
             for (const text of ['EUR', quote, d1, d2]) await expect(fxRow, `the banner row shows ${text}`).toContainText(text);
 
-            await showCostColumns(page, dashboard, row);
-            for (const columnId of COST_COLUMNS) await expect(costCell(row, columnId), `${columnId}: a dash, never a zero`).toHaveText(DASH);
-
+            // The URL opened the lot detail alone (Y5-2): the lots panel first, then «← Portfolio» for the positions.
             expect(
                 lotIssues(load.lots).map((issue) => issue.code),
                 'precondition: the lots analysis reports the missing rate too',
             ).toContain('MISSING_FX_RATES');
+            await expectLotIssue(page, 'MISSING_FX_RATES');
+
+            await backToPortfolio(page);
+            await showCostColumns(page, dashboard, row);
+            for (const columnId of COST_COLUMNS) await expect(costCell(row, columnId), `${columnId}: a dash, never a zero`).toHaveText(DASH);
+
+            // The detail is opened again and left open: D2 below is about a lots panel already open when «Sync rates» answers.
+            await openLotDetail(page, row, assetId);
             await expectLotIssue(page, 'MISSING_FX_RATES');
         });
 
@@ -664,7 +694,6 @@ test.describe('Data quality on real data — items 21, 22, 23 (issue #32)', () =
                 await expandStrict(page.getByTestId('data-quality-toggle'));
                 await expect(fxRow, 'the missing-rate row goes').toHaveCount(0, {timeout: 15_000});
             }
-            for (const columnId of COST_COLUMNS) await expect(costCell(row, columnId), `${columnId} is a figure again`).toHaveText(/\d/, {timeout: 15_000});
         });
 
         await test.step('D2: the lots panel already open asks again by itself, without a reload, and drops the issue', async () => {
@@ -685,6 +714,12 @@ test.describe('Data quality on real data — items 21, 22, 23 (issue #32)', () =
                 await expandStrict(lotsPanel.getByTestId('lot-data-quality-toggle'));
                 await expect(lotsPanel.getByTestId('lot-data-quality-issue-MISSING_FX_RATES'), 'the missing-rate row of the lots panel goes').toHaveCount(0, {timeout: 15_000});
             }
+        });
+
+        await test.step('after the sync, back on the portfolio: the positions show a figure again where they showed a dash', async () => {
+            await backToPortfolio(page);
+            await showCostColumns(page, dashboard, row);
+            for (const columnId of COST_COLUMNS) await expect(costCell(row, columnId), `${columnId} is a figure again`).toHaveText(/\d/, {timeout: 15_000});
         });
     });
 
