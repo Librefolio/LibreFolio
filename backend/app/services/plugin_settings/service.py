@@ -55,16 +55,21 @@ from backend.app.services.plugin_settings.fields import PluginSettingField, Sett
 from backend.app.services.plugin_settings.resolver import FieldState, StoredValue, missing_field_keys, resolve_plugin_fields
 from backend.app.services.plugin_settings.runtime import stored_value
 from backend.app.services.provider_registry import AbstractProviderRegistry
+from backend.app.services.tools.registry import ToolPluginRegistry
 from backend.app.utils.datetime_utils import utcnow
 
 logger = get_logger(__name__)
 
 #: The families whose plugins may declare settings, with their registries.
-FAMILY_REGISTRIES: dict[str, type[AbstractProviderRegistry]] = {"asset": AssetProviderRegistry, "fx": FXProviderRegistry, "brim": BRIMProviderRegistry}
+FAMILY_REGISTRIES: dict[str, type[AbstractProviderRegistry]] = {"asset": AssetProviderRegistry, "fx": FXProviderRegistry, "brim": BRIMProviderRegistry, "tool": ToolPluginRegistry}
+
+#: The families whose plugins have no icon of their own: a Tool is drawn with the ``icon_key`` of its service by the Tools page, and the
+#: settings catalogue lists it with the neutral icon.
+FAMILIES_WITHOUT_ICON: frozenset[str] = frozenset({"tool"})
 
 #: The attribute of a plugin instance that holds its icon URL, per family: the one its family's provider list publishes
 #: (``GET /assets/provider`` reads ``get_icon``, ``GET /fx/providers`` reads ``icon``, the BRIM plugins publish ``icon_url``). A new family
-#: adds one row.
+#: adds one row, or joins ``FAMILIES_WITHOUT_ICON``.
 FAMILY_ICON_ATTRIBUTES: dict[str, str] = {"asset": "get_icon", "fx": "icon", "brim": "icon_url"}
 
 
@@ -99,7 +104,12 @@ def _plugin_identity(family: str, plugin_class: type, code: str) -> tuple[str, s
     A plugin that cannot be instantiated shows its code and no icon. The name is ``provider_name``, else ``name``, else
     the code; one that raises (other than ``AttributeError``, which moves on to the next) is the code. An icon that
     cannot be read, or is not a non-empty string, is no icon: the catalogue never fails because of either.
+
+    A Tool is listed by its tool code (``code``): its name is the ``ToolService.name`` of that code, and it has no icon.
     """
+    if family == "tool":
+        service = next((candidate for candidate in getattr(plugin_class, "services", ()) if candidate.tool_code == code), None)
+        return (service.name if service is not None else code), None
     try:
         instance = plugin_class()
     except Exception:  # noqa: BLE001 — a plugin that cannot be instantiated still has a code to show

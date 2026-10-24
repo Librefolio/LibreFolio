@@ -1,13 +1,15 @@
-import {vi} from 'vitest';
-import {zodiosApi} from '$lib/api';
-
 /**
- * `vi.spyOn(zodiosApi, alias)` for one alias of the generated API client.
+ * `spyOnApi` — `vi.spyOn` on one alias of the generated client, through a one-key view of it.
  *
- * The cast is on purpose: the client's type is so large that the compiler's instantiation limit ("Type instantiation is
- * excessively deep") is crossed by a spy on it each time the OpenAPI document gains a few operations, and always in a
- * different test file. Typed through a plain record the spy costs nothing and the test keeps its own types for the values.
+ * Spying through the whole type of `zodiosApi` makes TypeScript instantiate every endpoint of the client, and the first
+ * statement of the whole program to do it overflows the instantiation depth once the client has grown by one endpoint
+ * (the trade-amount route of #47 did): the error then lands on whichever test file is checked first, and moves to the next
+ * when that one is fixed. This view names the alias and nothing else, so the type of the client is never expanded.
+ * What it gives up: the alias is checked as a string, not against the client — the call under test is typed by its own
+ * module, and a mistyped alias fails the test at once (nothing is spied, the real client answers).
  */
-export function spyOnApi(alias: string) {
-    return vi.spyOn(zodiosApi as unknown as Record<string, (...args: unknown[]) => Promise<unknown>>, alias);
+import {vi} from 'vitest';
+
+export function spyOnApi(client: unknown, alias: string) {
+    return vi.spyOn(client as Record<string, (...args: unknown[]) => unknown>, alias);
 }

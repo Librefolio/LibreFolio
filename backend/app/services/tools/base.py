@@ -11,6 +11,7 @@ from typing import ClassVar
 from pydantic import BaseModel, TypeAdapter
 
 from backend.app.schemas.tools import ToolDiscoveryReason, ToolDocumentation, ToolErrorCode, ToolOperationPolicy, ToolUIDescriptor
+from backend.app.services.plugin_settings.contract import PluginSettingsMixin
 
 
 class ToolDefinitionError(ValueError):
@@ -92,8 +93,14 @@ class ToolService:
         return TypeAdapter(self.output_type)
 
 
-class ToolPlugin(ABC):
-    """A packaged pure computation exposing one or more public services."""
+class ToolPlugin(PluginSettingsMixin, ABC):
+    """A packaged pure computation exposing one or more public services.
+
+    A plugin may declare ``settings_fields`` (family ``tool``, CP12): the core resolves the values of the user who asks in the
+    parent process and delivers them with the job; ``compute`` reads ``self.settings`` and still touches no database, request or
+    provider. The values are keyed by the **tool code** of each service: a plugin that bundles several services gets one set of
+    values per service.
+    """
 
     contract_version: ClassVar[str]
     implementation_version: ClassVar[str]

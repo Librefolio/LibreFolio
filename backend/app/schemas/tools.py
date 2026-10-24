@@ -53,6 +53,7 @@ ToolDiscoveryReason = Literal[
     "invalid_output_model",
     "invalid_schema",
     "invalid_operation_policy",
+    "invalid_settings",
 ]
 
 
