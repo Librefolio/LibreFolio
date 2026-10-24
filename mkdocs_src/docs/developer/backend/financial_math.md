@@ -88,8 +88,8 @@ backend/app/services/financial_math/
 │   ├── daily_state.py       DailyStateBuilder: the daily state vector, without I/O
 │   ├── derived_views.py     DerivedViewsBuilder (history, P&L, allocation…), cost positions
 │   ├── data_quality.py      FX pair slug, configured pair sets, build_data_quality_report()
-│   ├── period.py            a period's boundary states, its P&L, the identity that closes it and its residual (the AI Export reconciliation, J-14); the day's P&L change
-│   ├── contributions.py     a position's row in the Dashboard's Performance table: its period P&L (`position_period_pnl`), return on the start value, annualized returns, the internal-transfer split (P22)
+│   ├── period.py            a period's boundary states, its P&L, the identity that closes it and its residual (the AI Export reconciliation, J-14); the day's P&L change; the period's realized sales (`period_realized_sales`)
+│   ├── contributions.py     a position's row in the Dashboard's Performance table: its period P&L (`position_period_pnl`), return on the start value, annualized returns, the internal-transfer split (P22: `transfer_tract` is the tract of one transfer for one broker)
 │   ├── position_series.py   a position's daily series for the Dashboard's positions chart: P&L since the period's start (the Performance row's, day by day), its base and the percent on it, from the engine's frames of that position (J5-1, #48)
 │   └── engine.py            PortfolioCalculationEngine: loads a scope, runs the steps, caches
 └── lots/                    lots analysis math, called by lots_analysis_service.py
@@ -357,8 +357,13 @@ cost of what was bought (`acquisitions_from_average_costs()`) and the income and
 (`NativeCash.position_flow_steps()`). Its `pnl` on a day is the Performance row's `period_pnl` of the period from `date_from`
 to that day, by the same function (`contributions.position_period_pnl`), so the last point of a series is the table's row.
 Its `base`, the capital the percent is on, is the value at `date_from` in absolute terms, plus the cost of what is bought
-after it, plus what an internal transfer brings in at its value on arrival; a sale never lowers it, and a base that is 0 or
-unknown gives no percent (the developer's decision of 23/10). A closed position ends the day it went to 0, with its final
+after it, plus what an internal transfer brings in: at its value on arrival when the period splits its tract
+(`contributions.counted_tract`, the units' pnl is then measured from that value), else at the cost moved, as the table's base
+does; a sale never lowers it, and a base that is 0 or unknown gives no percent (the developer's decision of 23/10). The
+sales it reads are the table's, `period.period_realized_sales`, and the tract of a transfer is `contributions.transfer_tract`:
+the series keeps no copy of either rule. A point exists for every calendar day of every position asked (D-P4): the API stays
+daily, so the window a caller asks for is the cost of the answer. A position below the dust threshold is not held, and its
+point is 0 where the engine's day totals still count the dust. A closed position ends the day it went to 0, with its final
 pnl; units sent to another broker of the scope stay the sender's until they arrive (P22), so its series goes on to the
 arrival, holding the pnl of the last day held, and the tract settles it there. An asset asked without a broker is the sum
 over the brokers that held it: the tracts of a transfer between them cancel and what it brings in is not new capital. A value

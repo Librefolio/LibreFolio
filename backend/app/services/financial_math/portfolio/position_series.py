@@ -5,7 +5,11 @@ period's start, day by day: the Performance table's ``period_pnl`` of the period
 last point of a series is the table's row. This module is the pure side: it takes the engine's frames of each position
 (the state of a position over a stretch of days in which it does not change), the realized sales, the income and costs
 steps, the internal transfers and the cost of what was bought, and returns the series. It reads no database and builds
-no daily state: its work is proportional to the stretches, not to the days of the engine.
+no daily state: each figure of a day is a lookup in the stretches (a bisection), never a replay of the days before it.
+
+**Volume (D-P4).** A series is one point per calendar day and per requested position, so its size is the days of the window
+times the positions asked: a typo'd first year would ask for ~740 000 points per series. The API keeps the daily point; the
+Dashboard asks for a window its chart can draw (sampled on the long ones, as the cards of Z-29 do). Nothing here limits it.
 
 The rules, which the developer decided on 18/10 and 23/10 (plan 05, «Ondata 5»):
 
@@ -13,7 +17,9 @@ The rules, which the developer decided on 18/10 and 23/10 (plan 05, «Ondata 5»
   frame of ``date_from``, plus the tract an internal transfer gave it: ``contributions.transfer_tract_adjustments``) + the
   realized gain of its sales in ``(date_from, d]`` + its income - its fees and taxes over the same days;
 * **base** = the size of the value at ``date_from`` + the cost of what is bought after it + what an internal transfer
-  brings in, at its value on arrival. A sale never lowers it. ``pnl_percent`` = pnl / base, a fraction, unrounded; None
+  brings in: at its value on arrival when the period splits its tract (``contributions.counted_tract``, the units' pnl is then
+  measured from that value), else at the cost moved, which is where the plain boundary values measure their pnl from; as the
+  Performance row's base does (``contributions.annualized_period_return``). A sale never lowers it. ``pnl_percent`` = pnl / base, a fraction, unrounded; None
   when the base is 0 or unknown;
 * one point per **calendar day** from ``first_date`` to ``last_date``; ``last_date`` is ``date_to`` while the position is
   held, else the day it went to 0 (that day's point has quantity 0, value 0 and the final pnl);
@@ -24,6 +30,10 @@ The rules, which the developer decided on 18/10 and 23/10 (plan 05, «Ondata 5»
 
 Everything is in the report currency at the owner's share: the engine's frames are already scaled. The module imports
 nothing outside ``financial_math`` and the data-quality thresholds.
+
+A position is *held* when its quantity is above ``QUANTITY_DUST_THRESHOLD``. Below it a day's point is 0 in quantity and value,
+while the engine's day totals still count the dust: the sum of the series' ``market_value`` equals the report's on every day
+whose positions are held, and only there.
 """
 
 from __future__ import annotations
@@ -34,11 +44,10 @@ from dataclasses import dataclass
 from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
-from typing import Protocol
 
 from backend.app.services.financial_math.average_cost import AverageCost, CostMovementKind
-from backend.app.services.financial_math.portfolio.contributions import counted_tract, position_period_pnl
-from backend.app.services.financial_math.portfolio.models import InternalAssetTransfer, RealizedSale
+from backend.app.services.financial_math.portfolio.contributions import counted_tract, position_period_pnl, transfer_tract
+from backend.app.services.financial_math.portfolio.models import InternalAssetTransfer, PositionFrame, RealizedSale
 from backend.app.services.financial_math.returns import realized_gain
 from backend.app.services.platform.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
 
@@ -48,19 +57,6 @@ _ZERO = Decimal("0")
 PositionKey = tuple[int, int]
 #: What is asked for: ``(broker_id, asset_id)``, or ``(None, asset_id)`` for the asset summed over its brokers.
 PositionRequest = tuple[int | None, int]
-
-
-class PositionFrame(Protocol):
-    """What the engine's per-position frame holds, as this module reads it: the state of one position in ``start``..``end``."""
-
-    start: date_type
-    end: date_type  # inclusive
-    quantity: Decimal
-    market_value: Decimal | None
-    cost_basis: Decimal
-    cost_complete: bool
-    valuation_source: str | None
-    unrealized_pnl: Decimal | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -200,15 +196,16 @@ def _single(  # noqa: C901 — one pass over the days of a position: boundaries,
     start_value = (start_frame.market_value if held_at_start else _ZERO) if date_from is not None else _ZERO
     ug_start = start_frame.unrealized_pnl if held_at_start else None
 
-    gains = [(sale.date, realized_gain(sale.proceeds, sale.cost)) for sale in sales if sale.proceeds is not None and sale.cost_complete and (date_from is None or sale.date > date_from)]
+    # ``sales`` are the period's (``period.period_realized_sales``): dated in (date_from, date_to], proceeds and cost known.
+    gains = [(sale.date, realized_gain(sale.proceeds, sale.cost)) for sale in sales]
     realized = _steps_of([(day, gain) for day, gain in gains if gain is not None])
     sale_days = sorted({day for day, _ in gains})
     income = _Cumulative(tuple(step[0] for step in flow_steps), tuple(step[1] for step in flow_steps))
     costs = _Cumulative(tuple(step[0] for step in flow_steps), tuple(step[2] for step in flow_steps))
     flow_days = tuple(step[0] for step in flow_steps)
     bought = _steps_of(list(acquisitions))
-    tract_adjustments = _steps_of([(t.arrival, _tract(t, key)) for t in transfers if _takes_part(t, key) and counted_tract(t, date_from, t.arrival)])
-    brought_in = _steps_of([(t.arrival, _arrival_base(t)) for t in transfers if t.receiver_broker_id == key[0] and t.asset_id == key[1] and (date_from is None or t.arrival > date_from) and _arrival_base(t) is not None])
+    tract_adjustments = _steps_of([(t.arrival, transfer_tract(t, key[0])) for t in transfers if _takes_part(t, key) and counted_tract(t, date_from, t.arrival)])
+    brought_in = _steps_of([(t.arrival, base) for t in transfers if t.receiver_broker_id == key[0] and t.asset_id == key[1] and (date_from is None or t.arrival > date_from) and (base := _arrival_base(t, date_from)) is not None])
     start_unknown_base = held_at_start and start_value is None
 
     points: list[SeriesPoint] = []
@@ -281,15 +278,17 @@ def _takes_part(transfer: InternalAssetTransfer, key: PositionKey) -> bool:
     return transfer.asset_id == key[1] and key[0] in (transfer.sender_broker_id, transfer.receiver_broker_id)
 
 
-def _tract(transfer: InternalAssetTransfer, key: PositionKey) -> Decimal:
-    """What a counted transfer adds to the unrealized change of ``key``: ``V - C`` to the sender, ``-(V - C)`` to the receiver."""
-    tract = transfer.value_at_arrival - transfer.cost_moved
-    return tract if transfer.sender_broker_id == key[0] else -tract
+def _arrival_base(transfer: InternalAssetTransfer, date_from: date_type | None) -> Decimal | None:
+    """What a transfer brings into the receiver's base on arrival, by the rule the Performance row's base follows.
 
-
-def _arrival_base(transfer: InternalAssetTransfer) -> Decimal | None:
-    """What a transfer brings into the receiver's base: the units' value on arrival, else the cost moved; None when neither is known."""
-    return transfer.value_at_arrival if transfer.value_at_arrival is not None else transfer.cost_moved
+    When the period splits its tract (``counted_tract``) the units' pnl is measured from their value on arrival, so they enter
+    the base at that value (``closed_position_base``'s ``moved_in``: the cost plus ``V - C``). Otherwise — in transit at the
+    start, or the value unknown — the plain boundary values measure it from the cost, and so they enter at the cost moved. None
+    when that is not known either: the cost basis lacks it too, and the pnl with it.
+    """
+    if counted_tract(transfer, date_from, transfer.arrival):
+        return transfer.value_at_arrival
+    return transfer.cost_moved
 
 
 def acquisitions_from_average_costs(average_costs: Mapping[tuple[int, int], AverageCost], transfers: Sequence[InternalAssetTransfer]) -> dict[PositionKey, list[tuple[date_type, Decimal]]]:
@@ -326,9 +325,11 @@ def build_position_series(
 ) -> list[PositionSeriesData]:
     """The series of each requested position, in the order asked.
 
-    ``frames`` hold each position's frames in ascending order (``end`` inclusive). ``realized_sales`` are the sales whose
-    proceeds and cost are known. ``flow_steps`` give a position's income and costs as running totals from its first
-    movement: ``(day, income so far, fees and taxes so far)``. ``acquisitions`` are what was bought, ``(day, cost)``, never an
+    ``frames`` hold each position's frames in ascending order (``end`` inclusive). ``realized_sales`` are the period's sales,
+    already selected by ``period.period_realized_sales`` (dated in ``(date_from, date_to]``, proceeds and cost known).
+    ``flow_steps`` give a position's income and costs as running totals, ``(day, income so far, fees and taxes so far)``, as
+    ``NativeCash.position_flow_steps(date_from, date_to)`` returns them: counted from ``date_from`` (excluded), so they start at
+    0 after it. What the totals hold up to ``date_from`` is subtracted anyway, so steps that begin earlier are read right. ``acquisitions`` are what was bought, ``(day, cost)``, never an
     internal transfer's arrival (the transfers bring theirs in at their value on arrival).
     """
     out: list[PositionSeriesData] = []

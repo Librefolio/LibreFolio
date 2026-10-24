@@ -9679,3 +9679,26 @@ con la nota del 22/10. E2E proposti al coordinatore: `front-broker detail` (il c
    > `it.each`). Prova: senza il mio endpoint nello schema `svelte-check` dà 0 errori; con l'endpoint, 1. È al limite di TypeScript: qualunque
    > nuovo endpoint lo può far scattare. Il file è di un'altra sessione; la cura è nel test (un cast del bersaglio dello `spyOn`),
    > verificata più sotto.
+10. ✅ 24/10 — **J5-3: i seguiti della revisione di MF su J5-1** (base `7055a17bd`; corsia 6190).
+   > **Note implementazione**:
+   > - **Una sola regola del tratto**: `contributions.transfer_tract(transfer, broker_id)` (V − C al mittente, −(V − C) al destinatario);
+   >   la usano `transfer_tract_adjustments` e `position_series` (via la copia `_tract`).
+   > - **Una sola lettura delle vendite del periodo**: `_period_realized_sales` esce da `portfolio_service.py` e diventa
+   >   `period.period_realized_sales`; i tre lettori (riepilogo, tabella Periodo, serie) la chiamano. `position_series` non rifiltra più.
+   > - **Domanda 3 di MF (`_arrival_base` contro `transfer_tracts_moved_in`)**: la differenza **non era voluta**. Con V noto e tratto *non
+   >   contato* (partito prima di `date_from`, in viaggio all'inizio) la serie metteva V nella base del destinatario, mentre il suo pnl
+   >   parte dal costo (valori di confine semplici): la percentuale usciva troppo bassa. Ora la base è V solo se `counted_tract`, altrimenti il
+   >   costo spostato (come il «costo finale» della tabella); con V ignoto era già C. Cambia solo la serie di quel caso (base 1 185 → 1 000
+   >   nell'esempio del test); nessun numero della tabella né del report.
+   > - **Doc e tipi**: docstring del modulo (volume sotto D-P4: un punto per giorno e per posizione; polvere: sotto soglia il punto è 0 e
+   >   l'identità P2 non regge), docstring di `flow_steps` allineata alla chiamata vera, il `Protocol` `PositionFrame` tolto per il tipo del
+   >   modello; `financial_math.md` e `transactions/wac.md` aggiornati.
+   > - **Test** (rossi prima della cura, scritti da me e non dal sotto-agente `test-author`): `TestTransferTract` (5), `TestPeriodRealizedSales` (26),
+   >   base del destinatario in transito all'inizio (1, più una riga sul caso con V ignoto). Rafforzati: P1 su 4 inizi (prima/dopo la vendita e il
+   >   dividendo), P2 senza `None` (`market_value or 0` tolto) e P2 con due broker, un titolo in USD e un cambio che varia ogni giorno.
+   > - **Prima/dopo**: fotografia della tabella e della serie su 4 inizi × 2 libri (script fuori dal repo): 15 coppie uguali, 1 diversa, quella
+   >   voluta (base del destinatario dal giorno di arrivo).
+   > - Verdi: `services financial-math` 2 794 · `roi-fifo-utils` 1 977 · `portfolio-engine` 41 · `api portfolio` 58; `mkdocs build` e `check-links` ok;
+   >   ruff e black puliti.
+   > **⚠️ Fuori pista**: nell'asset sommato (`broker_id` None) le quote in viaggio all'inizio del periodo non hanno base (base 0, percentuale None):
+   > pnl senza capitale. Non l'ho toccato (fuori dal lotto); da annotare.
