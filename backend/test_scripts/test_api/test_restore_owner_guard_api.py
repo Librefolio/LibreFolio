@@ -33,6 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.api.v1.system import wake as wake_module
 from backend.app.config import API_V1_PREFIX
 from backend.app.db.models import User
+from backend.app.services.platform.instance_backup import apply as apply_module
 from backend.app.services.platform.scheduler import scheduler
 from backend.app.services.platform.sleep_wake import idle_monitor
 from backend.test_scripts.test_api import test_restore_interrupted_api as ri
@@ -51,7 +52,8 @@ from backend.test_scripts.test_api.test_await_restore_mode_api import (
     shown,
     signed_in,
 )
-from backend.test_scripts.test_services.test_restore_owner_guard import Asker, Clock, arm, guard_name, install
+from backend.test_scripts.test_services.test_backup_owner import STAGE_ID, write_state
+from backend.test_scripts.test_services.test_restore_owner_guard import Asker, Clock, arm, guard_name, guard_set, install
 
 # The fixtures of the interrupted restore's API tests, reused: the app of main.py and a test's instance.
 app = ri.app
@@ -185,6 +187,58 @@ async def test_a_pending_owner_that_heals_in_the_files_stops_refusing_after_the_
     clock.now = 100_000.0
     again = await brokers(instance, session)
     assert again.status_code == 200 and len(asker.calls) == 2, f"healed for good: served, nothing asked again: {shown(again)}, {asker.calls}"
+
+
+async def _pending_at_start(instance: Instance) -> tuple[Clock, dict[str, str]]:
+    """H5-5: a real committed ``restore.json`` that names the owner and records no outcome, the guard's real probe as the
+    start makes it (B's real hook, no fake), the guard's clock at 1 000 s. Returns the clock and a signed-in session."""
+    session = await signed_in(instance)
+    instance.switches()
+    (instance.root / ".restore").mkdir(exist_ok=True)
+    write_state(instance.root, owner_user_id=1)
+    guard_set(instance.monkeypatch, "_interrupted", False)
+    guard_set(instance.monkeypatch, "_owner_problem", None)
+    clock = Clock(1_000.0)
+    guard_set(instance.monkeypatch, "_monotonic", clock)
+    guard_set(instance.monkeypatch, "_owner_checked_at", clock.now)
+    assert guard_name("probe_owner_assignment")() == "pending", "Barrier: the real state says the owner is pending"
+    return clock, session
+
+
+@pytest.mark.asyncio
+async def test_the_real_state_going_from_pending_to_sent_serves_the_next_request_after_the_interval(instance):
+    """H5-5, the whole chain on real files: ``pending`` at the start refuses; the other worker's ``record_owner_outcome``
+    writes ``sent`` into ``restore.json``; the next request after ``OWNER_RECHECK_SECONDS`` reads it and is served, with no
+    restart. The first reading is never kept."""
+    clock, session = await _pending_at_start(instance)
+    refused = await brokers(instance, session)
+    assert code(refused) == (423, INTERRUPTED_CODE), f"pending at the start: refused: {shown(refused)}"
+
+    apply_module.record_owner_outcome(instance.root, STAGE_ID, "sent")
+    clock.now += guard_name("OWNER_RECHECK_SECONDS")
+    served = await brokers(instance, session)
+
+    assert served.status_code == 200, f"sent in the file: the next request after the interval is served: {shown(served)}"
+    assert guard_name("restore_interrupted")() is False, "the guard follows the file, not the first reading"
+
+
+@pytest.mark.asyncio
+async def test_the_real_state_going_from_pending_to_an_error_keeps_refusing_with_the_reason(instance):
+    """H5-5, the other way on real files: ``pending`` at the start, then ``error:EMAIL_TAKEN`` in ``restore.json``: the next
+    request after the interval is still refused, now on a code, and a reset of the file alone does not open it (a code is final
+    for the process: the administrator restarts after ``--recover owner``)."""
+    clock, session = await _pending_at_start(instance)
+
+    apply_module.record_owner_outcome(instance.root, STAGE_ID, "error:EMAIL_TAKEN")
+    clock.now += guard_name("OWNER_RECHECK_SECONDS")
+    refused = await brokers(instance, session)
+
+    assert code(refused) == (423, INTERRUPTED_CODE), f"error in the file: refused: {shown(refused)}"
+    assert (guard_name("_owner_problem"), guard_name("restore_interrupted_reason")()) == ("EMAIL_TAKEN", "owner_assignment"), "the guard holds the code"
+    assert apply_module.reset_owner_assignment(instance.root) is False, "Barrier: the reset clears the recorded error"
+    clock.now += 100_000.0
+    still = await brokers(instance, session)
+    assert code(still) == (423, INTERRUPTED_CODE), f"a code is not healed by the file alone: {shown(still)}"
 
 
 @pytest.mark.asyncio
