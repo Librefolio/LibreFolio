@@ -340,6 +340,23 @@ class TestAnInternalTransfer:
 
         # No tract is split: broker 1 loses its whole unrealized (100) on leaving, broker 2 carries 150 and then 200.
         assert (points_of(sender)[day(5)].pnl, points_of(receiver)[day(6)].pnl) == (D("-100"), D("200"))
+        # And the units enter the receiver's base at the cost moved, the same plain boundary values its pnl is measured from.
+        assert {p.base for p in receiver.points} == {D("1000")}
+
+    def test_a_transfer_in_transit_at_the_start_enters_the_receivers_base_at_its_cost(self):
+        """J5-3 (MF's point 3). Left on 2 Jan, before the window (it starts on 3 Jan), arriving on 5 Jan worth 1 150 (cost moved 1 000): the
+        period's rows split no tract (it departs on or before the start), so the receiver's pnl is its plain boundary value, measured from
+        the cost, 150 on arrival and 200 from 6 Jan. The base is the same cost, as the table's end cost is: not the value on arrival, which
+        would put a part of the gain in the base that the pnl counts."""
+        frames = (frame(2, 10, 5, 5, "10", "1150", "1000"), frame(2, 10, 6, 8, "10", "1200", "1000"))
+        in_transit = (InternalAssetTransfer(departure=day(2), arrival=day(5), asset_id=10, sender_broker_id=1, receiver_broker_id=2, value_at_arrival=D("1150"), cost_moved=D("1000")),)
+
+        [receiver] = build([(2, 10)], date_from=3, date_to=8, frames=frames, transfers=in_transit)
+
+        points = points_of(receiver)
+        assert (points[day(5)].pnl, points[day(6)].pnl) == (D("150"), D("200"))
+        assert {p.base for p in receiver.points} == {D("1000")}
+        assert points[day(6)].pnl_percent == D("200") / D("1000")
 
 
 # =============================================================================

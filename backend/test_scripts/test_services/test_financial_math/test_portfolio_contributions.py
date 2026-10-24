@@ -781,3 +781,32 @@ class TestAnnualizedPeriodReturnMovedIn:
 
         assert annualized == _a9_expected("0.0078")
         assert _head_annualized_period_return(c_pnl, ZERO, Decimal("500"), window_from=MI_ONWARD_ARRIVAL, end=A9_TO) == _a9_expected("0.0100") != annualized, "HEAD's base, the end cost"
+
+
+# =============================================================================
+# J5-3 (MF's review of J5-1, point 1): the tract of one transfer, one function
+# =============================================================================
+
+
+class TestTransferTract:
+    """``transfer_tract(transfer, broker_id)``: what a counted transfer adds to the unrealized change of one of its two brokers —
+    ``V − C`` to the sender, ``−(V − C)`` to the receiver. The position series (#48) and ``transfer_tract_adjustments`` read it
+    from here instead of each writing the rule; red by absence until it exists (AttributeError when a case runs)."""
+
+    @pytest.mark.parametrize("value, cost", [("600", "500"), ("400", "500"), ("500", "500"), ("0", "500")])
+    def test_the_sender_gets_value_less_cost_and_the_receiver_the_opposite(self, value, cost):
+        transfer = _transfer(value=value, cost=cost)
+
+        assert contributions.transfer_tract(transfer, A) == Decimal(value) - Decimal(cost)
+        assert contributions.transfer_tract(transfer, B) == Decimal(cost) - Decimal(value)
+
+    def test_it_is_the_amount_transfer_tract_adjustments_gives_each_broker(self):
+        transfers = [_transfer(sender=A, receiver=B, value="600", cost="500"), _transfer(sender=B, receiver=C, value="640", cost="500"), _transfer(sender=A, receiver=C, asset=Y, value="90", cost="100")]
+
+        adjustments = contributions.transfer_tract_adjustments(transfers, FROM, TO)
+
+        expected: dict[tuple[int, int], Decimal] = defaultdict(lambda: ZERO)
+        for transfer in transfers:
+            expected[(transfer.sender_broker_id, transfer.asset_id)] += contributions.transfer_tract(transfer, transfer.sender_broker_id)
+            expected[(transfer.receiver_broker_id, transfer.asset_id)] += contributions.transfer_tract(transfer, transfer.receiver_broker_id)
+        assert adjustments == dict(expected)

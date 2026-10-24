@@ -29,6 +29,14 @@ def counted_tract(transfer: InternalAssetTransfer, date_from: date_type | None, 
     return (date_from is None or transfer.departure > date_from) and transfer.arrival <= end and transfer.value_at_arrival is not None and transfer.cost_moved is not None
 
 
+def transfer_tract(transfer: InternalAssetTransfer, broker_id: int) -> Decimal:
+    """What a counted transfer (:func:`counted_tract`) adds to the unrealized change of one of its two brokers: ``V − C`` to
+    the sender, ``−(V − C)`` to the receiver. The one place of the rule; :func:`transfer_tract_adjustments` and the daily
+    series of a position (``position_series``) both read it."""
+    tract = transfer.value_at_arrival - transfer.cost_moved
+    return tract if transfer.sender_broker_id == broker_id else -tract
+
+
 def transfer_tract_adjustments(transfers: Iterable[InternalAssetTransfer], date_from: date_type | None, end: date_type) -> dict[tuple[int, int], Decimal]:
     """What each ``(broker_id, asset_id)`` row adds to its unrealized change for the internal transfers of the period.
 
@@ -42,9 +50,8 @@ def transfer_tract_adjustments(transfers: Iterable[InternalAssetTransfer], date_
     for transfer in transfers:
         if not counted_tract(transfer, date_from, end):
             continue
-        tract = transfer.value_at_arrival - transfer.cost_moved
-        adjustments[(transfer.sender_broker_id, transfer.asset_id)] += tract
-        adjustments[(transfer.receiver_broker_id, transfer.asset_id)] -= tract
+        adjustments[(transfer.sender_broker_id, transfer.asset_id)] += transfer_tract(transfer, transfer.sender_broker_id)
+        adjustments[(transfer.receiver_broker_id, transfer.asset_id)] += transfer_tract(transfer, transfer.receiver_broker_id)
     return dict(adjustments)
 
 

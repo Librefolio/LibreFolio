@@ -10,7 +10,10 @@ What is pinned, on ledgers written straight into the session (rolled back; each 
   ``get_positions_contribution`` for the same position and the same dates, to the digit, on a ledger with a purchase, a partial
   sale, a dividend and a fee;
 * **P2** — with every position chosen, the ``market_value`` of the series on each day adds up to the report's
-  ``market_value`` of that day;
+  ``market_value`` of that day, and no point of the compared days is unknown. Also with two brokers and an asset in a
+  foreign currency whose rate moves every day. The identity does not hold below the dust threshold
+  (``QUANTITY_DUST_THRESHOLD``): a position that small is not held, its point is 0 while the report still counts it. No
+  ledger here goes that low;
 * only the **asked** positions come back, in the order asked; ``broker_id`` None sums the brokers of the asset; a position
   never held has no points; a position sold out ends the day it went to 0;
 * a position of a broker the user cannot read comes back empty, never its figures.
@@ -36,11 +39,12 @@ from backend.test_scripts.test_db_config import setup_test_database
 
 setup_test_database()
 
+from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import backend.app.services.financial_math.portfolio.engine as portfolio_engine_module
 import backend.app.services.portfolio_service as portfolio_service_module
-from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType, User, UserRole
+from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, FxRate, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import OpenDateRangeModel
 from backend.app.schemas.portfolio import PortfolioReportQuery, PositionKey, PositionsSeriesQuery
@@ -78,16 +82,21 @@ async def _asset(session: AsyncSession, keep_alive: list[object], label: str) ->
     return asset
 
 
-def _prices(asset: Asset, first: date, last: date, *, start: str, step: str) -> list[PriceHistory]:
+def _prices(asset: Asset, first: date, last: date, *, start: str, step: str, currency: str = EUR) -> list[PriceHistory]:
     rows = []
     for index in range((last - first).days + 1):
         price = D(start) + D(step) * index
-        rows.append(PriceHistory(asset_id=asset.id, date=first + timedelta(days=index), open=price, high=price, low=price, close=price, volume=D("1"), currency=EUR, source_plugin_key="ps_test"))
+        rows.append(PriceHistory(asset_id=asset.id, date=first + timedelta(days=index), open=price, high=price, low=price, close=price, volume=D("1"), currency=currency, source_plugin_key="ps_test"))
     return rows
 
 
 def _tx(broker: Broker, asset: Asset | None, kind: TransactionType, on: date, quantity: str, amount: str) -> Transaction:
     return Transaction(broker_id=broker.id, asset_id=None if asset is None else asset.id, type=kind, date=on, quantity=D(quantity), amount=D(amount), currency=EUR)
+
+
+def _tx_in(broker: Broker, asset: Asset, kind: TransactionType, on: date, quantity: str, amount: str, currency: str = "USD") -> Transaction:
+    """A movement of the asset in the asset's own currency (``_tx`` writes EUR)."""
+    return Transaction(broker_id=broker.id, asset_id=asset.id, type=kind, date=on, quantity=D(quantity), amount=D(amount), currency=currency)
 
 
 async def _ledger(session: AsyncSession, keep_alive: list[object], label: str):
@@ -148,12 +157,15 @@ def clean_portfolio_caches(request):
 
 
 @pytest.mark.asyncio
-async def test_p1_the_last_point_is_the_periodo_rows_pnl(session, keep_alive):
+@pytest.mark.parametrize("start", [FROM, date(2024, 1, 12), date(2024, 2, 25), date(2024, 3, 3)], ids=["before-the-trades", "between-the-buys", "after-the-sale", "after-the-dividend"])
+async def test_p1_the_last_point_is_the_periodo_rows_pnl(session, keep_alive, start):
+    """The starts put the sale of 20 Feb and the dividend of 1 Mar before and after the period's start: a sale or a flow that the period
+    leaves out must stay out of the series as it does of the row."""
     user, broker, a, b = await _ledger(session, keep_alive, "p1")
     service = PortfolioService(session)
 
-    response = await service.get_positions_series(user_id=user.id, query=_query([(broker.id, a.id), (broker.id, b.id)]))
-    contribution = await service.get_positions_contribution(user_id=user.id, target_currency_override=EUR, date_from=FROM, date_to=TO)
+    response = await service.get_positions_series(user_id=user.id, query=_query([(broker.id, a.id), (broker.id, b.id)], date_from=start))
+    contribution = await service.get_positions_contribution(user_id=user.id, target_currency_override=EUR, date_from=start, date_to=TO)
 
     rows = {(row.broker_id, row.asset_id): row for row in contribution.positions}
     for series in response.series:
@@ -197,13 +209,72 @@ async def test_p2_with_every_position_chosen_the_market_values_add_up_to_the_rep
     by_day: dict[date, Decimal] = {}
     for series in response.series:
         for point in series.points:
-            by_day[point.date] = by_day.get(point.date, D("0")) + (point.market_value or D("0"))
+            if point.date >= date(2024, 1, 16):
+                assert point.market_value is not None, (series.key, point.date)
+                by_day[point.date] = by_day.get(point.date, D("0")) + point.market_value
     checked = 0
     for point in report.history or []:
-        if point.date in by_day and point.date >= date(2024, 1, 16):
+        if point.date in by_day:
             assert by_day[point.date] == point.market_value.amount, point.date
             checked += 1
     assert checked > 60, "the comparison covers the days both positions are held"
+
+
+USD = "USD"
+
+
+async def _own_eur_usd_rates(session: AsyncSession, first: date, last: date) -> dict[date, Decimal]:
+    """A EUR/USD rate for every day of ``first``..``last`` that moves every day (1 EUR = 1.10 USD + 0.002 a day), written by this test.
+
+    ``fx_rates`` is global and unique on (date, base, quote): a neighbour's row on a day is deleted first, inside this test's
+    transaction, which the ``session`` fixture rolls back, so the neighbour's rows come back and this test reads its own."""
+    rates = {first + timedelta(days=index): D("1.10") + D("0.002") * index for index in range((last - first).days + 1)}
+    await session.execute(delete(FxRate).where(FxRate.date >= first, FxRate.date <= last, FxRate.base == EUR, FxRate.quote == USD))
+    session.add_all(FxRate(date=on, base=EUR, quote=USD, rate=rate, source="ps_test") for on, rate in rates.items())
+    await session.flush()
+    return rates
+
+
+@pytest.mark.asyncio
+async def test_p2_two_brokers_and_a_foreign_asset_with_a_moving_rate_add_up_to_the_reports(session, keep_alive):
+    """One USD asset held at two brokers, bought on different days, the EUR/USD rate moving every day: the series values each day at
+    that day's rate, so on every day both are held the two series add up to the report's market value, and each series ends on its
+    row of the table."""
+    user, [first, second] = await _user(session, keep_alive, "fx", brokers=2)
+    asset = Asset(display_name=f"Ps fx {uuid4().hex[:8]}", currency=USD, asset_type=AssetType.STOCK)
+    await _persist(session, keep_alive, asset)
+    await _own_eur_usd_rates(session, FROM, TO)
+    await _persist(
+        session,
+        keep_alive,
+        Transaction(broker_id=first.id, type=TransactionType.DEPOSIT, date=date(2024, 1, 2), amount=D("2000"), currency=USD),
+        Transaction(broker_id=second.id, type=TransactionType.DEPOSIT, date=date(2024, 1, 2), amount=D("2000"), currency=USD),
+        _tx_in(first, asset, TransactionType.BUY, date(2024, 1, 10), "10", "-1000"),
+        _tx_in(second, asset, TransactionType.BUY, date(2024, 1, 12), "4", "-420"),
+        _tx_in(first, asset, TransactionType.SELL, date(2024, 2, 20), "-3", "390"),
+        *_prices(asset, FROM, TO, start="100", step="0.5", currency=USD),
+    )
+    service = PortfolioService(session)
+
+    response = await service.get_positions_series(user_id=user.id, query=_query([(first.id, asset.id), (second.id, asset.id)]))
+    report = await service.get_report(user_id=user.id, query=PortfolioReportQuery(date_range=OpenDateRangeModel(start=FROM, end=TO), target_currency=EUR, include_summary=False, include_allocation_history=False))
+    contribution = await service.get_positions_contribution(user_id=user.id, target_currency_override=EUR, date_from=FROM, date_to=TO)
+
+    by_day: dict[date, Decimal] = {}
+    for series in response.series:
+        for point in series.points:
+            if point.date >= date(2024, 1, 12):
+                assert point.market_value is not None, (series.key, point.date)
+                by_day[point.date] = by_day.get(point.date, D("0")) + point.market_value
+    checked = 0
+    for point in report.history or []:
+        if point.date in by_day:
+            assert by_day[point.date] == point.market_value.amount, point.date
+            checked += 1
+    assert checked > 60
+    rows = {(row.broker_id, row.asset_id): row for row in contribution.positions}
+    for series in response.series:
+        assert series.points[-1].pnl == rows[(series.key.broker_id, series.key.asset_id)].period_pnl, series.key
 
 
 # =============================================================================
