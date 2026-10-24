@@ -2148,11 +2148,13 @@ GENERIC_CSV_CODE = "broker_generic_csv"
 CSV_WITHOUT_DATE = b"type,amount,currency,description\nBUY,-1000.00,EUR,Buy some shares\nDEPOSIT,500.00,EUR,Top-up\n"
 # Directa's ``can_parse`` wants its labels anywhere in the first 20 rows and the ``Conto :`` marker; its ``parse`` wants the three
 # labels on ONE row. Spread over four rows they pass the first and fail the second: a real plugin that raises ``BRIMParseError``
-# ("Directa header row not found ...", no ``details``) from a file of three lines. The expected sentence is written out by hand.
+# ("Directa header row not found ...", with the code ``header_row_not_found`` since E-21) from a file of three lines. The expected
+# sentence and context are written out by hand.
 DIRECTA_CODE = "broker_directa"
 DIRECTA_NAME = "Directa SIM"
 DIRECTA_LABELS_ON_SEPARATE_ROWS = b"Conto : 12345\nData operazione\nTipo operazione\nIsin;Importo euro\n"
 DIRECTA_HEADER_ROW_MISSING = "Directa header row not found (expected 'Data operazione'/'Tipo operazione'/'Isin')"
+DIRECTA_HEADER_ROW_CONTEXT = {"expected": "Data operazione, Tipo operazione, Isin"}
 
 
 def _plain_workbook_bytes() -> bytes:
@@ -2262,12 +2264,17 @@ class TestParseRefusalReason:
                 await _delete_created(client, broker_ids=[broker_id])
 
     @pytest.mark.asyncio
-    async def test_a_plugin_that_raises_a_parse_error_without_a_code_gives_a_reason_with_no_code(self, test_server):
+    async def test_a_plugin_that_raises_a_coded_parse_error_gives_its_code_and_context(self, test_server):
         """RS-C70-03: Directa forced on a three-line file that passes its ``can_parse`` and fails its ``parse`` with a ``BRIMParseError``
-        that has no ``details``: 400, ``detail.message`` is "Parse error: <the plugin's sentence>", ``plugin_name`` is Directa's
-        ``provider_name``, ``reason`` is ``{code: null, message: <the plugin's sentence>, context: {}}``, and the stored
-        ``error_message`` is the plugin's sentence (the diagnostic the failed file has always kept)."""
-        print_section("RS-C70-03: a parse error without a code")
+        that carries a code (E-21): 400, ``detail.message`` is "Parse error: <the plugin's sentence>", ``plugin_name`` is Directa's
+        ``provider_name``, ``reason`` is ``{code: "header_row_not_found", message: <the plugin's sentence>, context: {expected: ...}}``,
+        and the stored ``error_message`` is the plugin's sentence (the diagnostic the failed file has always kept).
+
+        The counterpart, a plugin that raises ``BRIMParseError(message)`` with no details (a third-party or legacy one) and gets
+        ``{code: null, message, context: {}}``, cannot be reached here: every real plugin codes its errors, and the backend under test
+        is a separate process this test cannot patch. It is tested at service level, in-process, by
+        ``test_services/test_brim_parse_failure_detail.py::test_a_parse_error_without_a_code_gives_a_reason_with_no_code_and_no_context``."""
+        print_section("RS-C70-03: a coded parse error of a real plugin")
         async with httpx.AsyncClient() as client:
             await create_test_user(client)
             broker_id = await create_test_broker(client)
@@ -2283,9 +2290,9 @@ class TestParseRefusalReason:
                 assert detail["code"] == "parse_failed", detail
                 assert detail["message"] == f"Parse error: {DIRECTA_HEADER_ROW_MISSING}", detail
                 assert (detail["plugin_code"], detail["plugin_name"]) == (DIRECTA_CODE, DIRECTA_NAME), detail
-                assert detail["reason"] == {"code": None, "message": DIRECTA_HEADER_ROW_MISSING, "context": {}}, f"a plugin that gives no code gives its sentence and an empty context: {detail['reason']!r}"
+                assert detail["reason"] == {"code": "header_row_not_found", "message": DIRECTA_HEADER_ROW_MISSING, "context": DIRECTA_HEADER_ROW_CONTEXT}, f"the plugin's code, its sentence and its context, as the wizard translates them: {detail['reason']!r}"
                 await _assert_failed_with(client, file_id, DIRECTA_HEADER_ROW_MISSING)
-                print_success("✓ a BRIMParseError without a code answers the parse_failed object with a null code, and the file keeps the plugin's sentence")
+                print_success("✓ a coded BRIMParseError answers the parse_failed object with the plugin's code and context, and the file keeps the plugin's sentence")
             finally:
                 await _delete_files(client, file_ids)
                 await _delete_created(client, broker_ids=[broker_id])

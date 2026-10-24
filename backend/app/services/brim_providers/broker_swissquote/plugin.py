@@ -262,7 +262,7 @@ class SwissquoteBrokerProvider(BRIMProvider):
             with self._open_text(file_path, newline="") as f:
                 reader = csv.DictReader(f, delimiter=detected_delim)
                 if reader.fieldnames != SWISSQUOTE_HEADER:
-                    raise BRIMParseError("Unexpected Swissquote CSV header")
+                    raise BRIMParseError("Unexpected Swissquote CSV header", details={"code": "header_mismatch"})
                 skips.set_headers(reader.fieldnames)
 
                 row_num = 1
@@ -375,11 +375,11 @@ class SwissquoteBrokerProvider(BRIMProvider):
             self._pair_forex_legs(forex_legs, broker_id, transactions, validation_issues, skips)
 
         except FileNotFoundError:
-            raise BRIMParseError(f"File not found: {file_path}") from None
+            raise BRIMParseError(f"File not found: {file_path}", details={"code": "file_not_found", "context": {"file": file_path.name}}) from None
         except BRIMParseError:
             raise
         except Exception as e:
-            raise BRIMParseError(f"Error parsing file: {e}") from e
+            raise BRIMParseError(f"Error parsing file: {e}", details={"code": "file_unreadable", "context": {"error": str(e)}}) from e
 
         if not transactions:
             warnings.append("No valid transactions found in file")

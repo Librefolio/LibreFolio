@@ -10,6 +10,9 @@
  * - `{code: 'preview_unsupported' | 'preview_unreadable', message}`: `importWizard.previewFailed.<code>`, else `message`.
  * - anything else: `extractErrorMessage`, as before.
  *
+ * `resolveGapFixFailureMessage` does the same for the gap-fix refusal `409 {code: 'ledger_unreadable', message, reason, params}`
+ * (E-21): `importWizard.reportSet.gapFix.ledgerUnreadable.<reason>` with `params`, else the English `message`.
+ *
  * Pure: the wizard passes `$t`.
  */
 import {extractErrorMessage} from '$lib/utils/trySave';
@@ -47,4 +50,19 @@ function parseFailedMessage(detail: Record<string, unknown>, t: TranslateFn): st
     const pluginCode = typeof detail.plugin_code === 'string' ? detail.plugin_code : '';
     const pluginName = typeof detail.plugin_name === 'string' && detail.plugin_name ? detail.plugin_name : null;
     return t('importWizard.parseFailed', {values: {plugin_name: brimPluginName({code: pluginCode, name: pluginName}, t), reason: shownReason}});
+}
+
+/** The error of a refused gap-fix, shown in the UI language; any other error as `extractErrorMessage` says it. */
+export function resolveGapFixFailureMessage(error: unknown, t: TranslateFn, fallback?: string): string {
+    const detail = (error as {response?: {data?: {detail?: unknown}}} | null | undefined)?.response?.data?.detail;
+    if (isRecord(detail) && detail.code === 'ledger_unreadable') {
+        const message = typeof detail.message === 'string' && detail.message ? detail.message : null;
+        if (typeof detail.reason === 'string' && detail.reason) {
+            const key = `importWizard.reportSet.gapFix.ledgerUnreadable.${detail.reason}`;
+            const translated = t(key, {values: isRecord(detail.params) ? detail.params : {}});
+            if (translated !== key) return translated;
+        }
+        if (message) return message;
+    }
+    return extractErrorMessage(error, fallback);
 }
