@@ -430,7 +430,7 @@ What each plugin sends there (`plugin_version` is the one that introduced it; ch
 | Directa | 1.1.0 | a type not known | too few columns, an unreadable date, a missing type | — |
 | Revolut (Invest layout) | 1.3.0 | a `Stock split` with no readable positive `Quantity` (a reverse split), or with no ticker | — | `Transfer` |
 | Trading 212 | 1.2.0 | `stock distribution`, `currency conversion`; a `stock split close`/`open` that is a reverse split (fewer shares after), has equal shares, or has no partner | — | `transfer` |
-| eToro | 1.3.0 | `overnight refund` | — | — |
+| eToro | 1.4.0 | — (no type goes to the shared notice) | — | — |
 | Trade Republic | 1.1.0 | an unknown type; a row whose `Kosten` or `Belasting` is not zero (the row is imported, the fee and tax are not) | an unreadable date or amount, a missing ISIN | — |
 | Swissquote | 1.2.0 | a forex leg without its partner, with costs, or in an order of more than two legs; an unknown transaction | an unreadable date, a missing or zero net amount, a missing currency, a missing ISIN and symbol, a quantity not positive on a trade | — |
 | Interactive Brokers | 1.1.0 | an unknown direction, a trade without an ISIN (a currency trade) | an unreadable date | — |
@@ -603,9 +603,11 @@ eToro itself downloads the statement as XLS.
   `dividend` → `DIVIDEND`, `interest payment` → `INTEREST`, `withdraw request` → `WITHDRAWAL`,
   `deposit` → `DEPOSIT`. `withdraw fee`, `withdrawal conversion fee` and `conversion fee` are a
   `FEE` when the amount is not zero and skipped silently when it is, and so is `overnight fee`
-  (version 1.3.0); `sdrt` (UK stamp duty reserve tax) is a `TAX` on the row's asset. `overnight refund` has no honest
-  type (a `FEE` or `TAX` is a cost, a `DEPOSIT` is capital) and goes to the shared notice `rows_not_recognized`
-  (`NOT_IMPORTED_TYPES`: [Rows left out](#brim-row-skips)); any other type → warning.
+  (version 1.3.0); `sdrt` (UK stamp duty reserve tax) is a `TAX` on the row's asset. `overnight refund`
+  (money given back for an overnight fee, version 1.4.0, developer decision of 24/10/2026) is an `INTEREST`
+  with no asset: a `FEE` or `TAX` is a cost and a `DEPOSIT` is capital, so income is the honest type. Its cash is
+  the absolute amount whatever sign the file gives, and its description keeps the type (`overnight refund: daily`).
+  No eToro row goes to the shared notice `rows_not_recognized` any more; any other type → warning.
 - **Asset and currency** come from `Details` (`SYMBOL/CCY`, such as `NKE/USD`): the symbol is the
   fake asset's `extracted_symbol` (no ISIN, no name), and the three letters after the slash are the
   currency of the row's `Amount`. Without that shape, the whole text is the symbol and the currency

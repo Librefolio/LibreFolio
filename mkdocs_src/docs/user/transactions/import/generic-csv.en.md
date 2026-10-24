@@ -26,6 +26,18 @@ them by their names: there is nothing to map by hand.
     its own `currency`; you can also split a broker's history into several files, one per year
     for example, and import them together.
 
+!!! tip "Several date columns? Use the operation date"
+
+    LibreFolio reads **one** date column per file, never two. If the header holds several columns
+    with an accepted date name (for example `trade_date` and `settlement_date`, see the
+    [column reference](#column-reference)), it takes the **first one, reading from left to right**,
+    and ignores the others. A column with another name, such as `order date`, is not read at all.
+
+    Put in the date column the **operation date**: the day the trade or the transaction was made, not
+    the settlement or the booking day, which can come days later. This matters most when you write
+    the CSV by hand or have another AI write it for you: tell it to use the operation date, and to
+    leave the other dates out of the file.
+
 ### 🧯 If Something Goes Wrong
 
 - **"required column 'date' not found"** (or `type`): the first row lacks that column, or names it
