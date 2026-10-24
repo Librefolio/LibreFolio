@@ -501,7 +501,7 @@ The real change starts at the host, and `services/accounts/instance_owner.py` ru
   `flows.email_changed_work`, as for the profile.
 
 Tests: `./dev.py test services owner-email-change`, `./dev.py test api owner-email-change`,
-`./dev.py test db migration-006`.
+`./dev.py test db migration-005`.
 
 ### 🔑 Password-Reset Links {: #reset-links }
 
