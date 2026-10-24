@@ -108,12 +108,16 @@ it), printed by ``pending`` and by a confirmation on a blocked instance.
     ``test_backup_cli_recover.py``.
 (m) Lot B5-1 (interface ``B-b51-interface.md`` §5; written RED before it): ``pending`` of a committed restore confirmed
     via ``admin`` with an owner chosen prints one more line than the same restore without one, naming the owner's
-    account: ``sent`` (the link went to the owner's mailbox), ``link_only`` (the reset path, once, with «only to the
-    owner»), ``already_issued`` and ``already_done``, ``error:<CODE>`` (the code), and nothing recorded yet («next
-    start»). Never the path but for ``link_only``. A restore confirmed via ``cli`` or ``panel``, or without an owner,
+    account: ``sent`` (the link went to the owner's mailbox), ``link_only`` (R13: one ⚠️ line that says no email could
+    be sent and the link is in the instance log, never a link or a path: a state that still has an ``owner_reset_path``
+    key from an older LibreFolio prints none), ``error:<CODE>`` (the code), and nothing recorded yet («next start»).
+    Never a path. A restore confirmed via ``cli`` or ``panel``, or without an owner,
     prints no such line (a guard). ``pending --json`` never holds the owner's id, outcome, reset path or email (a guard,
     green before and after: its keys are B5-2's). The owner's fields are written into the state file as raw JSON, so
     that what ``pending`` prints is what fails.
+    Lot B5-1b (interface §9.2, written RED before it): the ``error:<CODE>`` line gains the way out on the same line,
+    ``./dev.py backup pending --recover owner`` (and still the code and «the server log has the cause»); no other
+    outcome's line mentions ``--recover``.
 
 Pure, as ``test_backup_cli.py``, whose fixtures and helpers are imported: data directories under ``tmp_path`` seen through
 ``LIBREFOLIO_DATA_DIR`` (production mode, checked); a real database at the head made once by ``alembic upgrade`` for the
@@ -1696,8 +1700,9 @@ def test_the_help_of_pending_names_recover(monkeypatch, capsys):
 # (m) Lot B5-1: what became of the owner's account
 # =============================================================================
 
-#: A's reset link for ``link_only``, recorded in the state: printed once by ``pending``, never by ``pending --json``.
-OWNER_RESET_PATH = "/reset-password#token=b51-cli-secret-0123456789abcdef"
+#: The value of a stale ``owner_reset_path`` key in a state file of an older LibreFolio: a canary that ``pending`` and
+#: ``pending --json`` never print (the owner's link is in the instance log only, R13).
+OWNER_RESET_PATH = "/reset-password#token=b51-cli-canary-0123456789abcdef"
 OWNER_EMAIL = "owner.b51@example.com"
 OWNER_ID = 42
 
@@ -1730,9 +1735,7 @@ def owner_lines(tmp_path: Path, monkeypatch, capsys, **owner: Any) -> tuple[list
 #: (the outcome recorded, what its one line must hold besides «owner»).
 OWNER_OUTCOMES = [
     pytest.param("sent", (), id="sent"),
-    pytest.param("link_only", ("only to the owner",), id="link_only"),
-    pytest.param("already_issued", (), id="already_issued"),
-    pytest.param("already_done", (), id="already_done"),
+    pytest.param("link_only", ("log",), id="link_only"),
     pytest.param("error:EMAIL_TAKEN", ("EMAIL_TAKEN",), id="error"),
     pytest.param(None, ("next start",), id="not-yet"),
 ]
@@ -1740,17 +1743,18 @@ OWNER_OUTCOMES = [
 
 @pytest.mark.parametrize(("outcome", "words"), OWNER_OUTCOMES)
 def test_pending_says_what_became_of_the_owner_s_account_in_one_line(tmp_path, monkeypatch, capsys, outcome, words):
-    """(m) B5-1: one line more than without an owner, naming the owner, with what the outcome needs; the reset path,
-    for ``link_only`` only, printed exactly once."""
+    """(m) B5-1: one line more than without an owner, naming the owner, with what the outcome needs (``link_only``: the
+    instance log); no link or path in the output, even when the state file still holds a stale ``owner_reset_path``
+    (R13)."""
     print_section(f"(m) B5-1 pending: owner {outcome}")
-    path = OWNER_RESET_PATH if outcome == "link_only" else None
-    extra, out = owner_lines(tmp_path, monkeypatch, capsys, owner_user_id=OWNER_ID, owner_outcome=outcome, owner_reset_path=path)
+    stale = {"owner_reset_path": OWNER_RESET_PATH} if outcome == "link_only" else {}
+    extra, out = owner_lines(tmp_path, monkeypatch, capsys, owner_user_id=OWNER_ID, owner_outcome=outcome, **stale)
     assert len(extra) == 1, f"[new] B5-1: one line about the owner's account, not {len(extra)}: {extra}\n{out}"
     line = extra[0]
     assert "owner" in line.lower(), f"the line names the owner: {line!r}"
     missing = [word for word in words if word.lower() not in line.lower()]
     assert missing == [], f"{outcome}: the line holds {missing}: {line!r}"
-    assert out.count(OWNER_RESET_PATH) == (1 if outcome == "link_only" else 0), f"{outcome}: the reset path printed {out.count(OWNER_RESET_PATH)} times: {out}"
+    assert OWNER_RESET_PATH not in out and "reset-password" not in out, f"{outcome}: no link nor path printed: {out}"
     print_success(f"{outcome}: {line}")
 
 
@@ -1777,7 +1781,7 @@ def test_pending_json_never_holds_the_owner(tmp_path, monkeypatch, capsys, outco
     whatever the state records."""
     monkeypatch.setenv("LIBREFOLIO_ADMIN_EMAIL", OWNER_EMAIL)
     root = instance(tmp_path, monkeypatch)
-    committed_with_owner(root, owner_user_id=OWNER_ID, owner_outcome=outcome, owner_reset_path=OWNER_RESET_PATH if outcome == "link_only" else None)
+    committed_with_owner(root, owner_user_id=OWNER_ID, owner_outcome=outcome, **({"owner_reset_path": OWNER_RESET_PATH} if outcome == "link_only" else {}))
     code = run("pending", "--json")
     captured = capsys.readouterr()
     assert code == 0, f"pending --json: exit 0: {captured.out} {captured.err}"
@@ -1787,3 +1791,25 @@ def test_pending_json_never_holds_the_owner(tmp_path, monkeypatch, capsys, outco
     shown = [secret for secret in ("owner", OWNER_RESET_PATH.lower(), "reset-password", OWNER_EMAIL) if secret in both]
     assert shown == [], f"pending --json holds {shown}: {captured.out}"
     print_success(f"{outcome}: nothing of the owner")
+
+
+@pytest.mark.parametrize("code", ["EMAIL_TAKEN", "USER_NOT_FOUND"])
+def test_pending_names_the_way_out_of_a_failed_owner_assignment_on_the_same_line(tmp_path, monkeypatch, capsys, code):
+    """(m) B5-1b §9.2: the one line about a failed owner assignment holds the code, the cause's place (the server log) and
+    the command that tries again, ``./dev.py backup pending --recover owner``; still one line more than without an owner."""
+    print_section("(m) B5-1b pending: the way out of error:<CODE>")
+    extra, out = owner_lines(tmp_path, monkeypatch, capsys, owner_user_id=OWNER_ID, owner_outcome=f"error:{code}")
+    assert len(extra) == 1, f"one line about the owner's account, not {len(extra)}: {extra}\n{out}"
+    line = extra[0]
+    assert code in line and "server log" in line, f"the code and where the cause is: {line!r}"
+    assert "./dev.py backup pending --recover owner" in line, f"[new] B5-1b: the line names the way out, on the same line: {line!r}"
+    assert "tries again" in line, f"and says what it does: {line!r}"
+    print_success(f"{code}: {line}")
+
+
+@pytest.mark.parametrize("outcome", ["sent", "link_only", None])
+def test_pending_names_no_recover_command_for_an_owner_who_is_not_in_error(tmp_path, monkeypatch, capsys, outcome):
+    """(m) B5-1b §9.2, a guard: only the failed outcome points to ``--recover owner``; the others offer nothing to run."""
+    extra, out = owner_lines(tmp_path, monkeypatch, capsys, owner_user_id=OWNER_ID, owner_outcome=outcome)
+    assert "--recover" not in out, f"{outcome}: no recover command: {out}"
+    print_success(f"{outcome}: no --recover")

@@ -8,9 +8,12 @@ gives that account the owner's address, makes it a protected administrator, make
 owner a link to choose a new one: workstream A's ``assign_owner_and_send_reset``. Whoever prepared the backup cannot sign
 in as the owner.
 
-The step ``restore-owner`` runs right after ``restore-commit``; it never raises. What it did is kept in the state of the
-restore (``owner_outcome``), so a start that dies after the call and before the record calls again, and A answers
-``already_issued``. A restore confirmed by the hosting panel or on the command line never names an owner.
+The step ``restore-owner`` runs right after ``restore-commit``; it never raises. What it did (``sent``, ``link_only``, or
+``error:<CODE>``) is kept in the state of the restore (``owner_outcome``). A does the whole treatment at every call and
+repeating it is harmless (it revokes the old link and sends a new one), so a start that dies after the call and before the
+record simply calls again. For ``link_only`` A writes the link in the instance log; it is never kept here, shown in the
+report or answered by the API: every administrator reads the report, the one who prepared the backup included. A restore
+confirmed by the hosting panel or on the command line never names an owner.
 """
 
 from __future__ import annotations
@@ -63,9 +66,22 @@ def _take_owner_lock(data_dir: Path) -> int | None:
     return fd
 
 
+@contextlib.contextmanager
+def held_owner_lock(data_dir: Path):
+    """The owner's lock for a block, not waited for: yields whether this process holds it. Taken before the apply lock,
+    as the startup step does."""
+    fd = _take_owner_lock(data_dir)
+    try:
+        yield fd is not None
+    finally:
+        if fd is not None:
+            with contextlib.suppress(OSError):
+                os.close(fd)
+
+
 def _assign_owner():
     """Workstream A's ``assign_owner_and_send_reset`` and its ``OwnerAssignmentError``, looked up at each call."""
-    from backend.app.services.email.flows import OwnerAssignmentError, assign_owner_and_send_reset  # noqa: PLC0415
+    from backend.app.services.accounts.instance_owner import OwnerAssignmentError, assign_owner_and_send_reset  # noqa: PLC0415
 
     return assign_owner_and_send_reset, OwnerAssignmentError
 
@@ -120,7 +136,6 @@ async def _assign_locked(data_dir: Path):
     from backend.app.services.platform.instance_backup.paths import database_path  # noqa: PLC0415
 
     engine = create_async_engine(f"sqlite+aiosqlite:///{database_path(data_dir)}", poolclass=NullPool)
-    reset_path = None
     try:
         async with AsyncSession(engine, expire_on_commit=False) as session:
             result = await assign(session, user_id)
@@ -132,12 +147,11 @@ async def _assign_locked(data_dir: Path):
         return None
     else:
         outcome = str(getattr(result.outcome, "value", result.outcome))
-        reset_path = result.reset_path if outcome == "link_only" else None
         logger.warning("The owner of the restored data is set", stage_id=stage_id, user_id=user_id, outcome=outcome)
     finally:
         await engine.dispose()
     try:
-        return await asyncio.to_thread(record_owner_outcome, data_dir, stage_id, outcome, reset_path)
-    except Exception as exc:  # noqa: BLE001 — not recorded: the next start calls again, and A answers already_issued
+        return await asyncio.to_thread(record_owner_outcome, data_dir, stage_id, outcome)
+    except Exception as exc:  # noqa: BLE001 — not recorded: the next start calls again, which is harmless
         logger.error("The outcome of the owner could not be recorded: the next start tries again", stage_id=stage_id, error=type(exc).__name__)
         return None
