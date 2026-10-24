@@ -423,7 +423,8 @@ def test_the_restore_owner_step_comes_right_after_restore_commit_and_carries_no_
     assert "restore-commit" in names and "backup-leftovers" in names, f"Barrier: restore-commit and backup-leftovers are startup steps: {names}"
     assert names.count("restore-owner") == 1, f"H5-3: one startup step restore-owner: {names}"
     assert names.index("restore-owner") == names.index("restore-commit") + 1, f"restore-owner comes right after restore-commit: {names}"
-    assert names.index("backup-leftovers") == names.index("restore-owner") + 1, f"backup-leftovers comes right after restore-owner: {names}"
+    between = names[names.index("restore-owner") + 1 : names.index("backup-leftovers")]
+    assert set(between) <= {"owner-sync"}, f"backup-leftovers follows restore-owner, only A5-1b's owner-sync between them: {names}"
     assert names.index("admin-bootstrap") < names.index("restore-owner"), f"admin-bootstrap runs before restore-owner: {names}"
     assert all(names.index(name) > names.index("restore-owner") for name in SKIPPED_AFTER_OWNER), f"the steps that serve come after restore-owner: {names}"
     step = _restore_owner_step()

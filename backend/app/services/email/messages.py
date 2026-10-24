@@ -1,7 +1,7 @@
 """The emails LibreFolio sends: their texts in the four languages of the interface, and the message with its headers.
 
 Each kind of email has a builder (``build_password_reset``, ``build_invite``, ``build_verification``,
-``build_admin_setup``, ``build_test_message``, ``build_email_changed``) that returns an ``EmailContent``: a subject, a plain-text part and an
+``build_admin_setup``, ``build_test_message``, ``build_email_changed``, ``build_email_change_confirmation``) that returns an ``EmailContent``: a subject, a plain-text part and an
 HTML part, in the language asked for (``email_language``: an unknown one is English). The texts live in
 ``templates/<language>.json``, one file per language with the same keys and the same ``$placeholders``; the HTML layout
 in ``templates/layout.html``. Every value that comes from a person — a user name, the name of the instance, who sent an
@@ -47,6 +47,7 @@ class EmailKind(StrEnum):
     ADMIN_SETUP = "admin_setup"
     TEST = "test"
     EMAIL_CHANGED = "email_changed"
+    EMAIL_CHANGE_CONFIRMATION = "email_change_confirmation"
 
 
 @dataclass(frozen=True)
@@ -197,6 +198,16 @@ def build_email_changed(*, language: str | None, instance: str) -> EmailContent:
     lang = email_language(language)
     values = {"instance": instance}
     return _render(EmailKind.EMAIL_CHANGED, lang, greeting="greeting_anonymous", before=["intro"], after=["advice"], values=values)
+
+
+def build_email_change_confirmation(*, language: str | None, username: str, link: str, ttl: timedelta, instance: str) -> EmailContent:
+    """The link that completes the change of the owner's address (A5-1b), sent to the NEW address the host named.
+
+    Its sender is trusted (the host's own variable, not a user), so it greets the owner by name, like the setup link.
+    """
+    lang = email_language(language)
+    values = {"username": username, "instance": instance, "duration": _duration(ttl, lang)}
+    return _render(EmailKind.EMAIL_CHANGE_CONFIRMATION, lang, greeting="greeting", before=["intro"], after=["expiry", "ignore"], values=values, link=_checked_link(link))
 
 
 class EmailRecipientError(ValueError):

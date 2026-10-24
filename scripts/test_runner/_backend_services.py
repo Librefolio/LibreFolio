@@ -626,6 +626,16 @@ def services_admin_bootstrap(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Initial administrator tests", verbose=verbose)
 
 
+def services_owner_email_change(verbose: bool = False, test_names: list = None) -> bool:
+    """Test A5-1b part 2: the instance owner's flag, the startup sync and the confirmation link of its new address."""
+    print_section("Services: Instance Owner Email Change (A5-1b)")
+    print_info("Testing: services/accounts/instance_owner.py (run_owner_sync, deliver_owner_change_link, startup_owner_sync, owner_change_status), user_service.account_protection, bootstrap_admin_service, email messages, the owner-sync startup step")
+    print_info("Tests: the owner flag and the protection rule, each branch of the sync (heal, same, conflict, live link, new link by email, link in the log), the status, the four-language email, the step order")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_owner_email_change.py", test_names)
+    return run_command(cmd, "Instance owner email change tests", verbose=verbose)
+
+
 def services_email_case(verbose: bool = False, test_names: list = None) -> bool:
     """Test P18: email addresses unique regardless of A–Z case, in the rule, the index, the lookups and the writes."""
     print_section("Services: Email Addresses Regardless of Case (P18)")
@@ -2327,6 +2337,16 @@ Note: No backend server required.
         desc="No @ in a new username (user create, LIBREFOLIO_ADMIN_USERNAME), spaces, accents and punctuation still taken, legacy names left as they are; no address equal to another account's username, A–Z case aside (register_user, user set-email, user create)",
         # PURE: every database is a private file under tmp_path built with create_all; the command line runs in this
         # process on that file, get_async_engine a tripwire; variables removed with monkeypatch. No lane DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "owner-email-change",
+        services_owner_email_change,
+        name="Instance Owner Email Change (A5-1b)",
+        desc="users.is_instance_owner and the protection rule (the click not made: the owner stays protected; a stranger holding the new address is not), the startup sync owner-sync (pending administrator untouched, heal, same address, conflict blocked, live link not resent, new link emailed to the NEW address, link in the log only when the email did not go, expired and changed-again links, two workers), owner_change_status, build_email_change_confirmation in four languages, the step after admin-bootstrap",
+        # PURE: every database is a private file under tmp_path built with create_all; profile and variables set with
+        # monkeypatch; the email faked in this process (outbox); no lane DB, no server.
         isolation="pure",
     )
     add_test(

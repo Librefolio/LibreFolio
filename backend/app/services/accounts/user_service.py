@@ -844,21 +844,51 @@ async def delete_account(session: AsyncSession, user: User) -> AccountDeletionRe
 PAYING_ADMINISTRATOR = "paying_administrator"
 
 
+#: What this process knows of the recorded instance owner (A5-1b): ``_UNKNOWN`` until the startup sync has read it, then the
+#: owner's id, or ``None`` when no account is recorded. A plain value, set by ``note_recorded_owner``: ``account_protection``
+#: is a function of one ``User`` and runs on every request that touches an account, so it asks no query.
+_UNKNOWN: object = object()
+_recorded_owner: object = _UNKNOWN
+
+
+def note_recorded_owner(owner_id: Optional[int]) -> None:
+    """Tell the account protection who the recorded owner is (``None``: nobody): the startup sync calls it after reading ``users.is_instance_owner``."""
+    global _recorded_owner  # noqa: PLW0603 — the one piece of state of this rule, see ``_recorded_owner``
+    _recorded_owner = owner_id
+
+
 def account_protection(user: User) -> Optional[str]:
     """Why ``user`` may be neither deleted, deactivated nor demoted by anyone from the app; ``None`` when nothing protects it.
 
-    A5-1: on a managed instance (``LIBREFOLIO_PROFILE=managed``) the account whose email is ``LIBREFOLIO_ADMIN_EMAIL`` —
-    the administrator who pays for the instance — is protected (``PAYING_ADMINISTRATOR``), by email alone, administrator
-    or not, compared regardless of A–Z case. In any other profile, or with a variable that is unset, blank or not an
-    address, no account is. The routes of ``api/v1/users.py`` ask it; the command line (``./dev.py user``) does not: it is
-    the operator's emergency exit. Both settings are read at every call.
+    On a managed instance (``LIBREFOLIO_PROFILE=managed``) the paying administrator is protected (``PAYING_ADMINISTRATOR``):
+
+    - the account recorded as the instance owner (``users.is_instance_owner``, A5-1b) is protected by that mark alone: a
+      variable that changed, an address not yet confirmed, a variable unset — none of them takes it away;
+    - once the startup sync has read the owner (``note_recorded_owner``), the mark decides alone when one is recorded: an
+      account that holds the address of a variable changed in conflict is a stranger and never receives the owner's
+      protection;
+    - when the sync recorded NOBODY, the account with the address of ``LIBREFOLIO_ADMIN_EMAIL`` (A–Z case aside) is protected
+      by its address only while it is an active administrator, the criterion by which the sync records an owner: an ordinary
+      user, or an inactive administrator, who put that address in their profile is not;
+    - before the sync has run in this process (a command, a test, the moments before the startup step) the address rule of
+      A5-1 is the fallback, as it was: the address alone protects, administrator or not.
+
+    In any other profile nobody is protected. The routes of ``api/v1/users.py`` ask it; the command line (``./dev.py user``)
+    does not: it is the operator's emergency exit. The profile and the variable are read at every call.
     """
     if get_settings().LIBREFOLIO_PROFILE != "managed":
         return None
-    owner = owner_admin_email()
-    if owner is not None and same_email(user.email, owner):
+    if user.is_instance_owner:
         return PAYING_ADMINISTRATOR
-    return None
+    recorded = _recorded_owner
+    if isinstance(recorded, int):
+        return PAYING_ADMINISTRATOR if user.id == recorded else None
+    owner = owner_admin_email()
+    if owner is None or not same_email(user.email, owner):
+        return None
+    if recorded is None and not (user.is_superuser and user.is_active):
+        return None
+    return PAYING_ADMINISTRATOR
 
 
 async def search_users(
