@@ -247,6 +247,38 @@ def settings_fingerprint(plain: Mapping[str, Any], secrets: Mapping[str, str]) -
     return hmac.new(subkey, canonical, hashlib.sha256).hexdigest()[:32]
 
 
+def default_settings_fingerprint(fields: tuple[PluginSettingField, ...]) -> str:
+    """The fingerprint of a plugin whose fields all hold their declared default: what ``build_bound_settings`` gives
+    when no environment variable and no stored row sets anything (a secret has no default, so none is bound).
+
+    It is the baseline of ``settings_changed_since``: the values a result was drawn over when nothing recorded them.
+    """
+    return settings_fingerprint({declared.key: declared.default for declared in fields if not declared.secret and declared.default is not None}, {})
+
+
+def settings_changed_since(saved_fingerprint: str | None, current: BoundSettings | None, fields: tuple[PluginSettingField, ...]) -> bool:
+    """Whether the values a plugin would be called with now differ from those a stored result was drawn over (CP12).
+
+    The rule that makes a BRIM parse «stale» when an import setting changes (a plugin whose output depends on a setting:
+    the order of the day and the month in a CSV), as a changed ``plugin_version`` does:
+
+    - ``current`` is None: the plugin declares no field (``bound_settings_for`` answers None), so no setting can have
+      changed the result: never stale for this reason.
+    - ``saved_fingerprint`` is what the parse recorded (``BoundSettings.fingerprint`` of the values it received). The
+      parse is stale when it differs from ``current.fingerprint``.
+    - Nothing recorded (a result drawn before the plugin had the field, or before the recording existed): the values it
+      was drawn over are the defaults, ``default_settings_fingerprint(fields)``. A file parsed before the field existed is
+      therefore not stale until a value moves away from the default.
+
+    ``current`` is what a parse for the user who looks at the file would receive now (the instance's values and that user's
+    own), so the personal values of the person about to re-parse decide, not those of whoever parsed it first.
+    """
+    if current is None:
+        return False
+    baseline = saved_fingerprint or default_settings_fingerprint(fields)
+    return current.fingerprint != baseline
+
+
 def build_bound_settings(  # noqa: PLR0913 — the arguments of resolve_plugin_fields
     family: str,
     plugin_code: str,
