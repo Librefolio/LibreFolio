@@ -217,7 +217,7 @@ test.describe('Settings › Security — an administrator', () => {
         try {
             const url = new URL(tab.url());
             // The user's language precedes the path unless it is English; the anchor is the English page's, whatever the language
-            expect(url.pathname, 'the page of the guide that explains the login limit').toMatch(/^\/mkdocs\/(?:(?:it|fr|es)\/)?admin\/configuration\/$/);
+            expect(url.pathname, 'the page of the guide that explains the login limit').toMatch(/^\/mkdocs\/(?:(?:it|fr|es)\/)?admin\/configuration_accounts\/$/);
             expect(url.hash, 'on its anchor').toBe('#login-limit');
         } finally {
             await tab.close();

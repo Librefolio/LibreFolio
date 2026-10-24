@@ -47,10 +47,12 @@ class PanelRestoreSummary(BaseModel):
 
 
 class PanelStatusResponse(BaseModel):
-    """``GET /api/v1/panel/status``: the state of the initial administrator's setup, and nothing else.
+    """``GET /api/v1/panel/status``: the state of the initial administrator's setup, the instance's mode and restore, how
+    many places its users take, and where a change of the owner's address stands.
 
-    No email, no username, no count: the panel learns whether the customer has activated the instance, and until when
-    the setup link works.
+    No email, no username: the panel learns whether the customer has activated the instance, until when the setup link
+    works, two counts (``users_used``, ``users_limit``) and whether the owner's new address waits for its confirmation
+    (``owner_email_change``), never who the users are nor an address.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -62,6 +64,12 @@ class PanelStatusResponse(BaseModel):
     setup_expires_at: datetime | None = Field(None, description="When the pending link stops working, in UTC; null in every other state")
     mode: InstanceMode = Field("normal", description="normal, or awaiting_restore while the instance waits for the panel to restore its data (H-62)")
     restore: PanelRestoreSummary | None = Field(None, description="The restore of the instance: waiting, being applied, or the last one that ended; null when none was ever recorded")
+    users_used: int = Field(..., ge=0, description="The places the users take: active accounts, live invitations and the inactive accounts that wait for their email verification or their setup, each counted once. A count, never who")
+    users_limit: int | None = Field(None, ge=1, description="How many places the instance may hold (`LIBREFOLIO_MAX_USERS`); null when there is no limit")
+    owner_email_change: Literal["pending", "blocked"] | None = Field(
+        None,
+        description="The change of the paying administrator's email address that the hosting provider started by changing LIBREFOLIO_ADMIN_EMAIL: pending, the new address was sent a confirmation link and the account keeps the old one until it is clicked; blocked, another account already holds the new address, so nothing changes (change the variable again to a free address); null, no change is waiting, or the instance is not managed, or its initial administrator has not set up yet. Never the address",
+    )
 
 
 class PanelRestoreStageReport(BaseModel):

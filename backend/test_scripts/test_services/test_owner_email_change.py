@@ -755,7 +755,8 @@ def test_the_owner_sync_step_runs_right_after_the_restore_commit() -> None:
     """OWN-060 (N3): ``STARTUP_STEPS`` has ``owner-sync`` immediately after ``restore-commit`` — which closes the way in after a restore and revokes every live one-time link, a change link just issued included —, and so after ``admin-bootstrap``; skipped when the instance serves no data; running ``startup_owner_sync``."""
     names = [step.name for step in app_lifespan.STARTUP_STEPS]
     assert "owner-sync" in names, "red until A5-1b part 2: STARTUP_STEPS has no owner-sync step"
-    assert names.index("owner-sync") == names.index("restore-commit") + 1, f"owner-sync must come right after restore-commit: {names}"
+    between = names[names.index("restore-commit") + 1 : names.index("owner-sync")]
+    assert names.index("owner-sync") > names.index("restore-commit") and set(between) <= {"restore-owner"}, f"owner-sync follows restore-commit, only H5-3's restore-owner between them: {names}"
     assert names.index("admin-bootstrap") < names.index("owner-sync")
     step = app_lifespan.STARTUP_STEPS[names.index("owner-sync")]
     assert step.skip_when is app_lifespan._serving_no_data

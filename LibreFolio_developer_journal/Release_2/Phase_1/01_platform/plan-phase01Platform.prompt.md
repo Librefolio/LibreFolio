@@ -10566,3 +10566,128 @@ mescolare le righe del runner dei due lotti:
     > `restore-interrupted` 34, `panel-status` 20, `hosting-panel-routes` 40); frontend 5 → verdi (130).
    > **⚠️ Fuori pista**: `"scarfSettings"` messo e poi tolto da `package.json`, dopo il cambio di Q-C: il file coincide col
    > commit.
+
+---
+
+### Ondata 5 (23/10/2026, base `1fd80c481` = `dev_release2`, treni 9 e 10 dentro; sessione H su Sonnet)
+
+Brief: `salvataggi-worktrees-20261021/ondata5/kickoff-H.md`. Lotti: H5-1 (`users_used`/`users_limit`), H5-2 (X-R84),
+DOC-2 (ricerca per lingua), DOC-1 (riordino della guida admin, con le guide Tailscale).
+
+1. ✅ **H5-1 · `users_used` e `users_limit` in `GET /api/v1/panel/status`** (23/10, treno 11a; richiesta formale del cloud, C5).
+   > **Note implementazione**: `PanelStatusResponse` ha due chiavi in più: `users_used` (intero ≥ 0, da
+   > `registration_service.user_usage`: attivi + inviti vivi + inattivi in attesa di verifica o di setup, ognuno una volta)
+   > e `users_limit` (intero ≥ 1 da `LIBREFOLIO_MAX_USERS`, `null` senza limite). Solo conteggi: nessun nome, email o id
+   > (un test semina dei «canarini» e cerca nel corpo grezzo). La risposta ha ora sei chiavi: è un **cambio di contratto**
+   > con il cloud (chiavi nuove, quelle che il cloud ignora se non le conosce). Docs: `hosting_providers.en.md` (esempio, tabella,
+   > pulsante «istanza piena»), `api/index.md`, `security.md`. `api sync` ok.
+   > **Rossi → verdi** (test-author): 36 casi rossi (`panel-status` 28, `await-restore-mode` 8; `restore-interrupted` 3
+   > dalla stessa chiave) → `panel-status` 33, `await-restore-mode` 36, `restore-interrupted` 34, `hosting-panel-routes` 40,
+   > `panel-restore` 136, `system` 122, `registration` 102; `api all` verde; `front check` 0/0.
+   > **⚠️ Fuori pista**: lo schema documenta `users_limit` con `minimum` 1 (è il vincolo vero di `LIBREFOLIO_MAX_USERS`); la
+   > prima versione del test chiedeva `{"type":"integer"}` esatto, adattata. Debito di traduzione: `hosting_providers` it/fr/es
+   > non esistono (solo inglese).
+2. ✅ **H5-2 · X-R84, un chunk che non si carica ricarica la pagina una volta** (23/10, treno 11a).
+   > **Note implementazione**: `frontend/src/lib/utils/core/chunkReload.ts` (`isChunkLoadError`, `reloadOnceForChunkError`,
+   > `installChunkReload`) e `frontend/src/hooks.client.ts` (nuovo: `installChunkReload()` all'avvio + `handleError`).
+   > Riconosce i messaggi di Chrome, Firefox, Safari e di Vite; il guardiano è un tempo in `sessionStorage`
+   > (`lf-chunk-reload-at`, finestra 60 s, scritto prima del `reload`); senza storage non ricarica mai (nessun ciclo).
+   > `app.html` non toccato (anti-FOUC e colori intatti, nessun hash a mano). Niente spec E2E (decisione del coordinatore:
+   > i 70 Vitest coprono il riconoscimento e il guardiano).
+   > **Rossi → verdi** (test-author): 70 casi (import mancante) → 70/70; `check-orphans` pulito; `front check` 0/0.
+3. ✅ **DOC-2 · ricerca per lingua** (23/10, treno 11a; analisi `ondata5/H-DOC2-analisi.md`; strada B approvata dal coordinatore e
+   dal developer).
+   > **Note implementazione**: `mkdocs_src/hooks/search_language_split.py` (hook `on_post_build`, priorità -100) scrive,
+   > accanto a `search/search_index.json`, un indice per lingua `search_index.<en|it|fr|es>.json`: una pagina è della lingua con
+   > cui comincia il suo indirizzo (`it/`, `fr/`, `es/`), il resto è inglese; salta le sotto-build di `mkdocs-static-i18n`
+   > (flag `building` del suo plugin), che erano lavoro e righe di registro inutili. `docs/javascripts/search-language.js`
+   > (senza dipendenze, caricato da `<head>` in `overrides/main.html` PRIMA del bundle di Material) avvolge `fetch`: la
+   > richiesta dell'indice completo diventa quella della lingua della pagina, a meno che la preferenza `lf-docs-search-all-languages`
+   > (localStorage) dica «tutte»; una casella «Cerca anche nelle altre lingue» (4 lingue scritte da me) è il primo figlio
+   > dell'area dei risultati; cambiarla salva la preferenza, tiene la query in sessionStorage e ricarica riaprendo la ricerca;
+   > senza storage vale la lingua della pagina. Una riga in `hooks:` di `mkdocs.yml`; stile in `static/extra.css`.
+   > Misure sulla build: en 3911 voci 5,98 MB · it 1843 1,36 MB · fr 1840 1,44 MB · es 1844 1,38 MB · completo 10,58 MB (prima
+   > ogni visitatore scaricava 10,5 MB). Docs: `developer/docs/translation-pipeline.md`, sezione «Search by Language».
+   > **Rossi → verdi** (test-author): 79 pytest (`utils docs-search-split`; 11 sulla build erano rossi finché il sito non è
+   > stato ricostruito) + 173 Vitest (`core-unit`) tutti verdi; spec Playwright `frontend/e2e/docs/search-language.spec.ts`
+   > (SL-01…SL-07, runner `front-utility docs-search-language`): **7/7 verdi** nello slot (vedi sotto). Nota per chi la rilancia: il
+   > server di prova ricostruisce il sito solo se un `.md` è più nuovo, quindi dopo un cambio dello script o dell'hook va fatto
+   > prima `./dev.py mkdocs build`.
+   > **⚠️ Fuori pista (E2E, il difetto vero)**: il primo giro dell'E2E diede 1 verde e 6 rossi: Material 9.7.7 carica l'indice con
+   > **`XMLHttpRequest`** (il browser lo elenca come `xmlhttprequest`, non `fetch`), quindi il wrapper di `fetch` non scattava mai.
+   > Visto dal vivo nel browser sulla corsia (`initiatorType`); lo script ora avvolge **anche** `XMLHttpRequest.prototype.open`
+   > (`installXhrRewriter`), e `fetch` resta per un Material futuro. Il test-author ha aggiunto 42 casi di Vitest (11 mutanti su 12
+   > li fanno rossi, uno è equivalente), poi **E2E 7/7 verdi** (corsia 6181, `front-utility docs-search-language`, 22 s, sito
+   > ricostruito prima). I Vitest sul solo `fetch` non potevano vederlo: un test di integrazione col browser vero era necessario.
+   > **⚠️ Fuori pista**: il test-author ha scritto i test mentre io scrivevo il codice (li avevo lanciati insieme): sono
+   > scritti dal contratto, non dal codice, e verificati con 9 mutanti; nessun rosso vero da vedere. Il debito di traduzione
+   > è nullo (pagina `developer/`, solo inglese).
+3b. ✅ **`--recover previous`** (23/10, richiesta di B, B5-2): le citazioni del comando che sono di H (`restore_guard.py`
+   con il suo test, `instance_block.py`, `hosting_providers.en.md`, `security.md`, `api/index.md`, il testo `adminHint` nei 4
+   cataloghi, i commenti della pagina) dicono `--recover previous`. I file di B (`cli_tools.en.md`, `backup_cli.py`,
+   `backup_restore.en.md`) restano a B.
+4. ✅ **DOC-1 · riordino della guida admin** (albero e inventario: `ondata5/H-DOC1-inventario.md`, approvato dal developer;
+   pagine piatte, gerarchia nella navigazione, che il developer vuole **annidata**). Due giri, per non fare conflitti con i rami
+   di B e A che toccavano tre pagine.
+   - ✅ **Giro 1** (23/10): `configuration` → 4 pagine, `email` → 3, `service_exposure` → 2, `sleep_wake` → 2, `connection_checks` → 2
+     (le due guide Tailscale incluse). Uno script deterministico (fuori dall'albero: scratchpad `doc1_split.py`) divide per
+     sezione H2 e riscrive 88 + 73 link e 3 citazioni; poi il `docs-writer` ha rivisto titoli, introduzioni, riquadri «in più pagine»
+     e l'indice admin. La divisione è stata provata prima su una copia fuori dall'albero (build strict ok).
+     **Difetti trovati dal build strict e curati**: (1) ancore su elementi che non sono titoli (`{: #session-cookie-secure }` su
+     una riga di tabella): il link intra-pagina punta ora a `configuration.md`; (2) nelle copie di ripiego `/it/` `/fr/` `/es/` le
+     pagine nuove (solo inglese) linkavano con ancora pagine che hanno traduzioni (`settings.md#registration`, `configuration.md
+     #main-options`…): togliamo l'ancora dove una traduzione non la possiede (25 link). In più 17 link semplici che nominavano una
+     sezione spostata («Accounts and Sign-ups», «Startup Checks»…) puntano ora alla pagina giusta (users, plugins, security.md,
+     email.md del developer). Resta da fare nello script per il giro 2: contare come ancore anche gli `{: #id }` fuori dai titoli.
+   - **Riferimenti dell'app** (tutti miei): 11 voci di `checkGuides.json` spostate; `cspNotice` le segue dal JSON; le specifiche
+     E2E `security-tab` (ASEC-E-04) e `csp-collector` aggiornate. **Mappa dei reindirizzamenti**:
+     `mkdocs_src/docs/javascripts/moved-anchors.js` (generata dalla divisione, senza dipendenze; `extra_javascript` in `mkdocs.yml`).
+   - **Navigazione annidata** in `mkdocs.yml` (gruppi con sottovoci) e `nav_translations` it/fr/es per le 10 etichette nuove.
+   - **Test** (test-author): `utils docs-admin-references` 47 (scansione di ogni riferimento dell'app, completezza della mappa
+     contro le ancore congelate `backend/test_scripts/fixtures/docs_admin/old_anchors.json`, il sito costruito, la nav);
+     Vitest `movedAnchors` (75 casi, 7 mutanti su 7 uccisi); `checkGuides` (debito di traduzione 33 → 3: le pagine nuove sono
+     solo inglesi). **E2E** nello slot: `security-tab` ASEC-E-04 1/1 e `csp-collector` 23 verdi (1 saltato).
+   - ✅ **Giro 2** (24/10, sul ramo con A5-1/A5-1b/A5-2 dentro, `2d6c549dd`): `hosting_providers` → 4 pagine (`hosting_providers`,
+     `hosting_instances`, `hosting_panel_api`, `hosting_panel_backups`), `backup_restore` → 3 (`backup_sealed`, `backup_moving`),
+     `cli_tools` → 2 (`cli_backup`). Stesso script, rifatto sull'albero vero (la prova di prima non aveva la sezione di A):
+     le ancore di A5-2 (`restore-owner`, `owner-email-change` → `hosting_instances`; `restore-owner-pending` → `hosting_panel_backups`) sono
+     nella mappa dei reindirizzamenti. Mappa `moved-anchors.js` +74 ancore (39 + 20 + 15), `old_anchors.json` esteso alle 3 pagine
+     (46 + 37 + 34 ancore, da `2d6c549dd`), nav annidata e `nav_translations` it/fr/es per 6 etichette nuove.
+     Aggiornati: 6 voci di `checkGuides.json` (`panel-api`, `panel-token`, `restore-upload-limit` ×2, `recipients`, `owner_email_change`), il
+     link della pagina di ripristino interrotto (`cli_backup/#backup-pending-unreadable`) e i suoi test, `test_hosting_panel_vectors.py`
+     (ora legge `hosting_panel_api.en.md`) e il testo del runner.
+     > **⚠️ Fuori pista**: il link del motivo `owner_assignment` (H5-3) era a livello di pagina `admin/backup_restore/` perché `--recover owner`
+     > non era documentato lì; ora punta alla sezione che lo documenta, `admin/hosting_panel_backups/#restore-owner-pending` (la pagina non ha
+     > traduzioni, quindi l'ancora regge nelle tre lingue). Test della pagina e del gate aggiornati; nota in `security.md`.
+     > Verifiche: build strict, `check-links` (97), `utils docs-admin-references` 47, Vitest 905 (`features/instance`, `api`, `i18n`,
+     > `movedAnchors`, `cspNotice`, `SecurityTab`), `services hosting-panel-vectors`, `front check` 0/0, prettier, ruff, black. Nessun E2E.
+5. ✅ **H5-3 · lo step `restore-owner` e la guardia** (24/10). Dopo un ripristino dall'app su un'istanza `managed`, il primo
+   avvio dà al titolare il suo account (B: `assign_restored_owner`; A: `assign_owner_and_send_reset`, non ancora nel ramo, i test
+   usano un finto A). Finché non è fatto, l'istanza non serve dati, sullo stesso meccanismo di B-33.
+   > **Note implementazione**: `Step("restore-owner")` subito dopo `restore-commit`, senza `skip_when`: attende `assign_restored_owner()`
+   > e poi `probe_owner_assignment()`. `restore_guard` ha un secondo stato `_owner_problem` (`None | "pending" | "<CODE>"`, da
+   > `apply.owner_assignment_problem`); `restore_interrupted()` è vero per entrambe le cause, quindi skip dei passi dopo, 423, 409 del
+   > backup del pannello, `/system/instance` e wake seguono senza altro codice. `restore_interrupted_reason()` (`restore_state` vince su
+   > `owner_assignment`) è il nuovo campo `restore_interrupted_reason` di `/system/instance`. **Più worker**: ne assegna uno solo (lock
+   > `.restore/owner.lock`); un altro che ha trovato `pending` resterebbe chiuso per sempre, quindi la dipendenza del router attende
+   > `refresh_restore_state()`: solo per `pending`, al più ogni 2 s (`OWNER_RECHECK_SECONDS`), riesamina in un thread; un codice non si
+   > riesamina mai (rimedio: `./dev.py backup pending --recover owner` di B + riavvio). Pagina: prop `reason`; per `owner_assignment`
+   > titolo/messaggio/hint nuovi (3 chiavi × 4 lingue), cita il comando e linka `admin/backup_restore/` senza ancora (dal giro 2 di DOC-1: `admin/hosting_panel_backups/#restore-owner-pending`).
+   > Test (test-author, rossi prima): `services restore-owner-guard` 46, `api restore-owner-guard` 31, `restore-guard` 25, `await-restore-mode`
+   > 38, `api restore-interrupted` 34; Vitest 111 (pagina, gate, `instanceBlockState`). Il test-author ha provato 10 mutanti su un'implementazione
+   > di riferimento. Doc: `hosting_providers` (sezione `restore-owner-pending`), `security.md`, `overview.md` (passo 18, numerazione
+   > spostata), `api/index.md`.
+   > **⚠️ Fuori pista**: nessuno. Resta a B documentare `--recover owner` in `cli_tools`/`backup_restore` (il link della pagina è a livello di pagina, quindi regge anche al giro 2 di DOC-1).
+6. ✅ **H5-4 · le richieste di A sul cambio dell'email del titolare** (24/10, dopo il merge di A5-1/A5-1b, `d71efc0b1`).
+   > **Note implementazione**: `PanelStatusResponse.owner_email_change: "pending" | "blocked" | null` (la risposta ha ora sette chiavi), riempito
+   > da `instance_owner.owner_change_status(session)`; controllo `accounts.owner_email_change` in `accounts/checks.py` (`info` se `pending`,
+   > `warning` se `blocked`, `ok` altrimenti; legge `startup_change_state()` in memoria, import pigro di `instance_owner` per non creare un
+   > ciclo con `config_audit`; non solleva mai), in `ACCOUNTS_CONFIG_CHECKS` dopo `check_login_limit`; tre chiavi i18n `auth.checks.ownerEmailChange.*` × 4
+   > lingue (le ho scritte io, A aveva detto che le scriveva A: da riconciliare al merge); voce in `checkGuides.json`. Doc: `hosting_providers`
+   > (nota «State of a change», tabella e JSON del pannello, «sette chiavi»), `configuration_security` (due righe nella tabella dei controlli),
+   > `security.md`, `api/index.md`. La riga `email_change_confirmation` della tabella dei log di A è nella pagina divisa `email_troubleshooting`.
+   > Test (test-author, rossi prima): `accounts-checks` 93, `config-audit` 255, `api panel-status` 41, `await-restore-mode` 36, `login-throttle` 58,
+   > `security-checks` 4; Vitest 256.
+   > **⚠️ Fuori pista**: il test-author ha scoperto che `hosting_providers.{it,fr,es}.md` non esistono (la pagina inglese è pubblicata in ogni lingua): la
+   > voce nuova non entra in `TRANSLATION_DEBT`. Analisi (senza codice) del link `/setup` emesso da `admin-bootstrap` prima di `restore-commit` mandata
+   > al coordinatore: reale ma stretto, la cura è di B (B5-1d).

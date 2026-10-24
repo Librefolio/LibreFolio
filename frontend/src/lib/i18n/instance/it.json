@@ -77,10 +77,13 @@
     "restoreInterrupted": {
       "title": "Il ripristino si è fermato a metà",
       "message": "LibreFolio non sa quali dati contiene, quindi non ne mostra nessuno finché il tuo amministratore non sceglie come procedere.",
-      "adminHint": "Amministratore: ferma LibreFolio, poi esegui ./dev.py backup pending per vedere cosa è successo e --recover per rimettere i dati di prima.",
+      "adminHint": "Amministratore: ferma LibreFolio, poi esegui ./dev.py backup pending per vedere cosa è successo e --recover previous per rimettere i dati di prima.",
       "docs": "Come recuperare",
       "autoReload": "La pagina si ricarica da sola quando LibreFolio torna a servire i dati.",
-      "support": "Scrivi all'assistenza"
+      "support": "Scrivi all'assistenza",
+      "ownerTitle": "L'account del titolare non è pronto",
+      "ownerMessage": "I dati sono stati ripristinati, ma il titolare non ha ancora il suo account: LibreFolio non ne mostra nessuno finché il tuo amministratore non lo imposta.",
+      "ownerAdminHint": "Amministratore: ferma LibreFolio, esegui ./dev.py backup pending --recover owner per impostare di nuovo l'account del titolare, poi riavvia LibreFolio."
     }
   }
 }

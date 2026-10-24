@@ -549,7 +549,7 @@ passwords: wait a few minutes and try again.*): the modal for a `429` whose `det
 keeping its three fields; the tab for that code, published as `data-error-code`, keeping the new address and the typed
 password ([ProfileTab](../frontend/components/features/settings.md#profiletab)). While the limit is off, the «Security»
 tab of Settings › Administration lists the warning of `accounts.login_limit` and counts it in its badge. The
-administrator's side is [Configuration](../../admin/configuration.md), section «Failed Sign-ins».
+administrator's side is [Configuration](../../admin/configuration_accounts.md#login-limit), section «Failed Sign-ins».
 
 Tests: `./dev.py test services login-throttle` (`backend/test_scripts/test_services/test_login_throttle.py`: the two
 limits on an injected clock, the A–Z key, the IPv6 /64, no address and no shared count of «no address», a refusal not
@@ -647,14 +647,14 @@ the hosting panel's routes, so the server starts anyway. Besides the `SecretFile
 either into `503` with the code `backup_panel_unavailable`, on every panel route, and logs one error line
 per refused call, `The hosting panel's backup token cannot be used: its routes refuse every request`, whose
 `error` names the variable, and the path of a file, never the token
-([Hosting for Others](../../admin/hosting_providers.md#panel-backups)).
+([Hosting for Others](../../admin/hosting_panel_backups.md#panel-backups)).
 Nor does an unusable `LIBREFOLIO_WAKE_TOKEN` or `LIBREFOLIO_PANEL_STATUS_TOKEN`: `wake_token()` in
 `backend/app/config/sleep_wake.py` and `panel_status_token()` in `backend/app/config/hosting_panel.py` follow the
 rules of the backup token, with `SleepWakeConfigError` and `HostingPanelConfigError` (`WAKE_TOKEN_…` and
 `PANEL_STATUS_TOKEN_…`, `_NOT_VISIBLE_ASCII` or `_TOO_SHORT`). The startup check `platform.hosting_panel` reads both
 ([Configuration Checks](#configuration-checks)), and `panel_access()` reads each at every call of its route,
 `POST /system/wake-sync` or `GET /panel/status`, which then answers `503` with the code `wake_unavailable` or
-`panel_status_unavailable` ([Hosting Panel API](../../admin/hosting_providers.md#panel-api)). Nor does a `_FILE` of a plugin setting
+`panel_status_unavailable` ([Hosting Panel API](../../admin/hosting_panel_api.md#panel-api)). Nor does a `_FILE` of a plugin setting
 that cannot give its value: the field gets the problem `invalid_env`, and the plugin is not configured
 until the variable is fixed ([Plugin Settings](patterns/plugin_settings.md#environment)).
 
@@ -813,7 +813,7 @@ only when no copy exists.
 Tests: `./dev.py test services config-secrets` (`env_secret()`) and
 `./dev.py test services config-instance-key`, whose section (g) pins `derive_key_from()` to three
 known answers computed with `derive_key()` before the two shared their helpers. What the
-administrator sees and does is in [Configuration](../../admin/configuration.md), section «The
+administrator sees and does is in [Configuration](../../admin/configuration_secrets.md#instance-key), section «The
 Instance Key».
 
 ### 🔐 Secure Backups (`.lfbk`) {: #secure-backups }
@@ -1147,7 +1147,7 @@ start log, not only at the hosting panel's first call, at the first restore uplo
 - **In `CONFIG_CHECKS`.** `BACKUP_CONFIG_CHECKS = (check_panel_token, check_upload_limit, check_restore_limit, check_recipients)` is unpacked in
   `CONFIG_CHECKS` right after `check_test_mode`, the last of the platform's, before workstream A's `ACCOUNTS_CONFIG_CHECKS` and E's
   `*EMAIL_CONFIG_CHECKS`, which still close the tuple. The startup audit logs their
-  error states as errors, each with its `summary`, a line naming its variable (quoted in «Startup Checks» of [Configuration](../../admin/configuration.md)), and the start goes on. The routes are unchanged: `503`, and their own
+  error states as errors, each with its `summary`, a line naming its variable (quoted in «Startup Checks» of [Configuration](../../admin/configuration_security.md#startup-checks)), and the start goes on. The routes are unchanged: `503`, and their own
   error line at each call.
 - **The import.** `config_audit` imports this module to build its tuple, so `checks.py` imports `ConfigCheck` only
   when a check runs, as E's `checks.py` does ([Email Service](../backend/email.md#configuration-checks)): either module
@@ -1166,7 +1166,7 @@ nightly backup, whose provider must be able to restore an instance without the i
 backups, and the self-hoster's cron. The format was agreed with the cloud coordinator in `BACKUP-contratto-L3.md`, the
 L3 contract, kept in the project folder outside the repository (`sealed.py`'s docstring names it); where the two
 differ, the code below is what ships. What the administrator sees is
-[Sealed Backups](../../admin/backup_restore.md#sealed).
+[Sealed Backups](../../admin/backup_sealed.md#sealed).
 
 **No cryptography of our own.** The `.lfbk` inside is the version-1 envelope of above, unchanged. The password is
 encrypted with age, a published format with a reference implementation in Go (`age`) and one in Rust (`rage`), through
@@ -1305,6 +1305,7 @@ started: it is `ok` at startup, so the startup audit never logs it.
 | `backup.restore_limit` | `LIBREFOLIO_BACKUP_MAX_RESTORE_MB` cannot be used, or, while it is unset outside `selfhosted`, the upload limit it follows: `backup.checks.restoreLimit.*`, see [Configuration Checks of the Backup](#backup-config-checks) | `error` |
 | `accounts.login_limit` | `LIBREFOLIO_LOGIN_LIMIT=off`, in any case: the [failed sign-in limit](#login-limit) is off. `auth.checks.loginLimit.off`, and one fixed summary however `off` is written: `LIBREFOLIO_LOGIN_LIMIT=off: failed sign-ins are not limited; turn it back on unless this is a test instance` | `warning` |
 | `accounts.login_limit` | Any value other than `on` or `off`: `auth.checks.loginLimit.invalid`, `detail` `{"value": <the value, stripped>}`, as `login_limit_value()` reads it. `log_configuration_audit()` stops the start on such a value (below), so the error shows only for a value read after the start | `error` |
+| `accounts.owner_email_change` | The change of the owner's address a hosting provider started with `LIBREFOLIO_ADMIN_EMAIL` (workstream A, lot A5-1b; the check is lot H5-4's), read in memory from `instance_owner.startup_change_state()`, never an address: `pending` is `info`, `auth.checks.ownerEmailChange.pending`; `blocked` (another account holds the new address) is `warning`, `auth.checks.ownerEmailChange.blocked`; none waiting is `ok`. The «Guide» button opens `admin/hosting_instances/#owner-email-change` | `info` or `warning` |
 
 The two checks of the managed profile's security switches (lot H-39), `check_frame_protection()` and
 `check_csp_report_only()`, read `get_settings()` and give no `detail`. Each is `ok` while its switch is on, in any
@@ -1392,7 +1393,7 @@ Tests: `./dev.py test services config-audit` (the order of `CONFIG_CHECKS` inclu
 A's, then E's three; and the two checks of the managed profile's switches in every state, a `PROFILE_DEFAULTS` entry
 removed included); the stop on a `LIBREFOLIO_ADMIN_*` value is in `./dev.py test services admin-bootstrap`, the check
 `accounts.login_limit` and the stop on a `LIBREFOLIO_LOGIN_LIMIT` value in `./dev.py test services accounts-checks`.
-What the administrator sees and does is in [Configuration](../../admin/configuration.md), section «Startup Checks»,
+What the administrator sees and does is in [Configuration](../../admin/configuration_security.md#startup-checks), section «Startup Checks»,
 and in the app in «Security» of [Global Settings](../../admin/settings.md).
 
 ### 🧩 Plugin Secrets Check {: #plugin-secrets-check }
@@ -1436,7 +1437,7 @@ entered again or the old key is restored.
 Tests: `./dev.py test services plugin-secrets-check`
 (`backend/test_scripts/test_services/test_plugin_secrets_check.py`), and the step's place in
 `./dev.py test services app-lifecycle`. What the administrator sees and does is in
-[Configuration](../../admin/configuration.md), section «Startup Checks».
+[Configuration](../../admin/configuration_security.md#startup-checks), section «Startup Checks».
 
 ### 📋 The Checks on Demand {: #security-checks-endpoint }
 
@@ -1467,7 +1468,7 @@ Each check has a guide, the section of the admin guide that explains it. The map
 its answer; `browser`, the findings the browser adds to the tab, today `accounts.openRegistration`
 (`OPEN_REGISTRATION_NOTICE_ID`, [The Open-Registration Warning](#open-registration-warning)). Each value is a path
 below `/mkdocs/` without the language, which `DocsLink` adds: `admin/<page>/#<anchor>`, such as
-`admin/configuration/#frame-protection` for `platform.frame_protection`. The tab's «Guide» button (workstream A, N69d)
+`admin/configuration_security/#frame-protection` for `platform.frame_protection`. The tab's «Guide» button (workstream A, N69d)
 reads it through `checkGuidePath(id)` of `checkGuides.ts`, beside the map. A new check needs its entry, and its anchor
 must be an explicit `{: #… }` of the English page: `./dev.py test services config-audit` fails when a check of the
 server has no entry, or an entry no check, and `./dev.py test front-utility core-unit` (`checkGuides.test.ts`) when an
@@ -1591,7 +1592,7 @@ shape:
 
 ### 🔒 Private Endpoints (auth required)
 
-All other endpoints — including Auth (profile, password), Settings (user settings, onboarding progress, and the global settings: any signed-in user reads them through `GET /settings/global` and `GET /settings/global/{key}`, only an administrator writes them; the login page needs none of them, it reads `/system/instance`), System diagnostics (`/system/plugin-diagnostics`), the block page (`/system/block`, see [Instance Block](#instance-block)), the catch-up of the prices (`/system/price-refresh`, see [Catch-up Progress](../backend/scheduler.md#price-refresh)), Brokers, BRIM (files and plugins), Transactions, **Uploads** (CRUD + file serving + plugin assets), FX, Assets, Risk, Tools, Backup, and Users — require a valid session cookie. The routes of the hosting panel take a token of their own instead of a session cookie, one per scope, sent as `Authorization: Bearer`: the backup routes (`/backup/panel/*`, `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`), the [scheduled wake-up](../../admin/sleep_wake.md#wake-sync) (`/system/wake-sync`, `LIBREFOLIO_WAKE_TOKEN`) and the setup status (`/panel/status`, `LIBREFOLIO_PANEL_STATUS_TOKEN`); the panel's restore (`/backup/panel/restore/*`, scope `backup:restore`) takes a signed ticket only, never a token. One dependency checks them all, `panel_access(scope)`: a missing or wrong token answers `401`, too many refused ones from an address `429`, and while a scope's token is not set its routes answer `404`, as a path that does not exist: see [The Hosting Panel's Access](#panel-access) below. The account administration routes of `/users` (every route but `/users/search`) also require an administrator (`require_admin`): see [Administrator API](access_control.md#admin-user-api). So does `GET /security/checks`, the configuration checks on demand: see [The Checks on Demand](#security-checks-endpoint).
+All other endpoints — including Auth (profile, password), Settings (user settings, onboarding progress, and the global settings: any signed-in user reads them through `GET /settings/global` and `GET /settings/global/{key}`, only an administrator writes them; the login page needs none of them, it reads `/system/instance`), System diagnostics (`/system/plugin-diagnostics`), the block page (`/system/block`, see [Instance Block](#instance-block)), the catch-up of the prices (`/system/price-refresh`, see [Catch-up Progress](../backend/scheduler.md#price-refresh)), Brokers, BRIM (files and plugins), Transactions, **Uploads** (CRUD + file serving + plugin assets), FX, Assets, Risk, Tools, Backup, and Users — require a valid session cookie. The routes of the hosting panel take a token of their own instead of a session cookie, one per scope, sent as `Authorization: Bearer`: the backup routes (`/backup/panel/*`, `LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN`), the [scheduled wake-up](../../admin/wake_sync.md#wake-sync) (`/system/wake-sync`, `LIBREFOLIO_WAKE_TOKEN`) and the setup status (`/panel/status`, `LIBREFOLIO_PANEL_STATUS_TOKEN`); the panel's restore (`/backup/panel/restore/*`, scope `backup:restore`) takes a signed ticket only, never a token. One dependency checks them all, `panel_access(scope)`: a missing or wrong token answers `401`, too many refused ones from an address `429`, and while a scope's token is not set its routes answer `404`, as a path that does not exist: see [The Hosting Panel's Access](#panel-access) below. The account administration routes of `/users` (every route but `/users/search`) also require an administrator (`require_admin`): see [Administrator API](access_control.md#admin-user-api). So does `GET /security/checks`, the configuration checks on demand: see [The Checks on Demand](#security-checks-endpoint).
 
 !!! info "📁 Files are protected too"
 
@@ -1609,7 +1610,7 @@ dependency checks all its routes: `panel_access(scope)` in `backend/app/services
 |-------|--------|------------------------------|---------------|---------------------|
 | `backup` | The four `/backup/panel/jobs…` routes, `backend/app/api/v1/backup/panel.py` (workstream B) | `backup_download_token()`: `SecretFileError`, `BackupConfigError` | `BackupPanelToken` | `backup_panel_unauthorized` / `backup_panel_unavailable` |
 | `wake` | `POST /system/wake-sync`, `backend/app/api/v1/system/wake.py` (workstream Z) | `wake_token()`: `SecretFileError`, `SleepWakeConfigError` | `WakeToken` | `wake_unauthorized` / `wake_unavailable` |
-| `status` | `GET /panel/status`, the [setup status](../../admin/hosting_providers.md#panel-status), read by [`admin_setup_status()`](access_control.md#setup-status), with the instance's `mode` and its `restore` (lot H-62) | `panel_status_token()` (`backend/app/config/hosting_panel.py`): `SecretFileError`, `HostingPanelConfigError` | `PanelStatusToken` | `panel_status_unauthorized` / `panel_status_unavailable` |
+| `status` | `GET /panel/status`, the [setup status](../../admin/hosting_panel_api.md#panel-status), read by [`admin_setup_status()`](access_control.md#setup-status), with the instance's `mode` and its `restore` (lot H-62), the two counts `users_used` and `users_limit` (lot H5-1), and `owner_email_change` (lot H5-4) | `panel_status_token()` (`backend/app/config/hosting_panel.py`): `SecretFileError`, `HostingPanelConfigError` | `PanelStatusToken` | `panel_status_unauthorized` / `panel_status_unavailable` |
 | `backup:restore` (`PanelScope.BACKUP_RESTORE`) | The seven `/backup/panel/restore…` routes, `backend/app/api/v1/backup/panel_restore.py` (lot H-62): see [Awaiting Restore](#await-restore) | None: `read_token` always answers `None`, so no token opens it and, without the panel's public keys, it is off (`404`); a signed ticket of this scope only | `BackupRestorePanelTicket` | `backup_restore_unauthorized` / `backup_restore_unavailable` |
 
 `panel_access(scope)` returns the same function for the same scope, so FastAPI runs it once per request. It takes the
@@ -1672,7 +1673,7 @@ its token nor the keys are set.
 | Check | `check_hosting_panel()`, `backend/app/services/platform/config_audit.py` | Keys, tolerance and audience that cannot be used: error, and every route answers `503`; in the managed profile a token beside usable keys is a warning |
 
 `PanelCaller` then carries `credential="ticket"`, with the `kid` and the `jti`, and the request line adds both. The
-contract, the codes and the test vectors are in [Signed Tickets](../../admin/hosting_providers.md#panel-api-tickets).
+contract, the codes and the test vectors are in [Signed Tickets](../../admin/hosting_panel_api.md#panel-api-tickets).
 
 Tests: `./dev.py test services hosting-panel-access`
 (`backend/test_scripts/test_services/test_hosting_panel_access.py`: the status token's reader, the four steps for
@@ -1680,7 +1681,7 @@ each scope, the limit across scopes and behind an untrusted proxy, the line), `.
 (`backend/test_scripts/test_api/test_hosting_panel_routes.py`: the tag, the endpoints and their operation ids, the
 schemes, the documented `429`) and `./dev.py test api panel-status`
 (`backend/test_scripts/test_api/test_panel_status_api.py`: the status route). Administrator side:
-[Hosting Panel API](../../admin/hosting_providers.md#panel-api).
+[Hosting Panel API](../../admin/hosting_panel_api.md#panel-api).
 
 ### 🔢 Numbers in Requests {: #request-numbers }
 
@@ -1900,7 +1901,7 @@ Tests: `./dev.py test services static-uploads`, `./dev.py test api uploads` and 
 ### 🚧 Instance Block {: #instance-block }
 
 A hosting provider blocks an instance with `LIBREFOLIO_BLOCKED`; the administrator's side is
-[Hosting for Others](../../admin/hosting_providers.md#instance-block). `backend/app/config/platform.py`
+[Hosting for Others](../../admin/hosting_instances.md#instance-block). `backend/app/config/platform.py`
 reads both variables from the process environment, never through `Settings`, and they work in every
 profile:
 
@@ -1933,8 +1934,8 @@ path, so the allow-list `ALLOWED_WHEN_BLOCKED` is a `frozenset` of endpoint func
 | `GET /system/block`, `GET /system/instance` | `block.get_instance_block`, `instance.get_instance_config` | The block page |
 | `GET /system/health`, `GET /system/ready`, `GET /system/info` | `health.health_check`, `ready.get_readiness`, `info.get_system_info` | Probes and version |
 | `GET /system/test-lane-health` | `health.test_lane_health` | The test runner's probe, `404` outside test mode |
-| `POST /system/wake-sync` | `wake.wake_sync` | The [scheduled wake-up](../../admin/sleep_wake.md#wake-sync), with its own token instead of a session: on a blocked instance it runs no job and answers `200` with `status: "blocked"` (decision D-W3) |
-| `GET /panel/status` | `panel.get_panel_status` | The hosting panel's [setup status](../../admin/hosting_providers.md#panel-status), read by [`admin_setup_status()`](access_control.md#setup-status), with its own token instead of a session (lot H-61): it answers as on any other instance |
+| `POST /system/wake-sync` | `wake.wake_sync` | The [scheduled wake-up](../../admin/wake_sync.md#wake-sync), with its own token instead of a session: on a blocked instance it runs no job and answers `200` with `status: "blocked"` (decision D-W3) |
+| `GET /panel/status` | `panel.get_panel_status` | The hosting panel's [setup status](../../admin/hosting_panel_api.md#panel-status), read by [`admin_setup_status()`](access_control.md#setup-status), with its own token instead of a session (lot H-61): it answers as on any other instance. Besides the setup, the `mode` and the `restore`, it holds two counts, `users_used` and `users_limit` (lot H5-1), and `owner_email_change` (lot H5-4: `pending`, `blocked` or `null`, never an address), never a name or an address |
 | The seven `/backup/panel/restore…` routes | `_PANEL_RESTORE_ROUTES` of `instance_block.py` (`backup_panel_restore.*`) | The panel's restore, with its ticket instead of a session (lot H-62): past the ticket each route answers `423 instance_blocked` itself, so a caller without a valid ticket learns nothing of the block. No restore happens on a blocked instance ([Awaiting Restore](#await-restore)) |
 
 **The refusal.** On a blocked instance, an endpoint outside the list first runs `get_current_user()`
@@ -2018,7 +2019,7 @@ job on a blocked instance ([Scheduler](../backend/scheduler.md#run-checks)).
 ### ⏳ Awaiting Restore {: #await-restore }
 
 Lot H-62. A hosting panel that restores an instance onto a new machine starts it with `LIBREFOLIO_AWAIT_RESTORE`; the
-administrator's side is [Restoring an Instance from Your Panel](../../admin/hosting_providers.md#panel-restore).
+administrator's side is [Restoring an Instance from Your Panel](../../admin/hosting_panel_backups.md#panel-restore).
 `awaiting_restore()` (`backend/app/config/platform.py`) reads it from the process environment at each call, with the
 values of `instance_blocked()`: any other value raises `ValueError`, and `log_configuration_audit()` stops the start
 on it, or logs a warning while it is on.
@@ -2091,7 +2092,7 @@ Lot B-33, the start's part (workstream H; the command-line side is workstream B'
 «An Unreadable Restore State» in [Command-Line Tools](../../admin/cli_tools.md)). When the state of the restore,
 `.restore/restore.json`, cannot be read (its owner or permissions changed, a disk error, a link or a folder in its
 place, content no LibreFolio wrote), a restore may have stopped half way and LibreFolio cannot tell which data it holds.
-The administrator's side is [When the State of a Restore Cannot Be Read](../../admin/hosting_providers.md#restore-interrupted).
+The administrator's side is [When the State of a Restore Cannot Be Read](../../admin/hosting_panel_backups.md#restore-interrupted).
 
 **The probe.** `backend/app/services/platform/restore_guard.py` owns it. The startup step `restore-state`, right after
 `pending-restore`, calls `probe_restore_state()` in a thread, which asks workstream B's
@@ -2100,8 +2101,8 @@ The administrator's side is [When the State of a Restore Cannot Be Read](../../a
 kept in the module for the whole process, and `restore_interrupted()` returns it: `False` in a process that never
 probed. When it cannot read the state, the step logs one error with B's `reason` (`io`, `not_a_file`, `invalid`), never
 the state's content, `The state of the restore cannot be read: LibreFolio serves no data until the administrator runs
-./dev.py backup pending --recover`; it never stops the start. A state made readable while the process runs counts only
-at the next start: the way out is `./dev.py backup pending --recover` with LibreFolio stopped, then a restart.
+./dev.py backup pending --recover previous`; it never stops the start. A state made readable while the process runs counts only
+at the next start: the way out is `./dev.py backup pending --recover previous` with LibreFolio stopped, then a restart.
 
 **The start.** While `restore_interrupted()`, `STARTUP_STEPS` skips what repairs, writes or warms up the data:
 `post-migration-fixes` and `lone-transfer-legs` (`skip_when=restore_interrupted`), and the six steps of
@@ -2131,7 +2132,7 @@ and deleting a panel job still answer. In this state:
 **The web app.** `AwaitingRestoreGate.svelte` reads `instanceConfig.config.restore_interrupted`; while it is `true` it
 shows `InstanceRestoreInterruptedPage.svelte` instead of every route, and wins over the awaiting-restore page
 (`frontend/src/lib/features/instance/components/`). The page, on the login's `AnimatedBackground`, asks for the
-administrator, links `admin/cli_tools/#backup-pending-unreadable` in the interface language, asks `/system/instance`
+administrator, links `admin/cli_backup/#backup-pending-unreadable` in the interface language, asks `/system/instance`
 every 30 seconds and reloads once `restore_interrupted` reads `false`. When `instanceConfig.config.support_url`
 (`LIBREFOLIO_SUPPORT_URL`) gives a usable address, it adds a «Contact support» link
 (`data-testid="instance-restore-interrupted-support"`): `supportChannel(supportUrl, {githubFallback: false})`
@@ -2141,7 +2142,27 @@ every 30 seconds and reloads once `restore_interrupted` reads `false`. When `ins
 (`isInstanceRestoreInterruptedError()`, `frontend/src/lib/features/instance/instanceBlockState.ts`), so the gate shows
 the page even when the configuration was read before.
 
-Tests: `./dev.py test services restore-guard` (`backend/test_scripts/test_services/test_restore_guard.py`: the probe,
+**The owner's account (lot H5-3).** A second reason closes the instance the same way. After a restore from the app on a
+managed instance (`confirmed_via == "admin"` with an `owner_user_id`, see [Backup and Restore](#backup-restore)), the
+startup step `restore-owner`, right after `restore-commit`, awaits workstream B's `assign_restored_owner()`
+(`backend/app/services/platform/instance_backup/owner.py`), which calls workstream A's `assign_owner_and_send_reset` once
+and records the outcome in the restore's state; the step then calls `probe_owner_assignment()`, which asks B's
+`apply.owner_assignment_problem()` (`None`, `pending`, or the code of the refusal, from `error:<CODE>`), keeps it in
+`_owner_problem` and logs one error with the value when it is not `None`. `restore_interrupted()` is true for either
+reason, so the steps after `restore-owner` that carry the skip, the `423`, the `409` of the panel's backup start,
+`/system/instance` and the wake-up follow with no other code; `restore_interrupted_reason()` says which
+(`restore_state` wins over `owner_assignment`), and `InstanceConfigResponse.restore_interrupted_reason` carries it.
+With several workers only the one holding the owner lock (`.restore/owner.lock`) calls A, so another worker's probe can
+find `pending` and would stay closed for good: the router dependency awaits `refresh_restore_state()` first, which, for
+`pending` only and at most every `OWNER_RECHECK_SECONDS` (2 s), asks again in a thread. A code is never asked again for
+the process: the way out is `./dev.py backup pending --recover owner` (B) and a restart. The page
+(`InstanceRestoreInterruptedPage.svelte`, prop `reason`) says «the owner's account is not ready», cites that command and
+links the section `admin/hosting_panel_backups/#restore-owner-pending`.
+
+Tests: `./dev.py test services restore-owner-guard` and `./dev.py test api restore-owner-guard`
+(`test_restore_owner_guard.py`, `test_restore_owner_guard_api.py`: the probe, the lazy recheck with a patched clock, two
+workers with a real state, the step's place, the 423 walk of every route), and `./dev.py test services restore-guard`
+(`backend/test_scripts/test_services/test_restore_guard.py`: the probe,
 its log line, the step's place and the skipped steps) and `./dev.py test api restore-interrupted`
 (`backend/test_scripts/test_api/test_restore_interrupted_api.py`: the list pinned by name and route, the third
 dependency, `/system/instance`, wake-sync, `/panel/status`).
@@ -2435,7 +2456,8 @@ email verification in [Email Verification](../backend/email.md#verification); th
   setup link. Any other token gets its status alone, and a token presented for another purpose is `unknown`.
 - **Anonymous answers say nothing about the users but whether there is one.** The `409` `USER_LIMIT_REACHED` of
   `POST /auth/register` carries no count and no billing link; only the administrator's routes add `limit`, `used`
-  and `billing_url`. About accounts, `GET /system/instance` publishes only the registration mode, whether a variable
+  and `billing_url`, and the hosting panel's `GET /panel/status`, behind its token, `users_used` and
+  `users_limit`: two counts, no billing link. About accounts, `GET /system/instance` publishes only the registration mode, whether a variable
   locks it, whether the instance has no account yet ([The First-Account Flag](#first-account-open)), and the
   [password rules](#password-rules), the same on every instance.
 - **The token rides in the fragment, never in the query string.** `token_path()` builds `/invite#token=…`,
@@ -2832,7 +2854,7 @@ restore waiting and the ticket of its outcome ([The Outcome Ticket](#backup-rest
 a `BackgroundTask` calls `restart.request_restart()`, which logs a warning
 and sends SIGTERM to the server's root process (`restart.server_pid()`, as for the boot): uvicorn's master stops its
 workers, and the shutdown budget bounds the stop («Stopping the Server» in
-[Configuration](../../admin/configuration.md)). The route answers `409` `restore_not_pending` unless a restore waits,
+[Configuration](../../admin/configuration_security.md#shutdown)). The route answers `409` `restore_not_pending` unless a restore waits,
 so an administrator stops the server only to apply one; on a blocked instance it is refused like the others. The
 signal goes through `restart.send_signal`, `os.kill` by default, read at each call: the tests replace it and never
 stop a real server. Since the signal goes to the root process, the next start is one of the whole server, which finds
@@ -3392,7 +3414,7 @@ mesh widened only where it is truly needed). Two `bool` switches of `Settings`, 
 `.env` wins over the profile. In the managed profile, a switch that is off shows in the
 [configuration checks](#configuration-checks): `platform.frame_protection`, a `warning`, and `platform.csp_report_only`,
 an `info` (H-39). The enforced policy has no check: it cannot be off. For administrators:
-«The Content-Security-Policy» in [Configuration](../../admin/configuration.md).
+«The Content-Security-Policy» in [Configuration](../../admin/configuration_security.md#csp).
 
 One `Content-Security-Policy` field per response (never two), and the module's docstring
 (`backend/app/services/platform/security_headers.py`) is the reference:
@@ -3573,7 +3595,7 @@ else (`frontend/src/lib/features/security/cspNotice.ts`):
   `(function anonymous(\n) {\nreturn this\n})` (the same entry as
   [the E2E baseline](../test-walkthrough/e2e.md#csp-baseline)'s `cheetah-grid-global-probe`);
 - anything else enforced: one `console.error` per page load, `LibreFolio blocked a script it did not send (<origin, inline
-  or eval>): a proxy, a CDN or a browser extension adds it. Guide: <origin>/mkdocs/admin/configuration/#csp`, and its
+  or eval>): a proxy, a CDN or a browser extension adds it. Guide: <origin>/mkdocs/admin/configuration_security/#csp`, and its
   source added once to `sessionStorage['librefolio-csp-blocked']`, a JSON array of distinct strings; storage failures are
   swallowed;
 - the Security tab's browser check `platform.blockedScript` (`securityFindings.ts`, guide entry in `checkGuides.json`) is a
@@ -3787,7 +3809,7 @@ the lesser harm: `forwarded_by_untrusted_proxy()` recognises them, and `rate_lim
   the check asks for.
 
 For administrators: «The Visitor's Address» in
-[Checking Connection Security](../../admin/connection_checks.md#reverse-proxy).
+[Checking Connection Security](../../admin/connection_proxy.md#reverse-proxy).
 
 Tests: `./dev.py test services client-address` (`backend/test_scripts/test_services/test_client_address.py`).
 

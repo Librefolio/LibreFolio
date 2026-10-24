@@ -135,7 +135,9 @@ BACKUP_TOKEN_VARIABLE = "LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN"
 PANEL_ENVIRONMENT = tuple(name for variable in (STATUS_TOKEN_VARIABLE, WAKE_TOKEN_VARIABLE, BACKUP_TOKEN_VARIABLE, "LIBREFOLIO_PANEL_PUBLIC_KEYS") for name in (variable, variable + "_FILE")) + ("LIBREFOLIO_PANEL_CLOCK_SKEW_SECONDS", "LIBREFOLIO_PUBLIC_URL")
 
 #: ``GET /panel/status``: the keys of its answer, and of its ``restore``.
-PANEL_STATUS_KEYS = frozenset({"admin_setup", "setup_expires_at", "mode", "restore"})
+#: H5-1: the answer also holds the two counts of the places taken, ``users_used`` and ``users_limit``.
+#: H5-4: and ``owner_email_change`` (pending, blocked or null): seven keys.
+PANEL_STATUS_KEYS = frozenset({"admin_setup", "setup_expires_at", "mode", "restore", "users_used", "users_limit", "owner_email_change"})
 PANEL_RESTORE_KEYS = frozenset({"state", "reason", "waiting", "backup_created_at", "stage_id"})
 STAGE_ID = "0123456789abcdef0123456789abcdef"
 BACKUP_CREATED_AT = datetime(2026, 10, 23, 3, 0, 12, tzinfo=UTC)
@@ -613,8 +615,8 @@ def _instant(value: Any) -> datetime | None:
 @pytest.mark.asyncio
 @pytest.mark.parametrize("awaiting", [False, True], ids=["normal", "awaiting-restore"])
 async def test_the_panel_status_says_the_mode_and_no_restore(instance, awaiting):
-    """AM-040 (§6): ``GET /panel/status`` holds exactly ``admin_setup``, ``setup_expires_at``, ``mode`` and
-    ``restore``; without a restore recorded ``restore`` is null; ``mode`` follows the switch."""
+    """AM-040 (§6): ``GET /panel/status`` holds exactly ``admin_setup``, ``setup_expires_at``, ``mode``,
+    ``restore``, ``users_used``, ``users_limit`` (H5-1) and ``owner_email_change`` (H5-4); without a restore recorded ``restore`` is null; ``mode`` follows the switch."""
     instance.switches(awaiting=awaiting)
     response = await panel_status(instance)
 
@@ -655,7 +657,7 @@ async def test_the_panel_status_says_why_a_restore_waits(instance):
 @pytest.mark.parametrize("reason", UNREADABLE_REASONS)
 async def test_a_restore_state_that_cannot_be_read_is_200_with_restore_unreadable_and_its_reason(instance, reason, awaiting):
     """AM-043 (D7, contract L3 §10 option A; replaces Q7's 500): a restore state on disk that B's reader refuses with
-    ``reason`` (``io``, ``not_a_file``, ``invalid``) → ``GET /panel/status`` answers 200 with exactly its four keys,
+    ``reason`` (``io``, ``not_a_file``, ``invalid``) → ``GET /panel/status`` answers 200 with exactly its seven keys (H5-1, H5-4),
     ``mode`` as the switch says, and ``restore`` exactly ``{state: unreadable, reason, waiting: null,
     backup_created_at: null, stage_id: null}``; never ``restore: null`` (a restore may wait behind it), never the 500."""
     write_unreadable_state(instance.root, reason, instance.monkeypatch)

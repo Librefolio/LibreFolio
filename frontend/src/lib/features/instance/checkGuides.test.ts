@@ -16,7 +16,7 @@
  *     the guide of an own key only (`Object.hasOwn`), so `undefined` for an unknown id and for `constructor`,
  *     `__proto__`, `toString` and `hasOwnProperty`.
  *   - A guide is `admin/<page>/#<anchor>`, matching `^admin/[a-z0-9_]+/#[a-z0-9-]+$`: no language prefix (`DocsLink`
- *     adds it), no leading `/`, no `.md`, a folder URL, an explicit anchor. The 21 guides are `EXPECTED_GUIDES` below.
+ *     adds it), no leading `/`, no `.md`, a folder URL, an explicit anchor. The 22 guides are `EXPECTED_GUIDES` below.
  *
  * The cases: §2's five — the shape, the anchors exist, the lookup, the browser half, the translation ratchet — and §1's
  * table pinned whole, so that a changed guide is a visible change of this file.
@@ -50,13 +50,20 @@
  * action `core-unit`).
  *
  * H-61 (checkpoint 1, contract §5, 20/10): the new startup check of the hosting panel's tokens, `platform.hosting_panel`,
- * has its guide, `admin/hosting_providers/#panel-api`, in the table between `platform.log_level` and `platform.test_mode`,
+ * has its guide, `admin/hosting_panel_api/#panel-api`, in the table between `platform.log_level` and `platform.test_mode`,
  * its place among the checks. Red until `checkGuides.json` holds it (§1 pinned whole) and `hosting_providers.en.md`
  * writes `{: #panel-api }` (§2.2, the docs step of the lot). `hosting_providers` has no translation, so the ratchet does
  * not move.
  *
+ * H5-4 (24/10, A's request A5-1b): the new check `accounts.owner_email_change` (the host changed the owner's email address:
+ * pending its confirmation, or blocked by another account) has its guide, `admin/hosting_instances/#owner-email-change`, in
+ * the table right after `accounts.login_limit`, its place among the checks. Red until `checkGuides.json` holds it (§1 pinned
+ * whole). The anchor already exists in `hosting_providers.en.md` (§2.2 stays green). `hosting_providers` has no translation
+ * (the docs publish its English page in every language), so, as for `#panel-api`, the pair joins no ratchet and
+ * `TRANSLATION_DEBT` does not move: it would be reported as new the day a translation of the page appears without the anchor.
+ *
  * H-55 v2 (step 4, 21/10): the browser's second finding, `platform.blockedScript` — a script the enforced
- * Content-Security-Policy blocked and this instance did not send —, has its guide, `admin/configuration/#csp`, in the
+ * Content-Security-Policy blocked and this instance did not send —, has its guide, `admin/configuration_security/#csp` (`admin/configuration/#csp` until DOC-1 moved it), in the
  * browser half. Red until `checkGuides.json` holds it (§1 pinned whole, §2.4 the browser half), `securityFindings` adds the
  * finding (§2.4's premise, fed `blockedScripts`) and, as the contract says, until `configuration.en.md` writes
  * `{: #csp }` (§2.2, the docs step of the lot): THAT anchor check stays red until the documentation lands. The it, fr and
@@ -94,36 +101,38 @@ vi.mock('$lib/api', () => {
 // =============================================================================
 
 /**
- * The 21 guides of §1, whole: check id → guide. A changed guide is a change of this table. Written in the order of the
+ * The 22 guides of §1, whole: check id → guide. A changed guide is a change of this table. Written in the order of the
  * checks (`CONFIG_CHECKS`, then `platform.plugin_secrets`), then the browser's finding, and compared as a record: the
  * order is pinned by §3, against the checks themselves.
  */
 const EXPECTED_GUIDES: Readonly<Record<string, string>> = {
-    'platform.jwt_secret': 'admin/configuration/#secrets',
-    'platform.secrets_set_twice': 'admin/configuration/#secret-files',
-    'platform.instance_key': 'admin/configuration/#instance-key',
+    'platform.jwt_secret': 'admin/configuration_secrets/#secrets',
+    'platform.secrets_set_twice': 'admin/configuration_secrets/#secret-files',
+    'platform.instance_key': 'admin/configuration_secrets/#instance-key',
     'platform.session_cookie': 'admin/connection_checks/#session-cookie',
-    'platform.client_address': 'admin/connection_checks/#untrusted-proxy',
-    'platform.frame_protection': 'admin/configuration/#frame-protection',
-    'platform.csp_report_only': 'admin/configuration/#csp-report-only',
-    'platform.log_level': 'admin/configuration/#startup-checks',
+    'platform.client_address': 'admin/connection_proxy/#untrusted-proxy',
+    'platform.frame_protection': 'admin/configuration_security/#frame-protection',
+    'platform.csp_report_only': 'admin/configuration_security/#csp-report-only',
+    'platform.log_level': 'admin/configuration_security/#startup-checks',
     // H-61: the hosting panel's wake-up and status tokens, right before the test mode check
-    'platform.hosting_panel': 'admin/hosting_providers/#panel-api',
-    'platform.test_mode': 'admin/configuration/#startup-checks',
-    'backup.panel_token': 'admin/hosting_providers/#panel-token',
-    'backup.upload_limit': 'admin/hosting_providers/#restore-upload-limit',
-    'backup.restore_limit': 'admin/hosting_providers/#restore-upload-limit',
+    'platform.hosting_panel': 'admin/hosting_panel_api/#panel-api',
+    'platform.test_mode': 'admin/configuration_security/#startup-checks',
+    'backup.panel_token': 'admin/hosting_panel_backups/#panel-token',
+    'backup.upload_limit': 'admin/hosting_panel_backups/#restore-upload-limit',
+    'backup.restore_limit': 'admin/hosting_panel_backups/#restore-upload-limit',
     // L3 (B, 22/10): the recipients of the hosting panel's sealed backups.
-    'backup.recipients': 'admin/backup_restore/#sealed',
-    'accounts.login_limit': 'admin/configuration/#login-limit',
+    'backup.recipients': 'admin/backup_sealed/#sealed',
+    'accounts.login_limit': 'admin/configuration_accounts/#login-limit',
+    // H5-4 (A's request A5-1b): the host-started change of the owner's email, right after the login limit's
+    'accounts.owner_email_change': 'admin/hosting_instances/#owner-email-change',
     'email.smtp': 'admin/email/#variables',
     'email.smtp_encryption': 'admin/email/#encryption-modes',
     'email.links': 'admin/email/#links-check',
-    'platform.plugin_secrets': 'admin/configuration/#plugin-secrets',
+    'platform.plugin_secrets': 'admin/configuration_secrets/#plugin-secrets',
     // The browser's half: the open-registration warning, `OPEN_REGISTRATION_NOTICE_ID`
     'accounts.openRegistration': 'admin/settings/#open-registration-warning',
     // H-55 v2: a script the enforced policy blocked and this instance did not send (`cspNotice.ts`)
-    'platform.blockedScript': 'admin/configuration/#csp',
+    'platform.blockedScript': 'admin/configuration_security/#csp',
 };
 
 /** The findings the browser adds to the Security tab: the open-registration warning and, since H-55 v2, a blocked script. */
@@ -132,48 +141,16 @@ const BROWSER_FINDINGS: readonly string[] = [OPEN_REGISTRATION_NOTICE_ID, BLOCKE
 
 /**
  * The baseline of the translation ratchet: the `<lang>:<page>#<anchor>` pairs whose it, fr or es page does not write the
- * anchor yet, sorted. Today 33: in the three languages, every guide anchor of `configuration`, `connection_checks` and
- * `settings` but `session-cookie` — the translations predate these anchors, and the new English text of N70 and of this
- * lot is real translation debt, not stamped. H-55 v2 adds three, `<lang>:configuration#csp`: the new English section of the
- * enforced policy (`{: #csp }`, the docs step of that lot) is not translated until the release's Aphra pass, as the
- * others of `configuration` were not. It only shrinks: the release's Aphra translation takes it to empty, a pair
- * the ratchet reports gone leaves it in the same change, and a new pair comes in only with its reason written beside it.
+ * anchor yet, sorted. Today 3: `settings#open-registration-warning` in the three languages, the English anchor of N70 that the
+ * `settings` translations predate. It was 33 until DOC-1 split the long English pages: every guide that pointed into
+ * `configuration` and `connection_checks` now points to a page that exists only in English (`configuration_secrets`,
+ * `configuration_security`, `configuration_accounts`, `connection_proxy`), which the docs publish in every language
+ * (`fallback_to_default`) and which therefore counts for nothing, so the 30 pairs of those anchors left the debt with the
+ * move (the debt itself moved to the translation of the new pages: each is untranslated). It only shrinks: the release's Aphra
+ * translation takes it to empty, a pair the ratchet reports gone leaves it in the same change, and a new pair comes in only
+ * with its reason written beside it.
  */
-const TRANSLATION_DEBT: readonly string[] = [
-    'es:configuration#csp',
-    'es:configuration#csp-report-only',
-    'es:configuration#frame-protection',
-    'es:configuration#instance-key',
-    'es:configuration#login-limit',
-    'es:configuration#plugin-secrets',
-    'es:configuration#secret-files',
-    'es:configuration#secrets',
-    'es:configuration#startup-checks',
-    'es:connection_checks#untrusted-proxy',
-    'es:settings#open-registration-warning',
-    'fr:configuration#csp',
-    'fr:configuration#csp-report-only',
-    'fr:configuration#frame-protection',
-    'fr:configuration#instance-key',
-    'fr:configuration#login-limit',
-    'fr:configuration#plugin-secrets',
-    'fr:configuration#secret-files',
-    'fr:configuration#secrets',
-    'fr:configuration#startup-checks',
-    'fr:connection_checks#untrusted-proxy',
-    'fr:settings#open-registration-warning',
-    'it:configuration#csp',
-    'it:configuration#csp-report-only',
-    'it:configuration#frame-protection',
-    'it:configuration#instance-key',
-    'it:configuration#login-limit',
-    'it:configuration#plugin-secrets',
-    'it:configuration#secret-files',
-    'it:configuration#secrets',
-    'it:configuration#startup-checks',
-    'it:connection_checks#untrusted-proxy',
-    'it:settings#open-registration-warning',
-];
+const TRANSLATION_DEBT: readonly string[] = ['es:settings#open-registration-warning', 'fr:settings#open-registration-warning', 'it:settings#open-registration-warning'];
 
 // =============================================================================
 //  The module under test, and its data
@@ -460,8 +437,9 @@ describe('checkGuides — the guide of each finding of the Security tab (N69d)',
 
     // red until N69d §1: checkGuides.ts does not exist
     // H-61: red until checkGuides.json holds platform.hosting_panel (contract §5)
-    // H-55 v2: red until checkGuides.json holds platform.blockedScript → admin/configuration/#csp
-    it('§1 pinned whole: CHECK_GUIDES is the table of the 21 guides — a changed guide is a change of this file', async () => {
+    // H-55 v2: red until checkGuides.json holds platform.blockedScript → admin/configuration_security/#csp
+    // H5-4: red until checkGuides.json holds accounts.owner_email_change → admin/hosting_instances/#owner-email-change
+    it('§1 pinned whole: CHECK_GUIDES is the table of the 22 guides — a changed guide is a change of this file', async () => {
         expect((await checkGuides()).CHECK_GUIDES, 'CHECK_GUIDES, check id → guide').toEqual(EXPECTED_GUIDES);
     });
 });

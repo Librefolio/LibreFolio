@@ -39,9 +39,10 @@ from backend.app.services.platform.config_audit import log_configuration_audit
 from backend.app.services.platform.database_bootstrap import ensure_database_exists, run_post_migration_fixes_at_startup
 from backend.app.services.platform.instance_backup.apply import apply_pending_restore, finish_pending_restore, hold_serving_lock
 from backend.app.services.platform.instance_backup.leftovers import sweep_backup_leftovers
+from backend.app.services.platform.instance_backup.owner import assign_restored_owner
 from backend.app.services.platform.lifecycle import Step, run_shutdown_steps, run_startup_steps
 from backend.app.services.platform.plugin_secrets_check import log_plugin_secrets_check
-from backend.app.services.platform.restore_guard import probe_restore_state, restore_interrupted
+from backend.app.services.platform.restore_guard import probe_owner_assignment, probe_restore_state, restore_interrupted
 from backend.app.services.platform.scheduler import get_shutdown_event, scheduler_loop
 from backend.app.services.platform.shutdown_budget import child_processes_step, install_shutdown_watchdog, shutdown_deadline
 from backend.app.services.platform.sleep_wake.idle_monitor import start_idle_monitor, stop_idle_monitor
@@ -226,6 +227,12 @@ def _serving_no_data() -> bool:
     return awaiting_restore() or restore_interrupted()
 
 
+async def _assign_restored_owner() -> None:
+    """The step ``restore-owner``: give the owner their account, then ask whether anything still keeps it from them."""
+    await assign_restored_owner()
+    await asyncio.to_thread(probe_owner_assignment)
+
+
 #: H-62: an instance awaiting its restore (``LIBREFOLIO_AWAIT_RESTORE``) skips the steps marked ``skip_when=_serving_no_data``:
 #: no initial administrator nor ``/setup`` link (a backup brings its own), no scheduler nor background warm-ups on an
 #: empty database. B-33: so does an instance whose restore state cannot be read, which also skips the repairs of the
@@ -260,6 +267,10 @@ STARTUP_STEPS: tuple[Step, ...] = (
     # The first start on restored data completed: commit the restore (B3), before any step reports on or serves the data.
     # A step before this one that raises rolls the restore back at the next start; one after it no longer does (N57).
     Step("restore-commit", lambda: asyncio.to_thread(finish_pending_restore)),
+    # H5-3: a restore from the app on a managed instance gives the owner their account at this first start; until it did
+    # (or while it could not) this process serves no data (restore_guard.py), and the steps after this one that warm up
+    # or run jobs on the data are skipped. It never raises: the probe that follows it only reads the state.
+    Step("restore-owner", lambda: _assign_restored_owner()),
     # The owner of a managed instance against LIBREFOLIO_ADMIN_EMAIL (A5-1b): recorded, or its new address confirmed by a link.
     # After restore-commit: the commit of a restore revokes every live one-time link, and a change link issued before it would
     # reach the customer already dead.

@@ -1559,7 +1559,7 @@ def services_hosting_panel_access_tickets(verbose: bool = False, test_names: lis
 def services_hosting_panel_vectors(verbose: bool = False, test_names: list = None) -> bool:
     """Test the hosting panel's ticket test vectors in the admin guide (H-61, L2): the key, the ticket and every verdict, checked against the code."""
     print_section("Services: Hosting Panel Ticket Test Vectors")
-    print_info("Testing: mkdocs_src/docs/admin/hosting_providers.en.md (#panel-api-test-vectors) against backend/app/services/platform/hosting_panel/tickets.py")
+    print_info("Testing: mkdocs_src/docs/admin/hosting_panel_api.en.md (#panel-api-test-vectors) against backend/app/services/platform/hosting_panel/tickets.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_hosting_panel_vectors.py", test_names)
     return run_command(cmd, "Hosting panel ticket vector tests", verbose=verbose)
 
@@ -1650,6 +1650,14 @@ def services_restore_guard(verbose: bool = False, test_names: list = None) -> bo
     print_info("Testing: services/platform/restore_guard.py (probe_restore_state, restore_interrupted), app_lifespan.STARTUP_STEPS restore-state and the eight skipped steps")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_restore_guard.py", test_names)
     return run_command(cmd, "Restore guard tests", verbose=verbose)
+
+
+def services_restore_owner_guard(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the guard's owner part: a restored instance serves no data until the owner has an account (H5-3, H)."""
+    print_section("Services: Restore Owner Guard")
+    print_info("Testing: restore_guard probe_owner_assignment, refresh_restore_state, restore_interrupted_reason, app_lifespan restore-owner step and the five steps skipped while the owner has no account, two-worker healing")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_restore_owner_guard.py", test_names)
+    return run_command(cmd, "Restore owner guard tests", verbose=verbose)
 
 
 def services_app_lifecycle(verbose: bool = False, test_names: list = None) -> bool:
@@ -3176,6 +3184,17 @@ Note: No backend server required.
         desc="B-33 (H, 22/10): probe_restore_state asks apply.restore_state_problem (the given or the instance's data directory), keeps the answer, logs one error line with the reason and never the state's content; restore_interrupted() False in a process that never probed; restore-state right after pending-restore, never stops the start; while interrupted post-migration-fixes, lone-transfer-legs and the six steps of the mode call nothing, the kept steps carry no skip",
         # PURE: B's hook replaced by monkeypatch (or a state file under tmp_path), the steps run alone with their calls
         # recorded, one child interpreter that only imports the module. No DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "restore-owner-guard",
+        services_restore_owner_guard,
+        name="Restore Owner Guard",
+        desc="H5-3 (H): after a restore from the app the instance serves no data until the owner has an account (B's assign_restored_owner), on B-33's mechanism: restore_guard keeps _owner_problem, probe_owner_assignment (one error line with the value only), restore_interrupted() = _interrupted or an owner problem (pure), restore_interrupted_reason() (restore_state wins over owner_assignment), refresh_restore_state re-asks a pending answer in a thread every OWNER_RECHECK_SECONDS and never a code or None, never raises; the step restore-owner right after restore-commit awaits assign_restored_owner then probes; the five serving steps after it skip while an owner problem is set; two workers: the one stuck in pending heals once the other records the outcome in a real restore.json",
+        # PURE: B's hook replaced by monkeypatch, the guard's clock patched; the two-worker case uses a restore.json and a
+        # migrated database copy under tmp_path (the fixtures of test_backup_owner.py) and a fake of A's function. No lane
+        # DB, no server, no network.
         isolation="pure",
     )
     add_test(
