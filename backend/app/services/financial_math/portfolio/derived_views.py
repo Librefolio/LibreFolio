@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import bisect
 from collections import defaultdict
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping, Sequence
 from datetime import date as date_type
+from datetime import timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -19,7 +20,7 @@ from backend.app.services.financial_math.average_cost import (
     cost_movement_from_transaction,
 )
 from backend.app.services.financial_math.portfolio.data_quality import build_data_quality_report
-from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction, DailyPortfolioState
+from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction, DailyPortfolioState, DailyStates
 from backend.app.services.financial_math.returns import CashFlowInput, NAVSnapshot
 from backend.app.services.financial_math.weights import slice_percents
 from backend.app.utils.asset.sector import sector_emoji
@@ -67,20 +68,54 @@ class DerivedViewsBuilder:
 
     def __init__(
         self,
-        daily_states: list[DailyPortfolioState],
+        daily_states: Sequence[DailyPortfolioState],
         target_currency: str,
     ) -> None:
         self.daily_states = daily_states
         self.target_currency = target_currency
-        # The states' dates, in the engine's order (ascending, one state a day): a window is found by bisection
-        self._dates = [state.date for state in daily_states]
+        # One state a day, ascending: the engine's DailyStates finds a day by date arithmetic (P4), any other sequence
+        # by bisection over its dates
+        self._dates = None if isinstance(daily_states, DailyStates) else [state.date for state in daily_states]
+
+    def _bisect_left(self, day: date_type) -> int:
+        """The index of the first state dated on or after ``day``."""
+        if self._dates is not None:
+            return bisect.bisect_left(self._dates, day)
+        first = self.daily_states.first_date
+        return 0 if first is None else min(max((day - first).days, 0), len(self.daily_states))
+
+    def _bisect_right(self, day: date_type) -> int:
+        """The index of the first state dated after ``day``."""
+        if self._dates is not None:
+            return bisect.bisect_right(self._dates, day)
+        first = self.daily_states.first_date
+        return 0 if first is None else min(max((day - first).days + 1, 0), len(self.daily_states))
 
     def _window(self, date_from: date_type | None, date_to: date_type | None, *, exclusive_start: bool = False) -> list[DailyPortfolioState]:
         """The states of ``[date_from, date_to]`` (``(date_from, date_to]`` with ``exclusive_start``), an open bound
-        reaching the end of the history: a view built for a window builds only its days (P2, N74)."""
-        start = 0 if date_from is None else (bisect.bisect_right if exclusive_start else bisect.bisect_left)(self._dates, date_from)
-        end = len(self._dates) if date_to is None else bisect.bisect_right(self._dates, date_to)
-        return self.daily_states[start:end]
+        reaching the end of the history: a view built for a window builds only its days (P2, N74, P4)."""
+        start = 0 if date_from is None else (self._bisect_right if exclusive_start else self._bisect_left)(date_from)
+        end = len(self.daily_states) if date_to is None else self._bisect_right(date_to)
+        return list(self.daily_states[start:end])
+
+    def _window_days(self, date_from: date_type | None, date_to: date_type | None, *, exclusive_start: bool = False) -> Iterator[tuple[date_type, DailyPortfolioState]]:
+        """Every day of the window with the state it reads: ``(day, state)``.
+
+        On the engine's DailyStates the state is its segment's (P4): no quiet day is built. It is read-only, and its
+        ``date``, ``external_cash_flow`` and ``acquisition_funding`` are the day's only when ``day == state.date`` (a
+        quiet day has no flow and no acquisition funding); use ``day`` for the date. Any other sequence gives each state
+        with its own date.
+        """
+        if self._dates is not None:
+            for state in self._window(date_from, date_to, exclusive_start=exclusive_start):
+                yield state.date, state
+            return
+        start = date_from + timedelta(days=1) if exclusive_start and date_from is not None else date_from
+        for segment in self.daily_states.iter_segments(start, date_to):
+            day = segment.start
+            while day <= segment.end:
+                yield day, segment.state
+                day += timedelta(days=1)
 
     def build_history(self, date_from: date_type | None = None, date_to: date_type | None = None) -> list[dict]:
         """Build PortfolioHistoryPoint-compatible dicts from the daily states of ``[date_from, date_to]``.
@@ -90,7 +125,7 @@ class DerivedViewsBuilder:
         """
         return [
             {
-                "date": s.date,
+                "date": day,
                 "cash_value": CurrencySchema(code=self.target_currency, amount=s.cash_value),
                 "market_value": CurrencySchema(code=self.target_currency, amount=s.market_value),
                 "broker_nav_value": CurrencySchema(code=self.target_currency, amount=s.broker_nav_value),
@@ -109,7 +144,7 @@ class DerivedViewsBuilder:
                 "total_pnl": CurrencySchema(code=self.target_currency, amount=s.total_pnl),
                 "unrealized_gain_loss": CurrencySchema(code=self.target_currency, amount=s.unrealized_gain_loss) if s.unrealized_gain_loss else None,
             }
-            for s in self._window(date_from, date_to)
+            for day, s in self._window_days(date_from, date_to)
         ]
 
     def build_broker_pnl_history(self, date_from: date_type | None = None, date_to: date_type | None = None) -> dict[int, list[dict]]:
@@ -122,9 +157,9 @@ class DerivedViewsBuilder:
         build_history()'s adapter-conversion pattern.
         """
         by_broker: dict[int, list[dict]] = defaultdict(list)
-        for s in self._window(date_from, date_to):
+        for day, s in self._window_days(date_from, date_to):
             for bid, contribution in s.broker_contributions.items():
-                by_broker[bid].append({"date": s.date, "total_pnl": CurrencySchema(code=self.target_currency, amount=contribution.pnl_contribution)})
+                by_broker[bid].append({"date": day, "total_pnl": CurrencySchema(code=self.target_currency, amount=contribution.pnl_contribution)})
         return dict(by_broker)
 
     def build_pnl_candles(self, date_from: date_type | None = None, date_to: date_type | None = None) -> list[dict]:
@@ -138,12 +173,12 @@ class DerivedViewsBuilder:
         adapter-conversion pattern (avoids a circular import on the API schema).
         """
         points: list[dict] = []
-        for s in self._window(date_from, date_to):
+        for day, s in self._window_days(date_from, date_to):
             if s.pnl_candle is None:
                 continue
             points.append(
                 {
-                    "date": s.date,
+                    "date": day,
                     "open": CurrencySchema(code=self.target_currency, amount=s.pnl_candle.open),
                     "high": CurrencySchema(code=self.target_currency, amount=s.pnl_candle.high),
                     "low": CurrencySchema(code=self.target_currency, amount=s.pnl_candle.low),
@@ -165,12 +200,13 @@ class DerivedViewsBuilder:
         """
         points: list[dict] = []
         # A flow series: a BUY dated date_from belongs to the previous period, (date_from, date_to]
-        for s in self._window(date_from, date_to, exclusive_start=True):
-            if s.acquisition_funding is None:
+        for day, s in self._window_days(date_from, date_to, exclusive_start=True):
+            # A quiet day acquires nothing: its segment's funding is the computed day's
+            if day != s.date or s.acquisition_funding is None:
                 continue
             points.append(
                 {
-                    "date": s.date,
+                    "date": day,
                     "from_new_capital": CurrencySchema(code=self.target_currency, amount=s.acquisition_funding.from_new_capital),
                     "from_reinvested": CurrencySchema(code=self.target_currency, amount=s.acquisition_funding.from_reinvested),
                 }
@@ -204,22 +240,27 @@ class DerivedViewsBuilder:
         The baseline uses portfolio perspective (contribution = positive), so we
         negate the delta when passing to performance functions.
         """
-        states = self.daily_states
         prev_baseline = Decimal("0")
-        if date_from is not None and states:
-            opening = max(bisect.bisect_right(self._dates, date_from) - 1, 0)
-            prev_baseline = states[opening].cumulative_external_cash_flow
-            nav_snapshots = [NAVSnapshot(date=states[opening].date, nav=states[opening].nav_value)] + [NAVSnapshot(date=s.date, nav=s.nav_value) for s in states[opening + 1 :]]
-            states = states[opening + 1 :]
-        else:
-            nav_snapshots = [NAVSnapshot(date=s.date, nav=s.nav_value) for s in states]
+        days = list(self._window_days(self._opening_day(date_from), None)) if date_from is not None and self.daily_states else list(self._window_days(None, None))
+        nav_snapshots = [NAVSnapshot(date=day, nav=s.nav_value) for day, s in days]
+        if date_from is not None and days:
+            # The opening state: its baseline is where the period's flows start from
+            prev_baseline = days[0][1].cumulative_external_cash_flow
+            days = days[1:]
         cash_flows: list[CashFlowInput] = []
-        for s in states:
+        for day, s in days:
             delta = s.cumulative_external_cash_flow - prev_baseline
             prev_baseline = s.cumulative_external_cash_flow
             if delta != 0:
-                cash_flows.append(CashFlowInput(date=s.date, amount=-delta))
+                cash_flows.append(CashFlowInput(date=day, amount=-delta))
         return nav_snapshots, cash_flows
+
+    def _opening_day(self, date_from: date_type) -> date_type:
+        """The day of the period's opening state: the last one on or before ``date_from``, else the first."""
+        opening = max(self._bisect_right(date_from) - 1, 0)
+        if self._dates is not None:
+            return self._dates[opening]
+        return self.daily_states.first_date + timedelta(days=opening)
 
     def build_allocation_current(
         self,
@@ -256,9 +297,7 @@ class DerivedViewsBuilder:
         attr = attr_map.get(dimension, "by_type")
 
         result = []
-        for s in self.daily_states:
-            if date_from and s.date < date_from:
-                continue
+        for day, s in self._window_days(date_from or None, None):
             d = getattr(s, attr, {})
             percents = slice_percents(d)
             components = [
@@ -269,8 +308,44 @@ class DerivedViewsBuilder:
                 }
                 for name, amt in sorted(d.items(), key=lambda x: -x[1])
             ]
-            result.append({"date": s.date, "components": components})
+            result.append({"date": day, "components": components})
         return result
+
+    @staticmethod
+    def _asset_components(state: DailyPortfolioState, names: Mapping[int, str], *, with_emoji: bool) -> list[dict]:
+        """The asset dimension of one day: a slice per held asset (``by_asset``) and the Liquidity slice, as by_type's
+        (the cash and the cash in transit), with their shares of the total, largest first."""
+        slices: dict[int | None, Decimal] = dict(state.by_asset)
+        slices[None] = state.cash_value + state.in_transit_cash_value
+        percents = slice_percents(slices)
+        components = []
+        for asset_id, amount in sorted(slices.items(), key=lambda item: -item[1]):
+            component = {
+                "name": "Liquidity" if asset_id is None else names.get(asset_id, f"Asset {asset_id}"),
+                "id": asset_id,
+                "value": percents[asset_id].quantize(Decimal("0.01")),
+                "amount": amount,
+            }
+            if with_emoji:
+                component["emoji"] = None
+            components.append(component)
+        return components
+
+    def allocation_asset_ids(self, date_from: date_type | None = None) -> set[int]:
+        """The assets with a slice in the asset dimension from ``date_from`` on (to name them)."""
+        if self._dates is None:
+            return {asset_id for segment in self.daily_states.iter_segments(date_from, None) for asset_id in segment.state.by_asset}
+        return {asset_id for _day, state in self._window_days(date_from, None) for asset_id in state.by_asset}
+
+    def build_asset_allocation_current(self, names: Mapping[int, str]) -> list[dict]:
+        """The asset dimension of the allocation on the last day (AllocationItem-like dicts, ``id`` = the asset's)."""
+        if not self.daily_states:
+            return []
+        return self._asset_components(self.daily_states[-1], names, with_emoji=True)
+
+    def build_asset_allocation_history(self, names: Mapping[int, str], date_from: date_type | None = None) -> list[dict]:
+        """The asset dimension's history from ``date_from``: ``{date, components}`` per day, as build_allocation_history."""
+        return [{"date": day, "components": self._asset_components(state, names, with_emoji=False)} for day, state in self._window_days(date_from or None, None)]
 
     def build_data_quality_report(self, **kwargs: Any) -> DataQualityReport:
         """The data-quality report of these daily states: see ``data_quality.build_data_quality_report``."""

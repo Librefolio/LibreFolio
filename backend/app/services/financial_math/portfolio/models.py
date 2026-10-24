@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import bisect
+from collections.abc import Iterable, Iterator, Sequence
+from dataclasses import dataclass, field, replace
 from datetime import date as date_type
+from datetime import timedelta
 from decimal import Decimal
 from enum import StrEnum
-from typing import Literal, Optional
+from typing import Literal, Optional, overload
 
 from backend.app.db.models import Transaction
 from backend.app.services.financial_math.average_cost import (
@@ -292,6 +295,9 @@ class DailyPortfolioState:
     by_type: dict[str, Decimal] = field(default_factory=dict)
     by_sector: dict[str, Decimal] = field(default_factory=dict)
     by_geography: dict[str, Decimal] = field(default_factory=dict)
+    # The held market value of each asset (asset_id -> amount, every broker, the values summed into market_value; no
+    # cash): the asset dimension of the allocations
+    by_asset: dict[int, Decimal] = field(default_factory=dict)
     # Data quality
     missing_price_asset_ids: set[int] = field(default_factory=set)
     missing_fx_pairs: set[str] = field(default_factory=set)
@@ -315,6 +321,193 @@ class DailyPortfolioState:
     # Unrealized gain/loss of the held positions (market_value - open_cost_basis) by asset
     # currency, split into asset and exchange-rate effect (see UnrealizedSplit).
     unrealized_by_currency: dict[str, UnrealizedSplit] = field(default_factory=dict)
+
+
+# =============================================================================
+# STATE SEGMENTS — one computed day and the quiet days that carry it (P4)
+# =============================================================================
+
+
+@dataclass(frozen=True, slots=True)
+class StateSegment:
+    """A computed day's state and the quiet days after it that carry it, up to ``end`` included.
+
+    ``state.date == start`` always. On a quiet day every field keeps its value except three: ``date``,
+    ``external_cash_flow`` (0) and ``acquisition_funding`` (None) — the engine marks dirty every day on which any
+    other field can change (``DailyStateBuilder._collect_dirty_days``). The state is read-only: a reader never
+    mutates it or its containers.
+    """
+
+    start: date_type
+    end: date_type
+    state: DailyPortfolioState
+
+    def state_on(self, day: date_type) -> DailyPortfolioState:
+        """The state of ``day``: the stored one on ``start``; on a quiet day a new state, its containers copied."""
+        if day == self.start:
+            return self.state
+        if not self.start < day <= self.end:
+            raise ValueError(f"{day} is outside the segment {self.start}..{self.end}")
+        state = self.state
+        return replace(
+            state,
+            date=day,
+            external_cash_flow=Decimal("0"),
+            by_type=dict(state.by_type),
+            by_sector=dict(state.by_sector),
+            by_geography=dict(state.by_geography),
+            by_asset=dict(state.by_asset),
+            missing_price_asset_ids=set(state.missing_price_asset_ids),
+            missing_fx_pairs=set(state.missing_fx_pairs),
+            stale_price_asset_ids=set(state.stale_price_asset_ids),
+            transaction_implied_asset_ids=set(state.transaction_implied_asset_ids),
+            transaction_implied_last_quote_dates=dict(state.transaction_implied_last_quote_dates),
+            broker_contributions=dict(state.broker_contributions),
+            acquisition_funding=None,
+            unrealized_by_currency=dict(state.unrealized_by_currency),
+        )
+
+
+class DailyStates(Sequence[DailyPortfolioState]):
+    """One state a day from ``first_date`` to ``last_date``, held as segments: a quiet day is built when read.
+
+    Indexing, slicing and iteration give the states a day-by-day list would hold (a quiet day as
+    :meth:`StateSegment.state_on` builds it); memory and the engine's work grow with the computed days only. A reader
+    that needs the values, not one object a day, walks :meth:`iter_segments` or asks one day (:meth:`state_on`,
+    :meth:`state_as_of`).
+    """
+
+    __slots__ = ("segments", "_starts")
+
+    def __init__(self, segments: Iterable[StateSegment] = ()) -> None:
+        stored = tuple(segments)
+        for index, segment in enumerate(stored):
+            if segment.state.date != segment.start or segment.end < segment.start:
+                raise ValueError(f"segment {segment.start}..{segment.end} holds the state of {segment.state.date}")
+            if index and segment.start != stored[index - 1].end + timedelta(days=1):
+                raise ValueError(f"segment {segment.start}..{segment.end} does not follow {stored[index - 1].start}..{stored[index - 1].end}")
+        self.segments: tuple[StateSegment, ...] = stored
+        self._starts: list[date_type] = [segment.start for segment in stored]
+
+    @property
+    def first_date(self) -> date_type | None:
+        """The first day; None when there is none."""
+        return self.segments[0].start if self.segments else None
+
+    @property
+    def last_date(self) -> date_type | None:
+        """The last day; None when there is none."""
+        return self.segments[-1].end if self.segments else None
+
+    def __len__(self) -> int:
+        if not self.segments:
+            return 0
+        return (self.segments[-1].end - self.segments[0].start).days + 1
+
+    def _segment_index(self, day: date_type) -> int:
+        """The index of the segment holding ``day``, which lies in ``[first_date, last_date]``."""
+        return bisect.bisect_right(self._starts, day) - 1
+
+    @overload
+    def __getitem__(self, index: int) -> DailyPortfolioState: ...
+
+    @overload
+    def __getitem__(self, index: slice) -> list[DailyPortfolioState]: ...
+
+    def __getitem__(self, index: int | slice) -> DailyPortfolioState | list[DailyPortfolioState]:
+        if isinstance(index, slice):
+            return [self._state_at(position) for position in range(*index.indices(len(self)))]
+        length = len(self)
+        position = index + length if index < 0 else index
+        if not 0 <= position < length:
+            raise IndexError("DailyStates index out of range")
+        return self._state_at(position)
+
+    def _state_at(self, position: int) -> DailyPortfolioState:
+        day = self.segments[0].start + timedelta(days=position)
+        return self.segments[self._segment_index(day)].state_on(day)
+
+    def __iter__(self) -> Iterator[DailyPortfolioState]:
+        for segment in self.segments:
+            day = segment.start
+            while day <= segment.end:
+                yield segment.state_on(day)
+                day += timedelta(days=1)
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Sequence) or isinstance(other, (str, bytes)):
+            return NotImplemented
+        if len(self) != len(other):
+            return False
+        return all(mine == theirs for mine, theirs in zip(self, other, strict=True))
+
+    __hash__ = None  # type: ignore[assignment]  # mutable-like equality, as a list
+
+    def __repr__(self) -> str:
+        return f"DailyStates({self.first_date}..{self.last_date}, {len(self.segments)} segments)"
+
+    def segment_at(self, day: date_type) -> StateSegment | None:
+        """The stored segment holding ``day``; None outside ``[first_date, last_date]``."""
+        if not self.segments or not self.segments[0].start <= day <= self.segments[-1].end:
+            return None
+        return self.segments[self._segment_index(day)]
+
+    def state_on(self, day: date_type) -> DailyPortfolioState | None:
+        """The state of ``day``; None outside ``[first_date, last_date]``."""
+        segment = self.segment_at(day)
+        return segment.state_on(day) if segment is not None else None
+
+    def state_as_of(self, day: date_type) -> DailyPortfolioState | None:
+        """The state of the last day on or before ``day`` (the last day's after ``last_date``); None before the first."""
+        if not self.segments or day < self.segments[0].start:
+            return None
+        last = self.segments[-1]
+        return self.state_on(min(day, last.end))
+
+    def iter_segments(self, date_from: date_type | None = None, date_to: date_type | None = None) -> Iterator[StateSegment]:
+        """The segments overlapping ``[date_from, date_to]`` (an open bound reaches the end), clipped to it.
+
+        A segment whose start moves gets the state of its new start, so ``state.date == start`` still holds; one that
+        is not clipped at its start keeps its stored state.
+        """
+        if not self.segments:
+            return
+        first = 0 if date_from is None or date_from <= self.segments[0].start else max(self._segment_index(date_from), 0)
+        for segment in self.segments[first:]:
+            if date_to is not None and segment.start > date_to:
+                return
+            if date_from is not None and segment.end < date_from:
+                continue
+            start = segment.start if date_from is None or date_from <= segment.start else date_from
+            end = segment.end if date_to is None or segment.end <= date_to else date_to
+            if start == segment.start and end == segment.end:
+                yield segment
+            else:
+                yield StateSegment(start=start, end=end, state=segment.state_on(start))
+
+
+@dataclass(frozen=True, slots=True)
+class PositionFrame:
+    """One position's values over the days ``start``..``end`` (both included) during which none of them changes.
+
+    A frame changes only when its own position does (a movement, a quote, a rate, a cost step of its own), and two
+    consecutive frames of a position never carry the same values. A position not held on a day has no frame there.
+    """
+
+    broker_id: int
+    asset_id: int
+    start: date_type
+    end: date_type
+    # At the owner's share, as the engine's cumulative quantity
+    quantity: Decimal
+    # Report currency; None when the position cannot be valued that day (missing rate, no observation)
+    market_value: Decimal | None
+    # Historical cost of the open quantity in the report currency (the known part)
+    cost_basis: Decimal
+    cost_complete: bool
+    valuation_source: ValuationSource
+    # market_value - cost_basis; None when market_value is None or the cost is incomplete
+    unrealized_pnl: Decimal | None
 
 
 # =============================================================================
@@ -364,6 +557,24 @@ class InternalAssetTransfer:
 
 
 @dataclass(frozen=True, slots=True)
+class MarketValueTransfer:
+    """A TRANSFER leg that crosses the scope's boundary (lot 41, D2/D5): in-kind capital at market value (B5).
+
+    ``capital`` is what ``DailyStateBuilder._transfer_leg_capital`` adds to the capital (+ received, − sent) and ``cost``
+    the cost the leg moved in its pool (signed; 0 without a cost step), both in the report currency at the owner's
+    share. Their difference is the gain the units accrued at the other broker: the period's breakdown shows it as a row
+    of its own (``period.market_value_transfer_results``).
+    """
+
+    transaction_id: int | None
+    broker_id: int
+    asset_id: int
+    date: date_type
+    capital: Decimal
+    cost: Decimal
+
+
+@dataclass(frozen=True, slots=True)
 class ShareMismatch:
     """A linked internal pair between two brokers owned at different shares (J-43).
 
@@ -410,7 +621,8 @@ class RowsBeforeFloor:
 class PortfolioCalculationResult:
     """Complete result from the portfolio calculation engine."""
 
-    daily_states: list[DailyPortfolioState]
+    # One state a day from date_from to date_to, held as segments (P4): the computed days, each carried to the next.
+    daily_states: DailyStates
     # Position snapshots for exposure + contribution views: the positions held at the end of the period's start day
     # (``period_start``, the first frame day unless the caller names it) and at date_to.
     position_states_start: list[DailyPositionState] = field(default_factory=list)
@@ -443,3 +655,9 @@ class PortfolioCalculationResult:
     missing_fx: dict[str, set[date_type]] = field(default_factory=dict)
     # J-43: the classification's linked internal pairs between brokers owned at different shares.
     share_mismatches: list[ShareMismatch] = field(default_factory=list)
+    # B5: every TRANSFER leg replayed as in-kind capital at market value (any date), in replay order.
+    market_value_transfers: list[MarketValueTransfer] = field(default_factory=list)
+    # The held positions' frames from date_from on (None unless asked: include_positions / compute_position_frames).
+    # Grouped by position, in the order the replay first met each one, each group by start: summing from Decimal("0"), in
+    # this order, the market values (not None) of the frames covering a day gives that day's market_value exactly.
+    position_frames: tuple[PositionFrame, ...] | None = None
