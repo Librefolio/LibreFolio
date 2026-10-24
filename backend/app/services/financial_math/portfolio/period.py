@@ -15,7 +15,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 from backend.app.services.financial_math.native_cash import CONVERSION_DUST
-from backend.app.services.financial_math.portfolio.models import DailyPortfolioState, DailyStates
+from backend.app.services.financial_math.portfolio.models import DailyPortfolioState, DailyStates, RealizedSale
 from backend.app.services.financial_math.returns import change_ratio
 
 
@@ -34,6 +34,16 @@ def state_as_of(daily_states: Sequence[DailyPortfolioState], as_of: date_type) -
     if index < 0:
         return None
     return daily_states[index]
+
+
+def period_realized_sales(sales: Sequence[RealizedSale], date_from: date_type | None, date_to: date_type | None) -> list[RealizedSale]:
+    """The engine's realized SELLs in ``(date_from, date_to]`` whose proceeds and cost are both known.
+
+    A sale whose proceeds could not be converted, or taken from a pool that already lacked part of its cost, is left out:
+    its pair, or the cost it lacks, is reported in the data quality. The one reader of the period's sales: the Performance
+    table, the summary and the daily series of a position (``position_series``) all take them from here.
+    """
+    return [sale for sale in sales if (date_from is None or sale.date > date_from) and (date_to is None or sale.date <= date_to) and sale.proceeds is not None and sale.cost_complete]
 
 
 @dataclass(frozen=True)

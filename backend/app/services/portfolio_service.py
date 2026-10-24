@@ -332,15 +332,6 @@ def _wac_qualifying_txs(steps: tuple[CostStep, ...], target_currency: str) -> li
     return rows
 
 
-def _period_realized_sales(sales: list[Any], date_from: date_type | None, date_to: date_type | None) -> list[Any]:
-    """The engine's realized SELLs in (date_from, date_to] whose proceeds and cost are both known.
-
-    A sale whose proceeds could not be converted, or taken from a pool that already lacked part
-    of its cost, is left out: its pair, or the cost it lacks, is reported in the data quality.
-    """
-    return [sale for sale in sales if (date_from is None or sale.date > date_from) and (date_to is None or sale.date <= date_to) and sale.proceeds is not None and sale.cost_complete]
-
-
 def _engine_missing_fx_pairs(engine_result: Any, period_from: date_type | None, period_to: date_type | None) -> list[WACMissingPairInfo]:
     """Every conversion the engine could not make, as pair + dates for the data-quality banner.
 
@@ -707,7 +698,7 @@ class PortfolioService:
 
         # Realized G/L of the SELLs and outgoing ADJUSTMENTs (proceeds 0, N78-1) in the period: proceeds minus the
         # historical cost the engine's average-cost pool gave up, both in base currency with the owner's share.
-        _realized_accum = sum((gain for sale in _period_realized_sales(engine_result.realized_sales, date_from, date_to) if (gain := realized_gain(sale.proceeds, sale.cost)) is not None), Decimal("0"))
+        _realized_accum = sum((gain for sale in period_math.period_realized_sales(engine_result.realized_sales, date_from, date_to) if (gain := realized_gain(sale.proceeds, sale.cost)) is not None), Decimal("0"))
 
         lot_split_ids = await split_linked_ids(self.db, [tx for txns in lot_txns_by_key.values() for tx in txns])
         # MF-A10: the moves at the owner's share, as the engine's quantities the rows test against the dust threshold
@@ -1691,7 +1682,7 @@ class PortfolioService:
 
         # ── Realized gain/loss from SELLs and outgoing ADJUSTMENTs (proceeds 0, N78-1) in period: proceeds minus the
         # historical cost the engine's average-cost pool gave up (base currency, owner share applied) ──
-        for sale in _period_realized_sales(engine_result.realized_sales, date_from, date_to):
+        for sale in period_math.period_realized_sales(engine_result.realized_sales, date_from, date_to):
             gain = realized_gain(sale.proceeds, sale.cost)
             if gain is None:
                 continue
@@ -1992,7 +1983,7 @@ class PortfolioService:
                 date_from=date_from,
                 date_to=effective_end,
                 frames=frames,
-                realized_sales=_period_realized_sales(engine_result.realized_sales, date_from, effective_end),
+                realized_sales=period_math.period_realized_sales(engine_result.realized_sales, date_from, effective_end),
                 flow_steps=native_cash.position_flow_steps(date_from, effective_end),
                 transfers=transfers,
                 acquisitions=acquisitions_from_average_costs(engine_result.average_costs, transfers),
