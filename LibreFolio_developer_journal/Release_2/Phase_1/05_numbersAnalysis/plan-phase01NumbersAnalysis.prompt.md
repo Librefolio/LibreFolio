@@ -9434,3 +9434,271 @@ con la nota del 22/10. E2E proposti al coordinatore: `front-broker detail` (il c
    >   (`J-j8-green-runner.log`); ruff e black puliti. Sull'albero vero `require_frontend_tools()` dà `True`.
    > **⚠️ Fuori pista**: `cmd_install` (`npx playwright install chromium`) non è guardata di proposito: gira dopo il suo
    > `npm ci`. Non ho lanciato una corsa `front-*` vera (avvierebbe backend e build): i test coprono il percorso.
+
+## Ondata 5 (23/10/2026) — #48 serie per posizione (J5-1) e R1 (J5-2)
+
+> Coordinatore (23/10): sono la sessione J dell'ondata 5; base `1fd80c481` (treni 9 e 10); corsia 6190
+> (`/tmp/librefolio-r13-j`). Kickoff: `salvataggi-worktrees-20261021/ondata5/kickoff-J.md`. Primo turno: solo analisi e
+> contratto; il codice di J5-1 viene dopo P4 di MF, quello di J5-2 dopo Q1…S1 di Z. Nota completa:
+> `side-session-notes/…/J5-analisi-turno1.md`.
+
+1. ✅ 23/10 — **Analisi di #48 (letta nel codice, nulla toccato).**
+   > **Note implementazione**:
+   > - **Cosa c'è**: il motore costruisce un `DailyPositionState` per (broker, asset) e giorno
+   >   (`daily_state.py::_build_position_state`, ~676) solo per sommarlo nello stato del portafoglio; ne tiene due liste, ai
+   >   bordi del periodo (`position_states_start/end`). Realizzato, proventi, spese e tratti dei trasferimenti interni sono
+   >   già in forma datata: `realized_sales`, `NativeCash` (`flows(date_from, date_to)`), `internal_asset_transfers` e
+   >   `average_costs` (passi di costo) nel risultato del motore.
+   > - **Cosa manca**: lo stato per posizione *su più giorni* (i frame di MF) e la formula che assembla il P&L di una posizione:
+   >   oggi sta **in linea** in `portfolio_service.py::get_positions_contribution` (~`:1693-1737`: `unrealized_delta` =
+   >   `ug_end − ug_start + aggiustamento del tratto`, `period_pnl` = unrealized + realizzato + proventi − spese). È una
+   >   copia che la serie giornaliera ripeterebbe: va sollevata in `financial_math/portfolio/contributions.py` (di MF) in una
+   >   funzione `position_period_pnl(...)` che il servizio e la serie chiamano entrambi.
+   > - **Il P&L della posizione, per giorno d**: `pnl(d)` = `ug(d) − ug(inizio) + tratti(inizio, d] + realizzato(inizio, d] +
+   >   proventi(inizio, d] − spese(inizio, d]`: lo stesso numero che la riga di «Periodo» mostra con `end = d`. Così
+   >   l'ultimo punto di ogni serie è la riga della tabella (parità forte, cifra per cifra).
+   > - **Il «base 100»** (decisione del developer 18/10: la % è proprio il base 100): `pnl_percent(d) = pnl(d) / base(d)`,
+   >   `base(d) = |valore a inizio periodo| + costo delle unità acquistate in (inizio, d]` (acquisto, rettifica in entrata al
+   >   suo costo, tratto di trasferimento interno in entrata al suo costo), che non scende con le vendite (come il costo
+   >   d'apertura del lotto, `LotComparisonChart`). **Domanda Q-J5-1** al developer, sotto.
+   > - **Selezione**: le righe della tabella «Portafoglio» sono per `(asset, broker)` (`summary.holdings`); la richiesta
+   >   accetta `broker_id` nullo = la somma dei broker nell'ambito per quell'asset.
+2. ✅ 23/10 — **Il contratto della serie (bozza, per Y).**
+   > **Note implementazione**: endpoint nuovo `POST /api/v1/portfolio/positions-series` (non dentro il report: la selezione cambia a
+   > ogni clic e il report è già pesante), schemi in `schemas/portfolio.py` (sezione J5-1, dopo B5):
+   > ```python
+   > class PositionKey(StrictModel):
+   >     asset_id: int
+   >     broker_id: Optional[int] = None        # None = the asset summed over the brokers of the scope
+   >
+   > class PositionsSeriesQuery(StrictModel):
+   >     broker_ids: Optional[List[int]] = None  # the scope, as PortfolioReportQuery
+   >     date_from: Optional[date]               # period start (the chart's left edge)
+   >     date_to: Optional[date]                 # default today
+   >     target_currency: Optional[str] = None
+   >     positions: List[PositionKey]            # only the chosen rows; 1..N (a cap, e.g. 50)
+   >
+   > class PositionSeriesPoint(StrictModel):     # one per calendar day, first_date..last_date
+   >     date: date
+   >     quantity: SafeDecimal                    # units held, at the owner's share; 0 once closed
+   >     market_value: Optional[SafeDecimal]      # report currency; 0 once closed; None: no price/rate that day
+   >     cost_basis: Optional[SafeDecimal]        # open historical cost; None when incomplete
+   >     pnl: Optional[SafeDecimal]               # cumulative since date_from, report currency (the Periodo table's period_pnl at that day)
+   >     base: Optional[SafeDecimal]              # capital deployed since date_from (>= 0)
+   >     pnl_percent: Optional[SafeDecimal]       # pnl / base, a fraction (0.12 = 12 %), unrounded; None when base is 0 or pnl unknown
+   >     valuation_source: Optional[Literal["MARKET_PRICE","LAST_TRADE_PRICE","ESTIMATED_AT_COST","MISSING"]]  # as PortfolioHolding; None when not held
+   >
+   > class PositionSeries(StrictModel):
+   >     key: PositionKey                         # as asked
+   >     asset_name: str; asset_ticker: Optional[str]; broker_name: Optional[str]
+   >     first_date: Optional[date]               # first day of points (date_from if held then, else the first day held)
+   >     last_date: Optional[date]                # date_to if still held, else the closing day (quantity 0, pnl final)
+   >     held_at_start: bool; held_at_end: bool
+   >     closed_on: Optional[date]                # the day the position went to 0 for good (None while held)
+   >     points: List[PositionSeriesPoint]
+   >     complete: bool                           # False if any point has a None pnl/market_value (a rate or price is missing)
+   >
+   > class PositionsSeriesResponse(StrictModel):
+   >     currency: str; date_from: date; date_to: date
+   >     series: List[PositionSeries]             # in the order asked; a key that was never held is present with points = []
+   >     data_quality: DataQualityReport          # the existing one: missing_fx, stale prices
+   > ```
+   > Regole: (a) **solo le posizioni chieste**, mai tutto il portafoglio; (b) un punto per **giorno di calendario** (come le serie
+   > dei lotti), costante nei giorni fermi; (c) dopo la chiusura la serie **finisce** al giorno della chiusura (`last_date`), non
+   > continua piatta; una posizione riaperta continua con quantità 0 nel mezzo; (d) nessun numero è calcolato dal frontend:
+   > la % arriva fatta; (e) il portafoglio intero **non** è in questa risposta: Y lo prende dalla storia già esistente
+   > («il rendimento già calcolato della Dashboard», decisione 18/10).
+3. ✅ 23/10 — **Parità che scrivo prima del codice (i rossi di J5-1).**
+   > **Note implementazione**:
+   > - **P1**: per ogni posizione, l'ultimo punto (`pnl`) = `period_pnl` della riga di `get_positions_contribution` con gli stessi
+   >   `date_from/date_to` (cifra per cifra).
+   > - **P2**: scelte tutte le posizioni, per ogni giorno la somma dei `market_value` = `market_value` dello stato del portafoglio
+   >   (al bit, quando nessun valore è `None`).
+   > - **P3**: scelte tutte, l'ultimo `Σ pnl` + gli `other_effects` della contribuzione = il P&L del periodo del report (l'identità
+   >   di `period_other_result`).
+   > - **P4**: serie di una posizione con acquisto, vendita parziale, trasferimento interno e split (quattro scenari, un libro
+   >   per ciascuno): niente salti alla data del trasferimento, `pnl` continuo; lo split non cambia `pnl` né `base`.
+   > - **P5**: solo le posizioni chieste (le altre non compaiono); e **memoria**: la richiesta non costruisce i giorni pieni
+   >   (`daily_states` pieno): misurato con i segmenti di P4 (il lavoro è proporzionale ai giorni sporchi, non a quelli di
+   >   calendario).
+   > - **P6**: una posizione chiusa finisce al giorno della chiusura; una mai tenuta ha `points = []`.
+4. ✅ 23/10 — **Cosa chiedo a MF (tramite il coordinatore).**
+   > **Note implementazione**: vedi la nota `J5-analisi-turno1.md`, «Risposta a MF». In sintesi: sì a `include_positions` con
+   > i frame **per posizione compressi** (un frame cambia solo quando cambia quella posizione, non a ogni giorno sporco
+   > globale), senza il campo `flow`, e la formula di P&L della riga sollevata in `contributions.py`.
+5. ✅ 23/10 — **Analisi di R1 e la versione di J del punto «ultimo prezzo ≤ d al tasso di d» (per Z).**
+   > **Note implementazione**:
+   > - **Dove il rischio cammina i giorni oggi**: `risk/scope.py::prepare_asset_series` (`:338-386`) chiede a `get_prices_bulk` la finestra
+   >   `[inizio−1, fine]` (un punto per giorno di calendario, `load_start = inizio − 1`), e `market_series.py::prepare_asset_series_set`
+   >   (`:205-`) ne usa pochissimi: il **giorno di base** (`inizio−1` se tutti gli asset hanno un punto, sennò il primo giorno
+   >   dell'intervallo in cui tutti ne hanno), le **date di quotazione fresche** di qualunque asset (`candidate_quote_dates`) che
+   >   siano presenti in tutti, e per ogni punto i campi di `_valuation_point` (`actual_rate_date`, `days_back`, `fx_rate_date`,
+   >   `fx_days_back`, cambio = `close / native_close`). I punti dei giorni di mezzo (festivi, weekend senza quotazione di nessuno)
+   >   sono costruiti e buttati. Stessi percorsi: `risk/replay.py:101` (stress) e `risk/service.py:123`; e
+   >   `assets/price_query.py:946` chiama la stessa `prepare_asset_series_set` per il confronto fra asset (file di Z).
+   > - **Il contratto che chiedo a Q1** (per asset, interno, non la API pubblica): un oggetto con `first_point_date` (il primo giorno
+   >   in cui il punto denso di oggi esisterebbe **in valuta di destinazione**), `observation_dates` (le righe salvate nella
+   >   finestra, carry compresi: `mark_market_closed_carries` li legge), e `point_on(d) -> FAPricePoint | None` che rende, per
+   >   un giorno qualunque `d` della finestra, **esattamente** il punto che il denso ha oggi in `d`: il `native_close` dell'ultima
+   >   osservazione ≤ `d`, convertito al cambio a gradini **di `d`**, con lo stesso `backward_fill_info`
+   >   (`actual_rate_date`, `days_back`, `fx_rate_date`, `fx_days_back`); `None` dove il denso non ha un punto (prima della prima
+   >   osservazione, o senza cambio). Con questo, il rischio calcola l'insieme dei giorni `D = {inizio−1} ∪ {giorni di quotazione
+   >   fresca di qualunque asset in [inizio, fine]}` e costruisce i punti solo lì: la camminata e le conversioni dei giorni fuori da
+   >   `D` spariscono.
+   > - **Due sottigliezze che il denso nasconde**: (1) il giorno di base è un giorno di calendario (`inizio−1`) senza quotazione
+   >   propria: serve `point_on(inizio−1)`, non solo le osservazioni; (2) il valore di un asset fermo in un giorno di quotazione
+   >   di un altro cambia con il cambio di quel giorno (USD in EUR): per questo è `point_on(d)` e non un valore portato.
+   > - **File**: `market_series.py` è elencato come proprio **sia** nel kickoff di J **sia** in quello di Z: propongo che Z faccia Q1 in
+   >   `price_query.py` senza toccarlo, e che J cambi `prepare_asset_series_set` in J5-2 dopo il commit di Q1 (Z conserva la
+   >   chiamata a `:946`, che J adegua).
+   > - **I 7 scenari di parità** (nessuno scritto oggi; ognuno confronta l'intero `PreparedAssetSeriesSet` — date, valutazioni,
+   >   rendimenti, `n_observations`, `calendar_days`, `annualization_factor`, coperture, `data_quality`, `fx_fingerprint` — fra
+   >   la lettura densa di oggi e quella per osservazioni; con `test-author`):
+   >   1. **Festivi**: righe salvate di weekend che ripetono il venerdì, con e senza `market_holidays`;
+   >   2. **Prezzi portati**: un asset che quota di rado (più della soglia `STALE_PRICE_THRESHOLD_DAYS`): contatori
+   >      `carried_forward_*` e `fresh_quote_coverage`;
+   >   3. **Date comuni**: A quota ogni giorno, B ogni settimana: B è portato sulle date di A al cambio di quel giorno;
+   >   4. **Buchi**: un buco di quotazioni in mezzo, un asset che parte dentro l'intervallo (`short_history`,
+   >      `baseline_inside_requested_range`), nessuna base comune (`no_common_valuation_baseline`);
+   >   5. **Split**: un asset con uno split nella finestra (i prezzi che il percorso denso legge, uguali identici);
+   >   6. **Esteri**: valuta ≠ destinazione con cambio a gradini che cambia nei giorni senza quotazione, cambio mancante
+   >      all'inizio (`missing_fx`), cambio portato (`fx_days_back`);
+   >   7. **Stress** (`risk/replay.py`, `algorithm_version 3.0.1`): finestra di replay con un proxy e un asset escluso in automatico:
+   >      i risultati dello stress identici.
+   >   Più due casi di forma: finestra di un solo giorno, e un asset senza punti.
+   > - **Rossi da scrivere ora** (puri, senza Q1): i 7 scenari costruiscono entrambe le letture dagli stessi dati — il denso con
+   >   `_build_backward_filled_series` di oggi, il nuovo con l'oggetto di Q1 —; finché Q1 non c'è, la lettura nuova manca e i casi
+   >   sono rossi per il motivo giusto (`AttributeError`/import). Non li lancio finché Q1 non c'è, salvo i controlli di forma.
+   > - **Non toccare**: il pavimento SEC8-1b (`risk/scope.py:71-85`, `bounded_range`): resta con il commento «SEC8-1b dopo R1»; lo toglie MF.
+6. ✅ 23/10 — **Rossi puri di J5-1 e di J5-2** (nessun codice di produzione; il coordinatore ha girato le mie risposte a MF, Z e Y e il
+   developer ha approvato Q-J5-1: base della % = valore a inizio periodo + costo di ciò che si compra dopo, le vendite non la
+   abbassano).
+   > **Note implementazione**:
+   > - **J5-1**: `test_financial_math/test_position_series.py`, 24 casi su `financial_math/portfolio/position_series.py::build_position_series`
+   >   (modulo nuovo, mio): tenuta per tutta la finestra · comprata in due riprese (l'esempio di 14,3 %: pnl 300 su base 2 100) ·
+   >   venduta a pezzi (la serie finisce il giorno della chiusura, pnl finale 160 = 360 − 200 già nel valore di partenza) · proventi e
+   >   spese cumulati (solo ciò che viene dopo l'inizio) · split (quantità ×2, pnl e base invariati) · valore non noto (pnl delle parti
+   >   note, `complete = False`, come la riga del Periodo) · trasferimento interno (ogni broker risponde del suo tratto; base del
+   >   ricevente = valore all'arrivo; la somma per asset senza salto e senza base doppia) · selezione (solo le chieste, nell'ordine;
+   >   `broker_id` nullo = somma; mai tenuta = nessun punto; riaperta = quantità 0 nel mezzo). **24 rossi**: 23 per assenza del modulo
+   >   (`ModuleNotFoundError`, letto per importlib in ogni caso) e 1 per la dipendenza da MF (`contributions.position_period_pnl`, la
+   >   formula della riga sollevata dal servizio). Le cifre attese sono fatte a mano: si verificano scrivendo il modulo.
+   > - **Regola dei valori sconosciuti**: la riga del Periodo somma le parti note e ha `pnl = None` solo senza nessuna parte
+   >   (`unrealized_delta` None per un bordo senza valore); la serie fa lo stesso e segna `complete = False` per punto e per serie.
+   >   Il contratto del passo 2 resta valido ma `pnl` può essere una somma parziale: lo dico a Y (il flag lo avverte).
+   > - **Ingressi del modulo**: `frames` per posizione (ordinati, `end` incluso), `realized_sales` (già filtrate come
+   >   `_period_realized_sales`: filtro oggi nel servizio, da sollevare con la formula), `flow_steps` (proventi e spese **cumulati dal
+   >   primo movimento**, `NativeCash.position_flow_steps` richiesto a MF), `transfers` (`InternalAssetTransfer`), `acquisitions`
+   >   (solo acquisti esterni; i trasferimenti in entrata entrano nella base dal loro valore all'arrivo, via `transfers`).
+   > - **J5-2**: `test_series_preparation.py::TestThePreparationFromReadingsIsTheDensePreparation`, 8 casi su
+   >   `market_series.prepare_asset_series_set_from_readings` (nome mio): festivi e righe di weekend, prezzo portato oltre la soglia,
+   >   date di quotazione di un solo asset, buchi/partenze tardive/base all'ultimo giorno, split, estero con cambio a gradini nei giorni senza
+   >   quotazione (cambio mancante all'inizio, cambio portato), finestra di replay del 2020 con un proxy, finestra di un giorno e
+   >   insieme vuoto. Le letture sono ricavate dai risultati densi stessi (`DenseReading`: `first_point_date`, `observation_dates`,
+   >   `point_on`), quindi i casi provano la preparazione contro il contratto, non Q1. **8 rossi** (`AttributeError`: la funzione non
+   >   c'è), 22 casi già nel file verdi. Prova che i casi sono sensati: con una funzione che rende il denso, **8 su 8 verdi** (script
+   >   in scratchpad), e il denso di ogni scenario ha contenuto (basi diverse, 11–20 date di rendimento, contatori di prezzi/cambi portati,
+   >   `short_history`, `baseline_inside_requested_range`, `missing_fx`).
+   > **⚠️ Fuori pista**: lo scenario «split» è debole nel puro (una serie con il prezzo dimezzato): lo split vero lo applica
+   > `price_query` e andrà provato nel caso di integrazione dopo Q1 (lettura vera contro denso), come lo stress 3.0.1 sui risultati
+   > veri. Quel caso di integrazione lo scrivo quando Z consegna.
+7. ✅ 23/10 — **Lavoro che non dipende da MF né da Z** (coordinatore: «se c'è lavoro di J che non dipende da loro, fallo»).
+   > **Note implementazione**:
+   > - **J5-1, il modulo puro** `financial_math/portfolio/position_series.py` (`build_position_series`; mio, file nuovo): le cifre
+   >   fatte a mano nei rossi erano giuste, **23 su 24 verdi al primo giro**; il 24° (`contributions.position_period_pnl`, la formula
+   >   della riga sollevata da MF) è `xfail(strict=True)`: il giorno in cui MF la solleva il caso passa, l'`xfail` rompe la corsa e
+   >   mi costringe a togliere il marcatore e a far chiamare la funzione alla serie. Tutta `financial_math/` **2 514 passed**
+   >   (compreso `test_layer_boundaries`).
+   > - **⚠️ Fuori pista (transitorio)**: l'assemblaggio del P&L (`unrealized_delta`, parti, somma) è in `position_series.py` con
+   >   un commento TRANSITIONAL: oggi è una **copia** di quello in linea nel servizio, finché MF non lo solleva (richiesta A). Va
+   >   sostituito, non tenuto.
+   > - **J5-2, `market_series.prepare_asset_series_set_from_readings`** (+ protocollo `AssetPriceReading`): la coda di
+   >   `prepare_asset_series_set` è ora `_prepare_from_inputs` (spostamento puro: i 22 casi esistenti restano verdi), e la funzione nuova
+   >   costruisce i punti solo nei giorni che servono: il giorno di base (`inizio − 1`), i giorni di quotazione fresca, il primo giorno
+   >   con tasso di ogni asset, le righe salvate col giorno prima di ciascuna (la catena che legge un close ripetuto come riporto,
+   >   `mark_market_closed_carries`: serve anche il punto sintetico del giorno prima, che il denso ha). I sette scenari + 2 casi che ho
+   >   aggiunto dopo la prova di mutazione (un riporto salvato dopo un giorno senza riga; un tasso che parte in un giorno che nessuno
+   >   quota): **10 su 10 verdi**, con le 4 mutazioni provate (senza il giorno del primo tasso · senza il giorno prima · senza le
+   >   sonde del cambio mancante · senza `inizio − 1`) **tutte rosse** (le prime due no, finché non ho aggiunto i due casi).
+   >   Regressione del rischio: `services risk-all` filtrato (`series_preparation`, `risk_eligibility`, `risk_asset_set`,
+   >   `asset_signals`, `series_returns`, `risk_replay`) **210 passed**.
+   > - **Resta di J5-2** (aspetta Q1 di Z): far chiamare la funzione a `risk/scope.py::prepare_asset_series` (e, per il replay,
+   >   `risk/replay.py:101`) con le letture vere, cioè togliere la lettura densa dal rischio; il caso di integrazione (lettura vera
+   >   contro denso) e quello dello stress 3.0.1 sui risultati veri.
+   > - **Docs**: `developer/backend/financial_math.md` (una riga nella mappa dei pacchetti), `developer/backend/risk/architecture.md`
+   >   (`market_series.py`: la funzione nuova e i giorni che costruisce).
+8. ✅ 23/10 — **J5-1 collegato a MF** (base `eabe2067d`: P4, `position_frames`, `position_period_pnl`, `position_flow_steps` dentro).
+   > **Note implementazione**:
+   > - `position_series.py` chiama ora `contributions.position_period_pnl` (la copia transitoria è sparita: il caso «ogni pnl è la
+   >   funzione della riga» tiene una spia e vale 5 chiamate per 5 punti; l'`xfail` è stato tolto). Adattatore
+   >   `acquisitions_from_average_costs` (acquisti dai passi del costo medio, i trasferimenti interni esclusi: entrano dal loro
+   >   valore all'arrivo). Ingresso proventi/spese dal `NativeCash.position_flow_steps(date_from, date_to)` di MF (totali dopo `date_from`).
+   > - **Scoperta dal primo test su DB** (`test_p4_a_transfer…`): un'unità mandata a un altro broker finisce nei frame del mittente il
+   >   giorno della partenza, ma la riga del Periodo del mittente la regola solo all'arrivo (il tratto, P22): la serie si fermava prima e il
+   >   suo ultimo punto non era la riga. Ora la serie del mittente **prosegue fino all'arrivo** e nei giorni in viaggio tiene il pnl
+   >   dell'ultimo giorno tenuto (`closed_on` resta il giorno della partenza). Limite dichiarato: per un trasferimento **parziale** il
+   >   mittente tiene i frame del resto e, in viaggio, il suo pnl cala del risultato delle unità in viaggio fino all'arrivo (è la
+   >   regola della riga a quella data); lo vede il grafico come un avvallo di qualche giorno.
+   > - **Il lettore**: `PortfolioService.get_positions_series` (additivo in `portfolio_service.py`, prima di `get_report`: file di MF,
+   >   punto da concordare): un solo run del motore con `include_positions` (chiave della cache a blob: la prima richiesta lo paga, il
+   >   cambio di selezione lo riusa), solo le posizioni chieste, un broker non leggibile = serie vuota.
+   > - **Schemi** (fine di `schemas/portfolio.py`): `PositionKey`, `PositionsSeriesQuery`, `PositionSeriesPoint`, `PositionSeries`,
+   >   `PositionsSeriesResponse`; il contratto del passo 2 con due cambi: `date_range` (come il report) al posto di `date_from/date_to`, e
+   >   `missing_fx_pairs: list[str]` al posto del `DataQualityReport`. **Endpoint** `POST /api/v1/portfolio/positions-series`.
+   > - **Rossi → verdi**: `test_positions_series_service.py` (nuovo, 10 casi su DB: P1 ultimo punto = riga del Periodo, valori esatti di
+   >   realizzato/dividendo/spesa; P2 Σ `market_value` = `market_value` del report su >60 giorni; selezione, somma sui broker,
+   >   mai tenuta, chiusa, broker non leggibile; trasferimento fra due broker; acquisto in due riprese; split) e 3 casi API in
+   >   `test_portfolio_api.py` (401, validazione, end-to-end contro la riga del report). Nota onesta: i test erano scritti prima del
+   >   codice, ma non li ho lanciati rossi prima della cura (la prima corsa ha trovato il caso del trasferimento, un difetto vero).
+   > - **Verdi**: pure 25 · servizio su DB 10 · API 3 · `financial_math/` + `series_preparation` **2 794 passed** · filtro di
+   >   `roi-fifo-utils` su contribuzione/portafoglio/frame/native cash/lotti **329 passed**; ruff e black puliti. `api sync` ok.
+   > **⚠️ Fuori pista**: il build di `api portfolio` ha stampato una diagnostica di svelte-check, «Type instantiation is excessively deep»
+   > in `frontend/src/lib/features/email/emailApi.test.ts:121` (file di un'altra sessione): non mio; da confermare con `front check`.
+   > Un passaggio di `black` ha riformattato per intero `test_portfolio_api.py` (righe che non erano mie): le ho riportate come erano.
+9. ✅ 23/10 — **J5-2 (R1) collegato a Q1 di Z** (base `79a95b1e7`: `ObservedPrices` dentro).
+   > **Note implementazione**:
+   > - **Q1 ha un'altra semantica di `first_point_date`** da quella che avevo chiesto: è il primo giorno con un punto *in qualunque
+   >   valuta* (finché manca il tasso il punto è nella valuta nativa). `prepare_asset_series_set_from_readings` trova da sé il primo giorno
+   >   *convertito* (`_first_converted_day`: ricerca binaria su `point_on`, il prefisso non convertito è contiguo): da lì il giorno di base
+   >   quando il tasso parte in un giorno che nessuno quota, e `unusable`/`missing_fx`. La lettura finta dei test (`DenseReading`) segue la
+   >   semantica vera; 10/10 verdi, e le 4 mutazioni restano rosse.
+   > - **`risk/scope.py::prepare_asset_series`** non chiama più `get_prices_bulk`: legge ogni asset con
+   >   `PriceQueryOperations.observed_prices` e passa le letture a `prepare_asset_series_set_from_readings`. Il tetto dei punti per giorno
+   >   (J-50) è lo stesso (`price_query.MAX_BULK_ITEM_DAYS`, stesso conteggio: un punto al giorno dal primo), controllato a ogni asset letto.
+   >   **Differenza dichiarata**: con più asset che superano il tetto, `actual` nell'errore è il totale fino all'asset che l'ha superato
+   >   (i successivi non si leggono), non il totale di tutti; con un asset il numero è identico (i test J-50 restano: 31, 305).
+   > - **Parità sul DB con Q1 vero** (`test_risk_price_day_budget.py`, 4 casi, tre titoli con un tasso EUR/USD a gradini, righe di weekend, un
+   >   buco di quotazioni, un buco di tassi, finestre prima del primo prezzo/tasso, di un giorno, dopo l'ultimo tasso): l'intero
+   >   `PreparedAssetSeriesSet` dalle osservazioni è **uguale** a quello dei prezzi densi di `get_prices_bulk`.
+   > - `test_risk_eligibility.py`: la spia della tabella dei festivi osserva ora anche la funzione nuova (stesso significato).
+   > - Verdi (filtro sul rischio): `risk_price_day_budget`, `risk_replay`, `risk_eligibility`, `risk_asset_set`, `series_preparation`,
+   >   `range_ceiling`, `risk_scope`, `risk_service` **300 passed**.
+   > - **Non toccato**: il pavimento SEC8-1b (`risk/scope.py::bounded_range`): resta con il suo commento; lo toglie MF.
+   > **⚠️ Fuori pista**: `front check` ha un errore che non è nel mio codice ma lo fa comparire il mio endpoint: «Type instantiation is
+   > excessively deep and possibly infinite», `frontend/src/lib/features/email/emailApi.test.ts:121` (`vi.spyOn(zodiosApi, …)` dentro un
+   > `it.each`). Prova: senza il mio endpoint nello schema `svelte-check` dà 0 errori; con l'endpoint, 1. È al limite di TypeScript: qualunque
+   > nuovo endpoint lo può far scattare. Il file è di un'altra sessione; la cura è nel test (un cast del bersaglio dello `spyOn`),
+   > verificata più sotto.
+10. ✅ 24/10 — **J5-3: i seguiti della revisione di MF su J5-1** (base `7055a17bd`; corsia 6190).
+   > **Note implementazione**:
+   > - **Una sola regola del tratto**: `contributions.transfer_tract(transfer, broker_id)` (V − C al mittente, −(V − C) al destinatario);
+   >   la usano `transfer_tract_adjustments` e `position_series` (via la copia `_tract`).
+   > - **Una sola lettura delle vendite del periodo**: `_period_realized_sales` esce da `portfolio_service.py` e diventa
+   >   `period.period_realized_sales`; i tre lettori (riepilogo, tabella Periodo, serie) la chiamano. `position_series` non rifiltra più.
+   > - **Domanda 3 di MF (`_arrival_base` contro `transfer_tracts_moved_in`)**: la differenza **non era voluta**. Con V noto e tratto *non
+   >   contato* (partito prima di `date_from`, in viaggio all'inizio) la serie metteva V nella base del destinatario, mentre il suo pnl
+   >   parte dal costo (valori di confine semplici): la percentuale usciva troppo bassa. Ora la base è V solo se `counted_tract`, altrimenti il
+   >   costo spostato (come il «costo finale» della tabella); con V ignoto era già C. Cambia solo la serie di quel caso (base 1 185 → 1 000
+   >   nell'esempio del test); nessun numero della tabella né del report.
+   > - **Doc e tipi**: docstring del modulo (volume sotto D-P4: un punto per giorno e per posizione; polvere: sotto soglia il punto è 0 e
+   >   l'identità P2 non regge), docstring di `flow_steps` allineata alla chiamata vera, il `Protocol` `PositionFrame` tolto per il tipo del
+   >   modello; `financial_math.md` e `transactions/wac.md` aggiornati.
+   > - **Test** (rossi prima della cura, scritti da me e non dal sotto-agente `test-author`): `TestTransferTract` (5), `TestPeriodRealizedSales` (26),
+   >   base del destinatario in transito all'inizio (1, più una riga sul caso con V ignoto). Rafforzati: P1 su 4 inizi (prima/dopo la vendita e il
+   >   dividendo), P2 senza `None` (`market_value or 0` tolto) e P2 con due broker, un titolo in USD e un cambio che varia ogni giorno.
+   > - **Prima/dopo**: fotografia della tabella e della serie su 4 inizi × 2 libri (script fuori dal repo): 15 coppie uguali, 1 diversa, quella
+   >   voluta (base del destinatario dal giorno di arrivo).
+   > - Verdi: `services financial-math` 2 794 · `roi-fifo-utils` 1 977 · `portfolio-engine` 41 · `api portfolio` 58; `mkdocs build` e `check-links` ok;
+   >   ruff e black puliti.
+   > **⚠️ Fuori pista**: nell'asset sommato (`broker_id` None) le quote in viaggio all'inizio del periodo non hanno base (base 0, percentuale None):
+   > pnl senza capitale. Non l'ho toccato (fuori dal lotto); da annotare.
