@@ -408,7 +408,7 @@ class User(SQLModel, table=True):
     email_verified_at: Optional[datetime] = Field(default=None, nullable=True, sa_type=DateTime)
     # The release whose changelog this user last saw.
     last_seen_version: Optional[str] = Field(default=None, max_length=40, nullable=True)
-    # The account that owns this (managed) instance: the paying administrator (A5-1b, migration 006). At most one account
+    # The account that owns this (managed) instance: the paying administrator (A5-1b, migration 005, step 1). At most one account
     # holds it (``ux_users_instance_owner``, partial). Never in an API schema: only ``user_service.account_protection`` and
     # ``instance_owner`` read it. Set by the managed bootstrap and the startup sync, never in another profile.
     is_instance_owner: bool = Field(default=False, nullable=False, sa_column_kwargs={"server_default": text("0")})
@@ -420,8 +420,8 @@ class User(SQLModel, table=True):
 # Email addresses are unique regardless of case (P18, migration 005, step 6). SQLite's lower() folds A–Z only, so letters outside
 # ASCII compare as written; user_service.email_fold() is the same rule in Python.
 Index("ux_users_email_lower", func.lower(User.__table__.c.email), unique=True)  # type: ignore[attr-defined]
-# At most one instance owner (A5-1b, migration 006). The query that reads it, ``SELECT id FROM users WHERE is_instance_owner = 1``,
-# plans ``SEARCH users USING COVERING INDEX ux_users_instance_owner`` (MIG6-004).
+# At most one instance owner (A5-1b, migration 005, step 1). The query that reads it, ``SELECT id FROM users WHERE is_instance_owner = 1``,
+# plans ``SEARCH users USING COVERING INDEX ux_users_instance_owner`` (pinned by test_migration_005_release_1_3).
 Index("ux_users_instance_owner", User.__table__.c.is_instance_owner, unique=True, sqlite_where=text("is_instance_owner = 1"))  # type: ignore[attr-defined]
 
 

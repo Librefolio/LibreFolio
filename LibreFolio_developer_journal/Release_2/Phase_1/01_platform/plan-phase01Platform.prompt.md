@@ -8523,6 +8523,50 @@ poi, in V1 e V3, `assignments|reported_currency|VARCHAR(8)` (in V2 e V4 nessuna 
   - i dati veri del developer. **Consiglio**: prima su una copia di lavoro del suo DB (skill `real-data-copy`), per
     vedere davvero la sua impronta.
 
+#### Procedura manuale: un DB della nightly del treno 10 (005 senza il titolare) riparato (24/10, lotto A5-3)
+
+**Quando.** Una volta sola, per ogni DB stampato `005_release_1_3_0_schema` dalla nightly del treno 10: quella 005
+non aveva `users.is_instance_owner`, il suo indice parziale `ux_users_instance_owner` e lo scopo `email_change` nel CHECK
+di `account_tokens`. La migrazione `006_owner_email_change` è stata fusa nella 005 (decisione del developer, 24/10:
+«ogni release una migrazione»), quindi Alembic vede il DB al head e non esegue niente. Sintomo: il server si avvia ma
+l'account del titolare dà errore (`no such column: users.is_instance_owner`) oppure parte con la 005 vecchia.
+
+**Lo script**: [`repair_005_owner_columns.py`](repair_005_owner_columns.py), accanto a questo file. Solo libreria
+standard, **non** è codice dell'app, si lancia a mano contro il file del DB (percorso passato come argomento).
+
+1. **Fermare il server** (Mac: `./dev.py server` fermato; Docker: `docker compose stop librefolio`).
+2. **Vedere cosa manca, senza cambiare niente:**
+   ```bash
+   python3 LibreFolio_developer_journal/Release_2/Phase_1/01_platform/repair_005_owner_columns.py <db> --check
+   ```
+3. **Riparare:**
+   ```bash
+   python3 LibreFolio_developer_journal/Release_2/Phase_1/01_platform/repair_005_owner_columns.py <db>
+   ```
+4. **Riavviare.** Il titolare lo registra l'avvio (`owner-sync`, dall'indirizzo di `LIBREFOLIO_ADMIN_EMAIL`).
+
+`<db>` è `backend/data/prod/sqlite/app.db` sul Mac (dal checkout principale; **la porta 6040 libera**). Con Docker il file
+è quello della tabella della procedura «011/010 → 005» qui sopra (`/app/backend/data/prod-docker/sqlite/app.db` nel
+contenitore, dati in `./LibreFolio-data` sull'host): lo script va lanciato sul file dell'host a contenitore fermo.
+
+Cosa fa lo script, e solo se manca qualcosa (un DB già giusto non viene toccato e non ne nasce una copia):
+
+- rifiuta un DB non stampato `005_release_1_3_0_schema` e un file che non è un DB LibreFolio: non cambia niente;
+- **copia prima il file** (`<db>.before-owner-fix-<data>`, con l'API di backup di SQLite, WAL compreso);
+- in **una transazione** (`BEGIN IMMEDIATE`): aggiunge la colonna (tutti gli account a 0), crea l'indice, ricostruisce
+  `account_tokens` con il CHECK nuovo (righe e indici conservati; niente lo referenzia);
+- verifica `foreign_key_check` e `integrity_check`, e stampa `OK`. Rilanciarlo non fa nulla.
+
+**Provato** (24/10) su copie di un DB di test costruito dalle migrazioni di `dev_release2` (`94672e66c`, 005 senza
+colonne), con due account e due link: `--check` non cambia niente; la riparazione dà lo stesso schema di un DB nuovo alla
+005 di oggi (tutte le righe di `sqlite_master`, SQL con spazi compressi); righe dei link identiche; secondo lancio «Nothing
+to do» e nessuna seconda copia; un DB stampato 004, un file che non è un DB e un percorso inesistente sono rifiutati.
+**Non provato** sul DB vero del developer: farlo prima su una copia.
+
+La verifica della procedura «011/010 → 005» qui sopra riguarda la 005 di prima: l'impronta `objects 1.3` e le righe
+`users|…` non includono il titolare, e con la 005 di oggi cambiano (il CHECK di `account_tokens` ha `email_change`, `users`
+ha una colonna in più). Per un DB che passa da lì, dopo la procedura serve anche questo script.
+
 ### Lotto «H-57: le migrazioni della 1.3 in una sola `005_release_1_3_0_schema`, variante V4» (19/10, 12:27) — passi
 
 > Via del coordinatore, con le decisioni del developer (19/10, 12:27).
