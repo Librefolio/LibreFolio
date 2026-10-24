@@ -10666,3 +10666,16 @@ DOC-2 (ricerca per lingua), DOC-1 (riordino della guida admin, con le guide Tail
    > di riferimento. Doc: `hosting_providers` (sezione `restore-owner-pending`), `security.md`, `overview.md` (passo 18, numerazione
    > spostata), `api/index.md`.
    > **⚠️ Fuori pista**: nessuno. Resta a B documentare `--recover owner` in `cli_tools`/`backup_restore` (il link della pagina è a livello di pagina, quindi regge anche al giro 2 di DOC-1).
+6. ✅ **H5-4 · le richieste di A sul cambio dell'email del titolare** (24/10, dopo il merge di A5-1/A5-1b, `d71efc0b1`).
+   > **Note implementazione**: `PanelStatusResponse.owner_email_change: "pending" | "blocked" | null` (la risposta ha ora sette chiavi), riempito
+   > da `instance_owner.owner_change_status(session)`; controllo `accounts.owner_email_change` in `accounts/checks.py` (`info` se `pending`,
+   > `warning` se `blocked`, `ok` altrimenti; legge `startup_change_state()` in memoria, import pigro di `instance_owner` per non creare un
+   > ciclo con `config_audit`; non solleva mai), in `ACCOUNTS_CONFIG_CHECKS` dopo `check_login_limit`; tre chiavi i18n `auth.checks.ownerEmailChange.*` × 4
+   > lingue (le ho scritte io, A aveva detto che le scriveva A: da riconciliare al merge); voce in `checkGuides.json`. Doc: `hosting_providers`
+   > (nota «State of a change», tabella e JSON del pannello, «sette chiavi»), `configuration_security` (due righe nella tabella dei controlli),
+   > `security.md`, `api/index.md`. La riga `email_change_confirmation` della tabella dei log di A è nella pagina divisa `email_troubleshooting`.
+   > Test (test-author, rossi prima): `accounts-checks` 93, `config-audit` 255, `api panel-status` 41, `await-restore-mode` 36, `login-throttle` 58,
+   > `security-checks` 4; Vitest 256.
+   > **⚠️ Fuori pista**: il test-author ha scoperto che `hosting_providers.{it,fr,es}.md` non esistono (la pagina inglese è pubblicata in ogni lingua): la
+   > voce nuova non entra in `TRANSLATION_DEBT`. Analisi (senza codice) del link `/setup` emesso da `admin-bootstrap` prima di `restore-commit` mandata
+   > al coordinatore: reale ma stretto, la cura è di B (B5-1d).

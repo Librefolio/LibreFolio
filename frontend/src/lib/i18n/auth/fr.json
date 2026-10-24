@@ -100,6 +100,11 @@
         "ok": "Les connexions échouées sont limitées : après 10 en 15 minutes pour un nom d'utilisateur ou un e-mail, ou 50 depuis une adresse, la connexion attend.",
         "off": "La limite des connexions échouées est désactivée (LIBREFOLIO_LOGIN_LIMIT=off) : les mots de passe peuvent être essayés sans pause. Réactivez-la, sauf s'il s'agit d'une instance de test.",
         "invalid": "LIBREFOLIO_LOGIN_LIMIT vaut « {value} », ni on ni off : le serveur ne démarre pas avec cette valeur."
+      },
+      "ownerEmailChange": {
+        "ok": "Aucun changement de l'adresse e-mail du propriétaire n'est en attente.",
+        "pending": "L'hébergeur a changé l'adresse e-mail du propriétaire : un lien de confirmation a été envoyé à la nouvelle adresse, et le compte garde l'ancienne jusqu'à la confirmation.",
+        "blocked": "L'hébergeur a changé l'adresse e-mail du propriétaire pour une adresse déjà utilisée par un autre compte : rien n'a changé. Choisissez une autre adresse et redémarrez."
       }
     },
     "askAdminToResetPassword": "Demandez à votre administrateur un lien de réinitialisation du mot de passe : il peut en créer un pour votre compte."

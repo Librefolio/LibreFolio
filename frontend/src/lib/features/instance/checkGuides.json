@@ -15,6 +15,7 @@
     "backup.restore_limit": "admin/hosting_providers/#restore-upload-limit",
     "backup.recipients": "admin/backup_restore/#sealed",
     "accounts.login_limit": "admin/configuration_accounts/#login-limit",
+    "accounts.owner_email_change": "admin/hosting_providers/#owner-email-change",
     "email.smtp": "admin/email/#variables",
     "email.smtp_encryption": "admin/email/#encryption-modes",
     "email.links": "admin/email/#links-check",

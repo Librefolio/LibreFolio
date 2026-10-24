@@ -20,6 +20,7 @@ from backend.app.config import get_data_dir
 from backend.app.config.platform import awaiting_restore
 from backend.app.db.session import get_session_generator
 from backend.app.schemas.hosting_panel import PanelRestoreSummary, PanelStatusResponse
+from backend.app.services.accounts import instance_owner
 from backend.app.services.accounts.bootstrap_admin_service import AdminSetupState, admin_setup_status
 from backend.app.services.accounts.registration_service import user_usage
 from backend.app.services.platform.hosting_panel.access import PanelCaller, PanelScope, panel_access
@@ -45,7 +46,8 @@ async def get_panel_status(
 ) -> PanelStatusResponse:
     """The state of the initial administrator's setup: none, pending (with the link's expiry), done or expired; the
     instance's mode, and its restore (H-62): its state and why it waits, without who confirmed it; and how many places
-    its users take, with the limit (H5-1): two counts, never a name or an address."""
+    its users take, with the limit (H5-1): two counts, never a name or an address; and where the change of the owner's address
+    stands (A5-1b, H5-4): pending its confirmation, blocked, or none."""
     status = await admin_setup_status(session, now=utcnow())
     expires_at = ensure_utc(status.setup_expires_at) if status.state.value == AdminSetupState.PENDING.value else None
     usage = await user_usage(session)
@@ -56,6 +58,7 @@ async def get_panel_status(
         restore=await _restore_summary(),
         users_used=usage.used,
         users_limit=usage.max_users,
+        owner_email_change=await instance_owner.owner_change_status(session),
     )
 
 
