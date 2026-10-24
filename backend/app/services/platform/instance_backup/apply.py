@@ -49,7 +49,6 @@ from __future__ import annotations
 import contextlib
 import functools
 import os
-import secrets
 import shutil
 import sqlite3
 import stat
@@ -187,11 +186,15 @@ class RestoreState(BaseModel):
     #: The session version every account got at the commit: the restore time in milliseconds (decision 40).
     session_version: int | None = None
     #: B5-1: the account of the backup the owner chose (a restore confirmed from the app of a managed instance); what the
-    #: first start did with it (one of A's outcomes, or ``error:<CODE>``); and, for ``link_only`` only, the path of the
-    #: owner's link, a secret shown by ``dev.py backup pending`` on the server and nowhere else.
+    #: first start did with it (``sent``, ``link_only`` or ``error:<CODE>``). The owner's link is never kept: for
+    #: ``link_only`` A writes it in the instance log.
     owner_user_id: int | None = None
     owner_outcome: str | None = None
-    owner_reset_path: str | None = None
+    #: B5-1d: the largest id of the one-time links the restored database held right after the swap, taken by this
+    #: process. The commit revokes the links up to it; a link with a greater id was issued by this start (the first
+    #: administrator's setup link, for data without an account) and is kept. ``None``: not known, every link is revoked.
+    #: Never a date of the database: whoever prepared the backup writes those.
+    token_watermark: int | None = None
 
 
 class RestoreStateError(RuntimeError):
@@ -304,6 +307,13 @@ class RestoreInUseError(RestoreStateError):
     serve data whose restore is not committed."""
 
     code = "restore_in_use"
+
+
+class RestoreOwnerNotFailedError(RestoreStateError):
+    """There is no failed assignment of the owner's account to try again (B5-1b): the last restore from the app has no
+    owner named, or its assignment is not in error."""
+
+    code = "owner_not_failed"
 
 
 def _now() -> datetime:
@@ -667,15 +677,43 @@ def owner_pending(data_dir: Path) -> tuple[str, int] | None:
     return state.stage_id, state.owner_user_id
 
 
-def record_owner_outcome(data_dir: Path, stage_id: str, outcome: str, reset_path: str | None) -> RestoreState | None:
+def record_owner_outcome(data_dir: Path, stage_id: str, outcome: str) -> RestoreState | None:
     """Record what the start did with the owner's account, once: a later record of the same restore changes nothing."""
     with _apply_lock(data_dir):
         state = _read_state(data_dir)
         if state is None or state.stage_id != stage_id or state.owner_outcome is not None:
             return state
-        state = state.model_copy(update={"owner_outcome": outcome, "owner_reset_path": reset_path})
+        state = state.model_copy(update={"owner_outcome": outcome})
         _write_state(data_dir, state)
         return state
+
+
+def reset_owner_assignment(data_dir: Path | None = None) -> bool:
+    """Clear the recorded error of the owner's assignment so it is tried again (B5-1b): ``backup pending --recover owner``.
+
+    An outcome of ``error:<CODE>`` is terminal (``owner_pending`` does not retry it), and the restore guard serves no data
+    while it stands. Only that outcome is cleared; nothing else of the state changes. Whether a server
+    serves the data directory: it only retries at its start, so then nothing is called here.
+
+    ``RestoreOwnerNotFailedError`` when there is nothing to clear (nothing is written); ``RestoreInUseError`` while
+    another process is setting the owner now. Lock order: the owner's lock, then the apply lock.
+    """
+    from backend.app.services.platform.instance_backup.owner import held_owner_lock  # noqa: PLC0415 — owner imports this module
+
+    data_dir = data_dir or get_data_dir()
+    if _restore_folder(data_dir) is not True:
+        raise RestoreOwnerNotFailedError("There is no restore here: nothing to try again")
+    with held_owner_lock(data_dir) as held:
+        if not held:
+            raise RestoreInUseError("The owner's account is being set by another process: run the command again in a moment")
+        with _apply_lock(data_dir), _exclusive_serving_lock(data_dir) as served:
+            state = _read_state(data_dir)
+            if state is None or state.status != "committed" or state.confirmed_via != "admin" or state.owner_user_id is None or state.owner_outcome is None or not state.owner_outcome.startswith("error:"):
+                raise RestoreOwnerNotFailedError("The owner's account has no failed assignment: nothing to try again")
+            code = state.owner_outcome.removeprefix("error:")
+            _write_state(data_dir, state.model_copy(update={"owner_outcome": None}))
+    logger.warning("The failed assignment of the owner's account was cleared: it is tried again", stage_id=state.stage_id, user_id=state.owner_user_id, code=code)
+    return served
 
 
 def confirm_restore(
@@ -916,7 +954,7 @@ def _swap(data_dir: Path, state: RestoreState, boot: Boot, now: datetime) -> Res
             return state
         try:
             _move_into_place(data_dir, copy, swap)
-            applied = journal.model_copy(update={"status": "applied", "applied_at": now})
+            applied = journal.model_copy(update={"status": "applied", "applied_at": now, "token_watermark": _largest_token_id(database_path(data_dir))})
             _write_state(data_dir, applied)
         except (OSError, BackupPathError) as exc:
             logger.error("The restore could not move the folders into place: the data of before is put back", error=str(exc))
@@ -1026,7 +1064,7 @@ def finish_pending_restore(data_dir: Path | None = None, *, boot: Boot | None = 
             raise RestoreInUseError("The restore found here was applied by another start of LibreFolio")
         if state.status == "applied" and state.boot == boot:
             now = now or _now()
-            value, revoked = _close_the_way_in(data_dir, now, state.owner_user_id, stage_id=state.stage_id)
+            value, revoked = _close_the_way_in(data_dir, now, state.owner_user_id, stage_id=state.stage_id, token_watermark=state.token_watermark)
             state = state.model_copy(update={"status": "committed", "finished_at": now, "session_version": value})
             _write_state(data_dir, state)
             logger.warning("Restore committed: every session ended, the backup's one-time links revoked", stage_id=state.stage_id, session_version=value, links_revoked=revoked)
@@ -1035,7 +1073,7 @@ def finish_pending_restore(data_dir: Path | None = None, *, boot: Boot | None = 
         return state
 
 
-def _close_the_way_in(data_dir: Path, now: datetime, owner_user_id: int | None = None, *, stage_id: str | None = None) -> tuple[int, int]:
+def _close_the_way_in(data_dir: Path, now: datetime, owner_user_id: int | None = None, *, stage_id: str | None = None, token_watermark: int | None = None) -> tuple[int, int]:
     """Close in the restored database every way in that was open before the restore, in one transaction; the session
     version given to every account, and how many one-time links were revoked.
 
@@ -1043,11 +1081,14 @@ def _close_the_way_in(data_dir: Path, now: datetime, owner_user_id: int | None =
       database holds when the clock is behind it: every session token issued before, by either database, is refused
       (decision 40). A time, not a counter: a password change afterwards still adds one.
     - Every one-time link still live in the backup (not consumed, not revoked: invitation, password reset, email
-      verification, admin setup) is revoked at the restore time, as ``token_service.revoke_tokens`` revokes one.
+      verification, admin setup) is revoked at the restore time, as ``token_service.revoke_tokens`` revokes one. Those
+      are the links up to ``token_watermark``, the largest id the database held at the swap (B5-1d): a link with a
+      greater id was issued by this start, before the commit, and stays (the setup link of the first administrator of
+      data without an account). Without a watermark every live link is revoked.
     - The account the owner chose (a restore confirmed from the app of a managed instance, B5-1) is closed:
       ``_close_owner_account``.
     """
-    unusable = _unusable_password_hash() if owner_user_id is not None else None
+    unusable = _unusable_hash() if owner_user_id is not None else None
     owner_email = None
     if owner_user_id is not None:
         from backend.app.services.platform.instance_backup.owner import configured_owner_email  # noqa: PLC0415 — owner imports this module
@@ -1064,18 +1105,24 @@ def _close_the_way_in(data_dir: Path, now: datetime, owner_user_id: int | None =
         value = max(restore_ms, restored + 1, before + 1)
         with conn:
             conn.execute("UPDATE users SET session_version = ?", (value,))
-            revoked = conn.execute("UPDATE account_tokens SET revoked_at = ? WHERE consumed_at IS NULL AND revoked_at IS NULL", (revoked_at,)).rowcount
+            if token_watermark is None:
+                revoked = conn.execute("UPDATE account_tokens SET revoked_at = ? WHERE consumed_at IS NULL AND revoked_at IS NULL", (revoked_at,)).rowcount
+            else:
+                # An id that is not an integer is never one this start issued: revoked with the rest.
+                revoked = conn.execute(
+                    "UPDATE account_tokens SET revoked_at = ? WHERE consumed_at IS NULL AND revoked_at IS NULL AND NOT (typeof(id) = 'integer' AND id > ?)",
+                    (revoked_at, token_watermark),
+                ).rowcount
             if owner_user_id is not None:
                 _close_owner_account(conn, owner_user_id, unusable, owner_email, stage_id)
     return value, revoked
 
 
-def _unusable_password_hash() -> str:
-    """A real bcrypt hash of a secret nobody ever sees: no password signs in, and an attempt costs what it costs for any
-    account. Workstream A's ``auth_service.unusable_password_hash`` once merged."""
-    from backend.app.services.accounts.auth_service import hash_password  # noqa: PLC0415
+def _unusable_hash() -> str:
+    """The hash that no password produces, workstream A's (``auth_service.unusable_password_hash``): one home for it."""
+    from backend.app.services.accounts import auth_service  # noqa: PLC0415 — accounts import the platform services
 
-    return hash_password(secrets.token_urlsafe(32))
+    return auth_service.unusable_password_hash()
 
 
 def _close_owner_account(conn: sqlite3.Connection, user_id: int, unusable: str, owner_email: str | None, stage_id: str | None) -> None:
@@ -1099,6 +1146,23 @@ def _close_owner_account(conn: sqlite3.Connection, user_id: int, unusable: str, 
                 conn.execute("UPDATE users SET is_instance_owner = 1 WHERE id = ?", (user_id,))
             assigned = True
     logger.warning("The account the owner chose is closed: its password unusable until the owner's link", stage_id=stage_id, user_id=user_id, assigned=assigned)
+
+
+def _largest_token_id(database: Path) -> int | None:
+    """The largest id of the one-time links of a database, read-only: 0 when it has none or no such table; ``None`` when it
+    cannot be read or an id is not an integer (the commit then revokes every link)."""
+    try:
+        if not stat.S_ISREG(database.lstat().st_mode):
+            return None
+        with closing(sqlite3.connect(f"{database.resolve().as_uri()}?mode=ro", uri=True)) as conn:
+            conn.execute("PRAGMA trusted_schema = OFF")
+            if conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'account_tokens'").fetchone() is None:
+                return 0
+            if conn.execute("SELECT 1 FROM account_tokens WHERE typeof(id) != 'integer' LIMIT 1").fetchone() is not None:
+                return None
+            return int(conn.execute("SELECT COALESCE(MAX(id), 0) FROM account_tokens").fetchone()[0])
+    except (OSError, sqlite3.Error, TypeError, ValueError):
+        return None
 
 
 def _largest_session_version(database: Path) -> int:

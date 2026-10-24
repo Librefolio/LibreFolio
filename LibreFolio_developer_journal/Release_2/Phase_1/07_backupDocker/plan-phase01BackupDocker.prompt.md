@@ -7901,3 +7901,97 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > **Doc** (docs-writer): `admin/backup_restore.en.md`, sezione nuova `#owner-account` (quando si chiede, quali account,
 > cosa succede al commit, senza email, riga di `backup pending`, tabella dei rifiuti) + un punto in `#restore-settings`.
 > `mkdocs build` strict pulito, check-links 97 validi. Nessun `translate-stamp`: debito di traduzione IT/FR/ES.
+
+#### B5-1b — `backup pending --recover owner` ✅ 2026-10-24
+
+> Richiesta del coordinatore (buco trovato da H): un esito `error:<CODE>` dell'assegnazione del titolare è terminale
+> (`owner_pending` non riprova, `--recover previous` cura solo lo stato illeggibile) e la guardia di H tiene l'istanza chiusa.
+> Interfaccia: `ondata5/B-b51-interface.md` §9.
+> **Note implementazione**:
+> - `apply.reset_owner_assignment(data_dir)`: azzera `owner_outcome` e `owner_reset_path` solo se l'esito è `error:`; non scrive
+>   altro. Ordine dei lucchetti: `owner.lock` (nuovo `owner.held_owner_lock`) e poi il lucchetto di apply, come lo step di
+>   avvio. Ritorna se un server serve la cartella dati. Nuovo errore `RestoreOwnerNotFailedError` (`owner_not_failed`).
+> - CLI: `RECOVER_CHOICES` ora ha `owner`. Lo snapshot `--json` di un ripristino committato dall'app con esito `error:` dà
+>   `reason: "owner_assignment"` e `choices: ["owner"]` (mai codice, nome, id o link).
+>   - Server fermo: azzera e richiama subito `assign_restored_owner()`; stampa la riga dell'esito.
+>   - Server acceso: azzera soltanto; l'assegnazione avviene al prossimo avvio.
+>   - Codici d'uscita:
+>     - 0 fatto;
+>     - 3 niente da riprovare (gara persa con un altro azzeramento);
+>     - 4 lo stato non offre `owner`, anche al secondo lancio;
+>     - 5: `restore_in_use` (lucchetto occupato), `owner_assignment_failed` (rifiutato di nuovo) o `failed`.
+> - La riga d'errore di `backup pending` ora dice `…; ./dev.py backup pending --recover owner tries again`.
+> - Test (rossi prima): `backup-owner` 90, `backup-cli-recover` 199, `backup-cli-restore` 139; regressione verde (apply 387,
+>   staging 248, restore-apply 285, panel-restore 136, restore-interrupted 34, restore-guard 25, cli 106/49/106, E2E 3+3).
+> **⚠️ Fuori pista**: nel brief dei rossi avevo scritto «secondo lancio → exit 3»; il §9.2 dice 4 e il test-author ha seguito
+> il §9.2. Il caso «nessun esito registrato» stampa la riga già esistente di `_print_owner_outcome`, non una frase nuova.
+> **Doc** (docs-writer): `admin/cli_tools.en.md`, sezioni `#backup-pending` e `#backup-pending-json` (riga d'esempio, `reason`
+> `owner_assignment`, tabella dei codici d'uscita, paragrafo `--recover owner`, «Run again» con il 4). `mkdocs build` strict
+> pulito, check-links 97. Nessun `translate-stamp`: debito di traduzione IT/FR/ES su `admin/cli_tools`.
+
+#### B5-1c — il nuovo contratto di A: niente link segreto nello stato ✅ 2026-10-24
+
+> Richiesta del coordinatore: la revisione di sicurezza di A5-2 ha trovato due bloccanti nel contratto di A, e A ha cambiato
+> la firma. Il rapporto del ripristino lo leggono tutti gli admin, anche chi ha preparato il backup: il link non ci va mai.
+> **Note implementazione**:
+> - Chiamata: `backend.app.services.accounts.instance_owner.assign_owner_and_send_reset(session, user_id, *, now=None)`
+>   (non più in `email/flows.py`). Gli esiti sono solo `sent` e `link_only`; spariscono `already_issued`, `already_done`
+>   e `since`. A ripete tutto il trattamento a ogni chiamata e il rifare è innocuo: dopo un riavvio a metà si richiama e
+>   basta (il link vecchio è revocato, ne parte uno nuovo).
+> - `RestoreState.owner_reset_path` non esiste più (`extra="ignore"`: un file vecchio con la chiave si legge e la chiave
+>   cade). `record_owner_outcome(data_dir, stage_id, outcome)` ha tre argomenti. Gli esiti registrati: `sent`, `link_only`,
+>   `error:<CODE>`. Il codice non legge mai `reset_path` dal risultato di A.
+> - Con `link_only` il link lo scrive A nel log dell'istanza. `backup pending` e `--recover owner` stampano una riga sola
+>   che lo dice (nessun percorso, nessun token); `--json` non l'ha mai avuto.
+> - `reset_owner_assignment` azzera solo `owner_outcome`. Il controllo lato server «se un utente ha già l'email del
+>   titolare, l'unica scelta valida è lui» c'era già (`owner_choices`).
+> - Test (rossi prima): `backup-owner` 87, `backup-cli-recover` 193, `backup-cli-restore` 135, `backup-apply` 401,
+>   `backup-restore-apply` 285. Il canarino `reset_path` messo da un finto A non compare in stato, log, CLI né `--json`.
+> **⚠️ Fuori pista**: 4 test di `backup-owner` confrontavano il file grezzo prima e dopo l'azzeramento (`Z` contro
+> `+00:00`): ora confrontano i modelli.
+> **Doc** (docs-writer): `admin/backup_restore.en.md` (`#owner-account`: validità 30 minuti, senza email il link è nel log,
+> due righe tolte dalla tabella) e `admin/cli_tools.en.md` (`--recover owner`). Debito di traduzione IT/FR/ES.
+
+#### B5-1d — il link di `/setup` di questo avvio sopravvive al commit ✅ 2026-10-24
+
+> Caso (trovato da A, analizzato da H): primo avvio dopo un ripristino i cui dati non hanno **nessun account**.
+> `admin-bootstrap` gira prima di `restore-commit` ed emette un link `/setup` nuovo; `_close_the_way_in` revocava ogni token
+> vivo, anche quello. L'admin restava senza accesso fino a un riavvio e a `user setup-link`.
+> **Vincolo**: il criterio non può venire dal database ripristinato. `created_at` lo scrive chi prepara il backup, e un token
+> piantato con una data futura sopravvivrebbe.
+> **Scelta (la più semplice)**: il criterio lo prende questo processo allo scambio.
+> - `RestoreState.token_watermark`: l'id massimo di `account_tokens` letto in sola lettura subito dopo lo scambio
+>   (`_swap`, nello stato `applied`). `0` se non c'è la tabella o non ci sono token; `None` se il database non si legge
+>   o un id non è intero (fail-closed).
+> - `_close_the_way_in` revoca i token vivi con `id <= watermark` (un id non intero si revoca sempre). Un id maggiore
+>   l'ha emesso questo avvio, perché il server non serve prima del commit: resta. Senza watermark (stato di un server
+>   più vecchio, o `None`) si revoca tutto, come prima.
+> - Un id enorme piantato dal backup al massimo fa revocare anche il link nuovo: fallisce chiuso, e l'autore del backup
+>   non ci guadagna nulla. La data del database non conta mai.
+> - `admin-bootstrap` non si sposta (N57 e i test `test_backup_apply.py:89` e `test_admin_bootstrap.py:1881` restano).
+> - Test (rossi prima), in `test_backup_apply.py` sezione (h): il watermark nello stato dopo lo scambio (0, nessuna tabella,
+>   illeggibile → `None`); il link di questo avvio sopravvive (data futura, passata, uguale), anche nel caso senza account;
+>   i token del backup si revocano, anche con data futura e id uguale al massimo; stato senza watermark revoca tutto;
+>   database illeggibile allo scambio revoca tutto.
+
+#### B5-1e — i seguiti dopo l'unione con A ✅ 2026-10-24
+
+> Dopo l'unione del ramo di A (`e49afe27c`): la funzione vera, la modale vera, l'hash di A.
+> **Note implementazione**:
+> - Modale: la `OwnerChoiceModal.svelte` di A ha le stesse prop (`open`, `ownerEmail`, `users`, `onConfirm`, `onCancel`, `busy`) e gli
+>   stessi `data-testid` della mia finta; `RestoreReportModal` la usa com'è, con `import {type OwnerCandidate}`.
+>   `front check` 0 errori e 0 avvisi. Due commenti dei test («stand-in») aggiornati.
+> - `apply._unusable_password_hash` tolta: il commit prende l'hash di `auth_service.unusable_password_hash()` (una sola casa).
+>   Rosso prima: un test mette un hash noto al posto della funzione di A e guarda che l'account scelto lo riceva.
+> - Giro vero con la funzione vera di A (nuova suite `backup-owner-real`, 6 test, tutti verdi al primo colpo; solo la posta è finta):
+>   - dal lifecycle (conferma, scambio, commit, `assign_restored_owner`) a `sent`: l'account ha l'email del titolare, è admin attivo e
+>     titolare, la password non apre nulla, resta un solo link vivo (il token piantato dal backup con data futura è cancellato),
+>     nessun segreto in stato, `backup pending` e `--json`;
+>   - `link_only` (posta che fallisce, o spenta): il link sta nel log di A e in nessun altro, non nel nostro modulo né nello stato;
+>   - errore chiuso: `EMAIL_TAKEN` registrato come `error:EMAIL_TAKEN`, `owner_assignment_problem` = `EMAIL_TAKEN`, DB invariato;
+>     poi, tolta la causa, `backup pending --recover owner` richiama A e finisce `sent`/`link_only`;
+>   - caduta tra la chiamata e il registro: la ripartenza richiama A, il link vecchio muore, ne resta uno;
+>   - A riceve solo `(user_id)`, con una sessione nuova.
+> - Test vecchi invecchiati dall'unione (la colonna `is_instance_owner` ora c'è nello schema): tre test di `backup-apply` aggiornati.
+> **⚠️ Fuori pista / non fatto**: l'E2E con un server vero aspetta lo step `restore-owner` di H, che sta nel suo ramo e non nel
+> mio: qui `assign_restored_owner` non gira ancora all'avvio. Il resto della catena è coperto a livello di servizi con la funzione vera.
