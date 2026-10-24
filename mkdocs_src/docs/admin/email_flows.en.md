@@ -251,7 +251,7 @@ address with a link that LibreFolio emails to the account. The switch is in
 - **While a hosting provider blocks the instance**, the page of the link says so, once its owner
   clicks **Confirm my email address**, and offers no retry: the link is not used up, and works
   again once the instance is unblocked, as long as it has not expired; otherwise signing in offers
-  a new one ([Hosting for Others](hosting_providers.md#instance-block)). Signing in still offers
+  a new one ([Hosting for Others](hosting_instances.md#instance-block)). Signing in still offers
   **Send the link again**, which then says *This instance is blocked by its hosting provider: try
   again once it is unblocked.*, never that the password is wrong, and works once the instance is
   unblocked. Nobody can sign up meanwhile: the registration page says the same.

@@ -220,7 +220,7 @@ docker compose exec librefolio sh -c 'exec gosu "${LIBREFOLIO_UID:-1000}:${LIBRE
 
 A plain `docker compose exec librefolio python dev.py <cmd>` runs the command as root instead: what it creates in `LibreFolio-data/` belongs to root until the container's next start, when the entrypoint hands the directory back to the image's user.
 
-In the image, `user`, `db`, `info` and `backup` work ([Back Up with Docker](cli_tools.md#backup-docker)). The development commands (`test`, `i18n`, `mkdocs translate` and `mkdocs translate-validate`) are listed too, but they only answer that they are *not available in this installation*: the image ships the application, not the development tree.
+In the image, `user`, `db`, `info` and `backup` work ([Back Up with Docker](cli_backup.md#backup-docker)). The development commands (`test`, `i18n`, `mkdocs translate` and `mkdocs translate-validate`) are listed too, but they only answer that they are *not available in this installation*: the image ships the application, not the development tree.
 
 The test-mode commands do not run in the container either; like `./dev.py mkdocs gallery`, they belong to a development checkout:
 
@@ -354,7 +354,7 @@ sqlite3 ./LibreFolio-data/sqlite/app.db ".backup '/path/to/backups/app.db-$(date
 
 SQLite's `.backup` command uses the online backup API, which is safe against a live WAL database.
 
-`backup create` needs neither a stop nor `sqlite3` on the host: `docker compose exec librefolio python dev.py backup create` puts a consistent copy of the database, the uploaded files, the broker reports and your own stress scenarios in one archive, in `LibreFolio-data/backups/`, while the server keeps running ([Back Up with Docker](cli_tools.md#backup-docker)). A clear archive leaves out `secrets/`, which holds the instance key: back that folder up as [What to Back Up](filesystem.md#what-to-back-up) explains. A [secure archive](backup_restore.md#secure), with `--encrypt`, carries the key LibreFolio generated, encrypted with your password.
+`backup create` needs neither a stop nor `sqlite3` on the host: `docker compose exec librefolio python dev.py backup create` puts a consistent copy of the database, the uploaded files, the broker reports and your own stress scenarios in one archive, in `LibreFolio-data/backups/`, while the server keeps running ([Back Up with Docker](cli_backup.md#backup-docker)). A clear archive leaves out `secrets/`, which holds the instance key: back that folder up as [What to Back Up](filesystem.md#what-to-back-up) explains. A [secure archive](backup_restore.md#secure), with `--encrypt`, carries the key LibreFolio generated, encrypted with your password.
 
 For the full list of what is worth backing up (uploaded files, original broker reports), see the [Filesystem Layout](filesystem.md) page.
 

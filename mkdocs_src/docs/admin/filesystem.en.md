@@ -122,7 +122,7 @@ The other variables, and the `.env` file, are described in [Configuration](confi
 
 ## 💾 Backup
 
-The recommended way is a backup archive, made while LibreFolio keeps running: see [Backup, Restore and Moving Your Instance](backup_restore.md). From the command line, `./dev.py backup create` writes one zip archive of the database, the uploaded files, the broker reports and your own stress scenarios, by default into the data directory's `backups/` folder: see [Back Up the Instance](cli_tools.md#backup), and [Back Up with Docker](cli_tools.md#backup-docker) for the command in the container. It leaves out `secrets/`, which you back up as [What to Back Up](#what-to-back-up) explains, unless you make it [secure](backup_restore.md#secure) (`--encrypt`): a secure archive carries the instance key LibreFolio generated. Copying the data directory by hand, below, is the alternative.
+The recommended way is a backup archive, made while LibreFolio keeps running: see [Backup, Restore and Moving Your Instance](backup_restore.md). From the command line, `./dev.py backup create` writes one zip archive of the database, the uploaded files, the broker reports and your own stress scenarios, by default into the data directory's `backups/` folder: see [Back Up the Instance](cli_backup.md#backup), and [Back Up with Docker](cli_backup.md#backup-docker) for the command in the container. It leaves out `secrets/`, which you back up as [What to Back Up](#what-to-back-up) explains, unless you make it [secure](backup_restore.md#secure) (`--encrypt`): a secure archive carries the instance key LibreFolio generated. Copying the data directory by hand, below, is the alternative.
 
 ### 📦 Simple Backup
 

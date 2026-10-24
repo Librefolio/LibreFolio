@@ -55,7 +55,7 @@ except:
 - the [scheduled wake-up](wake_sync.md#wake-sync): it is not a visit, although it keeps the machine awake while
   its jobs run;
 - the calls of a hosting panel to its backup routes, `/api/v1/backup/panel/…`, and to its status
-  route, `/api/v1/panel/status` ([Hosting Panel API](hosting_providers.md#panel-api)): they are not
+  route, `/api/v1/panel/status` ([Hosting Panel API](hosting_panel_api.md#panel-api)): they are not
   visits either, so a panel that polls a backup or the setup status never keeps the machine awake
   as a visit would. Each call keeps it awake only while it runs, a download until its last byte,
   and a running backup keeps it awake by itself (below). Like any request through Fly's proxy, a

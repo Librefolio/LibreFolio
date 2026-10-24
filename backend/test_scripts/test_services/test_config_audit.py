@@ -122,7 +122,7 @@ and an English summary for the log. ``log_configuration_audit()`` runs them at s
     platform's last. Its three messages are in the four catalogues of ``frontend/src/lib/i18n/instance``: ``unusable``
     naming exactly ``{variables}``, ``off`` and ``ok`` nothing; the control is ``secretsSetTwice.found``, which names
     exactly ``{variables}`` in each. ``_configure`` leaves both tokens unset, whatever the environment holds, so the
-    check is ok (off) in every other case of this file. The guide of the check, ``admin/hosting_providers/#panel-api``,
+    check is ok (off) in every other case of this file. The guide of the check, ``admin/hosting_panel_api/#panel-api``,
     is (j)'s and ``checkGuides.test.ts``'s.
 
 Pure: the data directory is in ``tmp_path``, every variable the checks read is set or removed through ``monkeypatch``

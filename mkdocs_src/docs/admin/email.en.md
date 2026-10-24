@@ -14,7 +14,7 @@ What LibreFolio sends:
   login page: [Forgotten Passwords](email_flows.md#forgot-password).
 - **The setup link of the initial administrator**, once, when LibreFolio creates that administrator
   from `LIBREFOLIO_ADMIN_EMAIL` and generates the link itself: see
-  [Hosting for Others](hosting_providers.md#initial-admin).
+  [Hosting for Others](hosting_instances.md#initial-admin).
 - **A link to confirm the email address of a new account**, when **Require Email Verification** is
   on: see [Email Verification](email_flows.md#verification).
 - **A notice to the old address** when someone changes the email address of their account:
@@ -22,7 +22,7 @@ What LibreFolio sends:
 
 The emails with a link also need `LIBREFOLIO_PUBLIC_URL`: see [Emails with a Link](email_flows.md#public-url).
 While a hosting provider blocks the instance, LibreFolio sends no email at all
-([Hosting for Others](hosting_providers.md#instance-block)).
+([Hosting for Others](hosting_instances.md#instance-block)).
 
 To set it up:
 

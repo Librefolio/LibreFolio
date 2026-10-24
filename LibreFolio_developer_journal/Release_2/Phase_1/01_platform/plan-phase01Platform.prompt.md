@@ -10626,7 +10626,7 @@ DOC-2 (ricerca per lingua), DOC-1 (riordino della guida admin, con le guide Tail
    con il suo test, `instance_block.py`, `hosting_providers.en.md`, `security.md`, `api/index.md`, il testo `adminHint` nei 4
    cataloghi, i commenti della pagina) dicono `--recover previous`. I file di B (`cli_tools.en.md`, `backup_cli.py`,
    `backup_restore.en.md`) restano a B.
-4. ⏳ **DOC-1 · riordino della guida admin** (albero e inventario: `ondata5/H-DOC1-inventario.md`, approvato dal developer;
+4. ✅ **DOC-1 · riordino della guida admin** (albero e inventario: `ondata5/H-DOC1-inventario.md`, approvato dal developer;
    pagine piatte, gerarchia nella navigazione, che il developer vuole **annidata**). Due giri, per non fare conflitti con i rami
    di B e A che toccavano tre pagine.
    - ✅ **Giro 1** (23/10): `configuration` → 4 pagine, `email` → 3, `service_exposure` → 2, `sleep_wake` → 2, `connection_checks` → 2
@@ -10647,8 +10647,20 @@ DOC-2 (ricerca per lingua), DOC-1 (riordino della guida admin, con le guide Tail
      contro le ancore congelate `backend/test_scripts/fixtures/docs_admin/old_anchors.json`, il sito costruito, la nav);
      Vitest `movedAnchors` (75 casi, 7 mutanti su 7 uccisi); `checkGuides` (debito di traduzione 33 → 3: le pagine nuove sono
      solo inglesi). **E2E** nello slot: `security-tab` ASEC-E-04 1/1 e `csp-collector` 23 verdi (1 saltato).
-   - ⏳ **Giro 2**: `hosting_providers`, `backup_restore`, `cli_tools`, dopo il merge dei rami di B (B5-1) e A (A5-1b/A5-2) ancora
-     aperti; stesso metodo, stesso test.
+   - ✅ **Giro 2** (24/10, sul ramo con A5-1/A5-1b/A5-2 dentro, `2d6c549dd`): `hosting_providers` → 4 pagine (`hosting_providers`,
+     `hosting_instances`, `hosting_panel_api`, `hosting_panel_backups`), `backup_restore` → 3 (`backup_sealed`, `backup_moving`),
+     `cli_tools` → 2 (`cli_backup`). Stesso script, rifatto sull'albero vero (la prova di prima non aveva la sezione di A):
+     le ancore di A5-2 (`restore-owner`, `owner-email-change` → `hosting_instances`; `restore-owner-pending` → `hosting_panel_backups`) sono
+     nella mappa dei reindirizzamenti. Mappa `moved-anchors.js` +74 ancore (39 + 20 + 15), `old_anchors.json` esteso alle 3 pagine
+     (46 + 37 + 34 ancore, da `2d6c549dd`), nav annidata e `nav_translations` it/fr/es per 6 etichette nuove.
+     Aggiornati: 6 voci di `checkGuides.json` (`panel-api`, `panel-token`, `restore-upload-limit` ×2, `recipients`, `owner_email_change`), il
+     link della pagina di ripristino interrotto (`cli_backup/#backup-pending-unreadable`) e i suoi test, `test_hosting_panel_vectors.py`
+     (ora legge `hosting_panel_api.en.md`) e il testo del runner.
+     > **⚠️ Fuori pista**: il link del motivo `owner_assignment` (H5-3) era a livello di pagina `admin/backup_restore/` perché `--recover owner`
+     > non era documentato lì; ora punta alla sezione che lo documenta, `admin/hosting_panel_backups/#restore-owner-pending` (la pagina non ha
+     > traduzioni, quindi l'ancora regge nelle tre lingue). Test della pagina e del gate aggiornati; nota in `security.md`.
+     > Verifiche: build strict, `check-links` (97), `utils docs-admin-references` 47, Vitest 905 (`features/instance`, `api`, `i18n`,
+     > `movedAnchors`, `cspNotice`, `SecurityTab`), `services hosting-panel-vectors`, `front check` 0/0, prettier, ruff, black. Nessun E2E.
 5. ✅ **H5-3 · lo step `restore-owner` e la guardia** (24/10). Dopo un ripristino dall'app su un'istanza `managed`, il primo
    avvio dà al titolare il suo account (B: `assign_restored_owner`; A: `assign_owner_and_send_reset`, non ancora nel ramo, i test
    usano un finto A). Finché non è fatto, l'istanza non serve dati, sullo stesso meccanismo di B-33.
@@ -10660,7 +10672,7 @@ DOC-2 (ricerca per lingua), DOC-1 (riordino della guida admin, con le guide Tail
    > `.restore/owner.lock`); un altro che ha trovato `pending` resterebbe chiuso per sempre, quindi la dipendenza del router attende
    > `refresh_restore_state()`: solo per `pending`, al più ogni 2 s (`OWNER_RECHECK_SECONDS`), riesamina in un thread; un codice non si
    > riesamina mai (rimedio: `./dev.py backup pending --recover owner` di B + riavvio). Pagina: prop `reason`; per `owner_assignment`
-   > titolo/messaggio/hint nuovi (3 chiavi × 4 lingue), cita il comando e linka `admin/backup_restore/` senza ancora.
+   > titolo/messaggio/hint nuovi (3 chiavi × 4 lingue), cita il comando e linka `admin/backup_restore/` senza ancora (dal giro 2 di DOC-1: `admin/hosting_panel_backups/#restore-owner-pending`).
    > Test (test-author, rossi prima): `services restore-owner-guard` 46, `api restore-owner-guard` 31, `restore-guard` 25, `await-restore-mode`
    > 38, `api restore-interrupted` 34; Vitest 111 (pagina, gate, `instanceBlockState`). Il test-author ha provato 10 mutanti su un'implementazione
    > di riferimento. Doc: `hosting_providers` (sezione `restore-owner-pending`), `security.md`, `overview.md` (passo 18, numerazione
