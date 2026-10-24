@@ -13,13 +13,15 @@ which fails the test (``pytest.fail``, never a skip) with the ``ImportError``: t
     confirmed via ``cli`` or ``panel`` (an owner id written there all the same); no owner id; an outcome already
     recorded (a second call after a first one, too). Otherwise A's ``assign_owner_and_send_reset(session, user_id)`` is
     called once, with the owner's id and an ``AsyncSession`` on the data directory's database (``expire_on_commit``
-    off): the fake reads the owner's row through it. What it answers is recorded in ``restore.json`` and in the state
-    returned: ``owner_outcome`` the outcome's value (``sent``, ``link_only``, ``already_issued``, ``already_done``);
-    ``owner_reset_path`` the result's ``reset_path`` for ``link_only`` only. ``OwnerAssignmentError`` (each of A's four
-    codes): ``owner_outcome`` ``error:<CODE>``, no path. Any other exception: logged, nothing recorded, the state still
-    waiting for the next start, nothing raised. ``_assign_owner()`` raising ``ImportError`` (A not merged): an error
-    logged, nothing recorded, nothing raised. Without arguments, the configured data directory.
-(c) The log: no line of any of these calls holds the owner's email, its username, the reset path, or the text of an
+    off) and nothing else (no ``since``, no ``now``): the fake reads the owner's row through it. What it answers is
+    recorded in ``restore.json`` and in the state returned: ``owner_outcome`` the outcome's value (``sent`` or
+    ``link_only``). The state has no ``owner_reset_path`` (R13 security review): A writes the link in the instance log
+    itself, so a stray ``reset_path`` on the result (the canary) is never read, copied, logged or stored.
+    ``OwnerAssignmentError`` (each of A's four codes): ``owner_outcome`` ``error:<CODE>``. Any other exception: logged,
+    nothing recorded, the state still waiting for the next start (which calls A again and records what A answers),
+    nothing raised. ``_assign_owner()`` raising ``ImportError`` (A not merged): an error logged, nothing recorded,
+    nothing raised. Without arguments, the configured data directory.
+(c) The log: no line of any of these calls holds the owner's email, its username, the link, or the text of an
     unexpected exception (its type only).
 (d) Security addendum §7.3 (written RED before it): the step takes a non-blocking exclusive ``flock`` on
     ``.restore/owner.lock`` (created 0600) before calling A and until the outcome is recorded; a worker that cannot take
@@ -34,20 +36,22 @@ which fails the test (``pytest.fail``, never a skip) with the ``ImportError``: t
     ``.restore/owner.lock`` (same file, mode 0600), ``False`` when another process holds it (never raising for that),
     released at the end however the block ended. ``apply.reset_owner_assignment(data_dir=None) -> bool``: for a committed
     restore confirmed via ``admin`` with an owner and an ``owner_outcome`` starting ``error:``, clears ``owner_outcome``
-    and ``owner_reset_path`` (nothing else) and answers whether a server serves the data directory; any other state
+    (nothing else: the state has no ``owner_reset_path`` key before nor after) and answers whether a server serves the
+    data directory; any other state
     (none, no ``.restore``, a phase before or after, ``cli``/``panel``, no owner, no outcome, an outcome of A) raises
     ``RestoreOwnerNotFailedError`` (code ``owner_not_failed``) and writes nothing — so a second call does too; the owner
     lock held elsewhere raises ``RestoreInUseError``; an unreadable state propagates ``RestoreStateUnreadableError``.
     Afterwards ``owner_assignment_problem`` is ``"pending"`` and the startup step calls A again. One log line (stage,
     user id, the code reset), never an address, a name or a link.
 
-How. A's code is not in this branch. Its signature (A5-2, ``side-session-notes/…/A5-2-firma-ripristino-titolare.md``)
-is played by the fakes of this module: ``FakeOutcome`` (a ``StrEnum`` of A's four values), ``FakeResult`` (A's frozen
-dataclass ``OwnerResetResult``: ``outcome``, ``user_id``, ``username``, ``email``, ``reset_path``, ``expires_at``) and
-``FakeOwnerAssignmentError`` (an ``Exception`` with A's ``code``). ``owner.py`` looks A's function up through
-``owner._assign_owner()``, a function of no argument that returns the pair ``(assign_owner_and_send_reset,
-OwnerAssignmentError)`` — it imports ``backend.app.services.email.flows`` lazily —; every test replaces it with one that
-returns a ``FakeA`` (an async callable recording each call) and ``FakeOwnerAssignmentError``, or raises ``ImportError``.
+How. A's signature (``backend.app.services.accounts.instance_owner.assign_owner_and_send_reset(session, user_id, *,
+now=None) -> OwnerResetResult``) is played by the fakes of this module: ``FakeOutcome`` (a ``StrEnum`` of A's two
+values), ``FakeResult`` (A's frozen dataclass ``OwnerResetResult``: ``outcome``, ``user_id``, ``username``, ``email``,
+``expires_at``; for ``link_only`` a subclass that carries a stray ``reset_path`` canary) and ``FakeOwnerAssignmentError``
+(an ``Exception`` with A's ``code``). ``owner.py`` looks A's function up through ``owner._assign_owner()``, a function of
+no argument that returns the pair ``(assign_owner_and_send_reset, OwnerAssignmentError)`` — it imports
+``backend.app.services.accounts.instance_owner`` lazily —; every test replaces it with one that returns a ``FakeA`` (an
+async callable recording each call) and ``FakeOwnerAssignmentError``, or raises ``ImportError``.
 
 The data directory of a test is under ``tmp_path``: a copy of ``test_backup_staging.py``'s database at the head (made
 once for the module by ``alembic upgrade`` in a process of its own) holding the owner's account, and ``.restore/
@@ -64,6 +68,7 @@ from __future__ import annotations
 import asyncio
 import fcntl
 import importlib
+import inspect
 import json
 import os
 import shutil
@@ -99,8 +104,9 @@ OWNER_SIDE_VARIABLES = ("LIBREFOLIO_ADMIN_USERNAME", "LIBREFOLIO_ADMIN_BOOTSTRAP
 #: The owner's email (the operator's) and the account the owner chose, as the restored database holds it.
 OWNER_EMAIL = "owner.b51@example.com"
 OWNER_USERNAME = "b51_chosen_owner"
-#: A's reset link for ``link_only``: a secret, never in a log line.
-RESET_PATH = "/reset-password#token=b51-secret-token-never-in-a-log-0123456789"
+#: A stray ``reset_path`` on the result of ``link_only``: the code must never read it, so it is in no file, no state, no
+#: log line. (A writes the real link in the instance log itself; this module proves the restore never touches one.)
+LINK_CANARY = "/reset-password#token=b51-canary-token-never-anywhere-0123456789"
 #: The text of an unexpected failure of A's function: only its type may be logged.
 UNEXPECTED_TEXT = "b51 unexpected failure text that must not reach the log"
 STAGE_ID = "0123456789abcdef0123456789abcdef"
@@ -117,12 +123,10 @@ LOG_CANARY = "b51 owner test: a canary through a logger of owner's name"
 
 
 class FakeOutcome(StrEnum):
-    """A's ``OwnerResetOutcome``."""
+    """A's ``OwnerResetOutcome``: only these two since the R13 security review."""
 
     SENT = "sent"
     LINK_ONLY = "link_only"
-    ALREADY_ISSUED = "already_issued"
-    ALREADY_DONE = "already_done"
 
 
 @dataclass(frozen=True)
@@ -133,8 +137,14 @@ class FakeResult:
     user_id: int
     username: str
     email: str
-    reset_path: str | None
     expires_at: datetime | None
+
+
+@dataclass(frozen=True)
+class LeakyResult(FakeResult):
+    """A result that carries, besides A's fields, a ``reset_path``: the canary the restore must never read."""
+
+    reset_path: str = LINK_CANARY
 
 
 class FakeOwnerAssignmentError(Exception):
@@ -148,29 +158,29 @@ class FakeOwnerAssignmentError(Exception):
 
 @dataclass
 class FakeA:
-    """A's ``assign_owner_and_send_reset(session, user_id)``: each call recorded with what its session showed (its type,
-    whether it expires on commit, the username of the row ``user_id`` in its database), then ``outcome`` answered or
-    ``raises`` raised."""
+    """A's ``assign_owner_and_send_reset(session, user_id, *, now=None)``: each call recorded with what its session showed
+    (its type, whether it expires on commit, the username of the row ``user_id`` in its database) and the ``now`` it was
+    given (the restore passes none), then ``outcome`` answered or ``raises`` raised. A ``since=`` is a ``TypeError``,
+    as for the real function."""
 
     outcome: FakeOutcome | None = None
     raises: BaseException | None = None
     calls: list[dict[str, Any]] = field(default_factory=list)
 
-    async def __call__(self, session: Any, user_id: int) -> FakeResult:
+    async def __call__(self, session: Any, user_id: int, *, now: datetime | None = None) -> FakeResult:
         row = (await session.execute(text("SELECT username FROM users WHERE id = :id"), {"id": user_id})).first()
         sync = getattr(session, "sync_session", None)
-        self.calls.append({"user_id": user_id, "async_session": isinstance(session, AsyncSession), "expire_on_commit": getattr(sync, "expire_on_commit", None), "username": row[0] if row else None})
+        self.calls.append({"user_id": user_id, "async_session": isinstance(session, AsyncSession), "expire_on_commit": getattr(sync, "expire_on_commit", None), "username": row[0] if row else None, "now": now})
         if self.raises is not None:
             raise self.raises
         assert self.outcome is not None, "a FakeA answers an outcome or raises"
-        reset_path = RESET_PATH if self.outcome is FakeOutcome.LINK_ONLY else None
-        expires = None if self.outcome is FakeOutcome.ALREADY_DONE else FINISHED_AT + timedelta(days=3)
-        return FakeResult(outcome=self.outcome, user_id=user_id, username=OWNER_USERNAME, email=OWNER_EMAIL, reset_path=reset_path, expires_at=expires)
+        result_type = LeakyResult if self.outcome is FakeOutcome.LINK_ONLY else FakeResult
+        return result_type(outcome=self.outcome, user_id=user_id, username=OWNER_USERNAME, email=OWNER_EMAIL, expires_at=FINISHED_AT + timedelta(days=3))
 
 
 def use_fake(monkeypatch: pytest.MonkeyPatch, owner: ModuleType, fake: FakeA) -> None:
     """``owner._assign_owner`` replaced: it returns the pair ``(fake, FakeOwnerAssignmentError)``, as the real one
-    returns ``(flows.assign_owner_and_send_reset, flows.OwnerAssignmentError)``."""
+    returns ``(instance_owner.assign_owner_and_send_reset, instance_owner.OwnerAssignmentError)``."""
     assert callable(getattr(owner, "_assign_owner", None)), "[new] B5-1: owner._assign_owner() is the lazy lookup of A's function (interface §4)"
     monkeypatch.setattr(owner, "_assign_owner", lambda: (fake, FakeOwnerAssignmentError))
 
@@ -182,7 +192,7 @@ def a_not_merged(monkeypatch: pytest.MonkeyPatch, owner: ModuleType) -> list[str
 
     def missing() -> tuple[Any, type[Exception]]:
         calls.append("_assign_owner")
-        raise ImportError("cannot import name 'assign_owner_and_send_reset' from 'backend.app.services.email.flows'")
+        raise ImportError("cannot import name 'assign_owner_and_send_reset' from 'backend.app.services.accounts.instance_owner'")
 
     monkeypatch.setattr(owner, "_assign_owner", missing)
     return calls
@@ -258,8 +268,9 @@ def await_dispose(engine: Any) -> None:
     asyncio.run(engine.dispose())
 
 
-def write_state(root: Path, *, status: str = "committed", confirmed_via: str = "admin", owner_user_id: int | None = None, owner_outcome: str | None = None, owner_reset_path: str | None = None) -> bytes:
-    """``.restore/restore.json`` as a start leaves a restore in ``status``, raw JSON with the owner's keys: its bytes."""
+def write_state(root: Path, *, status: str = "committed", confirmed_via: str = "admin", owner_user_id: int | None = None, owner_outcome: str | None = None, stale: dict[str, Any] | None = None) -> bytes:
+    """``.restore/restore.json`` as a start leaves a restore in ``status``, raw JSON with the owner's keys (never
+    ``owner_reset_path``): its bytes. ``stale``: keys of an older LibreFolio written into it as they are."""
     record: dict[str, Any] = {
         "format": 1,
         "status": status,
@@ -273,7 +284,7 @@ def write_state(root: Path, *, status: str = "committed", confirmed_via: str = "
         "action": "same",
         "owner_user_id": owner_user_id,
         "owner_outcome": owner_outcome,
-        "owner_reset_path": owner_reset_path,
+        **(stale or {}),
     }
     if status in ("applying", "applied", "rolling_back"):
         record["swap"] = [{"name": name, "live": True, "staged": True} for name in ("sqlite", "custom-uploads", "broker_reports", "scenario_catalog")]
@@ -297,10 +308,14 @@ def state_bytes(root: Path) -> bytes | None:
     return path.read_bytes() if path.exists() else None
 
 
-def recorded(root: Path) -> tuple[Any, Any, Any]:
-    """What ``restore.json`` says of the owner: id, outcome, reset path."""
-    record = json.loads(restore_state_path(root).read_text(encoding="utf-8"))
-    return tuple(record.get(name, "<missing>") for name in ("owner_user_id", "owner_outcome", "owner_reset_path"))
+def recorded(root: Path) -> tuple[Any, Any]:
+    """What ``restore.json`` says of the owner: id, outcome. The file never holds an ``owner_reset_path`` key (nor any
+    link): a state written by the code carries none."""
+    text_ = restore_state_path(root).read_text(encoding="utf-8")
+    record = json.loads(text_)
+    assert "owner_reset_path" not in record, f"the state has no owner_reset_path key: {sorted(record)}"
+    assert LINK_CANARY not in text_ and "reset-password" not in text_, "no link in restore.json"
+    return tuple(record.get(name, "<missing>") for name in ("owner_user_id", "owner_outcome"))
 
 
 async def assigned(owner: ModuleType, root: Path | None) -> tuple[Any, BaseException | None, list[dict[str, Any]]]:
@@ -318,9 +333,9 @@ async def assigned(owner: ModuleType, root: Path | None) -> tuple[Any, BaseExcep
 
 
 def no_secret_in(events: list[dict[str, Any]], *extra: str) -> None:
-    """No log line holds the owner's email, its username, the reset path, nor any of ``extra``."""
+    """No log line holds the owner's email, its username, the canary link, nor any of ``extra``."""
     lines = repr(events).lower()
-    shown = [secret for secret in (OWNER_EMAIL, OWNER_USERNAME, RESET_PATH, "b51-secret-token", *extra) if secret.lower() in lines]
+    shown = [secret for secret in (OWNER_EMAIL, OWNER_USERNAME, LINK_CANARY, "b51-canary-token", "reset-password", *extra) if secret.lower() in lines]
     assert shown == [], f"the log holds {shown}: {events}"
 
 
@@ -352,18 +367,18 @@ def test_the_owner_s_choice_is_required_in_the_managed_profile_only(owner, data_
 async def test_a_committed_admin_restore_assigns_the_chosen_owner_once_and_records_the_outcome(owner, data_dir, monkeypatch, outcome):
     """(b) Committed, via ``admin``, the owner chosen, nothing recorded yet: A's function called once, with the owner's
     id and an ``AsyncSession`` (``expire_on_commit`` off) on the data directory's database — it finds the owner's row
-    there —; its outcome recorded in ``restore.json`` and in the state returned, the reset path only for ``link_only``.
-    No log line holds the email, the username or the path."""
+    there —; its outcome recorded in ``restore.json`` and in the state returned. The stray ``reset_path`` of the
+    ``link_only`` result (the canary) is in no file, no state, no log line; the state has no such field."""
     print_section(f"(b) B5-1 assign_restored_owner: {outcome.value}")
     fake = FakeA(outcome=outcome)
     use_fake(monkeypatch, owner, fake)
     write_state(data_dir.root, owner_user_id=data_dir.owner_id)
     returned, raised, events = await assigned(owner, data_dir.root)
     assert raised is None, f"the step never raises: {type(raised).__name__}: {raised}"
-    assert fake.calls == [{"user_id": data_dir.owner_id, "async_session": True, "expire_on_commit": False, "username": OWNER_USERNAME}], f"A's function called once, with the owner's id and a session on this database: {fake.calls}"
-    path = RESET_PATH if outcome is FakeOutcome.LINK_ONLY else None
-    assert recorded(data_dir.root) == (data_dir.owner_id, outcome.value, path), f"restore.json records {outcome.value}: {recorded(data_dir.root)}"
-    assert returned is not None and (returned.status, returned.owner_user_id, returned.owner_outcome, returned.owner_reset_path) == ("committed", data_dir.owner_id, outcome.value, path), f"the state returned says it too: {returned}"
+    assert fake.calls == [{"user_id": data_dir.owner_id, "async_session": True, "expire_on_commit": False, "username": OWNER_USERNAME, "now": None}], f"A's function called once, with the owner's id and a session on this database, nothing else: {fake.calls}"
+    assert recorded(data_dir.root) == (data_dir.owner_id, outcome.value), f"restore.json records {outcome.value}: {recorded(data_dir.root)}"
+    assert returned is not None and (returned.status, returned.owner_user_id, returned.owner_outcome) == ("committed", data_dir.owner_id, outcome.value), f"the state returned says it too: {returned}"
+    assert "owner_reset_path" not in type(returned).model_fields and LINK_CANARY not in repr(returned.model_dump()), f"the state has no field for a link: {returned}"
     no_secret_in(events)
     print_success(f"{outcome.value} recorded, one call")
 
@@ -371,7 +386,7 @@ async def test_a_committed_admin_restore_assigns_the_chosen_owner_once_and_recor
 @pytest.mark.asyncio
 @pytest.mark.parametrize("code", ASSIGNMENT_CODES)
 async def test_an_owner_assignment_error_is_recorded_as_error_and_its_code(owner, data_dir, monkeypatch, code):
-    """(b) A's ``OwnerAssignmentError``: ``owner_outcome`` ``error:<CODE>``, no reset path, nothing raised; its message
+    """(b) A's ``OwnerAssignmentError``: ``owner_outcome`` ``error:<CODE>``, nothing raised; its message
     (which names the email) never in the log."""
     fake = FakeA(raises=FakeOwnerAssignmentError(code))
     use_fake(monkeypatch, owner, fake)
@@ -379,7 +394,7 @@ async def test_an_owner_assignment_error_is_recorded_as_error_and_its_code(owner
     returned, raised, events = await assigned(owner, data_dir.root)
     assert raised is None, f"the step never raises: {type(raised).__name__}: {raised}"
     assert len(fake.calls) == 1, f"A's function called once: {fake.calls}"
-    assert recorded(data_dir.root) == (data_dir.owner_id, f"error:{code}", None), f"restore.json records error:{code}: {recorded(data_dir.root)}"
+    assert recorded(data_dir.root) == (data_dir.owner_id, f"error:{code}"), f"restore.json records error:{code}: {recorded(data_dir.root)}"
     no_secret_in(events)
     print_success(f"error:{code}")
 
@@ -387,22 +402,24 @@ async def test_an_owner_assignment_error_is_recorded_as_error_and_its_code(owner
 @pytest.mark.asyncio
 async def test_an_unexpected_failure_leaves_the_owner_pending_for_the_next_start(owner, data_dir, monkeypatch):
     """(b) Any other exception of A's function: logged by its type only, nothing recorded — the next start calls A again
-    (A is idempotent: ``already_issued``) —, nothing raised."""
+    (each call of A does the whole treatment and is harmless to repeat) —, nothing raised."""
     fake = FakeA(raises=RuntimeError(UNEXPECTED_TEXT))
     use_fake(monkeypatch, owner, fake)
     before = write_state(data_dir.root, owner_user_id=data_dir.owner_id)
     _returned, raised, events = await assigned(owner, data_dir.root)
     assert raised is None, f"the step never raises: {type(raised).__name__}: {raised}"
     assert len(fake.calls) == 1, f"A's function called once: {fake.calls}"
-    assert recorded(data_dir.root) == (data_dir.owner_id, None, None), f"nothing recorded: {recorded(data_dir.root)}"
+    assert recorded(data_dir.root) == (data_dir.owner_id, None), f"nothing recorded: {recorded(data_dir.root)}"
     assert state_bytes(data_dir.root) == before, "restore.json as it was"
     assert levels(events) & {"warning", "error", "critical"}, f"the failure is logged: {events}"
     no_secret_in(events, UNEXPECTED_TEXT)
-    # The next start: A answers, the outcome is recorded.
-    fake.raises, fake.outcome = None, FakeOutcome.ALREADY_ISSUED
+    # The next start: A is called again and whatever it answers is recorded.
+    fake.raises, fake.outcome = None, FakeOutcome.LINK_ONLY
     _returned, raised, events = await assigned(owner, data_dir.root)
-    assert raised is None and recorded(data_dir.root) == (data_dir.owner_id, "already_issued", None), f"the next start records already_issued: {recorded(data_dir.root)}"
-    print_success("RuntimeError: pending, logged by type; then already_issued")
+    assert raised is None and len(fake.calls) == 2, f"the next start calls A again: {raised}, {fake.calls}"
+    assert recorded(data_dir.root) == (data_dir.owner_id, "link_only"), f"the next start records what A answered: {recorded(data_dir.root)}"
+    no_secret_in(events)
+    print_success("RuntimeError: pending, logged by type; then A called again and link_only recorded")
 
 
 @pytest.mark.asyncio
@@ -426,7 +443,7 @@ LEFT_ALONE = [
     *(pytest.param({"status": status, "owner_user_id": "owner"}, id=f"{status}") for status in ("pending", "applying", "applied", "rolling_back", "rolled_back")),
     *(pytest.param({"confirmed_via": via, "owner_user_id": "owner"}, id=f"committed-via-{via}") for via in ("cli", "panel")),
     pytest.param({"owner_user_id": None}, id="committed-no-owner"),
-    *(pytest.param({"owner_user_id": "owner", "owner_outcome": outcome}, id=f"already-{outcome}") for outcome in ("sent", "link_only", "already_issued", "already_done", "error:EMAIL_TAKEN")),
+    *(pytest.param({"owner_user_id": "owner", "owner_outcome": outcome}, id=f"already-{outcome}") for outcome in ("sent", "link_only", "error:EMAIL_TAKEN")),
 ]
 
 
@@ -441,8 +458,6 @@ async def test_anything_but_a_committed_admin_restore_waiting_for_its_owner_is_l
     before = None
     if fields is not None:
         given = {name: (data_dir.owner_id if value == "owner" else value) for name, value in fields.items()}
-        if given.get("owner_outcome") == "link_only":
-            given["owner_reset_path"] = RESET_PATH
         before = write_state(data_dir.root, **given)
     returned, raised, events = await assigned(owner, data_dir.root)
     assert raised is None, f"the step never raises: {type(raised).__name__}: {raised}"
@@ -468,6 +483,52 @@ async def test_a_second_call_after_a_recorded_outcome_does_nothing(owner, data_d
     print_success("second call: nothing")
 
 
+#: What a state written before the R13 security review carries: a link, a secret that must go.
+STALE_KEY = {"owner_reset_path": LINK_CANARY}
+
+
+def test_a_state_that_still_carries_owner_reset_path_reads_fine_and_the_key_is_dropped(data_dir):
+    """(b) R13: a ``restore.json`` of an older LibreFolio that still has ``owner_reset_path`` is read without an error;
+    the state has no such field, so the link is nowhere in what ``read_restore`` returns."""
+    write_state(data_dir.root, owner_user_id=data_dir.owner_id, stale=STALE_KEY)
+    state = apply_module().read_restore(data_dir.root)
+    assert state is not None and (state.status, state.owner_user_id, state.owner_outcome) == ("committed", data_dir.owner_id, None), f"read fine: {state}"
+    assert "owner_reset_path" not in type(state).model_fields and "owner_reset_path" not in state.model_dump(), "the state has no field for the link"
+    assert LINK_CANARY not in repr(state.model_dump()), "the stale link is not in what is read"
+    print_success("stale owner_reset_path: ignored")
+
+
+@pytest.mark.asyncio
+async def test_recording_an_outcome_rewrites_a_state_with_a_stale_link_without_it(owner, data_dir, monkeypatch):
+    """(b) R13: the start that records the outcome of a state still carrying ``owner_reset_path`` writes it back without
+    the key: the old link is in the file no more."""
+    fake = FakeA(outcome=FakeOutcome.SENT)
+    use_fake(monkeypatch, owner, fake)
+    write_state(data_dir.root, owner_user_id=data_dir.owner_id, stale=STALE_KEY)
+    _returned, raised, events = await assigned(owner, data_dir.root)
+    assert raised is None and len(fake.calls) == 1, f"precondition: the owner was assigned: {raised}, {fake.calls}"
+    assert recorded(data_dir.root) == (data_dir.owner_id, "sent"), f"recorded, and the file holds no owner_reset_path nor the old link: {recorded(data_dir.root)}"
+    no_secret_in(events)
+    print_success("stale owner_reset_path: gone after the record")
+
+
+@pytest.mark.parametrize("outcome", ["sent", "link_only", "error:EMAIL_TAKEN"])
+def test_record_owner_outcome_takes_the_outcome_only_and_records_it_once(data_dir, outcome):
+    """(b) R13: ``apply.record_owner_outcome(data_dir, stage_id, outcome)`` — three arguments, no link — records ``sent``,
+    ``link_only`` or ``error:<CODE>`` in ``restore.json`` without an ``owner_reset_path`` key; a second record of the
+    same restore changes nothing."""
+    apply = apply_module()
+    assert list(inspect.signature(apply.record_owner_outcome).parameters) == ["data_dir", "stage_id", "outcome"], "[new] R13: record_owner_outcome(data_dir, stage_id, outcome): it is handed no link"
+    write_state(data_dir.root, owner_user_id=data_dir.owner_id)
+    state = apply.record_owner_outcome(data_dir.root, STAGE_ID, outcome)
+    assert state is not None and (state.owner_user_id, state.owner_outcome) == (data_dir.owner_id, outcome), f"recorded: {state}"
+    assert recorded(data_dir.root) == (data_dir.owner_id, outcome), f"restore.json says it, with no link key: {recorded(data_dir.root)}"
+    after_first = state_bytes(data_dir.root)
+    apply.record_owner_outcome(data_dir.root, STAGE_ID, "sent" if outcome != "sent" else "link_only")
+    assert state_bytes(data_dir.root) == after_first, "a second record changes nothing"
+    print_success(f"record_owner_outcome: {outcome}")
+
+
 @pytest.mark.asyncio
 async def test_without_arguments_the_step_reads_the_configured_data_directory(owner, data_dir, monkeypatch):
     """(b) ``assign_restored_owner()`` without arguments: the configured data directory (the startup step's call)."""
@@ -476,7 +537,7 @@ async def test_without_arguments_the_step_reads_the_configured_data_directory(ow
     write_state(data_dir.root, owner_user_id=data_dir.owner_id)
     _returned, raised, events = await assigned(owner, None)
     assert raised is None, f"the step never raises: {type(raised).__name__}: {raised}"
-    assert (len(fake.calls), recorded(data_dir.root)) == (1, (data_dir.owner_id, "sent", None)), f"the configured data directory's restore: {fake.calls}, {recorded(data_dir.root)}"
+    assert (len(fake.calls), recorded(data_dir.root)) == (1, (data_dir.owner_id, "sent")), f"the configured data directory's restore: {fake.calls}, {recorded(data_dir.root)}"
     no_secret_in(events)
     print_success("no arguments: the configured data directory")
 
@@ -519,14 +580,14 @@ class GatedA(FakeA):
     entered: list[int] = field(default_factory=list)
     timed_out: bool = False
 
-    async def __call__(self, session: Any, user_id: int) -> FakeResult:
+    async def __call__(self, session: Any, user_id: int, *, now: datetime | None = None) -> FakeResult:
         self.entered.append(user_id)
         if len(self.entered) == 1:
             try:
                 await asyncio.wait_for(self.released.wait(), timeout=DEADLINE_S)
             except TimeoutError:
                 self.timed_out = True
-        return await super().__call__(session, user_id)
+        return await super().__call__(session, user_id, now=now)
 
 
 @pytest.mark.asyncio
@@ -550,7 +611,7 @@ async def test_two_workers_at_once_call_a_once(owner, data_dir, monkeypatch):
     assert not fake.timed_out, "barrier: A's first call was released by a worker returning, not by the deadline"
     assert fake.entered == [data_dir.owner_id], f"A's function called once, by one worker: {fake.entered}"
     assert sorted(result is None for result in results) == [False, True], f"one worker records the outcome, the other returns None: {results}"
-    assert recorded(data_dir.root) == (data_dir.owner_id, "sent", None), f"the outcome recorded once: {recorded(data_dir.root)}"
+    assert recorded(data_dir.root) == (data_dir.owner_id, "sent"), f"the outcome recorded once: {recorded(data_dir.root)}"
     no_secret_in([event for event in events if event.get("event") != LOG_CANARY])
     print_success("two workers: one call of A")
 
@@ -570,7 +631,7 @@ async def test_a_worker_that_cannot_take_the_owner_lock_leaves_the_owner_to_the_
     assert state_bytes(data_dir.root) == before, "restore.json as it was"
     no_secret_in(events)
     _returned, raised, _events = await assigned(owner, data_dir.root)
-    assert (raised, len(fake.calls), recorded(data_dir.root)) == (None, 1, (data_dir.owner_id, "sent", None)), f"the lock free: the owner assigned: {fake.calls}, {recorded(data_dir.root)}"
+    assert (raised, len(fake.calls), recorded(data_dir.root)) == (None, 1, (data_dir.owner_id, "sent")), f"the lock free: the owner assigned: {fake.calls}, {recorded(data_dir.root)}"
     print_success("the lock held elsewhere: None, A not called")
 
 
@@ -632,8 +693,6 @@ def test_owner_assignment_problem_says_whether_the_owner_s_account_is_still_open
     before = None
     if fields is not None:
         given = {name: (data_dir.owner_id if value == "owner" else value) for name, value in fields.items()}
-        if given.get("owner_outcome") == "link_only":
-            given["owner_reset_path"] = RESET_PATH
         before = write_state(data_dir.root, **given)
     assert hook(data_dir.root) == expected, f"{fields}: {expected!r}"
     assert state_bytes(data_dir.root) == before, f"{fields}: restore.json as it was"
@@ -756,9 +815,8 @@ def lock_is_free(root: Path) -> bool:
 
 
 def failed_state(root: Path, code: str = "EMAIL_TAKEN", owner_id: int | None = None, **fields: Any) -> bytes:
-    """A committed restore from the app whose owner assignment failed with ``code``; a stale reset path is in it, so that
-    clearing it is observable."""
-    return write_state(root, owner_user_id=owner_id, owner_outcome=f"error:{code}", owner_reset_path=RESET_PATH, **fields)
+    """A committed restore from the app whose owner assignment failed with ``code`` (no ``owner_reset_path`` key)."""
+    return write_state(root, owner_user_id=owner_id, owner_outcome=f"error:{code}", **fields)
 
 
 def state_fields(root: Path) -> dict[str, Any]:
@@ -843,19 +901,23 @@ def test_reset_owner_assignment_exception_is_a_restore_state_error_with_its_code
 
 
 @pytest.mark.parametrize("code", ASSIGNMENT_CODES)
-def test_reset_clears_the_failed_outcome_and_the_path_and_changes_nothing_else(data_dir, code):
-    """(f) B5-1b §9.1: ``owner_outcome`` ``error:<CODE>`` (each of A's codes): ``owner_outcome`` and ``owner_reset_path``
-    become ``None``, every other field of ``restore.json`` is as it was, and nobody serving: ``False``."""
+def test_reset_clears_the_failed_outcome_and_changes_nothing_else(data_dir, code):
+    """(f) B5-1b §9.1: ``owner_outcome`` ``error:<CODE>`` (each of A's codes): ``owner_outcome`` becomes ``None``, every
+    other field of the state is equal as a value (the file is rewritten through the model, so dates may change their
+    spelling: models are compared), the file has no ``owner_reset_path`` key before nor after, and nobody serving: ``False``."""
     print_section("(f) B5-1b reset_owner_assignment")
     reset = reset_function()
     failed_state(data_dir.root, code, data_dir.owner_id)
+    before_raw = state_fields(data_dir.root)
+    assert before_raw["owner_outcome"] == f"error:{code}" and "owner_reset_path" not in before_raw, "precondition: a failed assignment, no link key"
     before = apply_module().read_restore(data_dir.root).model_dump()
-    assert (before["owner_outcome"], before["owner_reset_path"]) == (f"error:{code}", RESET_PATH), "precondition: a failed assignment"
     answered = reset(data_dir.root)
     assert answered is False, f"nobody serves the data directory: False, not {answered!r}"
+    after_raw = state_fields(data_dir.root)
+    assert "owner_reset_path" not in after_raw, f"the file has no owner_reset_path key after the reset: {sorted(after_raw)}"
     after = apply_module().read_restore(data_dir.root).model_dump()
-    assert (after["owner_outcome"], after["owner_reset_path"]) == (None, None), f"the outcome and the path cleared: {after}"
-    assert {key: value for key, value in after.items() if key not in ("owner_outcome", "owner_reset_path")} == {key: value for key, value in before.items() if key not in ("owner_outcome", "owner_reset_path")}, "nothing else changed"
+    assert after["owner_outcome"] is None, f"the outcome cleared: {after}"
+    assert {key: value for key, value in after.items() if key != "owner_outcome"} == {key: value for key, value in before.items() if key != "owner_outcome"}, "nothing else changed, as a value"
     assert stat.S_IMODE(os.lstat(restore_state_path(data_dir.root)).st_mode) == 0o600, "the state stays readable by its owner only"
     print_success(f"{code}: cleared")
 
@@ -869,7 +931,8 @@ def test_reset_answers_true_when_a_server_serves_the_data_directory_and_still_cl
         answered = reset(data_dir.root)
     assert answered is True, f"a server serves: True, not {answered!r}"
     after = state_fields(data_dir.root)
-    assert (after["owner_outcome"], after["owner_reset_path"], after["owner_user_id"]) == (None, None, data_dir.owner_id), f"cleared, the owner still named: {after}"
+    assert (after["owner_outcome"], after["owner_user_id"]) == (None, data_dir.owner_id), f"cleared, the owner still named: {after}"
+    assert "owner_reset_path" not in after, f"no owner_reset_path key: {sorted(after)}"
     print_success("served: True, cleared")
 
 
@@ -878,7 +941,7 @@ def test_reset_without_arguments_reads_the_configured_data_directory(data_dir):
     reset = reset_function()
     failed_state(data_dir.root, "EMAIL_TAKEN", data_dir.owner_id)
     assert reset() is False, "the configured data directory's restore reset"
-    assert recorded(data_dir.root) == (data_dir.owner_id, None, None), f"cleared: {recorded(data_dir.root)}"
+    assert recorded(data_dir.root) == (data_dir.owner_id, None), f"cleared: {recorded(data_dir.root)}"
     print_success("no arguments: configured data directory")
 
 
@@ -910,7 +973,7 @@ def test_reset_leaves_the_owner_pending_for_the_startup_step_to_assign_it(owner,
     returned, raised, _events = asyncio.run(assigned(owner, data_dir.root))
     assert raised is None and returned is not None, f"the step ran: {returned}, {raised}"
     assert [call["user_id"] for call in fake.calls] == [data_dir.owner_id], f"A called once for the owner: {fake.calls}"
-    assert recorded(data_dir.root) == (data_dir.owner_id, "sent", None), f"the new outcome recorded: {recorded(data_dir.root)}"
+    assert recorded(data_dir.root) == (data_dir.owner_id, "sent"), f"the new outcome recorded: {recorded(data_dir.root)}"
     assert problem_hook()(data_dir.root) is None, "nothing keeps the owner out"
     print_success("reset then step: sent")
 
@@ -924,22 +987,20 @@ def test_a_failure_after_the_reset_can_be_reset_again(owner, data_dir, monkeypat
     failed_state(data_dir.root, "EMAIL_TAKEN", data_dir.owner_id)
     reset(data_dir.root)
     asyncio.run(assigned(owner, data_dir.root))
-    assert recorded(data_dir.root) == (data_dir.owner_id, "error:USER_NOT_FOUND", None), f"the new code recorded: {recorded(data_dir.root)}"
+    assert recorded(data_dir.root) == (data_dir.owner_id, "error:USER_NOT_FOUND"), f"the new code recorded: {recorded(data_dir.root)}"
     assert reset(data_dir.root) is False, "the second failure can be reset too"
-    assert recorded(data_dir.root) == (data_dir.owner_id, None, None)
+    assert recorded(data_dir.root) == (data_dir.owner_id, None)
     print_success("fail, reset, fail, reset")
 
 
 # --- reset_owner_assignment: the refusals -------------------------------------
 
-#: (the state's fields; ``owner_outcome`` and ``owner_reset_path`` are given as the case needs) for a restore that is not
+#: (the state's fields; ``owner_outcome`` is given as the case needs) for a restore that is not
 #: a failed owner assignment.
 NOT_FAILED = [
     pytest.param({"owner_user_id": "owner"}, id="committed-pending-owner"),
     pytest.param({"owner_user_id": "owner", "owner_outcome": "sent"}, id="outcome-sent"),
-    pytest.param({"owner_user_id": "owner", "owner_outcome": "link_only", "owner_reset_path": RESET_PATH}, id="outcome-link_only"),
-    pytest.param({"owner_user_id": "owner", "owner_outcome": "already_issued"}, id="outcome-already_issued"),
-    pytest.param({"owner_user_id": "owner", "owner_outcome": "already_done"}, id="outcome-already_done"),
+    pytest.param({"owner_user_id": "owner", "owner_outcome": "link_only"}, id="outcome-link_only"),
     *(pytest.param({"confirmed_via": via, "owner_user_id": "owner", "owner_outcome": "error:EMAIL_TAKEN"}, id=f"via-{via}-error") for via in ("cli", "panel")),
     pytest.param({"owner_user_id": None, "owner_outcome": "error:EMAIL_TAKEN"}, id="error-without-owner"),
     *(pytest.param({"status": status, "owner_user_id": "owner", "owner_outcome": "error:EMAIL_TAKEN"}, id=f"{status}-error") for status in ("pending", "applying", "applied", "rolling_back", "rolled_back")),
@@ -1002,7 +1063,7 @@ def test_reset_while_the_owner_lock_is_held_raises_restore_in_use_and_writes_not
         with pytest.raises(apply_module().RestoreInUseError):
             reset(data_dir.root)
     assert state_bytes(data_dir.root) == before, "restore.json as it was"
-    assert reset(data_dir.root) is False and recorded(data_dir.root) == (data_dir.owner_id, None, None), "the lock free: the reset works"
+    assert reset(data_dir.root) is False and recorded(data_dir.root) == (data_dir.owner_id, None), "the lock free: the reset works"
     print_success("owner lock held: RestoreInUseError")
 
 
@@ -1020,7 +1081,7 @@ def test_reset_releases_the_owner_lock_when_it_returns_or_raises(data_dir):
 
 def test_reset_logs_one_line_with_the_code_and_never_an_address_a_name_or_a_link(data_dir):
     """(f) B5-1b §9.1: one log line about the reset, naming the stage, the user id and the code that was reset; the owner's
-    address, the username and the reset path (the stale one in the state) are in no line."""
+    address, the username and any link are in no line."""
     reset = reset_function()
     failed_state(data_dir.root, "EMAIL_TAKEN", data_dir.owner_id)
     with capture_logs() as events:
