@@ -2576,8 +2576,9 @@ OWNER_SIDE_VARIABLES = ("LIBREFOLIO_ADMIN_USERNAME", "LIBREFOLIO_ADMIN_BOOTSTRAP
 #: The candidates' fields as the administrators' view shows them.
 #: B5-1: is_superuser and is_active as the backup holds them, the labels of A's OwnerChoiceModal (its signature, 23/10).
 VIEW_CANDIDATE_FIELDS = {"user_id", "username", "email", "owner_email", "administrator", "is_superuser", "is_active"}
-#: A's reset link, recorded for ``link_only``: never in an answer.
-RESET_PATH = "/reset-password#token=b51-api-secret-never-in-an-answer-0123456789"
+#: The value of a stale ``owner_reset_path`` key in a state file of an older LibreFolio: never in an answer (R13: the
+#: state no longer has the field, the owner's link is in the instance log only).
+STALE_RESET_PATH = "/reset-password#token=b51-api-secret-never-in-an-answer-0123456789"
 
 
 @dataclass(frozen=True)
@@ -2627,9 +2628,11 @@ async def confirm_with(stage_id: str, body: Any) -> httpx.Response:
     return await api.call("POST", CONFIRM.format(stage_id=stage_id), user=B3_ADMIN, json=body)
 
 
-def owner_on_disk(root: Path) -> tuple[Any, Any, Any]:
+def owner_on_disk(root: Path) -> tuple[Any, Any]:
+    """The owner's keys of ``restore.json``: id, outcome. The file never holds an ``owner_reset_path`` key."""
     record = json.loads(state_path(root).read_text(encoding="utf-8"))
-    return tuple(record.get(name, "<missing>") for name in ("owner_user_id", "owner_outcome", "owner_reset_path"))
+    assert "owner_reset_path" not in record, f"no owner_reset_path key in the state: {sorted(record)}"
+    return tuple(record.get(name, "<missing>") for name in ("owner_user_id", "owner_outcome"))
 
 
 @pytest.mark.asyncio
@@ -2692,7 +2695,7 @@ async def test_a_managed_confirmation_naming_the_forced_owner_is_accepted_and_re
     assert response.status_code == 202, f"the forced owner is confirmed: {api.shown(response)}"
     body = response.json()
     assert set(body) == STATUS_FIELDS, f"a RestoreStatus, nothing of the owner: {body}"
-    assert owner_on_disk(instance.root) == (owen, None, None), f"restore.json records the owner: {owner_on_disk(instance.root)}"
+    assert owner_on_disk(instance.root) == (owen, None), f"restore.json records the owner: {owner_on_disk(instance.root)}"
     print_success(f"202, owner {owen}")
 
 
@@ -2737,7 +2740,7 @@ async def test_a_self_hosted_confirmation_naming_an_owner_is_400_and_writes_noth
     assert not os.path.lexists(state_path(instance.root)), "nothing confirmed: no state written"
     accepted = await confirm(stage_id)
     assert accepted.status_code == 202, f"without the owner, confirmed: {api.shown(accepted)}"
-    assert owner_on_disk(instance.root) == (None, None, None), f"no owner recorded: {owner_on_disk(instance.root)}"
+    assert owner_on_disk(instance.root) == (None, None), f"no owner recorded: {owner_on_disk(instance.root)}"
     print_success("selfhosted with an owner: 400; without: 202")
 
 
@@ -2755,15 +2758,16 @@ async def test_a_confirmation_body_with_an_unknown_key_is_422(instance, owner_ar
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(("outcome", "reset_path"), [("sent", None), ("link_only", RESET_PATH), ("error:EMAIL_TAKEN", None), (None, None)])
-async def test_the_status_says_the_owner_s_outcome_never_the_id_nor_the_path(instance, outcome, reset_path):
+@pytest.mark.parametrize("outcome", ["sent", "link_only", "error:EMAIL_TAKEN", None])
+async def test_the_status_says_the_owner_s_outcome_never_the_id_nor_the_path(instance, outcome):
     """(o) B5-1: ``GET /status`` of a committed restore says nothing of the owner's account: neither its outcome (told on the
-    server by ``dev.py backup pending``), nor ``owner_user_id``, nor the reset path."""
+    server by ``dev.py backup pending``), nor ``owner_user_id``, nor a reset path. The state file is written with a stale
+    ``owner_reset_path`` key (an older LibreFolio): it is ignored, the status is a 200 without it (R13)."""
     root = instance.root
     write_state(root, "committed", api.UNKNOWN_ID)
     path = state_path(root)
     record = json.loads(path.read_text(encoding="utf-8"))
-    path.write_text(json.dumps({**record, "confirmed_via": "admin", "owner_user_id": 42, "owner_outcome": outcome, "owner_reset_path": reset_path}), encoding="utf-8")
+    path.write_text(json.dumps({**record, "confirmed_via": "admin", "owner_user_id": 42, "owner_outcome": outcome, "owner_reset_path": STALE_RESET_PATH}), encoding="utf-8")
     response = await restore_status()
     assert response.status_code == 200, api.shown(response)
     body = response.json()
@@ -2839,7 +2843,7 @@ async def test_a_managed_confirmation_after_a_case_only_change_of_the_owner_s_ad
     owen = owner_archive.accounts["owen_user"]["user_id"]
     response = await confirm_with(stage_id, {"owner_user_id": owen})
     assert response.status_code == 202, f"a case-only change: confirmed: {api.shown(response)}"
-    assert owner_on_disk(instance.root) == (owen, None, None), f"restore.json records the owner: {owner_on_disk(instance.root)}"
+    assert owner_on_disk(instance.root) == (owen, None), f"restore.json records the owner: {owner_on_disk(instance.root)}"
     print_success("case only: 202")
 
 
