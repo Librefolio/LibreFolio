@@ -111,6 +111,29 @@ class AskedDayRates(Mapping[tuple, Decimal]):
     def __len__(self) -> int:
         return sum(1 for _key in self)
 
+    def reading_change_days(self, source: str, destination: str | None = None) -> tuple[date, ...]:
+        """The days on which this view's reading of a pair may differ from its reading the day before, ascending.
+
+        Inside an asked window the reading is the last step on or before the day, so it moves only on a step; it appears
+        on a window's first day and disappears the day after its last. Every day the reading changes is here; a day here
+        need not be a change (a step equal to the one before). ``destination`` defaults to ``fixed_destination``; a pair
+        without steps or windows gives none. The calendar a day-by-day reader would walk, reduced to these days.
+        """
+        destination = destination if destination is not None else self._fixed_destination
+        pair = (source, destination)
+        steps = self._steps.get(pair)
+        asked = self._windows.get(pair, ())
+        if steps is None or not asked or not steps.days:
+            return ()
+        days: set[date] = set()
+        for first, last in asked:
+            days.add(first)
+            if last < date.max:
+                days.add(last + timedelta(days=1))
+            low, high = bisect.bisect_right(steps.days, first), bisect.bisect_right(steps.days, last)
+            days.update(steps.days[low:high])
+        return tuple(sorted(days))
+
     def step_series(self) -> dict[str, tuple[tuple[date, ...], tuple[Decimal, ...]]]:
         """By source, the days and values of its steps (each the rate from that day on), ascending; a source without a
         step is left out. Only with ``fixed_destination`` (one destination, so one series a source).

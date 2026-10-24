@@ -753,7 +753,10 @@ def _bracketed_xirr(flows: Sequence[tuple[float, float]], x0: float, scale: floa
             previous_rate = previous_npv = None
             continue
         if npv == 0.0:
-            roots.append(rate)
+            # An exact zero is a root only where the NPV changes sign around it (P1c): far from t=0 every term of a
+            # period that opens at 0 underflows to 0.0, and the NPV is exactly 0.0 at rates that solve nothing
+            if _changes_sign_at(flows, rate):
+                roots.append(rate)
         elif previous_rate is not None and previous_npv is not None and _opposite_signs(previous_npv, npv, noise_floor):
             try:
                 roots.append(brentq(lambda r: _xirr_npv(flows, r), previous_rate, rate, xtol=1e-14, maxiter=200))
@@ -783,10 +786,11 @@ def _bracketed_xirr_at(flows: Sequence[tuple[float, float]], rate: float, scale:
         return None
     if not (math.isfinite(low_npv) and math.isfinite(high_npv)):
         return None
-    # The scan keeps a grid point whose NPV is exactly 0.0 as a root (a rate of exactly 0, a constant value)
+    # The scan keeps a grid point whose NPV is exactly 0.0 as a root (a rate of exactly 0, a constant value) when the
+    # NPV changes sign around it (P1c: not a point where every term underflowed)
     if high_npv == 0.0 or low_npv == 0.0:
         exact = high if high_npv == 0.0 else low
-        return exact if _is_xirr_root(flows, exact, scale) else None
+        return exact if _changes_sign_at(flows, exact) and _is_xirr_root(flows, exact, scale) else None
     if not _opposite_signs(low_npv, high_npv, _npv_noise_floor(flows)):
         return None
     try:
