@@ -4840,3 +4840,63 @@ Base `9fa856f68` (merge di W2 #47 nel ramo MF, padri `d8cb1852c` + `0aeebbd6a`).
   `portfolio-engine` **41**, `roi-fifo-utils` **1970**, `api portfolio` **55**, `api transactions` **58** (l'endpoint di
   W2); parità contro `9fa856f68` su 6 copie: **220 casi, 0 differenze**; `mkdocs build` 0, `check-links` 0.
   **CHECKPOINT READY** inviato, FROZEN.
+
+#### Revisione J5-1 (#48) — `2d7502de0`, sola lettura (24/10)
+- ✅ Letta dagli oggetti git condivisi (base `270e85a55`). Esito: **nessun blocco sul calcolo**; riusa
+  `position_period_pnl`, `counted_tract`, `realized_gain`, i frame di P4 e `position_flow_steps` (nessun `daily_states`).
+  Da correggere (lista inviata al coordinatore): `_tract` copia il V − C di `transfer_tract_adjustments`; il filtro delle
+  vendite ripete `_period_realized_sales` (e il chiamante l'ha già applicato); `_arrival_base` usa una regola diversa da
+  `transfer_tracts_moved_in` (domanda a J); due docstring non vere (lavoro «proporzionale ai tratti»; `flow_steps` «dal
+  primo movimento»); `PositionFrame` come Protocol con lo stesso nome del modello; il test P2 nasconde i `None` con
+  `or 0` e copre un solo broker in EUR; le posizioni «polvere» rompono P2 (giuste per la riga, da dichiarare); il volume
+  d'uscita di un punto al giorno ricade in D-P4.
+
+#### Revisione W-B87 (split moltiplicativi Revolut / Trading 212) — `86c014295`, sola lettura (24/10)
+- ✅ Verdetto inviato: **va bene come import, da sistemare tre punti**. Senza SPLIT collegato: costo medio e P&L giusti
+  (costo totale invariato, capitale 0); limiti nella vista dei lotti (lotto nuovo a costo 0) e per un segno da
+  operazione non riscalato. Collegata: il costo medio usa la quantità della riga (movimento SPLIT), il FIFO il rapporto
+  dell'evento (`fifo/engine.py:511-535`): divergono se la quantità del broker è arrotondata (campione Revolut 0,1643 contro
+  0,1644). Valuta del costo 0 «USD» di ripiego in Revolut. Il test copre solo il parsing: proposti 7 casi numerici.
+
+#### MF-P1d · il MWRR dei flussi tutti nulli, e `implied_split_ratio` (24/10)
+Base `270e85a55`. Risposte del developer (24/10, via coordinatore): MF-P1d via («ok per l'mwrr nel caso che hai trovato»);
+P1c sui dati reali scartata (pochi anni: zero per costruzione); D-P4 ancora aperta (in coda, MF-P4a analisi). W chiede
+se `split_ratio_hint` (`_brim_io.py`, ramo di W) va nella casa unica: sì → scritto in `financial_math/splits.py`.
+Corsia: porta 6193, dati `/tmp/librefolio-r13-c5b`.
+- ✅ **Rossi** (test-author): `test_financial_math/test_mwrr_all_zero_flows.py` (17) e
+  `test_financial/test_mwrr_all_zero_readers.py` (10, SQLite privata: storia, card, JSON, AI Export `portfolio.summary` e
+  `portfolio.performance`): su HEAD 14 rossi (ognuno legge 0,1, la partenza di Newton), 13 guardie; `test_implied_split_ratio.py`
+  (33): su HEAD 33 rossi (nome assente).
+  > **⚠️ Fuori pista**: «una finestra che parte prima del primo versamento» non apre a zero nel servizio (gli stati
+  > partono dalla prima transazione); test-author ha usato due libri che aprono davvero a zero (conto svuotato e
+  > rifinanziato; acquisto registrato prima del suo versamento).
+- ✅ **Cura**: `returns._all_flows_zero` in `_solve_xirr` e `_newton_xirr` (nessun tasso quando tutti i flussi sono zero);
+  `splits.ImpliedSplitRatio` + `implied_split_ratio(held, added, *, max_denominator=10)` (frazione più vicina con
+  `Fraction.limit_denominator`, scarto d'arrotondamento del broker; None se niente tenuto/aggiunto o rapporto ≤ 1). Doc e mappe.
+- ✅ **Porte e parità** (slot 15:46–16:08, carico 4,1 → 1,8; `ondata5/MF-p1d-verify.log`): `financial-math` **2966**,
+  `portfolio-engine` **41**, `roi-fifo-utils` **1980**, `ai-export` **1133**, `api portfolio` **55**; parità contro
+  `270e85a55`: 220 casi, **3 differenze, tutte e sole il caso curato** (punto 2025-09-30 della linea «tutto» in USD delle
+  copie eur1900, typo1500, typo0001: 0,100000 annualizzato e 161 558,99 cumulato → None); `mkdocs build` 0, `check-links` 0.
+  **CHECKPOINT READY** inviato, FROZEN (poi MF-P4a).
+
+#### MF-P4a · analisi D-P4 per il developer (24/10, senza codice)
+- ✅ Scritto `salvataggi-worktrees-20261021/ondata5/DECISIONI-DP4.md`. Misure per sezione (`MF-p4/measure_sections.py`,
+  `tracemalloc`, slot 16:12–16:33; log `ondata5/MF-p4a-sections.log`): motore 6,9 MB su tutte le copie (398 segmenti);
+  report «tutto» 18 MB (390 giorni), 704 MB (24 404), **1 330 MB (46 317)** → ~28,8 kB per giorno, lineare: all'anno 1
+  ~21 GB e ~1,3 GB di JSON. La causa: le viste derivate e i lotti riespandono un punto per giorno (D1) dopo il motore
+  (`derived_views._window_days`, `lots_analysis_service` `history_dates`/`expand_to_days`). Raccomandazione: serie
+  campionata in backend (`max_points`, passi fino al decennio, costruita dai segmenti) prima di togliere i pavimenti;
+  avviso UI con conferma per le date prima del 1900 (form, Bulk, import, `CalendarMonth.svelte:224` `min="1900"`);
+  intervalli al posto delle date nella qualità dei dati.
+
+#### MF-P4b · cura A (serie campionata) — passo 1, il contratto (24/10)
+Decisione del developer (24/10): «cura A nell'ondata 5, poi avviso e pavimenti». Ordine dopo P4b: avviso UI per le date
+prima del 1900 (W), poi i pavimenti uno per lotto (con `CalendarMonth.svelte:224`, l'avviso `rows_before_floor`, il
+messaggio «Tra {min} e {max}»).
+- ✅ Scritto `salvataggi-worktrees-20261021/ondata5/CONTRATTO-P4b.md`: `max_points` (2–10 000) o `resolution` sul report,
+  i lotti e #48; vocabolario dei passi esteso in `price_sampling.py` (trimestre, anno, decennio; `coarsest`, prezzi
+  invariati); senza parametro risposta di oggi, tetto `MAX_DAILY_POINTS` = 36 525; punti = fine di ogni bucket + primo
+  giorno, valori veri dai segmenti, TWRR/ROI sui giorni dei segmenti ∪ campione, MWRR solo sul campione; candele per
+  bucket; qualità dei dati a intervalli (`*_ranges`, `WACMissingPairInfo.ranges`); chi fa cosa (MF backend e
+  campionatore, J lotti e #48, Y grafici); test di parità e di costo. In attesa dell'ok del coordinatore e del commit di
+  MF-P1d per il passo 2.

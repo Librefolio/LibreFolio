@@ -709,9 +709,18 @@ def _solve_xirr(flows: Sequence[tuple[float, float]], x0: float) -> float | None
     solve the equation is never returned: the bare secant method used before could stop, after an overflow, on one of its
     own starting points and give it back as the rate.
     """
+    if _all_flows_zero(flows):
+        return None
     scale = _xirr_scale(flows)
     rate = _newton_xirr(flows, x0, scale)
     return rate if rate is not None else _bracketed_xirr(flows, x0, scale)
+
+
+def _all_flows_zero(flows: Sequence[tuple[float, float]]) -> bool:
+    """Whether every amount is zero (MF-P1d): the NPV is then zero at every rate, so no rate solves anything — Newton would
+    answer its own starting point. A period opening at 0 whose only deposit falls on its last day is one: the deposit
+    joins the final value."""
+    return all(amount == 0.0 for _years, amount in flows)
 
 
 def _xirr_scale(flows: Sequence[tuple[float, float]]) -> float:
@@ -720,7 +729,10 @@ def _xirr_scale(flows: Sequence[tuple[float, float]]) -> float:
 
 
 def _newton_xirr(flows: Sequence[tuple[float, float]], x0: float, scale: float) -> float | None:
-    """The first step of :func:`_solve_xirr`: Newton's method from ``x0``, its answer kept only when it is a root."""
+    """The first step of :func:`_solve_xirr`: Newton's method from ``x0``, its answer kept only when it is a root; never on
+    flows that are all zero, where every rate is a «root» (MF-P1d)."""
+    if _all_flows_zero(flows):
+        return None
     # Imported here: the module's other functions are plain arithmetic, and a schema importing one of them (MF-D3) does
     # not load scipy for it.
     from scipy.optimize import newton as scipy_newton  # noqa: PLC0415
