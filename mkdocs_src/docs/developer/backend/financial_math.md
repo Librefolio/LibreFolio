@@ -75,7 +75,7 @@ backend/app/services/financial_math/
 ├── price_marks.py           daily mark of an asset: MARKET, TRADE_AVG, CARRIED or MISSING
 ├── yield_on_cost.py         Yield on Cost of holdings, replayed from the transaction ledger
 ├── weights.py               a share of a total (none on a total ≤ 0), allocation slices, gross weights, concentration (largest weight, HHI)
-├── splits.py                stock splits in the ledger: the ADJUSTMENT rows linked to a SPLIT asset event (one query), the ids an average-cost replay rescales, the usable-ratio rule, the incoming adjustments without a cost that a SPLIT retype must not orphan
+├── splits.py                stock splits in the ledger: the ADJUSTMENT rows linked to a SPLIT asset event (one query), the ids an average-cost replay rescales, the usable-ratio rule, the incoming adjustments without a cost that a SPLIT retype must not orphan, the split a share change implies (`implied_split_ratio`)
 ├── holding_window.py        how long a position has been held at its broker: oldest open lot, a closed position's window, its exits
 ├── fifo/                    FIFO lots
 │   ├── __init__.py          docstring only
@@ -126,7 +126,7 @@ underflow (`_npv_noise_floor`, `_opposite_signs`). A grid point whose NPV is exa
 the NPV changes sign around it (`_changes_sign_at`, in the scan and in `_bracketed_xirr_at`; P1c): on a period that
 opens at 0 and whose flows all lie decades after its start (a typo dated in 1900), every term underflows to 0.0 at the
 top of the grid, and that point solved nothing; the period has no rate there («—»), while a genuine exact zero, a rate
-of exactly 0, still changes sign and counts.
+of exactly 0, still changes sign and counts. Flows that are all zero have no rate either (MF-P1d): the NPV is zero at every rate, and Newton would answer its own starting point (0.1, «10 %») — a period opening at 0 whose only deposit falls on its last day is one, since the deposit joins the final value (`_all_flows_zero`, in `_solve_xirr` and `_newton_xirr`).
 
 `float_price_return()` and `observed_annualization()` (`returns.py`) serve the float return series that the risk and
 signal statistics read. `market_series.py`, which prepares those series, takes both from here and keeps no return

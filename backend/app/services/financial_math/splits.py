@@ -14,6 +14,7 @@ from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from datetime import date as date_type
 from decimal import Decimal
+from fractions import Fraction
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -94,6 +95,45 @@ async def load_split_links(db: AsyncSession, transactions: Sequence[Transaction]
 def is_valid_split_ratio(ratio: Decimal | None) -> bool:
     """A split ratio the layer can use: present, finite and positive."""
     return ratio is not None and ratio.is_finite() and ratio > 0
+
+
+@dataclass(frozen=True, slots=True)
+class ImpliedSplitRatio:
+    """The split a share change implies: ``numerator:denominator`` (3:1, 3:2), and how far the broker's number is from it."""
+
+    numerator: int
+    denominator: int
+    # Decimal(numerator) / Decimal(denominator)
+    ratio: Decimal
+    # (held + added) / held, as the broker's numbers give it
+    exact_ratio: Decimal
+    # added − held × (numerator − denominator) / denominator: the broker's rounding (0 when the numbers are exact)
+    rounding_gap: Decimal
+
+
+def implied_split_ratio(held: Decimal, added: Decimal, *, max_denominator: int = 10) -> ImpliedSplitRatio | None:
+    """The multiplicative split behind ``added`` new shares on ``held`` ones: the simple fraction nearest to
+    ``(held + added) / held`` with a denominator up to ``max_denominator``, and the broker's rounding gap.
+
+    A label for an import's «possible split» (W-B87): a broker that writes fractional shares rounds the shares it adds, so
+    0.1643 added on 0.0822 held is a 3:1 split 0.0001 short. None when nothing is held or nothing is added, or when the
+    nearest fraction is not above 1 (no multiplicative split).
+    """
+    if held <= 0 or added <= 0:
+        return None
+    exact_ratio = (held + added) / held
+    fraction = Fraction(exact_ratio).limit_denominator(max_denominator)
+    if fraction.numerator <= fraction.denominator:
+        return None
+    numerator, denominator = fraction.numerator, fraction.denominator
+    rounding_gap = added - held * (numerator - denominator) / denominator
+    return ImpliedSplitRatio(
+        numerator=numerator,
+        denominator=denominator,
+        ratio=Decimal(numerator) / Decimal(denominator),
+        exact_ratio=exact_ratio,
+        rounding_gap=rounding_gap,
+    )
 
 
 def is_split_event_type(value: object) -> bool:
