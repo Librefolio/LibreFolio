@@ -7973,3 +7973,25 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >   illeggibile → `None`); il link di questo avvio sopravvive (data futura, passata, uguale), anche nel caso senza account;
 >   i token del backup si revocano, anche con data futura e id uguale al massimo; stato senza watermark revoca tutto;
 >   database illeggibile allo scambio revoca tutto.
+
+#### B5-1e — i seguiti dopo l'unione con A ✅ 2026-10-24
+
+> Dopo l'unione del ramo di A (`e49afe27c`): la funzione vera, la modale vera, l'hash di A.
+> **Note implementazione**:
+> - Modale: la `OwnerChoiceModal.svelte` di A ha le stesse prop (`open`, `ownerEmail`, `users`, `onConfirm`, `onCancel`, `busy`) e gli
+>   stessi `data-testid` della mia finta; `RestoreReportModal` la usa com'è, con `import {type OwnerCandidate}`.
+>   `front check` 0 errori e 0 avvisi. Due commenti dei test («stand-in») aggiornati.
+> - `apply._unusable_password_hash` tolta: il commit prende l'hash di `auth_service.unusable_password_hash()` (una sola casa).
+>   Rosso prima: un test mette un hash noto al posto della funzione di A e guarda che l'account scelto lo riceva.
+> - Giro vero con la funzione vera di A (nuova suite `backup-owner-real`, 6 test, tutti verdi al primo colpo; solo la posta è finta):
+>   - dal lifecycle (conferma, scambio, commit, `assign_restored_owner`) a `sent`: l'account ha l'email del titolare, è admin attivo e
+>     titolare, la password non apre nulla, resta un solo link vivo (il token piantato dal backup con data futura è cancellato),
+>     nessun segreto in stato, `backup pending` e `--json`;
+>   - `link_only` (posta che fallisce, o spenta): il link sta nel log di A e in nessun altro, non nel nostro modulo né nello stato;
+>   - errore chiuso: `EMAIL_TAKEN` registrato come `error:EMAIL_TAKEN`, `owner_assignment_problem` = `EMAIL_TAKEN`, DB invariato;
+>     poi, tolta la causa, `backup pending --recover owner` richiama A e finisce `sent`/`link_only`;
+>   - caduta tra la chiamata e il registro: la ripartenza richiama A, il link vecchio muore, ne resta uno;
+>   - A riceve solo `(user_id)`, con una sessione nuova.
+> - Test vecchi invecchiati dall'unione (la colonna `is_instance_owner` ora c'è nello schema): tre test di `backup-apply` aggiornati.
+> **⚠️ Fuori pista / non fatto**: l'E2E con un server vero aspetta lo step `restore-owner` di H, che sta nel suo ramo e non nel
+> mio: qui `assign_restored_owner` non gira ancora all'avvio. Il resto della catena è coperto a livello di servizi con la funzione vera.

@@ -1764,6 +1764,14 @@ def services_backup_owner(verbose: bool = False, test_names: list = None) -> boo
     return run_command(cmd, "Restore owner tests", verbose=verbose)
 
 
+def services_backup_owner_real(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the owner's account after a restore with workstream A's real function (lot B5-1e): only the mail is played."""
+    print_section("Services: Restore Owner, the real call")
+    print_info("Testing: backend/app/services/platform/instance_backup/owner.py with backend/app/services/accounts/instance_owner.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_owner_real.py", test_names)
+    return run_command(cmd, "Restore owner (real) tests", verbose=verbose)
+
+
 def services_backup_secure_rules(verbose: bool = False, test_names: list = None) -> bool:
     """Test the rules of a secure backup: its password (the accounts' rules, at least 12 characters) and the key it carries."""
     print_section("Services: Secure Backup Rules")
@@ -3294,6 +3302,16 @@ Note: No backend server required.
         desc="The owner's account after a restore in the managed profile (lot B5-1): owner_choice_required() reads the profile; assign_restored_owner() calls A's instance_owner.assign_owner_and_send_reset(session, user_id) once, with nothing else (looked up through owner._assign_owner(), faked here with A's signature) for a committed restore confirmed via admin with an owner chosen and no outcome yet, on an AsyncSession of the data directory's database; records sent, link_only or error:<CODE> and never a link (the state has no owner_reset_path: a stray reset_path on A's result is read by nothing, and a stale key in an old state file is dropped); an unexpected failure or A not merged (ImportError) leaves the owner pending, nothing raised, and the next start calls A again and records what it answers; anything else left alone byte for byte; record_owner_outcome(data_dir, stage_id, outcome); reset_owner_assignment clears the outcome only; no email, username or link in the log",
         # PURE: every data directory under tmp_path, a migrated copy of the staging tests' database (alembic in a process
         # of its own), this process in test mode on that folder; A's function a fake. No lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-owner-real",
+        services_backup_owner_real,
+        name="Restore Owner, real call",
+        desc="The owner's account after a restore with A's real instance_owner.assign_owner_and_send_reset (lot B5-1e), nothing played but the mail (instance_owner.send_email an outbox, the SMTP transport a tripwire): a real backup at the migration head confirmed from the app in the managed profile, applied and committed, then owner.assign_restored_owner. The chosen account gets the owner's address, administrator, active, is_instance_owner (no other account marked), its password opens nothing; ONE live password-reset link (a planted one dated in the future is gone), one email to the owner, outcome sent; the token is in no restore.json, read_restore, backup pending (with and without --json) or log line; email failing or SMTP off gives link_only with the link in A's instance-log line only; another account holding the address gives error:EMAIL_TAKEN, owner_assignment_problem EMAIL_TAKEN, the database unchanged, and after the administrator frees it backup pending --recover owner (nobody serving) assigns the owner; a crash between the call and the record makes the next start call A again (old link dead, one live link, a second email, outcome recorded); A receives the chosen id only, on a fresh session (no since, no now)",
+        # PURE: the data directory under tmp_path, the restore real, a migrated copy of the staging tests' database (alembic in
+        # a process of its own); only the mail is fake. No lane DB, no server, no network.
         isolation="pure",
     )
     add_test(

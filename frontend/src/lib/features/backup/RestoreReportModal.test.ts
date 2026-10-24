@@ -631,7 +631,7 @@ describe('L3 — RestoreReportModal: the warnings of the accounts', () => {
  *     closes it and calls `onConfirm(id)` once; its cancel closes it, confirms nothing, and leaves the report open with
  *     the word typed.
  *
- * OwnerChoiceModal.svelte is workstream A's (a stand-in here, replaced whole at the merge): it is driven only through
+ * OwnerChoiceModal.svelte is workstream A's (its real component since the merge): it is driven only through
  * A's handles — `owner-choice-option` with `data-user-id` and `data-selected` (a click selects), `owner-choice-confirm`,
  * `owner-choice-cancel`, and `data-locked` on `owner-choice-modal` (the owner's address is one of the users': only that
  * one can be chosen). `ownerEmail` and the mapped `email` are seen through `data-locked`, which A's modal derives from

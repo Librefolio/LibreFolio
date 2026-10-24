@@ -5146,7 +5146,7 @@ BCRYPT_HASH = re.compile(r"\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}")
 BOB_ID = 2
 #: Bob holding the owner's address, his account disabled: the forced choice, neither active nor an administrator.
 BOB_HOLDER = {"user_id": BOB_ID, "username": "bob_user", "email": "OWNER.b51@EXAMPLE.com", "is_superuser": False, "is_active": False}
-#: A's column (its migration 006, not in this branch): set to 1 for the chosen account only when it exists.
+#: A's column (its migration 006, in the head schema since A is merged): set to 1 for the chosen account only when it exists.
 OWNER_COLUMN = "is_instance_owner"
 
 
@@ -5267,7 +5267,7 @@ def test_the_commit_closes_the_chosen_account_and_gives_it_the_owner_s_address(t
     hashes = with_backup_passwords(copy_database)
     before = accounts_of(copy_database)
     chosen_id = before[chosen_name]["id"]
-    assert OWNER_COLUMN not in before[chosen_name], f"precondition: A's {OWNER_COLUMN} is not in this branch's schema"
+    assert OWNER_COLUMN in before[chosen_name], f"precondition: A's {OWNER_COLUMN} (its migration 006) is in the head schema"
     state, events = committed_after(apply, instance, owner_user_id=chosen_id)
     assert (state.status, state.owner_user_id) == ("committed", chosen_id), f"committed, the owner {chosen_id}: {state}"
     after = accounts_of(instance.root / DATABASE_ENTRY)
@@ -5281,6 +5281,33 @@ def test_the_commit_closes_the_chosen_account_and_gives_it_the_owner_s_address(t
     print_success(f"{chosen_name}: closed, the owner's address, an active administrator")
 
 
+#: A real bcrypt hash (cost 4) of a secret nobody knows, made once with ``auth_service.hash_password``: what a faked
+#: ``auth_service.unusable_password_hash`` answers, so that a hash the commit made itself cannot be mistaken for it.
+UNUSABLE_SENTINEL = "$2b$04$dL/FsEAkMOTYguoge.H9V.fvCJ4tIdBJFGxDqRHDXrnDCnrwQKKQC"
+
+
+def test_the_commit_takes_the_chosen_account_s_unusable_hash_from_a_s_auth_service(tmp_path, databases, checked, monkeypatch):
+    """(t) B5-1e: the commit does not make its own unusable hash: the chosen account's ``hashed_password`` is exactly what
+    ``auth_service.unusable_password_hash()`` answers (asked once), and no other account's password changed."""
+    apply = apply_module()
+    instance = owner_case(tmp_path, databases, checked, monkeypatch, profile="managed", owner_email=OWNER_EMAIL, candidates=[ADA, ZOE])
+    hashes = with_backup_passwords(instance.copy / DATABASE_ENTRY)
+    asked: list[str] = []
+
+    def sentinel() -> str:
+        asked.append("asked")
+        return UNUSABLE_SENTINEL
+
+    monkeypatch.setattr(auth_service, "unusable_password_hash", sentinel)
+    state, _events = committed_after(apply, instance, owner_user_id=ADA["user_id"])
+    assert state.status == "committed", f"committed: {state}"
+    after = accounts_of(instance.root / DATABASE_ENTRY)
+    assert after["ada_admin"]["hashed_password"] == UNUSABLE_SENTINEL, "[new] B5-1e: the chosen account holds the hash auth_service.unusable_password_hash() answered"
+    assert asked == ["asked"], f"asked once, for the one chosen account: {asked}"
+    assert {name: row["hashed_password"] for name, row in after.items() if name != "ada_admin"} == {name: value for name, value in hashes.items() if name != "ada_admin"}, "no other account's password changed"
+    print_success("the unusable hash is A's")
+
+
 def test_the_commit_marks_the_instance_owner_where_a_s_column_exists(tmp_path, databases, checked, monkeypatch):
     """(t) B5-1 §7.5: where the restored database has A's ``is_instance_owner`` column (its migration 006), the chosen
     account gets 1 there, every other account keeps its 0."""
@@ -5288,7 +5315,7 @@ def test_the_commit_marks_the_instance_owner_where_a_s_column_exists(tmp_path, d
     b51_parameter(apply.confirm_restore, "owner_user_id")
     instance = owner_case(tmp_path, databases, checked, monkeypatch, profile="managed", owner_email=OWNER_EMAIL, candidates=[ADA, ZOE])
     copy_database = instance.copy / DATABASE_ENTRY
-    cases.execute(copy_database, f"ALTER TABLE users ADD COLUMN {OWNER_COLUMN} BOOLEAN NOT NULL DEFAULT 0")
+    assert OWNER_COLUMN in accounts_of(copy_database)["ada_admin"], f"precondition: the head schema has A's {OWNER_COLUMN} (its migration 006)"
     hashes = with_backup_passwords(copy_database)
     state, _events = committed_after(apply, instance, owner_user_id=ADA["user_id"])
     assert state.status == "committed", f"committed: {state}"
