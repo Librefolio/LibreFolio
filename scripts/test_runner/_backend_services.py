@@ -640,7 +640,9 @@ def services_owner_assignment(verbose: bool = False, test_names: list = None) ->
     """Test A5-2: a restore on a managed instance gives the instance to the owner the administrator chose."""
     print_section("Services: Owner Assignment after a Restore (A5-2)")
     print_info("Testing: services/accounts/instance_owner.py assign_owner_and_send_reset, auth_service.unusable_password_hash, user_service.create_password_reset(email=)")
-    print_info("Tests: the four precondition codes, the owner flag moved, an unusable password and ended sessions, the planted tokens of a backup neutralised (the four attacks), one new reset link (sent; link_only with the link in the instance's log, never in the result), a second call starting again, two calls at once")
+    print_info(
+        "Tests: the four precondition codes, the owner flag moved, an unusable password and ended sessions, the planted tokens of a backup neutralised (the four attacks), one new reset link (sent; link_only with the link in the instance's log, never in the result), a second call starting again, two calls at once"
+    )
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_owner_assignment.py", test_names)
     return run_command(cmd, "Owner assignment tests", verbose=verbose)
