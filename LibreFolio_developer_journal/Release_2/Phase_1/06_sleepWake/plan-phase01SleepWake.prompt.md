@@ -7455,3 +7455,34 @@ dello slot visibile: da non spostare; (c) gli errori di conversione portano l'in
    `signal-service` 69. Frontend (in `flock`, `LC_ALL=en_US.UTF-8`): Vitest `lib/charts/signals`, `lib/components/charts`,
    `lib/components/assets/detail` 58 file / 2009 test; `front check` 0 errori 0 avvisi (dopo `api sync`); `i18n check` e
    `i18n audit` puliti (0 chiavi mancanti, 0 inutilizzate). Prettier, ruff e black puliti.
+
+### MF-P4b lato AI Export — rossi (25/10, ondata 5)
+
+> Contratto `ondata5/CONTRATTO-P4b.md` §6 e revisione `REVISIONI-P4b.md`: la storia del report diventa a tratti
+> (`date`, `through`); l'AI Export la legge in `build_performance_bucket_rows` (`payloads/portfolio_broker.py:322`, usata da
+> `portfolio_financial` e `broker_financial`) e in `broker_cost_efficiency._average_nav` (`:563`).
+
+1. ✅ 25/10 — Rossi. `test_ai_export_performance_steps.py` (nuovo, 43 test, registrato come `services
+   ai-export-performance-steps`, PURE). L'oracolo è una **copia congelata** della funzione per giorno a `d96519b86` dentro il
+   test, applicata alla stessa storia espansa a un punto al giorno. APS-01 parità campo per campo su 7 storie (copre il
+   periodo, parte tardi, finisce presto, entrambi, un tratto, un giorno, vuota) × 5 piani di bucket (1, 4, 8, 16, 30); APS-02
+   il giorno di un estremo e della chiusura precedente è un giorno, mai la `date` di un tratto; APS-03 parità di NAV fra tratti
+   lontani, vince il giorno più vecchio; APS-04 la media è pesata per la lunghezza, il conteggio è in giorni, il periodo va dalla
+   prima `date` all'ultima `through`. **26 rossi per la ragione giusta** (un tratto conta come un giorno), 17 verdi (le storie
+   con un bucket solo, il giorno solo, la vuota: coincidono per costruzione).
+2. ✅ 25/10 — Cura (dopo il checkpoint piccolo di MF, `79468ddd2`). `build_performance_bucket_rows` legge i tratti con
+   `points_between` (taglio ai bordi): `min`/`max` per confronto stretto sui tratti (il primo a raggiungere il valore vince;
+   la data è quella del tratto tagliato, cioè `max(date, inizio bucket)`), la chiusura precedente è il **giorno** `through`
+   dell'ultimo tratto del bucket prima (`variation_start_date`). `_average_nav` pesa ogni tratto per la sua lunghezza
+   (`through - date + 1`), il conteggio è in giorni e il periodo va da `history[0].date` a `history[-1].through`. Verdi: i 43
+   rossi; `services ai-export` 1 133 (dopo l'adattamento delle fixture).
+   > **Note implementazione**: due file di test dell'AI Export (`..._portfolio_broker_financial`, `..._portfolio_broker_integration`)
+   > costruivano `PortfolioHistoryPoint` di un giorno senza `through`: 27 rossi, previsti. Il loro `_history_point` ora
+   > costruisce un `_StepHistoryPoint` (sottoclasse con `through`, un giorno se non dato) finché il modello non porta
+   > `through` (secondo checkpoint di MF): allora la sottoclasse si toglie.
+   > **⚠️ Fuori pista**: sul percorso vero (`load_portfolio_report`) il report è ancora giornaliero e senza `through`: i due
+   > lettori falliscono finché non arriva il report a tratti di MF. Non c'è ripiego, è voluto (nessun doppio percorso).
+3. ⏳ Probe di diff sulle 6 copie: dopo il report a tratti di MF (esito atteso: 0 differenze).
+   > **Note implementazione**: i punti del test sono un dataclass con `date`/`through`/`nav_value`/`capital_baseline`/
+   > `total_pnl`/`twrr`, perché i lettori funzionano su ogni punto con `date` e `through` (contratto §6): quando arriva
+   > `StepSpan` basta cambiare il tipo, non le asserzioni.

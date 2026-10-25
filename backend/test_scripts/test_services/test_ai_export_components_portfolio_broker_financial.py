@@ -115,6 +115,12 @@ def _report_metadata(scope: BuildScope) -> PortfolioReportMetadata:
     return PortfolioReportMetadata(target_currency=scope.target_currency, generated_at=scope.snapshot_as_of)
 
 
+class _StepHistoryPoint(PortfolioHistoryPoint):
+    """``PortfolioHistoryPoint`` with the ``through`` of a step (D-P4, cure B) until the model itself carries it (MF)."""
+
+    through: date
+
+
 def _history_point(
     day: date,
     *,
@@ -122,9 +128,12 @@ def _history_point(
     capital_baseline: object,
     total_pnl: object,
     twrr: object | None = None,
+    through: date | None = None,
 ) -> PortfolioHistoryPoint:
-    return PortfolioHistoryPoint(
+    """A history point that holds from ``day`` to ``through`` (D-P4: a step); one day when ``through`` is not given."""
+    return _StepHistoryPoint(
         date=day,
+        through=through or day,
         cash_value=_money(0),
         market_value=_money(nav),
         nav_value=_money(nav),

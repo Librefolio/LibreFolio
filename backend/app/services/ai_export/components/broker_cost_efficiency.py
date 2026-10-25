@@ -562,13 +562,15 @@ def _average_nav(
 ) -> tuple[Currency | None, str | None, int, Date | None, Date | None]:
     history = tuple(report.history or ())
     if history:
-        values = tuple(point.nav_value.amount for point in history)
+        # The history is in steps (D-P4): the mean is over DAYS, each step weighing its length, and the count is days.
+        days = sum(((point.through - point.date).days + 1 for point in history), 0)
+        total = sum((point.nav_value.amount * ((point.through - point.date).days + 1) for point in history), Decimal("0"))
         return (
-            Currency(code=target_currency, amount=sum(values, Decimal("0")) / Decimal(len(values))),
+            Currency(code=target_currency, amount=total / Decimal(days)),
             "arithmetic_mean_of_available_daily_nav",
-            len(values),
+            days,
             history[0].date,
-            history[-1].date,
+            history[-1].through,
         )
     if summary is not None and summary.period_nav_start is not None and summary.net_worth is not None:
         return (
