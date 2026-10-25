@@ -589,6 +589,33 @@ class FxBackwardFillInfo(BaseModel):
         return parse_ISO_date(v) if v is not None else v
 
 
+class DateSpan(StrictModel):
+    """Days from ``start`` to ``end``, both included (D-P4: the data-quality report's ranges instead of one date per day)."""
+
+    start: date_type = Field(..., description="First day, inclusive")
+    end: date_type = Field(..., description="Last day, inclusive")
+
+    @model_validator(mode="after")
+    def _end_not_before_start(self) -> DateSpan:
+        if self.end < self.start:
+            raise ValueError(f"end ({self.end}) must be on or after start ({self.start})")
+        return self
+
+
+class StepSpan(StrictModel):
+    """A point of a step series (D-P4, cure B): its value holds from ``date`` to ``through``, both included, during which
+    nothing changes. The base of every point of a series in steps; ``financial_math.series_steps.value_at`` reads a day."""
+
+    date: date_type = Field(..., description="First day the point holds")
+    through: date_type = Field(..., description="Last day the point holds, inclusive")
+
+    @model_validator(mode="after")
+    def _through_not_before_date(self) -> StepSpan:
+        if self.through < self.date:
+            raise ValueError(f"through ({self.through}) must be on or after date ({self.date})")
+        return self
+
+
 class DateRangeModel(BaseModel):
     """
     Reusable date range model for FA and FX operations.

@@ -95,7 +95,11 @@
       "eventCreateAmountRequired": "Le montant est obligatoire",
       "eventCreateDateRequired": "La date est obligatoire",
       "fxDatesHint": "Les dates 'De' et 'À' coïncident généralement : elles diffèrent quand le courtier crédite la nouvelle devise un autre jour.",
-      "eventEditTitle": "Modifier événement pour {asset}"
+      "eventEditTitle": "Modifier événement pour {asset}",
+      "entryModeAmount": "Montant total",
+      "entryModeUnitPrice": "Prix unitaire",
+      "unitPriceCalculated": "calculé",
+      "unitPriceHint": "Le montant est calculé à partir du prix unitaire et de la quantité ; vous pouvez toujours le modifier."
     },
     "bulk": {
       "resetRow": "Réinitialiser la ligne",
@@ -201,7 +205,8 @@
       "issuesHeader": "Des erreurs de validation ont été détectées",
       "balanceIssuesHeader": "Cette configuration génère des données incohérentes",
       "autoOff": "Auto-validation OFF ({n} lignes > {threshold}) — cliquez sur ⚡️Valider maintenant de soumettre",
-      "contextualIssuesHeader": "Avec les autres modifications en attente, cette ligne provoque les problèmes suivants :"
+      "contextualIssuesHeader": "Avec les autres modifications en attente, cette ligne provoque les problèmes suivants :",
+      "checkSummary": "{n, plural, one {# champ à corriger} other {# champs à corriger}}"
     },
     "errors": {
       "idRequired": "L'ID de transaction est requis et doit être > 0",

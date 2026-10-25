@@ -14,6 +14,8 @@
     import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import SingleDatePicker from '$lib/components/ui/date/SingleDatePicker.svelte';
     import ExactQuantityInput from '$lib/components/ui/input/ExactQuantityInput.svelte';
+    import TxCellMark from '$lib/features/transactions/form/TxCellMark.svelte';
+    import type {TxFormCell, TxFormCheckKind} from '$lib/features/transactions/form/txFormChecks';
     import CompactCashCell from '$lib/features/transactions/form/CompactCashCell.svelte';
     import TransactionTypeSearchSelect from '../TransactionTypeSearchSelect.svelte';
     import WacPreviewSection from '../wac/WacPreviewSection.svelte';
@@ -57,6 +59,8 @@
         pairLayout: PairFormLayout | null;
         quantityInputId: string;
         quantityInputSignRule: 'positive' | 'nonzero' | 'zero' | 'any';
+        /** V-37b: the cells «Validate now» found wrong, and why. */
+        markedCells: Partial<Record<TxFormCell, TxFormCheckKind>>;
         typeImmutable: boolean;
         wacAvailableCurrencies: string[];
         handleSyncFx: () => Promise<void>;
@@ -107,6 +111,7 @@
         pairLayout,
         quantityInputId,
         quantityInputSignRule,
+        markedCells,
         typeImmutable,
         wacAvailableCurrencies,
         handleSyncFx,
@@ -176,7 +181,7 @@
                     <span class="font-medium">{b?.name ?? `#${draft.broker_id}`}</span>
                 </div>
             {:else}
-                <BrokerSearchSelect brokers={brokersForSelect} value={brokerIdValue} onchange={(id) => setBroker(id ?? 0)} createLabel={$t('common.createNew') || 'Create new'} onCreateNew={() => (createBrokerOpen = true)} />
+                <TxCellMark cell="broker" marks={markedCells}><BrokerSearchSelect brokers={brokersForSelect} value={brokerIdValue} onchange={(id) => setBroker(id ?? 0)} createLabel={$t('common.createNew') || 'Create new'} onCreateNew={() => (createBrokerOpen = true)} /></TxCellMark>
             {/if}
         </div>
     {/if}
@@ -185,32 +190,43 @@
     {#if pairLayout === 'transfer_asset'}
         <div class="mt-3 flex flex-col gap-1" data-testid="tx-form-asset-wrap">
             <span class="text-xs text-lf-muted">{$t('common.asset')} *</span>
-            <AssetSelect bind:value={draft.asset_id} disabled={isReadonly || rowSaved} onchange={setAsset} testid="tx-form-asset" createLabel={isReadonly || rowSaved ? undefined : $t('assets.create') || 'New asset'} onCreateNew={isReadonly || rowSaved ? undefined : () => (createAssetOpen = true)} />
+            <TxCellMark cell="asset" marks={markedCells}
+                ><AssetSelect
+                    bind:value={draft.asset_id}
+                    disabled={isReadonly || rowSaved}
+                    onchange={setAsset}
+                    testid="tx-form-asset"
+                    createLabel={isReadonly || rowSaved ? undefined : $t('assets.create') || 'New asset'}
+                    onCreateNew={isReadonly || rowSaved ? undefined : () => (createAssetOpen = true)}
+                /></TxCellMark
+            >
         </div>
         <div class="mt-3 flex flex-col gap-1" data-testid="tx-form-quantity-wrap">
             <span class="text-xs text-lf-muted">
                 {$t('transactions.table.quantity')} <span class="text-lf-warning">(+)</span>
             </span>
-            <ExactQuantityInput
-                value={draft.quantity}
-                onchange={setQuantity}
-                onvaliditychange={onQuantityValidityChange}
-                step="1"
-                maxIntegerDigits={15}
-                maxFractionDigits={10}
-                maxSignificantDigits={REAL_SIGNIFICANT_DIGITS}
-                allowNegative
-                signRule={quantityInputSignRule}
-                resetKey={`${open}:${openKey ?? 0}`}
-                id={quantityInputId}
-                name="qty-{autocompleteNonce}"
-                placeholder="0"
-                ariaLabel={$t('transactions.table.quantity')}
-                ariaErrormessage={quantitySignificantError ? `${quantityInputId}-significant-error` : undefined}
-                className="qty-input !rounded-lg !px-3 !py-2 text-right tabular-nums focus:!ring-2 focus:!ring-lf-focus/30"
-                disabled={isReadonly}
-                testid="tx-form-quantity"
-            />
+            <TxCellMark cell="quantity" marks={markedCells}
+                ><ExactQuantityInput
+                    value={draft.quantity}
+                    onchange={setQuantity}
+                    onvaliditychange={onQuantityValidityChange}
+                    step="1"
+                    maxIntegerDigits={15}
+                    maxFractionDigits={10}
+                    maxSignificantDigits={REAL_SIGNIFICANT_DIGITS}
+                    allowNegative
+                    signRule={quantityInputSignRule}
+                    resetKey={`${open}:${openKey ?? 0}`}
+                    id={quantityInputId}
+                    name="qty-{autocompleteNonce}"
+                    placeholder="0"
+                    ariaLabel={$t('transactions.table.quantity')}
+                    ariaErrormessage={quantitySignificantError ? `${quantityInputId}-significant-error` : undefined}
+                    className="qty-input !rounded-lg !px-3 !py-2 text-right tabular-nums focus:!ring-2 focus:!ring-lf-focus/30"
+                    disabled={isReadonly}
+                    testid="tx-form-quantity"
+                /></TxCellMark
+            >
             {#if quantitySignificantError}
                 <p id="{quantityInputId}-significant-error" class="mt-1 text-xs text-lf-danger" data-testid="tx-form-quantity-significant-error">{$t('transactions.errors.significantDigitsExceeded', {values: {max: REAL_SIGNIFICANT_DIGITS}})}</p>
             {/if}
@@ -223,7 +239,7 @@
             <span class="text-xs text-lf-muted">
                 {$t('transactions.table.cash')} *
             </span>
-            <CompactCashCell value={draft.cash} onChange={setCash} signHint="positive" disabled={isReadonly} testid="tx-form-cash" defaultCode="EUR" maxSignificantDigits={REAL_SIGNIFICANT_DIGITS} />
+            <TxCellMark cell="cash" marks={markedCells}><CompactCashCell value={draft.cash} onChange={setCash} signHint="positive" disabled={isReadonly} testid="tx-form-cash" defaultCode="EUR" maxSignificantDigits={REAL_SIGNIFICANT_DIGITS} /></TxCellMark>
             {#if cashSignificantError}
                 <p class="mt-1 text-xs text-lf-danger" data-testid="tx-form-cash-significant-error">{$t('transactions.errors.significantDigitsExceeded', {values: {max: REAL_SIGNIFICANT_DIGITS}})}</p>
             {/if}
@@ -243,11 +259,11 @@
                 {#if isReadonly}
                     <div class="px-3 py-2 bg-lf-panel border border-lf-subtle rounded-lg text-sm text-lf-secondary">{draft.date || '—'}</div>
                 {:else}
-                    <SingleDatePicker bind:value={draft.date} label="" inputStyle={true} onchange={(d) => setDate(d)} onvaliditychange={onDateMainValidityChange} />
+                    <TxCellMark cell="date" marks={markedCells}><SingleDatePicker bind:value={draft.date} label="" inputStyle={true} onchange={(d) => setDate(d)} onvaliditychange={onDateMainValidityChange} /></TxCellMark>
                 {/if}
             </div>
             {#if pairLayout === 'fx'}
-                <CompactCashCell value={draft.cash} onChange={setCash} signHint="positive" disabled={isReadonly} testid="tx-form-cash-from" defaultCode="EUR" maxSignificantDigits={REAL_SIGNIFICANT_DIGITS} />
+                <TxCellMark cell="cash" marks={markedCells}><CompactCashCell value={draft.cash} onChange={setCash} signHint="positive" disabled={isReadonly} testid="tx-form-cash-from" defaultCode="EUR" maxSignificantDigits={REAL_SIGNIFICANT_DIGITS} /></TxCellMark>
                 {#if cashSignificantError}
                     <p class="mt-1 text-xs text-lf-danger" data-testid="tx-form-cash-from-significant-error">{$t('transactions.errors.significantDigitsExceeded', {values: {max: REAL_SIGNIFICANT_DIGITS}})}</p>
                 {/if}
@@ -255,7 +271,9 @@
                 <!-- transfer_asset / transfer_cash: broker from -->
                 <div class="flex flex-col gap-1">
                     <span class="text-xs text-lf-muted">{$t('transactions.table.broker')}</span>
-                    <BrokerSearchSelect brokers={brokersForFrom} value={brokerIdValue} onchange={(id) => setBroker(id ?? 0)} disabled={isReadonly || rowSaved} createLabel={$t('common.createNew') || 'Create new'} onCreateNew={() => (createBrokerOpen = true)} />
+                    <TxCellMark cell="broker" marks={markedCells}
+                        ><BrokerSearchSelect brokers={brokersForFrom} value={brokerIdValue} onchange={(id) => setBroker(id ?? 0)} disabled={isReadonly || rowSaved} createLabel={$t('common.createNew') || 'Create new'} onCreateNew={() => (createBrokerOpen = true)} /></TxCellMark
+                    >
                 </div>
             {/if}
         </div>
@@ -294,12 +312,12 @@
                     {#if isReadonly}
                         <div class="px-3 py-2 bg-lf-panel border border-lf-subtle rounded-lg text-sm text-lf-secondary">{effectiveDualTo.date || '—'}</div>
                     {:else}
-                        <SingleDatePicker value={effectiveDualTo.date} label="" inputStyle={true} onchange={setDateTo} onvaliditychange={onDateToValidityChange} />
+                        <TxCellMark cell="dateTo" marks={markedCells}><SingleDatePicker value={effectiveDualTo.date} label="" inputStyle={true} onchange={setDateTo} onvaliditychange={onDateToValidityChange} /></TxCellMark>
                     {/if}
                 </div>
             {/if}
             {#if pairLayout === 'fx'}
-                <CompactCashCell value={dualTo.cash} onChange={setCashTo} signHint="positive" disabled={isReadonly} testid="tx-form-cash-to" defaultCode="USD" maxSignificantDigits={REAL_SIGNIFICANT_DIGITS} />
+                <TxCellMark cell="cashTo" marks={markedCells}><CompactCashCell value={dualTo.cash} onChange={setCashTo} signHint="positive" disabled={isReadonly} testid="tx-form-cash-to" defaultCode="USD" maxSignificantDigits={REAL_SIGNIFICANT_DIGITS} /></TxCellMark>
                 {#if cashToSignificantError}
                     <p class="mt-1 text-xs text-lf-danger" data-testid="tx-form-cash-to-significant-error">{$t('transactions.errors.significantDigitsExceeded', {values: {max: REAL_SIGNIFICANT_DIGITS}})}</p>
                 {/if}
@@ -359,7 +377,9 @@
                             {/if}
                         </div>
                     {:else}
-                        <BrokerSearchSelect brokers={brokersForTo} value={brokerToIdValue} onchange={(id) => setBrokerTo(id ?? 0)} disabled={isReadonly || rowSaved} createLabel={$t('common.createNew') || 'Create new'} onCreateNew={() => (createBrokerOpen = true)} />
+                        <TxCellMark cell="brokerTo" marks={markedCells}
+                            ><BrokerSearchSelect brokers={brokersForTo} value={brokerToIdValue} onchange={(id) => setBrokerTo(id ?? 0)} disabled={isReadonly || rowSaved} createLabel={$t('common.createNew') || 'Create new'} onCreateNew={() => (createBrokerOpen = true)} /></TxCellMark
+                        >
                     {/if}
                 </div>
             {/if}
