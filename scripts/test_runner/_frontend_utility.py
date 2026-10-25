@@ -34,6 +34,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/utils/__tests__/internalPath.test.ts",
             "src/lib/utils/__tests__/parseDecimalInput.test.ts",
             "src/lib/utils/__tests__/parseTypedDate.test.ts",
+            "src/lib/utils/core/shortYearDates.gate.test.ts",
             "src/lib/utils/__tests__/requestConcurrency.test.ts",
             "src/lib/api/bulkBatches.test.ts",
             "src/lib/api/bulkBatchesGroups.test.ts",
