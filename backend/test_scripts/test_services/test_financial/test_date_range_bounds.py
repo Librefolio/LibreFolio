@@ -225,6 +225,11 @@ def _history_dates(points) -> list[date]:
     return [point.date for point in points or []]
 
 
+def _last_day(steps) -> date:
+    """The last day a lots history covers: its last step's ``through`` (J5-5: a row holds from ``date`` to ``through``)."""
+    return max(step.through for step in steps)
+
+
 # =============================================================================
 # ENGINE — PortfolioCalculationEngine.calculate
 # =============================================================================
@@ -445,11 +450,10 @@ class TestLotsBoundTheRange:
         result = await _lots(session, book, date_to=before + AHEAD)
         after = date.today()
 
-        values = _history_dates(result.value_history)
-        prices = _history_dates(result.price_history)
-        assert values and prices, "an open lot must have a value and a price history"
-        assert max(values) <= after + ONE_DAY, f"the value history runs to {max(values)}, past tomorrow ({after + ONE_DAY})"
-        assert max(prices) <= after + ONE_DAY, f"the price history runs to {max(prices)}, past tomorrow ({after + ONE_DAY})"
+        assert result.value_history and result.price_history, "an open lot must have a value and a price history"
+        last_value, last_price = _last_day(result.value_history), _last_day(result.price_history)
+        assert last_value <= after + ONE_DAY, f"the value history runs to {last_value}, past tomorrow ({after + ONE_DAY})"
+        assert last_price <= after + ONE_DAY, f"the price history runs to {last_price}, past tomorrow ({after + ONE_DAY})"
         assert result.calculation_metadata.computed_date_to in _tomorrows(before, after), f"computed_date_to is {result.calculation_metadata.computed_date_to}, expected tomorrow ({before + ONE_DAY})"
 
 
@@ -463,8 +467,8 @@ class TestLotsRangesWithinBoundsAreUnchanged:
 
         computed_to = result.calculation_metadata.computed_date_to
         assert computed_to in {before, after}, f"computed_date_to is {computed_to}, expected today ({before})"
-        assert max(_history_dates(result.value_history)) == computed_to
-        assert max(_history_dates(result.price_history)) == computed_to
+        assert _last_day(result.value_history) == computed_to
+        assert _last_day(result.price_history) == computed_to
 
     @pytest.mark.asyncio
     async def test_past_date_to_is_kept(self, session, book):
@@ -472,8 +476,8 @@ class TestLotsRangesWithinBoundsAreUnchanged:
         result = await _lots(session, book, date_to=book.last_quote)
 
         assert result.calculation_metadata.computed_date_to == book.last_quote
-        assert max(_history_dates(result.value_history)) == book.last_quote
-        assert max(_history_dates(result.price_history)) == book.last_quote
+        assert _last_day(result.value_history) == book.last_quote
+        assert _last_day(result.price_history) == book.last_quote
 
     @pytest.mark.asyncio
     async def test_date_to_tomorrow_is_kept(self, session, book):
@@ -484,7 +488,7 @@ class TestLotsRangesWithinBoundsAreUnchanged:
         result = await _lots(session, book, date_to=tomorrow)
 
         assert result.calculation_metadata.computed_date_to == tomorrow
-        assert max(_history_dates(result.value_history)) == tomorrow
+        assert _last_day(result.value_history) == tomorrow
 
 
 # =============================================================================
@@ -554,7 +558,7 @@ class TestExtremeRangesFinishQuickly:
 
         assert elapsed < QUICK_SECONDS, f"the lots analysis took {elapsed:.1f}s for date_to={EXTREME_END}"
         assert result.calculation_metadata.computed_date_to in _tomorrows(before, after)
-        assert max(_history_dates(result.value_history)) <= after + ONE_DAY
+        assert _last_day(result.value_history) <= after + ONE_DAY
 
 
 # =============================================================================
