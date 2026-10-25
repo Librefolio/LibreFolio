@@ -12,6 +12,8 @@
  * @module utils/rangeChange
  */
 
+import {utcMs} from './dateOnly';
+
 /** The first day the backend values: an earlier `range_start` is refused (422), and the whole request with it. */
 export const EARLIEST_RANGE_START = '1900-01-01';
 
@@ -50,7 +52,7 @@ function isCalendarDay(iso: string): boolean {
     const match = ISO_DAY.exec(iso);
     if (!match) return false;
     const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
-    const back = new Date(Date.UTC(year, month - 1, day));
+    const back = new Date(utcMs(year, month - 1, day));
     return back.getUTCFullYear() === year && back.getUTCMonth() === month - 1 && back.getUTCDate() === day;
 }
 

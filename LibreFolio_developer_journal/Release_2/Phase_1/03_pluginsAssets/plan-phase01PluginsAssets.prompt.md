@@ -9249,3 +9249,11 @@ i valori li risolve il **genitore** e viaggiano col lavoro, come per il parse BR
    attesi fino al merge di Y). `front check` 0/0, Prettier e `i18n check` puliti. Doc in inglese: `mkdocs build` (strict) e `check-links` exit 0.
 5. **Revisione di W5-8** (sola lettura): il campo `date_order` di W non è ancora nel worktree di W (HEAD `86c014295`, nessun `settings_fields` nei plugin BRIM): da fare quando c'è.
    Backlog: dove vivono le traduzioni di un campo di un tool (il gate dei nomi i18n legge le chiavi di asset e fx; oggi si vede l'inglese `label`/`description`).
+
+### X5-5 · D-P4: l'anno breve nei due controlli di X (25/10, base `b2fc380b0`)
+
+> **Note implementazione** (✅ 25/10/2026): `Date.UTC(24, …)` legge l'anno come 1924, quindi il controllo di andata e ritorno rifiutava il giorno. Due punti miei dall'elenco di Y
+> (`Y-anno-breve-fuori-ambito.md`, punti 7 e 8): `isCalendarDay` in `utils/rangeChange.ts` e `isoDayNumber` in `utils/periodChanges.ts` ora usano `utcMs(anno, indiceMese, giorno)` di
+> `utils/dateOnly.ts` (portata da Y nel commit `b2fc380b0`). Rossi prima (test-author): 6 rossi, `rangeStartFor` con `0024-03-01`, `0001-01-01` e `0000-02-29` (l'anno 0 è bisestile,
+> il 1900 no) dà `1900-01-01` invece di `null`; `visiblePeriodColumns` con gli anni 24, 1 e il confine 99→100 restituiva `[]`. Guardie verdi prima e dopo: `0001-02-29`, `0024-02-30`,
+> `0024-13-01`, inizio raddrizzato dopo `asOf`, fine prima dell'inizio. Dopo: i 3 file 195/195, i test collegati 347/347, `front check` 0/0, Prettier pulito.
