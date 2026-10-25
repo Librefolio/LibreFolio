@@ -203,6 +203,7 @@ from backend.app.schemas.portfolio import IssueSeverity, LotAnalysisType, LotsAn
 from backend.app.services.brokers.broker_service import BrokerService
 from backend.app.services.lots_analysis_service import LotsAnalysisService
 from backend.app.services.portfolio_service import PortfolioService
+from backend.test_scripts.test_services._lots_steps import daily_points
 from backend.test_scripts.test_utils import print_section, print_success
 
 REPORT = "EUR"
@@ -809,8 +810,8 @@ def _lots_view(response: LotsAnalysisResponse, book: Book, *, closure_fields: tu
             }
             for lot in response.lots or []
         ],
-        f"{book.name}'s WAC line": {point.date: (point.wac, point.pool_qty) for point in response.broker_wac_history or [] if point.broker_id == book.broker.id},
-        "cumulative WAC line": {point.date: (point.wac, point.pool_qty) for point in response.cumulative_wac_history or []},
+        f"{book.name}'s WAC line": {point.date: (point.wac, point.pool_qty) for point in daily_points(response.broker_wac_history) if point.broker_id == book.broker.id},
+        "cumulative WAC line": {point.date: (point.wac, point.pool_qty) for point in daily_points(response.cumulative_wac_history)},
     }
 
 
