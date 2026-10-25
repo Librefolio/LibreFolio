@@ -69,6 +69,10 @@ How to publish:
 - **Stable release**: a new GitHub release with «Set as a pre-release» unchecked, on a new plain `vX.Y.Z` tag, without `-rc.N` or any other suffix.
 - **Never promote** a prerelease: publish the stable release from scratch, on its own tag.
 
+!!! warning "A published tag is never republished"
+
+    Once a `vX.Y.Z` release is published, its tag is never moved, never deleted and created again, and its image is never replaced: a fix is a new release on the next tag. The same holds for an `-rc.N` candidate, whose correction is the next `-rc.N`. Whoever deploys from a tag may then resolve it once and keep what it found, for example a hosting provider that pins the image's digest: if the same tag ever answers with another image, that is a signal, not a routine, and it is read as a possible tampering. A broken release is superseded, not rewritten.
+
 ---
 
 ## 🔄 Execution Flow Diagram

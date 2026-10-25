@@ -1629,7 +1629,7 @@ def services_plugin_settings_guards(verbose: bool = False, test_names: list = No
 
 
 def services_platform_readiness(verbose: bool = False, test_names: list = None) -> bool:
-    """Test the readiness checks: database and migration codes, the head read once, no detail in the response."""
+    """Test the readiness checks: database and migration codes (behind, ahead), the database revision, the head read once, no other detail in the response."""
     print_section("Services: Instance Readiness")
     print_info("Testing: backend/app/services/platform/readiness.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_platform_readiness.py", test_names)
@@ -3166,7 +3166,7 @@ Note: No backend server required.
     add_test(cat, "plugin-settings-service", services_plugin_settings_service, name="Plugin Settings Service", desc="Catalogue and all-or-nothing writes on a private DB: scopes, LOCKED_BY_ENV, managed profile, item rules, log without values, key unavailable, MOCKFX writes", isolation="pure")
     add_test(cat, "secret-masking", services_secret_masking, name="Secret Masking", desc="mask_text with the URL forms, mask_exception through chains and groups, structlog processor and logging filter, the context variable across threads and tasks, the wiring in configure_logging", isolation="pure")
     add_test(cat, "plugin-settings-guards", services_plugin_settings_guards, name="Plugin Settings Guards", desc="Shipped system-field variables in .env.example, derived names unique, no alias read by the app itself, services/ai_export/ never imports the plugin settings", isolation="pure")
-    add_test(cat, "platform-readiness", services_platform_readiness, name="Instance Readiness", desc="Database and migration checks: ready, mismatch, unknown, unreachable; head read once, failure not kept; codes only in the response", isolation="pure")
+    add_test(cat, "platform-readiness", services_platform_readiness, name="Instance Readiness", desc="Database and migration checks: ready, behind, ahead, unknown, unreachable; database_revision; head read once, failure not kept; no error text, path or head in the response", isolation="pure")
     add_test(cat, "app-lifecycle", services_app_lifecycle, name="App Lifecycle", desc="Step runner (order, awaits, deadline cuts, a failure never skips the shutdown, step in progress); app steps in relative order, late-bound; middleware outermost first; SPA catch-all last", isolation="pure")
     add_test(
         cat,
