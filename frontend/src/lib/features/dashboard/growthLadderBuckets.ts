@@ -17,6 +17,8 @@
  * timezone ever moves a boundary.
  */
 
+import {utcMs} from '$lib/utils/dateOnly';
+
 export type LadderRung = '1D' | '3D' | '1W' | '2W' | '1M' | '3M' | '6M' | '1Y';
 
 /** A calendar period, both ends included. */
@@ -47,10 +49,15 @@ const TRIPLE_ORIGIN = 0;
 const MONDAY_ORIGIN = -3;
 const MONTHS_PER_RUNG: Partial<Record<LadderRung, number>> = {'1M': 1, '3M': 3, '6M': 6, '1Y': 12};
 
+/** Whole days since 1970-01-01 of a calendar day (`utcMs` takes a year before 100 as it is, where `Date.UTC` would not). */
+function utcDay(year: number, monthIndex: number, day: number): number {
+    return utcMs(year, monthIndex, day) / DAY_MS;
+}
+
 /** Whole days since 1970-01-01 of an ISO date. */
 function dayNumber(iso: string): number {
     const [year, month, day] = iso.split('-').map(Number);
-    return Date.UTC(year, month - 1, day) / DAY_MS;
+    return utcDay(year, month - 1, day);
 }
 
 function isoOfDay(day: number): string {
@@ -74,7 +81,7 @@ export function calendarPeriodOf(iso: string, rung: LadderRung): CalendarPeriod 
     const months = MONTHS_PER_RUNG[rung] ?? 1;
     const [year, month] = iso.split('-').map(Number);
     const first = Math.floor((month - 1) / months) * months;
-    return {start: isoOfDay(Date.UTC(year, first, 1) / DAY_MS), end: isoOfDay(Date.UTC(year, first + months, 1) / DAY_MS - 1)};
+    return {start: isoOfDay(utcDay(year, first, 1)), end: isoOfDay(utcDay(year, first + months, 1) - 1)};
 }
 
 /**
@@ -93,7 +100,8 @@ export function buildCalendarLadder(dates: readonly string[], rung: LadderRung, 
         out.push({startIndex: index, endIndex: index, period, coveredDays: 0, periodDays: dayNumber(period.end) - dayNumber(period.start) + 1, partial: false, current: false});
     }
     for (const bucket of out) {
-        bucket.coveredDays = bucket.endIndex - bucket.startIndex + 1;
+        // The days from the bucket's first date to its last: a step series holds few dates per bucket, a daily one all of them.
+        bucket.coveredDays = dayNumber(dates[bucket.endIndex]) - dayNumber(dates[bucket.startIndex]) + 1;
         bucket.current = bucket.period.end >= today;
         const startCut = dates[bucket.startIndex] > bucket.period.start;
         const endCut = dates[bucket.endIndex] < bucket.period.end && !bucket.current;
@@ -112,4 +120,26 @@ export function countCalendarBuckets(dates: readonly string[], rung: LadderRung)
         count++;
     }
     return count;
+}
+
+/** The index of the period that `rung` puts the day in: consecutive periods have consecutive indices. */
+function periodIndex(iso: string, rung: LadderRung): number {
+    const day = dayNumber(iso);
+    if (rung === '1D') return day;
+    if (rung === '3D') return Math.floor((day - TRIPLE_ORIGIN) / 3);
+    if (rung === '1W') return Math.floor((day - MONDAY_ORIGIN) / 7);
+    if (rung === '2W') return Math.floor((day - MONDAY_ORIGIN) / 14);
+    const months = MONTHS_PER_RUNG[rung] ?? 1;
+    const [year, month] = iso.split('-').map(Number);
+    return year * (12 / months) + Math.floor((month - 1) / months);
+}
+
+/**
+ * How many periods of `rung` lie between two days, both included, the ones the series skips too: what the offer weighs for a
+ * step series, whose few dates leave periods without one. The same figure as `countCalendarBuckets` of the daily series
+ * between the two days, without walking them. Zero when `last` precedes `first`.
+ */
+export function countSpannedPeriods(first: string, last: string, rung: LadderRung): number {
+    if (last < first) return 0;
+    return periodIndex(last, rung) - periodIndex(first, rung) + 1;
 }

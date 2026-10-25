@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {bucketValue, coveredRange, dayOfAxisValue, EXPAND_DAYS_CAP, expandDays, nearestPoint, pointsBetween, toLineSeries, toStepSeries, valueAt, type LinePoint, type StepSpan} from '../stepSeries';
+import {alignAt, bucketValue, coveredRange, dayOfAxisValue, EXPAND_DAYS_CAP, expandDays, nearestPoint, pointsBetween, toLineSeries, toStepSeries, valueAt, type LinePoint, type StepSpan} from '../stepSeries';
 import {dailyFromSteps, stepsFromDaily} from './stepSeriesTestKit';
 
 type Step = StepSpan & {nav: number | null};
@@ -243,6 +243,36 @@ describe('expandDays', () => {
         const typo = [step('0001-01-01', '2026-10-25', 5)];
         const started = performance.now();
         expect(expandDays(typo, '0001-01-01', '2026-10-25')).toBeNull();
+        expect(performance.now() - started).toBeLessThan(200);
+    });
+});
+
+describe('alignAt', () => {
+    it('gives the value of each given day, null where the series does not cover it', () => {
+        const days = ['2026-10-22', '2026-10-23', '2026-10-25', '2026-10-26', '2026-10-27', '2026-10-28', '2026-10-31'];
+        expect(alignAt(SERIES, days, nav)).toEqual([null, 100, 100, 110, null, 120, null]);
+    });
+
+    it('agrees with valueAt on every day', () => {
+        const days = dailyFromSteps(SERIES).map(({date}) => date);
+        const every = ['2026-10-20', ...days, '2026-10-27', '2026-11-02'];
+        expect(alignAt(SERIES, every, nav)).toEqual(every.map((day) => valueAt(SERIES, day)?.nav ?? null));
+    });
+
+    it('keeps an unknown value null and does not mistake it for a hole', () => {
+        const unknown = [step('2026-01-01', '2026-01-03', null), step('2026-01-04', '2026-01-04', 7)];
+        expect(alignAt(unknown, ['2026-01-02', '2026-01-04'], nav)).toEqual([null, 7]);
+    });
+
+    it('is empty for no days and all null for no steps', () => {
+        expect(alignAt(SERIES, [], nav)).toEqual([]);
+        expect(alignAt([], ['2026-01-01', '2026-01-02'], nav)).toEqual([null, null]);
+    });
+
+    it('costs the steps and the days given, not the days of the range', () => {
+        const typo = [step('0001-01-01', '2026-10-25', 5)];
+        const started = performance.now();
+        expect(alignAt(typo, ['0001-01-01', '1500-06-01', '2026-10-25'], nav)).toEqual([5, 5, 5]);
         expect(performance.now() - started).toBeLessThan(200);
     });
 });
