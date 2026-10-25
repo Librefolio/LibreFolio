@@ -203,6 +203,13 @@ class AssetPriceSeries:
     def has_observations(self) -> bool:
         return bool(self._dates)
 
+    @property
+    def observation_dates(self) -> tuple[date_type, ...]:
+        """The days that carry an observation — a market quote, or the average of the day's trades — ascending: the only
+        days on which :meth:`resolve` answers anything other than a carried mark (D-P4: a reader walks these, not the
+        calendar)."""
+        return tuple(self._dates)
+
     def last_market_date(self, query_date: date_type) -> Optional[date_type]:
         """The last day on or before ``query_date`` with a market quote; None when there is none.
 
