@@ -7486,3 +7486,18 @@ dello slot visibile: da non spostare; (c) gli errori di conversione portano l'in
    > **Note implementazione**: i punti del test sono un dataclass con `date`/`through`/`nav_value`/`capital_baseline`/
    > `total_pnl`/`twrr`, perché i lettori funzionano su ogni punto con `date` e `through` (contratto §6): quando arriva
    > `StepSpan` basta cambiare il tipo, non le asserzioni.
+
+### Anno breve nei punti di Z (25/10, ondata 5, D-P4)
+
+> `Date.UTC(24, …)` legge l'anno 24 come 1924. Elenco di Y: `ondata5/Y-anno-breve-fuori-ambito.md`; cura: `utcMs` di
+> `utils/dateOnly.ts` (nel ramo con `ac26cfd97`).
+
+1. ✅ 25/10 — Rossi. 8 test in 3 file già registrati: `TimeSeriesStore.test.ts` (serie con `0024-03-01`, `0001-01-01` e a
+   cavallo del 100: i punti si trovano, nessun gap nel 19xx; l'invalidazione di un intervallo corto non tocca il 1924),
+   `aiExportOptions.test.ts` (periodo che finisce nell'anno 24 e nell'anno 1; indietro oltre l'anno 100 senza cadere nel 1999;
+   una data che non esiste continua a lanciare), `snapshotDataRenderer.test.ts` (`dateOrdinal` di `0024-03-01` = −710 702 e di
+   `0001-01-01` = −719 162).
+2. ✅ 25/10 — Cura. `TimeSeriesStore.parseDate` e `formatDate` (l'anno si scrive a quattro cifre), `aiExportOptions.parseIsoDate` e
+   `subtractMonths`, `snapshotDataRenderer.dateOrdinal` (esportata per il test): `utcMs` al posto di `Date.UTC`. Verdi: Vitest
+   `stores`, `features/ai-export`, `utils`, `components/charts` 135 file / 4 088 test; `front check` 0 errori 0 avvisi (dopo
+   `api sync`: il client generato era vecchio e dava 4 errori in `txTradeAmountApi.ts`, non miei); Prettier pulito.

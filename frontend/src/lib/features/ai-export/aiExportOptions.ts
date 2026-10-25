@@ -1,3 +1,4 @@
+import {utcMs} from '../../utils/dateOnly';
 import type {AiExportCatalogCompatibilityResult} from './catalog/compatibility';
 import {findCompatibleAiExportSelection, selectionsForDomain} from './catalog/compatibility';
 import {resolveDefaultDetailLevel} from './catalog/shared';
@@ -112,7 +113,7 @@ export function normalizeAiExportPeriod(selection: AiExportPeriodSelection | und
 function parseIsoDate(value: string): Date {
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
     if (!match) throw new TypeError('AI Export snapshot date must use YYYY-MM-DD');
-    const parsed = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+    const parsed = new Date(utcMs(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
     if (parsed.toISOString().slice(0, 10) !== value) throw new TypeError('AI Export snapshot date is invalid');
     return parsed;
 }
@@ -121,8 +122,8 @@ function subtractMonths(end: Date, months: number): Date {
     const monthIndex = end.getUTCFullYear() * 12 + end.getUTCMonth() - months;
     const year = Math.floor(monthIndex / 12);
     const month = ((monthIndex % 12) + 12) % 12;
-    const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
-    return new Date(Date.UTC(year, month, Math.min(end.getUTCDate(), lastDay)));
+    const lastDay = new Date(utcMs(year, month + 1, 0)).getUTCDate();
+    return new Date(utcMs(year, month, Math.min(end.getUTCDate(), lastDay)));
 }
 
 export function resolveAiExportPeriod(snapshotAsOf: string, selection: AiExportPeriodSelection | undefined): AiExportResolvedPeriod {

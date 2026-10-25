@@ -625,3 +625,34 @@ describe('TimeSeriesStore.generation (N64)', () => {
         expect(generationOf(neighbour), 'a change of one store moved the generation of another: the answers drawn over it would be asked again for nothing (N64)').toBe(before);
     });
 });
+
+// D-P4: a date typed in the year 24 or 1 must stay there. `Date.UTC(24, …)` reads the year as 1924, so the store looked its
+// points up under another key and reported gaps for days it held.
+describe('TimeSeriesStore with a year before 100', () => {
+    it.each([
+        ['0024-03-01', '0024-03-03'],
+        ['0001-01-01', '0001-01-03'],
+        ['0099-12-30', '0100-01-01'],
+    ])('holds %s..%s as it was written: its points are found and its gap is named in the same years', (start, end) => {
+        const store = new TimeSeriesStore<TestPoint>();
+        store.merge([pt(start, 1)]);
+
+        const result = store.getRange(start, end);
+
+        expect(result.data.map((point) => point.date)).toEqual([start]);
+        expect(result.gaps).toHaveLength(1);
+        expect(result.gaps[0].end).toBe(end);
+        expect(result.gaps[0].start > start, 'the gap starts the day after the stored one, in the same year').toBe(true);
+        expect(result.gaps[0].start.startsWith('19'), 'a gap read in the 19xx').toBe(false);
+    });
+
+    it('invalidates and fetches a short-year range without touching the days of the 19xx', () => {
+        const store = new TimeSeriesStore<TestPoint>();
+        store.merge([pt('0024-03-01', 1), pt('1924-03-01', 2)]);
+
+        store.invalidateRange('0024-03-01', '0024-03-01');
+
+        expect(store.has('0024-03-01')).toBe(false);
+        expect(store.has('1924-03-01'), 'the 1924 point went with the year-24 range').toBe(true);
+    });
+});
