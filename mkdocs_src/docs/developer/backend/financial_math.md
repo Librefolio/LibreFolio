@@ -72,10 +72,11 @@ backend/app/services/financial_math/
 ├── trade_amount.py          the amount of a trade from its unit price and the unit price from its amount (quote base, half-even to the column scale): the transaction form's «Total amount / Unit price»; unrounded, the trade marks of price_marks.py (`unit_price_on_quote_axis`)
 ├── fx_rates.py              the orientation of a stored FX rate: a pair read from source to destination, either way (oriented_rate, any number type); the unit rates a calculation reads by day, as steps answered on the asked days only (AskedDayRates)
 ├── interest.py              day count conventions (ACT/365, ACT/360, ACT/ACT, 30/360), simple interest and daily compounding over a span in closed form, at a cost independent of the span (compound_growth, memoized): the primitives the Scheduled Investment provider builds its accrual on
-├── price_marks.py           daily mark of an asset: MARKET, TRADE_AVG, CARRIED or MISSING
+├── price_marks.py           daily mark of an asset: MARKET, TRADE_AVG, CARRIED or MISSING; the days with an observation (observation_dates)
+├── series_steps.py          series as steps (D-P4): the point holding a day (value_at), the points of a window clipped (points_between), the steps of a list of change rows (steps_from_rows, Decimals compared with their exponent)
 ├── yield_on_cost.py         Yield on Cost of holdings, replayed from the transaction ledger
 ├── weights.py               a share of a total (none on a total ≤ 0), allocation slices, gross weights, concentration (largest weight, HHI)
-├── splits.py                stock splits in the ledger: the ADJUSTMENT rows linked to a SPLIT asset event (one query), the ids an average-cost replay rescales, the usable-ratio rule, the incoming adjustments without a cost that a SPLIT retype must not orphan
+├── splits.py                stock splits in the ledger: the ADJUSTMENT rows linked to a SPLIT asset event (one query), the ids an average-cost replay rescales, the usable-ratio rule, the incoming adjustments without a cost that a SPLIT retype must not orphan, the split a share change implies (`implied_split_ratio`)
 ├── holding_window.py        how long a position has been held at its broker: oldest open lot, a closed position's window, its exits
 ├── fifo/                    FIFO lots
 │   ├── __init__.py          docstring only
@@ -127,7 +128,7 @@ underflow (`_npv_noise_floor`, `_opposite_signs`). A grid point whose NPV is exa
 the NPV changes sign around it (`_changes_sign_at`, in the scan and in `_bracketed_xirr_at`; P1c): on a period that
 opens at 0 and whose flows all lie decades after its start (a typo dated in 1900), every term underflows to 0.0 at the
 top of the grid, and that point solved nothing; the period has no rate there («—»), while a genuine exact zero, a rate
-of exactly 0, still changes sign and counts.
+of exactly 0, still changes sign and counts. Flows that are all zero have no rate either (MF-P1d): the NPV is zero at every rate, and Newton would answer its own starting point (0.1, «10 %») — a period opening at 0 whose only deposit falls on its last day is one, since the deposit joins the final value (`_all_flows_zero`, in `_solve_xirr` and `_newton_xirr`).
 
 `float_price_return()` and `observed_annualization()` (`returns.py`) serve the float return series that the risk and
 signal statistics read. `market_series.py`, which prepares those series, takes both from here and keeps no return
