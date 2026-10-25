@@ -10754,3 +10754,17 @@ DOC-2 (ricerca per lingua), DOC-1 (riordino della guida admin, con le guide Tail
    > fixture Vitest di `instanceConfig` non elencano le chiavi). Selettori su corsia 6197: `api instance-legal` 19, `api registration` 102,
    > `api system` 122, `services restore-owner-guard` 46, `api restore-owner-guard` 33.
    > **⚠️ Fuori pista**: nessuno. Lezione: un campo nuovo di una risposta pubblica va cercato per nome in tutti i `*_KEYS` e `set(body) ==` dei test.
+9. ✅ **H5-6 · `/system/ready` dice se il DB è indietro o avanti, e la sua revisione** (25/10). Dalla richiesta P-3 del coordinatore cloud, confermata dal
+   developer con una differenza: oltre ai codici, in risposta c'è anche la revisione del DB («non si sa mai che serve in futuro»). P-2 (un tag `X.Y.Z` non si ripubblica mai) è ora una regola scritta.
+   > **Note implementazione**: `ReadinessMigrationsState` è `ok | behind | ahead | unknown` (`mismatch` sparisce: si divide in due): `behind` = la revisione
+   > del DB è una che gli script conoscono ma non la testa (migrazione non applicata o fallita); `ahead` = non la conoscono (DB più nuovo dell'immagine, o di un altro
+   > LibreFolio, anche un DB a una revisione ritirata come la vecchia 006). Nuovo campo `ReadinessResponse.database_revision: str | None` (l'unica riga di `alembic_version`, `null`
+   > se non si legge); la testa degli script non esce mai. `readiness.py`: la lettura cacheata è ora `_read_alembic_scripts()` (testa + revisioni note, una sola
+   > `ScriptDirectory.from_config` per processo), `alembic_head_revision()` resta com'era. Doc: `docker_advanced` (le traduzioni non nominano `mismatch`),
+   > `service_exposure_funnel`, `curl-testing`, `security.md` (tabella dei codici, riga su `database_revision`), `api/index.md`; `release-pipeline.md`: avviso «A published tag is never
+   > republished» (P-2). Test (test-author): `services platform-readiness` 18 (`behind`/`ahead` anche su un albero di script a parte, `database_revision` in ogni caso), `api system` 125
+   > (corpo vivo con la revisione, parametri `behind`/`ahead`, OpenAPI con i quattro codici). `api sync` fatto (i file generati sono ignorati da git).
+   > Verifiche: `api instance-legal` 19, `api registration` 102, Vitest 1446 (`features/backup`, `features/instance`), `front check` 0/0, build strict, `check-links` 97, `docs-admin-references` 47, ruff/black.
+   > **⚠️ Fuori pista**: le liste di chiavi esatte di `/system/instance` non cambiano (il campo è di `/system/ready`): le ho solo rieseguite. La risposta pubblica
+   > ora dice a chiunque a che revisione sta il DB: l'`app_version` è già pubblico e la revisione ne dipende, quindi il guadagno per chi attacca è piccolo (scritto in `security.md`).
+   > `contratto-istanza.md` del cloud va aggiornato da loro (`mismatch` → `behind`/`ahead`, campo nuovo).

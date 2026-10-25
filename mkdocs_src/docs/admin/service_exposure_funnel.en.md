@@ -289,7 +289,7 @@ Once the container has started, the one-time key is used up: it disappears from 
     The `librefolio` service has a health check of its own, on `GET /api/v1/system/health` (see the compose file below): it tells Docker that the server answers. To watch LibreFolio from another device, for example with **Uptime Kuma**, point the monitor at `/api/v1/system/ready` on the address you open LibreFolio with, such as `https://librefolio.your-tailnet.ts.net/api/v1/system/ready`. It needs no sign-in and answers:
 
     * **`200`** when LibreFolio is ready to serve requests;
-    * **`503`** when it is not, with the check at fault in the answer: `database` (`unreachable`) or `migrations` (`mismatch`, `unknown`).
+    * **`503`** when it is not, with the check at fault in the answer: `database` (`unreachable`) or `migrations` (`behind`, `ahead`, `unknown`).
 
     The [Advanced Docker Guide](docker_advanced.md), section «Service: `librefolio`», explains the codes.
 

@@ -61,24 +61,33 @@ class HealthCheckResponse(StrictModel):
 
 
 ReadinessDatabaseState = Literal["ok", "unreachable"]
-ReadinessMigrationsState = Literal["ok", "mismatch", "unknown"]
+ReadinessMigrationsState = Literal["ok", "behind", "ahead", "unknown"]
 
 
 class ReadinessChecks(StrictModel):
     """One code per readiness check: never an error message, a path or a revision id."""
 
     database: ReadinessDatabaseState = Field(description="ok: the database answers a query; unreachable: it does not")
-    migrations: ReadinessMigrationsState = Field(description=("ok: the database schema is at the head revision of the migrations; mismatch: it is at another revision; unknown: the revision of the database or of the migrations cannot be read"))
+    migrations: ReadinessMigrationsState = Field(
+        description=(
+            "ok: the database schema is at the head revision of the migrations; "
+            "behind: it is at an older revision this version knows, a migration was not applied or failed; "
+            "ahead: it is at a revision this version does not know, the database is newer than the image; "
+            "unknown: the revision of the database or of the migrations cannot be read"
+        )
+    )
 
 
 class ReadinessResponse(StrictModel):
     """``GET /system/ready``: whether this instance can serve requests, with status 200 when ready and 503 otherwise.
 
-    Public by design, for health checks and orchestrators: the body carries one code per check and nothing else.
+    Public by design, for health checks and orchestrators: the body carries one code per check, the mode and the
+    database's migration revision, and nothing else: never an error message or a path.
     """
 
     status: Literal["ready", "not_ready"] = Field(description="ready when every check is ok")
     checks: ReadinessChecks
+    database_revision: str | None = Field(default=None, description="The revision the database's migrations stand at (the one row of alembic_version), to tell a database behind or ahead of this version; null when it cannot be read")
     mode: InstanceMode = Field(default="normal", description="normal, or awaiting_restore while the hosting panel restores the instance (H-62): ready then means ready to receive the backup")
 
 

@@ -20,8 +20,10 @@ Covers:
   or mailto: and one address (CP13); client_log_level (D4, H-60) live "debug", as every test lane runs at DEBUG
   (dev.py server --test sets LIBREFOLIO_LOG_LEVEL=DEBUG), its mapping pinned in process in
   test_services/test_server_errors.py
-- GET /api/v1/system/ready: public, no session; ready live (the lane's migrated database), 503 with the same body
-  in-process, 200 and 503 in OpenAPI
+- GET /api/v1/system/ready: public, no session; ready live (the lane's migrated database, with its revision as
+  database_revision, the repository's head), 503 with the same body in-process (behind and ahead carry the database's
+  revision through the route), 200 and 503 in OpenAPI, the schema declaring database_revision string|null and the
+  migrations codes ok, behind, ahead, unknown (lot H5-6)
 """
 
 import os
@@ -32,6 +34,8 @@ from uuid import uuid4
 import httpx
 import pytest
 import pytest_asyncio
+from alembic.config import Config as AlembicConfig
+from alembic.script import ScriptDirectory
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.routing import iter_route_contexts
@@ -54,7 +58,7 @@ from backend.app.api.v1.system.info import (
     parse_pipfile,
     signed_in_user,
 )
-from backend.app.config import TEST_LANE_HEADER, get_settings
+from backend.app.config import PROJECT_ROOT, TEST_LANE_HEADER, get_settings
 from backend.app.db.models import User
 from backend.app.db.session import get_session_generator
 from backend.app.schemas.auth import AccountsInstanceConfig
@@ -1162,6 +1166,13 @@ def test_openapi_documents_the_full_answer_first():
 READY_URL = f"{API_BASE}/system/ready"
 
 
+def _repository_head() -> str:
+    """The head revision of the repository's migration scripts, read here without the readiness module."""
+    head = ScriptDirectory.from_config(AlembicConfig(str(PROJECT_ROOT / "backend" / "alembic.ini"))).get_current_head()
+    assert isinstance(head, str) and head, f"Precondition: the migration scripts have one head, got {head!r}"
+    return head
+
+
 class TestReadinessIsPublic:
     """GET /system/ready resolves a database session, and no session gate."""
 
@@ -1175,7 +1186,7 @@ class TestReadinessIsPublic:
 
 
 class TestReadinessLive:
-    """GET /system/ready on the lane's backend: ready, for anyone, with the codes and nothing else."""
+    """GET /system/ready on the lane's backend: ready, for anyone, with the codes, the database's revision and the mode."""
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("forged_cookie", [False, True], ids=["no-cookie", "forged-session-cookie"])
@@ -1185,8 +1196,9 @@ class TestReadinessLive:
             response = await client.get(READY_URL, headers=headers, timeout=TIMEOUT)
 
         assert response.status_code == 200, f"the lane's database is migrated to the head: expected 200, got {response.status_code}: {response.text}"
-        # H-62 (contract L3 §6): readiness says the mode, normal on the lane; red until H-62
-        assert response.json() == {"status": "ready", "checks": {"database": "ok", "migrations": "ok"}, "mode": "normal"}, f"exactly the status, the two codes and the mode: {response.text}"
+        head = _repository_head()
+        # H-62 (contract L3 §6): readiness says the mode, normal on the lane; H5-6: and the revision the database stands at, the head of a migrated lane
+        assert response.json() == {"status": "ready", "checks": {"database": "ok", "migrations": "ok"}, "database_revision": head, "mode": "normal"}, f"exactly the status, the two codes, the database's revision (the head {head!r}) and the mode: {response.text}"
 
 
 def _readiness_app(session: object) -> FastAPI:
@@ -1201,17 +1213,19 @@ class TestReadinessInProcess:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
-        ("database", "migrations", "status_code"),
+        ("database", "migrations", "database_revision", "status_code"),
         [
-            pytest.param("ok", "ok", 200, id="ready-200"),
-            pytest.param("ok", "mismatch", 503, id="mismatch-503"),
-            pytest.param("ok", "unknown", 503, id="migrations-unknown-503"),
-            pytest.param("unreachable", "unknown", 503, id="unreachable-503"),
+            pytest.param("ok", "ok", "rev-at-head", 200, id="ready-200"),
+            pytest.param("ok", "behind", "rev-older", 503, id="behind-503"),
+            pytest.param("ok", "ahead", "rev-newer", 503, id="ahead-503"),
+            pytest.param("ok", "unknown", "rev-unjudged", 503, id="migrations-unknown-with-a-revision-503"),
+            pytest.param("ok", "unknown", None, 503, id="migrations-unknown-503"),
+            pytest.param("unreachable", "unknown", None, 503, id="unreachable-503"),
         ],
     )
-    async def test_the_status_code_follows_the_checks(self, monkeypatch, database, migrations, status_code):
+    async def test_the_status_code_follows_the_checks(self, monkeypatch, database, migrations, database_revision, status_code):
         status = "ready" if status_code == 200 else "not_ready"
-        answer = ReadinessResponse(status=status, checks=ReadinessChecks(database=database, migrations=migrations))
+        answer = ReadinessResponse(status=status, checks=ReadinessChecks(database=database, migrations=migrations), database_revision=database_revision)
         sessions: list[object] = []
 
         async def fake_check_readiness(session):
@@ -1225,8 +1239,8 @@ class TestReadinessInProcess:
 
         assert sessions == [session], f"Barrier: the route must check once, on the session it resolved: {sessions}"
         assert response.status_code == status_code, f"{status} ({database}, {migrations}): expected {status_code}, got {response.status_code}: {response.text}"
-        # H-62 (contract L3 §6): the mode beside it, normal outside the mode; red until H-62
-        assert response.json() == {"status": status, "checks": {"database": database, "migrations": migrations}, "mode": "normal"}, f"the body is the readiness answer and the mode, whatever the status code: {response.text}"
+        # H-62 (contract L3 §6): the mode beside it, normal outside the mode; H5-6: the database's revision carried through, null when unread
+        assert response.json() == {"status": status, "checks": {"database": database, "migrations": migrations}, "database_revision": database_revision, "mode": "normal"}, f"the body is the readiness answer, the database's revision and the mode, whatever the status code: {response.text}"
 
     def test_openapi_documents_200_and_503_with_the_readiness_body(self):
         responses = _instance_app().openapi()["paths"]["/api/v1/system/ready"]["get"]["responses"]
@@ -1234,3 +1248,14 @@ class TestReadinessInProcess:
 
         expected = {"$ref": "#/components/schemas/ReadinessResponse"}
         assert schemas == {"200": expected, "503": expected}, f"GET /system/ready must document 200 and 503, both with ReadinessResponse: {responses}"
+
+    def test_openapi_declares_the_database_revision_and_the_four_migration_codes(self):
+        """The 200's schema: database_revision is a string or null, never required; migrations is exactly ok, behind, ahead, unknown (``mismatch`` is gone)."""
+        schemas = _instance_app().openapi()["components"]["schemas"]
+
+        revision = schemas["ReadinessResponse"]["properties"]["database_revision"]
+        declared = {option.get("type") for option in revision.get("anyOf", [])} or {revision.get("type")}
+        assert declared == {"string", "null"}, f"database_revision must be declared string|null: {revision}"
+        assert "database_revision" not in schemas["ReadinessResponse"].get("required", []), f"database_revision has a default (null), so it is not required: {schemas['ReadinessResponse']}"
+        migrations = schemas["ReadinessChecks"]["properties"]["migrations"]
+        assert migrations.get("enum") == ["ok", "behind", "ahead", "unknown"], f"migrations must be exactly ok, behind, ahead, unknown (no mismatch): {migrations}"

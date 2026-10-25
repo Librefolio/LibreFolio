@@ -75,8 +75,8 @@ curl http://localhost:6040/api/v1/system/health
 
 # Readiness: does the database answer, is its schema at the head revision? (-i shows the status code)
 curl -i http://localhost:6040/api/v1/system/ready
-# 200: {"status":"ready","checks":{"database":"ok","migrations":"ok"}}
-# 503: {"status":"not_ready","checks":{"database":"ok","migrations":"mismatch"}}
+# 200: {"status":"ready","checks":{"database":"ok","migrations":"ok"},"database_revision":"<revision>","mode":"normal"}
+# 503: {"status":"not_ready","checks":{"database":"ok","migrations":"behind"},"database_revision":"<revision>","mode":"normal"}
 
 # System info: the app version only without the cookie, everything with it
 curl http://localhost:6040/api/v1/system/info
