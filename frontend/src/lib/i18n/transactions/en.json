@@ -95,7 +95,11 @@
       "eventCreateAmountRequired": "Amount is required",
       "eventCreateDateRequired": "Date is required",
       "fxDatesHint": "The 'From' and 'To' dates usually match: they differ when the broker credits the new currency on another day.",
-      "eventEditTitle": "Edit event for {asset}"
+      "eventEditTitle": "Edit event for {asset}",
+      "entryModeAmount": "Total amount",
+      "entryModeUnitPrice": "Unit price",
+      "unitPriceCalculated": "calculated",
+      "unitPriceHint": "The amount is calculated from the unit price and the quantity; you can still edit it."
     },
     "bulk": {
       "resetRow": "Reset row",
@@ -214,7 +218,8 @@
       "issuesHeader": "Validation errors were found",
       "balanceIssuesHeader": "This configuration causes data inconsistencies",
       "autoOff": "Auto-validate is OFF ({n} rows > {threshold}) — press ⚡️ Validate now before commit",
-      "contextualIssuesHeader": "With the other pending changes, this row causes the following issues:"
+      "contextualIssuesHeader": "With the other pending changes, this row causes the following issues:",
+      "checkSummary": "{n, plural, one {# field needs} other {# fields need}} fixing"
     },
     "errors": {
       "idRequired": "Transaction ID is required and must be > 0",
