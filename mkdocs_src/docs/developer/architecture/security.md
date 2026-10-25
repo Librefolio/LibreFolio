@@ -1571,22 +1571,22 @@ Docker health checks, Uptime Kuma, orchestrators and hosting panels. `check_read
 | Check | Codes |
 |-------|-------|
 | `database` | `ok`: the database answers a query; `unreachable`: it does not |
-| `migrations` | `ok`: the database's revision, in `alembic_version`, is the head revision of the migration scripts; `mismatch`: it is another revision; `unknown`: a revision cannot be read (no `alembic_version` table or not exactly one row in it, several heads or no scripts), and whenever `database` is `unreachable` |
+| `migrations` | `ok`: the database's revision, in `alembic_version`, is the head revision of the migration scripts; `behind`: it is a revision the scripts know but not the head, a migration was not applied or failed; `ahead`: it is a revision the scripts do not know, the database is newer than this version (or from another LibreFolio); `unknown`: a revision cannot be read (no `alembic_version` table or not exactly one row in it, several heads or no scripts), and whenever `database` is `unreachable` |
 
 `status` is `ready`, with `200`, only when both checks are `ok`; otherwise it is `not_ready`, with `503` and the same
 shape:
 
 ```json
-{"status": "ready", "checks": {"database": "ok", "migrations": "ok"}, "mode": "normal"}
+{"status": "ready", "checks": {"database": "ok", "migrations": "ok"}, "database_revision": "<revision>", "mode": "normal"}
 ```
 
+- **`database_revision`** is the revision the database's migrations stand at, the one row of `alembic_version`, or `null` when it cannot be read (the database is `unreachable`, the table is missing or it does not hold exactly one row). It is there to tell a database `behind` or `ahead` of this version, a hosting panel after an update: a revision id says which migration the data reached, and nothing about its content (developer decision, 25/10/2026). The head the scripts expect is never in the answer, and neither is a count or a path.
 - **`mode`** is `normal`, or `awaiting_restore` while the hosting panel restores the instance
   ([Awaiting Restore](#await-restore)): `ready` then means ready to receive the backup.
-- **Codes only.** The body never carries an error message, a path or a revision id. The details go to the server
+- **Codes and one revision.** The body never carries an error message or a path. The details go to the server
   log, once per change of state: `Instance not ready` (warning, with both codes and the problem) or `Instance ready`
   (info). A monitor that asks every few seconds adds no log line while the state holds.
-- **The head revision is read once per process**, from the migration scripts of `backend/alembic.ini`. A failed read
-  is not cached: the next check tries again.
+- **The head revision and the revisions the scripts know are read once per process**, from the migration scripts of `backend/alembic.ini`: that read decides `behind` from `ahead`. A failed read is not cached: the next check tries again.
 - **`/system/health` is a different question**: it answers `{"status": "ok"}` as soon as the server answers, without
   touching the database. The image's `HEALTHCHECK` and both Compose files call it.
 
