@@ -12,7 +12,7 @@
  * what a fresh worker honours. The rest assert values that are true everywhere.
  */
 import {describe, expect, it} from 'vitest';
-import {addDays, addMonths, daysBetween, midpointDate, todayIso} from '../dateOnly';
+import {addDays, addMonths, daysBetween, midpointDate, todayIso, utcMs} from '../dateOnly';
 
 describe('addDays', () => {
     it('crosses a year boundary forwards', () => {
@@ -153,5 +153,24 @@ describe('todayIso', () => {
         // property that differs precisely when it matters.
         const now = new Date();
         expect(todayIso().endsWith(String(now.getDate()).padStart(2, '0'))).toBe(true);
+    });
+});
+
+describe('utcMs', () => {
+    // WHY: `Date.UTC(24, 0, 1)` reads the year as 1924. A date typed in the year 24 must stay there, in every chart that does
+    // calendar arithmetic on it.
+    it('takes a year before 100 as it is', () => {
+        expect(new Date(utcMs(24, 0, 1)).toISOString()).toBe('0024-01-01T00:00:00.000Z');
+        expect(new Date(utcMs(1, 0, 1)).toISOString()).toBe('0001-01-01T00:00:00.000Z');
+    });
+
+    it('agrees with Date.UTC from the year 100 on', () => {
+        expect(utcMs(2026, 9, 25)).toBe(Date.UTC(2026, 9, 25));
+        expect(utcMs(100, 0, 1)).toBe(Date.UTC(100, 0, 1));
+    });
+
+    it('rolls over months and days the way Date.UTC does (month 12 is January, day 0 is the day before)', () => {
+        expect(utcMs(2026, 12, 1)).toBe(Date.UTC(2027, 0, 1));
+        expect(new Date(utcMs(24, 2, 0)).toISOString()).toBe('0024-02-29T00:00:00.000Z');
     });
 });
