@@ -95,7 +95,11 @@
       "eventCreateAmountRequired": "L'importo è obbligatorio",
       "eventCreateDateRequired": "La data è obbligatoria",
       "fxDatesHint": "Le date 'Da' e 'A' di solito coincidono: si separano quando il broker accredita la nuova valuta in un altro giorno.",
-      "eventEditTitle": "Modifica evento per {asset}"
+      "eventEditTitle": "Modifica evento per {asset}",
+      "entryModeAmount": "Importo totale",
+      "entryModeUnitPrice": "Prezzo unitario",
+      "unitPriceCalculated": "calcolato",
+      "unitPriceHint": "L'importo si calcola dal prezzo unitario e dalla quantità; puoi comunque modificarlo."
     },
     "bulk": {
       "resetRow": "Reimposta riga",
@@ -201,7 +205,8 @@
       "issuesHeader": "Sono stati identificati degli errori nei campi",
       "balanceIssuesHeader": "Questa configurazione genera dati inconsistenti",
       "autoOff": "Auto-validazione OFF ({n} righe > {threshold}) — premi ⚡️Verifica ora prima del commit",
-      "contextualIssuesHeader": "Considerando le altre modifiche in sospeso, questa riga causa i seguenti problemi:"
+      "contextualIssuesHeader": "Considerando le altre modifiche in sospeso, questa riga causa i seguenti problemi:",
+      "checkSummary": "{n, plural, one {# campo da correggere} other {# campi da correggere}}"
     },
     "errors": {
       "idRequired": "L'ID transazione è obbligatorio e deve essere > 0",
