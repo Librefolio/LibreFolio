@@ -46,6 +46,7 @@ from backend.app.schemas.portfolio import (
 from backend.app.services.brokers.broker_service import BrokerService
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
 from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder
+from backend.app.services.financial_math.series_steps import value_at
 from backend.app.services.financial_math.valuation import compute_holding_value
 from backend.app.services.platform.data_quality_thresholds import TRANSACTION_IMPLIED_GRACE_DAYS
 from backend.app.services.portfolio_service import (
@@ -3659,7 +3660,11 @@ class TestPortfolioServiceGetReport:
                 date_range={"start": str(day1), "end": str(day5)},
             ),
         )
-        assert [p.date for p in wide.history] == [day1, day2, day3, day4, day5]
+        # The history is in steps (D-P4): each point holds from its date to its through, and the days a point holds are read
+        # by value_at. The wide range is day1..day5, every day of it held by a step.
+        assert (wide.range.start, wide.range.end) == (day1, day5)
+        assert (wide.history[0].date, wide.history[-1].through) == (day1, day5)
+        assert [value_at(wide.history, day) is not None for day in (day1, day2, day3, day4, day5)] == [True] * 5
         assert wide.metadata.computed_date_to == day5
 
         # Narrow call: same tx/price fingerprint as the wide call (no PriceHistory
@@ -3675,12 +3680,14 @@ class TestPortfolioServiceGetReport:
             ),
         )
 
-        assert [p.date for p in narrow.history] == [day1, day2, day3]
+        assert (narrow.range.start, narrow.range.end) == (day1, day3)
+        assert (narrow.history[0].date, narrow.history[-1].through) == (day1, day3), "no step reaches past the narrower date_to"
+        assert [value_at(narrow.history, day) is not None for day in (day1, day2, day3, day4, day5)] == [True, True, True, False, False], "no phantom future day: the wider blob's day4 and day5 are not held"
         assert narrow.metadata.computed_date_to == day3
         assert narrow.summary.net_worth.amount == Decimal("1050")
-        # Day-over-day delta (mirrors the frontend KPI calc: history[-1] - history[-2])
+        # Day-over-day delta (mirrors the frontend KPI calc: the last day minus the day before)
         # must reflect day3 vs day2 (real data), not two identical phantom future days.
-        assert narrow.history[-1].nav_value.amount - narrow.history[-2].nav_value.amount == Decimal("50")
+        assert value_at(narrow.history, day3).nav_value.amount - value_at(narrow.history, day2).nav_value.amount == Decimal("50")
 
     @pytest.mark.asyncio
     async def test_get_report_income_history_flag_gates_section_and_busts_l2_cache(self, session, test_user, broker_with_access):

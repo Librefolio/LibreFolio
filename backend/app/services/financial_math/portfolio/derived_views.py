@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import bisect
+import calendar
 from collections import defaultdict
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
@@ -22,6 +23,7 @@ from backend.app.services.financial_math.average_cost import (
 from backend.app.services.financial_math.portfolio.data_quality import build_data_quality_report
 from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction, DailyPortfolioState, DailyStates
 from backend.app.services.financial_math.returns import CashFlowInput, NAVSnapshot
+from backend.app.services.financial_math.series_steps import steps_from_rows
 from backend.app.services.financial_math.weights import slice_percents
 from backend.app.utils.asset.sector import sector_emoji
 
@@ -53,6 +55,70 @@ def build_cost_positions(
         if movement is not None:
             movements[(tx.asset_id, tx.broker_id)].append(movement)
     return [CostPosition(key=key, asset_currency=asset_currencies.get(key[0], target_currency), movements=tuple(items)) for key, items in movements.items()]
+
+
+#: A step of the history longer than this many days gets a true MWRR point at each month end inside it (D-P4, §2)
+MWRR_LONG_STEP_DAYS = 62
+#: At most this many monthly MWRR points a step, evenly spread over its month ends
+MWRR_MAX_MONTHLY_POINTS = 24
+
+
+def _month_ends_inside(first: date_type, last: date_type) -> list[date_type]:
+    """The last day of each calendar month strictly between ``first`` and ``last``."""
+    ends: list[date_type] = []
+    year, month = first.year, first.month
+    while True:
+        end = date_type(year, month, calendar.monthrange(year, month)[1])
+        if end >= last:
+            return ends
+        if end > first:
+            ends.append(end)
+        if year == date_type.max.year and month == 12:
+            return ends
+        year, month = (year + 1, 1) if month == 12 else (year, month + 1)
+
+
+def mwrr_line_days(steps: Iterable[Any]) -> list[date_type]:
+    """The days of the history's MWRR line (D-P4, contract §2): each step's ``date`` and ``through``, plus, in a step
+    longer than :data:`MWRR_LONG_STEP_DAYS` days, the month ends strictly inside it — at most
+    :data:`MWRR_MAX_MONTHLY_POINTS`, evenly spread when there are more. Sorted, no duplicate."""
+    days: set[date_type] = set()
+    for step in steps:
+        first, last = (step["date"], step["through"]) if isinstance(step, Mapping) else (step.date, step.through)
+        days.update((first, last))
+        if (last - first).days + 1 > MWRR_LONG_STEP_DAYS:
+            ends = _month_ends_inside(first, last)
+            if len(ends) > MWRR_MAX_MONTHLY_POINTS:
+                ends = [ends[index * (len(ends) - 1) // (MWRR_MAX_MONTHLY_POINTS - 1)] for index in range(MWRR_MAX_MONTHLY_POINTS)]
+            days.update(ends)
+    return sorted(days)
+
+
+def _amount_or_none(amount: Decimal) -> Decimal | None:
+    """The history's optional amounts: None when zero, as the point has always given them."""
+    return amount if amount else None
+
+
+#: The history point's money fields, each with the state's amount it shows (an optional one is None when zero)
+_HISTORY_AMOUNTS: tuple[tuple[str, Callable[[DailyPortfolioState], Decimal | None]], ...] = (
+    ("cash_value", lambda s: s.cash_value),
+    ("market_value", lambda s: s.market_value),
+    ("broker_nav_value", lambda s: s.broker_nav_value),
+    ("in_transit_cash_value", lambda s: _amount_or_none(s.in_transit_cash_value)),
+    ("in_transit_asset_market_value", lambda s: _amount_or_none(s.in_transit_asset_market_value)),
+    ("in_transit_market_value", lambda s: _amount_or_none(s.in_transit_market_value)),
+    ("nav_value", lambda s: s.nav_value),
+    ("open_cost_basis", lambda s: _amount_or_none(s.open_cost_basis)),
+    ("in_transit_asset_cost_basis", lambda s: _amount_or_none(s.in_transit_asset_cost_basis)),
+    ("in_transit_book_value", lambda s: _amount_or_none(s.in_transit_book_value)),
+    ("book_value", lambda s: _amount_or_none(s.book_value)),
+    ("capital_baseline", lambda s: s.cumulative_external_cash_flow),
+    ("book_asset_like", lambda s: s.book_asset_like),
+    ("cash_from_contributed_capital", lambda s: s.cash_from_contributed_capital),
+    ("cash_from_generated_returns", lambda s: s.cash_from_generated_returns),
+    ("total_pnl", lambda s: s.total_pnl),
+    ("unrealized_gain_loss", lambda s: _amount_or_none(s.unrealized_gain_loss)),
+)
 
 
 # =============================================================================
@@ -93,99 +159,147 @@ class DerivedViewsBuilder:
 
     def _window(self, date_from: date_type | None, date_to: date_type | None, *, exclusive_start: bool = False) -> list[DailyPortfolioState]:
         """The states of ``[date_from, date_to]`` (``(date_from, date_to]`` with ``exclusive_start``), an open bound
-        reaching the end of the history: a view built for a window builds only its days (P2, N74, P4)."""
+        reaching the end of the history: a view built for a window builds only its days (P2, N74). On the engine's
+        DailyStates it builds every quiet day: the step views read :meth:`_change_rows` instead (D-P4)."""
         start = 0 if date_from is None else (self._bisect_right if exclusive_start else self._bisect_left)(date_from)
         end = len(self.daily_states) if date_to is None else self._bisect_right(date_to)
         return list(self.daily_states[start:end])
 
-    def _window_days(self, date_from: date_type | None, date_to: date_type | None, *, exclusive_start: bool = False) -> Iterator[tuple[date_type, DailyPortfolioState]]:
-        """Every day of the window with the state it reads: ``(day, state)``.
+    def window_range(self, date_from: date_type | None, date_to: date_type | None) -> tuple[date_type, date_type] | None:
+        """The report's ``range`` (D-P4): the days of ``[date_from, date_to]`` that have a state, as ``(start, end)``; an
+        open bound reaches the history's end. None when the window holds no state."""
+        if not self.daily_states:
+            return None
+        first, last = (self._dates[0], self._dates[-1]) if self._dates is not None else (self.daily_states.first_date, self.daily_states.last_date)
+        start = first if date_from is None else max(date_from, first)
+        end = last if date_to is None else min(date_to, last)
+        return (start, end) if start <= end else None
 
-        On the engine's DailyStates the state is its segment's (P4): no quiet day is built. It is read-only, and its
-        ``date``, ``external_cash_flow`` and ``acquisition_funding`` are the day's only when ``day == state.date`` (a
-        quiet day has no flow and no acquisition funding); use ``day`` for the date. Any other sequence gives each state
-        with its own date.
+    def _change_rows(self, start: date_type, end: date_type, extra_days: Iterable[date_type] = ()) -> list[tuple[date_type, DailyPortfolioState]]:
+        """The days of ``[start, end]`` on which a view may change, each with the state it reads, in order: ``start``,
+        every engine segment start inside, and ``extra_days`` inside (D-P4). Any other sequence gives every state.
+
+        The state is the segment's own, read-only and never built for the day: its ``date``, ``external_cash_flow`` and
+        ``acquisition_funding`` are its segment start's, which no step view reads.
         """
         if self._dates is not None:
-            for state in self._window(date_from, date_to, exclusive_start=exclusive_start):
-                yield state.date, state
-            return
-        start = date_from + timedelta(days=1) if exclusive_start and date_from is not None else date_from
-        for segment in self.daily_states.iter_segments(start, date_to):
-            day = segment.start
-            while day <= segment.end:
-                yield day, segment.state
-                day += timedelta(days=1)
+            return [(state.date, state) for state in self._window(start, end)]
+        rows: dict[date_type, DailyPortfolioState] = {}
+        segments = self.daily_states.segments
+        first = max(bisect.bisect_right(segments, start, key=lambda segment: segment.start) - 1, 0)
+        for segment in segments[first:]:
+            if segment.start > end:
+                break
+            if segment.end >= start:
+                rows[max(segment.start, start)] = segment.state
+        for day in extra_days:
+            if start <= day <= end and day not in rows:
+                rows[day] = self.daily_states.segment_at(day).state
+        return sorted(rows.items(), key=lambda row: row[0])
 
-    def build_history(self, date_from: date_type | None = None, date_to: date_type | None = None) -> list[dict]:
-        """Build PortfolioHistoryPoint-compatible dicts from the daily states of ``[date_from, date_to]``.
+    def change_days(self, start: date_type, end: date_type, extra_days: Iterable[date_type] = ()) -> list[date_type]:
+        """The days of :meth:`_change_rows`: where a step of a view built over ``[start, end]`` may begin."""
+        return [day for day, _state in self._change_rows(start, end, extra_days)]
 
-        Returns dicts (not PortfolioHistoryPoint) to avoid circular import.
-        The API adapter converts these to PortfolioHistoryPoint.
+    def build_history(
+        self,
+        date_from: date_type | None = None,
+        date_to: date_type | None = None,
+        *,
+        metrics: Callable[[date_type], Mapping[str, Any]] | None = None,
+        extra_days: Iterable[date_type] = (),
+    ) -> list[dict]:
+        """The history of ``[date_from, date_to]`` in steps (D-P4): PortfolioHistoryPoint-compatible dicts, each holding
+        from its ``date`` to its ``through``.
+
+        ``metrics(day)``: more fields of a change day (the service's TWRR and ROI), part of the step's values; a day where
+        they change is in ``extra_days``. Two consecutive change days with the same values — Decimals with their
+        exponent — make one step. Returns dicts (not PortfolioHistoryPoint) to avoid a circular import; the API adapter
+        converts them.
         """
+        window = self.window_range(date_from, date_to)
+        if window is None:
+            return []
+        start, end = window
+        rows = []
+        for day, state in self._change_rows(start, end, extra_days):
+            amounts = tuple(amount(state) for _name, amount in _HISTORY_AMOUNTS)
+            extra = dict(metrics(day)) if metrics is not None else {}
+            rows.append((day, amounts, extra))
+        steps = steps_from_rows(rows, day=lambda row: row[0], values=lambda row: (row[1], tuple(row[2].items())), range_start=start, range_end=end)
+        code = self.target_currency
         return [
             {
-                "date": day,
-                "cash_value": CurrencySchema(code=self.target_currency, amount=s.cash_value),
-                "market_value": CurrencySchema(code=self.target_currency, amount=s.market_value),
-                "broker_nav_value": CurrencySchema(code=self.target_currency, amount=s.broker_nav_value),
-                "in_transit_cash_value": CurrencySchema(code=self.target_currency, amount=s.in_transit_cash_value) if s.in_transit_cash_value else None,
-                "in_transit_asset_market_value": CurrencySchema(code=self.target_currency, amount=s.in_transit_asset_market_value) if s.in_transit_asset_market_value else None,
-                "in_transit_market_value": CurrencySchema(code=self.target_currency, amount=s.in_transit_market_value) if s.in_transit_market_value else None,
-                "nav_value": CurrencySchema(code=self.target_currency, amount=s.nav_value),
-                "open_cost_basis": CurrencySchema(code=self.target_currency, amount=s.open_cost_basis) if s.open_cost_basis else None,
-                "in_transit_asset_cost_basis": CurrencySchema(code=self.target_currency, amount=s.in_transit_asset_cost_basis) if s.in_transit_asset_cost_basis else None,
-                "in_transit_book_value": CurrencySchema(code=self.target_currency, amount=s.in_transit_book_value) if s.in_transit_book_value else None,
-                "book_value": CurrencySchema(code=self.target_currency, amount=s.book_value) if s.book_value else None,
-                "capital_baseline": CurrencySchema(code=self.target_currency, amount=s.cumulative_external_cash_flow),
-                "book_asset_like": CurrencySchema(code=self.target_currency, amount=s.book_asset_like),
-                "cash_from_contributed_capital": CurrencySchema(code=self.target_currency, amount=s.cash_from_contributed_capital),
-                "cash_from_generated_returns": CurrencySchema(code=self.target_currency, amount=s.cash_from_generated_returns),
-                "total_pnl": CurrencySchema(code=self.target_currency, amount=s.total_pnl),
-                "unrealized_gain_loss": CurrencySchema(code=self.target_currency, amount=s.unrealized_gain_loss) if s.unrealized_gain_loss else None,
+                "date": step.date,
+                "through": step.through,
+                **{name: (CurrencySchema(code=code, amount=amount) if amount is not None else None) for (name, _amount), amount in zip(_HISTORY_AMOUNTS, step.row[1], strict=True)},
+                **step.row[2],
             }
-            for day, s in self._window_days(date_from, date_to)
+            for step in steps
         ]
 
     def build_broker_pnl_history(self, date_from: date_type | None = None, date_to: date_type | None = None) -> dict[int, list[dict]]:
-        """Per-broker additive P&L history: broker_id -> [{date, total_pnl}, ...].
+        """Per-broker additive P&L history in steps: broker_id -> [{date, through, total_pnl}, ...] (D-P4).
 
         Derived from DailyPortfolioState.broker_contributions (see G1a/§4.2), which
         is built additively in the same daily replay as the scope-aggregate
-        total_pnl, so for every date sum(points[bid].total_pnl) == aggregate total_pnl.
-        Returns raw dicts (not BrokerPnlHistory) to avoid circular import, mirroring
+        total_pnl, so for every day sum(value of each broker's step) == aggregate total_pnl.
+        Each broker's steps are maximal: they end where its own P&L changes. A day a broker is not in the state is a gap
+        in its series. Returns raw dicts (not BrokerPnlHistory) to avoid circular import, mirroring
         build_history()'s adapter-conversion pattern.
         """
-        by_broker: dict[int, list[dict]] = defaultdict(list)
-        for day, s in self._window_days(date_from, date_to):
-            for bid, contribution in s.broker_contributions.items():
-                by_broker[bid].append({"date": day, "total_pnl": CurrencySchema(code=self.target_currency, amount=contribution.pnl_contribution)})
-        return dict(by_broker)
+        window = self.window_range(date_from, date_to)
+        if window is None:
+            return {}
+        start, end = window
+        rows: list[tuple[date_type, int, Decimal | None]] = []
+        seen: dict[int, None] = {}
+        for day, state in self._change_rows(start, end):
+            for bid, contribution in state.broker_contributions.items():
+                seen.setdefault(bid)
+                rows.append((day, bid, contribution.pnl_contribution))
+            rows.extend((day, bid, None) for bid in seen if bid not in state.broker_contributions)
+        steps = steps_from_rows(rows, day=lambda row: row[0], values=lambda row: row[2], key=lambda row: row[1], is_gap=lambda row: row[2] is None, range_start=start, range_end=end)
+        by_broker: dict[int, list[dict]] = {}
+        for step in steps:
+            by_broker.setdefault(step.key, []).append({"date": step.date, "through": step.through, "total_pnl": CurrencySchema(code=self.target_currency, amount=step.row[2])})
+        return by_broker
 
     def build_pnl_candles(self, date_from: date_type | None = None, date_to: date_type | None = None) -> list[dict]:
-        """Synthetic total-P&L candle series (G1b): [{date, open, high, low, close}, ...].
+        """Synthetic total-P&L candle series (G1b) in steps: [{date, through, open, high, low, close}, ...] (D-P4).
 
         Days whose candle is unavailable (DailyPortfolioState.pnl_candle is None — a held
-        asset's valuation was MISSING that day) are omitted entirely, a genuine gap rather
-        than a guessed/zeroed candle. ``close`` reproduces the canonical
-        PortfolioHistoryPoint.total_pnl for the same date exactly (see PnlCandleContribution
-        / DailyStateBuilder §4.3). Returns raw dicts, mirroring build_history()'s
-        adapter-conversion pattern (avoids a circular import on the API schema).
+        asset's valuation was MISSING that day) are a gap: no step covers them, rather than a
+        guessed/zeroed candle. A quiet day carries the candle of the last computed day, as it always did, so a step has
+        one candle. ``close`` reproduces the canonical PortfolioHistoryPoint.total_pnl of
+        the same day exactly (see PnlCandleContribution / DailyStateBuilder §4.3). Returns raw dicts, mirroring
+        build_history()'s adapter-conversion pattern (avoids a circular import on the API schema).
         """
-        points: list[dict] = []
-        for day, s in self._window_days(date_from, date_to):
-            if s.pnl_candle is None:
-                continue
-            points.append(
-                {
-                    "date": day,
-                    "open": CurrencySchema(code=self.target_currency, amount=s.pnl_candle.open),
-                    "high": CurrencySchema(code=self.target_currency, amount=s.pnl_candle.high),
-                    "low": CurrencySchema(code=self.target_currency, amount=s.pnl_candle.low),
-                    "close": CurrencySchema(code=self.target_currency, amount=s.pnl_candle.close),
-                }
-            )
-        return points
+        window = self.window_range(date_from, date_to)
+        if window is None:
+            return []
+        start, end = window
+        rows = [(day, state.pnl_candle) for day, state in self._change_rows(start, end)]
+        steps = steps_from_rows(
+            rows,
+            day=lambda row: row[0],
+            values=lambda row: (row[1].open, row[1].high, row[1].low, row[1].close),
+            is_gap=lambda row: row[1] is None,
+            range_start=start,
+            range_end=end,
+        )
+        code = self.target_currency
+        return [
+            {
+                "date": step.date,
+                "through": step.through,
+                "open": CurrencySchema(code=code, amount=step.row[1].open),
+                "high": CurrencySchema(code=code, amount=step.row[1].high),
+                "low": CurrencySchema(code=code, amount=step.row[1].low),
+                "close": CurrencySchema(code=code, amount=step.row[1].close),
+            }
+            for step in steps
+        ]
 
     def build_acquisition_funding(self, date_from: date_type | None = None, date_to: date_type | None = None) -> list[dict]:
         """New-vs-reinvested BUY funding split (batch 2): [{date, from_new_capital,
@@ -199,14 +313,18 @@ class DerivedViewsBuilder:
         build_history()'s adapter-conversion pattern.
         """
         points: list[dict] = []
-        # A flow series: a BUY dated date_from belongs to the previous period, (date_from, date_to]
-        for day, s in self._window_days(date_from, date_to, exclusive_start=True):
-            # A quiet day acquires nothing: its segment's funding is the computed day's
-            if day != s.date or s.acquisition_funding is None:
+        # A flow series: a BUY dated date_from belongs to the previous period, (date_from, date_to]. A quiet day acquires
+        # nothing (P4): only a segment's start can carry funding
+        if self._dates is not None:
+            states = self._window(date_from, date_to, exclusive_start=True)
+        else:
+            states = [segment.state for segment in self.daily_states.segments if (date_from is None or segment.start > date_from) and (date_to is None or segment.start <= date_to)]
+        for s in states:
+            if s.acquisition_funding is None:
                 continue
             points.append(
                 {
-                    "date": day,
+                    "date": s.date,
                     "from_new_capital": CurrencySchema(code=self.target_currency, amount=s.acquisition_funding.from_new_capital),
                     "from_reinvested": CurrencySchema(code=self.target_currency, amount=s.acquisition_funding.from_reinvested),
                 }
@@ -216,6 +334,8 @@ class DerivedViewsBuilder:
     def build_performance_inputs(
         self,
         date_from: date_type | None = None,
+        *,
+        days: Iterable[date_type] | None = None,
     ) -> tuple[list, list]:
         """Extract NAV snapshots and the invested-capital flow series for ROI/TWRR/MWRR.
 
@@ -224,6 +344,12 @@ class DerivedViewsBuilder:
         With ``date_from`` (P2, N74), only what ``returns.rebase_to_period`` keeps of them for that period: the snapshots
         from the period's opening state on (the last one dated on or before ``date_from``, else the first) and the flows
         dated after it, so the rebase gives the same period without building the history before it.
+
+        On the engine's DailyStates (D-P4) the snapshots are not one a day: the opening day, then ``days`` after it —
+        by default every segment start and the last day. A quiet day changes neither the NAV nor the baseline, so each
+        TWRR, ROI and MWRR value the ``returns`` functions give on a snapshot's day is the one the daily series gives on
+        that day, bit for bit (a quiet sub-period's factor is exactly 1; the flows are dated on segment starts and the
+        MWRR solves each day alone). Any other sequence gives one snapshot a day.
 
         The capital flow is derived from the day-over-day change in
         ``cumulative_external_cash_flow`` (the *capital baseline*), NOT from the
@@ -240,19 +366,50 @@ class DerivedViewsBuilder:
         The baseline uses portfolio perspective (contribution = positive), so we
         negate the delta when passing to performance functions.
         """
+        if not self.daily_states:
+            return [], []
+        if self._dates is None:
+            return self._sparse_performance_inputs(date_from, days)
         prev_baseline = Decimal("0")
-        days = list(self._window_days(self._opening_day(date_from), None)) if date_from is not None and self.daily_states else list(self._window_days(None, None))
-        nav_snapshots = [NAVSnapshot(date=day, nav=s.nav_value) for day, s in days]
-        if date_from is not None and days:
+        states = self._window(self._opening_day(date_from), None) if date_from is not None else list(self.daily_states)
+        nav_snapshots = [NAVSnapshot(date=s.date, nav=s.nav_value) for s in states]
+        if date_from is not None and states:
             # The opening state: its baseline is where the period's flows start from
-            prev_baseline = days[0][1].cumulative_external_cash_flow
-            days = days[1:]
+            prev_baseline = states[0].cumulative_external_cash_flow
+            states = states[1:]
         cash_flows: list[CashFlowInput] = []
-        for day, s in days:
+        for s in states:
             delta = s.cumulative_external_cash_flow - prev_baseline
             prev_baseline = s.cumulative_external_cash_flow
             if delta != 0:
-                cash_flows.append(CashFlowInput(date=day, amount=-delta))
+                cash_flows.append(CashFlowInput(date=s.date, amount=-delta))
+        return nav_snapshots, cash_flows
+
+    def _sparse_performance_inputs(self, date_from: date_type | None, days: Iterable[date_type] | None) -> tuple[list, list]:
+        """:meth:`build_performance_inputs` on the engine's DailyStates: the snapshots of the opening day and of ``days``
+        after it (default: every segment start and the last day), the flows of the segment starts (D-P4)."""
+        states = self.daily_states
+        opening = self._opening_day(date_from) if date_from is not None else states.first_date
+        last = states.last_date
+        segments = states.segments
+        opening_index = max(bisect.bisect_right(segments, opening, key=lambda segment: segment.start) - 1, 0)
+        later = segments[opening_index + 1 :]  # the segments starting after the opening day
+        snapshot_days = {opening}
+        if days is None:
+            snapshot_days.update(segment.start for segment in later)
+            snapshot_days.add(last)
+        else:
+            snapshot_days.update(day for day in days if opening < day <= last)
+        nav_snapshots = [NAVSnapshot(date=day, nav=states.segment_at(day).state.nav_value) for day in sorted(snapshot_days)]
+        # The opening state's baseline is where the period's flows start from; without date_from the first day's own
+        # baseline is its flow
+        prev_baseline = segments[opening_index].state.cumulative_external_cash_flow if date_from is not None else Decimal("0")
+        cash_flows: list[CashFlowInput] = []
+        for segment in later if date_from is not None else segments:
+            delta = segment.state.cumulative_external_cash_flow - prev_baseline
+            prev_baseline = segment.state.cumulative_external_cash_flow
+            if delta != 0:
+                cash_flows.append(CashFlowInput(date=segment.start, amount=-delta))
         return nav_snapshots, cash_flows
 
     def _opening_day(self, date_from: date_type) -> date_type:
@@ -289,27 +446,29 @@ class DerivedViewsBuilder:
         return _alloc(last.by_type), _alloc(last.by_sector, use_sector_emoji=True), _alloc(last.by_geography)
 
     def build_allocation_history(self, dimension: str, date_from: date_type | None = None) -> list[dict]:
-        """Build allocation history series for a given dimension.
+        """Build allocation history series for a given dimension, in steps (D-P4).
 
-        Returns list of {date, components: [{name, value, amount}]} dicts.
+        Returns list of {date, through, components: [{name, value, amount}]} dicts.
         """
         attr_map = {"type": "by_type", "sector": "by_sector", "geography": "by_geography"}
         attr = attr_map.get(dimension, "by_type")
 
-        result = []
-        for day, s in self._window_days(date_from or None, None):
-            d = getattr(s, attr, {})
+        def components(state: DailyPortfolioState) -> list[dict]:
+            d = getattr(state, attr, {})
             percents = slice_percents(d)
-            components = [
-                {
-                    "name": name,
-                    "value": percents[name].quantize(Decimal("0.01")),
-                    "amount": amt,
-                }
-                for name, amt in sorted(d.items(), key=lambda x: -x[1])
-            ]
-            result.append({"date": day, "components": components})
-        return result
+            return [{"name": name, "value": percents[name].quantize(Decimal("0.01")), "amount": amt} for name, amt in sorted(d.items(), key=lambda x: -x[1])]
+
+        return self._component_steps(components, date_from)
+
+    def _component_steps(self, components: Callable[[DailyPortfolioState], list[dict]], date_from: date_type | None) -> list[dict]:
+        """``{date, through, components}`` steps from ``date_from`` to the end: one per run of identical components."""
+        window = self.window_range(date_from or None, None)
+        if window is None:
+            return []
+        start, end = window
+        rows = [(day, components(state)) for day, state in self._change_rows(start, end)]
+        steps = steps_from_rows(rows, day=lambda row: row[0], values=lambda row: row[1], range_start=start, range_end=end)
+        return [{"date": step.date, "through": step.through, "components": step.row[1]} for step in steps]
 
     @staticmethod
     def _asset_components(state: DailyPortfolioState, names: Mapping[int, str], *, with_emoji: bool) -> list[dict]:
@@ -335,7 +494,7 @@ class DerivedViewsBuilder:
         """The assets with a slice in the asset dimension from ``date_from`` on (to name them)."""
         if self._dates is None:
             return {asset_id for segment in self.daily_states.iter_segments(date_from, None) for asset_id in segment.state.by_asset}
-        return {asset_id for _day, state in self._window_days(date_from, None) for asset_id in state.by_asset}
+        return {asset_id for state in self._window(date_from, None) for asset_id in state.by_asset}
 
     def build_asset_allocation_current(self, names: Mapping[int, str]) -> list[dict]:
         """The asset dimension of the allocation on the last day (AllocationItem-like dicts, ``id`` = the asset's)."""
@@ -344,8 +503,9 @@ class DerivedViewsBuilder:
         return self._asset_components(self.daily_states[-1], names, with_emoji=True)
 
     def build_asset_allocation_history(self, names: Mapping[int, str], date_from: date_type | None = None) -> list[dict]:
-        """The asset dimension's history from ``date_from``: ``{date, components}`` per day, as build_allocation_history."""
-        return [{"date": day, "components": self._asset_components(state, names, with_emoji=False)} for day, state in self._window_days(date_from or None, None)]
+        """The asset dimension's history from ``date_from``: ``{date, through, components}`` steps, as
+        build_allocation_history."""
+        return self._component_steps(lambda state: self._asset_components(state, names, with_emoji=False), date_from)
 
     def build_data_quality_report(self, **kwargs: Any) -> DataQualityReport:
         """The data-quality report of these daily states: see ``data_quality.build_data_quality_report``."""

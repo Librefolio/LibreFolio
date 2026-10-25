@@ -583,16 +583,19 @@ class TestPortfolioHistoryEndpoint:
 
 @pytest.mark.asyncio
 class TestPortfolioReportEndpoint:
-    async def test_report_response_has_exactly_twelve_sections(self, test_server):
-        """The report wire shape is exactly these twelve sections.
+    async def test_report_response_has_exactly_fourteen_sections(self, test_server):
+        """The report wire shape is exactly these fourteen sections: the twelve of before, plus ``range`` and
+        ``mwrr_line`` of the series in steps (D-P4, cure B).
 
         A section removed from the report must leave the wire, not linger as a null
         key. The API serializes every unrequested section as null, so the default
         request is enough to see the complete set of top-level keys.
         """
-        print_section("Portfolio Report: exactly twelve sections")
+        print_section("Portfolio Report: exactly fourteen sections")
         expected_sections = {
             "metadata",
+            "range",
+            "mwrr_line",
             "summary",
             "history",
             "allocation_history",
@@ -1408,11 +1411,7 @@ class _WacApiSession:
         self.broker_id = broker_id
         self.accessible = accessible
         self.access_role = access_role
-        self.accessible_ids = (
-            list(accessible_ids)
-            if accessible_ids is not None
-            else ([broker_id] if accessible else [])
-        )
+        self.accessible_ids = list(accessible_ids) if accessible_ids is not None else ([broker_id] if accessible else [])
         self.assets = list(assets)
         self.statements = []
 
@@ -1445,9 +1444,7 @@ def _focused_portfolio_app(
     app.dependency_overrides[get_session_generator] = override_session
     app.dependency_overrides[get_current_user] = override_current_user
     if current_user is not None:
-        app.dependency_overrides[
-            portfolio_api._get_allocation_source_user
-        ] = override_current_user
+        app.dependency_overrides[portfolio_api._get_allocation_source_user] = override_current_user
     return app
 
 
@@ -1525,10 +1522,7 @@ async def test_allocation_source_post_returns_typed_uncached_response(
     builder.assert_awaited_once()
     assert builder.await_args.args == (session,)
     assert builder.await_args.kwargs["user_id"] == 41
-    assert (
-        builder.await_args.kwargs["request"].model_dump(mode="json")
-        == _planner_source_payload()
-    )
+    assert builder.await_args.kwargs["request"].model_dump(mode="json") == _planner_source_payload()
 
 
 @pytest.mark.asyncio
@@ -1594,9 +1588,7 @@ async def test_allocation_source_maps_focused_domain_errors(
 async def test_allocation_source_anonymous_is_401_before_service(
     monkeypatch,
 ):
-    builder = AsyncMock(
-        side_effect=AssertionError("Anonymous request reached source service")
-    )
+    builder = AsyncMock(side_effect=AssertionError("Anonymous request reached source service"))
     monkeypatch.setattr(
         portfolio_api,
         "build_portfolio_planner_source",
@@ -1625,9 +1617,7 @@ async def test_allocation_source_anonymous_is_401_before_service(
 async def test_allocation_source_superuser_has_no_implicit_broker_bypass(
     monkeypatch,
 ):
-    builder = AsyncMock(
-        side_effect=PortfolioPlannerSourceAccessError("forbidden")
-    )
+    builder = AsyncMock(side_effect=PortfolioPlannerSourceAccessError("forbidden"))
     monkeypatch.setattr(
         portfolio_api,
         "build_portfolio_planner_source",
@@ -1648,9 +1638,7 @@ async def test_allocation_source_superuser_has_no_implicit_broker_bypass(
         )
 
     assert response.status_code == 403
-    assert response.json()["detail"]["code"] == (
-        "portfolio_planner_source_broker_forbidden"
-    )
+    assert response.json()["detail"]["code"] == ("portfolio_planner_source_broker_forbidden")
     assert response.headers.get("cache-control") == "no-store"
     assert builder.await_args.kwargs["user_id"] == 91
 
@@ -1894,10 +1882,13 @@ async def test_legacy_wac_response_remains_byte_and_semantically_compatible(
 
     assert response.status_code == 200
     assert response.json() == expected
-    assert response.content == json.dumps(
-        expected,
-        separators=(",", ":"),
-    ).encode()
+    assert (
+        response.content
+        == json.dumps(
+            expected,
+            separators=(",", ":"),
+        ).encode()
+    )
     compute.assert_awaited_once_with(
         session=session,
         broker_id=broker_id,
