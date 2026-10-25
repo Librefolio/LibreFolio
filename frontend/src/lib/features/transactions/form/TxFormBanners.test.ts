@@ -53,7 +53,7 @@ vi.mock('$lib/i18n', async (importOriginal) => {
     return {...(await importOriginal<typeof import('$lib/i18n')>()), _: translator, t: translator, locale: writable('en')};
 });
 
-import {render, screen, within} from '$test/component';
+import {fireEvent, render, screen, within} from '$test/component';
 import TxFormBanners from './TxFormBanners.svelte';
 import type {ValidationIssue} from './txFormTypes';
 
@@ -137,5 +137,56 @@ describe('TxFormBanners — every issue item carries its code, data-code (J-57 c
 
         expect.soft(codesOf(items.field), 'tx-form-issue: data-code of each item, in the order of the field issues').toEqual(field.map((issue) => issue.code));
         expect(codesOf(items.balance), 'tx-form-balance-issue: data-code of each item, in the order of the balance issues').toEqual(balance.map((issue) => issue.code));
+    });
+});
+
+/**
+ * The warning for a date before 1900 (D-P4, W5-10): `tx-form-pre-floor`, an amber banner whose `data-pending` says
+ * whether the dates still wait for the user's answer. The confirm button exists only while the answer is pending AND the
+ * form can take it (a handler is given: the form saves by itself). Read by test id and attribute; the sentence comes
+ * through the key echo with the dates as its values.
+ */
+describe('TxFormBanners — the date-before-1900 warning', () => {
+    it('is not drawn without dates', () => {
+        render(TxFormBanners, props({preFloorDates: [], preFloorPending: true, onConfirmPreFloor: vi.fn()}));
+        expect(screen.queryByTestId('tx-form-pre-floor')).toBeNull();
+        expect(screen.queryByTestId('tx-form-pre-floor-confirm')).toBeNull();
+    });
+
+    it('is a warning banner, pending, with the confirm button, which calls the handler once', async () => {
+        const onConfirmPreFloor = vi.fn();
+        render(TxFormBanners, props({preFloorDates: ['1850-05-01'], preFloorPending: true, onConfirmPreFloor}));
+
+        const banner = screen.getByTestId('tx-form-pre-floor');
+        expect(banner).toHaveAttribute('data-pending', 'true');
+        expect(banner.closest('[data-testid="info-banner-warning"]'), 'an InfoBanner, warning').not.toBeNull();
+        expect(banner.textContent ?? '', 'the date is the value of the message').toContain('transactions.form.preFloorDate.message(date=1850-05-01)');
+
+        await fireEvent.click(within(banner).getByTestId('tx-form-pre-floor-confirm'));
+        expect(onConfirmPreFloor).toHaveBeenCalledTimes(1);
+    });
+
+    it('lists every date in the message', () => {
+        render(TxFormBanners, props({preFloorDates: ['1850-05-01', '1851-06-02'], preFloorPending: true, onConfirmPreFloor: vi.fn()}));
+        expect(screen.getByTestId('tx-form-pre-floor').textContent ?? '').toContain('date=1850-05-01, 1851-06-02');
+    });
+
+    it('once confirmed: still shown, not pending, no button', () => {
+        render(TxFormBanners, props({preFloorDates: ['1850-05-01'], preFloorPending: false, onConfirmPreFloor: vi.fn()}));
+        expect(screen.getByTestId('tx-form-pre-floor')).toHaveAttribute('data-pending', 'false');
+        expect(screen.queryByTestId('tx-form-pre-floor-confirm')).toBeNull();
+    });
+
+    it('without a handler (the form hands the row to the bulk editor): shown, no button, even if pending', () => {
+        render(TxFormBanners, props({preFloorDates: ['1850-05-01'], preFloorPending: true}));
+        expect(screen.getByTestId('tx-form-pre-floor')).toBeInTheDocument();
+        expect(screen.queryByTestId('tx-form-pre-floor-confirm')).toBeNull();
+    });
+
+    it('does not depend on the issue banners: drawn beside a refused save', () => {
+        const field = [fieldIssue('costBasisRequired', 'cost_basis_override')];
+        render(TxFormBanners, props({commitFailed: true, issues: field, fieldIssues: field, preFloorDates: ['1850-05-01'], preFloorPending: true, onConfirmPreFloor: vi.fn()}));
+        expect(screen.getByTestId('info-banner-error')).toBeInTheDocument();
+        expect(screen.getByTestId('tx-form-pre-floor')).toHaveAttribute('data-pending', 'true');
     });
 });

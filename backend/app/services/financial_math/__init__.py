@@ -39,8 +39,6 @@ Modules:
   the conversions between calendar days and observations), the change of a price or rate over the
   fixed periods of the Assets and FX tables, and the gain that recovers a drawdown.
 * ``valuation`` — the value of a holding from its quantity, price and quote base quantity.
-* ``trade_amount`` — the amount of a trade from its unit price and the unit price from its amount, on the asset's quote
-  base, rounded half-even to the column's scale (the transaction form's «Total amount / Unit price», #47).
 * ``fx_rates`` — the orientation of a stored FX rate: a pair read from source to destination,
   either way; and the unit rates a calculation reads by day, kept as steps and answered on the asked days only
   (``AskedDayRates``, P3).

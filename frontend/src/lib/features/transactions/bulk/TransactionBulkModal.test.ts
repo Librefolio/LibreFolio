@@ -1019,3 +1019,211 @@ describe('TransactionBulkModal — W-B87: the possible-split banner', () => {
         expect(bannerRowIds()).toEqual([rowIdOf('W-B87 split')]);
     });
 });
+
+// ---------------------------------------------------------------------------
+// D-P4 (W5-10) — a date before 1900: its own banner, one confirmation at Save All
+// ---------------------------------------------------------------------------
+
+/**
+ * The backend still refuses a transaction before 1900-01-01; the editor warns and asks once. The contract:
+ *
+ *   - `tx-bulk-pre-floor` (`data-count` = rows) lists one `tx-bulk-pre-floor-row` per row dated before 1900, keyed by the
+ *     visible row (`data-row-id`) and carrying `data-date`. It comes from the row's DATE, so a row that reached the grid
+ *     without the import's `date_before_1900` todo (the Form's Apply) is listed all the same;
+ *   - the todo `date_before_1900` is not a «field to verify»: a row whose only warning is that one draws no
+ *     `tx-bulk-todo-warnings` banner and does not trigger the warnings gate;
+ *   - Save All: after the suggestions gate and the fields-to-verify gate comes ONE confirmation for all the rows (the
+ *     `ConfirmModal`, titled `transactions.bulk.preFloorDate.confirmTitle`). Cancel returns to the grid and commits
+ *     nothing; confirm commits. A batch with no such row goes straight to the save.
+ *
+ * Which of the two ConfirmModals is on screen is told by its message (`confirm-modal-message`), compared with the real
+ * catalogue read through the key, as the case above reads its labels. Rows come in the way an import brings them.
+ */
+describe('TransactionBulkModal — D-P4: the date-before-1900 banner and its Save All confirmation', () => {
+    const OLD = '1850-05-01';
+    const OTHER_OLD = '1899-12-31';
+    const NORMAL = '2024-03-12';
+
+    type Handed = {tx: TransactionCreateItem; todos: Array<Record<string, unknown>>};
+
+    /** The todo an import review puts on such a row (`withPreFloorDateTodo`). */
+    const preFloorTodo = (date: string): Record<string, unknown> => ({field: 'date', severity: 'warning', reasonCode: 'date_before_1900', message: 'Invented pre-floor', context: {date}});
+    const genericTodo = (): Record<string, unknown> => ({field: 'description', severity: 'warning', reasonCode: 'probe_generic', message: 'Invented generic todo'});
+
+    /** A deposit on broker 77 as an import hands it over. */
+    function deposit(description: string, date: string, todos: Array<Record<string, unknown>> = []): Handed {
+        return {tx: {broker_id: 77, type: 'DEPOSIT', date, quantity: '0', cash: {code: 'EUR', amount: '100'}, tags: [], description} as unknown as TransactionCreateItem, todos};
+    }
+
+    async function importIntoNewEditor(batch: Handed[]): Promise<void> {
+        mountEditor({action: 'import'});
+        await waitFor(() => expect(wizardProbe().open, 'the import intent opens the wizard').toBe(true));
+        (wizardProbe().onImportBatch as (creates: Handed[]) => void)(batch);
+        await settle();
+        for (const {tx} of batch) expect(rowStatus(gridRowDescribed(String(tx.description))), `premise: ${tx.description} is a new row`).toBe('new');
+    }
+
+    const rowIdOf = (description: string): string => gridRowDescribed(description).getAttribute('data-row-id') ?? '';
+    const bannerLines = (): HTMLElement[] => screen.queryAllByTestId('tx-bulk-pre-floor-row');
+    const bannerRowIds = (): string[] => bannerLines().map((line) => line.getAttribute('data-row-id') ?? '');
+    const commitCalls = async () => vi.mocked((await import('$lib/features/transactions/txCommitApi')).commitTransactions);
+    const confirmMessage = (): string => screen.queryByTestId('confirm-modal-message')?.textContent ?? '';
+    const preFloorMessage = (n: number): string => get(_)('transactions.bulk.preFloorDate.confirmMessage', {values: {n}});
+    const warningsMessage = (n: number): string => get(_)('importWizard.todoWarningConfirmMessage', {values: {n}});
+
+    /** Click Save All and wait until the editor has answered: a confirmation is up, or the commit went out. */
+    async function saveAll(): Promise<void> {
+        await fireEvent.click(screen.getByTestId('tx-bulk-commit'));
+        await settle();
+    }
+
+    // --- the banner ---------------------------------------------------------------------------------------------
+
+    it('lists the rows dated before 1900, by their visible row and date, and no other row', async () => {
+        await importIntoNewEditor([deposit('D-P4 old', OLD, [preFloorTodo(OLD)]), deposit('D-P4 normal', NORMAL), deposit('D-P4 other old', OTHER_OLD, [preFloorTodo(OTHER_OLD)])]);
+
+        const banner = screen.getByTestId('tx-bulk-pre-floor');
+        expect(banner).toHaveAttribute('data-count', '2');
+        expect(new Set(bannerRowIds())).toEqual(new Set([rowIdOf('D-P4 old'), rowIdOf('D-P4 other old')]));
+        const dateOf = (description: string) =>
+            bannerLines()
+                .find((line) => line.getAttribute('data-row-id') === rowIdOf(description))
+                ?.getAttribute('data-date');
+        expect(dateOf('D-P4 old')).toBe(OLD);
+        expect(dateOf('D-P4 other old')).toBe(OTHER_OLD);
+    });
+
+    it('comes from the date: a row without the import’s todo is listed all the same', async () => {
+        await importIntoNewEditor([deposit('D-P4 no todo', OLD, [])]);
+
+        expect(screen.getByTestId('tx-bulk-pre-floor')).toHaveAttribute('data-count', '1');
+        expect(bannerRowIds()).toEqual([rowIdOf('D-P4 no todo')]);
+    });
+
+    it('is absent when no row is dated before 1900, 1900-01-01 included', async () => {
+        await importIntoNewEditor([deposit('D-P4 normal', NORMAL), deposit('D-P4 first day', '1900-01-01')]);
+
+        expect(screen.queryByTestId('tx-bulk-pre-floor')).toBeNull();
+    });
+
+    it('the todo is not a «field to verify»: a row whose only warning is that one draws no generic banner', async () => {
+        await importIntoNewEditor([deposit('D-P4 old', OLD, [preFloorTodo(OLD)])]);
+
+        expect(screen.queryByTestId('tx-bulk-pre-floor')).not.toBeNull();
+        expect(screen.queryByTestId('tx-bulk-todo-warnings')).toBeNull();
+    });
+
+    it('beside a real warning the generic banner lists that row only', async () => {
+        await importIntoNewEditor([deposit('D-P4 old', OLD, [preFloorTodo(OLD)]), deposit('D-P4 generic', NORMAL, [genericTodo()])]);
+
+        const generic = await screen.findByTestId('tx-bulk-todo-warnings');
+        await fireEvent.click(screen.getByTestId('tx-bulk-todo-warnings-toggle'));
+        const listed = [...generic.querySelectorAll('[data-testid="tx-bulk-todo-goto"]')].map((goto) => goto.getAttribute('data-row-id'));
+        expect(listed).toEqual([rowIdOf('D-P4 generic')]);
+        expect(bannerRowIds()).toEqual([rowIdOf('D-P4 old')]);
+    });
+
+    // --- Save All -----------------------------------------------------------------------------------------------
+
+    it('a batch with no row before 1900 goes straight to the save, asking nothing', async () => {
+        const commit = await commitCalls();
+        await importIntoNewEditor([deposit('D-P4 normal', NORMAL)]);
+
+        await saveAll();
+
+        expect(screen.queryByTestId('confirm-modal-confirm')).toBeNull();
+        expect(commit).toHaveBeenCalled();
+    });
+
+    it('a row before 1900 (its only warning is the date): Save All asks the date question, not the fields to verify, and saves nothing yet', async () => {
+        const commit = await commitCalls();
+        await importIntoNewEditor([deposit('D-P4 old', OLD, [preFloorTodo(OLD)])]);
+
+        await saveAll();
+
+        expect(await screen.findByTestId('confirm-modal-confirm')).toBeInTheDocument();
+        expect(confirmMessage(), 'the date question').toBe(preFloorMessage(1));
+        expect(commit).not.toHaveBeenCalled();
+    });
+
+    it('Cancel returns to the grid: nothing committed, the banner and the rows still there, and a second Save All asks again', async () => {
+        const commit = await commitCalls();
+        await importIntoNewEditor([deposit('D-P4 old', OLD, [preFloorTodo(OLD)])]);
+        await saveAll();
+        await screen.findByTestId('confirm-modal-cancel');
+
+        await fireEvent.click(screen.getByTestId('confirm-modal-cancel'));
+        await settle();
+
+        await waitFor(() => expect(screen.queryByTestId('confirm-modal-confirm')).toBeNull());
+        expect(commit).not.toHaveBeenCalled();
+        expect(screen.getByTestId('tx-bulk-pre-floor')).toHaveAttribute('data-count', '1');
+        expect(rowStatus(gridRowDescribed('D-P4 old'))).toBe('new');
+
+        await saveAll();
+        expect(confirmMessage(), 'asked again').toBe(preFloorMessage(1));
+        expect(commit).not.toHaveBeenCalled();
+    });
+
+    it('Confirm commits, once, with the date as it is', async () => {
+        const commit = await commitCalls();
+        await importIntoNewEditor([deposit('D-P4 old', OLD, [preFloorTodo(OLD)])]);
+        await saveAll();
+        await fireEvent.click(await screen.findByTestId('confirm-modal-confirm'));
+        await settle();
+
+        await waitFor(() => expect(commit).toHaveBeenCalledTimes(1));
+        const payload = commit.mock.calls[0]?.[0] as {creates?: Array<{date?: string}>};
+        expect(payload.creates?.map((create) => create.date)).toEqual([OLD]);
+    });
+
+    it('two rows before 1900 are ONE question, naming the count', async () => {
+        const commit = await commitCalls();
+        await importIntoNewEditor([deposit('D-P4 old', OLD, [preFloorTodo(OLD)]), deposit('D-P4 other old', OTHER_OLD, [preFloorTodo(OTHER_OLD)]), deposit('D-P4 normal', NORMAL)]);
+
+        await saveAll();
+        expect(confirmMessage()).toBe(preFloorMessage(2));
+        await fireEvent.click(screen.getByTestId('confirm-modal-confirm'));
+        await settle();
+
+        await waitFor(() => expect(commit).toHaveBeenCalledTimes(1));
+        expect(screen.queryByTestId('confirm-modal-confirm'), 'no second question').toBeNull();
+        const payload = commit.mock.calls[0]?.[0] as {creates?: Array<{date?: string}>};
+        expect(payload.creates?.map((create) => create.date).sort()).toEqual([OLD, OTHER_OLD, NORMAL].sort());
+    });
+
+    it('the order of the gates: the fields to verify first, then the date; Cancel on the first stops everything', async () => {
+        const commit = await commitCalls();
+        await importIntoNewEditor([deposit('D-P4 old', OLD, [preFloorTodo(OLD)]), deposit('D-P4 generic', NORMAL, [genericTodo()])]);
+
+        await saveAll();
+        expect(confirmMessage(), 'first the fields to verify (one row, the generic one: the date todo is not counted)').toBe(warningsMessage(1));
+        await fireEvent.click(screen.getByTestId('confirm-modal-cancel'));
+        await settle();
+        await waitFor(() => expect(screen.queryByTestId('confirm-modal-confirm')).toBeNull());
+        expect(commit).not.toHaveBeenCalled();
+
+        await saveAll();
+        await fireEvent.click(screen.getByTestId('confirm-modal-confirm'));
+        await waitFor(() => expect(confirmMessage(), 'then the date').toBe(preFloorMessage(1)));
+        expect(commit).not.toHaveBeenCalled();
+
+        await fireEvent.click(screen.getByTestId('confirm-modal-confirm'));
+        await settle();
+        await waitFor(() => expect(commit).toHaveBeenCalledTimes(1));
+    });
+
+    it('Cancel on the date question after the fields to verify were confirmed commits nothing', async () => {
+        const commit = await commitCalls();
+        await importIntoNewEditor([deposit('D-P4 old', OLD, [preFloorTodo(OLD)]), deposit('D-P4 generic', NORMAL, [genericTodo()])]);
+        await saveAll();
+        await fireEvent.click(screen.getByTestId('confirm-modal-confirm'));
+        await waitFor(() => expect(confirmMessage()).toBe(preFloorMessage(1)));
+
+        await fireEvent.click(screen.getByTestId('confirm-modal-cancel'));
+        await settle();
+
+        await waitFor(() => expect(screen.queryByTestId('confirm-modal-confirm')).toBeNull());
+        expect(commit).not.toHaveBeenCalled();
+    });
+});

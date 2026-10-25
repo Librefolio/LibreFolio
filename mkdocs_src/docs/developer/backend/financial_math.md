@@ -69,7 +69,6 @@ backend/app/services/financial_math/
 ├── ledger_totals.py         control totals of the ledger for backups: cash per broker and currency, quantity per position
 ├── returns.py               simple ROI, TWRR, MWRR (values and daily series; the Dashboard's rule in period_mwrr*; ROI and TWRR on a given capital or exposure for the lots' shorts; a flow counts on the first snapshot on or after it, flows_by_snapshot_date), annualization, period rebasing, G/L ratio (holding or group), change ratio, timing effect, realized gain, price return (also as a float for a return series), observed annualization of a return series (DAYS_PER_YEAR, its validator, calendar days ↔ observations both ways), fixed-period changes of a price or rate (1D … 5Y, both orientations) and its change over a whole range, recovery from a drawdown
 ├── valuation.py             holding value from quantity, price and quote_base_quantity
-├── trade_amount.py          the amount of a trade from its unit price and the unit price from its amount (quote base, half-even to the column scale): the transaction form's «Total amount / Unit price»
 ├── fx_rates.py              the orientation of a stored FX rate: a pair read from source to destination, either way (oriented_rate, any number type); the unit rates a calculation reads by day, as steps answered on the asked days only (AskedDayRates)
 ├── interest.py              day count conventions (ACT/365, ACT/360, ACT/ACT, 30/360), simple interest and daily compounding over a span in closed form, at a cost independent of the span (compound_growth, memoized): the primitives the Scheduled Investment provider builds its accrual on
 ├── price_marks.py           daily mark of an asset: MARKET, TRADE_AVG, CARRIED or MISSING
@@ -537,7 +536,14 @@ flowchart LR
    the lots table footer over the selection, else the filtered rows (`unifiedLotsTableHelpers.ts`),
    the comparison chart's aggregate of the selected lots (`lotComparisonChartHelpers.ts`) and the
    WAC chart's percentage view (`lotWacPriceChartHelpers.ts`), all in
-   `frontend/src/lib/features/brokers/lots/` — and each exception must be declared where it lives.
+   `frontend/src/lib/features/brokers/lots/`; and the trade amount of the transaction form
+   (`frontend/src/lib/features/transactions/form/txTradeAmount.ts`, W5-9): the amount from the unit price the
+   user types, or the unit price from the amount, `quantity / quote_base_quantity × price` on exact decimals
+   (`BigInt` at a fixed scale, half-even to the stored 6 and 12 decimals, no float and no library) — a single
+   product or quotient, which the developer decided (25/10/2026) is the frontend's own and does not deserve a
+   route. The line is the size of the calculation: a small sum or product on the numbers the user types stays in
+   the browser; anything with a series, a date, a rate or a rule is the backend's. Each exception must be declared
+   where it lives.
    The measuring tool takes the backend's annualization floor: `MIN_ANNUALIZATION_DAYS` in
    `MeasureSignal.ts` is held to `_MIN_ANNUALIZATION_DAYS` of `returns.py` by a parity test in
    `measureSignal.test.ts`, so changing one without the other fails that test. Its `changePct` (null on a zero

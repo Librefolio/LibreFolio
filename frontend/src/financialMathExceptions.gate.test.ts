@@ -14,7 +14,10 @@
  *     user chooses: the footer of the lots table — a table, not a chart — over the rows the user selects, else those the
  *     filters leave visible (`unifiedLotsTableHelpers.ts`, fed by `DataTable.svelte`); the aggregate of the lots
  *     selected in the comparison chart (`lotComparisonChartHelpers.ts`); and the WAC chart's percentage view, its value
- *     series rebased on the first known value (`lotWacPriceChartHelpers.ts`).
+ *     series rebased on the first known value (`lotWacPriceChartHelpers.ts`);
+ *   - the trade amount of the transaction form (W5-9, #47, `txTradeAmount.ts`): the amount from the unit price the user
+ *     types, or the unit price from the amount, one product or one quotient on exact decimals (developer decision of
+ *     25/10/2026: small sums and products are the frontend's own, a route for a multiplication is not).
  *
  * Each exception must be declared where it lives. The documentation named the four files while the code declared none
  * of them (plan 43, `plan-phase00FinancialMathHome.prompt.md:1494`): this gate was written red against that state, and
@@ -107,6 +110,7 @@ const SINE = 'src/lib/charts/signals/SineSignal.ts';
 const LOTS_TABLE = 'src/lib/features/brokers/lots/unifiedLotsTableHelpers.ts';
 const LOT_COMPARISON = 'src/lib/features/brokers/lots/lotComparisonChartHelpers.ts';
 const LOT_WAC = 'src/lib/features/brokers/lots/lotWacPriceChartHelpers.ts';
+const TRADE_AMOUNT = 'src/lib/features/transactions/form/txTradeAmount.ts';
 
 interface DeclaredException {
     /** Relative to `frontend/`. */
@@ -133,6 +137,7 @@ const DECLARED_EXCEPTIONS: readonly DeclaredException[] = [
     {file: LOTS_TABLE, annualizes: false, measure: 'D-MF6(b), the lots table footer: sums, weighted averages and returns over the rows the user selects, else those left visible'},
     {file: LOT_COMPARISON, annualizes: false, measure: 'D-MF6(b), the lot comparison aggregate: value and return of the lots the user selects'},
     {file: LOT_WAC, annualizes: false, measure: "D-MF6(b), the WAC chart's percentage view: the value series rebased on its first known value"},
+    {file: TRADE_AMOUNT, annualizes: false, measure: "W5-9 (#47), the transaction form: the trade's amount from the unit price the user types, or the unit price from the amount — one product or one quotient, exact decimals"},
 ];
 
 const DECLARED_FILES: ReadonlySet<string> = new Set(DECLARED_EXCEPTIONS.map((entry) => entry.file));

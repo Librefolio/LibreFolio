@@ -503,3 +503,34 @@ describe('SingleDatePicker — onvaliditychange, the refusal reported to the for
         expect(onvaliditychange).toHaveBeenLastCalledWith({valid: true});
     });
 });
+
+/**
+ * D-P4 (W5-10): the picker takes a date before 1900. The warning and the confirmation belong to the forms; the picker
+ * must not refuse or clamp such a date, or the user could never reach the warning.
+ */
+describe('SingleDatePicker — a date before 1900 is accepted (D-P4)', () => {
+    it.each(['1850-05-01', '1899-12-31', '0950-01-01'])('commits a typed %s as it is on blur, and does not flag it', async (typed) => {
+        const {input, root, onchange} = setup();
+        await type(input, typed);
+        await fireEvent.blur(input);
+
+        expect(onchange).toHaveBeenCalledExactlyOnceWith(typed);
+        expect(root).toHaveAttribute('data-invalid', 'false');
+        expect(input.value).toBe(typed);
+    });
+
+    it('commits a day-first 01/05/1850 as 1850-05-01', async () => {
+        const {input, root, onchange} = setup();
+        await type(input, '01/05/1850');
+        await fireEvent.blur(input);
+
+        expect(onchange).toHaveBeenCalledExactlyOnceWith('1850-05-01');
+        expect(root).toHaveAttribute('data-invalid', 'false');
+    });
+
+    it('shows a stored date before 1900 as it is', () => {
+        const {input, root} = setup({value: '1850-05-01'});
+        expect(input.value).toBe('1850-05-01');
+        expect(root).toHaveAttribute('data-invalid', 'false');
+    });
+});

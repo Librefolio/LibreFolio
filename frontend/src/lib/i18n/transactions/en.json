@@ -99,7 +99,11 @@
       "entryModeAmount": "Total amount",
       "entryModeUnitPrice": "Unit price",
       "unitPriceCalculated": "calculated",
-      "unitPriceHint": "The amount is calculated from the unit price and the quantity; you can still edit it."
+      "unitPriceHint": "The amount is calculated from the unit price and the quantity; you can still edit it.",
+      "preFloorDate": {
+        "message": "The date {date} is before 1 January 1900. Check that the year is right: it is often a typo.",
+        "confirm": "Yes, the date is right"
+      }
     },
     "bulk": {
       "resetRow": "Reset row",
@@ -146,6 +150,13 @@
         "ratioHint": "Type 3 for a 3-for-1 split, 0.25 for a 1-for-4 reverse split. The shares you hold are multiplied by this number.",
         "ratio": "Ratio {ratio} (from your holding of {held})",
         "rounding": "The broker rounded the quantity: with ratio {ratio} this row differs by {delta} shares from your holding times the ratio. Lots and the Dashboard can show a small gap."
+      },
+      "preFloorDate": {
+        "message": "{n} rows are dated before 1 January 1900. Check the year: it is often a typo.",
+        "row": "Row {row}: {date}",
+        "confirmTitle": "Save dates before 1900?",
+        "confirmMessage": "{n} rows are dated before 1 January 1900. Save them as they are?",
+        "confirmProceed": "Yes, the dates are right"
       }
     },
     "commit": {

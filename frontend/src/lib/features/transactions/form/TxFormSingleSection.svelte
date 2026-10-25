@@ -56,7 +56,7 @@
         /** V-37b: the cells «Validate now» found wrong, and why. */
         markedCells: Partial<Record<TxFormCell, TxFormCheckKind>>;
         /** #47: the «Total amount / Unit price» row, shown for a BUY or SELL. */
-        showEntryMode: boolean;
+        showTradePrice: boolean;
         entryMode: TradeAmountDriver;
         unitPrice: string;
         onEntryModeChange: (mode: TradeAmountDriver) => void;
@@ -106,7 +106,7 @@
         quantityInputId,
         quantityInputSignRule,
         markedCells,
-        showEntryMode,
+        showTradePrice,
         entryMode,
         unitPrice,
         onEntryModeChange,
@@ -245,8 +245,8 @@
                 {#if cashHint}
                     <span class="text-[10px] text-lf-muted">{cashHint}</span>
                 {/if}
-                {#if showEntryMode}
-                    <TxTradePriceRow mode={entryMode} {unitPrice} disabled={isReadonly} onModeChange={onEntryModeChange} {onUnitPriceInput} />
+                {#if showTradePrice}
+                    <TxTradePriceRow mode={entryMode} {unitPrice} readonly={isReadonly} onModeChange={onEntryModeChange} {onUnitPriceInput} />
                 {/if}
             </div>
         {:else if rule.quantityMode !== 'forbidden'}

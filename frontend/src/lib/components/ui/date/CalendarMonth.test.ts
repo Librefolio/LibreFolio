@@ -324,3 +324,55 @@ describe('CalendarMonth — the pending day cannot be chosen again (Y-N65)', () 
         expect(day('2024-03-14')).toHaveAttribute('data-state', 'range-end');
     });
 });
+
+/**
+ * D-P4 (W5-10): the year field no longer stops at 1900. The backend floor stays, and the forms warn about a date before
+ * it, so the calendar must let the user get there to be warned (and to enter an old transaction at all). Contract: the
+ * year input has no `min` attribute; `max` is still 2200; a year typed below 1900 reaches `onSetYear` as it is; the
+ * arrows (`numericArrows`) stop at year 1, not at 1900.
+ */
+describe('CalendarMonth — the year field has no 1900 floor (D-P4)', () => {
+    const yearInput = (): HTMLInputElement => screen.getByTestId('calendar-year-input') as HTMLInputElement;
+
+    it('has no min attribute, and still caps the year at 2200', () => {
+        render(CalendarMonth, baseProps());
+        expect(yearInput().hasAttribute('min')).toBe(false);
+        expect(yearInput()).toHaveAttribute('max', '2200');
+    });
+
+    it.each([1850, 1899, 1900, 1])('a year of %i typed is handed to onSetYear as it is', async (year) => {
+        const onSetYear = vi.fn();
+        render(CalendarMonth, baseProps({onSetYear}));
+
+        await fireEvent.change(yearInput(), {target: {value: String(year)}});
+
+        expect(onSetYear).toHaveBeenCalledExactlyOnceWith(year);
+    });
+
+    it('shows a year before 1900 the parent hands it, and the grid spans that month', () => {
+        render(CalendarMonth, baseProps({year: 1850, month: 4}));
+        expect(yearInput()).toHaveValue(1850);
+        expect(screen.getByTestId('calendar-month')).toHaveAttribute('data-year', '1850');
+        expect(day('1850-05-01')).toBeInTheDocument();
+    });
+
+    it('ArrowDown on a year before 1900 steps by one and fires the change (no clamp at 1900)', async () => {
+        const onSetYear = vi.fn();
+        render(CalendarMonth, baseProps({year: 1850, month: 4, onSetYear}));
+
+        await fireEvent.keyDown(yearInput(), {key: 'ArrowDown'});
+
+        expect(onSetYear).toHaveBeenCalledWith(1849);
+    });
+
+    it('ArrowDown on year 1 stays at year 1: the arrows have a floor of their own', async () => {
+        const onSetYear = vi.fn();
+        render(CalendarMonth, baseProps({year: 1, month: 4, onSetYear}));
+
+        await fireEvent.keyDown(yearInput(), {key: 'ArrowDown'});
+
+        expect(onSetYear).not.toHaveBeenCalledWith(0);
+        expect(onSetYear).not.toHaveBeenCalledWith(-1);
+        expect(yearInput()).toHaveValue(1);
+    });
+});
