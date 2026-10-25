@@ -5,6 +5,12 @@ when every XIRR flow of a period is zero — it opens at NAV 0 and its only flow
 NAV_D + flow_D = 0 — Newton returns its starting guess ``_MWRR_GUESS`` = 0.1. The cure approved by the developer
 (24/10/2026): no rate, the Dashboard shows «—». These tests pin what each reader hands out on such a day.
 
+Since D-P4 cure B the history's MWRR is the report's ``mwrr_line`` (``history[].mwrr_*`` are gone): true points on
+each history step's ``date`` and ``through`` (and at the month ends inside a step longer than 62 days). So «the
+point on day d» is the line point dated d, and «every other point as on HEAD» compares each point the line has with
+the HEAD value of that day (``EMPTIED_HEAD`` / ``BUY_FIRST_HEAD`` stay per-day, as measured): the line must hold the
+days that matter (the first day, the day before the deposit, the deposit day, the last day).
+
 Which periods open at zero, measured on HEAD 270e85a55 with ``PortfolioService.get_report``:
 - NOT a range that merely starts before the portfolio's first day: the engine's daily states start at the first
   transaction, so the period opens on that day with the deposit already inside its value (1000 > 0), and the bug does
@@ -33,7 +39,7 @@ wall-clock dependency (every range is explicit), no translated text.
 
 Runs in ``./dev.py test services roi-fifo-utils`` (the runner collects the whole ``test_financial/`` directory).
 
-Reference: backend/app/services/portfolio_service.py (get_report, get_summary, get_history),
+Reference: backend/app/services/portfolio_service.py (get_report, get_summary, get_history_steps),
 backend/app/services/financial_math/returns.py (period_mwrr, period_mwrr_series, _mwrr_solve),
 backend/app/services/ai_export/components/portfolio_financial.py (portfolio.summary, portfolio.performance).
 """
@@ -56,11 +62,12 @@ import backend.app.services.financial_math.portfolio.engine as portfolio_engine_
 from backend.app.db.base import SQLModel  # every model, for create_all
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.schemas.common import OpenDateRangeModel
-from backend.app.schemas.portfolio import IssueCode, PortfolioHistoryPoint, PortfolioReportQuery, PortfolioReportResponse, PortfolioSummary
+from backend.app.schemas.portfolio import IssueCode, MwrrLinePoint, PortfolioHistoryPoint, PortfolioReportQuery, PortfolioReportResponse, PortfolioSummary
 from backend.app.services import portfolio_service as portfolio_service_module
 from backend.app.services.ai_export.components.catalog import build_component_registry
 from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain
 from backend.app.services.ai_export.dependencies import BuildContext, build_bucket_plan_for_scope
+from backend.app.services.financial_math.series_steps import value_at
 from backend.app.services.portfolio_service import PortfolioService
 
 EUR = "EUR"
@@ -211,18 +218,31 @@ async def _report(book: _Book, start: date | None, end: date) -> PortfolioReport
 # =============================================================================
 
 
-def _shown(points: list[PortfolioHistoryPoint]) -> dict[date, tuple[str | None, str | None]]:
-    return {point.date: (None if point.mwrr_annualized is None else str(point.mwrr_annualized), None if point.mwrr_cumulative is None else str(point.mwrr_cumulative)) for point in points}
+def _shown(points: list[MwrrLinePoint]) -> dict[date, tuple[str | None, str | None]]:
+    return {point.date: (None if point.annualized is None else str(point.annualized), None if point.cumulative is None else str(point.cumulative)) for point in points}
 
 
 def _history(report: PortfolioReportResponse) -> list[PortfolioHistoryPoint]:
+    """The report's history steps, in order (they cover the report's range with no gap)."""
     assert report.history, "the report has no history"
-    return sorted(report.history, key=lambda point: point.date)
+    return list(report.history)
 
 
-def _point_on(points: list[PortfolioHistoryPoint], day: date) -> PortfolioHistoryPoint:
+def _line(report: PortfolioReportResponse) -> list[MwrrLinePoint]:
+    """The report's MWRR line: true points on each step's date and through, dated inside the range."""
+    assert report.mwrr_line, "the report has no MWRR line"
+    return list(report.mwrr_line)
+
+
+def _step_on(points: list[PortfolioHistoryPoint], day: date) -> PortfolioHistoryPoint:
+    step = value_at(points, day)
+    assert step is not None, f"no history step holding {day} (the history spans {points[0].date}..{points[-1].through})"
+    return step
+
+
+def _line_point_on(points: list[MwrrLinePoint], day: date) -> MwrrLinePoint:
     point = next((point for point in points if point.date == day), None)
-    assert point is not None, f"no history point on {day} (the history spans {points[0].date}..{points[-1].date})"
+    assert point is not None, f"no MWRR line point on {day} (the line spans {points[0].date}..{points[-1].date})"
     return point
 
 
@@ -244,7 +264,7 @@ def _assert_opens_at_zero_and_deposit_lands(points: list[PortfolioHistoryPoint],
     """Presence barrier: the history covers the period from its opening at NAV 0 to the deposit day, worth 1000 there."""
     assert points[0].date == opening, f"the history opens on {points[0].date}, expected {opening}"
     assert points[0].nav_value.amount == 0, f"precondition: the period should open at NAV 0, it opens at {points[0].nav_value.amount}"
-    assert _point_on(points, deposit_day).nav_value.amount == Decimal("1000"), f"precondition: the value on {deposit_day} is {_point_on(points, deposit_day).nav_value.amount}, expected 1000"
+    assert _step_on(points, deposit_day).nav_value.amount == Decimal("1000"), f"precondition: the value on {deposit_day} is {_step_on(points, deposit_day).nav_value.amount}, expected 1000"
 
 
 # =============================================================================
@@ -257,36 +277,42 @@ class TestEmptiedAndRefundedReport:
 
     @pytest.mark.asyncio
     async def test_history_point_on_the_redeposit_day_has_no_mwrr(self, tmp_path):
-        """RED on HEAD: 0.100000 annualized, 0.002615 cumulative on 11/5."""
+        """RED on HEAD: 0.100000 annualized, 0.002615 cumulative on 11/5 (now the line's point dated 11/5)."""
         async with _private_engine(tmp_path, "history") as engine:
             report = await _report(await _emptied_book(engine), WINDOW_OPEN, WINDOW_END)
 
         points = _history(report)
         _assert_opens_at_zero_and_deposit_lands(points, WINDOW_OPEN, REDEPOSIT_DAY)
-        point = _point_on(points, REDEPOSIT_DAY)
-        assert (point.mwrr_annualized, point.mwrr_cumulative) == (None, None), f"{REDEPOSIT_DAY}: every XIRR flow of the period ending there is 0, the line should show «—», got {_shown([point])}"
+        # The re-deposit opens a step (a movement), so the line has a true point on its date.
+        point = _line_point_on(_line(report), REDEPOSIT_DAY)
+        assert (point.annualized, point.cumulative) == (None, None), f"{REDEPOSIT_DAY}: every XIRR flow of the period ending there is 0, the line should show «—», got {_shown([point])}"
 
     @pytest.mark.asyncio
     async def test_history_other_points_unchanged(self, tmp_path):
-        """GREEN guard: every other point as on HEAD."""
+        """GREEN guard: every other line point is HEAD's value of its day (the line holds the days that matter)."""
         async with _private_engine(tmp_path, "others") as engine:
             report = await _report(await _emptied_book(engine), WINDOW_OPEN, WINDOW_END)
 
-        shown = _shown(_history(report))
+        shown = _shown(_line(report))
         assert REDEPOSIT_DAY in shown, f"no point on {REDEPOSIT_DAY}"
         del shown[REDEPOSIT_DAY]
-        assert shown == EMPTIED_HEAD
+        # Presence barrier: the opening, the day before the re-deposit (the through of the step before it) and the last day.
+        assert {WINDOW_OPEN, REDEPOSIT_DAY - timedelta(days=1), WINDOW_END} <= set(shown), f"the line misses a day that matters: it has {sorted(shown)}"
+        unexpected = {day: shown[day] for day in shown if day not in EMPTIED_HEAD}
+        assert unexpected == {}, f"points on days HEAD has no value for: {unexpected}"
+        assert shown == {day: EMPTIED_HEAD[day] for day in shown}
 
     @pytest.mark.asyncio
     async def test_report_json_carries_null_on_the_redeposit_day(self, tmp_path):
-        """RED on HEAD: the JSON carries "0.100000". The report serialises either way."""
+        """RED on HEAD: the JSON carries "0.100000" (now in ``mwrr_line``; the history steps carry no MWRR field)."""
         async with _private_engine(tmp_path, "json") as engine:
             report = await _report(await _emptied_book(engine), WINDOW_OPEN, WINDOW_END)
 
         dumped = report.model_dump(mode="json")
-        entry = next((row for row in dumped["history"] if row["date"] == REDEPOSIT_DAY.isoformat()), None)
-        assert entry is not None, f"no JSON history entry on {REDEPOSIT_DAY}"
-        assert (entry["mwrr_annualized"], entry["mwrr_cumulative"]) == (None, None), (entry["mwrr_annualized"], entry["mwrr_cumulative"])
+        entry = next((row for row in dumped["mwrr_line"] if row["date"] == REDEPOSIT_DAY.isoformat()), None)
+        assert entry is not None, f"no JSON MWRR line point on {REDEPOSIT_DAY}"
+        assert (entry["annualized"], entry["cumulative"]) == (None, None), (entry["annualized"], entry["cumulative"])
+        assert [row for row in dumped["history"] if "mwrr_annualized" in row or "mwrr_cumulative" in row] == [], "the history steps still carry MWRR fields"
 
     @pytest.mark.asyncio
     async def test_card_ending_on_the_redeposit_day_has_no_mwrr(self, tmp_path):
@@ -324,25 +350,28 @@ class TestWholeHistoryOpeningAtZero:
 
     @pytest.mark.asyncio
     async def test_history_point_on_the_deposit_day_has_no_mwrr(self, tmp_path):
-        """RED on HEAD: 0.100000 annualized, 0.001830 cumulative on 10/3."""
+        """RED on HEAD: 0.100000 annualized, 0.001830 cumulative on 10/3 (now the line's point dated 10/3)."""
         async with _private_engine(tmp_path, "whole") as engine:
             report = await _report(await _buy_first_book(engine), None, BUY_FIRST_END)
 
-        points = _history(report)
-        _assert_opens_at_zero_and_deposit_lands(points, BUY_DAY, LATE_DEPOSIT_DAY)
-        point = _point_on(points, LATE_DEPOSIT_DAY)
-        assert (point.mwrr_annualized, point.mwrr_cumulative) == (None, None), f"{LATE_DEPOSIT_DAY}: every XIRR flow is 0, the line should show «—», got {_shown([point])}"
+        _assert_opens_at_zero_and_deposit_lands(_history(report), BUY_DAY, LATE_DEPOSIT_DAY)
+        point = _line_point_on(_line(report), LATE_DEPOSIT_DAY)
+        assert (point.annualized, point.cumulative) == (None, None), f"{LATE_DEPOSIT_DAY}: every XIRR flow is 0, the line should show «—», got {_shown([point])}"
 
     @pytest.mark.asyncio
     async def test_history_other_points_unchanged(self, tmp_path):
-        """GREEN guard: every other point as on HEAD, and the card of the whole history."""
+        """GREEN guard: every other line point is HEAD's value of its day, and the card of the whole history."""
         async with _private_engine(tmp_path, "whole_others") as engine:
             report = await _report(await _buy_first_book(engine), None, BUY_FIRST_END)
 
-        shown = _shown(_history(report))
+        shown = _shown(_line(report))
         assert LATE_DEPOSIT_DAY in shown, f"no point on {LATE_DEPOSIT_DAY}"
         del shown[LATE_DEPOSIT_DAY]
-        assert shown == BUY_FIRST_HEAD
+        # Presence barrier: the opening, the day before the deposit (the through of the step before it) and the last day.
+        assert {BUY_DAY, LATE_DEPOSIT_DAY - timedelta(days=1), BUY_FIRST_END} <= set(shown), f"the line misses a day that matters: it has {sorted(shown)}"
+        unexpected = {day: shown[day] for day in shown if day not in BUY_FIRST_HEAD}
+        assert unexpected == {}, f"points on days HEAD has no value for: {unexpected}"
+        assert shown == {day: BUY_FIRST_HEAD[day] for day in shown}
         assert _card(report.summary) == ("9.167683", "0.150030", 22, "0.050030", "0.100000")
 
 
