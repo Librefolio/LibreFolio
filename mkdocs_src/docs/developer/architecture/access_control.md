@@ -198,6 +198,11 @@ Besides the broker roles, every account carries one system-wide flag, `users.is_
   for the current password: see [Changing the Email](security.md#email-change)). The device that
   made the change gets a new cookie and stays signed in; a username change ends no session. Every
   change that ends sessions is in [Session Revocation](security.md#session-revocation).
+- **A new address revokes the account's live `email_change` links** together with its password-reset and setup links
+  (`user_service.update_profile`, A5-4): a change of address asked for before cannot move it again. On a managed
+  instance, `./dev.py user reassign-owner <username>` (`cmd_reassign_owner`) takes an account back to the address of
+  `LIBREFOLIO_ADMIN_EMAIL`: it runs `instance_owner.assign_owner_and_send_reset`, the treatment of a restore (unusable
+  password, sessions ended, links neutralised, one reset link), and refuses on a non-managed profile.
 - **Password rules**: `create` and `reset` call `validate_password()` in `scripts/user_cli.py`,
   a thin wrapper over `password_policy.failed_rules()`: the same rules as the API and the app
   ([Password Rules](security.md#password-rules)), checked before anything is read from the
