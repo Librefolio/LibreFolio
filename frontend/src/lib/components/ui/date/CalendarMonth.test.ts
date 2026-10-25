@@ -376,3 +376,96 @@ describe('CalendarMonth — the year field has no 1900 floor (D-P4)', () => {
         expect(yearInput()).toHaveValue(1);
     });
 });
+
+/**
+ * W5-11: `new Date(y, m, 1)` reads a year 0..99 as 1900..1999, so the grid of a short year (a date typed `0024-03-01`,
+ * D-P4) was the grid of 1924 — its first day in the wrong weekday column — and its cells were written with an unpadded
+ * year (`24-03-01`). Contract: cells carry a four-digit ISO year, and the first of the month sits in the column of its
+ * weekday on the proleptic Gregorian calendar (Monday = column 0; the grid starts on a Monday).
+ */
+describe('CalendarMonth — years below 100 (W5-11)', () => {
+    /** Every day cell of the grid, in reading order. */
+    const cells = (): HTMLButtonElement[] => [...document.querySelectorAll<HTMLButtonElement>('[data-testid="calendar-day"]')];
+
+    /** Index of a day in the grid: its row is index div 7, its weekday column (Monday = 0) is index mod 7. */
+    function indexOf(iso: string): number {
+        const index = cells().findIndex((cell) => cell.dataset.iso === iso);
+        if (index < 0) throw new Error(`no day cell for ${iso} — the grid does not span that date`);
+        return index;
+    }
+
+    // Weekdays computed with Python's datetime.date(y, m, d).weekday() (Monday = 0), not by the code under test.
+    it.each([
+        {name: 'March 2024 (control)', year: 2024, month: 2, first: '2024-03-01', last: '2024-03-31', weekday: 4},
+        {name: 'March of year 24', year: 24, month: 2, first: '0024-03-01', last: '0024-03-31', weekday: 4},
+        {name: 'January of year 1', year: 1, month: 0, first: '0001-01-01', last: '0001-01-31', weekday: 0},
+    ])('$name: 31 days in the month, the first on weekday column $weekday', ({year, month, first, last, weekday}) => {
+        render(CalendarMonth, baseProps({year, month}));
+
+        const inMonth = cells().filter((cell) => cell.dataset.inMonth === 'true');
+        expect(inMonth).toHaveLength(31);
+        expect(inMonth[0].dataset.iso).toBe(first);
+        expect(inMonth[30].dataset.iso).toBe(last);
+        expect(day(first)).toHaveAttribute('data-in-month', 'true');
+        // The number of cells before the 1st is its weekday, and its column is the weekday.
+        expect(indexOf(first)).toBe(weekday);
+        expect(indexOf(first) % 7).toBe(weekday);
+        // The grid is six full weeks.
+        expect(cells()).toHaveLength(42);
+    });
+
+    // Independent of how a cell writes its ISO year: only the position of the first in-month cell is read, so the
+    // Date(y, m, 1) century shift shows up on its own (1 March 24 is a Friday; 1924-03-01 is a Saturday).
+    it.each([
+        {year: 2024, month: 2, weekday: 4},
+        {year: 24, month: 2, weekday: 4},
+        {year: 1, month: 0, weekday: 0},
+        {year: 99, month: 11, weekday: 1},
+    ])('year $year, month $month: the first in-month cell sits in weekday column $weekday', ({year, month, weekday}) => {
+        render(CalendarMonth, baseProps({year, month}));
+
+        expect(cells().findIndex((cell) => cell.dataset.inMonth === 'true')).toBe(weekday);
+    });
+
+    it('year 24: every day of the month is addressed by its four-digit ISO date', () => {
+        render(CalendarMonth, baseProps({year: 24, month: 2}));
+
+        for (let d = 1; d <= 31; d++) {
+            expect(day(`0024-03-${String(d).padStart(2, '0')}`)).toHaveAttribute('data-in-month', 'true');
+        }
+        expect(screen.getByTestId('calendar-month')).toHaveAttribute('data-year', '24');
+    });
+
+    it('year 24: February, the leap one, spans 29 days', () => {
+        render(CalendarMonth, baseProps({year: 24, month: 1}));
+
+        expect(cells().filter((cell) => cell.dataset.inMonth === 'true')).toHaveLength(29);
+        expect(day('0024-02-29')).toHaveAttribute('data-in-month', 'true');
+    });
+
+    it('year 1, January: renders (its leading cells belong to year 0) and does not throw', () => {
+        expect(() => render(CalendarMonth, baseProps({year: 1, month: 0}))).not.toThrow();
+        expect(day('0001-01-01')).toBeInTheDocument();
+    });
+
+    it('a click on a day of year 24 reports its ISO date with the padded year', async () => {
+        const onDayClick = vi.fn();
+        render(CalendarMonth, baseProps({year: 24, month: 2, onDayClick}));
+
+        await fireEvent.click(day('0024-03-15'));
+
+        expect(onDayClick).toHaveBeenCalledExactlyOnceWith('0024-03-15');
+    });
+});
+
+describe('CalendarMonth — the year before the first day (W5-11)', () => {
+    it('January of year 1: the leading cells of year 0 are disabled, 0001-01-01 is not', () => {
+        render(CalendarMonth, baseProps({year: 1, month: 0}));
+        const cells = screen.getAllByTestId('calendar-day');
+        const first = cells.find((cell) => cell.getAttribute('data-iso') === '0001-01-01');
+        expect(first).toBeDefined();
+        expect(first).not.toBeDisabled();
+        const outside = cells.filter((cell) => (cell.getAttribute('data-iso') ?? '') < '0001-01-01');
+        for (const cell of outside) expect(cell).toBeDisabled();
+    });
+});
