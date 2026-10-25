@@ -104,6 +104,17 @@ export function addMonths(isoDate: string, months: number): string {
     return formatUtc(d);
 }
 
+/**
+ * Milliseconds of UTC midnight of a year, a month index (0 = January) and a day, rolling over as `Date.UTC` does. `Date.UTC`
+ * reads a year from 0 to 99 as 1900 to 1999, so a date typed in the year 24 would sit a century off in any chart that does
+ * calendar arithmetic on it; setting the year on its own takes it as it is.
+ */
+export function utcMs(year: number, monthIndex: number, day: number): number {
+    const date = new Date(0);
+    date.setUTCFullYear(year, monthIndex, day);
+    return date.getTime();
+}
+
 /** Whole days from `start` to `end`; negative when `end` precedes `start`. */
 export function daysBetween(start: string, end: string): number {
     const ms = parseUtc(end).getTime() - parseUtc(start).getTime();
