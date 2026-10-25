@@ -317,7 +317,45 @@ An outgoing ADJUSTMENT moves no cash, so no pool of §6 changes, and no capital 
 | Replay | $[\min(t_{\mathrm{first}},\ t_0),\ t_1]$ | Every day, with the same rules: cash, qty, WAC, pools, prices, FX, position and portfolio states |
 | Frame | $[t_0,\ t_1]$ | The days whose states are returned |
 
-There is one replay, from the first movement $t_{\mathrm{first}}$ (or $t_0$, when earlier) to $t_1$. A movement dated before $t_0$ follows the same rules as any other: it is converted at the rate of its own date and moves the WAC pools and the 3-pool K/R/W, and on every day the rate of a held foreign currency changes the cash is revalued and the exchange result enters the pools (§6). The states are returned from $t_0$, so a day's state does not depend on the frame it is read in. A day on which no term of the model changes — no movement, rate, quote, split, transit boundary or price turning stale — carries the previous day's state.
+There is one replay, from the first movement $t_{\mathrm{first}}$ (or $t_0$, when earlier) to $t_1$. A movement dated before $t_0$ follows the same rules as any other: it is converted at the rate of its own date and moves the WAC pools and the 3-pool K/R/W, and on every day the rate of a held foreign currency changes the cash is revalued and the exchange result enters the pools (§6). The states are returned from $t_0$, so a day's state does not depend on the frame it is read in. A day on which no term of the model changes carries the previous day's state. A day changes it when it brings a movement, a change of a rate the day reads, a quote, a split, a transit boundary, a price turning stale or a rate turning stale; the first replayed day and the start of the frame are always computed.
+
+**When a price turns stale.** A carried price is stale once its last observation $o$ (a quote or a BUY/SELL trade) is more than $\theta = 7$ days old. The flag of every day is computed as before, but the engine starts a new state on the first stale day, $o+\theta+1$, only when the price is still carried then:
+
+$$
+\text{stale turn at } o+\theta+1 \iff \text{no observation of the asset falls in } (o,\ o+\theta+1]
+$$
+
+A newer observation inside that stretch is a change of its own and renews the age of the price: with a Friday quote followed by a Monday quote, Friday + 8 days is not a turn, because the price in use then is Monday's and is not stale.
+
+**When a rate turns stale.** A rate read to value the held securities (the currency of the asset and of its quotes against $C^*$) turns stale in the same way: when the stored row it comes from, dated $r$, is more than $\theta$ days old, the day $r+\theta+1$ starts a new state, unless a newer row replaces it first. The state then carries the pair `CCY/C*` with the date $r$ of its row, and the report lists it in `data_quality.stale_fx_pairs` as `{pair, last_rate_date, stale_days}` for the valuation day. The rate is still the last one known: staleness is a flag, not a different value.
+
+### 🪜 Daily States as Steps {: #daily-states-as-steps }
+
+Between two days that change the state, every value of the report is identical. The portfolio report therefore does not return one point per calendar day: it returns **one point per stretch without news**, which holds from its `date` to its `through`, both included. The response carries `range {start, end}`, the window after clipping to the days that have a state.
+
+```json
+{
+  "range": {"start": "2026-10-23", "end": "2026-10-26"},
+  "history": [
+    {"date": "2026-10-23", "through": "2026-10-25", "nav_value": {"code": "EUR", "amount": "10450.00"}, "twrr": "0", "roi": "0.045000"},
+    {"date": "2026-10-26", "through": "2026-10-26", "nav_value": {"code": "EUR", "amount": "10462.50"}, "twrr": "0.001196", "roi": "0.046250"}
+  ],
+  "mwrr_line": [
+    {"date": "2026-10-23", "annualized": "0", "cumulative": "0"},
+    {"date": "2026-10-25", "annualized": "0", "cumulative": "0"},
+    {"date": "2026-10-26", "annualized": "0.156557", "cumulative": "0.001196"}
+  ]
+}
+```
+
+A fund held on Friday 23, Saturday 24, Sunday 25 and Monday 26 October, quoted on Friday and on Monday (the figures are illustrative, and the other fields of a point are left out). Saturday's NAV is the NAV of the step that contains it: $\mathrm{NAV}(t)$ is read from the point with `date` $\le t \le$ `through`, with a search by date and no calculation.
+
+- **Which series.** `history`, `allocation_history.*`, `broker_pnl_history[].points` and `pnl_candles.points`. The event series (income, cost, deposit, acquisition funding) are unchanged: one point per event.
+- **Maximal steps.** Two adjacent steps never carry identical values; the steps of a broker are maximal for its own P&L, not for the portfolio's.
+- **Gaps.** A day that no step covers has no value: a broker that starts mid-window, or a day without a P&L candle (a held asset could not be valued).
+- **TWRR and ROI** stay inside the steps. On a quiet day the TWRR factor is exactly 1 and the ROI does not change. The first point of the TWRR is pinned to 0, being period-relative.
+- **MWRR** moves every day, because time passes, and with several flows it has no closed form: it does not sit in the steps but in `mwrr_line`, a series of **true values**, each equal to the [MWRR](mwrr.md) of the period ending that day, under the same rule as the card (no rate when the portfolio's value or the net invested capital is not positive). The line has a point at the `date` and at the `through` of every step; inside a step longer than 62 days it adds the last day of each calendar month strictly inside it, at most 24 per step, evenly spread. Its first point is pinned to 0.
+- **Data quality** follows the same idea: `incomplete_nav_ranges`, `incomplete_book_value_ranges`, `incomplete_allocation_ranges` and `incomplete_valuation_ranges` are lists of `{start, end}` with consecutive days merged. `missing_fx_pairs[].dates` holds only the dates of the movements, and `missing_fx_pairs[].ranges` the valuation days, merged. The older `incomplete_*_dates` lists are transitional.
 
 ---
 

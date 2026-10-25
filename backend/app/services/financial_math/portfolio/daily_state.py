@@ -310,7 +310,7 @@ class DailyStateBuilder:
         movement_days = set(all_txs_by_date) | set(ecf_by_date) | internal_flow_dates
         self._replay_from = min([self.date_from, *movement_days])
         frame_fx_days = set(self.native_cash.rate_change_days(self._replay_from, self.date_to))
-        dirty_days = self._collect_dirty_days(set(cash_deltas) | set(position_txs_by_date) | set(ecf_by_date) | internal_flow_dates, set(position_txs_by_date), frame_fx_days)
+        dirty_days = self._collect_dirty_days(set(cash_deltas) | set(position_txs_by_date) | set(ecf_by_date) | internal_flow_dates, frame_fx_days)
         ordered_dirty_days = sorted(dirty_days)
 
         # #48: each position's closed frames, and the frame still open on the last computed day (start, values)
@@ -452,6 +452,7 @@ class DailyStateBuilder:
             held_today: set[tuple[int, int]] = set()
             missing: set[int] = set()
             stale: set[int] = set()
+            stale_fx: dict[str, date_type] = {}
             missing_fx: set[str] = set()
             implied: set[int] = set()
             implied_last_quotes: dict[int, date_type | None] = {}
@@ -486,6 +487,8 @@ class DailyStateBuilder:
                     missing.add(asset_id)
                 if valuation.stale:
                     stale.add(asset_id)
+                if valuation.market_value is not None and (stale_pair := self._stale_fx_pair(valuation.effective_currency, current)) is not None:
+                    stale_fx[stale_pair[0]] = stale_pair[1]
                 if valuation.missing_fx_pair:
                     missing_fx.add(valuation.missing_fx_pair)
                 if valuation.source == ValuationSource.LAST_TRADE_PRICE:
@@ -633,6 +636,7 @@ class DailyStateBuilder:
                 missing_price_asset_ids=missing,
                 missing_fx_pairs=missing_fx,
                 stale_price_asset_ids=stale,
+                stale_fx_pairs=stale_fx,
                 transaction_implied_asset_ids=implied,
                 transaction_implied_last_quote_dates=implied_last_quotes,
                 nav_complete=len(missing) == 0,
@@ -877,12 +881,13 @@ class DailyStateBuilder:
         """The rate the day reads from the pre-loaded map: the exact day's, or None."""
         return self.fx_rate_map.get((currency, self.target_currency, day))
 
-    def _collect_dirty_days(self, movement_days: set[date_type], position_days: set[date_type], fx_days: set[date_type]) -> set[date_type]:
+    def _collect_dirty_days(self, movement_days: set[date_type], fx_days: set[date_type]) -> set[date_type]:
         """The days from the replay's start to date_to whose state must be computed; any other day carries the last one.
 
         A movement (cash, position, external or internal flow); a rate change of a held foreign currency (its cash is
         revalued) or of a rate the day reads for its securities or its cash in transit; an in-transit boundary; a market
-        quote (it sets the day's mark and restarts the price's age); the day a carried price turns stale; a split; the
+        quote (it sets the day's mark and restarts the price's age); the day a carried price turns stale (only when no
+        newer observation of its mark comes first); the day a rate read for the securities turns stale; a split; the
         first replayed day, date_from and the period's start.
         """
         start, end = self._replay_from, self.date_to
@@ -896,11 +901,7 @@ class DailyStateBuilder:
             dirty_days.update(day for day in boundaries if day >= start)
         for prices in self.price_map.values():
             dirty_days.update(dt for dt, _close, _currency in prices if start <= dt <= end)
-        observed = {dt for prices in self.price_map.values() for dt, _close, _currency in prices} | position_days
-        for day in observed:
-            first_stale = day + timedelta(days=STALE_PRICE_THRESHOLD_DAYS + 1)
-            if start <= first_stale <= end:
-                dirty_days.add(first_stale)
+        dirty_days.update(day for day in self._stale_turn_days() if start <= day <= end)
         for history in self.split_history.values():
             dirty_days.update(split.date for split in history if start <= split.date <= end)
         dirty_days.add(start)
@@ -961,6 +962,43 @@ class DailyStateBuilder:
             _move_linked_cash(ctxn, amount, K, R, transfer_splits)
         return withdrawn, buy_from_k, buy_from_r
 
+    def _stale_turn_days(self) -> set[date_type]:
+        """The days a price or an exchange rate the valuation reads turns stale (D-P4).
+
+        A price turns stale STALE_PRICE_THRESHOLD_DAYS + 1 days after the last observation of its mark (a quote or a
+        trade), only when no newer observation comes first: no Friday + 8 behind Monday's quote. A rate read for the
+        securities turns stale the same way: its stored row grows older than the threshold before a newer step comes.
+        """
+        turns: set[date_type] = set()
+        for series in self.mark_series.values():
+            observed = series.observation_dates
+            for index, day in enumerate(observed):
+                first_stale = day + timedelta(days=STALE_PRICE_THRESHOLD_DAYS + 1)
+                if index + 1 < len(observed) and observed[index + 1] <= first_stale:
+                    continue
+                turns.add(first_stale)
+        if isinstance(self.fx_rate_map, AskedDayRates):
+            for currency in self._valuation_currencies():
+                turns.update(self.fx_rate_map.stale_turn_days(currency, self.target_currency, STALE_PRICE_THRESHOLD_DAYS))
+        return turns
+
+    def _valuation_currencies(self) -> set[str]:
+        """The currencies other than the report's that value the securities: the assets' and their quotes'."""
+        currencies = {currency for prices in self.price_map.values() for _day, _close, currency in prices if currency}
+        currencies.update(currency for currency in self.asset_currencies.values() if currency)
+        currencies.discard(self.target_currency)
+        return currencies
+
+    def _stale_fx_pair(self, currency: str | None, day: date_type) -> tuple[str, date_type] | None:
+        """``("CCY/TARGET", row date)`` when the day values a security in ``currency`` with a stored rate older than the
+        stale threshold."""
+        if not currency or currency == self.target_currency or not isinstance(self.fx_rate_map, AskedDayRates):
+            return None
+        rate_day = self.fx_rate_map.rate_day_at(currency, self.target_currency, day)
+        if rate_day is None or (day - rate_day).days <= STALE_PRICE_THRESHOLD_DAYS:
+            return None
+        return f"{currency}/{self.target_currency}", rate_day
+
     def _valuation_rate_change_days(self) -> set[date_type]:
         """Frame days on which a rate the day reads to value it changes from the day before.
 
@@ -969,9 +1007,7 @@ class DailyStateBuilder:
         valuation: the exact day's rate, so one that appears or disappears counts.
         """
         changed: set[date_type] = set()
-        currencies = {currency for prices in self.price_map.values() for _day, _close, currency in prices if currency}
-        currencies.update(currency for currency in self.asset_currencies.values() if currency)
-        currencies.discard(self.target_currency)
+        currencies = self._valuation_currencies()
         # R13-SEC8: no rate is read before EARLIEST_RANGE_START (none is loaded there), so the calendars start there at
         # the earliest. Each calendar holds only the days a reading can change on (_reading_calendar): a row stored
         # centuries back never makes a calendar of every day since.
