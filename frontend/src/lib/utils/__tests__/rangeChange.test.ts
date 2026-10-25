@@ -61,6 +61,7 @@ describe('EARLIEST_RANGE_START — the first day the backend values', () => {
 });
 
 describe('rangeStartFor — the range_start a request sends', () => {
+    // X5-5 (D-P4): a year before 100 is read as typed, not as 19xx (`Date.UTC(24, …)` is 1924).
     it.each([
         {case: 'a year on screen sends its first day', start: RANGE_START, asOf: AS_OF, sent: RANGE_START},
         {case: 'a 29 February sends itself, in a leap year', start: '2024-02-29', asOf: AS_OF, sent: '2024-02-29'},
@@ -80,6 +81,26 @@ describe('rangeStartFor — the range_start a request sends', () => {
         {case: 'as_of before 1900 and a start before it: the raised start falls after as_of', start: '1850-06-01', asOf: '1899-12-31'},
         {case: 'a start on as_of, both before 1900: the raised start falls after as_of', start: '1899-12-31', asOf: '1899-12-31'},
     ])('sends none for $case ($start … $asOf): the backend would refuse it, every Δ column with it', ({start, asOf}) => {
+        expect(rangeStartFor(start, asOf)).toBeNull();
+    });
+
+    // X5-5 (D-P4): the year is read as typed. Every start here is before 1900, so it is raised to 1900-01-01; the year
+    // 0 is a leap year of the proleptic Gregorian calendar (divisible by 400), where 1900 is not.
+    it.each([
+        {case: 'a start in the year 24 is a real day, raised to 1900-01-01', start: '0024-03-01'},
+        {case: 'a start on 1 January of the year 1 is a real day, raised to 1900-01-01', start: '0001-01-01'},
+        {case: 'a start on 29 February of the year 0 is a real day (year 0 is leap), raised to 1900-01-01', start: '0000-02-29'},
+    ])('$case ($start … 2026-10-25)', ({start}) => {
+        expect(rangeStartFor(start, '2026-10-25')).toBe(EARLIEST_RANGE_START);
+    });
+
+    // X5-5 (D-P4): guards that stay null, before and after the fix: the calendar still refuses, and a raised start still may not pass as_of.
+    it.each([
+        {case: '29 February of the year 1, which is not leap', start: '0001-02-29', asOf: '2026-10-25'},
+        {case: '30 February of the year 24', start: '0024-02-30', asOf: '2026-10-25'},
+        {case: 'a thirteenth month in the year 24', start: '0024-13-01', asOf: '2026-10-25'},
+        {case: 'as_of in the year 24 and a start in the year 1: the raised start (1900) falls after as_of', start: '0001-01-01', asOf: '0024-03-01'},
+    ])('sends none for $case ($start … $asOf)', ({start, asOf}) => {
         expect(rangeStartFor(start, asOf)).toBeNull();
     });
 
