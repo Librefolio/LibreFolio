@@ -78,6 +78,21 @@ export function valueAt<T extends StepSpan>(points: readonly T[], day: string): 
 }
 
 /**
+ * What `pick` reads from the point holding each of the given days, null where the series does not hold the day. The days
+ * must be in ascending order. One walk over the points and the days (cost: their number, never the days between), the way
+ * a chart that keeps arrays «one value per date» gets them from steps.
+ */
+export function alignAt<T extends StepSpan, V>(points: readonly T[], days: readonly string[], pick: (point: T) => V): Array<V | null> {
+    const aligned: Array<V | null> = [];
+    let index = 0;
+    for (const day of days) {
+        while (index < points.length && points[index].through < day) index += 1;
+        aligned.push(index < points.length && points[index].date <= day ? pick(points[index]) : null);
+    }
+    return aligned;
+}
+
+/**
  * The point in force on the last day of a bucket the series covers: the point holding `bucketEnd`, or, when the series
  * ends or has a hole before `bucketEnd`, its last point that still touches the bucket. Null when the series does not
  * touch the bucket at all. What a weekly or monthly chart shows for the bucket, as it did with the last daily point.

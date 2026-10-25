@@ -62,6 +62,7 @@
  *     bucket gets a separator too: ECharts draws a lone band tick on the axis start, and
  *     the first visible bucket's left edge is the plot edge, where a line is drawn anyway.
  */
+import {utcMs} from '$lib/utils/dateOnly';
 import {CANDLE_MIN_SLOT_PX} from '$lib/components/charts/timeSeriesAggregation';
 import {calendarPeriodOf, type LadderRung} from './growthLadderBuckets';
 
@@ -174,7 +175,7 @@ function formatDay(locale: string, style: LabelStyle, day: number): string {
 
 /** Whole UTC day number of an ISO date: calendar arithmetic free of time zones and DST. */
 function dayOf(iso: string): number {
-    return Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10))) / DAY_MS;
+    return utcMs(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10))) / DAY_MS;
 }
 
 interface MonthFirst {
@@ -194,7 +195,7 @@ function monthFirstsBetween(fromDay: number, toDay: number): MonthFirst[] {
             year += 1;
             month0 -= 12;
         }
-        const day = Date.UTC(year, month0, 1) / DAY_MS;
+        const day = utcMs(year, month0, 1) / DAY_MS;
         if (day > toDay) return firsts;
         firsts.push({day, year, month0});
         month0 += 1;
@@ -233,7 +234,7 @@ export function planLadderAxis(input: LadderAxisInput): LadderAxisPlan {
         if (rung === '1M') return formatDay(locale, 'month', startDay(index));
         const month0 = Number(start.slice(5, 7)) - 1;
         if (rung === '3M') return quarterLabel((Math.floor(month0 / 3) + 1) as 1 | 2 | 3 | 4);
-        const lastMonthDay = Date.UTC(Number(start.slice(0, 4)), month0 + 5, 1) / DAY_MS;
+        const lastMonthDay = utcMs(Number(start.slice(0, 4)), month0 + 5, 1) / DAY_MS;
         return `${formatDay(locale, 'month', startDay(index))}–${formatDay(locale, 'month', lastMonthDay)}`;
     };
     const shortText = (index: number): string => (shortTexts[index] ??= nameOf(index));

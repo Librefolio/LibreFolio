@@ -28,7 +28,7 @@
  * `todayIso()`), so no case here touches the clock.
  */
 import {describe, expect, it} from 'vitest';
-import {buildCalendarLadder, calendarPeriodOf, countCalendarBuckets} from './growthLadderBuckets';
+import {buildCalendarLadder, calendarPeriodOf, countCalendarBuckets, countSpannedPeriods} from './growthLadderBuckets';
 import type {LadderPeriod, LadderRung} from './growthLadderBuckets';
 
 const DAY_MS = 86_400_000;
@@ -238,5 +238,52 @@ describe('countCalendarBuckets: what the rung offer weighs', () => {
     it('an empty series counts no bucket', () => {
         // WHY: the offer runs before the history arrives.
         expect(RUNGS.map((rung) => countCalendarBuckets([], rung))).toEqual(RUNGS.map(() => 0));
+    });
+});
+
+describe('a series of witness days (steps), not of every day', () => {
+    // WHY: a step series gives the chart one date per stretch without news, so the dates of a bucket are few and far
+    // apart. The days a bucket covers are the days from its first date to its last, not the number of dates.
+    it('a bucket covers the days from its first date to its last, however few dates it holds', () => {
+        const ladder = buildCalendarLadder(['2026-03-02', '2026-03-20', '2026-03-31'], '1M', '2026-12-31');
+        expect(ladder).toEqual([bucket(0, 2, '2026-03-01', '2026-03-31', 30, 31, {partial: true})]);
+    });
+
+    it('a whole month holding two dates covers all its days', () => {
+        const ladder = buildCalendarLadder(['2026-02-01', '2026-02-28'], '1M', '2026-12-31');
+        expect(ladder).toEqual([bucket(0, 1, '2026-02-01', '2026-02-28', 28, 28)]);
+    });
+
+    it('is the same as the index count for a series of every day', () => {
+        for (const name of Object.keys(WINDOWS) as Array<keyof typeof WINDOWS>) {
+            const dates = WINDOWS[name];
+            for (const rung of RUNGS) {
+                for (const entry of buildCalendarLadder(dates, rung, dates[dates.length - 1])) expect(entry.coveredDays).toBe(entry.endIndex - entry.startIndex + 1);
+            }
+        }
+    });
+});
+
+describe('countSpannedPeriods: the periods between two days, without the days', () => {
+    it.each(Object.keys(WINDOWS) as Array<keyof typeof WINDOWS>)('%s window: on every rung it counts the buckets of the daily series', (name) => {
+        const dates = WINDOWS[name];
+        expect(RUNGS.map((rung) => countSpannedPeriods(dates[0], dates[dates.length - 1], rung))).toEqual(RUNGS.map((rung) => countCalendarBuckets(dates, rung)));
+    });
+
+    it('counts the periods a gap spans, which a count of the periods the dates touch would miss', () => {
+        expect(countSpannedPeriods('2026-01-05', '2026-04-10', '1M')).toBe(4);
+        expect(countCalendarBuckets(['2026-01-05', '2026-04-10'], '1M')).toBe(2);
+    });
+
+    it('is one for one day and zero for an inverted pair', () => {
+        expect(RUNGS.map((rung) => countSpannedPeriods('2026-05-06', '2026-05-06', rung))).toEqual(RUNGS.map(() => 1));
+        expect(countSpannedPeriods('2026-05-07', '2026-05-06', '1D')).toBe(0);
+    });
+
+    it('does not walk the days: 740 000 of them are counted at once', () => {
+        const started = performance.now();
+        expect(countSpannedPeriods('0001-01-01', '2026-10-25', '1D')).toBe(739_914);
+        expect(countSpannedPeriods('0001-01-01', '2026-10-25', '1Y')).toBe(2_026);
+        expect(performance.now() - started).toBeLessThan(100);
     });
 });
