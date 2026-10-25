@@ -1914,6 +1914,24 @@ class PortfolioService:
                     )
                 )
                 residual -= exchange_result
+            # B5 (financial_math.portfolio.period): the gain securities accrued at a broker outside the view before they
+            # crossed its boundary, a row per broker in the same order; the residual drops by the same amount.
+            transfer_results = period_math.market_value_transfer_results(getattr(engine_result, "market_value_transfers", None) or [], date_from, effective_end)
+            for bid in sorted(transfer_results, key=lambda broker_id: access_order.get(broker_id, len(access_order))):
+                transfer_result = transfer_results[bid]
+                if abs(transfer_result) < CONVERSION_DUST:
+                    continue
+                broker = await self._get_broker(bid)
+                other_effects.append(
+                    OtherPeriodEffect(
+                        description="Transfers at market value",
+                        category="Other",
+                        period_pnl=transfer_result,
+                        broker_id=bid,
+                        broker_name=broker.name if broker else f"Broker {bid}",
+                    )
+                )
+                residual -= transfer_result
             show_residual = abs(residual) >= CONVERSION_DUST if native_cash.foreign_cash_broker_ids else residual != 0
             if show_residual:
                 other_effects.append(

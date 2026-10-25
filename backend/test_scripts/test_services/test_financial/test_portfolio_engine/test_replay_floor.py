@@ -21,8 +21,8 @@ replayed exactly, on their own dates and in their own order: quantities, cash, c
   (MF5-1) the engine builds no quiet day at all (segments, ``StateSegment.state_on`` for a reader): the test counts
   ``state_on`` calls (none during ``build()``) and ``DailyPortfolioState`` constructions (one per computed day, those
   from ``date_from`` on being the segment starts); D4 and D6 lying inside a segment keeps it from passing vacuously.
-- ``TestRateCalendarsStartAtTheFloor`` — red on HEAD: a recording wrapper of ``daily_state._calendar`` sees a calendar
-  from 1889-12-31 (the valuation calendar of the USD stock; the USD cash in transit since 1890-01-02); after the cure no
+- ``TestRateCalendarsStartAtTheFloor`` — red on HEAD: a recording wrapper of ``daily_state._calendar`` (since MF5-2a:
+  of ``DailyStateBuilder._reading_calendar``, the candidate days only) sees a calendar from 1889-12-31 (the valuation calendar of the USD stock; the USD cash in transit since 1890-01-02); after the cure no
   calendar starts before 1899-12-31. The precondition (the calendar of that currency still runs to its last day) keeps
   it from passing vacuously.
 - ``TestAMovementOnDayOne`` — red on HEAD: ``OverflowError: date value out of range`` from ``_calendar`` for a movement
@@ -65,7 +65,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-import backend.app.services.financial_math.portfolio.daily_state as daily_state_module
 from backend.app.db.models import TransactionType
 from backend.app.services.financial_math.portfolio.classifier import ScopeAwareTransactionClassifier
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
@@ -343,16 +342,21 @@ class TestNoQuietDayBeforeDateFrom:
 # =============================================================================
 
 
-def _recording_calendar(monkeypatch) -> list[tuple[date, date]]:
-    """Wrap ``daily_state._calendar``: every ``(first, last)`` it is asked for, in order."""
-    calls: list[tuple[date, date]] = []
-    real_calendar = daily_state_module._calendar
+def _recording_calendar(monkeypatch) -> list[tuple[frozenset[str], date, date, list[date]]]:
+    """Wrap ``DailyStateBuilder._reading_calendar``: every ``(currencies, first, last, days read)``, in order.
 
-    def recording(first, last):
-        calls.append((first, last))
-        return real_calendar(first, last)
+    MF5-2a: the rate calendars hold only the days a reading can change on (``_reading_calendar``, which starts at
+    ``first`` - 1 day unless ``first`` is ``date.min``); before it, ``daily_state._calendar`` gave every day.
+    """
+    calls: list[tuple[frozenset[str], date, date, list[date]]] = []
+    real_reading_calendar = DailyStateBuilder._reading_calendar
 
-    monkeypatch.setattr(daily_state_module, "_calendar", recording)
+    def recording(self, currencies, first, last):
+        days = real_reading_calendar(self, currencies, first, last)
+        calls.append((frozenset(currencies), first, last, list(days)))
+        return days
+
+    monkeypatch.setattr(DailyStateBuilder, "_reading_calendar", recording)
     return calls
 
 
@@ -372,8 +376,9 @@ class TestRateCalendarsStartAtTheFloor:
 
         _build(ledger(), D3)
 
-        assert any(last == last_day for _first, last in calls), f"precondition: the calendar of that currency runs to {last_day}, calendars asked: {calls}"
-        early = [(first, last) for first, last in calls if first < FIRST_CALENDAR_DAY]
+        asked = [(sorted(currencies), first, last, days[:1]) for currencies, first, last, days in calls]
+        assert any("USD" in currencies and last == last_day and days for currencies, _first, last, days in calls), f"precondition: a USD calendar runs to {last_day}, calendars asked: {asked}"
+        early = [(sorted(currencies), first, days[:1]) for currencies, first, _last, days in calls if first < FLOOR or (days and days[0] < FIRST_CALENDAR_DAY)]
         assert early == [], f"rate calendars starting before {FIRST_CALENDAR_DAY}: {early}"
 
 

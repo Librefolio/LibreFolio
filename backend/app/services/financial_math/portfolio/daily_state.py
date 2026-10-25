@@ -17,6 +17,7 @@ from backend.app.services.financial_math.average_cost import (
     CostEffect,
     CostStep,
 )
+from backend.app.services.financial_math.fx_rates import AskedDayRates
 from backend.app.services.financial_math.native_cash import NativeCash, change_days
 from backend.app.services.financial_math.portfolio.classifier import _CASH_LINKED_TYPES, _LINKED_TYPES
 from backend.app.services.financial_math.portfolio.models import (
@@ -29,6 +30,7 @@ from backend.app.services.financial_math.portfolio.models import (
     EngineEndState,
     InternalAssetTransfer,
     InTransitInterval,
+    MarketValueTransfer,
     PnlCandleContribution,
     PortfolioCalculationResult,
     PositionFrame,
@@ -63,11 +65,6 @@ def _cumulative_split_ratio(history: SplitHistory, reference_date: date_type, va
 def _exact(values: tuple) -> tuple:
     """``values`` with every Decimal as its digits and exponent: equal only when the Decimals are the same."""
     return tuple(value.as_tuple() if isinstance(value, Decimal) else value for value in values)
-
-
-def _calendar(first: date_type, last: date_type) -> list[date_type]:
-    """Every day from ``first`` to ``last``, both included."""
-    return [first + timedelta(days=offset) for offset in range((last - first).days + 1)]
 
 
 def _valued_at_cost(cost_value: Decimal) -> ValuationResult:
@@ -236,6 +233,7 @@ class DailyStateBuilder:
             for missing in average_cost.missing:
                 self._missing_fx[missing.pair].update(missing.dates)
         realized_sales: list[RealizedSale] = []
+        market_value_transfers: list[MarketValueTransfer] = []
 
         # ── 1. Cash ledger: sum amount deltas per day ──
         cash_deltas: dict[date_type, Decimal] = defaultdict(lambda: zero)
@@ -394,6 +392,17 @@ class DailyStateBuilder:
                     if transfer_capital is not None:
                         cumulative_ecf += transfer_capital
                         cumulative_ecf_by_broker[bid] += transfer_capital
+                        # B5: the leg, with the cost it moved, for the period breakdown's row of its own
+                        market_value_transfers.append(
+                            MarketValueTransfer(
+                                transaction_id=tx.id,
+                                broker_id=bid,
+                                asset_id=tx.asset_id,
+                                date=tx.date,
+                                capital=transfer_capital,
+                                cost=step.cost_report_change if step is not None else zero,
+                            )
+                        )
                     if tx.quantity > 0:
                         # In-kind ADJUSTMENT-in (priced, no cash): capital contribution.
                         # Add the cost it brings into the pool to the capital baseline so total
@@ -676,6 +685,7 @@ class DailyStateBuilder:
             date_to=self.date_to,
             average_costs=dict(self.average_costs),
             realized_sales=realized_sales,
+            market_value_transfers=market_value_transfers,
             missing_fx={pair: set(dates) for pair, dates in self._missing_fx.items()},
         )
 
@@ -963,17 +973,46 @@ class DailyStateBuilder:
         currencies.update(currency for currency in self.asset_currencies.values() if currency)
         currencies.discard(self.target_currency)
         # R13-SEC8: no rate is read before EARLIEST_RANGE_START (none is loaded there), so the calendars start there at
-        # the earliest: a row stored centuries back never makes a calendar of every day since.
+        # the earliest. Each calendar holds only the days a reading can change on (_reading_calendar): a row stored
+        # centuries back never makes a calendar of every day since.
         replay_from = max(self._replay_from, EARLIEST_RANGE_START)
         if currencies:
-            changed.update(day for day in change_days(self._read_rate, currencies, _calendar(replay_from - timedelta(days=1), self.date_to)) if day >= replay_from)
+            changed.update(day for day in change_days(self._read_rate, currencies, self._reading_calendar(currencies, replay_from, self.date_to)) if day >= replay_from)
         for interval in self.in_transit_intervals:
             currency = interval.departure_leg.currency
             start, end = max(interval.start_date, replay_from), min(interval.end_date, self.date_to)
             if interval.tx_type != "cash" or not currency or currency == self.target_currency or start > end:
                 continue
-            changed.update(day for day in change_days(self._read_rate, {currency}, _calendar(start - timedelta(days=1), end)) if day >= start)
+            changed.update(day for day in change_days(self._read_rate, {currency}, self._reading_calendar({currency}, start, end)) if day >= start)
         return changed
+
+    def _reading_calendar(self, currencies: set[str], first: date_type, last: date_type) -> list[date_type]:
+        """The days of ``[first − 1, last]`` on which the day's rate of ``currencies`` may differ from the day before.
+
+        A reader of the exact day's rate (:meth:`_read_rate`) sees a change only on such a day, so ``change_days`` on
+        these days, with the day before each, finds exactly the changes of the whole calendar. On an ``AskedDayRates``
+        they are its steps and window bounds (``reading_change_days``); on a plain map, each key's day and the day after.
+        No day before ``date.min``: there a rate counts as a change, as on a calendar's first day.
+        """
+        rates = self.fx_rate_map
+        candidates: set[date_type] = set()
+        if isinstance(rates, AskedDayRates):
+            for currency in currencies:
+                candidates.update(rates.reading_change_days(currency, self.target_currency))
+        else:
+            for key in rates:
+                if len(key) == 3 and key[0] in currencies and key[1] == self.target_currency:
+                    day = key[2]
+                    candidates.add(day)
+                    if day < date_type.max:
+                        candidates.add(day + timedelta(days=1))
+        days: set[date_type] = {first - timedelta(days=1)} if first > date_type.min else set()
+        for day in candidates:
+            if first <= day <= last:
+                days.add(day)
+                if day > date_type.min:
+                    days.add(day - timedelta(days=1))
+        return sorted(days)
 
     def _convert(self, amount: Decimal, from_ccy: str, dt: date_type) -> Decimal | None:
         """Convert amount from from_ccy to target_currency using pre-loaded FX map."""
