@@ -92,6 +92,7 @@
         readAlonePlugins,
         rememberedChoices,
         setBlocksAnalysis,
+        formatIsoDay,
         setPluginFor,
         setRequest,
         setSelectionState,
@@ -116,7 +117,6 @@
     import ReviewStep from './ReviewStep.svelte';
     import WizardFooter from './WizardFooter.svelte';
     import {formatFixed} from '$lib/utils/core/formatFixed';
-    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     // =========================================================================
     // Props
@@ -3705,17 +3705,8 @@ ${arrow}<span>${label}</span></span>`,
         }
     }
 
-    /** An ISO day (or timestamp) in the user's date format, read as a calendar day. */
-    function formatSetDay(iso: string | null | undefined): string {
-        if (!iso) return '—';
-        const day = String(iso).slice(0, 10);
-        const [year, month, date] = day.split('-').map(Number);
-        if (!year || !month || !date) return day;
-        return new Date(Date.UTC(year, month - 1, date)).toLocaleDateString(uiLocale(), {timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit'});
-    }
-
     function setRowLabel(set: ReportSetGroup, fileCount: number): string {
-        return $t('importWizard.reportSet.analyzeRowLabel', {values: {date: formatSetDay(set.uploadedAt), n: fileCount}});
+        return $t('importWizard.reportSet.analyzeRowLabel', {values: {date: formatIsoDay(set.uploadedAt), n: fileCount}});
     }
 
     /** A combined file of the set was already parsed: the set was analysed before (design §4.3, case C). */
@@ -4453,7 +4444,7 @@ ${arrow}<span>${label}</span></span>`,
                 {uploading}
                 {pendingFileActions}
                 {pendingFileColumns}
-                {formatSetDay}
+                formatSetDay={formatIsoDay}
                 {handleFilesChanged}
                 {onGlobalBrokerChange}
                 {removePendingFilesByIds}
