@@ -160,6 +160,13 @@ describe('parseDateToUtcMs', () => {
     it('returns null for an unparseable value', () => {
         expect(parseDateToUtcMs('not a date')).toBeNull();
     });
+
+    // WHY: `Date.UTC(24, …)` reads the year as 1924, so a lot opened by a date typed in the year 24 sat a century off on the Gantt axis.
+    it('keeps a year before 100 where it is, as a date-only string and as a timestamp', () => {
+        expect(new Date(parseDateToUtcMs('0024-03-01') as number).toISOString()).toBe('0024-03-01T00:00:00.000Z');
+        expect(new Date(parseDateToUtcMs('0024-03-01T10:00:00Z') as number).toISOString()).toBe('0024-03-01T00:00:00.000Z');
+        expect(new Date(parseDateToUtcMs('0001-01-01') as number).toISOString()).toBe('0001-01-01T00:00:00.000Z');
+    });
 });
 
 describe('firstPresentUnknown', () => {
