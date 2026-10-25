@@ -107,6 +107,18 @@ composes one synthetic P&L candle per day:
   (developer decision P2): its `cost_basis_override` is a cost — often the position's average
   cost — not what the asset was worth that day. One that takes units out has no value at all
   (N78-1). Only market quotes and `BUY`/`SELL` trades mark an asset.
+- **A market quote is read in the units of its own day; a split moves the quantity.** The
+  portfolio engine values a holding as quantity × mark. The quantity changes at a split only
+  through the `ADJUSTMENT` rows linked to the SPLIT event, on the split's date. The split ratio
+  restates only a trade-derived mark (`LAST_TRADE_PRICE`, `_cumulative_split_ratio()` in
+  `financial_math/portfolio/daily_state.py`), never a market quote. So a provider that stores
+  closes already adjusted for later splits undervalues every day before a split, by its ratio,
+  and the day of the split shows a jump that is not a flow. Yahoo Finance does this: its `Close`
+  is split-adjusted even with `auto_adjust=False`. Example: 10 AAPL on 28 August 2020 count
+  10 × 124.8 = 1 248 instead of 4 990, and on 31 August, 40 × 129 = 5 160. From the split on, the
+  numbers are right. This is a known limit of release 1.3 (developer decision of 23/10/2026, MF-SPL1 C). The
+  target is to store as-traded closes, with the readers that need a continuous line (charts,
+  signals, risk) applying the SPLIT events themselves.
 
 ## 🧾 No observation: valued at cost {: #valued-at-cost }
 
