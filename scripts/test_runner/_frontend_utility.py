@@ -31,6 +31,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/components/ui/select/optionFilter.test.ts",
             "src/lib/utils/__tests__/dateArrowStep.test.ts",
             "src/lib/utils/__tests__/dateOnly.test.ts",
+            "src/lib/utils/__tests__/stepSeries.test.ts",
             "src/lib/utils/__tests__/internalPath.test.ts",
             "src/lib/utils/__tests__/parseDecimalInput.test.ts",
             "src/lib/utils/__tests__/parseTypedDate.test.ts",
