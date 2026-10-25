@@ -6,6 +6,7 @@
  * currency — is read at that moment, as when the formatter's body lived in the component; the theme is the one the
  * option was built with.
  */
+import {utcMs} from '$lib/utils/dateOnly';
 import {escapeHtml} from '$lib/utils/core/escapeHtml';
 import {formatDay} from '$lib/utils/core/formatAxisDate';
 import {formatPercent} from '$lib/utils/core/formatPercent';
@@ -50,7 +51,7 @@ export function formatTooltipMonth(date: string): string {
         month: 'long',
         year: 'numeric',
         timeZone: 'UTC',
-    }).format(new Date(Date.UTC(year, month - 1, day)));
+    }).format(new Date(utcMs(year, month - 1, day)));
 }
 
 /**
