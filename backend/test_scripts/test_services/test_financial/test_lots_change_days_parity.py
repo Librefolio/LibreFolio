@@ -93,9 +93,20 @@ transaction and comes back with the rollback —, and VND's absence is owned the
 ``test_lots_market_price_history.py`` owns it.
 
 TODAY (HEAD ``b675ada54``): both reds fail on their assertion; every PARITY case is green.
+
+J5-5 (steps, contract MF-P4b §1.3, §8): the seven histories become STEPS (``date`` .. ``through``) and the answer carries
+``range``. The reds at the end of the file (RED until the cure): ``test_red_every_history_is_a_list_of_steps`` (shape,
+maximality, A == B once expanded, over every PARITY case), ``test_red_the_1900_lot_is_a_few_steps``,
+``test_red_a_price_representation_change_is_a_step_boundary`` (8 Apr 2024 of book ``representation``) and
+``test_red_a_year_one_typo_costs_steps_not_days`` (floor lowered in this process, measured on HEAD: 737 854 calls of
+``AssetPriceSeries.resolve``, 613 s, 3.9 GB). The ``test_guard_the_step_checker_*`` tests prove the checker itself on
+pure cases and on the real books. The answer is read as ``model_dump(mode="json")`` dicts: no new class is imported.
 """
 
 import random
+import sys
+import time
+import tracemalloc
 from collections import Counter
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -118,7 +129,9 @@ from backend.app.db.session import get_async_engine
 from backend.app.schemas.portfolio import LotAnalysisType, LotsAnalysisResponse
 from backend.app.services import lots_analysis_service
 from backend.app.services.financial_math.lots import histories
+from backend.app.services.financial_math.price_marks import AssetPriceSeries
 from backend.app.services.lots_analysis_service import get_lots_analysis
+from backend.test_scripts.test_services._lots_steps import as_daily_rows, compress_days, expand_steps, order_by_key, rows_by_key, step_values
 from backend.test_scripts.test_services._scope_boundary_books import (
     L1_BUY_DAY,
     L1_DATE_TO,
@@ -137,8 +150,18 @@ from backend.test_scripts.test_services._scope_boundary_books import (
 
 EUR = "EUR"
 ALL_ANALYSES = list(LotAnalysisType)
-# The sections with one point per day (and per lot or broker): what the change days fill.
-DAILY_SECTIONS = ("value_history", "return_history", "price_history", "market_price_history", "broker_wac_history", "cumulative_wac_history", "performance_history")
+# The seven history sections, each with the field that keys its rows (None: one line for the whole scope). Since J5-5 a
+# row is a STEP (``date`` .. ``through``), not a day; the change days fill them.
+STEP_KEYS: dict[str, str | None] = {
+    "value_history": "lot_id",
+    "return_history": "lot_id",
+    "price_history": "lot_id",
+    "market_price_history": None,
+    "broker_wac_history": "broker_id",
+    "cumulative_wac_history": None,
+    "performance_history": None,
+}
+DAILY_SECTIONS = tuple(STEP_KEYS)
 # The per-day steps the reds count, on the module that calls them (histories.py reads both through its globals).
 COUNTED_STEPS = ("_lot_snapshot_on_date", "_open_value_on_date")
 CALL_BUDGET = 400
@@ -196,7 +219,10 @@ async def _analysis(
 
 
 def _every_day_is_a_change_day(**arguments) -> list[date]:
-    """``lot_change_days`` as today's computation reads it: every day of ``days`` is a change day."""
+    """``lot_change_days`` as today's computation reads it: every day of ``days`` is a change day. If the cure of J5-5
+    changes the signature (no ``days`` list any more), this stand-in must follow it: it fails loudly, never silently
+    patches nothing."""
+    assert "days" in arguments, f"lot_change_days has no `days` argument any more ({sorted(arguments)}): adapt _every_day_is_a_change_day to the new signature"
     return list(arguments["days"])
 
 
@@ -580,10 +606,16 @@ async def seed_1900(session: AsyncSession) -> Book:
 BookCheck = Callable[[Book, LotsAnalysisResponse], None]
 
 
+def _market_price_days(result: LotsAnalysisResponse) -> list[Mapping]:
+    """The asset's market price line as one row per day, read in whichever form the answer has it (days before J5-5,
+    steps after): the books prove what they are on days, not on rows."""
+    return as_daily_rows(result.model_dump(mode="json")["market_price_history"] or [], None)
+
+
 def _check_every_day_marked(_book: Book, result: LotsAnalysisResponse) -> None:
     """The HUF and ISK rates are in place: the market price line has a point on every day from the first transaction to
     ``date_to``, the five days of ``FX_GAP`` included (5 Dec 1937's rate carried over them)."""
-    marked = [point.date for point in result.market_price_history or []]
+    marked = [date.fromisoformat(row["date"]) for row in _market_price_days(result)]
     assert marked == _calendar(FX_FIRST_DAY, FX_DATE_TO), f"precondition: {len(marked)} marked days, from {marked[:1]} to {marked[-1:]}"
 
 
@@ -600,7 +632,7 @@ def _check_at_cost(first_day: date, last_day_at_cost: date) -> BookCheck:
 def _check_representations(_book: Book, result: LotsAnalysisResponse) -> None:
     """The line from the BUY to the first close: the trade's mark, 1 650 / 15 = ``110``, estimated, on 3 Apr and carried
     to 7 Apr; on 8 Apr the close of 110, read back from the DB padded to six decimals, ``110.000000``, not estimated."""
-    line = {point.date: (str(point.market_price), point.estimated) for point in result.market_price_history or []}
+    line = {date.fromisoformat(row["date"]): (row["market_price"], row["estimated"]) for row in _market_price_days(result)}
     observed = {day: line.get(day) for day in _calendar(REPRESENTATION_FIRST_DAY, REPRESENTATION_CLOSE_DAY)}
     expected = dict.fromkeys(_calendar(REPRESENTATION_FIRST_DAY, REPRESENTATION_CLOSE_DAY - timedelta(days=1)), ("110", True))
     expected[REPRESENTATION_CLOSE_DAY] = ("110.000000", False)
@@ -724,14 +756,14 @@ def _reader(book: Book, scope: str) -> tuple[User, list[int] | None]:
 
 @pytest.mark.asyncio
 async def test_red_the_1900_book_is_valued_on_its_change_days_alone(session, monkeypatch):
-    """RED until L1a. The 1900 book read over its last 30 days, every analysis: ``_lot_snapshot_on_date`` and
+    """GUARD (red until L1a, green since, to stay green after J5-5). The 1900 book read over its last 30 days, every analysis: ``_lot_snapshot_on_date`` and
     ``_open_value_on_date`` (``financial_math/lots/histories.py``, counted on the module whose globals call them) are
     called at most 400 times together. The lot changes on six days — the BUY, four closes, the SELL —: with the first
     day, the last and each change's next day, 13 change days by the contract, five calls each (65); the budget leaves
     room for more event dates.
 
-    Precondition, green today and after: the lot of the BUY has a value point on each of the window's 31 days, and the
-    builders reach both counted steps.
+    Precondition, green today and after: the lot of the BUY has value rows, and the builders reach both counted steps.
+    (That these rows are a few STEPS covering the 31 days is ``test_red_the_1900_lot_is_a_few_steps``.)
 
     Today: about 221 000 calls — 44 240 days from 2 Jan 1900, five calls a day.
     """
@@ -742,10 +774,30 @@ async def test_red_the_1900_book_is_valued_on_its_change_days_alone(session, mon
 
     result = await _analysis(session, user=book.users["owner"], asset=book.asset, broker_ids=None, date_from=BOOK_1900_DATE_FROM, date_to=BOOK_1900_DATE_TO)
 
-    lot_days = [point.date for point in result.value_history or [] if point.lot_id == book.rows["buy"].id]
-    assert lot_days == _calendar(BOOK_1900_DATE_FROM, BOOK_1900_DATE_TO), f"precondition: {len(lot_days)} value points for the lot of the BUY"
+    lot_rows = [point for point in result.value_history or [] if point.lot_id == book.rows["buy"].id]
+    assert lot_rows, "precondition: the lot of the BUY has value rows"
     assert all(calls[name] > 0 for name in COUNTED_STEPS), f"precondition: the builders value the lot through the counted steps, {dict(calls)}"
-    assert sum(calls.values()) <= CALL_BUDGET, f"{sum(calls.values())} calls of {' + '.join(COUNTED_STEPS)} {dict(calls)} to answer {len(lot_days)} days; the budget is {CALL_BUDGET}"
+    assert sum(calls.values()) <= CALL_BUDGET, f"{sum(calls.values())} calls of {' + '.join(COUNTED_STEPS)} {dict(calls)} to answer a {BOOK_1900_DATE_TO - BOOK_1900_DATE_FROM} window; the budget is {CALL_BUDGET}"
+
+
+@pytest.mark.asyncio
+async def test_red_the_1900_lot_is_a_few_steps(session):
+    """RED until J5-5 (steps). The 1900 book read over its last 30 days, every analysis: nothing changes in the window
+    (the closes and the SELL are in 2020), so the lot of the BUY has ONE value step — rows are maximal — and its
+    expansion is exactly the window's 31 calendar days, ``range`` being the window.
+
+    Today: the rows carry no ``through`` (one row per day) — «row has no through».
+    """
+    book = await seed_1900(session)
+
+    result = await _analysis(session, user=book.users["owner"], asset=book.asset, broker_ids=None, date_from=BOOK_1900_DATE_FROM, date_to=BOOK_1900_DATE_TO)
+
+    payload = result.model_dump(mode="json")
+    assert payload.get("range") == {"start": BOOK_1900_DATE_FROM.isoformat(), "end": BOOK_1900_DATE_TO.isoformat()}, f"range: {payload.get('range')!r}"
+    lot_rows = [row for row in payload["value_history"] if row["lot_id"] == book.rows["buy"].id]
+    days = [row["date"] for row in expand_steps(lot_rows, "lot_id")]
+    assert days == [day.isoformat() for day in _calendar(BOOK_1900_DATE_FROM, BOOK_1900_DATE_TO)], f"the steps of the lot expand to {len(days)} days"
+    assert len(lot_rows) == 1, f"nothing changes in the window: one maximal step, got {len(lot_rows)} rows"
 
 
 @pytest.mark.asyncio
@@ -801,3 +853,286 @@ async def test_parity_the_change_days_answer_what_every_day_answers(session, mon
         scenario.check(book, as_is)
     difference = _first_difference(_dump(as_is), _dump(every_day))
     assert difference is None, f"{scenario_name} / {window} / {scope}: on its change days the answer differs from every day's at {difference} — points A/B {_point_counts(as_is, every_day)}"
+
+
+# --------------------------------------------------------------------------- #
+# J5-5 — the seven histories as STEPS (contract MF-P4b §1.1, §1.3, §8): the shape reds
+# --------------------------------------------------------------------------- #
+#
+# A row of a history is no longer a day but a STEP: ``date`` (the first day it holds) and ``through`` (the last day,
+# inclusive); the response carries ``range = {start, end}``, ``start = max(display_from, computed_from)``, ``end =
+# date_to``. The rows of one key (``lot_id``; ``broker_id`` for the broker WAC; none for the others) are in order, do not
+# overlap and lie inside ``range``; a gap is only where today's daily answer has no row. Steps are MAXIMAL: two rows of
+# one key that touch (the second starts the day after the first ends) never carry identical values — compared as JSON
+# text, so ``1.10`` and ``1.1`` differ — and expanding every row from ``date`` to ``through`` gives today's daily answer,
+# field for field.
+#
+# These tests read the answer as ``model_dump(mode="json")`` dicts and name no new class (``StepSpan``, ``DateSpan``
+# come from another workstream): until the schema carries ``range`` and ``through`` they fail on an assertion.
+# An empty window (``date_from`` after ``date_to``) has no step in any section; its ``range`` would start after it ends,
+# which the contract does not say, so it is not asserted.
+
+
+def assert_step_shape(payload: Mapping, *, expected_range: Mapping[str, str], label: str) -> None:
+    """``payload`` (a dumped ``LotsAnalysisResponse``) has its ``range`` and, in each of the seven sections, rows that are
+    steps: ``through`` >= ``date``, ordered, not overlapping, inside ``range``, maximal where they touch."""
+    assert payload.get("range") == dict(expected_range), f"{label}: range is {payload.get('range')!r}, expected {dict(expected_range)}"
+    range_start, range_end = date.fromisoformat(expected_range["start"]), date.fromisoformat(expected_range["end"])
+    for section, key_name in STEP_KEYS.items():
+        for key, group in rows_by_key(payload.get(section) or [], key_name).items():
+            where = f"{label}: {section}[{key_name}={key}]"
+            previous: Mapping | None = None
+            for row in group:
+                assert "through" in row, f"{where}: row has no `through` (the series is still one row per day): {dict(row)}"
+                first, last = date.fromisoformat(row["date"]), date.fromisoformat(row["through"])
+                assert first <= last, f"{where}: through {last} before date {first}"
+                assert range_start <= first and last <= range_end, f"{where}: step {first}..{last} outside the range {range_start}..{range_end}"
+                if previous is not None:
+                    previous_last = date.fromisoformat(previous["through"])
+                    assert first > previous_last, f"{where}: step {first}..{last} starts inside or before the previous one, which ends {previous_last}"
+                    if first == previous_last + timedelta(days=1):
+                        assert step_values(row) != step_values(previous), f"{where}: steps ending {previous_last} and starting {first} hold identical values: one step, not two"
+                previous = row
+
+
+def _expected_range(date_from: date | None, result: LotsAnalysisResponse, date_to: date) -> dict[str, str]:
+    """``{start, end}`` the contract gives: ``start = max(display_from, computed_from)``, the first day with data in the
+    window; ``end = date_to``."""
+    computed_from = result.calculation_metadata.computed_date_from
+    assert computed_from is not None, "precondition: the book has a first computed day"
+    return {"start": (computed_from if date_from is None else max(date_from, computed_from)).isoformat(), "end": date_to.isoformat()}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("scenario_name", "window", "scope"), PARITY_CASES)
+async def test_red_every_history_is_a_list_of_steps(session, monkeypatch, scenario_name, window, scope):
+    """RED until J5-5. A book read over a window in a scope, every analysis: the answer has its ``range`` and the seven
+    histories are steps (``assert_step_shape``); and the steps computed on the change days (A) expand to the same daily
+    rows as the steps computed on every day (B, ``lot_change_days`` answering every day): the canonical form's proof.
+    An empty window has no row in any section.
+
+    Today: ``range`` is missing from the answer — «range is None».
+    """
+    scenario = SCENARIOS[scenario_name]
+    book = await scenario.seed(session)
+    date_from, date_to = scenario.readings()[window]
+    user, broker_ids = _reader(book, scope)
+    selected = [book.rows[name].id for name in scenario.selected] or None
+    empty_window = date_from is not None and date_from > date_to
+
+    as_is, every_day = await _as_is_and_every_day(session, monkeypatch, user=user, asset=book.asset, broker_ids=broker_ids, date_from=date_from, date_to=date_to, selected_lot_ids=selected)
+
+    _assert_not_vacuous(as_is, empty_window=empty_window)
+    label = f"{scenario_name} / {window} / {scope}"
+    payload_a, payload_b = as_is.model_dump(mode="json"), every_day.model_dump(mode="json")
+    if empty_window:
+        return
+    assert_step_shape(payload_a, expected_range=_expected_range(date_from, as_is, date_to), label=label)
+    for section, key_name in STEP_KEYS.items():
+        expanded_a = expand_steps(payload_a.get(section) or [], key_name)
+        expanded_b = expand_steps(payload_b.get(section) or [], key_name)
+        assert expanded_a == expanded_b, f"{label}: {section}: the steps on the change days expand to {len(expanded_a)} daily rows, on every day to {len(expanded_b)}: first difference {_first_difference(expanded_a, expanded_b, section)}"
+        canonical = compress_days(expanded_a, key_name)
+        assert order_by_key(payload_a.get(section) or [], key_name) == canonical, f"{label}: {section}: the steps are not the maximal ones of their own expansion ({len(payload_a.get(section) or [])} rows, {len(canonical)} maximal steps)"
+
+
+# The checker itself, so that a red is red for the answer and never for the checker: pure cases, then the real books.
+
+_RANGE = {"start": "2024-01-01", "end": "2024-01-10"}
+
+
+def _price_step(first: str, last: str, price: str = "1.10", **extra: object) -> dict:
+    return {"date": first, "through": last, "market_price": price, "currency": "EUR", "estimated": False, **extra}
+
+
+def test_guard_the_step_checker_accepts_canonical_steps():
+    """GUARD. Steps with a gap between them, and touching steps whose prices ``1.10`` and ``1.1`` differ as text, are valid;
+    ``expand_steps`` repeats each on its days and ``compress_days`` gives the steps back."""
+    steps = [_price_step("2024-01-01", "2024-01-03"), _price_step("2024-01-04", "2024-01-05", "1.1"), _price_step("2024-01-08", "2024-01-10", "1.1")]
+    assert_step_shape({"range": _RANGE, "market_price_history": steps}, expected_range=_RANGE, label="canonical")
+    days = expand_steps(steps, None)
+    assert [row["date"] for row in days] == ["2024-01-01", "2024-01-02", "2024-01-03", "2024-01-04", "2024-01-05", "2024-01-08", "2024-01-09", "2024-01-10"]
+    assert all("through" not in row for row in days)
+    assert compress_days(days, None) == steps
+
+
+@pytest.mark.parametrize(
+    ("steps", "range_", "expected"),
+    [
+        pytest.param([_price_step("2024-01-01", "2024-01-03"), _price_step("2024-01-04", "2024-01-05")], _RANGE, "identical values", id="touching-and-equal"),
+        pytest.param([_price_step("2024-01-01", "2024-01-04"), _price_step("2024-01-04", "2024-01-05", "1.2")], _RANGE, "starts inside or before", id="overlapping"),
+        pytest.param([_price_step("2024-01-04", "2024-01-05"), _price_step("2024-01-01", "2024-01-02", "1.2")], _RANGE, "starts inside or before", id="out-of-order"),
+        pytest.param([_price_step("2023-12-31", "2024-01-03")], _RANGE, "outside the range", id="before-the-range"),
+        pytest.param([_price_step("2024-01-08", "2024-01-11")], _RANGE, "outside the range", id="after-the-range"),
+        pytest.param([_price_step("2024-01-05", "2024-01-04")], _RANGE, "before date", id="through-before-date"),
+        pytest.param([{"date": "2024-01-01", "market_price": "1.10"}], _RANGE, "no `through`", id="a-day-not-a-step"),
+        pytest.param([_price_step("2024-01-01", "2024-01-03")], {"start": "2024-01-02", "end": "2024-01-10"}, "range is", id="wrong-range"),
+    ],
+)
+def test_guard_the_step_checker_rejects_what_is_not_a_step_list(steps, range_, expected):
+    """GUARD. Each defect of the contract is caught, and named."""
+    with pytest.raises(AssertionError, match=expected):
+        assert_step_shape({"range": range_, "market_price_history": steps}, expected_range=_RANGE, label="mutant")
+
+
+def test_guard_a_key_is_checked_on_its_own_rows():
+    """GUARD. Two lots whose steps touch in time but not in key are not compared; one lot's two equal touching steps are."""
+    lot_1, lot_2 = {"lot_id": 1, "market_price": "1", "currency": "EUR", "estimated": False}, {"lot_id": 2, "market_price": "1", "currency": "EUR", "estimated": False}
+    fine = [{**lot_1, "date": "2024-01-01", "through": "2024-01-05"}, {**lot_2, "date": "2024-01-06", "through": "2024-01-07"}]
+    assert_step_shape({"range": _RANGE, "price_history": fine}, expected_range=_RANGE, label="two lots")
+    split = [{**lot_1, "date": "2024-01-01", "through": "2024-01-05"}, {**lot_1, "date": "2024-01-06", "through": "2024-01-07"}]
+    with pytest.raises(AssertionError, match="identical values"):
+        assert_step_shape({"range": _RANGE, "price_history": split}, expected_range=_RANGE, label="one lot")
+
+
+STEP_CHECK_CASES = [case for case in PARITY_CASES if case.values[1] != "empty"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("scenario_name", "window", "scope"), STEP_CHECK_CASES)
+async def test_guard_the_step_checker_accepts_the_real_books_as_steps(session, scenario_name, window, scope):
+    """GUARD (green today, and after J5-5). The answer of a book, its seven histories read in whichever form they come
+    (daily rows today, steps after) and compressed to maximal steps, is a valid step list inside the expected ``range``,
+    and expands back to the same daily rows: the checker and the expected range hold on the real books, so a red of
+    ``test_red_every_history_is_a_list_of_steps`` is red for the answer.
+    """
+    scenario = SCENARIOS[scenario_name]
+    book = await scenario.seed(session)
+    date_from, date_to = scenario.readings()[window]
+    user, broker_ids = _reader(book, scope)
+    selected = [book.rows[name].id for name in scenario.selected] or None
+
+    result = await _analysis(session, user=user, asset=book.asset, broker_ids=broker_ids, date_from=date_from, date_to=date_to, selected_lot_ids=selected)
+
+    payload = result.model_dump(mode="json")
+    for section, key_name in STEP_KEYS.items():
+        daily = as_daily_rows(payload.get(section) or [], key_name)
+        steps = compress_days(daily, key_name)
+        payload[section] = steps
+        assert expand_steps(steps, key_name) == list(daily), f"{scenario_name} / {window} / {scope}: {section} does not expand back to its daily rows"
+    expected_range = _expected_range(date_from, result, date_to)
+    assert_step_shape(payload, expected_range=expected_range, label=f"{scenario_name} / {window} / {scope}")
+
+
+# --------------------------------------------------------------------------- #
+# A boundary the candidate days could miss: a price that changes its representation on a day without a transaction
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.asyncio
+async def test_red_a_price_representation_change_is_a_step_boundary(session):
+    """RED until J5-5. Book ``representation`` over its whole life: the lot's mark reads ``110`` (estimated) until Sun 7
+    Apr 2024 and ``110.000000`` (a close, not estimated) from Mon 8 Apr, a day with no transaction and a price of the
+    same value. The price lines of the lot and of the asset have a step ending 7 Apr and another starting 8 Apr, and the
+    lot's value line a step starting 8 Apr: the day only the price's representation can name must stay a boundary after
+    the cure, however it chooses its candidate days.
+
+    Today: the rows carry no ``through`` — «row has no through».
+    """
+    book = await seed_representation(session)
+    lot_id = book.rows["buy"].id
+
+    result = await _analysis(session, user=book.users["owner"], asset=book.asset, broker_ids=None, date_from=None, date_to=REPRESENTATION_DATE_TO)
+
+    payload = result.model_dump(mode="json")
+    last_estimated, first_close = (REPRESENTATION_CLOSE_DAY - timedelta(days=1)).isoformat(), REPRESENTATION_CLOSE_DAY.isoformat()
+    for section, key_name in (("price_history", "lot_id"), ("market_price_history", None), ("value_history", "lot_id")):
+        rows = [row for row in payload[section] if key_name is None or row[key_name] == lot_id]
+        assert all("through" in row for row in rows), f"{section}: row has no `through` (the series is still one row per day)"
+        ending = [row for row in rows if row["through"] == last_estimated]
+        starting = [row for row in rows if row["date"] == first_close]
+        assert len(ending) == 1 and len(starting) == 1, f"{section}: {len(ending)} steps end {last_estimated}, {len(starting)} start {first_close}"
+        assert step_values(ending[0]) != step_values(starting[0]), f"{section}: the steps around {first_close} hold identical values"
+        if section != "value_history":
+            assert (ending[0]["market_price"], ending[0]["estimated"]) == ("110", True), f"{section}: {ending[0]}"
+            assert (starting[0]["market_price"], starting[0]["estimated"]) == ("110.000000", False), f"{section}: {starting[0]}"
+
+
+# --------------------------------------------------------------------------- #
+# The typo: a first transaction in year 1 costs steps, not days
+# --------------------------------------------------------------------------- #
+
+YEAR_ONE_BUY_DAY = date(1, 1, 3)
+YEAR_ONE_DATE_TO = date(2021, 2, 15)
+RESOLVE_BUDGET = 2_000  # the price series is asked at most this often in the whole analysis (today once per calendar day: 737 854)
+RESOLVE_ABORT = 5_000  # the spy stops the analysis here, so that today the red fails fast instead of walking 740 000 days
+STEP_ROWS_PER_SECTION = 40  # bounded by the true changes of the book (a BUY, four closes, a SELL), not by its 737 834 days
+PEAK_BYTES = 150 * 1024 * 1024
+WALL_SECONDS = 20
+
+
+async def seed_year_one(session: AsyncSession) -> Book:
+    """Book ``year-one``: EUR. BUY 10 at 100 on 3 Jan of year 1 (a typo), closes 101 (2 Mar 2020), 103 (1 Jun), 99 (1 Sep),
+    105 (1 Dec); SELL 4 at 105 on 15 Oct 2020. One lot, one broker."""
+    owner, brokers, asset = await _eur_book(session, "year_one")
+    a = brokers["A"]
+    add_prices(session, asset, {date(2020, 3, 2): "101", date(2020, 6, 1): "103", date(2020, 9, 1): "99", date(2020, 12, 1): "105"})
+    rows = await _add(
+        session,
+        buy=asset_row(a, asset, TransactionType.BUY, YEAR_ONE_BUY_DAY, "10", amount="-1000"),
+        sell=asset_row(a, asset, TransactionType.SELL, date(2020, 10, 15), "-4", amount="420"),
+    )
+    return Book(asset=asset, users={"owner": owner}, brokers=brokers, rows=rows)
+
+
+def _lower_the_floor(monkeypatch: pytest.MonkeyPatch, floor: date) -> list[str]:
+    """``EARLIEST_RANGE_START`` is ``floor`` in this process only: in the module that defines it and in every backend module
+    that imported it by value. The names of the modules patched are returned."""
+    patched = []
+    for name, module in list(sys.modules.items()):
+        if name.startswith("backend.app") and module is not None and "EARLIEST_RANGE_START" in vars(module):
+            monkeypatch.setattr(module, "EARLIEST_RANGE_START", floor)
+            patched.append(name)
+    return patched
+
+
+@pytest.mark.asyncio
+async def test_red_a_year_one_typo_costs_steps_not_days(session, monkeypatch):
+    """RED until J5-5. A lot bought on 3 Jan of year 1 and read over its whole life (``date_from`` None), every analysis,
+    with the product's floor lowered to 1 Jan of year 1 in this process only: the 737 834 days since the BUY are never
+    walked.
+    (a) every section has at most ``STEP_ROWS_PER_SECTION`` rows, and the lot's value steps and the price line cover every
+        day from the first to ``date_to`` (summed lengths, no day built);
+    (b) ``AssetPriceSeries.resolve`` is called at most ``RESOLVE_BUDGET`` times (a spy raises at ``RESOLVE_ABORT``);
+    (c) the peak of ``tracemalloc`` is under 150 MB;
+    (d) the answer comes in under 20 s (and no list of every day is built: (b) bounds the price loop, the peak the lists).
+
+    Today: the price loop asks the series once per calendar day — the spy raises at 5 000 calls.
+    """
+    book = await seed_year_one(session)
+    patched = _lower_the_floor(monkeypatch, date(1, 1, 1))
+    assert "backend.app.utils.datetime_utils" in patched and "backend.app.services.lots_analysis_service" in patched, f"precondition: the floor is lowered where it is defined and where the service reads it, {patched}"
+
+    resolved = Counter[str]()
+    original_resolve = AssetPriceSeries.resolve
+
+    def counted_resolve(self, query_date):
+        resolved["calls"] += 1
+        if resolved["calls"] > RESOLVE_ABORT:
+            raise AssertionError(f"AssetPriceSeries.resolve called more than {RESOLVE_ABORT} times: the price loop is still per day")
+        return original_resolve(self, query_date)
+
+    monkeypatch.setattr(AssetPriceSeries, "resolve", counted_resolve)
+
+    tracemalloc.start()
+    started = time.monotonic()
+    try:
+        result = await _analysis(session, user=book.users["owner"], asset=book.asset, broker_ids=None, date_from=None, date_to=YEAR_ONE_DATE_TO)
+        elapsed = time.monotonic() - started
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+
+    assert result.calculation_status != "FAILED", f"precondition: the year-one book is analysed, {result.calculation_status}"
+    assert resolved["calls"] <= RESOLVE_BUDGET, f"AssetPriceSeries.resolve called {resolved['calls']} times; the budget is {RESOLVE_BUDGET}"
+    payload = result.model_dump(mode="json")
+    assert payload.get("range") == {"start": YEAR_ONE_BUY_DAY.isoformat(), "end": YEAR_ONE_DATE_TO.isoformat()}, f"range: {payload.get('range')!r}"
+    for section in STEP_KEYS:
+        rows = payload.get(section) or []
+        assert 0 < len(rows) <= STEP_ROWS_PER_SECTION, f"{section}: {len(rows)} rows; at most {STEP_ROWS_PER_SECTION}, one per true change"
+    whole_life = (YEAR_ONE_DATE_TO - YEAR_ONE_BUY_DAY).days + 1
+    for section, selector in (("value_history", lambda row: row["lot_id"] == book.rows["buy"].id), ("market_price_history", lambda row: True)):
+        covered = sum((date.fromisoformat(row["through"]) - date.fromisoformat(row["date"])).days + 1 for row in payload[section] if selector(row))
+        assert covered == whole_life, f"{section}: the steps cover {covered} days, the life since the BUY is {whole_life}"
+    assert peak < PEAK_BYTES, f"tracemalloc peak {peak / 1024 / 1024:.0f} MB; the budget is {PEAK_BYTES // 1024 // 1024} MB"
+    assert elapsed < WALL_SECONDS, f"the answer took {elapsed:.1f} s; the budget is {WALL_SECONDS} s"

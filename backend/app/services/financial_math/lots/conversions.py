@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import ChainMap, defaultdict
 from dataclasses import dataclass
 from datetime import date as date_type
+from datetime import timedelta
 from decimal import Decimal
 from typing import Sequence
 
@@ -121,6 +122,34 @@ class FxRateResolver:
             self._missing[f"{currency}/{self.target_currency}"].add(as_of_date)
             return None
         return amount * rate
+
+    def convert_through(self, amount: Decimal | None, currency: str | None, first: date_type, last: date_type) -> Decimal | None:
+        """``amount`` at the rate of ``first``, for a stretch ``first``..``last`` over which the rate does not move.
+
+        The market price is read only on the days a rate can change (``rate_change_days``); a day between two of them
+        has the rate of the one before. When there is no rate, every day of the stretch is a gap of the pair, as when
+        each of them was asked one by one.
+        """
+        converted = self.convert(amount, currency, first)
+        if converted is None and amount is not None and currency and currency != self.target_currency and last > first:
+            self._missing[f"{currency}/{self.target_currency}"].update(first + timedelta(days=offset) for offset in range(1, (last - first).days + 1))
+        return converted
+
+    def rate_change_days(self) -> tuple[date_type, ...]:
+        """The days on which the rate of a currency valued over a window (``need_days``) can differ from the day before,
+        ascending: the steps of its rate and the bounds of its asked windows, whatever the currency. Every day the rate
+        moves is here; a day here need not be a change. The days a market price converted into the target can change on
+        (``change_days.price_candidate_days``)."""
+        days: set[date_type] = set()
+        for currency in self._windows:
+            for rates in self._rates.maps:
+                if isinstance(rates, AskedDayRates):
+                    days.update(rates.reading_change_days(currency, self.target_currency))
+                else:
+                    for rate_key in rates:
+                        if rate_key[0] == currency:
+                            days.update((rate_key[1], rate_key[1] + timedelta(days=1)))
+        return tuple(sorted(days))
 
     def missing_pairs(self) -> list[WACMissingPairInfo]:
         """Every conversion asked for and not made, one entry per pair, as the data-quality report lists them."""

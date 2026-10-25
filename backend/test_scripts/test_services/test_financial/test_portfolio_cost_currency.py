@@ -83,6 +83,7 @@ from backend.app.schemas.wac import WACMissingPairInfo
 from backend.app.services.financial_math import average_cost
 from backend.app.services.lots_analysis_service import LotsAnalysisService
 from backend.app.services.portfolio_service import PortfolioService, compute_wac_iterative
+from backend.test_scripts.test_services._lots_steps import daily_points
 from backend.test_scripts.test_utils import print_section, print_success
 
 REPORT = "EUR"
@@ -377,10 +378,11 @@ async def _lots_wac_lines(session: AsyncSession, book: Book, *, date_to: date) -
 
 
 def _wac_lines(response: LotsAnalysisResponse, book: Book) -> dict[str, dict[date, tuple[Decimal, Decimal]]]:
-    """Both lines as {date: (WAC, pool quantity)}: the book's broker line and the cumulative one."""
+    """Both lines as {date: (WAC, pool quantity)}: the book's broker line and the cumulative one, one entry a day (J5-5: the
+    steps repeated over their days — these tests are about the cost of a day, not about how the days are grouped)."""
     return {
-        "broker": {point.date: (point.wac, point.pool_qty) for point in response.broker_wac_history or [] if point.broker_id == book.broker.id},
-        "cumulative": {point.date: (point.wac, point.pool_qty) for point in response.cumulative_wac_history or []},
+        "broker": {point.date: (point.wac, point.pool_qty) for point in daily_points(response.broker_wac_history) if point.broker_id == book.broker.id},
+        "cumulative": {point.date: (point.wac, point.pool_qty) for point in daily_points(response.cumulative_wac_history)},
     }
 
 
@@ -873,8 +875,8 @@ class TestAverageCostInvariants:
             requested_analyses=[LotAnalysisType.BROKER_WAC_HISTORY, LotAnalysisType.CUMULATIVE_WAC_HISTORY],
         )
 
-        broker_line = {point.date: (point.wac, point.pool_qty) for point in response.broker_wac_history or [] if point.broker_id == book.broker.id}
-        cumulative_line = {point.date: (point.wac, point.pool_qty) for point in response.cumulative_wac_history or []}
+        broker_line = {point.date: (point.wac, point.pool_qty) for point in daily_points(response.broker_wac_history) if point.broker_id == book.broker.id}
+        cumulative_line = {point.date: (point.wac, point.pool_qty) for point in daily_points(response.cumulative_wac_history)}
         expected = {
             SINGLE_BUY_1: (Decimal("100"), Decimal("10")),
             SINGLE_BUY_2: (Decimal("150"), Decimal("20")),

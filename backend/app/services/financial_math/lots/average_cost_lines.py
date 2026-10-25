@@ -26,7 +26,7 @@ def build_broker_wac_history(
         line = lines.get(broker_id)
         if line is None:
             continue
-        points.extend(BrokerWACHistoryPoint(date=point_date, broker_id=broker_id, wac=wac_amount, pool_qty=pool_qty) for point_date, wac_amount, pool_qty in average_cost_points(line, history_dates))
+        points.extend(BrokerWACHistoryPoint(date=point_date, through=point_date, broker_id=broker_id, wac=wac_amount, pool_qty=pool_qty) for point_date, wac_amount, pool_qty in average_cost_points(line, history_dates))
     return points
 
 
@@ -37,7 +37,7 @@ def build_cumulative_wac_history(
     line = lines.get(ALL_BROKERS)
     if line is None:
         return []
-    return [CumulativeWACHistoryPoint(date=point_date, wac=wac_amount, pool_qty=pool_qty) for point_date, wac_amount, pool_qty in average_cost_points(line, history_dates)]
+    return [CumulativeWACHistoryPoint(date=point_date, through=point_date, wac=wac_amount, pool_qty=pool_qty) for point_date, wac_amount, pool_qty in average_cost_points(line, history_dates)]
 
 
 def average_cost_points(line: AverageCost, history_dates: Sequence[date_type]) -> list[tuple[date_type, Decimal, Decimal]]:

@@ -37,6 +37,7 @@ from backend.app.db.models import TransactionType
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.portfolio import LotAnalysisType
 from backend.app.services.lots_analysis_service import get_lots_analysis
+from backend.test_scripts.test_services._lots_steps import daily_points
 from backend.test_scripts.test_services._scope_boundary_books import add_prices, asset_row, new_asset, new_broker, new_user
 
 ADJUSTMENT_DAY = date(2025, 2, 3)
@@ -81,7 +82,7 @@ async def test_the_performance_history_starts_on_the_adjustment_day_and_twrr_mee
 
     # Precondition, green today and after: the analysis is not FAILED, so its performance history is given (J-12).
     assert result.performance_history is not None, (result.calculation_status, result.data_quality)
-    points = {point.date: point for point in result.performance_history}
+    points = {point.date: point for point in daily_points(result.performance_history)}
     first_point = min((day for day, point in points.items() if point.roi is not None), default=None)
     last = points[DATE_TO]
     observed = {"first day with a point": first_point, "last day (ROI, TWRR)": (last.roi, last.twrr)}
