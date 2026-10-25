@@ -99,7 +99,11 @@
       "entryModeAmount": "Montant total",
       "entryModeUnitPrice": "Prix unitaire",
       "unitPriceCalculated": "calculé",
-      "unitPriceHint": "Le montant est calculé à partir du prix unitaire et de la quantité ; vous pouvez toujours le modifier."
+      "unitPriceHint": "Le montant est calculé à partir du prix unitaire et de la quantité ; vous pouvez toujours le modifier.",
+      "preFloorDate": {
+        "message": "La date {date} est antérieure au 1er janvier 1900. Vérifiez que l'année est correcte : c'est souvent une faute de frappe.",
+        "confirm": "Oui, la date est correcte"
+      }
     },
     "bulk": {
       "resetRow": "Réinitialiser la ligne",
@@ -146,6 +150,13 @@
         "ratioHint": "Saisissez 3 pour un split 3 pour 1, 0.25 pour un split inversé 1 pour 4. Les actions détenues sont multipliées par ce nombre.",
         "ratio": "Ratio {ratio} (d'après vos {held} actions détenues)",
         "rounding": "Le courtier a arrondi la quantité : avec le ratio {ratio}, cette ligne diffère de {delta} actions de votre détention multipliée par le ratio. Les Lots et le Tableau de bord peuvent montrer un petit écart."
+      },
+      "preFloorDate": {
+        "message": "{n} lignes ont une date antérieure au 1er janvier 1900. Vérifiez l'année : c'est souvent une faute de frappe.",
+        "row": "Ligne {row} : {date}",
+        "confirmTitle": "Enregistrer des dates antérieures à 1900 ?",
+        "confirmMessage": "{n} lignes ont une date antérieure au 1er janvier 1900. Les enregistrer telles quelles ?",
+        "confirmProceed": "Oui, les dates sont correctes"
       }
     },
     "commit": {

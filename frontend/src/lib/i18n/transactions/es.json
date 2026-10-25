@@ -99,7 +99,11 @@
       "entryModeAmount": "Importe total",
       "entryModeUnitPrice": "Precio unitario",
       "unitPriceCalculated": "calculado",
-      "unitPriceHint": "El importe se calcula a partir del precio unitario y la cantidad; aún puedes editarlo."
+      "unitPriceHint": "El importe se calcula a partir del precio unitario y la cantidad; aún puedes editarlo.",
+      "preFloorDate": {
+        "message": "La fecha {date} es anterior al 1 de enero de 1900. Comprueba que el año sea correcto: suele ser un error de escritura.",
+        "confirm": "Sí, la fecha es correcta"
+      }
     },
     "bulk": {
       "resetRow": "Restablecer fila",
@@ -146,6 +150,13 @@
         "ratioHint": "Escribe 3 para un split 3 por 1, 0.25 para un split inverso 1 por 4. Las acciones que tienes se multiplican por este número.",
         "ratio": "Proporción {ratio} (según tus {held} acciones)",
         "rounding": "El bróker redondeó la cantidad: con la proporción {ratio} esta fila difiere en {delta} acciones de tu posición por la proporción. Lotes y Panel pueden mostrar una pequeña diferencia."
+      },
+      "preFloorDate": {
+        "message": "{n} filas tienen una fecha anterior al 1 de enero de 1900. Comprueba el año: suele ser un error de escritura.",
+        "row": "Fila {row}: {date}",
+        "confirmTitle": "¿Guardar fechas anteriores a 1900?",
+        "confirmMessage": "{n} filas tienen una fecha anterior al 1 de enero de 1900. ¿Guardarlas tal cual?",
+        "confirmProceed": "Sí, las fechas son correctas"
       }
     },
     "commit": {

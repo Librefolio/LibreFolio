@@ -1,38 +1,42 @@
 // @vitest-environment jsdom
 /**
- * TransactionFormModal — «Total amount / Unit price» badge of the single BUY / SELL form (#47), component test (Vitest + jsdom).
+ * TransactionFormModal — «Total amount / Unit price» of the single BUY / SELL form (#47), component test (Vitest + jsdom).
+ *
+ * The calculation is the form's own (W5-9, `txTradeAmount.ts`): synchronous, exact decimal arithmetic, no network. So
+ * nothing is mocked for it: the asset comes from the real asset store seeded with `mergeAssets` (with its
+ * `quote_base_quantity`, 1 or 100, or without one), and the expectations below are sums a person can check on paper.
+ * The arithmetic itself (ties, limits, parity with the backend it replaced) is proved in `txTradeAmount.test.ts`.
  *
  * The contract:
  *   - `data-testid="tx-form-entry-mode"` is a badge of two buttons, `…-amount` and `…-unit-price`, the state in `aria-pressed`
- *     (amount pressed by default). It exists ONLY for a single BUY or SELL (never for a DEPOSIT, an FX or a transfer pair,
- *     nor in view mode);
+ *     (amount pressed by default). It exists ONLY for a single BUY or SELL being edited (never for a DEPOSIT, an FX or a
+ *     transfer pair, nor in view mode);
  *   - amount mode: a read-only `tx-form-unit-price-computed` carries the calculated price in `data-value` (empty while
  *     nothing can be calculated); the amount is the field the user types;
  *   - unit-price mode: an editable `tx-form-unit-price` input is shown and the cash amount (`tx-form-cash-amount`, still
  *     editable) receives the calculated amount;
- *   - the driver is the value written last; the other value comes from the BACKEND (`convertTradeAmount`, mocked here as a
- *     lookup table keyed by the request: the test never calculates). The request is {asset_id, quantity, mode, value}.
- *     Typing an amount hands the driver (and the badge) back to amount; a quantity or asset edit keeps it.
+ *   - the driver is the value written last; the other value is calculated from it. Typing an amount hands the driver (and
+ *     the badge) back to amount; a quantity or asset edit keeps it;
+ *   - an asset the store does not know (yet) calculates nothing; one whose row carries no quote base counts as base 1;
+ *   - view mode of a saved BUY / SELL shows both the amount (cash cell) and the unit price, read-only, with no badge;
+ *   - the payload carries the amount only, never a unit price.
  *
- * What this file leaves to the E2E (transactions-modals.spec.ts):
- *   - a real backend answer (here every answer is a table entry) and the comma-decimal typing (`83,40`);
- *   - that no `/transactions/commit` goes out (this harness mocks the commit api, so «nothing was committed» says nothing).
+ * What this file leaves to the E2E (transactions-modals.spec.ts): the comma-decimal typing (`83,40`) on a real page and
+ * that no `/transactions/commit` goes out (this harness mocks the commit api, so «nothing was committed» says nothing).
  *
- * Absences are proved with a positive control, not with the clock: a request that must NOT have gone out is shown by the
- * request that must, arriving later with every earlier call accounted for. The asset is picked through the real select, from
- * the real asset store seeded with `mergeAssets`; the broker comes from `defaultBrokerId`.
+ * Absences are proved with a positive control, not with the clock: a price that must NOT be there is shown to be missing
+ * for the reason named (the asset is unknown), then the reason is removed and the price appears. The asset is picked
+ * through the real select; the broker comes from `defaultBrokerId`.
  *
  * Asserted: data-testid / data-value / aria-pressed only, never a translated label.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import {tick} from 'svelte';
 import {writable} from 'svelte/store';
 import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import {zodiosApi} from '$lib/api';
 import {mergeAssets, resetAssetStore} from '$lib/stores/reference/assetStore';
 import {schemas} from '$lib/api/generated';
 import {commitTransactions, validateTransactions} from '$lib/features/transactions/txCommitApi';
-import {convertTradeAmount} from '$lib/features/transactions/form/txTradeAmountApi';
 import {ensureTypesLoaded} from '$lib/features/transactions/transactionTypeStore';
 import {guideAnchors} from '$lib/features/onboarding/guideAnchors.svelte';
 import type {ContextualOnboardingFlow, GuideStepId, GuidedOnboardingFlow} from '$lib/features/onboarding/onboardingGuideCatalog';
@@ -83,24 +87,6 @@ vi.mock('$lib/features/transactions/txCommitApi', () => ({
     commitTransactions: vi.fn(async () => ({committed: true, results: [], issues: []})),
     validateTransactions: vi.fn(async () => ({committed: true, issues: [], rawResponse: {wac_results: []}})),
 }));
-// #47: the backend's calculator is a lookup table keyed by the request. The test never does the arithmetic: an answer
-// is written next to the request that earns it, and a request nobody wrote an answer for gets `null` (a refusal).
-const {answers, answerKey, answer} = vi.hoisted(() => {
-    type Request = {asset_id: number; quantity: string; mode: string; value: string};
-    const answers = new Map<string, string>();
-    const answerKey = (request: Request) => `${request.asset_id}|${request.mode}|${request.quantity}|${request.value}`;
-    const answer = (assetId: number, mode: 'amount_to_price' | 'price_to_amount', quantity: string, value: string, result: string) => {
-        answers.set(answerKey({asset_id: assetId, mode, quantity, value}), result);
-    };
-    return {answers, answerKey, answer};
-});
-vi.mock('$lib/features/transactions/form/txTradeAmountApi', () => ({
-    convertTradeAmount: vi.fn(async (request: {asset_id: number; quantity: string; mode: string; value: string}) => {
-        const result = answers.get(answerKey(request));
-        return result === undefined ? null : {result, quote_base_quantity: 1};
-    }),
-}));
-
 /**
  * Keep the component at the public onboardingGuide boundary while owning the
  * queue and active state in this file. The real controller's persistence and
@@ -225,9 +211,12 @@ const TYPES_RESPONSE = schemas.TXTypesResponse.parse({
 import TransactionFormModal from './TransactionFormModal.svelte';
 
 const ASSET = 42;
-const OTHER_ASSET = 43;
-/** Past the debounce the form may put before a request, short of the test's own budget. */
-const WAIT = {timeout: 4_000};
+/** A bond: the quote refers to 100 units. */
+const BOND = 44;
+/** An asset whose store row carries no quote base. */
+const NO_BASE = 43;
+/** An asset the store does not hold (yet). */
+const UNKNOWN_ASSET = 999;
 
 /** A create form on the shared broker; Apply pushes the draft (no commit on the wire). */
 function mount(props: Record<string, unknown> = {}) {
@@ -259,8 +248,6 @@ function txRow(overrides: Record<string, unknown> = {}) {
 /** A single BUY or SELL seeded with its asset and broker, quantity and cash still blank. */
 const seededSingle = (type: 'BUY' | 'SELL') => ({items: [txRow({type})]});
 
-type TradeRequest = {asset_id: number; quantity: string; mode: string; value: string};
-
 // ---------------------------------------------------------------------------------------------------------------------
 // What this file observes and does
 // ---------------------------------------------------------------------------------------------------------------------
@@ -273,14 +260,6 @@ const unitPriceInput = (): HTMLInputElement => screen.getByTestId('tx-form-unit-
 const cashAmount = (): HTMLInputElement => screen.getByTestId('tx-form-cash-amount') as HTMLInputElement;
 /** The calculated price shown in amount mode: `''` while the attribute is empty or absent. */
 const computedValue = (): string => computedPrice().getAttribute('data-value') ?? '';
-
-/** Every request the form sent to the backend, in order. */
-const requests = (): TradeRequest[] => vi.mocked(convertTradeAmount).mock.calls.map(([request]) => request as unknown as TradeRequest);
-
-/** Wait for the request `{asset_id, quantity, mode, value}` (exactly this shape) to have gone out. */
-function asked(mode: 'amount_to_price' | 'price_to_amount', quantity: string, value: string, assetId = ASSET): Promise<void> {
-    return waitFor(() => expect(requests(), `the form asks ${mode} for quantity ${quantity}, value ${value}`).toContainEqual({asset_id: assetId, quantity, mode, value}), WAIT);
-}
 
 function expectPressed(which: 'amount' | 'unit-price'): void {
     expect(amountButton(), 'the amount button').toHaveAttribute('aria-pressed', which === 'amount' ? 'true' : 'false');
@@ -327,25 +306,28 @@ function resetGuideState() {
     guideState.queuedGuides = [];
 }
 
-/** Quantity 12 and an amount of 1000.8 in amount mode, the calculated price on screen. Calls so far are forgotten. */
+/** The calculated price in amount mode, once the form has caught up with what was typed. */
+async function expectComputed(value: string): Promise<void> {
+    await waitFor(() => expect(computedPrice()).toHaveAttribute('data-value', value));
+}
+
+/** Quantity 12 and an amount of 1000.8 in amount mode on the seeded BUY: the calculated price (83.4) on screen. */
 async function reachAmountDriverWithPrice(): Promise<void> {
     await screen.findByTestId('tx-form-quantity');
     await typeQuantity('12');
     await typeAmount('1000.8');
-    await waitFor(() => expect(computedValue()).toBe('83.4'), WAIT);
+    await expectComputed('83.4');
 }
 
-/** From a blank BUY: asset, quantity 12, the badge on Unit price, a price of 83.4: the amount calculated, the price the driver. Calls so far are forgotten. */
-async function reachUnitPriceDriver(): Promise<void> {
+/** From a blank BUY: asset, quantity 12, the badge on Unit price, a price of 83.4: the amount calculated, the price the driver. */
+async function reachUnitPriceDriver(assetId = ASSET): Promise<void> {
     await screen.findByTestId('tx-form-quantity');
-    await pickAsset(ASSET);
+    await pickAsset(assetId);
     await typeQuantity('12');
     await fireEvent.click(unitPriceButton());
     await screen.findByTestId('tx-form-unit-price');
     await typeUnitPrice('83.4');
-    await asked('price_to_amount', '12', '83.4');
-    await waitFor(() => expect(cashAmount()).toHaveValue('1000.8'), WAIT);
-    vi.mocked(convertTradeAmount).mockClear();
+    await waitFor(() => expect(cashAmount()).toHaveValue('1000.8'));
 }
 
 describe('TransactionFormModal — «Total amount / Unit price» (#47)', () => {
@@ -356,17 +338,11 @@ describe('TransactionFormModal — «Total amount / Unit price» (#47)', () => {
         vi.mocked(zodiosApi.get_transaction_types_api_v1_transactions_types_get).mockResolvedValue(TYPES_RESPONSE);
         resetAssetStore();
         mergeAssets([
-            {id: ASSET, display_name: 'Entry mode asset A', currency: 'EUR', active: true},
-            {id: OTHER_ASSET, display_name: 'Entry mode asset B', currency: 'EUR', active: true},
+            {id: ASSET, display_name: 'Entry mode asset A', currency: 'EUR', quote_base_quantity: 1, active: true},
+            {id: BOND, display_name: 'Entry mode bond (base 100)', currency: 'EUR', quote_base_quantity: 100, active: true},
+            // A row of an older payload: no quote base at all.
+            {id: NO_BASE, display_name: 'Entry mode asset without base', currency: 'EUR', active: true},
         ]);
-        // What the backend would answer, written next to the request that earns it (no arithmetic here).
-        answers.clear();
-        answer(ASSET, 'amount_to_price', '12', '1000.8', '83.4');
-        answer(ASSET, 'price_to_amount', '12', '83.4', '1000.8');
-        answer(ASSET, 'amount_to_price', '12', '1000.9', '83.4083333333');
-        answer(ASSET, 'price_to_amount', '10', '83.4', '834');
-        answer(ASSET, 'amount_to_price', '10', '1000.8', '100.08');
-        answer(OTHER_ASSET, 'price_to_amount', '12', '83.4', '1200');
         await setupI18n();
         await ensureTypesLoaded();
     });
@@ -424,7 +400,7 @@ describe('TransactionFormModal — «Total amount / Unit price» (#47)', () => {
             await waitFor(() => expect(entryBadge()).not.toBeNull());
         });
 
-        it('an FX pair has no badge', async () => {
+        it('an FX pair has no badge and no unit price', async () => {
             mount();
             await chooseDualType('FX_CONVERSION');
             expect(entryBadge(), 'an FX pair has no badge').toBeNull();
@@ -432,29 +408,29 @@ describe('TransactionFormModal — «Total amount / Unit price» (#47)', () => {
             expect(screen.queryByTestId('tx-form-unit-price')).toBeNull();
         });
 
-        it('a transfer pair has no badge', async () => {
+        it('a transfer pair has no badge and no unit price', async () => {
             mount();
             await chooseDualType('TRANSFER');
             expect(entryBadge(), 'a transfer pair has no badge').toBeNull();
             expect(screen.queryByTestId('tx-form-unit-price-computed')).toBeNull();
+            expect(screen.queryByTestId('tx-form-unit-price')).toBeNull();
         });
 
-        it('a BUY in view (readonly) mode has no badge', async () => {
-            mount({mode: 'view', items: [txRow({type: 'BUY', quantity: '12', cash: {code: 'EUR', amount: '-1000.8'}})]});
-            // The readonly form is on screen (its quantity is there, disabled) before the absence is asserted.
-            expect(await screen.findByTestId('tx-form-quantity')).toBeDisabled();
+        it('a saved BUY opened for editing has the badge, and its price is calculated at once from the amount it holds', async () => {
+            mount({mode: 'edit', items: [txRow({type: 'BUY', quantity: '12', cash: {code: 'EUR', amount: '-1000.8'}})]});
+            await screen.findByTestId('tx-form-quantity');
 
-            expect(entryBadge(), 'a readonly form has no badge').toBeNull();
-            expect(screen.queryByTestId('tx-form-unit-price-computed')).toBeNull();
-            expect(screen.queryByTestId('tx-form-unit-price')).toBeNull();
+            expect(entryBadge()).not.toBeNull();
+            expectPressed('amount');
+            await expectComputed('83.4');
         });
     });
 
     // -----------------------------------------------------------------------------------------------------------------
     // (b) amount mode
     // -----------------------------------------------------------------------------------------------------------------
-    describe('(b) amount mode: the backend calculates the unit price', () => {
-        it.each(['BUY', 'SELL'] as const)('a %s with quantity 12 and amount 1000.8 asks amount_to_price and shows the answer in data-value', async (type) => {
+    describe('(b) amount mode: the form calculates the unit price', () => {
+        it.each(['BUY', 'SELL'] as const)('a %s with quantity 12 and amount 1000.8 shows 83.4 in data-value', async (type) => {
             mount(seededSingle(type));
             await screen.findByTestId('tx-form-quantity');
             expect(computedValue(), 'premise: nothing can be calculated yet').toBe('');
@@ -462,30 +438,66 @@ describe('TransactionFormModal — «Total amount / Unit price» (#47)', () => {
             await typeQuantity('12');
             await typeAmount('1000.8');
 
-            await asked('amount_to_price', '12', '1000.8');
-            await waitFor(() => expect(computedPrice()).toHaveAttribute('data-value', '83.4'), WAIT);
+            await expectComputed('83.4');
             expect(cashAmount(), 'the amount stays as typed and editable').toHaveValue('1000.8');
             expect(cashAmount()).toBeEnabled();
             expectPressed('amount');
         });
 
-        it('the request carries the asset the user picked from the real select', async () => {
+        it('the asset the user picked from the real select decides the base: base 1 against base 100', async () => {
             mount();
             await screen.findByTestId('tx-form-quantity');
+            await typeQuantity('1000');
+            await typeAmount('985');
+
             await pickAsset(ASSET);
+            await expectComputed('0.985');
+
+            await pickAsset(BOND);
+            await expectComputed('98.5');
+        });
+
+        it('the price keeps up to 12 decimals: 1000.9 over 12 units', async () => {
+            mount(seededSingle('BUY'));
+            await screen.findByTestId('tx-form-quantity');
+            await typeQuantity('12');
+            await typeAmount('1000.9');
+            await expectComputed('83.408333333333');
+        });
+
+        it('a tie rounds half-even, end to end: 1 over 8192 units ends on …312|5, so it stays on 2', async () => {
+            mount(seededSingle('BUY'));
+            await screen.findByTestId('tx-form-quantity');
+            await typeQuantity('8192');
+            await typeAmount('1');
+            await expectComputed('0.000122070312');
+
+            await typeAmount('3'); // …937|5: the odd 7 goes up
+            await expectComputed('0.000366210938');
+        });
+
+        it('an integer price carries no decimal point, and nothing trails', async () => {
+            mount(seededSingle('BUY'));
+            await screen.findByTestId('tx-form-quantity');
+            await typeQuantity('10');
+            await typeAmount('1000');
+            await expectComputed('100');
+        });
+
+        it('an asset whose store row has no quote base counts as base 1', async () => {
+            mount({items: [txRow({asset_id: NO_BASE})]});
+            await screen.findByTestId('tx-form-quantity');
             await typeQuantity('12');
             await typeAmount('1000.8');
-
-            await asked('amount_to_price', '12', '1000.8', ASSET);
-            await waitFor(() => expect(computedValue()).toBe('83.4'), WAIT);
+            await expectComputed('83.4');
         });
     });
 
     // -----------------------------------------------------------------------------------------------------------------
     // (c) unit-price mode
     // -----------------------------------------------------------------------------------------------------------------
-    describe('(c) unit-price mode: the backend calculates the amount', () => {
-        it('switching to Unit price shows the editable price input; typing 83.4 with quantity 12 asks price_to_amount and fills the amount', async () => {
+    describe('(c) unit-price mode: the form calculates the amount', () => {
+        it('switching to Unit price shows the editable price input; typing 83.4 with quantity 12 fills the amount with 1000.8', async () => {
             mount();
             await screen.findByTestId('tx-form-quantity');
             await pickAsset(ASSET);
@@ -499,14 +511,39 @@ describe('TransactionFormModal — «Total amount / Unit price» (#47)', () => {
             expect(screen.queryByTestId('tx-form-unit-price-computed'), 'unit-price mode has no calculated-price element').toBeNull();
 
             await typeUnitPrice('83.4');
-            await asked('price_to_amount', '12', '83.4');
-            await waitFor(() => expect(cashAmount()).toHaveValue('1000.8'), WAIT);
+            await waitFor(() => expect(cashAmount()).toHaveValue('1000.8'));
             expect(unitPriceInput(), 'the price stays as typed').toHaveValue('83.4');
             expect(cashAmount(), 'the calculated amount is still editable').toBeEnabled();
             expect(cashAmount()).not.toHaveAttribute('readonly');
         });
 
-        it('on Unit price, a zero price asks nothing: the first request is the one for the price that makes it calculable', async () => {
+        it('a bond (base 100): 1000 units at 98.5 are 985, not 98500', async () => {
+            mount();
+            await screen.findByTestId('tx-form-quantity');
+            await pickAsset(BOND);
+            await typeQuantity('1000');
+            await fireEvent.click(unitPriceButton());
+            await screen.findByTestId('tx-form-unit-price');
+
+            await typeUnitPrice('98.5');
+            await waitFor(() => expect(cashAmount()).toHaveValue('985'));
+        });
+
+        it('the amount is rounded half-even to its 6 decimals: a price of 0.0000025 for one unit is 0.000002, 0.0000035 is 0.000004', async () => {
+            mount();
+            await screen.findByTestId('tx-form-quantity');
+            await pickAsset(ASSET);
+            await typeQuantity('1');
+            await fireEvent.click(unitPriceButton());
+            await screen.findByTestId('tx-form-unit-price');
+
+            await typeUnitPrice('0.0000025');
+            await waitFor(() => expect(cashAmount()).toHaveValue('0.000002'));
+            await typeUnitPrice('0.0000035');
+            await waitFor(() => expect(cashAmount()).toHaveValue('0.000004'));
+        });
+
+        it('a zero price calculates nothing; the next price that makes it calculable fills the amount', async () => {
             mount();
             await screen.findByTestId('tx-form-quantity');
             await pickAsset(ASSET);
@@ -515,12 +552,9 @@ describe('TransactionFormModal — «Total amount / Unit price» (#47)', () => {
             await screen.findByTestId('tx-form-unit-price');
 
             await typeUnitPrice('0');
+            expect(cashAmount(), 'a zero price gives no amount').toHaveValue('');
             await typeUnitPrice('83.4');
-            await asked('price_to_amount', '12', '83.4');
-            expect(
-                requests().every((request) => request.mode === 'price_to_amount' && request.value === '83.4'),
-                `nothing was asked for the blank amount or the zero price, only for the price: ${JSON.stringify(requests())}`,
-            ).toBe(true);
+            await waitFor(() => expect(cashAmount()).toHaveValue('1000.8'));
         });
     });
 
@@ -528,20 +562,17 @@ describe('TransactionFormModal — «Total amount / Unit price» (#47)', () => {
     // (d) the amount edit gives the driver back
     // -----------------------------------------------------------------------------------------------------------------
     describe('(d) editing the amount after a unit price hands the driver back to the amount', () => {
-        it('the price follows through amount_to_price, the badge is back on amount, and no price_to_amount goes out for that edit', async () => {
+        it('the price follows the new amount, the badge is back on amount, and the amount is what the user typed', async () => {
             mount();
             await reachUnitPriceDriver();
+            expectPressed('unit-price');
 
             await typeAmount('1000.9');
 
-            await asked('amount_to_price', '12', '1000.9');
-            await waitFor(() => expect(computedPrice()).toHaveAttribute('data-value', '83.4083333333'), WAIT);
             expectPressed('amount');
+            await expectComputed('83.408333333333');
             expect(cashAmount(), 'the amount is what the user typed').toHaveValue('1000.9');
-            expect(
-                requests().filter((request) => request.mode === 'price_to_amount'),
-                'the edit of the amount asked no price_to_amount',
-            ).toEqual([]);
+            expect(screen.queryByTestId('tx-form-unit-price'), 'the price input is gone').toBeNull();
         });
     });
 
@@ -549,175 +580,207 @@ describe('TransactionFormModal — «Total amount / Unit price» (#47)', () => {
     // (e) a quantity or asset edit keeps the driver
     // -----------------------------------------------------------------------------------------------------------------
     describe('(e) a quantity or asset edit keeps the driver and recalculates the other value', () => {
-        it('driver unit price: a new quantity asks price_to_amount again, the amount follows, the price is kept', async () => {
+        it('driver unit price: a new quantity recalculates the amount, the price is kept', async () => {
             mount();
             await reachUnitPriceDriver();
 
             await typeQuantity('10');
 
-            await asked('price_to_amount', '10', '83.4');
-            await waitFor(() => expect(cashAmount()).toHaveValue('834'), WAIT);
+            await waitFor(() => expect(cashAmount()).toHaveValue('834'));
             expectPressed('unit-price');
             expect(unitPriceInput(), 'the price the user wrote is untouched').toHaveValue('83.4');
-            expect(
-                requests().filter((request) => request.mode === 'amount_to_price'),
-                'a quantity edit asked no amount_to_price while the unit price drives',
-            ).toEqual([]);
         });
 
-        it('driver amount: a new quantity asks amount_to_price again, the price follows, the amount is kept', async () => {
+        it('driver amount: a new quantity recalculates the price, the amount is kept', async () => {
             mount(seededSingle('BUY'));
             await reachAmountDriverWithPrice();
-            vi.mocked(convertTradeAmount).mockClear();
 
             await typeQuantity('10');
 
-            await asked('amount_to_price', '10', '1000.8');
-            await waitFor(() => expect(computedPrice()).toHaveAttribute('data-value', '100.08'), WAIT);
+            await expectComputed('100.08');
             expect(cashAmount(), 'the amount the user wrote is untouched').toHaveValue('1000.8');
-            expect(
-                requests().filter((request) => request.mode === 'price_to_amount'),
-                'a quantity edit asked no price_to_amount while the amount drives',
-            ).toEqual([]);
+            expectPressed('amount');
         });
 
-        it('driver unit price: picking another asset asks price_to_amount for the new asset, with the same price', async () => {
+        it('driver unit price: picking the bond keeps the price and recalculates the amount on base 100', async () => {
             mount();
-            await reachUnitPriceDriver();
+            await reachUnitPriceDriver(ASSET);
 
-            await pickAsset(OTHER_ASSET);
+            await pickAsset(BOND);
 
-            await asked('price_to_amount', '12', '83.4', OTHER_ASSET);
-            await waitFor(() => expect(cashAmount()).toHaveValue('1200'), WAIT);
+            await waitFor(() => expect(cashAmount()).toHaveValue('10.008')); // 12 / 100 × 83.4
             expectPressed('unit-price');
             expect(unitPriceInput()).toHaveValue('83.4');
+
+            await pickAsset(ASSET);
+            await waitFor(() => expect(cashAmount()).toHaveValue('1000.8'));
+        });
+
+        it('driver amount: picking the bond keeps the amount and recalculates the price on base 100', async () => {
+            mount({items: [txRow()]});
+            await screen.findByTestId('tx-form-quantity');
+            await typeQuantity('12');
+            await typeAmount('1000.8');
+            await expectComputed('83.4');
+
+            await pickAsset(BOND);
+
+            await expectComputed('8340'); // 1000.8 × 100 / 12
+            expect(cashAmount()).toHaveValue('1000.8');
+            expectPressed('amount');
         });
     });
 
     // -----------------------------------------------------------------------------------------------------------------
-    // (f) nothing to ask
+    // (f) nothing to calculate
     // -----------------------------------------------------------------------------------------------------------------
-    describe('(f) no request while there is nothing to ask', () => {
-        it('a blank or zero quantity asks nothing; the quantity that makes it complete is the first request', async () => {
-            mount();
+    describe('(f) nothing to calculate', () => {
+        it('a blank or zero quantity calculates nothing; the quantity that makes it complete does', async () => {
+            mount(seededSingle('BUY'));
             await screen.findByTestId('tx-form-quantity');
-            await pickAsset(ASSET);
 
             await typeAmount('1000.8'); // quantity still blank
+            expect(computedValue(), 'blank quantity').toBe('');
             await typeQuantity('0');
-            await typeQuantity('12');
+            expect(computedValue(), 'zero quantity').toBe('');
 
-            await asked('amount_to_price', '12', '1000.8');
-            expect(
-                requests().every((request) => request.quantity === '12'),
-                `no request left with a blank or zero quantity: ${JSON.stringify(requests())}`,
-            ).toBe(true);
+            await typeQuantity('12');
+            await expectComputed('83.4');
         });
 
-        it('no asset asks nothing; picking the asset is what sends the first request', async () => {
-            mount();
-            await screen.findByTestId('tx-form-quantity');
-
-            await typeQuantity('12');
-            await typeAmount('1000.8'); // no asset yet
-            await pickAsset(ASSET);
-
-            await asked('amount_to_price', '12', '1000.8');
-            expect(
-                requests().every((request) => request.asset_id === ASSET),
-                `no request left without the asset: ${JSON.stringify(requests())}`,
-            ).toBe(true);
-        });
-
-        it('an amount of zero or a negative one asks nothing; a positive amount asks', async () => {
-            mount();
-            await screen.findByTestId('tx-form-quantity');
-            await pickAsset(ASSET);
-            await typeQuantity('12');
+        it('an amount of zero, a negative one or a blank one calculates nothing and takes away the old price; a positive one calculates', async () => {
+            mount(seededSingle('BUY'));
+            await reachAmountDriverWithPrice();
 
             await typeAmount('0');
-            await typeAmount('-5');
+            await expectComputed('');
             await typeAmount('1000.8');
+            await expectComputed('83.4');
 
-            await asked('amount_to_price', '12', '1000.8');
-            expect(
-                requests().every((request) => request.value === '1000.8'),
-                `no request left for a zero or negative amount: ${JSON.stringify(requests())}`,
-            ).toBe(true);
+            await typeAmount('-5');
+            await expectComputed('');
+            await typeAmount('1000.8');
+            await expectComputed('83.4');
+
+            await typeAmount('');
+            await expectComputed('');
         });
 
-        it('an amount past six decimals asks nothing: it is red in its own field', async () => {
-            mount();
+        it('an amount past six decimals calculates nothing: it is red in its own field', async () => {
+            mount(seededSingle('BUY'));
             await screen.findByTestId('tx-form-quantity');
-            await pickAsset(ASSET);
             await typeQuantity('12');
 
             await typeAmount('1000.1234567');
+            expect(computedValue()).toBe('');
             await typeAmount('1000.8');
-
-            await asked('amount_to_price', '12', '1000.8');
-            expect(
-                requests().every((request) => request.value === '1000.8'),
-                `no request left for the seven-decimal amount: ${JSON.stringify(requests())}`,
-            ).toBe(true);
-        });
-    });
-
-    // -----------------------------------------------------------------------------------------------------------------
-    // (g) a refusal leaves the form usable
-    // -----------------------------------------------------------------------------------------------------------------
-    describe('(g) the backend answering null', () => {
-        it('amount mode: the stale price goes away, ⚡ and Save are not blocked, and the next quantity calculates again', async () => {
-            const {onPushDraft} = mount(seededSingle('BUY'));
-            await reachAmountDriverWithPrice();
-
-            await typeQuantity('7'); // nobody wrote an answer for it: the backend refuses
-            await asked('amount_to_price', '7', '1000.8');
-            await waitFor(() => expect(computedValue(), 'the price of the old quantity is not kept').toBe(''), WAIT);
-
-            expect(screen.getByTestId('tx-form-validate-now'), '⚡ is not blocked by an empty calculated price').toBeEnabled();
-            await waitFor(() => expect(screen.getByTestId('tx-form-save'), 'Save is not blocked either').toBeEnabled());
-
-            await fireEvent.click(screen.getByTestId('tx-form-validate-now'));
-            await waitFor(() => expect(validateTransactions).toHaveBeenCalled());
-            await fireEvent.click(screen.getByTestId('tx-form-save'));
-            expect(onPushDraft, 'the form can still be applied').toHaveBeenCalledTimes(1);
-            expect(commitTransactions).not.toHaveBeenCalled();
+            await expectComputed('83.4');
         });
 
-        it('amount mode: after a refusal the next calculable quantity fills the price again', async () => {
-            mount(seededSingle('BUY'));
-            await reachAmountDriverWithPrice();
-            await typeQuantity('7');
-            await waitFor(() => expect(computedValue()).toBe(''), WAIT);
-
-            await typeQuantity('12');
-
-            await waitFor(() => expect(computedValue()).toBe('83.4'), WAIT);
-        });
-
-        it('unit-price mode: a refused price leaves the amount empty and the form usable; the next price fills it', async () => {
-            mount();
+        it('an asset the store does not know calculates nothing, in amount mode; once the store has it the price appears', async () => {
+            mount({items: [txRow({asset_id: UNKNOWN_ASSET})]});
             await screen.findByTestId('tx-form-quantity');
-            await pickAsset(ASSET);
+            await typeQuantity('12');
+            await typeAmount('1000.8');
+            expect(computedValue(), 'no asset row, no quote base, no price').toBe('');
+
+            // Positive control: the same form, the asset arrives (the store loads late) → the price follows.
+            mergeAssets([{id: UNKNOWN_ASSET, display_name: 'Arrived late', currency: 'EUR', quote_base_quantity: 1, active: true}]);
+            await expectComputed('83.4');
+        });
+
+        it('an asset the store does not know calculates nothing, in unit-price mode; once the store has it the amount appears', async () => {
+            mount({items: [txRow({asset_id: UNKNOWN_ASSET, cash: null})]});
+            await screen.findByTestId('tx-form-quantity');
             await typeQuantity('12');
             await fireEvent.click(unitPriceButton());
             await screen.findByTestId('tx-form-unit-price');
-
-            await typeUnitPrice('99'); // nobody wrote an answer for it
-            await asked('price_to_amount', '12', '99');
-            await tick();
-            expect(cashAmount(), 'nothing was calculated: the amount stays empty').toHaveValue('');
-            expect(unitPriceInput(), 'the price stays as typed').toHaveValue('99');
-            expect(cashAmount(), 'the amount can still be typed').toBeEnabled();
-
             await typeUnitPrice('83.4');
-            await waitFor(() => expect(cashAmount()).toHaveValue('1000.8'), WAIT);
+            expect(cashAmount(), 'no asset row, nothing to multiply with').toHaveValue('');
+            expect(unitPriceInput(), 'the price stays as typed').toHaveValue('83.4');
+
+            mergeAssets([{id: UNKNOWN_ASSET, display_name: 'Arrived late', currency: 'EUR', quote_base_quantity: 100, active: true}]);
+            await waitFor(() => expect(cashAmount()).toHaveValue('10.008'));
+        });
+
+        it('no asset picked at all calculates nothing; picking one does', async () => {
+            mount();
+            await screen.findByTestId('tx-form-quantity');
+            await typeQuantity('12');
+            await typeAmount('1000.8');
+            expect(computedValue()).toBe('');
+
+            await pickAsset(ASSET);
+            await expectComputed('83.4');
         });
     });
 
     // -----------------------------------------------------------------------------------------------------------------
-    // (h) back to amount
+    // (g) the payload
+    // -----------------------------------------------------------------------------------------------------------------
+    describe('(g) the payload carries the amount, never a unit price', () => {
+        async function applyAndRead(onPushDraft: ReturnType<typeof vi.fn>): Promise<Record<string, unknown>> {
+            await waitFor(() => expect(screen.getByTestId('tx-form-save')).toBeEnabled());
+            await fireEvent.click(screen.getByTestId('tx-form-save'));
+            expect(onPushDraft, 'the form was applied').toHaveBeenCalledTimes(1);
+            expect(commitTransactions).not.toHaveBeenCalled();
+            return onPushDraft.mock.calls[0]?.[0] as Record<string, unknown>;
+        }
+
+        function expectNoUnitPrice(payload: Record<string, unknown>): void {
+            expect(
+                Object.keys(payload).filter((key) => /price/i.test(key)),
+                'no key of the payload names a price',
+            ).toEqual([]);
+            expect(JSON.stringify(payload), 'the unit price (83.4) is nowhere in the payload').not.toContain('83.4');
+        }
+
+        it('amount mode: the quantity and the signed amount, no price', async () => {
+            const {onPushDraft} = mount();
+            await screen.findByTestId('tx-form-quantity');
+            await pickAsset(ASSET);
+            await typeQuantity('12');
+            await typeAmount('1000.8');
+            await expectComputed('83.4');
+
+            const payload = await applyAndRead(onPushDraft);
+
+            expect(payload.asset_id).toBe(ASSET);
+            expect(payload.quantity).toBe('12');
+            expect(payload.cash).toEqual({code: 'EUR', amount: '-1000.8'});
+            expectNoUnitPrice(payload);
+        });
+
+        it('unit-price mode: the amount the form calculated is the one sent, no price', async () => {
+            const {onPushDraft} = mount();
+            await reachUnitPriceDriver();
+
+            const payload = await applyAndRead(onPushDraft);
+
+            expect(payload.quantity).toBe('12');
+            expect(payload.cash).toEqual({code: 'EUR', amount: '-1000.8'});
+            expectNoUnitPrice(payload);
+        });
+
+        it('a bond: the amount sent is the one on base 100', async () => {
+            const {onPushDraft} = mount();
+            await screen.findByTestId('tx-form-quantity');
+            await pickAsset(BOND);
+            await typeQuantity('1000');
+            await fireEvent.click(unitPriceButton());
+            await screen.findByTestId('tx-form-unit-price');
+            await typeUnitPrice('98.5');
+            await waitFor(() => expect(cashAmount()).toHaveValue('985'));
+
+            const payload = await applyAndRead(onPushDraft);
+
+            expect(payload.cash).toEqual({code: 'EUR', amount: '-985'});
+            expect(Object.keys(payload).filter((key) => /price/i.test(key))).toEqual([]);
+        });
+    });
+
+    // -----------------------------------------------------------------------------------------------------------------
+    // (h) switching the badge
     // -----------------------------------------------------------------------------------------------------------------
     describe('(h) switching the badge', () => {
         it('back to amount keeps the calculated amount on screen, drops the price input and shows the price again', async () => {
@@ -728,9 +791,8 @@ describe('TransactionFormModal — «Total amount / Unit price» (#47)', () => {
 
             expectPressed('amount');
             expect(cashAmount(), 'the amount stays on screen').toHaveValue('1000.8');
-            await waitFor(() => expect(computedPrice()).toHaveAttribute('data-value', '83.4'), WAIT);
+            await expectComputed('83.4');
             expect(screen.queryByTestId('tx-form-unit-price'), 'the price input goes away').toBeNull();
-            await asked('amount_to_price', '12', '1000.8');
         });
 
         it('to Unit price keeps the amount that was typed', async () => {
@@ -742,6 +804,62 @@ describe('TransactionFormModal — «Total amount / Unit price» (#47)', () => {
             expectPressed('unit-price');
             await screen.findByTestId('tx-form-unit-price');
             expect(cashAmount(), 'switching the badge does not clear the amount').toHaveValue('1000.8');
+        });
+    });
+
+    // -----------------------------------------------------------------------------------------------------------------
+    // (i) view mode: both forms of the same trade
+    // -----------------------------------------------------------------------------------------------------------------
+    describe('(i) view mode of a saved trade shows the total amount and the unit price', () => {
+        it('a saved BUY: the amount in the cash cell and the price next to it, read-only, no badge', async () => {
+            mount({mode: 'view', items: [txRow({type: 'BUY', quantity: '12', cash: {code: 'EUR', amount: '-1000.8'}})]});
+            // The readonly form is on screen (its quantity is there, disabled) before anything is asserted about it.
+            expect(await screen.findByTestId('tx-form-quantity')).toBeDisabled();
+
+            expect(cashAmount(), 'the total amount, shown as the form shows a BUY').toHaveValue('1000.8');
+            expect(cashAmount()).toBeDisabled();
+            await expectComputed('83.4');
+            expect(computedPrice(), 'the unit price is text, not a field').not.toBeInstanceOf(HTMLInputElement);
+            expect(entryBadge(), 'a readonly form has no badge').toBeNull();
+            expect(screen.queryByTestId('tx-form-unit-price'), 'no input for the price').toBeNull();
+        });
+
+        it('a saved SELL: both forms too', async () => {
+            mount({mode: 'view', items: [txRow({type: 'SELL', quantity: '-12', cash: {code: 'EUR', amount: '1000.8'}})]});
+            expect(await screen.findByTestId('tx-form-quantity')).toBeDisabled();
+
+            expect(cashAmount()).toHaveValue('1000.8');
+            await expectComputed('83.4');
+            expect(entryBadge()).toBeNull();
+            expect(screen.queryByTestId('tx-form-unit-price')).toBeNull();
+        });
+
+        it('a saved bond BUY is read on its base 100', async () => {
+            mount({mode: 'view', items: [txRow({asset_id: BOND, type: 'BUY', quantity: '1000', cash: {code: 'EUR', amount: '-985'}})]});
+            expect(await screen.findByTestId('tx-form-quantity')).toBeDisabled();
+
+            expect(cashAmount()).toHaveValue('985');
+            await expectComputed('98.5');
+        });
+
+        it('a saved trade whose asset the store does not know shows the amount and an empty price; the asset arriving fills it', async () => {
+            mount({mode: 'view', items: [txRow({asset_id: UNKNOWN_ASSET, type: 'BUY', quantity: '12', cash: {code: 'EUR', amount: '-1000.8'}})]});
+            expect(await screen.findByTestId('tx-form-quantity')).toBeDisabled();
+
+            expect(cashAmount()).toHaveValue('1000.8');
+            expect(computedValue()).toBe('');
+
+            mergeAssets([{id: UNKNOWN_ASSET, display_name: 'Arrived late', currency: 'EUR', quote_base_quantity: 1, active: true}]);
+            await expectComputed('83.4');
+        });
+
+        it('a DEPOSIT in view mode has neither a price nor a badge', async () => {
+            mount({mode: 'view', items: [txRow({type: 'DEPOSIT', asset_id: null, quantity: '0', cash: {code: 'EUR', amount: '500'}})]});
+            await screen.findByTestId('tx-form-cash-amount');
+
+            expect(entryBadge()).toBeNull();
+            expect(screen.queryByTestId('tx-form-unit-price-computed')).toBeNull();
+            expect(screen.queryByTestId('tx-form-unit-price')).toBeNull();
         });
     });
 });

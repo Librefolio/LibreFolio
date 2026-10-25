@@ -61,7 +61,7 @@
 
     import {zodiosApi} from '$lib/api';
     import {ensureCurrenciesLoaded} from '$lib/stores/reference/currencyStore';
-    import {ensureAssetsLoaded, getAssetInfo, getAllAssets, refreshAllAssets} from '$lib/stores/reference/assetStore';
+    import {assetStoreVersion, ensureAssetsLoaded, getAssetInfo, getAllAssets, refreshAllAssets} from '$lib/stores/reference/assetStore';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {ensureBrokersLoaded, getEditableBrokers, brokerStoreVersion, refreshAllBrokers, getBrokerInfo, getBrokerRole, type BrokerInfo} from '$lib/stores/reference/brokerStore';
     import {type TransactionTypeCode, type PairFormLayout, getTransactionTypeIconUrl, getTypeRule, getPairFormLayout, isDraftReadyForValidation, ensureTypesLoaded, getSwapGroup, typesVersion} from '$lib/features/transactions/transactionTypeStore';
@@ -71,8 +71,8 @@
     import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
     import {generateUUID} from '$lib/utils/core/uuid';
     import {normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
-    import {convertTradeAmount} from '$lib/features/transactions/form/txTradeAmountApi';
-    import {driverAfterEdit, planTradeAmountRequest, type TradeAmountDriver} from '$lib/features/transactions/form/txTradeAmount';
+    import {preFloorDates} from '$lib/features/transactions/preFloorDate';
+    import {calculateTradeValue, driverAfterEdit, type TradeAmountDriver} from '$lib/features/transactions/form/txTradeAmount';
     import {computeTxFormChecks, type TxFormCell, type TxFormCheckKind} from '$lib/features/transactions/form/txFormChecks';
     import {deduplicateIssues, signLabel, signHintKey} from '$lib/features/transactions/form/txFormFields';
     import {isBulkBalanceIssue} from '$lib/features/transactions/bulk/bulkDisplay';
@@ -367,6 +367,7 @@
             partnerRow = null;
             loadingPartner = false;
             quantityInputValid = true;
+            preFloorConfirmedKey = '';
             checksArmed = false;
             tradeEntryMode = 'amount';
             tradeDriver = 'amount';
@@ -827,6 +828,14 @@
         return null;
     });
 
+    // D-P4 (W5-10): a date before 1900 is usually a typo. The form warns, and its own save waits for one confirmation
+    // (the key is the dates asked about: a different date asks again). An edited row is asked about a date it changes,
+    // not about the one it already holds. When the form only hands the row to the bulk editor (`!commitOnSave`) the
+    // bulk editor asks, once for all its rows.
+    let preFloorList = $derived(preFloorDates([mode === 'edit' && draft.date === mainRow?.date ? null : draft.date, !pairLayout || (mode === 'edit' && effectiveDualTo.date === partnerRow?.date) ? null : effectiveDualTo.date]));
+    let preFloorConfirmedKey = $state('');
+    let preFloorPending = $derived(!isReadonly && commitOnSave && preFloorList.length > 0 && preFloorConfirmedKey !== preFloorList.join(','));
+
     /**
      * V-37 / V-37b: what is wrong with the form on its own, found without the server — `computeTxFormChecks`: first the
      * required fields, then the format (a quantity or cash sign it refuses, two sides that must differ, a typed date the
@@ -847,25 +856,29 @@
     let markedCount = $derived(Object.keys(markedCells).length);
 
     // =========================================================================
-    // «Total amount / Unit price» (#47): the user types one, the backend calculates the other
+    // «Total amount / Unit price» (#47): the user types one, the form calculates the other (W5-9, `txTradeAmount.ts`)
     // =========================================================================
 
-    /** Quiet time after the last keystroke before the backend is asked for the other value. */
-    const TRADE_AMOUNT_DELAY_MS = 250;
     /** The badge: which field the user types. It follows the driver after an edit, and the open form starts on the amount. */
     let tradeEntryMode = $state<TradeAmountDriver>('amount');
     /** The value written last; the other one is calculated from it (`driverAfterEdit`). Only a typed unit price makes it `unit_price`. */
     let tradeDriver = $state<TradeAmountDriver>('amount');
-    /** The unit price as the field shows it (a comma stays a comma while typed; the request reads it normalised): calculated while the amount drives, typed while it does. Never part of the payload: only the amount is stored. */
+    /** The unit price as the field shows it (a comma stays a comma while typed; the calculation reads it normalised): calculated while the amount drives, typed while it does. Never part of the payload: only the amount is stored. */
     let unitPrice = $state('');
-    /** A BUY or SELL: the only types with a quantity and a cash amount both required. A pair has no unit price. */
-    let showEntryMode = $derived(!isReadonly && !pairLayout && rule.quantityMode !== 'forbidden' && rule.cashField !== 'forbidden' && rule.assetField !== 'forbidden');
-    let tradeRequest = $derived(showEntryMode ? planTradeAmountRequest({driver: tradeDriver, assetId: draft.asset_id, quantity: draft.quantity, amount: draft.cash?.amount ?? '', unitPrice: normalizeDecimalInput(unitPrice)}) : null);
-    let tradeRequestKey = $derived(tradeRequest ? JSON.stringify(tradeRequest) : '');
-    let tradeSeq = 0;
+    /** A BUY or SELL: the only types with a quantity and a cash amount both required. A pair has no unit price. Shown in view mode too, so a saved trade reads in both forms. */
+    let showTradePrice = $derived(!pairLayout && rule.quantityMode !== 'forbidden' && rule.cashField !== 'forbidden' && rule.assetField !== 'forbidden');
+    /** The badge that picks the field to type: only while the form can be edited. */
+    let showEntryMode = $derived(!isReadonly && showTradePrice);
+    /** The asset's quote base, `null` while the asset is not in the store (the store's version makes this follow its loading). */
+    let tradeQuoteBase = $derived.by<number | null>(() => {
+        void $assetStoreVersion;
+        const info = draft.asset_id != null ? getAssetInfo(draft.asset_id) : null;
+        return info ? (info.quote_base_quantity ?? 1) : null;
+    });
+    let tradeValue = $derived(showTradePrice ? calculateTradeValue({driver: tradeDriver, quoteBaseQuantity: tradeQuoteBase, quantity: draft.quantity, amount: draft.cash?.amount ?? '', unitPrice: normalizeDecimalInput(unitPrice)}) : null);
 
-    /** The backend's answer lands in the value that does not drive: never in the one the user is typing. */
-    function applyTradeAnswer(mode: 'price_to_amount' | 'amount_to_price', result: string | null) {
+    /** The calculated value lands in the one that does not drive: never in the one the user is typing. */
+    function applyTradeValue(mode: 'price_to_amount' | 'amount_to_price', result: string | null) {
         if (mode === 'amount_to_price') {
             unitPrice = result ?? '';
             return;
@@ -876,20 +889,15 @@
     }
 
     $effect(() => {
-        void tradeRequestKey;
-        const request = untrack(() => tradeRequest);
-        const seq = ++tradeSeq;
-        if (!request) {
-            // Nothing to calculate from: a calculated unit price has no source left; a typed one stays as the user left it.
-            if (untrack(() => tradeDriver) === 'amount' && untrack(() => unitPrice) !== '') unitPrice = '';
-            return;
-        }
-        const timer = setTimeout(async () => {
-            const answered = await convertTradeAmount(request);
-            // A newer request, or a driver that changed meanwhile, made this answer stale.
-            if (seq === tradeSeq) applyTradeAnswer(request.mode, answered?.result ?? null);
-        }, TRADE_AMOUNT_DELAY_MS);
-        return () => clearTimeout(timer);
+        const value = tradeValue;
+        untrack(() => {
+            if (!value) {
+                // Nothing to calculate from: a calculated unit price has no source left; a typed one stays as the user left it.
+                if (tradeDriver === 'amount' && unitPrice !== '') unitPrice = '';
+                return;
+            }
+            applyTradeValue(value.mode, value.result);
+        });
     });
 
     function onEntryModeChange(mode: TradeAmountDriver) {
@@ -1211,6 +1219,8 @@
             void focusFirstMarkedCell();
             return;
         }
+        // D-P4: a date before 1900 waits for its confirmation (the banner has the button).
+        if (preFloorPending) return;
         // Bugfix-5 §A4: when wired from the BulkModal, "Apply" pushes the draft
         // back to the parent grid instead of committing to the backend.
         if (!commitOnSave) {
@@ -1497,7 +1507,23 @@
         <!-- Body (scrollable) -->
         <!-- ============================================================= -->
         <div class="overflow-y-auto flex-1 min-h-0 px-5 py-4 space-y-4" data-testid="tx-form-body" data-guide-scroll-root bind:this={formBodyEl}>
-            <TxFormBanners {getBulkContext} bind:commitFailed bind:formError {issues} bind:issuesDismissed {loadingPartner} {balanceIssues} {dualValidationError} {fieldIssues} {resolverCtx} {showIssuesBanner} {handleSyncFx} />
+            <TxFormBanners
+                {getBulkContext}
+                bind:commitFailed
+                bind:formError
+                {issues}
+                bind:issuesDismissed
+                {loadingPartner}
+                {balanceIssues}
+                {dualValidationError}
+                {fieldIssues}
+                {resolverCtx}
+                {showIssuesBanner}
+                {handleSyncFx}
+                preFloorDates={isReadonly ? [] : preFloorList}
+                {preFloorPending}
+                onConfirmPreFloor={commitOnSave ? () => (preFloorConfirmedKey = preFloorList.join(',')) : undefined}
+            />
 
             <!-- ============================================================= -->
             <!-- DUAL FORM — FX / Transfer Asset / Transfer Cash -->
@@ -1586,7 +1612,7 @@
                     {quantityInputId}
                     {quantityInputSignRule}
                     {markedCells}
-                    {showEntryMode}
+                    {showTradePrice}
                     entryMode={tradeEntryMode}
                     {unitPrice}
                     {onEntryModeChange}
@@ -1680,7 +1706,7 @@
                     <button
                         type="button"
                         class="px-4 py-2 text-sm rounded-lg text-lf-on-action bg-lf-action hover:bg-lf-action-hover disabled:opacity-50 inline-flex items-center gap-1.5"
-                        disabled={committing || loadingPartner || hasLocalErrors || (!commitOnSave && !isFormComplete)}
+                        disabled={committing || loadingPartner || hasLocalErrors || preFloorPending || (!commitOnSave && !isFormComplete)}
                         onclick={commit}
                         data-testid="tx-form-save"
                         use:guideAnchor={'transaction.create.save'}
