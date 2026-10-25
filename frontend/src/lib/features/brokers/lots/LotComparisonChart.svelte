@@ -16,6 +16,7 @@
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
+    import {utcMs} from '$lib/utils/dateOnly';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {translateOr} from '$lib/utils/core/translateOr';
     import {parseDisplayDate} from '$lib/utils/core/formatAxisDate';
@@ -399,7 +400,7 @@
             month: 'long',
             year: 'numeric',
             timeZone: 'UTC',
-        }).format(new Date(Date.UTC(year, month - 1, 1)));
+        }).format(new Date(utcMs(year, month - 1, 1)));
     }
 
     function buildTooltipBucketHeader(params: any[], fallbackDate: number | string, theme: ReturnType<typeof buildTooltipTheme>): string {

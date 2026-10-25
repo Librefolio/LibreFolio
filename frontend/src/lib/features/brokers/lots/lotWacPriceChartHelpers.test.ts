@@ -77,6 +77,16 @@ describe('isoDateToUtcMs / utcMsToIsoDate', () => {
     });
 });
 
+// WHY: `Date.UTC(24, …)` reads the year as 1924, and an unpadded year would write `24-03-01`: the zoom window of a chart
+// whose lot starts in the year 24 sat a century off.
+describe('isoDateToUtcMs / utcMsToIsoDate with a year before 100', () => {
+    it.each(['0024-03-01', '0001-01-01', '0099-12-31'])('%s is read in its own year and written back whole', (date) => {
+        const ms = isoDateToUtcMs(date);
+        expect(new Date(ms).toISOString().slice(0, 10)).toBe(date);
+        expect(utcMsToIsoDate(ms)).toBe(date);
+    });
+});
+
 describe('resolveQbqScale', () => {
     it('returns the quantity when it is strictly positive', () => {
         expect(resolveQbqScale(100)).toBe(100);

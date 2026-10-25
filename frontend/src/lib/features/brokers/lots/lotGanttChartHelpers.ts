@@ -21,6 +21,7 @@
  */
 
 import {buildTooltipDivider, buildTooltipRow} from '$lib/components/charts/echartsTooltipHelpers';
+import {utcMs} from '$lib/utils/dateOnly';
 import {getBrokerColor, type BrokerLike} from '$lib/utils/broker/brokerColors';
 import {escapeHtml} from '$lib/utils/core/escapeHtml';
 import {clamp, LOT_QUANTITY_FRACTION_DIGITS, scopeBoundaryOf, type ScopeBoundary} from './lotChartShared';
@@ -71,13 +72,13 @@ export function parseDateToUtcMs(value: string): number | null {
     const dateOnlyMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (dateOnlyMatch) {
         const [, year, month, day] = dateOnlyMatch;
-        return Date.UTC(Number(year), Number(month) - 1, Number(day));
+        return utcMs(Number(year), Number(month) - 1, Number(day));
     }
 
     const parsed = Date.parse(value);
     if (!Number.isFinite(parsed)) return null;
     const date = new Date(parsed);
-    return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+    return utcMs(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
 }
 
 /**

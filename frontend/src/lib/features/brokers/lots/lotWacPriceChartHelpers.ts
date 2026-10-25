@@ -24,6 +24,7 @@
  * @module brokers/lots/lotWacPriceChartHelpers
  */
 
+import {utcMs} from '$lib/utils/dateOnly';
 import {safeDecimal} from '$lib/types';
 import {mapDateToBucket} from '$lib/components/charts/timeSeriesAggregation';
 import {themed} from '$lib/theme/themePair';
@@ -81,13 +82,13 @@ export function sortDates(a: string, b: string): number {
 export function isoDateToUtcMs(date: string): number {
     const [year, month, day] = date.split('-').map(Number);
     if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return Number.NaN;
-    return Date.UTC(year, month - 1, day);
+    return utcMs(year, month - 1, day);
 }
 
 /** UTC-midnight epoch millisecond → `YYYY-MM-DD`, the inverse of {@link isoDateToUtcMs}. */
 export function utcMsToIsoDate(ms: number): string {
     const date = new Date(ms);
-    const year = date.getUTCFullYear();
+    const year = String(date.getUTCFullYear()).padStart(4, '0');
     const month = String(date.getUTCMonth() + 1).padStart(2, '0');
     const day = String(date.getUTCDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
