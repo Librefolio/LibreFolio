@@ -4727,3 +4727,216 @@ valuation_source, unrealized_pnl`; niente `flow`; niente frame a quantità 0; Σ
   `check-links` 0 (slot 20:31–20:42, carico 1,9 → 2,7; log `ondata5/MF-p4b-verify.log`). Porte dopo le riparazioni (slot
   21:19–21:23, carico 3,9 → 4,5; `ondata5/MF-p4b-gates2.log`): `financial-math` **2736**, `portfolio-engine` **41**,
   `roi-fifo-utils` **1963**, `api portfolio` **55**. **CHECKPOINT READY** inviato, FROZEN.
+
+#### MF5-3 · B5 — «Transfers at market value» nel waterfall (23/10)
+Base `b6a25adcb` (MF5-1b committato). Il caso: vista filtrata su un broker; un titolo esce verso (o entra da) un broker
+fuori dalla vista: la gamba è capitale al valore di mercato (lotto 41, D2/D5) mentre il costo si sposta con la
+posizione, quindi MV − costo (mittente) o costo − MV (destinatario) restava nel residuo «Other».
+- ✅ **Rossi** (test-author): `test_financial_math/test_market_value_transfers.py` (20, puro) e
+  `test_financial/test_waterfall_market_value_transfers.py` (7, SQLite privata). Su HEAD 23 rossi (contratto assente;
+  nel servizio l'importo stava nel residuo: +300 / −300 / +420), 4 guardie verdi; 26/27 su una cura di riferimento.
+- ✅ **Cura**: `models.MarketValueTransfer` + `PortfolioCalculationResult.market_value_transfers` (ogni gamba per cui
+  `_transfer_leg_capital` dà un valore, col costo del suo passo); `period.market_value_transfer_results` (per broker,
+  Σ costo − capitale nelle gambe di (date_from, end]); `get_positions_contribution`: dopo le righe «FX on cash», una riga
+  «Transfers at market value» (categoria Other) per broker, nello stesso ordine, nascosta sotto `CONVERSION_DUST`, il
+  residuo scende dello stesso importo. Doc (docs-writer): `period-pnl.en.md` (sottosezione `#transfers-at-market-value`,
+  formula, esempio), `kpi-cards.en.md`, `developer/.../wac.md`.
+  > **⚠️ Fuori pista**: avevo chiesto a docs-writer il timbro Aphra su `period-pnl.en.md` e `kpi-cards.en.md`, ma sono
+  > aggiunte di contenuto (una sottosezione), non correzioni puntuali: ho tolto i due timbri a mano da
+  > `.translate-hashes.json` (file tornato identico a HEAD). Il debito di traduzione resta dichiarato.
+  > **Note implementazione**: B5 27 verdi; porte (slot 21:57–22:01): `financial-math` **2756**, `portfolio-engine` **41**,
+  > `roi-fifo-utils` **1970**, `api portfolio` **55**; parità contro `b6a25adcb`: copie del 1900/1500 48 casi 0 differenze;
+  > copia base 154 casi, **42 diversi, tutti e soli per la riga nuova** (`MF-p4/check_b5.py`: 48 righe nuove, residuo
+  > sceso esattamente della loro somma, nient'altro cambiato; il residuo diventa più piccolo in 42 casi su 42, in 6
+  > scompare; Σ|residuo| 126 130 → 105 010); `mkdocs build` 0, `check-links` 0. Log `ondata5/MF-b5-verify.log`.
+  > Richiesta a Y (frontend): `OtherPeriodEffectsTable.svelte:76` e `PerformanceChart.svelte:296`.
+
+#### MF5-4 · MF-P1c — gli zeri falsi della griglia del MWRR (23/10)
+Base `259a30076` (B5 committato). Via del coordinatore: corpora di prova soltanto (i dati reali li chiede al developer).
+- ✅ **Rossi** (test-author): `test_financial_math/test_mwrr_false_grid_zero.py` (28; su HEAD 16 rossi per la ragione
+  giusta, 12 guardie verdi). Flussi trovati: apertura −0,0, versamento −1 000 a 85/100/126 anni e valore +1 200 poco dopo
+  → HEAD restituisce un punto della griglia (6 605,9 / 1 736,8 / 379,19) dove ogni termine è andato a 0,0; la radice vera
+  ≈ 8,3·10⁷ è fuori griglia; un caso a 90 anni con la radice vera 5 957 sulla griglia ma oltre la soglia di underflow
+  (≈ 3 981): non dimostrabile → «—». Dashboard simulata: 379,189396 e 3 980,071706.
+- ✅ **Cura** (`returns.py`): un punto della griglia con VAN esattamente 0,0 è radice solo se `_changes_sign_at` (nella
+  scansione e in `_bracketed_xirr_at`). Doc: `developer/backend/financial_math.md` (paragrafo del solutore).
+  > **⚠️ Fuori pista**: tre test esistenti di `test_mwrr_warm_start.py` fissavano i tassi falsi (379,189…, il 12,80
+  > della Dashboard): li riscrive test-author. Trovato un difetto vicino, fuori lotto: con tutti i flussi a zero Newton
+  > restituisce la sua partenza (0,1 → «10 %» nel giorno del versamento di un periodo che apre a zero): backlog MF-P1d.
+- ✅ **Conteggi** (prima della cura, albero di `259a30076`, `MF-p4/count_p1c.py`, slot 22:56–22:58): copia base 88 report
+  (11 utenti × 2 valute × 4 finestre) **0** zeri falsi; copie del 1900/1500 8 report ciascuna: eur1900 0, typo1500 0,
+  usd1900 **1** punto della linea («tutto», valuta base: 250,19), buy1900 **2** punti («tutto», base e USD: 379,19); le
+  card mai. Dati reali: non usati (il coordinatore li chiede al developer).
+- ✅ **Test esistenti riscritti** (test-author): `test_mwrr_warm_start.py` i 3 casi (+78/−25; il 12,80 della Dashboard in
+  una sezione 7 «P1c»); i due file insieme 228 verdi.
+- ✅ **Porte e parità** (slot 23:16–23:31, carico 1,5 → 1,3; `ondata5/MF-p1c-verify.log`): `financial-math` **2785**,
+  `portfolio-engine` **41**, `roi-fifo-utils` **1970**, `api portfolio` **55**; parità contro `259a30076`: 202 casi, **3
+  differenze, tutte e sole i 3 punti contati** (2025-09-30 della linea MWRR «tutto»: 250,188643 → None, 379,189396 →
+  None ×2; il resto dei tre report identico); `mkdocs build` 0, `check-links` 0. **CHECKPOINT READY** inviato, FROZEN.
+
+#### MF5-2 · pavimenti N74 e R13-SEC8 — misura prima della cura (24/10, BLOCCATO su una decisione)
+Base `352d48ff3` (P1c committato). Prima dei rossi ho misurato che cosa costa una data sbagliata all'anno 1 senza
+pavimenti (`MF-p4/measure_floor.py`: pavimento abbassato a 0001-01-01 nel solo processo; copie `typo0001` = un
+versamento al 0001-01-02, `buy0001` = un acquisto al 0001-01-02; un processo per caso; log
+`ondata5/MF-floor-measure-before.log`, slot 00:06, carico 3,3):
+
+| Caso | Pavimento 1900 (oggi) | Senza pavimento (anno 1) |
+|---|---|---|
+| motore | 46 318 giorni, 398 segmenti, 0,2 s, 88 MB | 739 912 giorni, **398 segmenti**, 1,7 s, 114 MB |
+| report 1M / 1A | 0,7 s, 134–144 MB | 2,2–2,3 s, 135–146 MB |
+| report «tutto» | 16 s, **1,5 GB** di picco, 79 MB di JSON | **fermato da me a 4,4 GB dopo ~25 s, in crescita** (la macchina ha 15 GB) |
+| lotti 1A | 0,3 s, 95 MB | 4,1 s, 294 MB |
+| lotti «tutto» | 2,0 s, 384 MB, 32 MB di JSON | non lanciato (stima ×16: ~6 GB) |
+
+- **Che cosa vuol dire.** P4 regge: il motore costa i suoi 398 giorni sporchi anche con 740 000 giorni. Restano due cose:
+  (1) un cammino di calcolo, `DailyStateBuilder._valuation_rate_change_days` (un calendario di ogni giorno, letto
+  per ogni valuta: 1,48 milioni di letture nel profilo del report 1M), più i cammini dei lotti (`history_dates` e le
+  scansioni giornaliere che L1 ha lasciato «per progetto»); (2) **il volume d'uscita** (D1, «un punto al giorno»): il
+  report «tutto» e i lotti «tutto» costruiscono e serializzano un punto per ognuno dei 740 000 giorni. Questo è D-P4,
+  rimandato dopo P4: senza pavimenti un refuso può far crescere un report oltre la memoria del server.
+- **Bordo trovato**: con il pavimento tolto, una data al 0001-01-01 fa `day - 1` fuori dal calendario di Python
+  (`_calendar(replay_from - timedelta(days=1), …)`, l'intervallo di transito `max(...) - 1` del classificatore):
+  va coperto da un rosso.
+- **Altri effetti del lotto** (da dire nel checkpoint): l'avviso `rows_before_floor` della qualità dei dati perde senso
+  e va tolto; il messaggio del frontend «tra {min} e {max}» e il selettore dell'anno (`CalendarMonth.svelte:224`,
+  `min="1900"`) vanno cambiati da chi li possiede.
+- In attesa: decisione del developer (via coordinatore) su D-P4 prima di togliere i pavimenti; nel frattempo posso
+  curare il cammino del motore (`_valuation_rate_change_days` sui gradini) senza cambiare nessun numero.
+
+#### MF5-2a · il cammino del calendario dei tassi e il bordo del 0001-01-01 (24/10, senza decisione)
+Via del coordinatore: i pavimenti restano finché il developer non risponde su D-P4; intanto la cura del cammino del
+motore e il rosso del bordo, a pavimento invariato. Revisione W2 #47: inviata a parte («ok», un seguito sulla casa unica:
+`price_marks.py:306-307`, assegnato a MF dopo questo checkpoint).
+- ✅ **Rossi** (test-author): `test_financial_math/test_rate_change_days_on_steps.py` (30): su HEAD 15 rossi per la
+  ragione giusta (9 metodo assente, 4 `OverflowError` a date.min, i 2 di costo: `_read_rate` 92 042 letture per 10 giorni
+  candidati e 137 698 per 21), 15 guardie verdi (equivalenza col riferimento denso su 7 + 4 libri nominati e 80 casuali).
+- ✅ **Cura**: `fx_rates.AskedDayRates.reading_change_days` (i gradini dentro le finestre, il primo giorno d'ogni finestra,
+  il giorno dopo l'ultimo); `DailyStateBuilder._reading_calendar` (sulla vista: quei giorni; su una mappa semplice: i
+  giorni delle chiavi e il giorno dopo; ognuno col giorno prima; nessun giorno prima di date.min);
+  `_valuation_rate_change_days` legge solo quei giorni; tolto `_calendar` (più nessun uso). Docstring di `change_days`,
+  doc `transactions/wac.md`.
+  > **Note implementazione**: 30 + 197 (`test_asked_day_rates`) verdi.
+- ✅ **Porte e parità** (slot 00:49–01:07, carico 4,2 → 2,8; `ondata5/MF-floor-verify.log`): `financial-math` **2815**,
+  `portfolio-engine` **41**, `api portfolio` **55**; `roi-fifo-utils` 2 rossi per l'aiuto `_calendar` tolto, portati da
+  test-author (`test_replay_floor.py`, il registratore avvolge `_reading_calendar`, la stessa intenzione; con un pavimento
+  mutante al 1800 torna rosso), poi **1970** (01:15). Parità contro `352d48ff3`: 6 copie (base, 1900 ×3, 1500, 0001)
+  **220 casi, 0 differenze**; `mkdocs build` 0, `check-links` 0.
+  > **Effetto misurato** (copia `typo0001`, pavimento abbassato all'anno 1 nel solo processo): motore 1,7 → **0,11 s**,
+  > report 1M 2,2 → **0,6 s**, 1A 2,3 → **0,67 s** (uguale al caso col pavimento: 0,7 s). Resta solo il volume d'uscita di
+  > «tutto» (D-P4) e i cammini dei lotti. **CHECKPOINT READY** inviato, FROZEN.
+
+#### MF5-5 · una casa sola per il prezzo unitario di un'operazione (24/10)
+Base `9fa856f68` (merge di W2 #47 nel ramo MF, padri `d8cb1852c` + `0aeebbd6a`). Seguito della revisione di W2:
+`price_marks.py:306-307` e `trade_amount.unit_price_from_amount` scrivevano due volte la stessa formula.
+- ✅ **Rossi** (test-author): `test_financial_math/test_unit_price_single_home.py` (46): su HEAD 37 rossi (l'aiuto non
+  esiste; `price_marks` non lo importa), 9 guardie di parità verdi; con l'ordine «prima moltiplica» 12 rossi (a 28 cifre,
+  base 3: 0,999…9 contro 1). I 54 test di W2 restano verdi.
+- ✅ **Cura**: `trade_amount.unit_price_on_quote_axis` (importo / quantità × base, non arrotondato, nel contesto di chi
+  chiama: l'ordine di `price_marks`); `price_marks` lo usa per il segno delle operazioni (tolta la `scale` locale);
+  `unit_price_from_amount` lo arrotonda a 80 cifre. Mappe della casa: `financial-math.instructions.md`,
+  `backend.instructions.md`, `developer/backend/financial_math.md`.
+  > **Note implementazione**: 46 + 54 = 100 verdi.
+- ✅ **Porte e parità** (slot 01:47–02:09, carico 2,7 → 1,6; `ondata5/MF-up-verify.log`): `financial-math` **2916**,
+  `portfolio-engine` **41**, `roi-fifo-utils` **1970**, `api portfolio` **55**, `api transactions` **58** (l'endpoint di
+  W2); parità contro `9fa856f68` su 6 copie: **220 casi, 0 differenze**; `mkdocs build` 0, `check-links` 0.
+  **CHECKPOINT READY** inviato, FROZEN.
+
+#### Revisione J5-1 (#48) — `2d7502de0`, sola lettura (24/10)
+- ✅ Letta dagli oggetti git condivisi (base `270e85a55`). Esito: **nessun blocco sul calcolo**; riusa
+  `position_period_pnl`, `counted_tract`, `realized_gain`, i frame di P4 e `position_flow_steps` (nessun `daily_states`).
+  Da correggere (lista inviata al coordinatore): `_tract` copia il V − C di `transfer_tract_adjustments`; il filtro delle
+  vendite ripete `_period_realized_sales` (e il chiamante l'ha già applicato); `_arrival_base` usa una regola diversa da
+  `transfer_tracts_moved_in` (domanda a J); due docstring non vere (lavoro «proporzionale ai tratti»; `flow_steps` «dal
+  primo movimento»); `PositionFrame` come Protocol con lo stesso nome del modello; il test P2 nasconde i `None` con
+  `or 0` e copre un solo broker in EUR; le posizioni «polvere» rompono P2 (giuste per la riga, da dichiarare); il volume
+  d'uscita di un punto al giorno ricade in D-P4.
+
+#### Revisione W-B87 (split moltiplicativi Revolut / Trading 212) — `86c014295`, sola lettura (24/10)
+- ✅ Verdetto inviato: **va bene come import, da sistemare tre punti**. Senza SPLIT collegato: costo medio e P&L giusti
+  (costo totale invariato, capitale 0); limiti nella vista dei lotti (lotto nuovo a costo 0) e per un segno da
+  operazione non riscalato. Collegata: il costo medio usa la quantità della riga (movimento SPLIT), il FIFO il rapporto
+  dell'evento (`fifo/engine.py:511-535`): divergono se la quantità del broker è arrotondata (campione Revolut 0,1643 contro
+  0,1644). Valuta del costo 0 «USD» di ripiego in Revolut. Il test copre solo il parsing: proposti 7 casi numerici.
+
+#### MF-P1d · il MWRR dei flussi tutti nulli, e `implied_split_ratio` (24/10)
+Base `270e85a55`. Risposte del developer (24/10, via coordinatore): MF-P1d via («ok per l'mwrr nel caso che hai trovato»);
+P1c sui dati reali scartata (pochi anni: zero per costruzione); D-P4 ancora aperta (in coda, MF-P4a analisi). W chiede
+se `split_ratio_hint` (`_brim_io.py`, ramo di W) va nella casa unica: sì → scritto in `financial_math/splits.py`.
+Corsia: porta 6193, dati `/tmp/librefolio-r13-c5b`.
+- ✅ **Rossi** (test-author): `test_financial_math/test_mwrr_all_zero_flows.py` (17) e
+  `test_financial/test_mwrr_all_zero_readers.py` (10, SQLite privata: storia, card, JSON, AI Export `portfolio.summary` e
+  `portfolio.performance`): su HEAD 14 rossi (ognuno legge 0,1, la partenza di Newton), 13 guardie; `test_implied_split_ratio.py`
+  (33): su HEAD 33 rossi (nome assente).
+  > **⚠️ Fuori pista**: «una finestra che parte prima del primo versamento» non apre a zero nel servizio (gli stati
+  > partono dalla prima transazione); test-author ha usato due libri che aprono davvero a zero (conto svuotato e
+  > rifinanziato; acquisto registrato prima del suo versamento).
+- ✅ **Cura**: `returns._all_flows_zero` in `_solve_xirr` e `_newton_xirr` (nessun tasso quando tutti i flussi sono zero);
+  `splits.ImpliedSplitRatio` + `implied_split_ratio(held, added, *, max_denominator=10)` (frazione più vicina con
+  `Fraction.limit_denominator`, scarto d'arrotondamento del broker; None se niente tenuto/aggiunto o rapporto ≤ 1). Doc e mappe.
+- ✅ **Porte e parità** (slot 15:46–16:08, carico 4,1 → 1,8; `ondata5/MF-p1d-verify.log`): `financial-math` **2966**,
+  `portfolio-engine` **41**, `roi-fifo-utils` **1980**, `ai-export` **1133**, `api portfolio` **55**; parità contro
+  `270e85a55`: 220 casi, **3 differenze, tutte e sole il caso curato** (punto 2025-09-30 della linea «tutto» in USD delle
+  copie eur1900, typo1500, typo0001: 0,100000 annualizzato e 161 558,99 cumulato → None); `mkdocs build` 0, `check-links` 0.
+  **CHECKPOINT READY** inviato, FROZEN (poi MF-P4a).
+
+#### MF-P4a · analisi D-P4 per il developer (24/10, senza codice)
+- ✅ Scritto `salvataggi-worktrees-20261021/ondata5/DECISIONI-DP4.md`. Misure per sezione (`MF-p4/measure_sections.py`,
+  `tracemalloc`, slot 16:12–16:33; log `ondata5/MF-p4a-sections.log`): motore 6,9 MB su tutte le copie (398 segmenti);
+  report «tutto» 18 MB (390 giorni), 704 MB (24 404), **1 330 MB (46 317)** → ~28,8 kB per giorno, lineare: all'anno 1
+  ~21 GB e ~1,3 GB di JSON. La causa: le viste derivate e i lotti riespandono un punto per giorno (D1) dopo il motore
+  (`derived_views._window_days`, `lots_analysis_service` `history_dates`/`expand_to_days`). Raccomandazione: serie
+  campionata in backend (`max_points`, passi fino al decennio, costruita dai segmenti) prima di togliere i pavimenti;
+  avviso UI con conferma per le date prima del 1900 (form, Bulk, import, `CalendarMonth.svelte:224` `min="1900"`);
+  intervalli al posto delle date nella qualità dei dati.
+
+#### MF-P4b · cura A (serie campionata) — passo 1, il contratto (24/10)
+Decisione del developer (24/10): «cura A nell'ondata 5, poi avviso e pavimenti». Ordine dopo P4b: avviso UI per le date
+prima del 1900 (W), poi i pavimenti uno per lotto (con `CalendarMonth.svelte:224`, l'avviso `rows_before_floor`, il
+messaggio «Tra {min} e {max}»).
+- ✅ Scritto `salvataggi-worktrees-20261021/ondata5/CONTRATTO-P4b.md`: `max_points` (2–10 000) o `resolution` sul report,
+  i lotti e #48; vocabolario dei passi esteso in `price_sampling.py` (trimestre, anno, decennio; `coarsest`, prezzi
+  invariati); senza parametro risposta di oggi, tetto `MAX_DAILY_POINTS` = 36 525; punti = fine di ogni bucket + primo
+  giorno, valori veri dai segmenti, TWRR/ROI sui giorni dei segmenti ∪ campione, MWRR solo sul campione; candele per
+  bucket; qualità dei dati a intervalli (`*_ranges`, `WACMissingPairInfo.ranges`); chi fa cosa (MF backend e
+  campionatore, J lotti e #48, Y grafici); test di parità e di costo. In attesa dell'ok del coordinatore e del commit di
+  MF-P1d per il passo 2.
+- ⏸️ **Passo 2a fermato dal coordinatore** (24/10): il developer propone la serie «a gradini» (solo i giorni con una
+  novità). Nessun codice di prodotto scritto; restano non tracciati i rossi di test-author `test_portfolio_sampling.py`
+  e `test_price_sampling_long_steps.py` (quest'ultimo orfano del runner).
+- ✅ **Analisi della proposta** (sezione «Proposta del developer» in `ondata5/DECISIONI-DP4.md`): tutte le serie del
+  report costanti fra due novità tranne MWRR annualizzato e cumulato (con più flussi nessuna formula chiusa; con un solo
+  flusso sì); scelta per il MWRR: due valori esatti per tratto (inizio e fine), niente tetto dei 200 anni. Misure
+  (`ondata5/MF-p4c-segments*.log`): base con crypto 390/390 novità; senza crypto 337/390 (86 %); con la regola del
+  «prezzo vecchio» rifinita (solo se nessuna quotazione più nuova entro 8 giorni; patch nel solo processo di misura)
+  283/390 (73 %) → 10 anni solo azioni ~2 670 punti; refuso al 1900 398/46 317.
+  > **⚠️ Fuori pista**: `_collect_dirty_days` segna «osservazione + 8» per ogni osservazione, anche con una quotazione
+  > più nuova prima: rende novità quasi tutti i sabati. Cura proposta (0,5 giorni, numeri invariati, da provare con la
+  > parità). Raccomandazione: B (gradini), MF 2,5–3 giorni, J e Y circa 5 in parallelo; pavimenti dopo.
+
+#### MF-P4b · cura B (serie a gradini) — il contratto (25/10)
+Decisione (25/10, developer via coordinatore): cura B con una sola forma `steps` (rottura del report), `date` +
+`through` + `range`, `mwrr_line` (inizio e fine di ogni tratto, un punto al mese nei tratti > 62 giorni, max 24),
+prezzo vecchio rifinito (soglia e banner invariati), `fx_stale` nel report, qualità dei dati a intervalli, helper unico
+nel frontend (Y), `value_at` lato backend per l'AI Export (Z).
+- ✅ Cancellati, su autorizzazione del coordinatore, i due rossi non tracciati del passo 2a (`test_portfolio_sampling.py`,
+  `test_price_sampling_long_steps.py`).
+- ✅ Riscritto `salvataggi-worktrees-20261021/ondata5/CONTRATTO-P4b.md` per la cura B: esempi JSON di storia,
+  allocazioni, P&L per broker, candele, lotti e #48; `mwrr_line`; prezzo e cambio vecchi; qualità dei dati a intervalli;
+  helper `stepSeries.ts` (Y); `series_steps.value_at` (Z); chi fa cosa; 9 regole di parità; il testo della voce
+  «⚠️ Breaking changes». In revisione da J, Y e Z prima del codice.
+- ✅ **Revisioni di J, Y, Z integrate nel contratto** (25/10, `ondata5/REVISIONI-P4b.md`): percorso `positions-series`;
+  invariante «in ordine, senza sovrapposizioni, dentro `range`, buchi ammessi»; `value_at` dà il tratto; `points_between`
+  taglia ai bordi; linea MWRR in `GrowthChart`; `pointsBetween` nel §5 (tolto `sumAt`); `_average_nav` pesata; i due
+  lettori del rischio a J; `steps_from_rows` e `observation_dates` nel checkpoint piccolo; stime aggiornate.
+- ✅ **Checkpoint piccolo, rossi** (test-author): `test_financial_math/test_series_steps.py` (615) e
+  `test_price_series_observation_dates.py` (13): su HEAD `445386f80` 628 rossi (nomi assenti); 628/628 su una cura di
+  riferimento; 8 mutanti su 9 presi (il nono equivalente).
+- ✅ **Cura**: `financial_math/series_steps.py` (`StepRow`, `value_at` con `bisect` e `key`, `points_between`,
+  `steps_from_rows` con `_runs` e `_exact`); `schemas/common.py` `DateSpan`, `StepSpan`; `AssetPriceSeries.observation_dates`;
+  mappe della casa unica (`financial-math.instructions.md`, `backend.instructions.md`, `financial_math.md`).
+  > **Note implementazione**: 628 + `test_layer_boundaries` = 684 verdi.
+- ✅ **Porte e parità** (slot 10:19–10:40, carico 3,3 → 2,1; `ondata5/MF-steps-verify.log`): `financial-math` **3595**,
+  `portfolio-engine` **41**, `roi-fifo-utils` **1980**, `api portfolio` **55**; parità contro `445386f80` su 6 copie:
+  **220 casi, 0 differenze** (nessun comportamento cambia: solo funzioni e modelli nuovi); `mkdocs build` 0, `check-links`
+  0. **CHECKPOINT READY** inviato, FROZEN. Poi il secondo checkpoint (report a gradini, `mwrr_line`, prezzo vecchio,
+  `fx_stale`, intervalli, `unit_rate_steps` con `as_of`).
