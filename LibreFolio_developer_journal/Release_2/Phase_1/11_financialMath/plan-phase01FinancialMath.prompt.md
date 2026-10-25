@@ -4900,3 +4900,43 @@ messaggio «Tra {min} e {max}»).
   bucket; qualità dei dati a intervalli (`*_ranges`, `WACMissingPairInfo.ranges`); chi fa cosa (MF backend e
   campionatore, J lotti e #48, Y grafici); test di parità e di costo. In attesa dell'ok del coordinatore e del commit di
   MF-P1d per il passo 2.
+- ⏸️ **Passo 2a fermato dal coordinatore** (24/10): il developer propone la serie «a gradini» (solo i giorni con una
+  novità). Nessun codice di prodotto scritto; restano non tracciati i rossi di test-author `test_portfolio_sampling.py`
+  e `test_price_sampling_long_steps.py` (quest'ultimo orfano del runner).
+- ✅ **Analisi della proposta** (sezione «Proposta del developer» in `ondata5/DECISIONI-DP4.md`): tutte le serie del
+  report costanti fra due novità tranne MWRR annualizzato e cumulato (con più flussi nessuna formula chiusa; con un solo
+  flusso sì); scelta per il MWRR: due valori esatti per tratto (inizio e fine), niente tetto dei 200 anni. Misure
+  (`ondata5/MF-p4c-segments*.log`): base con crypto 390/390 novità; senza crypto 337/390 (86 %); con la regola del
+  «prezzo vecchio» rifinita (solo se nessuna quotazione più nuova entro 8 giorni; patch nel solo processo di misura)
+  283/390 (73 %) → 10 anni solo azioni ~2 670 punti; refuso al 1900 398/46 317.
+  > **⚠️ Fuori pista**: `_collect_dirty_days` segna «osservazione + 8» per ogni osservazione, anche con una quotazione
+  > più nuova prima: rende novità quasi tutti i sabati. Cura proposta (0,5 giorni, numeri invariati, da provare con la
+  > parità). Raccomandazione: B (gradini), MF 2,5–3 giorni, J e Y circa 5 in parallelo; pavimenti dopo.
+
+#### MF-P4b · cura B (serie a gradini) — il contratto (25/10)
+Decisione (25/10, developer via coordinatore): cura B con una sola forma `steps` (rottura del report), `date` +
+`through` + `range`, `mwrr_line` (inizio e fine di ogni tratto, un punto al mese nei tratti > 62 giorni, max 24),
+prezzo vecchio rifinito (soglia e banner invariati), `fx_stale` nel report, qualità dei dati a intervalli, helper unico
+nel frontend (Y), `value_at` lato backend per l'AI Export (Z).
+- ✅ Cancellati, su autorizzazione del coordinatore, i due rossi non tracciati del passo 2a (`test_portfolio_sampling.py`,
+  `test_price_sampling_long_steps.py`).
+- ✅ Riscritto `salvataggi-worktrees-20261021/ondata5/CONTRATTO-P4b.md` per la cura B: esempi JSON di storia,
+  allocazioni, P&L per broker, candele, lotti e #48; `mwrr_line`; prezzo e cambio vecchi; qualità dei dati a intervalli;
+  helper `stepSeries.ts` (Y); `series_steps.value_at` (Z); chi fa cosa; 9 regole di parità; il testo della voce
+  «⚠️ Breaking changes». In revisione da J, Y e Z prima del codice.
+- ✅ **Revisioni di J, Y, Z integrate nel contratto** (25/10, `ondata5/REVISIONI-P4b.md`): percorso `positions-series`;
+  invariante «in ordine, senza sovrapposizioni, dentro `range`, buchi ammessi»; `value_at` dà il tratto; `points_between`
+  taglia ai bordi; linea MWRR in `GrowthChart`; `pointsBetween` nel §5 (tolto `sumAt`); `_average_nav` pesata; i due
+  lettori del rischio a J; `steps_from_rows` e `observation_dates` nel checkpoint piccolo; stime aggiornate.
+- ✅ **Checkpoint piccolo, rossi** (test-author): `test_financial_math/test_series_steps.py` (615) e
+  `test_price_series_observation_dates.py` (13): su HEAD `445386f80` 628 rossi (nomi assenti); 628/628 su una cura di
+  riferimento; 8 mutanti su 9 presi (il nono equivalente).
+- ✅ **Cura**: `financial_math/series_steps.py` (`StepRow`, `value_at` con `bisect` e `key`, `points_between`,
+  `steps_from_rows` con `_runs` e `_exact`); `schemas/common.py` `DateSpan`, `StepSpan`; `AssetPriceSeries.observation_dates`;
+  mappe della casa unica (`financial-math.instructions.md`, `backend.instructions.md`, `financial_math.md`).
+  > **Note implementazione**: 628 + `test_layer_boundaries` = 684 verdi.
+- ✅ **Porte e parità** (slot 10:19–10:40, carico 3,3 → 2,1; `ondata5/MF-steps-verify.log`): `financial-math` **3595**,
+  `portfolio-engine` **41**, `roi-fifo-utils` **1980**, `api portfolio` **55**; parità contro `445386f80` su 6 copie:
+  **220 casi, 0 differenze** (nessun comportamento cambia: solo funzioni e modelli nuovi); `mkdocs build` 0, `check-links`
+  0. **CHECKPOINT READY** inviato, FROZEN. Poi il secondo checkpoint (report a gradini, `mwrr_line`, prezzo vecchio,
+  `fx_stale`, intervalli, `unit_rate_steps` con `as_of`).

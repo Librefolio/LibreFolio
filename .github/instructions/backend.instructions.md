@@ -83,6 +83,7 @@ layer — its boundaries, imports and guards — are in `financial-math.instruct
 | The orientation of a stored FX rate (a pair read from source to destination, either way); the unit rates a calculation reads by day, kept as steps and answered on the asked days only (`AskedDayRates`, P3) | `services/financial_math/fx_rates.py` |
 | Day count conventions (ACT/365, ACT/360, ACT/ACT, 30/360), simple interest, daily compounding over a span in closed form | `services/financial_math/interest.py` |
 | Daily price mark of an asset for valuation | `services/financial_math/price_marks.py` |
+| A series as steps (date … through): the value of a day, a window, the steps of the change rows | `services/financial_math/series_steps.py` |
 | Yield on Cost | `services/financial_math/yield_on_cost.py` |
 | Stock splits linked to the ledger: their rows, the usable ratio, the incoming adjustments without a cost a SPLIT may not lose by a retype, and the ratio a share change implies (`implied_split_ratio`, an import's «possible split») | `services/financial_math/splits.py` |
 | Weights and concentration: a share of a total, allocation slices, gross weights, largest weight and Herfindahl index | `services/financial_math/weights.py` |
