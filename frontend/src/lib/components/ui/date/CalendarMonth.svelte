@@ -218,10 +218,9 @@
             <SimpleSelect class="inline-block w-auto" compact dropdownPosition="auto" onchange={(v) => onSetMonth(parseInt(v))} options={monthSelectOptions} showChevron={false} value={String(month)} />
             <input
                 type="number"
-                use:numericArrows
+                use:numericArrows={{min: 1}}
                 data-testid="calendar-year-input"
                 value={year}
-                min="1900"
                 max="2200"
                 onchange={(e) => onSetYear(parseInt(e.currentTarget.value) || new Date().getFullYear())}
                 class="w-14 px-1 py-0.5 text-xs font-semibold text-center bg-transparent border-none outline-none
