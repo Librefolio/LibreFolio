@@ -90,8 +90,9 @@ backend/app/services/financial_math/
 │   ├── daily_state.py       DailyStateBuilder: the daily state vector, without I/O
 │   ├── derived_views.py     DerivedViewsBuilder (history, P&L, allocation…), cost positions
 │   ├── data_quality.py      FX pair slug, configured pair sets, build_data_quality_report()
-│   ├── period.py            a period's boundary states, its P&L, the identity that closes it and its residual (the AI Export reconciliation, J-14); the day's P&L change
-│   ├── contributions.py     a position's row in the Dashboard's Performance table: its period P&L (`position_period_pnl`), return on the start value, annualized returns, the internal-transfer split (P22)
+│   ├── period.py            a period's boundary states, its P&L, the identity that closes it and its residual (the AI Export reconciliation, J-14); the day's P&L change; the period's realized sales (`period_realized_sales`)
+│   ├── contributions.py     a position's row in the Dashboard's Performance table: its period P&L (`position_period_pnl`), return on the start value, annualized returns, the internal-transfer split (P22: `transfer_tract` is the tract of one transfer for one broker)
+│   ├── position_series.py   a position's series, as steps, for the Dashboard's positions chart: P&L since the period's start (the Performance row's, at each day), its base and the percent on it, from the engine's frames of that position (J5-1, #48; D-P4)
 │   └── engine.py            PortfolioCalculationEngine: loads a scope, runs the steps, caches
 └── lots/                    lots analysis math, called by lots_analysis_service.py
     ├── __init__.py          docstring only
@@ -99,7 +100,7 @@ backend/app/services/financial_math/
     ├── conversions.py       FxRateResolver (its rates read as steps), a closure's legs at their own dates, and the conversions each view needs
     ├── economic_events.py   income and FEE/TAX as engine inputs, their outputs, what is withheld
     ├── histories.py         value, return, price, market price and performance histories
-    ├── change_days.py       the days the daily series can change on, and their expansion to every day of the window
+    ├── change_days.py       the days the lots' series can change on (`price_candidate_days`, `lot_change_days`), a lazy calendar (`DayRange`) and the series as steps (`history_steps`, D-P4)
     ├── summary.py           a lot's figures: the cost of its open quantity, value and P&L by direction, the lot summary
     ├── scope_boundary.py    transfer legs whose partner sits outside the scope, read at its edge: in at their cost, out at market
     └── average_cost_lines.py  per-broker and cumulative WAC history points
@@ -355,6 +356,39 @@ quote of another asset does not split it. A position not held on a day has no fr
 closed position simply ends. The frames are grouped in the order the replay first met each
 position, each group by start: summing from `Decimal("0")`, in that order, the market values (not
 None) of the frames covering a day gives that day's `market_value` exactly. Off by default.
+
+**The positions chart (#48).** `position_series.build_position_series()` turns the frames of the chosen positions into one
+series each, as steps (a point holds from its `date` to its `through`), and nothing else of the engine: it reads the realized sales, the internal transfers, the
+cost of what was bought (`acquisitions_from_average_costs()`) and the income and costs by day
+(`NativeCash.position_flow_steps()`). Its `pnl` on a day is the Performance row's `period_pnl` of the period from `date_from`
+to that day, by the same function (`contributions.position_period_pnl`), so the last point of a series is the table's row.
+Its `base`, the capital the percent is on, is the value at `date_from` in absolute terms, plus the cost of what is bought
+after it, plus what an internal transfer brings in: at its value on arrival when the period splits its tract
+(`contributions.counted_tract`, the units' pnl is then measured from that value), else at the cost moved, as the table's base
+does; a sale never lowers it, and a base that is 0 or unknown gives no percent (the developer's decision of 23/10). The
+sales it reads are the table's, `period.period_realized_sales`, and the tract of a transfer is `contributions.transfer_tract`:
+the series keeps no copy of either rule. The steps cover every calendar day of a position from its first to its last day, without a gap (D-P4): the days a position's
+figures can change on are those of its inputs (a frame starting or ending, a sale, an income or a cost, a purchase, a transfer's
+tract or arrival, the period's start), each read as ever by a lookup, and two consecutive points with the same figures, down to the
+exponent of each Decimal, are one (`series_steps.steps_from_rows`). Expanding every point over its days gives the daily series
+field for field; a date typed in the year 1 costs what the changes cost, not 740 000 points. A position below the dust threshold is not held, and its
+point is 0 where the engine's day totals still count the dust. A closed position ends the day it went to 0, with its final
+pnl; units sent to another broker of the scope stay the sender's until they arrive (P22), so its series goes on to the
+arrival, holding the pnl of the last day held, and the tract settles it there. An asset asked without a broker is the sum
+over the brokers that held it: the tracts of a transfer between them cancel and what it brings in is not new capital. A value
+that is not known leaves `market_value` None and `pnl` the sum of the parts that are known, with `complete` False, as the
+row does. `PortfolioService.get_positions_series()` runs the engine once with `include_positions` (the blob cache keeps it
+between two selections) and serves `POST /api/v1/portfolio/positions-series`.
+
+**The lots' histories as steps (D-P4).** The seven daily series of `POST /portfolio/lots/analysis` (value, return, price, market price,
+broker and cumulative average cost, performance) give a row for each stretch of days in which nothing changes: it holds from its
+`date` to its `through`, both included, and the response has the `range` they lie in. The analysis never walks the calendar. The
+days the converted market price can change on are known from the inputs (`AssetPriceSeries.observation_dates`, the steps of the
+rates, `FxRateResolver.rate_change_days()`, the events and the end of the days valued at cost, each with the day after it:
+`change_days.price_candidate_days`); the price is read on those, the builders run on the days `lot_change_days` keeps, and
+`history_steps` turns their rows into steps per key: consecutive identical rows, with the exponent of every Decimal, are one, and a
+change day where a key has no row after its first opens a gap. The days between two reads repeat the day before to the digit, so
+expanding the steps gives the daily answer field for field. A missing rate is a gap of the pair over the stretch it holds.
 
 **The asset dimension.** Each state carries `by_asset` (asset id → the held market value summed into
 `market_value`, every broker; no cash). `DerivedViewsBuilder.build_asset_allocation_current()` and

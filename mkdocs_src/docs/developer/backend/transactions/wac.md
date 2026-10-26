@@ -411,7 +411,7 @@ page explains how both reach the Dashboard.
 
 ### 📊 PortfolioService
 
-- **Realized of the period.** `_period_realized_sales()` keeps the engine's
+- **Realized of the period.** `period.period_realized_sales()` (`financial_math/portfolio/period.py`) keeps the engine's
   `realized_sales` — SELLs and outgoing `ADJUSTMENT`s — dated in
   `(date_from, date_to]` whose proceeds and cost are both known; realized =
   Σ (proceeds − cost). A disposal left out is reported instead (its pair, or the

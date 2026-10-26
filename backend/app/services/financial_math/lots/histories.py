@@ -238,6 +238,7 @@ def build_performance_history(  # noqa: C901 — cash-flow collection loops with
     return [
         PerformanceHistoryPoint(
             date=current_date,
+            through=current_date,
             roi=None if invalid_external_flow_from is not None and current_date >= invalid_external_flow_from else roi_map.get(current_date),
             twrr=None if invalid_external_flow_from is not None and current_date >= invalid_external_flow_from else twrr_map.get(current_date),
         )
@@ -482,6 +483,7 @@ def build_value_history(
                 LotValueHistoryPoint(
                     lot_id=lot_id,
                     date=current_date,
+                    through=current_date,
                     open_value=open_value,
                     proceeds=proceeds,
                     total_value=total_value,
@@ -553,6 +555,7 @@ def build_return_history(
                 LotReturnHistoryPoint(
                     lot_id=lot_id,
                     date=current_date,
+                    through=current_date,
                     total_return=total_return,
                     relative_return=relative_return,
                     reference_price_source=reference_price_source if relative_return is not None else None,
@@ -605,7 +608,7 @@ def build_price_history(
             if entry is None:
                 continue
             market_price, is_estimated = entry
-            points.append(LotPriceHistoryPoint(lot_id=lot_id, date=current_date, market_price=market_price, currency=target_currency, estimated=is_estimated))
+            points.append(LotPriceHistoryPoint(lot_id=lot_id, date=current_date, through=current_date, market_price=market_price, currency=target_currency, estimated=is_estimated))
     return points
 
 
@@ -627,7 +630,7 @@ def build_market_price_history(
         if entry is None:
             continue
         market_price, is_estimated = entry
-        points.append(MarketPriceHistoryPoint(date=current_date, market_price=market_price, currency=target_currency, estimated=is_estimated))
+        points.append(MarketPriceHistoryPoint(date=current_date, through=current_date, market_price=market_price, currency=target_currency, estimated=is_estimated))
     return points
 
 

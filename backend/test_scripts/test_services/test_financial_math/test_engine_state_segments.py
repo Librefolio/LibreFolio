@@ -718,7 +718,7 @@ class TestSegmentBoundedReaders:
     def test_the_data_quality_report_lists_the_incomplete_days(self, century):
         """Precondition: the whole-history report counts ~275 incomplete NAV days, while the segments are few."""
         report = build_data_quality_report(century.daily_states)
-        assert len(report.incomplete_nav_dates) > 200
+        assert sum((span.end - span.start).days + 1 for span in report.incomplete_nav_ranges) > 200
         assert len(century.daily_states.segments) < 100
 
     @pytest.mark.parametrize(

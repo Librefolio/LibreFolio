@@ -9,7 +9,7 @@ from decimal import Decimal
 import pytest
 from pydantic import BaseModel, ConfigDict
 
-from backend.app.schemas.common import Currency, DateRangeModel
+from backend.app.schemas.common import Currency, DateRangeModel, DateSpan
 from backend.app.schemas.portfolio import (
     DataQualityExcludedAsset,
     DataQualityExclusionReason,
@@ -655,14 +655,17 @@ async def test_portfolio_scope_reuses_one_report_for_weights_and_twrr(monkeypatc
         history=[
             PortfolioHistoryPoint.model_construct(
                 date=date(2026, 1, 1),
+                through=date(2026, 1, 1),
                 twrr=Decimal("0"),
             ),
             PortfolioHistoryPoint.model_construct(
                 date=date(2026, 1, 2),
+                through=date(2026, 1, 2),
                 twrr=Decimal("0.1"),
             ),
             PortfolioHistoryPoint.model_construct(
                 date=date(2026, 1, 3),
+                through=date(2026, 1, 3),
                 twrr=Decimal("0.045"),
             ),
         ],
@@ -849,7 +852,7 @@ def slice_report(
                 for asset_id, value in holdings.items()
             ],
         ),
-        history=[PortfolioHistoryPoint.model_construct(date=point_date, twrr=value) for point_date, value in (twrr or [])],
+        history=[PortfolioHistoryPoint.model_construct(date=point_date, through=point_date, twrr=value) for point_date, value in (twrr or [])],
         data_quality=DataQualityReport(),
     )
 
@@ -1493,10 +1496,10 @@ def _missing_price(asset_id: int) -> MissingPriceAsset:
         pytest.param({"missing_price_assets": [_missing_price(9)]}, "missing_prices", "risk.warnings.data_quality_missing_prices", id="missing-price"),
         pytest.param({"unresolved_fx_pairs": ["GBP/EUR"]}, "missing_fx_rates", "risk.warnings.data_quality_missing_fx_rates", id="unresolved-fx"),
         pytest.param({"missing_fx_pairs": [WACMissingPairInfo(pair="CHF/EUR")]}, "missing_fx_rates", "risk.warnings.data_quality_missing_fx_rates", id="missing-fx"),
-        pytest.param({"incomplete_nav_dates": [date(2026, 1, 5)]}, "incomplete_dates", "risk.warnings.data_quality_incomplete_dates", id="incomplete-nav"),
-        pytest.param({"incomplete_book_value_dates": [date(2026, 1, 5)]}, "incomplete_dates", "risk.warnings.data_quality_incomplete_dates", id="incomplete-book-value"),
-        pytest.param({"incomplete_allocation_dates": [date(2026, 1, 5)]}, "incomplete_dates", "risk.warnings.data_quality_incomplete_dates", id="incomplete-allocation"),
-        pytest.param({"incomplete_valuation_dates": [date(2026, 1, 5)]}, "incomplete_dates", "risk.warnings.data_quality_incomplete_dates", id="incomplete-valuation"),
+        pytest.param({"incomplete_nav_ranges": [DateSpan(start=date(2026, 1, 5), end=date(2026, 1, 5))]}, "incomplete_dates", "risk.warnings.data_quality_incomplete_dates", id="incomplete-nav"),
+        pytest.param({"incomplete_book_value_ranges": [DateSpan(start=date(2026, 1, 5), end=date(2026, 1, 5))]}, "incomplete_dates", "risk.warnings.data_quality_incomplete_dates", id="incomplete-book-value"),
+        pytest.param({"incomplete_allocation_ranges": [DateSpan(start=date(2026, 1, 5), end=date(2026, 1, 5))]}, "incomplete_dates", "risk.warnings.data_quality_incomplete_dates", id="incomplete-allocation"),
+        pytest.param({"incomplete_valuation_ranges": [DateSpan(start=date(2026, 1, 5), end=date(2026, 1, 5))]}, "incomplete_dates", "risk.warnings.data_quality_incomplete_dates", id="incomplete-valuation"),
     ],
 )
 def test_each_data_quality_cause_alone_gets_exactly_its_own_warning(fields, cause, key):
@@ -1521,8 +1524,8 @@ def test_every_data_quality_cause_together_gets_one_warning_each_and_no_generic_
         missing_price_assets=[_missing_price(9)],
         unresolved_fx_pairs=["GBP/EUR"],
         missing_fx_pairs=[WACMissingPairInfo(pair="CHF/EUR", dates=[date(2026, 1, 5)])],
-        incomplete_nav_dates=[date(2026, 1, 5), date(2026, 1, 6)],
-        incomplete_valuation_dates=[date(2026, 1, 6), date(2026, 1, 7)],
+        incomplete_nav_ranges=[DateSpan(start=date(2026, 1, 5), end=date(2026, 1, 6))],
+        incomplete_valuation_ranges=[DateSpan(start=date(2026, 1, 6), end=date(2026, 1, 7))],
     )
 
     warnings = data_quality_warnings(report)
@@ -1542,6 +1545,50 @@ def test_every_data_quality_cause_together_gets_one_warning_each_and_no_generic_
     assert by_cause["missing_fx_rates"].message_params == {"pairs": "CHF/EUR, GBP/EUR"}
     # Dates are counted once across the four lists, not summed.
     assert by_cause["incomplete_dates"].message_params == {"count": 3}
+
+
+def _steps_report(*steps: tuple[date, date, str | None]) -> PortfolioReportResponse:
+    """A report whose history is steps: ``(date, through, cumulative twrr)``."""
+    report = slice_report(holdings={1: "100"})
+    report.history = [PortfolioHistoryPoint.model_construct(date=first, through=last, twrr=None if twrr is None else Decimal(twrr)) for first, last, twrr in steps]
+    return report
+
+
+def test_the_portfolio_twrr_reads_a_step_on_every_day_it_holds():
+    """D-P4: a step holds its cumulative TWRR from ``date`` to ``through``; the returns are those of the daily history the steps
+    stand for, on the observation days and on every calendar day alike."""
+    steps = _steps_report((date(2026, 1, 1), date(2026, 1, 3), "0"), (date(2026, 1, 4), date(2026, 1, 6), "0.1"), (date(2026, 1, 7), date(2026, 1, 7), "0.045"))
+    daily = slice_report(holdings={1: "100"}, twrr=[(date(2026, 1, day), Decimal(value)) for day, value in ((1, "0"), (2, "0"), (3, "0"), (4, "0.1"), (5, "0.1"), (6, "0.1"), (7, "0.045"))])
+
+    assert portfolio_twrr_returns(steps) == portfolio_twrr_returns(daily)
+    observed = {date(2026, 1, 3), date(2026, 1, 5), date(2026, 1, 7)}
+    on_observed = portfolio_twrr_returns(steps, observed)
+    assert on_observed == portfolio_twrr_returns(daily, observed)
+    # The TWRR stays exact across the days dropped: 0 → 0.1 over the 4th-5th, then 0.1 → 0.045.
+    assert on_observed[1] == (date(2026, 1, 3), date(2026, 1, 5), date(2026, 1, 7))
+    assert on_observed[2] == pytest.approx((0.0, 0.1, -0.05))
+
+
+def test_the_portfolio_twrr_skips_the_steps_that_have_none_and_starts_at_the_first_that_has_one():
+    steps = _steps_report((date(2026, 1, 1), date(2026, 1, 2), None), (date(2026, 1, 3), date(2026, 1, 4), "0"), (date(2026, 1, 5), date(2026, 1, 6), "0.02"))
+
+    baseline, dates, returns, calendar_days, _annualization, _coverage = portfolio_twrr_returns(steps, {date(2026, 1, 2), date(2026, 1, 5), date(2026, 1, 6)})
+
+    assert baseline == date(2026, 1, 3)
+    assert dates == (date(2026, 1, 5), date(2026, 1, 6))  # the 2nd has no TWRR: it is not a day of the series
+    assert returns == pytest.approx((0.02, 0.0))
+    assert calendar_days == 3
+
+
+def test_a_history_with_a_step_of_seven_centuries_is_read_on_the_observation_days_alone():
+    """The year-1 typo: the observed days are read by a lookup in the steps, never a walk of the calendar."""
+    steps = _steps_report((date(1, 1, 3), date(2020, 1, 1), "0"), (date(2020, 1, 2), date(2026, 1, 1), "0.05"))
+
+    baseline, dates, returns, _calendar_days, _annualization, _coverage = portfolio_twrr_returns(steps, {date(2020, 1, 2), date(2025, 6, 2)})
+
+    assert baseline == date(1, 1, 3)
+    assert dates == (date(2020, 1, 2), date(2025, 6, 2))
+    assert returns == pytest.approx((0.05, 0.0))
 
 
 def test_the_generic_data_quality_warning_appears_only_when_no_cause_applies():
@@ -1658,7 +1705,7 @@ SPY = {"instance_id": "spy", "analytic_code": "context_spy"}
 # past the staleness threshold, and a date dropped from the joint calendar. Each names its own cause.
 JOINT_CALENDAR_DEGRADATIONS = [
     pytest.param({"carried_forward_price_points": 3, "carried_forward_price_asset_ids": [BENCHMARK_ASSET_ID]}, "stale_prices", id="carried-benchmark-price"),
-    pytest.param({"incomplete_valuation_dates": [date(2026, 1, 12)]}, "incomplete_dates", id="dropped-calendar-date"),
+    pytest.param({"incomplete_valuation_ranges": [DateSpan(start=date(2026, 1, 12), end=date(2026, 1, 12))]}, "incomplete_dates", id="dropped-calendar-date"),
 ]
 
 
