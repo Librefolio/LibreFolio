@@ -752,6 +752,23 @@ describe('dayBefore', () => {
     });
 });
 
+/**
+ * W5-11: Date.UTC reads a year 0..99 as 1900..1999. `dayBefore` of a date typed with a short year (D-P4) must stay in
+ * that year, on the proleptic Gregorian calendar.
+ */
+describe('dayBefore — years below 100 (W5-11)', () => {
+    it.each([
+        ['0024-03-01', '0024-02-29'],
+        ['0001-01-02', '0001-01-01'],
+        ['0100-01-01', '0099-12-31'],
+        ['0100-03-01', '0100-02-28'],
+        ['2024-03-01', '2024-02-29'],
+    ])('the day before %s is %s', async (value, expected) => {
+        const dayBefore = await c2('dayBefore');
+        expect(dayBefore(value)).toBe(expected);
+    });
+});
+
 // ---------------------------------------------------------------------------
 // formatIsoDay — the day in the interface language (M-18 CP2)
 // ---------------------------------------------------------------------------
@@ -818,6 +835,30 @@ describe('formatIsoDay — the day in the interface language (M-18 CP2)', () => 
         expect(formatIsoDay(undefined)).toBe('—');
         expect(formatIsoDay('')).toBe('—');
         expect(formatIsoDay('not-a-day')).toBe('not-a-day');
+    });
+});
+
+/**
+ * W5-11: a year below 1000 is not written through Intl: `01/03/24` would read as 2024, a typo that looks right. The ISO
+ * text is shown as it is. A four-digit year keeps the localized notation.
+ */
+describe('formatIsoDay — years below 1000 (W5-11)', () => {
+    it.each(['0024-03-01', '0999-05-06', '0001-01-01', '0099-12-31'])('writes %s as the ISO text, not through Intl', async (value) => {
+        const formatIsoDay = await c2('formatIsoDay');
+        expect(formatIsoDay(value)).toBe(value);
+    });
+
+    it('an instant with a short year is read as its own ISO day', async () => {
+        const formatIsoDay = await c2('formatIsoDay');
+        expect(formatIsoDay('0024-03-01T10:00:00Z')).toBe('0024-03-01');
+    });
+
+    it('control: year 1000 and 2024 keep the localized notation', async () => {
+        const formatIsoDay = await c2('formatIsoDay');
+        const intl = (y: number) => new Date(Date.UTC(y, 2, 1)).toLocaleDateString('en-US', {timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit'});
+        expect(formatIsoDay('2024-03-01')).toBe(intl(2024));
+        expect(formatIsoDay('2024-03-01')).toBe('03/01/2024');
+        expect(formatIsoDay('1000-03-01')).toBe(intl(1000));
     });
 });
 
@@ -1111,6 +1152,59 @@ describe('buildSetTimeline', () => {
         expect(timeline?.end).toBe('2020-09-30');
         expect(rowOf(timeline, 'custody')?.gaps).toEqual([]);
         expect(rowOf(timeline, 'cash')?.gaps).toEqual([]);
+    });
+});
+
+/**
+ * W5-11: a coverage dated with a short year (a typo the date picker now lets through, D-P4) is the year 24, two thousand
+ * years before 2024 — not 1924, a century before. The distances are the true ones, in days of the proleptic calendar.
+ */
+describe('buildSetTimeline — years below 100 (W5-11)', () => {
+    const ROLES = ['custody'];
+    // 0024-03-01 → 2024-03-31 is 730 515 days; the short coverage lasts 30 days, the long one starts 730 485 days in.
+    const SPAN = 730515;
+    const shortFile = {file_id: 'f-short', role: 'custody', coverage: [{axis: 'trade', start: '0024-03-01', end: '0024-03-31'}]};
+    const longFile = {file_id: 'f-long', role: 'custody', coverage: [{axis: 'trade', start: '2024-03-01', end: '2024-03-31'}]};
+    const barOf = (timeline: SetTimeline | null, fileId: string) => timeline?.rows[0]?.bars.find((bar) => bar.fileId === fileId);
+
+    it('spans from year 24 to year 2024, written back as ISO', async () => {
+        const buildSetTimeline = await c2('buildSetTimeline');
+        const timeline = buildSetTimeline({members: [longFile, shortFile]}, ROLES);
+
+        expect(timeline?.start).toBe('0024-03-01');
+        expect(timeline?.end).toBe('2024-03-31');
+        expect(barOf(timeline, 'f-short')).toMatchObject({start: '0024-03-01', end: '0024-03-31'});
+    });
+
+    it('places the bars by the true distance, about two thousand years apart', async () => {
+        const buildSetTimeline = await c2('buildSetTimeline');
+        const timeline = buildSetTimeline({members: [longFile, shortFile]}, ROLES);
+        const short = barOf(timeline, 'f-short');
+        const long = barOf(timeline, 'f-long');
+
+        expect(short?.leftPct).toBeCloseTo(0, 9);
+        expect(short?.widthPct).toBeCloseTo((30 / SPAN) * 100, 9);
+        expect(long?.leftPct).toBeCloseTo((730485 / SPAN) * 100, 9);
+        expect(long?.widthPct).toBeCloseTo((30 / SPAN) * 100, 9);
+    });
+
+    it('the gap between them runs from the day after the short coverage to the eve of the long one', async () => {
+        const buildSetTimeline = await c2('buildSetTimeline');
+        const timeline = buildSetTimeline({members: [longFile, shortFile]}, ROLES);
+        const [gap] = timeline?.rows[0]?.gaps ?? [];
+
+        expect(timeline?.rows[0]?.gaps).toHaveLength(1);
+        expect(gap).toMatchObject({start: '0024-04-01', end: '2024-02-29'});
+        expect(gap.widthPct).toBeCloseTo((730453 / SPAN) * 100, 9);
+    });
+
+    it('a history that starts at year 1 is placed at the left edge', async () => {
+        const buildSetTimeline = await c2('buildSetTimeline');
+        const timeline = buildSetTimeline({members: [longFile], history_start: '0001-01-01', history_end: '0001-12-31', history_count: 3}, ROLES);
+
+        expect(timeline?.start).toBe('0001-01-01');
+        expect(timeline?.history).toMatchObject({start: '0001-01-01', end: '0001-12-31', count: 3});
+        expect(timeline?.history?.leftPct).toBeCloseTo(0, 9);
     });
 });
 

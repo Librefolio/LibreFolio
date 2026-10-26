@@ -41,6 +41,7 @@ from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.plugin_settings.fields import PluginSettingField, SettingOption, SettingScope, SettingType
 from backend.app.services.provider_registry import register_provider
 
 logger = structlog.get_logger(__name__)
@@ -207,13 +208,39 @@ DATE_FORMATS = [
     "%d %B %Y",  # Full text: 03 January 2025
 ]
 
+#: ``date_order`` setting: how a date such as 03/04/2025 is read. ``day_first`` is the behaviour before the field existed.
+DAY_FIRST = "day_first"
+MONTH_FIRST = "month_first"
 
-def parse_date(value: str) -> Optional[date]:
+#: ``month_first``: for the slash, the dash and the dot the month is tried first and the day order is the fallback, so a value the
+#: first cannot read (25/12/2025) is still read. ISO, compact and text dates have one reading and do not move.
+MONTH_FIRST_DATE_FORMATS = [
+    "%Y-%m-%d",
+    "%m/%d/%Y",
+    "%d/%m/%Y",
+    "%m-%d-%Y",
+    "%d-%m-%Y",
+    "%Y/%m/%d",
+    "%m.%d.%Y",
+    "%d.%m.%Y",
+    "%Y%m%d",
+    "%d %b %Y",
+    "%d %B %Y",
+]
+
+
+def _date_formats(order: str) -> List[str]:
+    """The formats of ``order``: ``DATE_FORMATS`` untouched for ``day_first`` (and for a value the plugin does not know)."""
+    return MONTH_FIRST_DATE_FORMATS if order == MONTH_FIRST else DATE_FORMATS
+
+
+def parse_date(value: str, order: str = DAY_FIRST) -> Optional[date]:
     """
     Parse a date string using multiple format patterns.
 
     Args:
         value: Date string to parse
+        order: ``day_first`` (default) or ``month_first``: which of 03/04/2025 and 04/03/2025 style wins when both read
 
     Returns:
         date object or None if parsing fails
@@ -222,7 +249,7 @@ def parse_date(value: str) -> Optional[date]:
     if not value:
         return None
 
-    for fmt in DATE_FORMATS:
+    for fmt in _date_formats(order):
         try:
             return datetime.strptime(value, fmt).date()
         except ValueError:
@@ -316,6 +343,25 @@ class GenericCSVBrokerProvider(BRIMProvider):
     Detection priority is 0 (lowest) - used as fallback when no broker-specific
     plugin matches the file.
     """
+
+    # The order of day and month is the user's: each one imports files of their own country's format. The default is the
+    # behaviour before the field existed, so nobody who never opened the setting sees a different date.
+    settings_fields = (
+        PluginSettingField(
+            key="date_order",
+            type=SettingType.SELECT,
+            scope=SettingScope.USER,
+            label="Order of day and month",
+            description="How a date such as 03/04/2025 is read: the day first (3 April) or the month first (4 March).",
+            default=DAY_FIRST,
+            options=(
+                SettingOption(DAY_FIRST, "Day first", label_key="pluginSettings.brim.broker_generic_csv.option.date_order.day_first"),
+                SettingOption(MONTH_FIRST, "Month first", label_key="pluginSettings.brim.broker_generic_csv.option.date_order.month_first"),
+            ),
+            label_key="pluginSettings.brim.broker_generic_csv.label.date_order",
+            description_key="pluginSettings.brim.broker_generic_csv.description.date_order",
+        ),
+    )
 
     @property
     def provider_code(self) -> str:
@@ -415,6 +461,9 @@ class GenericCSVBrokerProvider(BRIMProvider):
         # Track extracted asset info (BRIMExtractedAssetInfo objects)
         self._extracted_assets_raw: Dict[int, BRIMExtractedAssetInfo] = {}
 
+        # Read here, never in __init__: only the parse receives the values (detection and report sets run without them)
+        date_order = self.settings.get("date_order", DAY_FIRST)
+
         detected_delim = self.detect_csv_delimiter(file_path)
 
         try:
@@ -428,12 +477,12 @@ class GenericCSVBrokerProvider(BRIMProvider):
                 if "date" not in column_map:
                     raise BRIMParseError(
                         "Required column 'date' not found in CSV header",
-                        details={"headers": reader.fieldnames},
+                        details={"headers": reader.fieldnames, "code": "missing_columns", "context": {"columns": "date", "count": 1}},
                     )
                 if "type" not in column_map:
                     raise BRIMParseError(
                         "Required column 'type' not found in CSV header",
-                        details={"headers": reader.fieldnames},
+                        details={"headers": reader.fieldnames, "code": "missing_columns", "context": {"columns": "type", "count": 1}},
                     )
 
                 # Parse rows
@@ -447,6 +496,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
                             row_num=row_num,
                             transactions=transactions,
                             validation_issues=validation_issues,
+                            date_order=date_order,
                         )
                     except Exception as e:
                         warnings.append(f"Row {row_num}: {e!s}")
@@ -473,7 +523,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
         except BRIMParseError:
             raise
         except Exception as e:
-            raise BRIMParseError(f"Error reading CSV file: {e!s}", details={"file": file_path.name}) from e
+            raise BRIMParseError(f"Error reading CSV file: {e!s}", details={"file": file_path.name, "code": "file_unreadable", "context": {"error": str(e)}}) from e
 
         if not transactions:
             warnings.append("No valid transactions found in file")
@@ -519,6 +569,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
         row_num: int,
         transactions: List[TXCreateItem],
         validation_issues: List[BRIMValidationIssue],
+        date_order: str = DAY_FIRST,
     ) -> Optional[TXCreateItem]:
         """
         Parse a single CSV row into a TXCreateItem.
@@ -550,7 +601,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
         if not date_str:
             raise ValueError("Empty date value")
 
-        tx_date = parse_date(date_str)
+        tx_date = parse_date(date_str, date_order)
         if not tx_date:
             raise ValueError(f"Invalid date format: '{date_str}'")
 

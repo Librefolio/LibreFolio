@@ -12,6 +12,8 @@
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {tick} from 'svelte';
+import {get} from 'svelte/store';
+import {_} from '$lib/i18n';
 import {cleanup, fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
 import ImportWizardModal from './ImportWizardModal.svelte';
 import TransactionBulkModal, {type WorkspaceIntent} from '../bulk/TransactionBulkModal.svelte';
@@ -387,6 +389,76 @@ describe('ImportWizardModal — Confirm All parent merge', () => {
         expect(buildMergedTransactionsCalls).toHaveBeenCalledTimes(mergeCountBefore + 1);
         expect(screen.getByTestId('import-wizard-content')).toHaveAttribute('data-busy', 'false');
         expect(screen.getByTestId('import-wizard-assets-continue')).toBeEnabled();
+    });
+});
+
+/**
+ * A parse the server refuses (lot W5-5, backlog C-70b). The API answers 400 with `detail = {code: 'parse_failed', message,
+ * plugin_code, plugin_name, reason}`; the Step 3 failure list must show it in the UI language — the frame
+ * `importWizard.parseFailed` around the plugin's name and the translated reason — and never the English `message` of the
+ * object, which is the server's diagnostic. The expected text is what the real catalogue renders for those keys (`get(_)`),
+ * not a wording written in the test; the English diagnostic is the one string the failure list must not show.
+ */
+describe('ImportWizardModal — a parse the server refuses', () => {
+    const ENGLISH_DIAGNOSTIC = "Plugin 'Owned Parser' cannot parse file 'refused.csv': required column 'date' not found in the CSV header";
+    const REFUSAL_CONTEXT = {columns: 'date', count: 1};
+
+    beforeEach(async () => {
+        vi.clearAllMocks();
+        guideAnchors.clear();
+        guideState.active = null;
+        const broker = {id: 78, name: 'Refused parse broker', default_import_plugin: 'owned-parser', opened_at: '2020-01-01', icon_url: null, portal_url: null};
+        vi.mocked(getEditableBrokers).mockReturnValue([broker]);
+        vi.mocked(getBrokerInfo).mockImplementation((id) => (id === broker.id ? broker : null));
+        vi.mocked(zodiosApi.list_files_api_v1_brokers_import_files_get).mockResolvedValue([
+            {file_id: 'refused-file', filename: 'refused.csv', size_bytes: 128, status: 'uploaded', uploaded_at: '2026-09-14T08:00:00Z', compatible_plugins: ['owned-parser'], target_broker_id: broker.id, can_delete: true},
+        ]);
+        vi.mocked(zodiosApi.parse_file_api_v1_brokers_import_files__file_id__parse_post).mockRejectedValue(
+            Object.assign(new Error('Request failed with status code 400'), {
+                response: {
+                    status: 400,
+                    statusText: 'Bad Request',
+                    data: {
+                        detail: {
+                            code: 'parse_failed',
+                            message: ENGLISH_DIAGNOSTIC,
+                            plugin_code: 'owned-parser',
+                            plugin_name: 'Owned Parser',
+                            reason: {code: 'missing_columns', message: "required column 'date' not found in the CSV header", context: REFUSAL_CONTEXT},
+                        },
+                    },
+                },
+            }),
+        );
+        await setupI18n();
+    });
+
+    afterEach(() => {
+        cleanup();
+        guideAnchors.clear();
+        guideState.active = null;
+        vi.mocked(getEditableBrokers).mockReturnValue([]);
+        vi.mocked(getBrokerInfo).mockReturnValue(null);
+        vi.mocked(zodiosApi.list_files_api_v1_brokers_import_files_get).mockResolvedValue([]);
+    });
+
+    it('lists the failure in the UI language: the frame with the plugin and the translated reason, not the English diagnostic', async () => {
+        mount();
+        await waitFor(() => expect(screen.getByTestId('import-wizard-step1')).toHaveAttribute('data-busy', 'false'));
+        await fireEvent.click(screen.getByTestId('import-wizard-next'));
+        await waitFor(() => expect(screen.getByTestId('import-wizard-step2')).toHaveAttribute('data-busy', 'false'));
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-refused-file'));
+        await waitFor(() => expect(screen.getByTestId('import-wizard-parse')).toBeEnabled());
+        await fireEvent.click(screen.getByTestId('import-wizard-parse'));
+
+        const failures = await screen.findByTestId('import-wizard-parse-errors');
+
+        const translate = get(_);
+        const reason = translate('importWizard.parseRefusal.missing_columns', {values: REFUSAL_CONTEXT});
+        const expected = translate('importWizard.parseFailed', {values: {plugin_name: 'Owned Parser', reason}});
+        expect(failures.textContent, "the server's English diagnostic is not what the user reads").not.toContain(ENGLISH_DIAGNOSTIC);
+        expect(expected, 'premise: the catalogue has the frame (red until the keys are added)').not.toBe('importWizard.parseFailed');
+        expect(failures.textContent, 'the failure list shows the translated frame around the translated reason').toContain(expected);
     });
 });
 

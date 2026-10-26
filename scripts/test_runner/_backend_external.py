@@ -271,6 +271,39 @@ def external_brim_row_skips(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "BRIM row skips tests", verbose=verbose)
 
 
+def external_brim_operation_date(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that BRIM plugins record the operation date, never the value / settlement date (W-B88)."""
+    print_section("External: BRIM Operation Date Tests")
+    print_info("Testing: the transaction date is the day of the operation, not the value / settlement date")
+    print_info("Tests: rows whose two dates differ, per plugin; the Disnat settlement-date fallback for rows with no trade date")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_operation_date.py",
+                            test_names or None)
+    return run_command(cmd, "BRIM operation date tests", verbose=verbose)
+
+
+def external_brim_economic_rows(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that eToro, Swissquote, Revolut and Trading 212 import the rows with an economic effect they used to leave out (W-B87)."""
+    print_section("External: BRIM Economic Rows Tests")
+    print_info("Testing: overnight fees, SDRT, forex pairs and stock splits become transactions; the rows that cannot are still listed")
+    print_info("Tests: eToro FEE and TAX, Swissquote FX_CONVERSION pairs, Revolut and Trading 212 ADJUSTMENT with a possible_split todo")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_economic_rows.py",
+                            test_names or None)
+    return run_command(cmd, "BRIM economic rows tests", verbose=verbose)
+
+
+def external_brim_date_order(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the generic CSV plugin's date_order field: parity with the old behaviour, month_first, the declaration (CP12, W5-8)."""
+    print_section("External: BRIM Date Order Tests")
+    print_info("Testing: broker_generic_csv parse_date(value, order), the date_order setting and its declaration")
+    print_info("Tests: day_first is the old behaviour bit for bit, month_first mirrors the slash, dash and dot dates, the plugin declares the field")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_date_order.py",
+                            test_names or None)
+    return run_command(cmd, "BRIM date order tests", verbose=verbose)
+
+
 def external_all(verbose: bool = False,
                  providers: list = None, exclude_providers: list = None) -> bool:
     """Run all external tests (network-dependent)."""
@@ -325,6 +358,16 @@ These tests verify external API integrations:
     add_test(cat, "brim-row-skips", external_brim_row_skips, name="BRIM Row Skips",
              desc="Test the rows BRIM plugins leave out (known quietly, unknown loudly)", prereq="Sample files in test fixtures",
              tests="RowSkips helper, report_issue per plugin, silent rows, versions, plugin classification, catalogue keys")
+    add_test(cat, "brim-operation-date", external_brim_operation_date, name="BRIM Operation Date",
+             desc="Test that BRIM plugins date a transaction with the operation date, never the value / settlement date", prereq="Sample files in test fixtures",
+             tests="Directa, DEGIRO, InvestEngine, Saxo, Credit Agricole, Schwab, Disnat (incl. settlement fallback)")
+    add_test(cat, "brim-economic-rows", external_brim_economic_rows, name="BRIM Economic Rows",
+             desc="Test that eToro, Swissquote, Revolut and Trading 212 import the rows with an economic effect", prereq="Sample files in test fixtures",
+             tests="eToro overnight fee and SDRT, Swissquote forex pairs, Revolut and Trading 212 stock splits, rows still listed")
+    add_test(cat, "brim-date-order", external_brim_date_order, name="BRIM Date Order",
+             desc="Test the generic CSV plugin's date_order field (CP12, W5-8): day_first parity with the old behaviour, month_first, the declaration", prereq="Sample files in test fixtures",
+             tests="parse_date parity with a frozen reference, generic samples with and without day_first bound, month_first on slash/dash/dot, field declared as the contract says",
+             isolation="pure")
     add_test(cat, "all", external_all, test_names=False, name="All External Tests",
              desc="Run all external tests")
     registry["external"] = cat

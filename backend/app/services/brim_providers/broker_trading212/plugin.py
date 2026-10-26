@@ -39,12 +39,12 @@ from datetime import date as date_type
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import structlog
 
 from backend.app.db.models import TransactionType
-from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMParseOutput, BRIMValidationIssue
+from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMFieldTodo, BRIMParseOutput, BRIMValidationIssue
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
@@ -92,10 +92,38 @@ SKIP_TYPES = [
 # Types left out that change the quantity, the shares or the cash: the plugin does not import them yet, so a notice with the link to
 # open an issue lists them (W-B87, D-W85-4).
 NOT_IMPORTED_TYPES = [
-    "stock split",
     "stock distribution",
     "currency conversion",
 ]
+
+
+# A stock split is two rows, ``Stock split close`` (the old shares leave) and ``Stock split open`` (the new ones arrive), with the same
+# ISIN and a ``Time`` a few milliseconds apart. More shares after than before is a multiplicative split: it enters as an incoming
+# ADJUSTMENT of the difference at no cost, flagged ``possible_split`` (W-B87). Fewer shares (a reverse split), as many, or a row
+# without its partner is not imported: it is listed.
+SPLIT_CLOSE = "stock split close"
+SPLIT_OPEN = "stock split open"
+SPLIT_PAIR_SECONDS = 2.0
+
+
+def _parse_trading212_timestamp(value: str) -> Optional[datetime]:
+    """The ``Time`` of a row to the microsecond, ``None`` when it cannot be read."""
+    value = value.strip()
+    for fmt in ("%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S"):
+        try:
+            return datetime.strptime(value[:26], fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def _split_shares(row: Dict[str, str]) -> Optional[Decimal]:
+    """The shares of a split row: ``No. of shares``, or, in the layout the real export has for these rows (one cell shifted to the
+    right: the order id sits in ``Price / share``), the cell after it."""
+    shares = _parse_trading212_number(row.get(COL_SHARES, "") or "")
+    if shares is None:
+        shares = _parse_trading212_number(row.get("Currency (Price / share)", "") or "")
+    return shares
 
 
 def _parse_trading212_datetime(value: str) -> Optional[date_type]:
@@ -199,6 +227,8 @@ class Trading212BrokerProvider(BRIMProvider):
         asset_to_fake_id: Dict[str, int] = {}
         next_fake_id = FAKE_ASSET_ID_BASE
         skips = io.RowSkips()
+        field_todos: List[BRIMFieldTodo] = []
+        split_rows: List[Tuple[int, Dict[str, str], str]] = []
         quiet = 0
 
         detected_delim = self.detect_csv_delimiter(file_path)
@@ -216,7 +246,11 @@ class Trading212BrokerProvider(BRIMProvider):
                     if not action:
                         continue
 
-                    if any(skip in action for skip in NOT_IMPORTED_TYPES):
+                    if action in (SPLIT_CLOSE, SPLIT_OPEN):
+                        split_rows.append((row_num, row, action))
+                        continue
+
+                    if any(skip in action for skip in NOT_IMPORTED_TYPES) or "stock split" in action:
                         skips.unknown(row_num, row, f"not imported yet: {action}")
                         continue
 
@@ -350,13 +384,15 @@ class Trading212BrokerProvider(BRIMProvider):
                             tags=["import", "trading212", "tax"],
                         )
 
+            self._import_splits(split_rows, reader.fieldnames or [], broker_id, transactions, validation_issues, field_todos, extracted_assets, asset_to_fake_id, skips)
+
         except FileNotFoundError:
-            raise BRIMParseError(f"File not found: {file_path}") from None
+            raise BRIMParseError(f"File not found: {file_path}", details={"code": "file_not_found", "context": {"file": file_path.name}}) from None
         except Exception as e:
-            raise BRIMParseError(f"Error parsing file: {e}") from e
+            raise BRIMParseError(f"Error parsing file: {e}", details={"code": "file_unreadable", "context": {"error": str(e)}}) from e
 
         if not transactions:
-            raise BRIMParseError("No valid transactions found in file")
+            raise BRIMParseError("No valid transactions found in file", details={"code": "no_valid_transactions"})
 
         # Convert raw dict to BRIMExtractedAssetInfo
         extracted_assets_typed: Dict[int, BRIMExtractedAssetInfo] = {
@@ -381,13 +417,108 @@ class Trading212BrokerProvider(BRIMProvider):
             transactions=transactions,
             warnings=[*warnings, *skips.notices()],
             validation_issues=validation_issues,
+            field_todos=field_todos,
             extracted_assets=extracted_assets_typed,
         )
 
+    def _import_splits(
+        self,
+        split_rows: List[Tuple[int, Dict[str, str], str]],
+        headers: List[str],
+        broker_id: int,
+        transactions: List[TXCreateItem],
+        validation_issues: List[BRIMValidationIssue],
+        field_todos: List[BRIMFieldTodo],
+        extracted_assets: Dict[int, Dict[str, Optional[str]]],
+        asset_to_fake_id: Dict[str, int],
+        skips: io.RowSkips,
+    ) -> None:
+        """Pair the ``close`` and ``open`` rows of each split; a multiplicative one becomes an incoming ADJUSTMENT at no cost."""
+        by_key: Dict[str, Tuple[List[Tuple[int, Dict[str, str], datetime, Decimal]], List[Tuple[int, Dict[str, str], datetime, Decimal]]]] = {}
+        unreadable: List[Tuple[int, Dict[str, str], str]] = []
+        for row_num, row, action in split_rows:
+            moment = _parse_trading212_timestamp(row.get(COL_TIME, ""))
+            shares = _split_shares(row)
+            key = row.get(COL_ISIN, "").strip() or row.get(COL_TICKER, "").strip()
+            if moment is None or shares is None or not key:
+                unreadable.append((row_num, row, action))
+                continue
+            closes, opens = by_key.setdefault(key, ([], []))
+            (closes if action == SPLIT_CLOSE else opens).append((row_num, row, moment, shares))
+
+        listed: List[Tuple[int, Dict[str, str], str]] = list(unreadable)
+        for key, (closes, opens) in by_key.items():
+            free_opens = list(opens)
+            for close in closes:
+                partner = min(((abs((o[2] - close[2]).total_seconds()), o) for o in free_opens), default=None, key=lambda pair: pair[0])
+                if partner is None or partner[0] > SPLIT_PAIR_SECONDS:
+                    listed.append((close[0], close[1], SPLIT_CLOSE))
+                    continue
+                free_opens.remove(partner[1])
+                added = partner[1][3] - close[3]
+                if added <= 0:
+                    listed.extend([(close[0], close[1], SPLIT_CLOSE), (partner[1][0], partner[1][1], SPLIT_OPEN)])
+                    continue
+                self._emit_split(partner[1][0], partner[1][1], added, close[3], headers, broker_id, transactions, validation_issues, field_todos, extracted_assets, asset_to_fake_id, key)
+            listed.extend((o[0], o[1], SPLIT_OPEN) for o in free_opens)
+
+        for row_num, row, action in sorted(listed, key=lambda item: item[0]):
+            skips.unknown(row_num, row, f"not imported yet: {action}")
+
+    def _emit_split(
+        self,
+        row_num: int,
+        row: Dict[str, str],
+        added: Decimal,
+        held_before: Decimal,
+        headers: List[str],
+        broker_id: int,
+        transactions: List[TXCreateItem],
+        validation_issues: List[BRIMValidationIssue],
+        field_todos: List[BRIMFieldTodo],
+        extracted_assets: Dict[int, Dict[str, Optional[str]]],
+        asset_to_fake_id: Dict[str, int],
+        key: str,
+    ) -> None:
+        """The incoming ADJUSTMENT of one multiplicative split, on the asset of ``key`` (ISIN, else ticker), and its todo."""
+        isin = row.get(COL_ISIN, "").strip()
+        ticker = row.get(COL_TICKER, "").strip()
+        if key in asset_to_fake_id:
+            asset_id = asset_to_fake_id[key]
+        else:
+            asset_id = min([FAKE_ASSET_ID_BASE + 1, *extracted_assets.keys(), *asset_to_fake_id.values()]) - 1
+            asset_to_fake_id[key] = asset_id
+            extracted_assets[asset_id] = {"extracted_symbol": ticker or None, "extracted_isin": isin or None, "extracted_name": row.get(COL_NAME, "").strip() or None}
+        currency = (row.get(COL_CURRENCY, "") or "").strip().upper()
+        if not currency.isalpha() or len(currency) != 3:
+            currency = (row.get("Currency (Price / share)", "") or "").strip().upper()
+        if not currency.isalpha() or len(currency) != 3:
+            currency = "EUR"
+        name = row.get(COL_NAME, "").strip()
+        description = f"stock split: {name}" if name else "stock split"
+        created = self._create_transaction(
+            row_num=row_num,
+            transactions=transactions,
+            validation_issues=validation_issues,
+            context=description,
+            broker_id=broker_id,
+            asset_id=asset_id,
+            type=TransactionType.ADJUSTMENT,
+            date=_parse_trading212_datetime(row.get(COL_TIME, "")),
+            quantity=added,
+            cash=None,
+            cost_basis_override=Currency(code=currency, amount=Decimal("0")),
+            description=description,
+            tags=["import", "trading212"],
+        )
+        if created is not None:
+            field_todos.append(io.possible_split_todo(len(transactions) - 1, row_num, headers, row, ticker=ticker or key, added_quantity=added, isin=isin or None, held_before=held_before))
+
     @property
     def plugin_version(self) -> str:
+        # 1.2.0 — a multiplicative stock split (``Stock split close`` + ``open``) becomes an incoming ADJUSTMENT at no cost, flagged ``possible_split`` (W-B87).
         # 1.1.0 — a split, a share distribution or a currency conversion is listed in a notice with the link to open an issue (W-B87).
-        return "1.1.0"
+        return "1.2.0"
 
     @property
     def docs_url(self) -> Optional[str]:

@@ -26,6 +26,18 @@ them by their names: there is nothing to map by hand.
     its own `currency`; you can also split a broker's history into several files, one per year
     for example, and import them together.
 
+!!! tip "Several date columns? Use the operation date"
+
+    LibreFolio reads **one** date column per file, never two. If the header holds several columns
+    with an accepted date name (for example `trade_date` and `settlement_date`, see the
+    [column reference](#column-reference)), it takes the **first one, reading from left to right**,
+    and ignores the others. A column with another name, such as `order date`, is not read at all.
+
+    Put in the date column the **operation date**: the day the trade or the transaction was made, not
+    the settlement or the booking day, which can come days later. This matters most when you write
+    the CSV by hand or have another AI write it for you: tell it to use the operation date, and to
+    leave the other dates out of the file.
+
 ### 🧯 If Something Goes Wrong
 
 - **"required column 'date' not found"** (or `type`): the first row lacks that column, or names it
@@ -36,6 +48,27 @@ them by their names: there is nothing to map by hand.
 - **The bulk workspace asks for a cost on an `ADJUSTMENT` row**: enter the cost of **one** unit,
   not the total value of the position. Only a row that adds units asks for it: one that removes
   units (a negative quantity) has no value.
+
+### 📅 Day and month order {: #day-month-order }
+
+A date such as `03/04/2025` can mean 3 April or 4 March, depending on the country. LibreFolio lets
+you choose how the Generic CSV importer reads it. The choice is yours alone: other people of the same
+LibreFolio keep their own.
+
+Open **Settings › Plugins**, find **Broker imports**, and set **Order of day and month**:
+
+- **Day first** (the default): `03/04/2025` is **3 April 2025**. This is how LibreFolio always read it,
+  so nothing changes if you never open the setting.
+- **Month first**: `03/04/2025` is **4 March 2025**, the way it is written in the United States.
+
+A date that only one order can read is always read right, whatever you choose: `25/12/2025` is 25
+December, because there is no month 25. Dates written like `2025-12-25`, `20251225` or `25 Dec 2025` have
+a single meaning and never move.
+
+!!! tip "Parse the file again after changing it"
+
+    A file you already parsed keeps the dates it was read with. After you change the setting, the file
+    shows the notice that it must be **parsed again**: parse it again, then review the rows.
 
 ---
 

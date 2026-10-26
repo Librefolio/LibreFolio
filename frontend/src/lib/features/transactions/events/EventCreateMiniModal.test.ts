@@ -17,10 +17,12 @@
  * `data-*` / values are asserted, never a translated text.
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
-import {writable} from 'svelte/store';
+import {get, writable} from 'svelte/store';
 import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import {zodiosApi} from '$lib/api';
 import {schemas} from '$lib/api/generated';
+import {_} from '$lib/i18n';
+import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
 
 vi.mock('$lib/api', () => {
     const cache = new Map<string, ReturnType<typeof vi.fn>>();
@@ -224,5 +226,233 @@ describe('EventCreateMiniModal — the save toast shows the value exactly, two t
         expect(uiLocale(), 'control: the English UI on jsdom’s en-US browser is written en-US').toBe('en-US');
 
         expect(await savedToast('1.5')).toMatch(numberToken('1.50'));
+    });
+});
+
+/**
+ * W-B87 — the mini modal for an ADJUSTMENT row (a stock split an importer flagged `possible_split`).
+ *
+ * For `defaultEventType="ADJUSTMENT"` the modal offers the types of `eventTypesForTx` (SPLIT, PRICE_ADJUSTMENT) and starts on
+ * `defaultEventTypeForTx` (SPLIT). A SPLIT's amount is a RATIO — new shares per old share, `3` for a 3 for 1, `0.25` for a 1 for
+ * 4 — not a sum of money, so for SPLIT:
+ *
+ *   - the label is the key `transactions.bulk.possibleSplit.ratioLabel`, not `transactions.fields.amount`;
+ *   - the placeholder is `2`, and the asset's currency is not written next to the field;
+ *   - a paragraph (`event-create-ratio-hint`, key `transactions.bulk.possibleSplit.ratioHint`) explains it, for SPLIT only;
+ *   - the typed ratio is never reformatted at the blur (`3` stays `3`, not `3.00`), and a suggestion (`suggestedAmount`: the
+ *     importer's rounded ratio) is written as given in the field, with no two decimals either; no suggestion: the field is empty;
+ *   - the create sends `{mode: 'create', type: 'SPLIT', value: {code: <asset currency>, amount: <the ratio, its digits>}}`;
+ *   - a ratio of 0, or one that is no number, is never sent (the message of `eventCreateAmountRequired`, as today).
+ *
+ * Every other type is untouched: the guards at the end are green today and must stay so.
+ *
+ * Text. The suite boots the real catalogue, so a label is compared with what `$_(key)` says for that very key, read in the test:
+ * no English is typed. The label of a ratio must be `ratioLabel`'s, and not the amount label's. Controls are found by
+ * `data-testid`; the type list is read through its `role="option"` entries, in the order the modal offers them.
+ */
+describe('EventCreateMiniModal — an ADJUSTMENT row creates a SPLIT whose amount is a ratio (W-B87)', () => {
+    const textOf = (key: string): string => get(_)(key);
+
+    beforeAll(async () => {
+        await setupI18n();
+    });
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        upsert.mockResolvedValue(SAVED);
+    });
+
+    afterEach(() => {
+        cleanup();
+    });
+
+    /** The modal for an ADJUSTMENT row, opened and seeded; returns the amount field. */
+    async function mountForAdjustment(props: Record<string, unknown> = {}) {
+        const handlers = mount({defaultEventType: 'ADJUSTMENT', ...props});
+        const amount = await seededAmount();
+        return {...handlers, amount};
+    }
+
+    /** The options of the type select, in the order offered: open it, read the `role="option"` entries. */
+    async function typeOptions(): Promise<HTMLElement[]> {
+        await fireEvent.click(screen.getByTestId('event-create-type-button'));
+        const dropdown = await screen.findByTestId('event-create-type-dropdown');
+        return within(dropdown).getAllByRole('option');
+    }
+
+    async function closeTypeSelect(): Promise<void> {
+        const button = screen.getByTestId('event-create-type-button');
+        if (button.getAttribute('aria-expanded') === 'true') await fireEvent.click(button);
+    }
+
+    function amountLabel(): HTMLElement {
+        const label = document.querySelector<HTMLElement>('label[for="event-amount"]');
+        if (!label) throw new Error('the amount field has no label[for="event-amount"]');
+        return label;
+    }
+
+    it('offers the SPLIT and PRICE_ADJUSTMENT events, in that order, and starts on SPLIT', async () => {
+        await mountForAdjustment();
+
+        expect(screen.getByTestId('event-create-type-button'), 'the select starts on SPLIT').toHaveTextContent(textOf('assetDetail.eventType.SPLIT'));
+        const options = await typeOptions();
+        expect(options, 'two events on offer, not the three of a dividend').toHaveLength(2);
+        expect(options[0]).toHaveTextContent(textOf('assetDetail.eventType.SPLIT'));
+        expect(options[1]).toHaveTextContent(textOf('assetDetail.eventType.PRICE_ADJUSTMENT'));
+    });
+
+    it('for SPLIT the field is a ratio: its own label, the placeholder 2, the explanation, no currency beside it', async () => {
+        const {amount} = await mountForAdjustment();
+
+        expect(textOf('transactions.bulk.possibleSplit.ratioLabel'), 'premise: the ratio label is not the amount label').not.toBe(textOf('transactions.fields.amount'));
+        expect(amountLabel()).toHaveTextContent(textOf('transactions.bulk.possibleSplit.ratioLabel'));
+        expect(amountLabel(), 'the field is no longer called amount').not.toHaveTextContent(textOf('transactions.fields.amount'));
+        expect(amount).toHaveAttribute('placeholder', '2');
+        expect(screen.queryByTestId('event-create-ratio-hint'), 'SPLIT is explained').not.toBeNull();
+        const beside = amount.parentElement as HTMLElement;
+        expect(beside.textContent ?? '', 'a ratio has no currency: neither the code').not.toContain('USD');
+        expect(beside.textContent ?? '', 'nor its symbol').not.toContain(getCurrencyInfo('USD').symbol);
+    });
+
+    it('the ratio opens empty when nothing is suggested, even if the other types would have been prefilled', async () => {
+        const {amount} = await mountForAdjustment();
+
+        expect(amount).toHaveValue('');
+        expect(screen.getByTestId('event-create-submit'), 'nothing to send yet').toBeDisabled();
+    });
+
+    it.each([
+        ['3', '3'],
+        ['0.25', '0.25'],
+        ['2.5', '2.5'],
+    ])('a suggested ratio of %s opens as %s: written as given, never with two decimals', async (suggested, shown) => {
+        const {amount} = await mountForAdjustment({suggestedAmount: suggested});
+
+        expect(amount).toHaveValue(shown);
+        expect(screen.getByTestId('event-create-submit')).toBeEnabled();
+    });
+
+    it.each([
+        ['3', '3'],
+        ['0.25', '0.25'],
+        ['1.5', '1.5'],
+    ])('a ratio of %s stays %s at the blur', async (typed, shown) => {
+        const {amount} = await mountForAdjustment();
+
+        await fireEvent.input(amount, {target: {value: typed}});
+        await fireEvent.blur(amount);
+
+        expect(amount, 'the blur must not write 3.00').toHaveValue(shown);
+    });
+
+    it('creates a SPLIT with the ratio as typed, in the asset currency, and hands back the saved event', async () => {
+        const {amount, oncreated, onclose} = await mountForAdjustment();
+
+        await fireEvent.input(amount, {target: {value: '3'}});
+        await fireEvent.blur(amount);
+        await fireEvent.click(screen.getByTestId('event-create-submit'));
+
+        await waitFor(() => expect(upsert).toHaveBeenCalledTimes(1));
+        const items = upsert.mock.calls[0]?.[0];
+        expect(items, 'one item, for the asset').toHaveLength(1);
+        expect(items?.[0]).toMatchObject({asset_id: ASSET_ID, mode: 'create'});
+        const point = items?.[0]?.events?.[0];
+        expect(point?.type).toBe('SPLIT');
+        expect(point?.date).toBe(DEFAULT_DATE);
+        expect(point?.value.code, 'the value carries the asset currency as its code').toBe('USD');
+        expect(String(point?.value.amount), 'the ratio, its digits, no 3.00').toBe('3');
+        await waitFor(() => expect(oncreated).toHaveBeenCalledWith(SAVED_EVENT_ID));
+        expect(onclose).toHaveBeenCalled();
+    });
+
+    it('creates a 1 for 4 split as 0.25', async () => {
+        const {amount} = await mountForAdjustment();
+
+        await fireEvent.input(amount, {target: {value: '0.25'}});
+        await fireEvent.blur(amount);
+        await fireEvent.click(screen.getByTestId('event-create-submit'));
+
+        await waitFor(() => expect(upsert).toHaveBeenCalledTimes(1));
+        const point = upsert.mock.calls[0]?.[0]?.[0]?.events?.[0];
+        expect(point?.type).toBe('SPLIT');
+        expect(String(point?.value.amount)).toBe('0.25');
+    });
+
+    it('a suggested ratio is sent as the field shows it', async () => {
+        await mountForAdjustment({suggestedAmount: '3'});
+
+        await fireEvent.click(screen.getByTestId('event-create-submit'));
+
+        await waitFor(() => expect(upsert).toHaveBeenCalledTimes(1));
+        const point = upsert.mock.calls[0]?.[0]?.[0]?.events?.[0];
+        expect(point?.type).toBe('SPLIT');
+        expect(String(point?.value.amount)).toBe('3');
+    });
+
+    it.each(['0', '0.00', 'abc'])('a ratio of %j is never sent', async (typed) => {
+        upsert.mockReturnValue(new Promise<never>(() => {}));
+        const {amount} = await mountForAdjustment();
+
+        await fireEvent.input(amount, {target: {value: typed}});
+        await fireEvent.blur(amount);
+        const submit = screen.getByTestId('event-create-submit') as HTMLButtonElement;
+        // The cure may disable the button or refuse on click: either way nothing reaches the API, and a refusal says so.
+        if (!submit.disabled) {
+            await fireEvent.click(submit);
+            expect(await screen.findByTestId('info-banner-error'), 'the refusal is announced').toBeVisible();
+        }
+
+        expect(upsert).not.toHaveBeenCalled();
+    });
+
+    it('PRICE_ADJUSTMENT on the same row is a money amount again: the amount label and the currency are back, no ratio explanation', async () => {
+        const {amount} = await mountForAdjustment();
+
+        const options = await typeOptions();
+        const priceAdjustment = options.find((option) => (option.textContent ?? '').includes(textOf('assetDetail.eventType.PRICE_ADJUSTMENT')));
+        if (!priceAdjustment) throw new Error('premise: the PRICE_ADJUSTMENT option is offered');
+        await fireEvent.click(priceAdjustment);
+        await closeTypeSelect();
+
+        expect(screen.getByTestId('event-create-type-button'), 'premise: the row now creates a PRICE_ADJUSTMENT').toHaveTextContent(textOf('assetDetail.eventType.PRICE_ADJUSTMENT'));
+        await waitFor(() => expect(screen.queryByTestId('event-create-ratio-hint')).toBeNull());
+        expect(amountLabel()).toHaveTextContent(textOf('transactions.fields.amount'));
+        expect((amount.parentElement as HTMLElement).textContent ?? '').toContain('USD');
+    });
+
+    // Guards, green today: every type that is not an ADJUSTMENT row keeps its form.
+    describe('guards: a row that is not an ADJUSTMENT keeps its dividend form', () => {
+        it('offers the three TX-compatible events and starts on DIVIDEND', async () => {
+            mount({defaultEventType: 'DIVIDEND'});
+            await seededAmount();
+
+            expect(screen.getByTestId('event-create-type-button')).toHaveTextContent(textOf('assetDetail.eventType.DIVIDEND'));
+            const options = await typeOptions();
+            expect(options).toHaveLength(3);
+            expect(options[0]).toHaveTextContent(textOf('assetDetail.eventType.DIVIDEND'));
+            expect(options[1]).toHaveTextContent(textOf('assetDetail.eventType.INTEREST'));
+            expect(options[2]).toHaveTextContent(textOf('assetDetail.eventType.PRICE_ADJUSTMENT'));
+        });
+
+        it('keeps the money amount: its label, the currency beside it, two decimals at the blur, the suggestion at two decimals, no ratio hint', async () => {
+            mount({defaultEventType: 'DIVIDEND', suggestedAmount: '5'});
+            const amount = await seededAmount();
+
+            expect(amountLabel()).toHaveTextContent(textOf('transactions.fields.amount'));
+            expect(amount).toHaveAttribute('placeholder', '0.00');
+            expect((amount.parentElement as HTMLElement).textContent ?? '').toContain('USD');
+            expect(screen.queryByTestId('event-create-ratio-hint')).toBeNull();
+            expect(amount, 'the suggestion is prefilled with two decimals').toHaveValue('5.00');
+            await fireEvent.input(amount, {target: {value: '1'}});
+            await fireEvent.blur(amount);
+            expect(amount).toHaveValue('1.00');
+        });
+
+        it('INTEREST starts on INTEREST', async () => {
+            mount({defaultEventType: 'INTEREST'});
+            await seededAmount();
+
+            expect(screen.getByTestId('event-create-type-button')).toHaveTextContent(textOf('assetDetail.eventType.INTEREST'));
+        });
     });
 });

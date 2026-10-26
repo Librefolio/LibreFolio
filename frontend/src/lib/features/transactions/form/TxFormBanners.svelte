@@ -24,9 +24,31 @@
         resolverCtx: ResolverContext;
         showIssuesBanner: boolean;
         handleSyncFx: () => Promise<void>;
+        /** Dates of the form before 1900 (D-P4, W5-10): the warning asks for one confirmation before the save goes on. */
+        preFloorDates?: string[];
+        /** Whether the dates still wait for the user's answer; false once confirmed, or when the save is not the form's (the bulk editor asks). */
+        preFloorPending?: boolean;
+        /** The answer «the date is right»; omitted when the form does not save by itself. */
+        onConfirmPreFloor?: () => void;
     }
 
-    let {getBulkContext, commitFailed = $bindable(), formError = $bindable(), issues, issuesDismissed = $bindable(), loadingPartner, balanceIssues, dualValidationError, fieldIssues, resolverCtx, showIssuesBanner, handleSyncFx}: Props = $props();
+    let {
+        getBulkContext,
+        commitFailed = $bindable(),
+        formError = $bindable(),
+        issues,
+        issuesDismissed = $bindable(),
+        loadingPartner,
+        balanceIssues,
+        dualValidationError,
+        fieldIssues,
+        resolverCtx,
+        showIssuesBanner,
+        handleSyncFx,
+        preFloorDates = [],
+        preFloorPending = false,
+        onConfirmPreFloor,
+    }: Props = $props();
 </script>
 
 <!-- Inline banners: red ⛔ for commit failure, green ✓ for valid,
@@ -98,6 +120,20 @@
                 {/each}
             </ul>
         {/if}
+    </InfoBanner>
+{/if}
+
+<!-- A date before 1900 (D-P4, W5-10): usually a typo. The save waits for one confirmation (the bulk editor asks at its own save). -->
+{#if preFloorDates.length > 0}
+    <InfoBanner variant="warning">
+        <div class="flex flex-wrap items-center gap-2" data-testid="tx-form-pre-floor" data-pending={preFloorPending ? 'true' : 'false'}>
+            <span class="min-w-0 flex-1 text-sm">⚠ {$t('transactions.form.preFloorDate.message', {values: {date: preFloorDates.join(', ')}})}</span>
+            {#if onConfirmPreFloor && preFloorPending}
+                <button type="button" class="shrink-0 rounded bg-lf-selected px-2 py-1 text-xs font-medium text-lf-link hover:bg-lf-checked/20 transition-colors" onclick={onConfirmPreFloor} data-testid="tx-form-pre-floor-confirm">
+                    {$t('transactions.form.preFloorDate.confirm')}
+                </button>
+            {/if}
+        </div>
     </InfoBanner>
 {/if}
 

@@ -18,6 +18,9 @@
  *   - the return chart of the positions the user ticks (Y5-2, #48, `positionsSeries.ts`): the backend's fraction in
  *     «base 100» (a change of unit), and the Dashboard's own history moved to the left edge of the user's window. No
  *     new calculation: a number the backend computed, shifted or re-expressed for the chart.
+ *   - the trade amount of the transaction form (W5-9, #47, `txTradeAmount.ts`): the amount from the unit price the user
+ *     types, or the unit price from the amount, one product or one quotient on exact decimals (developer decision of
+ *     25/10/2026: small sums and products are the frontend's own, a route for a multiplication is not).
  *
  * Each exception must be declared where it lives. The documentation named the four files while the code declared none
  * of them (plan 43, `plan-phase00FinancialMathHome.prompt.md:1494`): this gate was written red against that state, and
@@ -111,6 +114,7 @@ const LOTS_TABLE = 'src/lib/features/brokers/lots/unifiedLotsTableHelpers.ts';
 const LOT_COMPARISON = 'src/lib/features/brokers/lots/lotComparisonChartHelpers.ts';
 const LOT_WAC = 'src/lib/features/brokers/lots/lotWacPriceChartHelpers.ts';
 const POSITIONS_SERIES = 'src/lib/features/dashboard/positionsSeries.ts';
+const TRADE_AMOUNT = 'src/lib/features/transactions/form/txTradeAmount.ts';
 
 interface DeclaredException {
     /** Relative to `frontend/`. */
@@ -138,6 +142,7 @@ const DECLARED_EXCEPTIONS: readonly DeclaredException[] = [
     {file: LOT_COMPARISON, annualizes: false, measure: 'D-MF6(b), the lot comparison aggregate: value and return of the lots the user selects'},
     {file: LOT_WAC, annualizes: false, measure: "D-MF6(b), the WAC chart's percentage view: the value series rebased on its first known value"},
     {file: POSITIONS_SERIES, annualizes: false, measure: "Y5-2, the positions return chart: the backend's fraction in base 100, and the Dashboard history moved to the left edge of the window the user picks"},
+    {file: TRADE_AMOUNT, annualizes: false, measure: "W5-9 (#47), the transaction form: the trade's amount from the unit price the user types, or the unit price from the amount — one product or one quotient, exact decimals"},
 ];
 
 const DECLARED_FILES: ReadonlySet<string> = new Set(DECLARED_EXCEPTIONS.map((entry) => entry.file));

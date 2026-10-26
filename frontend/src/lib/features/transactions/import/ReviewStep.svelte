@@ -14,6 +14,8 @@
     import BrokerBadge from '$lib/components/ui/display/BrokerBadge.svelte';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
+    import {isPossibleSplitTodo} from '$lib/features/transactions/bulk/bulkTodos';
+    import {isPreFloorDateTodo} from '$lib/features/transactions/preFloorDate';
     import {duplicateCandidates} from '$lib/features/transactions/import/importResolutionHelpers';
     import type {AssetResolution, MergedTx} from '$lib/features/transactions/import/importTypes';
     import type {BrokerOpeningIssue} from './wizardTypes';
@@ -96,6 +98,9 @@
         step4SelectAll,
         step4SelectVisible,
     }: Props = $props();
+    let possibleSplitRowCount = $derived(step4Rows.filter((mt) => mt.selected && mt.todos.some(isPossibleSplitTodo)).length);
+    /** The selected rows dated before 1900 (D-P4, W5-10): listed here, confirmed once when the editor saves them. */
+    let preFloorRowCount = $derived(step4Rows.filter((mt) => mt.selected && mt.todos.some(isPreFloorDateTodo)).length);
 </script>
 
 <div
@@ -106,6 +111,16 @@
     data-selected-count={step4SelectedCount}
     data-total-count={step4TotalCount}
 >
+    {#if possibleSplitRowCount > 0}
+        <div data-testid="import-review-possible-split-note">
+            <InfoBanner variant="info" message={$t('importWizard.reviewPossibleSplitNote', {values: {n: possibleSplitRowCount}})} />
+        </div>
+    {/if}
+    {#if preFloorRowCount > 0}
+        <div data-testid="import-review-pre-floor-note" data-count={preFloorRowCount}>
+            <InfoBanner variant="warning" message={$t('importWizard.reviewPreFloorNote', {values: {n: preFloorRowCount}})} />
+        </div>
+    {/if}
     {#if duplicateRecheckError}
         <div data-testid="import-wizard-duplicate-recheck-error">
             <InfoBanner variant="error" message={$t('importWizard.duplicateRecheckFailed', {values: {error: duplicateRecheckError}})} />
@@ -331,7 +346,7 @@
             enableColumnResize={true}
             enableColumnVisibility={true}
             tableLayout="auto"
-            getRowClass={(mt) => `${!mt.selected ? 'opacity-50' : ''} ${mt.isDupKeeper ? 'bg-lf-success-soft/60' : ''}`.trim()}
+            getRowClass={(mt) => `${!mt.selected ? 'opacity-50' : ''} ${mt.isDupKeeper ? 'bg-lf-success-soft/60' : ''} ${mt.todos.some(isPreFloorDateTodo) ? 'bg-lf-warning-soft/60' : ''}`.trim()}
             emptyMessage={$t('importWizard.noFiles')}
         />
     </div>

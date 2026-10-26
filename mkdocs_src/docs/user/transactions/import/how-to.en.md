@@ -287,9 +287,7 @@ for the rows listed in red, and asks before saving the values listed in amber th
 verified (**Save anyway**). A row whose quantity has more than 10 decimal places, whose cash amount
 has more than 6, or whose per-unit cost basis has more than 12, is refused at **Save All**, with the
 maximum in the message (*Quantity: At most 10 decimal places*): LibreFolio never rounds it.
-Transaction dates go from 1 January 1900 to tomorrow: a row of the report dated outside
-that range is refused at **Save All** too, with the range in the message (*Date: Between 1900-01-01
-and 2026-10-18* when today is 17 October 2026).
+Transaction dates can go back as far as the year 1 and up to tomorrow. A row dated before 1900 is marked amber in the review (a note above the table counts them) and the bulk workspace asks once to confirm them, since such a date is usually a typo; once confirmed it is saved like any other. A row dated after tomorrow is refused at **Save All**, with the last allowed day in the message (*Date: Not after 2026-10-18* when today is 17 October 2026).
 
 A row that brings units in — an **Adjustment** that adds units, or the receiving side of an
 **Asset Transfer** — keeps the cost written in the report, even 0, in **Manual**. If the report

@@ -8,7 +8,6 @@ Unified Batch Pipeline:
 - GET    /transactions                Query with filters (access-scoped)
 - GET    /transactions?ids=1,2,3      Batch read preserving input order
 - GET    /transactions/types          Transaction type metadata
-- POST   /transactions/trade-amount   The other value of «Total amount / Unit price» (the form's #47)
 
 Semantics:
 - Access control is EDITOR on every distinct `broker_id` touched by a batch.
@@ -19,7 +18,7 @@ Semantics:
 from decimal import Decimal
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.v1.auth import get_current_user
@@ -30,10 +29,8 @@ from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.transactions.batch import TXBatchResponse, TXMixedBatch, TXPromoteBatchItem, TXSplitBatchItem
 from backend.app.schemas.transactions.event_suggest import TXEventReconciliationItem, TXEventSuggestRequestItem, TXEventSuggestResultItem
 from backend.app.schemas.transactions.promotion import TXPromoteSuggestInput, TXPromoteSuggestResponse, TXTransferPromoteRequest, TXTransferPromoteResponse
-from backend.app.schemas.transactions.trade_amount import TXTradeAmountRequest, TXTradeAmountResponse
 from backend.app.schemas.transactions.transactions import TXCreateItem, TXQueryParams, TXReadItem, TXUpdateItem
 from backend.app.schemas.transactions.type_metadata import EVENT_TYPE_METADATA, TX_TYPE_METADATA, TXTypesResponse
-from backend.app.services.transactions.trade_amount import convert_trade_amount
 from backend.app.services.transactions.transaction_service import TransactionService
 from backend.app.utils.datetime_utils import parse_ISO_date
 
@@ -283,31 +280,6 @@ async def event_reconciliation(
     """
     service = TransactionService(session)
     return await service.event_reconciliation(current_user.id, broker_id=broker_id, asset_id=asset_id)
-
-
-# =============================================================================
-# TRADE AMOUNT (the form's «Total amount / Unit price», #47)
-# =============================================================================
-
-
-@tx_router.post("/trade-amount", response_model=TXTradeAmountResponse)
-async def trade_amount(
-    request: TXTradeAmountRequest,
-    session: AsyncSession = Depends(get_session_generator),
-    _current_user: User = Depends(get_current_user),
-) -> TXTradeAmountResponse:
-    """
-    The other value of a BUY or SELL: from the unit price the amount (``price_to_amount``), from the amount the unit
-    price (``amount_to_price``), for ``quantity`` units of the asset, on the asset's quote base.
-
-    The form types one value and shows the other; the arithmetic lives in ``financial_math/trade_amount.py``, rounded
-    half-even to the scale of the column that keeps the result. Assets are global: the caller only has to be
-    authenticated. 404 for an unknown asset; 422 for a zero quantity or a value past the input limits.
-    """
-    response = await convert_trade_amount(session, request)
-    if response is None:
-        raise HTTPException(status_code=404, detail="Asset not found")
-    return response
 
 
 # =============================================================================

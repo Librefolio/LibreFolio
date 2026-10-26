@@ -40,3 +40,16 @@ export function getEventTypeOptions(t: (key: string) => string, filter?: readonl
         docsPath: docsMap[type],
     }));
 }
+
+/** Event types an ADJUSTMENT can link to (`EventTypeMetadata.compatible_tx_types`): a split or a price adjustment. */
+export const EVENT_TYPES_FOR_ADJUSTMENT = ['SPLIT', 'PRICE_ADJUSTMENT'] as const;
+/** The event types the «new event» modal offers for a transaction of this type. */
+export function eventTypesForTx(txType: string): readonly string[] {
+    return txType === 'ADJUSTMENT' ? EVENT_TYPES_FOR_ADJUSTMENT : EVENT_TYPES_TX_COMPATIBLE;
+}
+/** The event type the «new event» modal starts with for a transaction of this type. */
+export function defaultEventTypeForTx(txType: string): string {
+    if (txType === 'ADJUSTMENT') return 'SPLIT';
+    if (txType === 'INTEREST') return 'INTEREST';
+    return 'DIVIDEND';
+}

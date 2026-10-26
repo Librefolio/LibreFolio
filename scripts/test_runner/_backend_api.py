@@ -605,6 +605,17 @@ def api_brim_scalable(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "BRIM Scalable API tests", verbose=verbose)
 
 
+def api_brim_date_order(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the generic CSV date_order API flow tests."""
+    print_section("BRIM Date Order API Tests")
+    print_info("Testing the user's own date_order end to end: plugin settings catalogue, parse, parse_is_stale")
+    print_info("Tests: the card is offered, a file parsed over the defaults is current, a changed value makes it stale until parsed again, no fingerprint served")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_brim_date_order_api.py", test_names)
+    return run_command(cmd, "BRIM date order API tests", verbose=verbose)
+
+
 def search2prices_test(verbose: bool = False, test_names: list = None) -> bool:
     """Run E2E API tests: Search → Create → Assign → Metadata → Prices."""
     print_section("E2E API Test search-to-prices")
@@ -1297,6 +1308,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "uploads-serve-file", api_uploads_serve_file, name="Uploads Serve File", desc="Preview, download, MIME")
     add_test(api, "brokers", api_brokers, name="Brokers API", desc="CRUD broker endpoints")
     add_test(api, "brim", api_brim, name="BRIM API", desc="Upload, parse, import flow")
+    add_test(api, "brim-date-order", api_brim_date_order, name="BRIM Date Order API", desc="W5-8 (CP12): the user's own date_order reaches the generic CSV parse, a change makes the file stale until parsed again, the fingerprint is never served")
     add_test(api, "brim-scalable", api_brim_scalable, name="BRIM Scalable API", desc="Scalable broker + overnight account: transfers merged and re-imported as duplicates, one-broker cash")
     add_test(api, "auth", api_auth, name="Auth API", desc="Register, login, logout, me", exclusive_because="rewrites global_settings.registration_mode, one row shared by every user: a concurrent unit would register against whatever value this one left behind")
     # Write-scoped, no exclusive_because: every case that needs another registration mode, an accounts variable or a

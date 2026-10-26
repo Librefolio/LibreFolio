@@ -50,9 +50,10 @@
     import ParseDetailModal from '$lib/features/transactions/import/ParseDetailModal.svelte';
     import ImportBrokerMismatchModal, {type BrokerMismatchBroker, type BrokerMismatchPlugin, type BrokerMismatchTarget} from '$lib/features/transactions/import/ImportBrokerMismatchModal.svelte';
     import {findDefaultPluginMismatch, resolveParseRefusalMessage, type ParseRefusal} from '$lib/features/transactions/import/defaultPluginCheck';
+    import {resolveGapFixFailureMessage, resolveParseFailureMessage} from '$lib/features/transactions/import/parseFailure';
     import {brimPluginName} from '$lib/utils/brim/pluginText';
     import {isFallbackPlugin} from '$lib/utils/brim/pluginKind';
-    import {fetchFilePreview, getFilePreviewError} from '$lib/utils/files/filePreview';
+    import {fetchFilePreview} from '$lib/utils/files/filePreview';
     import {generateUUID} from '$lib/utils/core/uuid';
     import {mapWithConcurrency} from '$lib/utils/core/requestConcurrency';
     import DataTable from '$lib/components/table/DataTable.svelte';
@@ -91,6 +92,7 @@
         readAlonePlugins,
         rememberedChoices,
         setBlocksAnalysis,
+        formatIsoDay,
         setPluginFor,
         setRequest,
         setSelectionState,
@@ -115,7 +117,6 @@
     import ReviewStep from './ReviewStep.svelte';
     import WizardFooter from './WizardFooter.svelte';
     import {formatFixed} from '$lib/utils/core/formatFixed';
-    import {uiLocale} from '$lib/stores/app/uiLocale';
 
     // =========================================================================
     // Props
@@ -1380,7 +1381,7 @@
                 const response = await zodiosApi.gap_fix_api_v1_brokers_import_gap_fix_post(request as unknown as Parameters<typeof zodiosApi.gap_fix_api_v1_brokers_import_gap_fix_post>[0]);
                 outcomes.push({brokerId: request.broker_id, pluginCode: request.plugin_code, response});
             } catch (error) {
-                outcomes.push({brokerId: request.broker_id, pluginCode: request.plugin_code, error: extractErrorMessage(error, $t('importWizard.reportSet.gapFix.error'))});
+                outcomes.push({brokerId: request.broker_id, pluginCode: request.plugin_code, error: resolveGapFixFailureMessage(error, $t, $t('importWizard.reportSet.gapFix.error'))});
             }
         }
         return buildGapFixView(outcomes, localizeGapFixTodo);
@@ -3704,17 +3705,8 @@ ${arrow}<span>${label}</span></span>`,
         }
     }
 
-    /** An ISO day (or timestamp) in the user's date format, read as a calendar day. */
-    function formatSetDay(iso: string | null | undefined): string {
-        if (!iso) return '—';
-        const day = String(iso).slice(0, 10);
-        const [year, month, date] = day.split('-').map(Number);
-        if (!year || !month || !date) return day;
-        return new Date(Date.UTC(year, month - 1, date)).toLocaleDateString(uiLocale(), {timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit'});
-    }
-
     function setRowLabel(set: ReportSetGroup, fileCount: number): string {
-        return $t('importWizard.reportSet.analyzeRowLabel', {values: {date: formatSetDay(set.uploadedAt), n: fileCount}});
+        return $t('importWizard.reportSet.analyzeRowLabel', {values: {date: formatIsoDay(set.uploadedAt), n: fileCount}});
     }
 
     /** A combined file of the set was already parsed: the set was analysed before (design §4.3, case C). */
@@ -4043,7 +4035,7 @@ ${arrow}<span>${label}</span></span>`,
             result.status = 'done';
         } catch (e) {
             result.status = 'error';
-            result.errorMessage = extractErrorMessage(e);
+            result.errorMessage = resolveParseFailureMessage(e, $t);
         }
     }
 
@@ -4335,7 +4327,7 @@ ${arrow}<span>${label}</span></span>`,
         } catch (error) {
             if (token === previewRequestToken) {
                 previewData = null;
-                previewError = getFilePreviewError(error, 'Preview failed');
+                previewError = resolveParseFailureMessage(error, $t, 'Preview failed');
             }
         } finally {
             if (token === previewRequestToken) previewLoading = false;
@@ -4452,7 +4444,7 @@ ${arrow}<span>${label}</span></span>`,
                 {uploading}
                 {pendingFileActions}
                 {pendingFileColumns}
-                {formatSetDay}
+                formatSetDay={formatIsoDay}
                 {handleFilesChanged}
                 {onGlobalBrokerChange}
                 {removePendingFilesByIds}

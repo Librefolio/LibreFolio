@@ -4,5 +4,23 @@
       "name": "CSV genérico",
       "description": "Importa las transacciones de un archivo CSV genérico. Detecta las columnas a partir de los nombres del encabezado. Admite varios formatos de fecha y de número."
     }
+  },
+  "pluginSettings": {
+    "brim": {
+      "broker_generic_csv": {
+        "label": {
+          "date_order": "Orden del día y del mes"
+        },
+        "description": {
+          "date_order": "Cómo se lee una fecha como 03/04/2025 en un CSV genérico: primero el día (3 de abril) o primero el mes (4 de marzo). Una fecha que no se puede leer de la primera forma se lee de la otra (25/12/2025 es siempre el 25 de diciembre)."
+        },
+        "option": {
+          "date_order": {
+            "day_first": "Primero el día (03/04 = 3 de abril)",
+            "month_first": "Primero el mes (03/04 = 4 de marzo)"
+          }
+        }
+      }
+    }
   }
 }

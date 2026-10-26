@@ -565,6 +565,16 @@ def services_linked_adjustment_pair(verbose: bool = False, test_names: list = No
     return run_command(cmd, "Linked adjustment pair tests", verbose=verbose)
 
 
+def services_transfer_pair_order(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that a linked TRANSFER / CASH_TRANSFER arriving before it departs is saved as sent and warned (pairArrivalBeforeDeparture)."""
+    print_section("Services: Transfer Pair Order")
+    print_info("Testing: backend/app/services/transactions/batch_creates.py (resolve_create_links) + batch_edits.py (validate_updated_pairs) + TXBatchResponse.warnings")
+    print_info("Tests: arrival dated before departure on create and on a date edit gives a non-blocking warning; equal/normal order, FX_CONVERSION, ADJUSTMENT, unlinked rows and untouched stored pairs give none; the data is saved as sent; the message in 4 languages")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_transfer_pair_order.py", test_names)
+    return run_command(cmd, "Transfer pair order tests", verbose=verbose)
+
+
 def services_transaction_decimal_places(verbose: bool = False, test_names: list = None) -> bool:
     """Test how many decimal places a transaction keeps, where a batch refuses more, and the balances summed exactly (C-97a)."""
     print_section("Services: Transaction Decimal Places")
@@ -992,6 +1002,26 @@ def services_brim_parse_settings(verbose: bool = False, test_names: list = None)
     return run_command(cmd, "BRIM parse settings tests", verbose=verbose)
 
 
+def services_brim_parse_failure_detail(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the 400 of a failed BRIM parse: an object the wizard translates, not an English sentence (W5-5, C-70b)."""
+    print_section("Services: BRIM Parse Failure Detail")
+    print_info("Testing: backend/app/api/v1/brokers.py (parse_file), brim_parse_pool.parse_file_offloaded, brim_provider guard")
+    print_info("Tests: BRIMParseError with/without a code, the guard's coded and silent refusals, unknown plugin stays a string, 404 unchanged")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_parse_failure_detail.py", test_names)
+    return run_command(cmd, "BRIM parse failure detail tests", verbose=verbose)
+
+
+def services_brim_parse_error_codes(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that every BRIMParseError of a BRIM plugin carries a code the wizard translates (W5-6, E-21)."""
+    print_section("Services: BRIM Parse Error Codes")
+    print_info("Testing: backend/app/services/brim_providers/** (static ast scan), frontend/src/lib/i18n/importWizard/{en,it,fr,es}.json")
+    print_info("Tests: every raise coded, not swallowed by a broad except, text in the four catalogues, placeholders agree, generic CSV and DEGIRO codes")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_parse_error_codes.py", test_names)
+    return run_command(cmd, "BRIM parse error codes tests", verbose=verbose)
+
+
 def services_brim_field_contract(verbose: bool = False, test_names: list = None) -> bool:
     """Test the contract of a field in a BRIM plugin: declaration, default = old behaviour, per-user value, stale parse."""
     print_section("Services: BRIM Field Contract")
@@ -1000,6 +1030,16 @@ def services_brim_field_contract(verbose: bool = False, test_names: list = None)
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_field_contract.py", test_names)
     return run_command(cmd, "BRIM field contract tests", verbose=verbose)
+
+
+def services_brim_file_settings(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the wiring of a BRIM plugin's settings: the value reaches the pool worker, the fingerprint is stored, a changed setting makes a parse stale."""
+    print_section("Services: BRIM File Settings")
+    print_info("Testing: brim_parse_pool.parse_file_offloaded (bound), brim_provider.save_parse_result (settings_fingerprint), services/brim/brim_file_settings.py (apply_settings_staleness)")
+    print_info("Tests: the value reaches the subprocess, the fingerprint is stored and never served, stale by the user's own value")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_file_settings.py", test_names)
+    return run_command(cmd, "BRIM file settings tests", verbose=verbose)
 
 
 def services_settings(verbose: bool = False, test_names: list = None) -> bool:
@@ -1097,6 +1137,16 @@ def services_orphan_transfer_numbers(verbose: bool = False, test_names: list = N
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial/test_orphan_transfer_after_broker_delete.py", test_names)
     return run_command(cmd, "Orphan transfer numbers tests", verbose=verbose)
+
+
+def services_split_adjustment_ledger(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Lots and the Dashboard numbers of the incoming ADJUSTMENT a broker's split row becomes (W5-2b)."""
+    print_section("Services: Split Adjustment Ledger (W5-2b numbers)")
+    print_info("Testing: LotsAnalysisService (FIFO lots, average-cost lines) and PortfolioService.get_summary over a SPLIT event and its linked incoming ADJUSTMENT rows")
+    print_info("Tests: a row at cost 0 against a row without cost, a rounded row (FIFO follows the ratio, the average cost the row), a sale before the split, an unlinked row, two brokers, two splits on one day")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial/test_split_adjustment_ledger.py", test_names)
+    return run_command(cmd, "Split adjustment ledger tests", verbose=verbose)
 
 
 def services_lone_transfer_legs(verbose: bool = False, test_names: list = None) -> bool:
@@ -2330,6 +2380,13 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "transfer-pair-order",
+        services_transfer_pair_order,
+        name="Transfer Pair Order",
+        desc="W5-3: a linked TRANSFER / CASH_TRANSFER arriving before it departs is saved as sent (create and date edit) and the batch carries a non-blocking pairArrivalBeforeDeparture warning; none for equal or normal dates, FX_CONVERSION, ADJUSTMENT, unlinked rows or an untouched stored pair; the message exists in EN/IT/FR/ES",
+    )
+    add_test(
+        cat,
         "transaction-decimal-places",
         services_transaction_decimal_places,
         name="Transaction Decimal Places",
@@ -2692,11 +2749,34 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "brim-parse-failure-detail",
+        services_brim_parse_failure_detail,
+        name="BRIM Parse Failure Detail",
+        desc="W5-5 (C-70b): a failed BRIM parse answers 400 with a parse_failed object (plugin, English message, coded reason) the wizard translates; the guard's refusal carries the plugin's BRIMRefusal; an unknown plugin keeps a string, 404 unchanged",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "brim-parse-error-codes",
+        services_brim_parse_error_codes,
+        name="BRIM Parse Error Codes",
+        desc="W5-6 (E-21): every BRIMParseError raised by a BRIM plugin carries details code/context (static ast scan), is not swallowed by a broad except, and has its importWizard.parseRefusal text with agreeing placeholders in en/it/fr/es; generic CSV and DEGIRO raise the expected codes",
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "brim-field-contract",
         services_brim_field_contract,
         name="BRIM Field Contract",
         desc="A field in a BRIM plugin (CP12): declaration, default = the behaviour before the field, the importing user's value, and the stale-parse rule (settings_changed_since)",
         isolation="pure",
+    )
+    add_test(
+        cat,
+        "brim-file-settings",
+        services_brim_file_settings,
+        name="BRIM File Settings",
+        desc="W5-8 (CP12): parse_file_offloaded(bound=) reaches the real pool worker, save_parse_result stores parsed_settings_fingerprint (never served), apply_settings_staleness marks a PARSED file stale when the looking user's values moved",
     )
     add_test(cat, "settings", services_settings, name="Settings Service", desc="User settings CRUD, get_effective_base_currency")
     add_test(cat, "current-price-bootstrap", services_current_price_bootstrap, name="Current Price Bootstrap", desc="OHLC widening helper (F.2/F.3)")
@@ -2736,6 +2816,17 @@ Note: No backend server required.
         # The file sits in test_financial/, which roi-fifo-utils runs whole: the derived "all"
         # skips this action so that the file runs once there.
         in_all=False,
+    )
+    add_test(
+        cat,
+        "split-adjustment-ledger",
+        services_split_adjustment_ledger,
+        name="Split Adjustment Ledger",
+        desc="W5-2b: a SPLIT event with its linked incoming ADJUSTMENT row read by Lots (FIFO lots, average-cost lines) and the Dashboard: a row at cost 0 reads as a row without cost (20 shares, cost 1000, average 50), a row rounded off the ratio makes FIFO and the average cost differ by the rounding, a split after a sale, a row not linked, two brokers on one event, two splits on one day",
+        # The file sits in test_financial/, which roi-fifo-utils runs whole: the derived "all"
+        # skips this action so that the file runs once there.
+        in_all=False,
+        # Write-scoped (the category default): a user, brokers and an asset under a unique marker, every reading by their ids, the session rolled back.
     )
     add_test(
         cat,

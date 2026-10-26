@@ -204,7 +204,9 @@
       "fineco_not_yet_settled": "{count, plural, one {# row is not settled yet (its value date is after today) and was not imported: it arrives with the next export.} other {# rows are not settled yet (their value date is after today) and were not imported: they arrive with the next export.}}",
       "fineco_incomplete_rows": "This import may be wrong: {count, plural, one {# row lacks} other {# rows lack}} a required number (quantity or amount). Check the rows below; if the file is right, it is likely an importer bug, and you can help us fix it:",
       "rows_not_recognized": "{count, plural, one {# row was} other {# rows were}} left out, or only partly imported, because the importer does not recognise or does not yet import what {count, plural, one {it describes} other {they describe}}. Check the rows below; if this matters for your shares or cash, report it so we can handle the case:",
-      "rows_unreadable": "{count, plural, one {# row was} other {# rows were}} left out because a value {count, plural, one {it needs} other {they need}} cannot be read. Check the rows below; if the file is right, report it so we can handle the case:"
+      "rows_unreadable": "{count, plural, one {# row was} other {# rows were}} left out because a value {count, plural, one {it needs} other {they need}} cannot be read. Check the rows below; if the file is right, report it so we can handle the case:",
+      "possible_split": "Possible stock split of {ticker}: {added_quantity} new shares at no cost. Link a SPLIT event, or create one.",
+      "date_before_1900": "The date {date} is before 1 January 1900: check the year."
     },
     "evidenceRowsTitle": "Source rows",
     "evidenceRowCount": "{n} rows",
@@ -436,7 +438,11 @@
         "column": {
           "point": "Point"
         },
-        "noProposals": "This point needs no correction."
+        "noProposals": "This point needs no correction.",
+        "ledgerUnreadable": {
+          "currency_codes": "LibreFolio's balances of this broker cannot be compared with the bank: its transactions hold currency codes that are not ISO 4217 codes: {codes}{more, plural, =0 {} other { and # more}}. Correct them first.",
+          "values": "LibreFolio's balances of this broker cannot be compared with the bank: {count, plural, one {# of its transactions holds a value that is not a number} other {# of its transactions hold a value that is not a number}}. Ask the administrator to repair them."
+        }
       },
       "badge": {
         "column": "Report set",
@@ -513,7 +519,22 @@
       "missing_columns": "{count, plural, one {Required column {columns} not found in the CSV header.} other {Required columns {columns} not found in the CSV header.}}",
       "no_movement_rows": "The file has no movement rows.",
       "degiro_csv_only": "Only the CSV export is read: download the Account Statement as CSV.",
-      "degiro_not_account_statement": "This is not a DEGIRO Account Statement: expected 12 columns with the ISIN fifth, unnamed amount columns ninth and eleventh, and dates as DD-MM-YYYY."
+      "degiro_not_account_statement": "This is not a DEGIRO Account Statement: expected 12 columns with the ISIN fifth, unnamed amount columns ninth and eleventh, and dates as DD-MM-YYYY.",
+      "file_not_found": "The file was not found.",
+      "header_mismatch": "The header row is not the one of this export.",
+      "header_row_not_found": "The header row of the table was not found in the file.",
+      "no_valid_transactions": "The file holds no valid transactions.",
+      "file_empty": "The file is empty.",
+      "intesa_layout_unknown": "The layout is none of the two Intesa Sanpaolo exports (movements or patrimonio).",
+      "scalable_not_export": "This is not a Scalable Capital export.",
+      "danske_custody_columns_missing": "This is not a Danske Bank custody export: the transaction columns are missing.",
+      "danske_cash_columns_missing": "This is not a Danske Bank cash statement: the account columns are missing.",
+      "danske_combined_columns_missing": "This is not a Danske Bank combined file: the columns {missing} are missing.",
+      "danske_not_combined_file": "This is not a Danske Bank combined file.",
+      "danske_combined_line_unknown_kind": "Line {line} of the combined file has an unknown kind ({kind}).",
+      "danske_combined_line_incomplete": "Line {line} of the combined file is incomplete.",
+      "danske_combined_line_not_cash": "Line {line} of the combined file is not a standalone cash row.",
+      "danske_no_dated_rows": "The custody exports have no dated rows: there is nothing to combine."
     },
     "brimEvidence": {
       "scalable_unreadable_rows": "On these rows a date, an amount, a currency, the shares or the security is missing or cannot be read.",
@@ -532,6 +553,14 @@
       "rows_unreadable": "The last column says what could not be read on each row."
     },
     "notesCount": "{n, plural, one {# note} other {# notes}}",
-    "noNotices": "No warnings or notes"
+    "noNotices": "No warnings or notes",
+    "parseFailed": "The {plugin_name} plugin could not read the file: {reason}",
+    "parseFailedNoReason": "The file could not be read, and the plugin gave no reason.",
+    "previewFailed": {
+      "preview_unsupported": "This file type has no preview.",
+      "preview_unreadable": "The file looks damaged or is not what its extension says: it cannot be previewed."
+    },
+    "reviewPossibleSplitNote": "{n, plural, one {# row looks like a stock split: the new shares come in at no cost.} other {# rows look like stock splits: the new shares come in at no cost.}} In the editor you can link or create the SPLIT event.",
+    "reviewPreFloorNote": "{n} selected rows are dated before 1 January 1900. Check the year: it is often a typo. You will be asked to confirm them when you save."
   }
 }

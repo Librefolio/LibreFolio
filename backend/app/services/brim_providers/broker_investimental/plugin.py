@@ -220,7 +220,7 @@ class InvestimentalBrokerProvider(BRIMProvider):
             with self._open_text(file_path, newline="") as f:
                 reader = csv.DictReader(f, delimiter=detected_delim)
                 if not reader.fieldnames or not all(col in reader.fieldnames for col in REQUIRED_COLUMNS):
-                    raise BRIMParseError("Unexpected Investimental header")
+                    raise BRIMParseError("Unexpected Investimental header", details={"code": "header_mismatch"})
 
                 row_num = 1
                 for row in reader:
@@ -324,11 +324,11 @@ class InvestimentalBrokerProvider(BRIMProvider):
                     )
 
         except FileNotFoundError:
-            raise BRIMParseError(f"File not found: {file_path}") from None
+            raise BRIMParseError(f"File not found: {file_path}", details={"code": "file_not_found", "context": {"file": file_path.name}}) from None
         except BRIMParseError:
             raise
         except Exception as e:
-            raise BRIMParseError(f"Error parsing file: {e}") from e
+            raise BRIMParseError(f"Error parsing file: {e}", details={"code": "file_unreadable", "context": {"error": str(e)}}) from e
 
         if skipped_cancelled:
             warnings.append(f"Summary: skipped {skipped_cancelled} cancelled/rejected/expired orders")

@@ -19,6 +19,7 @@ import type {ImportTodo} from '$lib/features/transactions/txPayloadHelpers';
 import {isFakeAssetId, FAKE_ASSET_ID_BASE} from '$lib/features/transactions/import/isFakeAssetId';
 import {CONF_ORDER, type DuplicateStatus, type MergedTx, type AssetResolution} from '$lib/features/transactions/import/importTypes';
 import {duplicateStatusAllowsAutoSelect} from '$lib/features/transactions/import/importDedup';
+import {withPreFloorDateTodo} from '$lib/features/transactions/preFloorDate';
 
 /** The parse-result fields the merge reads — reduced to what the loop touches. */
 export interface MergeSourceResult {
@@ -191,7 +192,7 @@ export function buildMergedTransactions(parseResults: MergeSourceResult[], broke
                 duplicateStatus: dupStatus,
                 dbDuplicateStatus: dupStatus === 'likely' || dupStatus === 'possible' ? dupStatus : undefined,
                 dupMatches: dupMatchesMap.get(txIdx) ?? [],
-                todos: todosMap.get(txIdx) ?? [],
+                todos: withPreFloorDateTodo(todosMap.get(txIdx) ?? [], (txClone as {date?: string | null}).date),
             });
         }
     }

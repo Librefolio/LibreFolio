@@ -50,7 +50,7 @@ import multiprocessing.forkserver
 import os
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
-from typing import Optional
+from typing import Any, Optional
 
 import structlog
 
@@ -129,7 +129,11 @@ def prewarm() -> None:
         logger.warning("BRIM parse pool prewarm failed; the first parse will start the pool", error=str(exc))
 
 
-async def parse_file_offloaded(file_id: str, plugin_code: str, broker_id: int, *, user_id: Optional[int] = None) -> BRIMParseOutput:
+_RESOLVE: Any = object()
+"""Default of ``bound``: «resolve the values here, for ``user_id``» (``None`` is a value: no settings)."""
+
+
+async def parse_file_offloaded(file_id: str, plugin_code: str, broker_id: int, *, user_id: Optional[int] = None, bound: Any = _RESOLVE) -> BRIMParseOutput:
     """
     Parse a file without blocking the event loop, on a real core when possible.
 
@@ -137,13 +141,17 @@ async def parse_file_offloaded(file_id: str, plugin_code: str, broker_id: int, *
     (a segfaulting C parser takes its worker with it, and that must not take the import
     down too).
 
-    W-BS (prepared, no plugin declares a field yet): a plugin that declares settings has its values resolved here, in the
+    W-BS: a plugin that declares settings has its values resolved here, in the
     parent, which can read the database and the instance key — the instance's, and the personal ones of ``user_id``, who
     imports — and handed to the worker as a fourth argument of ``parse_file``. A secret never leaves the parent unmasked: the
     exception of the parse is masked here too. A plugin without fields is called exactly as before: no database read, three
     arguments.
+
+    ``bound`` is for a caller that resolved the values itself (the parse route, which also stores their fingerprint with the
+    result, so that both come from one reading): given, the database is not read again, and ``None`` means «no settings».
     """
-    bound = await bound_settings_for(BRIMProviderRegistry, plugin_code, user_id=user_id)
+    if bound is _RESOLVE:
+        bound = await bound_settings_for(BRIMProviderRegistry, plugin_code, user_id=user_id)
     if bound is None:
         return await _parse_offloaded((file_id, plugin_code, broker_id))
     secrets = bound.secret_values()
