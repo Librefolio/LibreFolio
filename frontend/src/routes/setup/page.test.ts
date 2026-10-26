@@ -151,6 +151,8 @@ const USERNAME = 'carla.rossi';
 const GOOD_PASSWORD = 'Str0ng!pass';
 /** The line of a dead setup link: no administrator exists yet to ask for a new one. */
 const SETUP_HINT = 'auth.setup.newLinkHint';
+/** A5-6: the line of an EXPIRED setup link on a managed instance: the hosting provider sends the next one by itself; if none came, support. */
+const MANAGED_EXPIRED_HINT = 'auth.setup.expiredManagedHint';
 /** The line of the other link pages, which has no place here. */
 const ASK_ADMIN = 'auth.link.askAdmin';
 
@@ -246,6 +248,7 @@ beforeEach(() => {
 afterEach(() => {
     cleanup();
     openAt('/');
+    mocks.instance.config = {profile: 'selfhosted', accounts: {registration_mode: 'disabled', registration_locked: false}};
 });
 
 describe('/setup — the token, read once', () => {
@@ -346,6 +349,85 @@ describe('/setup — the way to a new link: no administrator exists yet to ask',
         await expectStatus('missing');
         expect(hintShown()).toBe(SETUP_HINT);
         expect(pageRoot().innerHTML).not.toContain(ASK_ADMIN);
+    });
+});
+
+describe('/setup — an expired link on a managed instance (A5-6)', () => {
+    const managed = (): void => {
+        mocks.instance.config = {profile: 'managed', accounts: {registration_mode: 'disabled', registration_locked: false}};
+    };
+
+    it('says to contact support if no new link came: auth.setup.expiredManagedHint, with no button and no other call', async () => {
+        managed();
+        mocks.inspect.mockResolvedValue({status: 'expired', purpose: 'admin_setup'});
+        openAt(`/setup#token=${TOKEN}`);
+
+        render(SetupPage);
+
+        await expectStatus('expired');
+        expect(hintShown(), 'the line of link-status-hint').toBe(MANAGED_EXPIRED_HINT);
+        expect(pageRoot().innerHTML, 'neither the line of the self-hosted instance nor the one of the other link pages').not.toContain(SETUP_HINT);
+        expect(pageRoot().innerHTML).not.toContain(ASK_ADMIN);
+        expect(within(pageRoot()).queryByTestId('link-status-retry'), 'nothing to press: the provider sends the link').toBeNull();
+        expect(mocks.inspect, 'the one inspection of the link, nothing else asked').toHaveBeenCalledTimes(1);
+        expect(mocks.setup).not.toHaveBeenCalled();
+    });
+
+    it('links to the support address of the instance when it has one', async () => {
+        mocks.instance.config = {profile: 'managed', accounts: {registration_mode: 'disabled', registration_locked: false}, support_url: 'mailto:help@example.com'};
+        mocks.inspect.mockResolvedValue({status: 'expired', purpose: 'admin_setup'});
+        openAt(`/setup#token=${TOKEN}`);
+
+        render(SetupPage);
+
+        await expectStatus('expired');
+        expect(within(pageRoot()).getByTestId('link-status-support')).toHaveAttribute('href', 'mailto:help@example.com');
+    });
+
+    it('draws no support link when the instance has no support address', async () => {
+        managed();
+        mocks.inspect.mockResolvedValue({status: 'expired', purpose: 'admin_setup'});
+        openAt(`/setup#token=${TOKEN}`);
+
+        render(SetupPage);
+
+        await expectStatus('expired');
+        expect(hintShown()).toBe(MANAGED_EXPIRED_HINT);
+        expect(within(pageRoot()).queryByTestId('link-status-support')).toBeNull();
+    });
+
+    it.each(['consumed', 'revoked', 'unknown'])('keeps the line of today when the link is %s: only an expired link is sent again', async (status) => {
+        managed();
+        mocks.inspect.mockResolvedValue({status, purpose: 'admin_setup'});
+        openAt(`/setup#token=${TOKEN}`);
+
+        render(SetupPage);
+
+        await expectStatus(status);
+        expect(hintShown()).toBe(SETUP_HINT);
+        expect(within(pageRoot()).queryByTestId('link-status-support')).toBeNull();
+    });
+
+    it('keeps the line of today when the page was opened without a token', async () => {
+        managed();
+        openAt('/setup');
+
+        render(SetupPage);
+
+        await expectStatus('missing');
+        expect(hintShown()).toBe(SETUP_HINT);
+    });
+
+    it('keeps the line of today on a self-hosted instance, whose expired link only the owner of the server can replace', async () => {
+        mocks.instance.config = {profile: 'selfhosted', accounts: {registration_mode: 'disabled', registration_locked: false}};
+        mocks.inspect.mockResolvedValue({status: 'expired', purpose: 'admin_setup'});
+        openAt(`/setup#token=${TOKEN}`);
+
+        render(SetupPage);
+
+        await expectStatus('expired');
+        expect(hintShown()).toBe(SETUP_HINT);
+        expect(pageRoot().innerHTML).not.toContain(MANAGED_EXPIRED_HINT);
     });
 });
 

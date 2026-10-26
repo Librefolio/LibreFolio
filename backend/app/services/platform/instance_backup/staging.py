@@ -174,6 +174,9 @@ class OwnerCandidate(BaseModel):
     email: str | None
     is_superuser: bool
     is_active: bool
+    #: Whether the copy marks it as its instance's owner (``users.is_instance_owner``). Written by whoever prepared the
+    #: backup: a hint for the restore of a managed instance that has nobody to ask (B5-1j), never a permission.
+    is_instance_owner: bool = False
 
 
 class StagingReport(BaseModel):
@@ -218,7 +221,7 @@ class StagingReport(BaseModel):
     #: B5-1: the accounts the owner may choose; a report written before reads none. The owner's address the check used
     #: (the confirmation refuses a report whose address is not the current one), and what in the copy would let a
     #: crafted backup defeat the owner's assignment: ``duplicate_email``, ``duplicate_username``,
-    #: ``address_is_a_username``.
+    #: ``address_is_a_username``, ``pending_administrator``.
     owner_candidates: list[OwnerCandidate] = []
     owner_email_checked: str | None = None
     owner_conflicts: list[str] = []
@@ -843,8 +846,11 @@ def _owner_check(database: Path) -> tuple[str | None, list[OwnerCandidate], list
         conn.execute("PRAGMA trusted_schema=OFF")
         if conn.execute("SELECT 1 FROM users WHERE typeof(id) != 'integer' OR username IS NULL LIMIT 1").fetchone():
             raise StagingError("database_damaged", "The backup's accounts are not ones LibreFolio writes: it cannot be restored")
+        # The mark exists where A's migration ran (the copy is at the head here); a column that is not there marks nobody.
+        has_mark = "is_instance_owner" in {row[1] for row in conn.execute("PRAGMA table_info(users)")}
+        mark = "is_instance_owner" if has_mark else "0"
         rows = conn.execute(
-            "SELECT id, username, email, is_superuser, is_active FROM users WHERE (is_superuser = 1 AND is_active = 1) OR (? IS NOT NULL AND lower(email) = lower(?)) ORDER BY username",
+            f"SELECT id, username, email, is_superuser, is_active, {mark} FROM users WHERE (is_superuser = 1 AND is_active = 1) OR (? IS NOT NULL AND lower(email) = lower(?)) ORDER BY username",  # noqa: S608 — `mark` is one of two constants
             (owner_email, owner_email),
         ).fetchall()
         conflicts = []
@@ -858,11 +864,22 @@ def _owner_check(database: Path) -> tuple[str | None, list[OwnerCandidate], list
         # assignment would be refused after the swap.
         if owner_email is not None and conn.execute("SELECT 1 FROM users WHERE lower(username) = lower(?) AND (email IS NULL OR lower(email) != lower(?)) LIMIT 1", (owner_email, owner_email)).fetchone():
             conflicts.append("address_is_a_username")
+        # An inactive account with a setup link not yet used (the initial administrator waiting for it): the start's
+        # admin bootstrap runs before the restore is committed and gives it the owner's address, unless an account holds it
+        # already, so the owner's assignment would then be refused (EMAIL_TAKEN).
+        if (
+            owner_email is not None
+            and conn.execute(
+                "SELECT 1 FROM users u WHERE u.is_active = 0 AND EXISTS (SELECT 1 FROM account_tokens t WHERE t.user_id = u.id AND t.purpose = 'admin_setup')" " AND NOT EXISTS (SELECT 1 FROM account_tokens t WHERE t.user_id = u.id AND t.purpose = 'admin_setup' AND t.consumed_at IS NOT NULL) LIMIT 1"
+            ).fetchone()
+            and not conn.execute("SELECT 1 FROM users WHERE lower(email) = lower(?) LIMIT 1", (owner_email,)).fetchone()
+        ):
+            conflicts.append("pending_administrator")
     candidates = []
-    for user_id, username, email, is_superuser, is_active in rows:
+    for user_id, username, email, is_superuser, is_active, marked in rows:
         if type(user_id) is not int or username is None:
             raise StagingError("database_damaged", "The backup's accounts are not ones LibreFolio writes: it cannot be restored")
-        candidates.append(OwnerCandidate(user_id=user_id, username=str(username), email=None if email is None else str(email), is_superuser=bool(is_superuser), is_active=bool(is_active)))
+        candidates.append(OwnerCandidate(user_id=user_id, username=str(username), email=None if email is None else str(email), is_superuser=bool(is_superuser), is_active=bool(is_active), is_instance_owner=marked == 1))
     return owner_email, candidates, sorted(set(conflicts))
 
 

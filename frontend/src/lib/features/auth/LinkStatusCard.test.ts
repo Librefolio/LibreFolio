@@ -206,3 +206,36 @@ describe('LinkStatusCard — the retry, for a check that failed', () => {
         expect(screen.queryByTestId('link-status-retry')).toBeNull();
     });
 });
+
+describe('LinkStatusCard — the support link (A5-6)', () => {
+    const SUPPORT_LABEL = 'auth.setup.supportLink';
+
+    it('draws a link to the page passed as supportHref, under the hint, with its own test id', () => {
+        render(LinkStatusCard, {props: {status: 'expired', hintKey: 'auth.setup.expiredManagedSupportHint', supportHref: 'https://support.example.com/help'}});
+
+        const link = within(root()).getByTestId('link-status-support');
+        expect(link).toHaveAttribute('href', 'https://support.example.com/help');
+        expect(link.textContent).toContain(SUPPORT_LABEL);
+        expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
+    });
+
+    it('opens a mailto in the mail program: no new tab', () => {
+        render(LinkStatusCard, {props: {status: 'expired', supportHref: 'mailto:help@example.com'}});
+
+        const link = within(root()).getByTestId('link-status-support');
+        expect(link).toHaveAttribute('href', 'mailto:help@example.com');
+        expect(link).not.toHaveAttribute('target');
+    });
+
+    it("draws none without supportHref: today's card is unchanged", () => {
+        render(LinkStatusCard, {props: {status: 'expired'}});
+
+        expect(within(root()).queryByTestId('link-status-support')).toBeNull();
+    });
+
+    it.each(['checking', 'error', 'closed'] as LinkStatus[])('draws none while %s, whatever the page passes: nothing is wrong with the link', (status) => {
+        render(LinkStatusCard, {props: {status, supportHref: 'mailto:help@example.com'}});
+
+        expect(within(root()).queryByTestId('link-status-support')).toBeNull();
+    });
+});

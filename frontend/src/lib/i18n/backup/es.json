@@ -232,7 +232,7 @@
         "owner_choice_required": "Elige la cuenta que pasa a ser del titular antes de confirmar.",
         "owner_choice_invalid": "La cuenta elegida no puede pasar a ser del titular: elige una de las propuestas.",
         "owner_email_not_set": "LIBREFOLIO_ADMIN_EMAIL no está configurada: no se puede elegir la cuenta del titular. Pregunta al proveedor del alojamiento.",
-        "owner_conflict": "La copia contiene dos cuentas con la misma dirección o el mismo nombre, o la dirección del titular como nombre de otra cuenta: no se puede restaurar aquí."
+        "owner_conflict": "La copia contiene dos cuentas con la misma dirección o el mismo nombre, la dirección del titular como nombre de otra cuenta, o un administrador que aún espera su enlace de configuración: no se puede restaurar aquí."
       },
       "password": {
         "intro": "Una copia segura: escribe la contraseña con la que se hizo.",
@@ -271,7 +271,7 @@
     "ownerChoice": {
       "title": "¿Quién es el titular de esta instancia?",
       "intro": "Elige qué usuario de esta copia pasa a ser el administrador que paga la instancia.",
-      "notice": "A este usuario se le pondrá el correo del titular ({email}) y será administrador protegido. Su contraseña se restablecerá: se envía a esa dirección un enlace para elegir una nueva.",
+      "notice": "A este usuario se le pondrá el correo del titular ({email}) y será administrador protegido. Su contraseña se restablecerá: se envía a esa dirección un enlace para elegir una nueva. Si el correo no puede enviarse, el enlace se escribe en el registro de la instancia, para que quien la gestiona se lo entregue al titular.",
       "locked": "Un usuario de esta copia ya tiene el correo del titular: es el titular.",
       "adminBadge": "Administrador",
       "inactiveBadge": "Desactivado",

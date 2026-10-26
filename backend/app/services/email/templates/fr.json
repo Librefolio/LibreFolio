@@ -10,7 +10,12 @@
     "intro": "Nous avons reçu une demande de réinitialisation du mot de passe de votre compte sur $instance.",
     "action": "Choisir un nouveau mot de passe",
     "expiry": "Le lien ne fonctionne qu'une seule fois et expire dans $duration.",
-    "ignore": "Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail : votre mot de passe reste le même."
+    "ignore": "Si vous n'êtes pas à l'origine de cette demande, ignorez cet e-mail : votre mot de passe reste le même.",
+    "restore_subject": "Choisissez un nouveau mot de passe pour LibreFolio",
+    "restore_intro": "Votre compte sur $instance a été restauré à partir d'une sauvegarde.",
+    "restore_note": "Pour votre sécurité, votre mot de passe a été révoqué après la restauration. Utilisez le bouton ci-dessous pour en choisir un nouveau.",
+    "restore_fallback": "Si le lien a expiré, choisissez « Mot de passe oublié ? » sur la page de connexion, avec cette adresse e-mail, pour en recevoir un nouveau.",
+    "restore_unexpected": "Si vous ne vous y attendiez pas, contactez la personne qui gère ce LibreFolio."
   },
   "invite": {
     "subject": "Une invitation à LibreFolio",

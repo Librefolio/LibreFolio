@@ -87,7 +87,9 @@
       "submit": "Activar la cuenta",
       "failed": "No se ha podido configurar la cuenta. Inténtalo de nuevo.",
       "blocked": "Esta instancia está bloqueada por su proveedor: la cuenta se podrá configurar cuando se desbloquee.",
-      "newLinkHint": "Pide un enlace nuevo a tu proveedor. En tu propio servidor, ejecuta «dev.py user setup-link»."
+      "newLinkHint": "Pide un enlace nuevo a tu proveedor. En tu propio servidor, ejecuta «dev.py user setup-link».",
+      "expiredManagedHint": "Si no has recibido uno nuevo por correo electrónico, escribe a soporte.",
+      "supportLink": "Escribir a soporte"
     },
     "notices": {
       "openRegistration": "El registro está abierto y esta instancia es accesible desde fuera de tu red local: cualquiera que la encuentre puede crear una cuenta.",

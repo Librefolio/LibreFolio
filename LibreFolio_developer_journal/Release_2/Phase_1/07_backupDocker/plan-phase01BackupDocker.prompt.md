@@ -7995,3 +7995,56 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 > - Test vecchi invecchiati dall'unione (la colonna `is_instance_owner` ora c'è nello schema): tre test di `backup-apply` aggiornati.
 > **⚠️ Fuori pista / non fatto**: l'E2E con un server vero aspetta lo step `restore-owner` di H, che sta nel suo ramo e non nel
 > mio: qui `assign_restored_owner` non gira ancora all'avvio. Il resto della catena è coperto a livello di servizi con la funzione vera.
+
+#### B5-1f — l'E2E con il server vero ✅ 2026-10-24
+
+> Dopo l'unione di H (`f1382724b`): lo step `restore-owner` gira all'avvio. Nuovo E2E `e2e backup-roundtrip-owner`
+> (`test_backup_roundtrip_owner.py`, 5 test, «pure», figli uvicorn su socket Unix, profilo `managed`, posta spenta).
+> **Note implementazione**:
+> - Primo admin del bersaglio senza toccare il DB: il primo avvio crea l'admin iniziale (admin-bootstrap), il test legge il link di
+>   setup dal log del figlio e lo spende su `POST /auth/setup`. I token sono oscurati nei messaggi d'errore.
+> - Giro intero: carica, controllo (`owner_choice` obbligatorio), conferma senza scelta → 409 `owner_choice_required`, con scelta → 202,
+>   riavvio, commit + `restore-owner` → `link_only`. L'account scelto ha l'email del titolare, è admin attivo e unico titolare; la
+>   vecchia password e le sessioni di prima sono rifiutate; il link sta solo nel log del figlio (non in stato, rapporto, API, file di
+>   dati), si spende una volta sola e il titolare entra con la password nuova.
+> - Al più una volta: un altro avvio non scrive un secondo link, lo stato resta identico.
+> - Chiusura in fallimento: con `LIBREFOLIO_ADMIN_EMAIL` cambiata tra conferma e avvio su un indirizzo già di un altro account →
+>   `error:EMAIL_TAKEN`, login 423 (`restore_interrupted_reason = owner_assignment`), nessun link; `backup pending --recover owner` con
+>   l'indirizzo giusto → al riavvio `link_only` e l'istanza serve.
+> - Ripristino da CLI senza titolare: stato `committed` senza `owner_*`, nessun account col flag, nessun account chiuso.
+> - Un managed in modalità test vuole `LIBREFOLIO_TEST_LANE_ID` di 16–128 caratteri (H-46); il dominio di prova non può essere `.test`.
+
+#### B5-1g — le correzioni della revisione di sicurezza di A su `3a3c357d7` ✅ 2026-10-24
+
+> **Note implementazione** (rossi dal `test-author`, poi la cura; 5 punti su 6, il sesto era già giusto):
+> 1. Errore passeggero: `owner._assign_with_retries` riprova fino a `_ATTEMPTS = 4` volte, `_RETRY_PAUSE_SECONDS = 1.0`, solo se SQLite dice
+>    «locked/busy»; ogni altra eccezione esce subito. Il motore ha `timeout=30` s (busy timeout). Dopo l'ultimo tentativo resta `pending`
+>    per il prossimo avvio. (Il timeout di default del driver dava già 5 s; ora è esplicito e a 30.)
+> 2. Flag `is_instance_owner` del backup: `apply._clear_owner_flag` lo azzera su tutti gli account al commit; lo rimette solo
+>    `_close_owner_account` per l'account assegnato. Senza scelta (pannello, CLI) lo ricava `_heal` di A dalla variabile.
+> 3. `PRAGMA trusted_schema = OFF` come primo comando della connessione di `_close_the_way_in`.
+> 4. Admin in attesa nel backup: `staging._owner_check` aggiunge il conflitto `pending_administrator` (inattivo, con un link `admin_setup`
+>    non usato, e nessun account con l'indirizzo del titolare); la conferma lo rifiuta con `owner_conflict` (409). Testo della
+>    conferma aggiornato in 4 lingue.
+> 5. `link_only`: la nota della modale (`backup.ownerChoice.notice`) ora dice che, se l'email non parte, il link è nel log dell'istanza,
+>    per chi gestisce l'istanza, senza mostrarlo; docs allineate.
+> 6. Nessun admin attivo: già un blocco (`no_administrator`, 409 `restore_not_restorable`, la modale non apre la scelta): pin di test
+>    (15 casi API + 2 Vitest), nessuna cura.
+> **⚠️ Fuori pista**: `_largest_session_version` (lettura di `previous/`) non imposta `trusted_schema=OFF`: fuori dal percorso vivo, non
+> toccata. `black --check` fallisce già su `_backend_api.py` in HEAD (righe non mie).
+
+#### B5-1h — `trusted_schema = OFF` nella lettura di `previous/` ✅ 2026-10-24
+
+> **Note implementazione**: `apply._largest_session_version` apre la connessione a sola lettura e come primo comando dà
+> `PRAGMA trusted_schema = OFF`, come tutte le altre letture di una copia. Rosso prima (test con `RecordingConnect`, anche 0 per
+> percorso mancante o cartella), poi una riga. `backup-apply` 420, `backup-owner` 98, su data dir nuova `/tmp/librefolio-r13-b51h`.
+
+### B5-1i — Gate train 11: `owner-email-change` red in B (triage, no code change) — 2026-10-24
+
+> **Note implementazione**: triage only, nothing changed in the code. The red `test_owner_email_change.py::test_after_a_restore_with_the_variable_changed_the_link_issued_at_the_start_is_alive` comes from B5-1g point 2 (`a4d727e4a`): `apply._clear_owner_flag` clears `users.is_instance_owner` in the restore's commit, so A's owner sync finds no flagged owner, `_heal` looks for an account holding `LIBREFOLIO_ADMIN_EMAIL` (none) and issues no `email_change` link. Proof: with that one line disabled the suite is 50 passed (file restored afterwards, tree clean). Verdict: **design conflict** between A's security review (clear the flag) and A's test OWN-083 (the flag survives). Not changed: product decision for the developer; two options in the checkpoint. `backup-owner-real` 6 passed, `restore-owner-guard` 46 passed on `/tmp/librefolio-r13-c6`.
+
+### B5-1j — Owner of a restore from the command line or the hosting panel (managed) — 2026-10-26
+
+> **Note implementazione**: analysis `ondata5/B-5-1j-analisi-titolare-nel-restore-cli.md` (reviewed by A, decisions O1–O3 by the developer: self-hosted unchanged, no candidate → the restore goes on with a warning, email text is A5-5). Production: `staging.OwnerCandidate.is_instance_owner` (read from the copy; absent column → False); `apply.OwnerPick`, `pick_owner` (holder of V → the ONE active administrator the backup marks → nobody; two marked is nobody, never the first by id), `owner_plan`; `_check_owner_choice` now returns the account and the outcome to record (`none` when nobody) and, for cli/panel on managed with V set, refuses a report checked for another address (`restore_stage_outdated`) or with conflicts (`owner_conflict`, advice "make a new backup"); the `confirmed_via != "admin"` filters of `owner_assignment_problem`, `owner_pending`, `reset_owner_assignment` and of the CLI `--recover` gate are gone; `_clear_owner_flag` (B5-1g) stays and now matches the design. CLI: one owner line in the report and after `✅` (username through `_safe`, never an address), `./dev.py user reassign-owner <username>` when nobody, `backup pending` prints it for outcome `none`. `app_lifespan.py`, `restore_guard.py`, `panel_restore.py` untouched (H): the panel goes through `confirm_restore`. Docs EN: `backup_restore.en.md` (`#owner-pick`), `cli_backup.en.md` (`#backup-restore-owner`).
+> **⚠️ Fuori pista**: (1) the test-author's panel API tests used `.test` addresses as `LIBREFOLIO_ADMIN_EMAIL` (rejected: no pick) — fixed in the tests; (2) `user reassign-owner` does not exist yet (A5-4): docs and CLI quote it as "arrives with a later change"; (3) stale sentence in H's `hosting_panel_backups.en.md` (#restore-owner-pending) and `hosting_providers.en.md` ("names no owner"): reported to the coordinator, not touched.
+> **Results** (lane `/tmp/librefolio-r13-b51j`): backup-staging 266, backup-owner 133, owner-assignment 24, restore-guard 25, cli-recover 200, cli-restore 169, cli 106, restore-interrupted 34, backup-apply 501, panel-restore 136, backup-restore-apply 303, e2e backup-roundtrip-owner 7 — all passed; mkdocs build and check-links (97 links) passed. `api backup-owner-channels` 10 passed (after fixing the tests' `.test` address).
