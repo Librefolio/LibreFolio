@@ -410,6 +410,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/auth/AuthPageFrame.managed.test.ts",
             "src/lib/features/auth/AuthPageFrame.legal.test.ts",
             "src/lib/features/auth/LinkStatusCard.test.ts",
+            "src/lib/features/auth/expiredSetupNotice.test.ts",
             "src/lib/features/auth/ResetPasswordCard.test.ts",
             "src/lib/features/auth/SetupCard.test.ts",
             "src/routes/page.authFlash.test.ts",
