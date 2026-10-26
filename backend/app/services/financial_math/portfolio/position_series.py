@@ -1,4 +1,4 @@
-"""The daily series of a position: its P&L and its base, one point per calendar day (J5-1, #48).
+"""The series of a position: its P&L and its base, as steps (J5-1, #48; D-P4).
 
 The chart of the Dashboard's positions draws one line per chosen position. A line is the position's result since the
 period's start, day by day: the Performance table's ``period_pnl`` of the period from ``date_from`` to each day, so the
@@ -7,9 +7,12 @@ last point of a series is the table's row. This module is the pure side: it take
 steps, the internal transfers and the cost of what was bought, and returns the series. It reads no database and builds
 no daily state: each figure of a day is a lookup in the stretches (a bisection), never a replay of the days before it.
 
-**Volume (D-P4).** A series is one point per calendar day and per requested position, so its size is the days of the window
-times the positions asked: a typo'd first year would ask for ~740 000 points per series. The API keeps the daily point; the
-Dashboard asks for a window its chart can draw (sampled on the long ones, as the cards of Z-29 do). Nothing here limits it.
+**Steps (D-P4, cure B).** A point holds from its ``date`` to its ``through``, both included: the days between two changes are one
+point, so a typo'd first year costs what its changes cost and not ~740 000 points per series. The days a position's figures
+can change on are those of its inputs (a frame starting or ending, a sale, an income or cost, a purchase, a transfer's tract
+or arrival, the period's start); on each the figures are read as ever (a lookup, never a replay), and two consecutive
+points with the same figures, down to the exponent of each Decimal, are one. Expanding every point over its days gives the
+daily series, field for field (``series_steps``).
 
 The rules, which the developer decided on 18/10 and 23/10 (plan 05, «Ondata 5»):
 
@@ -21,8 +24,8 @@ The rules, which the developer decided on 18/10 and 23/10 (plan 05, «Ondata 5»
   measured from that value), else at the cost moved, which is where the plain boundary values measure their pnl from; as the
   Performance row's base does (``contributions.annualized_period_return``). A sale never lowers it. ``pnl_percent`` = pnl / base, a fraction, unrounded; None
   when the base is 0 or unknown;
-* one point per **calendar day** from ``first_date`` to ``last_date``; ``last_date`` is ``date_to`` while the position is
-  held, else the day it went to 0 (that day's point has quantity 0, value 0 and the final pnl);
+* points that cover every **calendar day** from ``first_date`` to ``last_date`` without a gap; ``last_date`` is ``date_to`` while the
+  position is held, else the day it went to 0 (that day has quantity 0, value 0 and the final pnl);
 * ``None`` is «not known», never 0. A day without a market value has a pnl of the parts that are known, flagged
   ``complete = False``, as the Performance row does;
 * a request for ``(None, asset)`` is the asset summed over the brokers that held it. The tracts of an internal transfer
@@ -39,6 +42,7 @@ whose positions are held, and only there.
 from __future__ import annotations
 
 import bisect
+import dataclasses
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date as date_type
@@ -49,6 +53,7 @@ from backend.app.services.financial_math.average_cost import AverageCost, CostMo
 from backend.app.services.financial_math.portfolio.contributions import counted_tract, position_period_pnl, transfer_tract
 from backend.app.services.financial_math.portfolio.models import InternalAssetTransfer, PositionFrame, RealizedSale
 from backend.app.services.financial_math.returns import realized_gain
+from backend.app.services.financial_math.series_steps import steps_from_rows, value_at
 from backend.app.services.platform.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
 
 _ZERO = Decimal("0")
@@ -61,9 +66,10 @@ PositionRequest = tuple[int | None, int]
 
 @dataclass(frozen=True, slots=True)
 class SeriesPoint:
-    """One day of a position's series."""
+    """One step of a position's series: the figures hold from ``date`` to ``through``, both included."""
 
     date: date_type
+    through: date_type
     quantity: Decimal
     market_value: Decimal | None
     cost_basis: Decimal | None
@@ -163,8 +169,8 @@ def _single(  # noqa: C901 — one pass over the days of a position: boundaries,
     flow_steps: Sequence[tuple[date_type, Decimal, Decimal]],
     transfers: Sequence[InternalAssetTransfer],
     acquisitions: Sequence[tuple[date_type, Decimal]],
-) -> tuple[PositionSeriesData, dict[date_type, _Parts]]:
-    """The series of one position at one broker, and its base's parts by day (what the asset-level sum needs)."""
+) -> tuple[PositionSeriesData, _Steps]:
+    """The series of one position at one broker, and what transfers brought into its base (what the asset-level sum takes out)."""
     start_frame = reader.on(date_from) if date_from is not None else None
     held_at_start = _held(start_frame)
     held_frames = [frame for frame in reader.frames if frame.quantity > QUANTITY_DUST_THRESHOLD and frame.start <= date_to]
@@ -208,19 +214,20 @@ def _single(  # noqa: C901 — one pass over the days of a position: boundaries,
     brought_in = _steps_of([(t.arrival, base) for t in transfers if t.receiver_broker_id == key[0] and t.asset_id == key[1] and (date_from is None or t.arrival > date_from) and (base := _arrival_base(t, date_from)) is not None])
     start_unknown_base = held_at_start and start_value is None
 
-    points: list[SeriesPoint] = []
-    parts: dict[date_type, _Parts] = {}
-    day = first_date
-    while day <= last_date:
+    cache: dict[date_type, SeriesPoint] = {}
+
+    def point_at(day: date_type) -> SeriesPoint:
+        """The position's figures on one day, a lookup in the stretches and the steps: never built from the day before."""
+        known = cache.get(day)
+        if known is not None:
+            return known
         frame = reader.on(day)
         held = _held(frame)
-        if not held and transit_end is not None and last_held < day < transit_end and points:
+        if not held and transit_end is not None and last_held < day < transit_end:
             # In transit: the units are on their way, their result is settled on arrival. The point keeps the last held day's pnl.
-            before = points[-1]
-            points.append(SeriesPoint(day, _ZERO, _ZERO, _ZERO, before.pnl, before.base, before.pnl_percent, None, before.complete))
-            parts[day] = _Parts(brought_in=brought_in.up_to(day))
-            day += timedelta(days=1)
-            continue
+            before = point_at(last_held)
+            cache[day] = SeriesPoint(day, day, _ZERO, _ZERO, _ZERO, before.pnl, before.base, before.pnl_percent, None, before.complete)
+            return cache[day]
         ug_day = frame.unrealized_pnl if held else None
         adjustment = tract_adjustments.up_to(day) if tract_adjustments.moved_in(date_from, day) else None
         realized_sum = realized.up_to(day) if sale_days and sale_days[0] <= day else None
@@ -247,30 +254,56 @@ def _single(  # noqa: C901 — one pass over the days of a position: boundaries,
         else:
             base = abs(start_value or _ZERO) + bought.up_to(day) + brought_in.up_to(day)
         percent = pnl / base if pnl is not None and base is not None and base != 0 else None
-        points.append(
-            SeriesPoint(
-                date=day,
-                quantity=frame.quantity if held else _ZERO,
-                market_value=frame.market_value if held else _ZERO,
-                cost_basis=(frame.cost_basis if frame.cost_complete else None) if held else _ZERO,
-                pnl=pnl,
-                base=base,
-                pnl_percent=percent,
-                valuation_source=frame.valuation_source if held else None,
-                complete=not unknown_boundary,
-            )
+        cache[day] = SeriesPoint(
+            date=day,
+            through=day,
+            quantity=frame.quantity if held else _ZERO,
+            market_value=frame.market_value if held else _ZERO,
+            cost_basis=(frame.cost_basis if frame.cost_complete else None) if held else _ZERO,
+            pnl=pnl,
+            base=base,
+            pnl_percent=percent,
+            valuation_source=frame.valuation_source if held else None,
+            complete=not unknown_boundary,
         )
-        parts[day] = _Parts(brought_in=brought_in.up_to(day))
-        day += timedelta(days=1)
+        return cache[day]
+
+    # D-P4: the figures change only on the days one of their inputs does, so the series is given there and is steps. Each of
+    # these is an input read by day: a frame starting or ending (the position held or not), a sale, an income or a cost, a
+    # purchase, a transfer's tract or what it brings in, the arrival that ends the days in transit, the period's start.
+    changing: set[date_type] = {first_date, last_date, last_held + timedelta(days=1)}
+    for frame in reader.frames:
+        changing.add(frame.start)
+        changing.add(_next_day(frame.end))
+    changing.update(sale_days)
+    changing.update(flow_days)
+    changing.update(bought.days)
+    changing.update(tract_adjustments.days)
+    changing.update(brought_in.days)
+    if transit_end is not None:
+        changing.add(transit_end)
+    if date_from is not None:
+        changing.update((date_from, date_from + timedelta(days=1)))
+    days = sorted(day for day in changing if first_date <= day <= last_date)
+    points = _steps_of_points([point_at(day) for day in days], first_date, last_date)
     data = PositionSeriesData(key, first_date, last_date, held_at_start, held_at_end, closed_on, points, all(point.complete for point in points))
-    return data, parts
+    return data, brought_in
 
 
-@dataclass(frozen=True, slots=True)
-class _Parts:
-    """What of a base an internal transfer brought in: the asset-level sum takes it out, it is not new capital."""
+def _next_day(day: date_type) -> date_type:
+    return day if day == date_type.max else day + timedelta(days=1)
 
-    brought_in: Decimal
+
+def _point_values(point: SeriesPoint) -> tuple[object, ...]:
+    """A point's figures, the days it holds left out."""
+    return (point.quantity, point.market_value, point.cost_basis, point.pnl, point.base, point.pnl_percent, point.valuation_source, point.complete)
+
+
+def _steps_of_points(points: Sequence[SeriesPoint], first: date_type, last: date_type) -> list[SeriesPoint]:
+    """The points of the days a series can change on, as steps from ``first`` to ``last``: two consecutive points with the same
+    figures (down to the exponent of each Decimal) are one, which holds until the day before the next."""
+    steps = steps_from_rows(points, day=lambda point: point.date, values=_point_values, range_start=first, range_end=last)
+    return [dataclasses.replace(step.row, date=step.date, through=step.through) for step in steps]
 
 
 def _takes_part(transfer: InternalAssetTransfer, key: PositionKey) -> bool:
@@ -350,23 +383,29 @@ def build_position_series(
                     acquisitions=list(acquisitions.get(key, ())),
                 )
             )
-        out.append(singles[0][0] if broker_id is not None else _sum_over_brokers(request, [data for data, _ in singles], [parts for _, parts in singles]))
+        out.append(singles[0][0] if broker_id is not None else _sum_over_brokers(request, [data for data, _ in singles], [brought for _, brought in singles]))
     return out
 
 
-def _sum_over_brokers(request: PositionRequest, singles: list[PositionSeriesData], parts: list[dict[date_type, _Parts]]) -> PositionSeriesData:
-    """An asset summed over the brokers that held it: each broker's point on each day, a closed one at its last."""
+def _sum_over_brokers(request: PositionRequest, singles: list[PositionSeriesData], brought: list[_Steps]) -> PositionSeriesData:
+    """An asset summed over the brokers that held it: each broker's step on each day, a closed one at its last.
+
+    What an internal transfer brought into a receiver's base (``brought``, by broker) is taken out: it is not new capital.
+    The sum changes only where one of the brokers' steps starts, so it is given there.
+    """
     held = [data for data in singles if data.points]
     if not held:
         return PositionSeriesData(request, None, None, False, False, None, [], True)
     first_date = min(data.first_date for data in held)
     last_date = max(data.last_date for data in held)
     at_end = any(data.held_at_end for data in held)
-    by_day = [{point.date: point for point in data.points} for data in held]
-    brought = [part for data, part in zip(singles, parts, strict=True) if data.points]
+    brought_in_by = [steps for data, steps in zip(singles, brought, strict=True) if data.points]
+    changing = {first_date, last_date}
+    for data in held:
+        changing.update(point.date for point in data.points)
+    days = sorted(day for day in changing if first_date <= day <= last_date)
     points: list[SeriesPoint] = []
-    day = first_date
-    while day <= last_date:
+    for day in days:
         quantity = _ZERO
         market_value: Decimal | None = _ZERO
         cost_basis: Decimal | None = _ZERO
@@ -375,17 +414,17 @@ def _sum_over_brokers(request: PositionRequest, singles: list[PositionSeriesData
         base: Decimal | None = _ZERO
         complete = True
         source: str | None = None
-        for data, index, part in zip(held, by_day, brought, strict=True):
-            point = index.get(day)
+        for data, steps in zip(held, brought_in_by, strict=True):
+            point = value_at(data.points, day)
             if point is None:
                 if day < data.first_date:
                     continue
                 point = data.points[-1]  # closed: the final pnl and base stay in the sum, the position is worth 0
                 market_value_here, cost_here, quantity_here, source_here = _ZERO, _ZERO, _ZERO, None
-                brought_in = part[data.last_date].brought_in
+                brought_in = steps.up_to(data.last_date)
             else:
                 market_value_here, cost_here, quantity_here, source_here = point.market_value, point.cost_basis, point.quantity, point.valuation_source
-                brought_in = part[day].brought_in
+                brought_in = steps.up_to(day)
             quantity += quantity_here
             market_value = None if market_value is None or market_value_here is None else market_value + market_value_here
             cost_basis = None if cost_basis is None or cost_here is None else cost_basis + cost_here
@@ -396,7 +435,7 @@ def _sum_over_brokers(request: PositionRequest, singles: list[PositionSeriesData
             complete = complete and point.complete
             source = source or source_here
         pnl = sum(pnls, _ZERO) if pnl_known else None
-        points.append(SeriesPoint(day, quantity, market_value, cost_basis, pnl, base, pnl / base if pnl is not None and base not in (None, _ZERO) else None, source, complete))
-        day += timedelta(days=1)
+        points.append(SeriesPoint(day, day, quantity, market_value, cost_basis, pnl, base, pnl / base if pnl is not None and base not in (None, _ZERO) else None, source, complete))
+    steps_out = _steps_of_points(points, first_date, last_date)
     closed_on = None if at_end else max(data.closed_on for data in held if data.closed_on is not None)
-    return PositionSeriesData(request, first_date, last_date, any(data.held_at_start for data in held), at_end, closed_on, points, all(point.complete for point in points))
+    return PositionSeriesData(request, first_date, last_date, any(data.held_at_start for data in held), at_end, closed_on, steps_out, all(point.complete for point in steps_out))

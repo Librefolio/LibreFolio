@@ -86,6 +86,7 @@ from backend.app.schemas.common import Currency
 from backend.app.schemas.portfolio import LotAnalysisType, LotsAnalysisResponse, PortfolioSummary
 from backend.app.services.lots_analysis_service import LotsAnalysisService
 from backend.app.services.portfolio_service import PortfolioService
+from backend.test_scripts.test_services._lots_steps import daily_points
 from backend.test_scripts.test_utils import print_section, print_success
 
 REPORT = "EUR"
@@ -582,7 +583,7 @@ class TestTheExampleOfTheDecision:
         book = await _example_book(session, stored_value)
 
         response = await _lots(session, book, date_to=EXAMPLE_EXIT_DAY, analyses=(LotAnalysisType.LOT_SUMMARY, LotAnalysisType.PERFORMANCE_HISTORY))
-        twrr_by_day = {point.date: point.twrr for point in response.performance_history or []}
+        twrr_by_day = {point.date: point.twrr for point in daily_points(response.performance_history)}
         eve, day = twrr_by_day.get(EXAMPLE_EVE_DAY), twrr_by_day.get(EXAMPLE_EXIT_DAY)
         day_move = None if eve is None or day is None else (1 + day) / (1 + eve) - 1
         observed = {**_lots_view(response, book), "the day's TWRR in the lots' performance": day_move}

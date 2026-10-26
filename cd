@@ -1,0 +1,130 @@
+........................................................................ [ 63%]
+...........FFFF..........................                                [100%]
+=================================== FAILURES ===================================
+_ test_price_candidate_days_put_the_day_after_the_last_day_at_cost_in_the_window_only[the-day-before-the-last-the-last-day] _
+
+at_cost_offset = 8, expected = (0, 9)
+
+    @pytest.mark.parametrize(
+        ("at_cost_offset", "expected"),
+        [
+            pytest.param(3, (0, 1, 4, 5, 9), id="mid-window-the-day-after-and-its-next-day"),
+            pytest.param(0, (0, 1, 2, 9), id="the-first-day-the-day-after-is-the-second-and-its-next-the-third"),
+            pytest.param(-1, (0, 1, 9), id="the-day-before-the-first-the-first-day-and-its-next"),
+            pytest.param(8, (0, 9), id="the-day-before-the-last-the-last-day"),
+            pytest.param(9, (0, 9), id="the-last-day-the-day-after-it-is-outside-and-dropped"),
+            pytest.param(-5, (0, 9), id="long-before-the-first-nothing"),
+            pytest.param(None, (0, 9), id="no-day-at-cost"),
+        ],
+    )
+    def test_price_candidate_days_put_the_day_after_the_last_day_at_cost_in_the_window_only(at_cost_offset, expected):
+        """``at_cost_until`` + 1 is the day the open lots start being valued at the market: a candidate (with its next day)
+        when it is inside the window, nothing more when it falls past the last day or comes before the first."""
+        days = _days(10)
+        at_cost_until = None if at_cost_offset is None else MONDAY + timedelta(days=at_cost_offset)
+    
+>       assert _candidates(days[0], days[9], at_cost_until=at_cost_until) == _at(days, *expected)
+E       assert [datetime.dat...(2024, 3, 13)] == [datetime.dat...(2024, 3, 13)]
+E         
+E         At index 1 diff: datetime.date(2024, 3, 5) != datetime.date(2024, 3, 13)
+E         Left contains one more item: datetime.date(2024, 3, 13)
+E         Use -v to get more diff
+
+backend/test_scripts/test_services/test_financial_math/test_lot_change_days.py:980: AssertionError
+_ test_price_candidate_days_put_the_day_after_the_last_day_at_cost_in_the_window_only[the-last-day-the-day-after-it-is-outside-and-dropped] _
+
+at_cost_offset = 9, expected = (0, 9)
+
+    @pytest.mark.parametrize(
+        ("at_cost_offset", "expected"),
+        [
+            pytest.param(3, (0, 1, 4, 5, 9), id="mid-window-the-day-after-and-its-next-day"),
+            pytest.param(0, (0, 1, 2, 9), id="the-first-day-the-day-after-is-the-second-and-its-next-the-third"),
+            pytest.param(-1, (0, 1, 9), id="the-day-before-the-first-the-first-day-and-its-next"),
+            pytest.param(8, (0, 9), id="the-day-before-the-last-the-last-day"),
+            pytest.param(9, (0, 9), id="the-last-day-the-day-after-it-is-outside-and-dropped"),
+            pytest.param(-5, (0, 9), id="long-before-the-first-nothing"),
+            pytest.param(None, (0, 9), id="no-day-at-cost"),
+        ],
+    )
+    def test_price_candidate_days_put_the_day_after_the_last_day_at_cost_in_the_window_only(at_cost_offset, expected):
+        """``at_cost_until`` + 1 is the day the open lots start being valued at the market: a candidate (with its next day)
+        when it is inside the window, nothing more when it falls past the last day or comes before the first."""
+        days = _days(10)
+        at_cost_until = None if at_cost_offset is None else MONDAY + timedelta(days=at_cost_offset)
+    
+>       assert _candidates(days[0], days[9], at_cost_until=at_cost_until) == _at(days, *expected)
+E       assert [datetime.dat...(2024, 3, 13)] == [datetime.dat...(2024, 3, 13)]
+E         
+E         At index 1 diff: datetime.date(2024, 3, 5) != datetime.date(2024, 3, 13)
+E         Left contains one more item: datetime.date(2024, 3, 13)
+E         Use -v to get more diff
+
+backend/test_scripts/test_services/test_financial_math/test_lot_change_days.py:980: AssertionError
+_ test_price_candidate_days_put_the_day_after_the_last_day_at_cost_in_the_window_only[long-before-the-first-nothing] _
+
+at_cost_offset = -5, expected = (0, 9)
+
+    @pytest.mark.parametrize(
+        ("at_cost_offset", "expected"),
+        [
+            pytest.param(3, (0, 1, 4, 5, 9), id="mid-window-the-day-after-and-its-next-day"),
+            pytest.param(0, (0, 1, 2, 9), id="the-first-day-the-day-after-is-the-second-and-its-next-the-third"),
+            pytest.param(-1, (0, 1, 9), id="the-day-before-the-first-the-first-day-and-its-next"),
+            pytest.param(8, (0, 9), id="the-day-before-the-last-the-last-day"),
+            pytest.param(9, (0, 9), id="the-last-day-the-day-after-it-is-outside-and-dropped"),
+            pytest.param(-5, (0, 9), id="long-before-the-first-nothing"),
+            pytest.param(None, (0, 9), id="no-day-at-cost"),
+        ],
+    )
+    def test_price_candidate_days_put_the_day_after_the_last_day_at_cost_in_the_window_only(at_cost_offset, expected):
+        """``at_cost_until`` + 1 is the day the open lots start being valued at the market: a candidate (with its next day)
+        when it is inside the window, nothing more when it falls past the last day or comes before the first."""
+        days = _days(10)
+        at_cost_until = None if at_cost_offset is None else MONDAY + timedelta(days=at_cost_offset)
+    
+>       assert _candidates(days[0], days[9], at_cost_until=at_cost_until) == _at(days, *expected)
+E       assert [datetime.dat...(2024, 3, 13)] == [datetime.dat...(2024, 3, 13)]
+E         
+E         At index 1 diff: datetime.date(2024, 3, 5) != datetime.date(2024, 3, 13)
+E         Left contains one more item: datetime.date(2024, 3, 13)
+E         Use -v to get more diff
+
+backend/test_scripts/test_services/test_financial_math/test_lot_change_days.py:980: AssertionError
+_ test_price_candidate_days_put_the_day_after_the_last_day_at_cost_in_the_window_only[no-day-at-cost] _
+
+at_cost_offset = None, expected = (0, 9)
+
+    @pytest.mark.parametrize(
+        ("at_cost_offset", "expected"),
+        [
+            pytest.param(3, (0, 1, 4, 5, 9), id="mid-window-the-day-after-and-its-next-day"),
+            pytest.param(0, (0, 1, 2, 9), id="the-first-day-the-day-after-is-the-second-and-its-next-the-third"),
+            pytest.param(-1, (0, 1, 9), id="the-day-before-the-first-the-first-day-and-its-next"),
+            pytest.param(8, (0, 9), id="the-day-before-the-last-the-last-day"),
+            pytest.param(9, (0, 9), id="the-last-day-the-day-after-it-is-outside-and-dropped"),
+            pytest.param(-5, (0, 9), id="long-before-the-first-nothing"),
+            pytest.param(None, (0, 9), id="no-day-at-cost"),
+        ],
+    )
+    def test_price_candidate_days_put_the_day_after_the_last_day_at_cost_in_the_window_only(at_cost_offset, expected):
+        """``at_cost_until`` + 1 is the day the open lots start being valued at the market: a candidate (with its next day)
+        when it is inside the window, nothing more when it falls past the last day or comes before the first."""
+        days = _days(10)
+        at_cost_until = None if at_cost_offset is None else MONDAY + timedelta(days=at_cost_offset)
+    
+>       assert _candidates(days[0], days[9], at_cost_until=at_cost_until) == _at(days, *expected)
+E       assert [datetime.dat...(2024, 3, 13)] == [datetime.dat...(2024, 3, 13)]
+E         
+E         At index 1 diff: datetime.date(2024, 3, 5) != datetime.date(2024, 3, 13)
+E         Left contains one more item: datetime.date(2024, 3, 13)
+E         Use -v to get more diff
+
+backend/test_scripts/test_services/test_financial_math/test_lot_change_days.py:980: AssertionError
+=========================== short test summary info ============================
+FAILED backend/test_scripts/test_services/test_financial_math/test_lot_change_days.py::test_price_candidate_days_put_the_day_after_the_last_day_at_cost_in_the_window_only[the-day-before-the-last-the-last-day]
+FAILED backend/test_scripts/test_services/test_financial_math/test_lot_change_days.py::test_price_candidate_days_put_the_day_after_the_last_day_at_cost_in_the_window_only[the-last-day-the-day-after-it-is-outside-and-dropped]
+FAILED backend/test_scripts/test_services/test_financial_math/test_lot_change_days.py::test_price_candidate_days_put_the_day_after_the_last_day_at_cost_in_the_window_only[long-before-the-first-nothing]
+FAILED backend/test_scripts/test_services/test_financial_math/test_lot_change_days.py::test_price_candidate_days_put_the_day_after_the_last_day_at_cost_in_the_window_only[no-day-at-cost]
+4 failed, 109 passed in 1.54s
+exit 1

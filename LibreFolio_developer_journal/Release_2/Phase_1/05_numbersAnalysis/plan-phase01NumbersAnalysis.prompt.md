@@ -9702,3 +9702,35 @@ con la nota del 22/10. E2E proposti al coordinatore: `front-broker detail` (il c
    >   ruff e black puliti.
    > **⚠️ Fuori pista**: nell'asset sommato (`broker_id` None) le quote in viaggio all'inizio del periodo non hanno base (base 0, percentuale None):
    > pnl senza capitale. Non l'ho toccato (fuori dal lotto); da annotare.
+
+11. ✅ 25–26/10 — **J5-5: lotti e #48 a tratti** (D-P4, cura B; contratto `ondata5/CONTRATTO-P4b.md`; base `791f765a5`, poi l'unione del report a gradini di MF; corsia 6190).
+   > **Note implementazione**:
+   > - **Forma**: le sette storie dei lotti e le serie per posizione (`POST /portfolio/positions-series`) hanno punti `StepSpan`: un punto vale da `date` a
+   >   `through`, e la risposta ha `range`. I tratti sono ordinati, senza sovrapposizioni e **massimali** (due righe consecutive uguali, con l'esponente di
+   >   ogni Decimal, sono una); nei lotti restano buchi dove oggi non c'è riga (un prezzo non convertibile).
+   > - **Lotti** (`lots_analysis_service.py`, `financial_math/lots/change_days.py`): `expand_to_days` e la lista `history_dates` non esistono più. Il calendario
+   >   è `DayRange` (sequenza pigra, per la bisezione di `last_day_without_observation`); i giorni in cui il prezzo convertito può cambiare sono noti senza
+   >   percorrere la finestra (`price_candidate_days`: `AssetPriceSeries.observation_dates`, i passi dei cambi `FxRateResolver.rate_change_days()`, gli eventi, la
+   >   fine dei giorni a costo, ciascuno con il giorno dopo); il prezzo si legge solo lì, i costruttori girano sui giorni che `lot_change_days` tiene, e
+   >   `history_steps` (su `series_steps.steps_from_rows` di MF) fa i tratti per chiave. I giorni senza cambio per un cambio mancante diventano
+   >   `missing_fx_pairs[].ranges` (`FxRateResolver.convert_through`), non una data per giorno.
+   > - **#48** (`position_series.py`): la serie si dà sui giorni in cui cambia un input (inizio e fine+1 di ogni frame, vendite, flussi, acquisti, tract, arrivi, il
+   >   fine transito, `date_from` e il giorno dopo); `point_at(giorno)` è una ricerca come prima. Il punto «in viaggio» legge l'ultimo giorno posseduto (non più
+   >   `points[-1]`); l'asset sommato si calcola sull'unione dei giorni di cambio dei broker e un broker chiuso dà il suo ultimo tratto.
+   > - **Rischio**: `portfolio_twrr_returns` legge il report a tratti con `value_at` (sui giorni di osservazione; senza, giorno per giorno solo dentro ai tratti con
+   >   TWRR); `risk/data_quality.py` conta i giorni dell'unione degli intervalli dei quattro `incomplete_*_ranges`; `market_series.py` dà `incomplete_valuation_ranges`.
+   >   I quattro campi `incomplete_*_dates` sono tolti dal `DataQualityReport`.
+   > - **Prima/dopo** (imbracatura in `ondata5/J-p4b/`, fuori dal repo): i dump di HEAD (`ed2cce21e`, un punto al giorno) contro i nuovi, con i tratti espansi:
+   >   lotti **178 casi su 178 identici** (13 libri × finestre × ambiti, tutte le analisi), #48 **12 su 12** (libri a chiusure settimanali, vendita parziale,
+   >   dividendo, spesa, trasferimento in viaggio, posizione che si chiude, asset sommato, 6 inizi); i controlli di forma (ordine, contiguità, massimalità, ultimo
+   >   `through` = `last_date`) tutti verdi. Righe: lotti 117 324 → 60 703 sui libri di prova (prezzi giornalieri); #48 1 671 → 978.
+   > - **Costo del refuso all'anno 1** (BUY il 3/1/0001, lotti): HEAD ≈ 737 854 chiamate a `AssetPriceSeries.resolve`, 613 s, picco 3,9 GB; ora ≤ 2 000
+   >   chiamate, meno di 40 righe per sezione, < 150 MB (rosso del test-author, verde).
+   > - **Test**: due `test-author` per i rossi (lotti: forma, costo, il confine di rappresentazione dell'8 apr; #48: oracolo contro la riga del Periodo a ogni inizio/fine
+   >   tratto, transito, anno 1) e per adattare i test esistenti (helper unico `test_services/_lots_steps.py`); i test dei due lettori del rischio li ho scritti
+   >   dopo il codice (nessuna fase rossa).
+   > **⚠️ Fuori pista**: (1) il mio dump di prova numerava gli id per valore: un asset e un broker con lo stesso numero si scambiavano l'etichetta (178 «differenze»
+   >   finte); ora la numerazione è per famiglia (`asset#0`, `broker#1`…) e HEAD è ridumpato dal suo albero. (2) `test_ai_export_components_portfolio_broker_financial.py`
+   >   costruisce `PortfolioHistoryPoint` senza `through` (cambio di MF sul report): è di Z. (3) La voce del CHANGELOG sta nelle Breaking changes insieme a quella del
+   >   report; da unire con quella di MF. (4) Restano fuori: l'anno breve di `assetSetLevels.ts:425-426` (per `utcMs` serve il ramo di Y), e i grafici dei lotti e di
+   >   #48 nel frontend (Y), che leggono ancora una riga al giorno.

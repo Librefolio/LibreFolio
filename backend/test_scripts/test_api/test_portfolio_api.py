@@ -3,7 +3,7 @@
 import json
 import uuid
 from collections import defaultdict
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
@@ -35,6 +35,7 @@ from backend.app.services.pac_allocator.source.portfolio_allocation_source impor
 )
 from backend.test_scripts.test_db_config import get_test_db_path, verify_test_database
 from backend.test_scripts.test_server_helper import _TestingServerManager
+from backend.test_scripts.test_services._lots_steps import expand_steps
 from backend.test_scripts.test_utils import print_section, print_success
 
 settings = get_settings()
@@ -1291,9 +1292,13 @@ class TestLotsAnalysisEndpoint:
             assert resp.status_code == 200, resp.text
             data = resp.json()
 
+            # J5-5 (steps, contract MF-P4b §1.3): a row holds from `date` to `through`, and the answer carries the `range` the rows lie in.
+            # 10 Jan (ROI 0, no TWRR yet) and 11 Jan (ROI and TWRR 0.1) are different figures, so they are two steps of one day each.
+            assert data["range"] == {"start": "2026-01-10", "end": "2026-01-11"}
             assert data["performance_history"] is not None
             assert len(data["performance_history"]) == 2
-            assert set(data["performance_history"][0]) == {"date", "roi", "twrr"}
+            assert set(data["performance_history"][0]) == {"date", "through", "roi", "twrr"}
+            assert [(row["date"], row["through"]) for row in data["performance_history"]] == [("2026-01-10", "2026-01-10"), ("2026-01-11", "2026-01-11")]
             assert Decimal(data["performance_history"][0]["roi"]) == Decimal("0")
             assert data["performance_history"][0]["twrr"] is None
             assert Decimal(data["performance_history"][1]["roi"]) == Decimal("0.1")
@@ -1353,7 +1358,11 @@ class TestLotsAnalysisEndpoint:
                 data = resp.json()
 
                 assert isinstance(data["market_price_history"], list), data
-                line = [(point["date"], Decimal(point["market_price"]), point["currency"], point["estimated"]) for point in data["market_price_history"]]
+                # J5-5 (steps): the line is two steps, the BUY's mark held 10-14 Jan and the SELL's 15-20 Jan; the days a client reads
+                # from them (`expand_steps`: each step repeated from `date` to `through`) are the ones the test has always named.
+                assert data["range"] == {"start": "2026-01-10", "end": "2026-01-20"}
+                assert [(step["date"], step["through"], Decimal(step["market_price"])) for step in data["market_price_history"]] == [("2026-01-10", "2026-01-14", Decimal("100")), ("2026-01-15", "2026-01-20", Decimal("110"))]
+                line = [(point["date"], Decimal(point["market_price"]), point["currency"], point["estimated"]) for point in expand_steps(data["market_price_history"], None)]
                 expected = [(f"2026-01-{day:02d}", Decimal("100"), "EUR", True) for day in range(10, 15)] + [(f"2026-01-{day:02d}", Decimal("110"), "EUR", True) for day in range(15, 21)]
                 assert line == expected
                 assert (data["price_history"], data["lots"]) == (None, None)
@@ -1457,8 +1466,9 @@ class TestPositionsSeriesEndpoint:
         assert (empty.status_code, too_many.status_code, unknown_field.status_code) == (422, 422, 422)
 
     async def test_the_series_of_a_position_ends_where_the_reports_contribution_row_does(self, test_server):
-        """One position bought and sold out: the series is daily from the window's first day to the day it closed, its last pnl is the
-        report's ``period_pnl`` for the same position and window. It owns and deletes its user, broker, asset, three transactions and
+        """One position bought and sold out: the series is steps (``date``..``through``) contiguous from the window's first day to the day it
+        closed, the response carries the window as ``range``, and the last step's pnl is the report's ``period_pnl`` for the same position
+        and window. It owns and deletes its user, broker, asset, three transactions and
         one price, broker first (as the report's date-aware test does)."""
         print_section("Positions series: end to end")
         async with httpx.AsyncClient() as client:
@@ -1494,13 +1504,20 @@ class TestPositionsSeriesEndpoint:
         assert series_resp.status_code == 200, series_resp.text
         body = series_resp.json()
         assert (body["currency"], body["date_from"], body["date_to"]) == ("EUR", "2025-01-31", "2025-02-28")
+        assert body["range"] == {"start": "2025-01-31", "end": "2025-02-28"}
         [series] = body["series"]
         assert (series["first_date"], series["last_date"], series["closed_on"], series["held_at_start"], series["held_at_end"]) == ("2025-01-31", "2025-02-15", "2025-02-15", True, False)
-        assert [point["date"] for point in series["points"]][:2] == ["2025-01-31", "2025-02-01"]
-        assert len(series["points"]) == 16
+        points = series["points"]
+        # Contiguous steps from first_date to last_date (16 calendar days) with fewer steps than days; the last one is the day it closed.
+        assert (points[0]["date"], points[-1]["through"]) == ("2025-01-31", "2025-02-15")
+        for before, after in zip(points, points[1:], strict=False):
+            assert date.fromisoformat(after["date"]) == date.fromisoformat(before["through"]) + timedelta(days=1)
+        assert all(date.fromisoformat(point["date"]) <= date.fromisoformat(point["through"]) for point in points)
+        assert sum((date.fromisoformat(point["through"]) - date.fromisoformat(point["date"])).days + 1 for point in points) == 16
+        assert len(points) < 16
         [row] = report_resp.json()["positions_contribution"]["positions"]
-        assert Decimal(series["points"][-1]["pnl"]) == Decimal(row["period_pnl"])
-        assert (series["points"][-1]["quantity"], series["points"][-1]["market_value"]) == ("0", "0")
+        assert Decimal(points[-1]["pnl"]) == Decimal(row["period_pnl"])
+        assert (points[-1]["quantity"], points[-1]["market_value"]) == ("0", "0")
 
 
 def _focused_portfolio_app(

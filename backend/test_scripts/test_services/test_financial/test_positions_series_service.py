@@ -1,4 +1,4 @@
-"""J5-1 (#48) — ``PortfolioService.get_positions_series``: the daily series of the chosen positions, read from the engine.
+"""J5-1 (#48) — ``PortfolioService.get_positions_series``: the series (as steps) of the chosen positions, read from the engine.
 
 The pure side (``financial_math/portfolio/position_series.py``) is pinned in ``test_financial_math/test_position_series.py``;
 this file pins the reading: the engine run with the position frames (``include_positions``), the cash flows by day, the
@@ -54,6 +54,11 @@ EUR = "EUR"
 FROM = date(2024, 1, 1)
 TO = date(2024, 3, 31)
 D = Decimal
+
+
+def expand(points) -> list:
+    """The daily series a step series stands for (D-P4): every step repeated over its days, ``date..through``, one point per calendar day."""
+    return [point.model_copy(update={"date": point.date + timedelta(days=offset), "through": point.date + timedelta(days=offset)}) for point in points for offset in range((point.through - point.date).days + 1)]
 
 
 # =============================================================================
@@ -170,7 +175,7 @@ async def test_p1_the_last_point_is_the_periodo_rows_pnl(session, keep_alive, st
     rows = {(row.broker_id, row.asset_id): row for row in contribution.positions}
     for series in response.series:
         row = rows[(series.key.broker_id, series.key.asset_id)]
-        assert series.points[-1].date == TO
+        assert series.points[-1].through == TO  # the last step is the one the row shows
         assert series.points[-1].pnl == row.period_pnl, f"asset {series.key.asset_id}: the series ends where the table's row does"
     assert {s.key.asset_id for s in response.series} == {a.id, b.id}
 
@@ -184,7 +189,7 @@ async def test_p1_a_series_counts_the_realized_gain_the_dividend_and_the_fee(ses
 
     [series] = (await PortfolioService(session).get_positions_series(user_id=user.id, query=_query([(broker.id, a.id)]))).series
 
-    points = {p.date: p for p in series.points}
+    points = {p.date: p for p in expand(series.points)}
     assert points[date(2024, 2, 19)].pnl == D("10") * (D("124.5") - D("100"))
     assert points[date(2024, 2, 20)].pnl == D("6") * (D("125") - D("100")) + D("120")
     assert points[date(2024, 2, 29)].pnl == D("6") * (D("129.5") - D("100")) + D("120")
@@ -208,7 +213,7 @@ async def test_p2_with_every_position_chosen_the_market_values_add_up_to_the_rep
 
     by_day: dict[date, Decimal] = {}
     for series in response.series:
-        for point in series.points:
+        for point in expand(series.points):
             if point.date >= date(2024, 1, 16):
                 assert point.market_value is not None, (series.key, point.date)
                 by_day[point.date] = by_day.get(point.date, D("0")) + point.market_value
@@ -262,7 +267,7 @@ async def test_p2_two_brokers_and_a_foreign_asset_with_a_moving_rate_add_up_to_t
 
     by_day: dict[date, Decimal] = {}
     for series in response.series:
-        for point in series.points:
+        for point in expand(series.points):
             if point.date >= date(2024, 1, 12):
                 assert point.market_value is not None, (series.key, point.date)
                 by_day[point.date] = by_day.get(point.date, D("0")) + point.market_value
@@ -310,7 +315,7 @@ async def test_an_asset_with_no_broker_sums_the_brokers_that_hold_it(session, ke
     summed, one, other = (await service.get_positions_series(user_id=user.id, query=_query([(None, asset.id), (first.id, asset.id), (second.id, asset.id)]))).series
 
     day = date(2024, 2, 1)
-    at = lambda series: next(point for point in series.points if point.date == day)  # noqa: E731
+    at = lambda series: next(point for point in expand(series.points) if point.date == day)  # noqa: E731
     assert at(summed).quantity == at(one).quantity + at(other).quantity == D("14")
     assert at(summed).market_value == at(one).market_value + at(other).market_value
     assert at(summed).pnl == at(one).pnl + at(other).pnl
@@ -375,10 +380,10 @@ async def test_p4_a_transfer_between_two_brokers_leaves_no_jump_and_each_last_po
     assert receiver.points[-1].pnl == rows[(second.id, asset.id)].period_pnl
     assert (sender.closed_on, sender.last_date, receiver.held_at_end) == (date(2024, 2, 5), date(2024, 2, 7), True)
     # The asset held at one broker would go price by price: pnl = 10 x (price - 100) on every day of the move.
-    for point in summed.points:
+    for point in expand(summed.points):
         if point.date >= date(2024, 2, 8):
             assert point.pnl == D("10") * (D("100") + D("0.5") * (point.date - date(2024, 1, 1)).days - D("100")), point.date
-    assert {point.base for point in summed.points} == {D("1000")}, "the move brings in no new capital"
+    assert {point.base for point in expand(summed.points)} == {D("1000")}, "the move brings in no new capital"
 
 
 @pytest.mark.asyncio
@@ -397,7 +402,7 @@ async def test_p4_bought_in_two_goes_the_base_grows_with_the_second_purchase_and
 
     [series] = (await PortfolioService(session).get_positions_series(user_id=user.id, query=_query([(broker.id, asset.id)]))).series
 
-    points = {p.date: p for p in series.points}
+    points = {p.date: p for p in expand(series.points)}
     assert series.first_date == date(2024, 1, 10) and not series.held_at_start
     assert points[date(2024, 1, 31)].base == D("1000")
     assert points[date(2024, 2, 1)].base == D("2100")
@@ -428,7 +433,7 @@ async def test_p4_a_split_changes_the_quantity_and_not_the_pnl(session, keep_ali
 
     [series] = (await PortfolioService(session).get_positions_series(user_id=user.id, query=_query([(broker.id, asset.id)]))).series
 
-    points = {p.date: p for p in series.points}
+    points = {p.date: p for p in expand(series.points)}
     assert (points[date(2024, 2, 14)].quantity, points[date(2024, 2, 15)].quantity) == (D("10"), D("20"))
-    assert {p.pnl for p in series.points} == {D("0")}
-    assert {p.base for p in series.points} == {D("1000")}
+    assert {p.pnl for p in expand(series.points)} == {D("0")}
+    assert {p.base for p in expand(series.points)} == {D("1000")}
