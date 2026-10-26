@@ -7482,7 +7482,23 @@ dello slot visibile: da non spostare; (c) gli errori di conversione portano l'in
    > `through` (secondo checkpoint di MF): allora la sottoclasse si toglie.
    > **⚠️ Fuori pista**: sul percorso vero (`load_portfolio_report`) il report è ancora giornaliero e senza `through`: i due
    > lettori falliscono finché non arriva il report a tratti di MF. Non c'è ripiego, è voluto (nessun doppio percorso).
-3. ⏳ Probe di diff sulle 6 copie: dopo il report a tratti di MF (esito atteso: 0 differenze).
+3. ✅ 26/10 — Report a tratti di MF (unione `f6ca43fdc`): le due fixture tornano a `PortfolioHistoryPoint` (che ha `through`), via
+   `_StepHistoryPoint`. `services ai-export` 1 133 passati sul percorso vero.
+4. ✅ 26/10 — Probe di diff sulle 6 copie (`base`, `eur1900`, `usd1900`, `buy1900`, `typo1500`, `nocrypto`, quelle di MF in
+   `ondata5/MF-p4/corpora`): per ognuna `portfolio.overview_and_history` e `portfolio.asset_history` (tutti i broker) e
+   `broker.overview_and_history` per ogni broker dell'utente `e2e_test_user`, più `broker.asset_history` di un broker, a 3 livelli
+   di dettaglio e 2 periodi (3M, 1Y): 60 costruzioni per copia, 360 in tutto, HEAD (`MF-p4/head_tree`) contro il ramo, entrambe
+   da una copia fresca. Script in `ondata5/Z-probe/` (`dump.py`, `compare.py`, `run.sh`).
+   **0 differenze** in tutte le sezioni, tranne due motivi spiegati sotto.
+   > **⚠️ Fuori pista**: il probe ha trovato una differenza vera nel NAV medio, che i miei test non vedevano: nell'ultima cifra
+   > (`...342` contro `...351`, 18 costruzioni). Un NAV convertito ha più di 28 cifre significative e il contesto Decimal
+   > arrotonda ogni addizione, quindi `nav × giorni` non è la somma di `giorni` addizioni. `_average_nav` ora somma il NAV una
+   > volta per ogni giorno del tratto, in ordine (parità al bit); test nuovo `APS-05` (rosso prima, 44 verdi dopo). Il costo è
+   > un'addizione per giorno, nulla rispetto al resto.
+   > **Resta di J, non mio**: la sezione `portfolio.drawdown_summary` / `broker.drawdown_summary` (30 costruzioni su 60 per copia
+   > nel `base`) cambia `n_observations` (388 → 285) e `coverage_ratio` (1,0 → 0,73) perché `risk/results.py:80-82` conta i punti
+   > della storia come giorni; con essa cambiano le statistiche di dimensione. Il confronto finale le esclude
+   > (`Z_PROBE_IGNORE_RISK=1`), cosa dichiarata qui; senza l'esclusione le uniche differenze sono quelle.
    > **Note implementazione**: i punti del test sono un dataclass con `date`/`through`/`nav_value`/`capital_baseline`/
    > `total_pnl`/`twrr`, perché i lettori funzionano su ogni punto con `date` e `through` (contratto §6): quando arriva
    > `StepSpan` basta cambiare il tipo, non le asserzioni.

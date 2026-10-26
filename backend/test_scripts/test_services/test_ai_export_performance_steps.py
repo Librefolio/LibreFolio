@@ -246,3 +246,27 @@ def test_aps04_the_average_nav_is_the_mean_of_the_days_not_of_the_steps(name):
     assert answer[0] == reference[0] and answer[0].amount.as_tuple() == reference[0].amount.as_tuple(), f"{name}: {answer[0]} != {reference[0]}"
     assert answer[1:] == reference[1:], name
     assert answer[2] == sum((step.through - step.date).days + 1 for step in steps), "the count is days"
+
+
+def test_aps05_the_average_nav_adds_the_days_in_order_as_the_day_by_day_mean_does():
+    """APS-05: a NAV is a long Decimal (a converted value has 28 or more significant digits) and the context rounds each
+    addition, so ``nav * days`` is not the sum of ``days`` additions in the last digits. The probe on the real copies found it:
+    the mean of 365 days differed in the 27th digit. The mean of steps adds each NAV once for each of its days, in order, and
+    is the day-by-day mean to the digit and the exponent.
+
+    Red before the fix: it multiplied the NAV by the length of its step.
+    """
+    nav = ["7494.150670142390036005801342", "7500.987654321098765432109876", "7488.111111111111111111111111", "7501.333333333333333333333333"]
+    lengths = [97, 130, 61, 77]
+    start = date(2026, 1, 1)
+    steps = []
+    cursor = start
+    for amount, length in zip(nav, lengths, strict=True):
+        steps.append(Step(date=cursor, through=cursor + timedelta(days=length - 1), nav_value=_money(amount), capital_baseline=_money("1000.00"), total_pnl=_money("0.00"), twrr=None))
+        cursor += timedelta(days=length)
+
+    answer = broker_cost_efficiency._average_nav(SimpleNamespace(history=steps), None, target_currency=EUR)
+    reference = day_by_day_average_nav(expand(steps), EUR)
+
+    assert answer[0].amount.as_tuple() == reference[0].amount.as_tuple(), f"{answer[0].amount} != {reference[0].amount}"
+    assert answer[1:] == reference[1:]
