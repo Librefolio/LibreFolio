@@ -271,6 +271,16 @@ def services_fx_stretch_conversion(verbose: bool = False, test_names: list = Non
     return run_command(cmd, "FX stretch conversion tests", verbose=verbose)
 
 
+def services_ai_export_performance_steps(verbose: bool = False, test_names: list = None) -> bool:
+    """MF-P4b: the AI Export performance buckets and the average NAV read the portfolio history as steps (date, through)."""
+    print_section("Services: AI Export Performance Steps (MF-P4b)")
+    print_info("Testing: build_performance_bucket_rows (payloads/portfolio_broker.py), broker_cost_efficiency._average_nav")
+    print_info("Parity: the rows built from steps equal the day-by-day function's (a frozen copy in the test) on the history expanded to days: extremes and their days, previous close, flow, P&L, return, index")
+    print_info("Average NAV: the mean of every day weighted by the step's length, the count in days, the period from the first date to the last through")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_ai_export_performance_steps.py", test_names)
+    return run_command(cmd, "AI Export performance steps tests", verbose=verbose)
+
+
 def services_provider_registry(verbose: bool = False, test_names: list = None) -> bool:
     """Test registry dei provider (asset & fx)."""
     print_section("Services: Provider Registry")
@@ -2188,6 +2198,15 @@ Note: No backend server required.
         name="FX Stretch Conversion",
         desc="X-Q3: convert_by_stretch answers item for item what convert_bulk answers (direct, inverse, identity, no rate, gap, amount exponent) and hands convert one conversion per (amount, pair, rate row); convert_currency_bulk answers what it answered with every day converted, signals and samples included",
         # PURE: a private SQLite file under tmp_path built with create_all; no lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "ai-export-performance-steps",
+        services_ai_export_performance_steps,
+        name="AI Export Performance Steps",
+        desc="MF-P4b: build_performance_bucket_rows and _average_nav read the portfolio history as steps (date, through) and answer what they answered with one point a day: every bucket field (extremes and the day each is reached, previous close day, flow, P&L, returns) on five bucket plans and seven histories (covering, late start, early end, one step, one day, empty), a NAV tie between steps apart, and the average NAV weighted by the step's length with the count in days",
+        # PURE: the history is built in the test; no database, no server, no network.
         isolation="pure",
     )
     add_test(cat, "provider-registry", services_provider_registry, name="Provider Registry", desc="Registration, lookup, priority, fallback")

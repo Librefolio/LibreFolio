@@ -122,9 +122,12 @@ def _history_point(
     capital_baseline: object,
     total_pnl: object,
     twrr: object | None = None,
+    through: date | None = None,
 ) -> PortfolioHistoryPoint:
+    """A history point that holds from ``day`` to ``through`` (D-P4: a step); one day when ``through`` is not given."""
     return PortfolioHistoryPoint(
         date=day,
+        through=through or day,
         cash_value=_money(0),
         market_value=_money(nav),
         nav_value=_money(nav),

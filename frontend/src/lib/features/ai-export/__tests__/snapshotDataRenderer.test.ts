@@ -3695,3 +3695,21 @@ describe('AI Export compact Snapshot Data renderer', () => {
         });
     });
 });
+
+// D-P4: a history date typed in the year 24 or 1 is a date, not «no order»: `Date.UTC(24, …)` read it as 1924 and the
+// round-trip check refused it.
+describe('dateOrdinal with a year before 100', () => {
+    const dateOrdinal = (value: string): number | undefined => (snapshotDataRendererModule as unknown as {dateOrdinal?: (value: string) => number | undefined}).dateOrdinal?.(value);
+
+    it('gives the days since 1970 of a year-24 and a year-1 date', () => {
+        expect(dateOrdinal('0024-03-01')).toBe(-710_702); // 1970-01-01 minus 710 702 days
+        expect(dateOrdinal('0001-01-01')).toBe(-719_162);
+        expect(dateOrdinal('0024-03-02')! - dateOrdinal('0024-03-01')!).toBe(1);
+    });
+
+    it('still gives a modern date its ordinal and refuses a date that does not exist', () => {
+        expect(dateOrdinal('1970-01-02')).toBe(1);
+        expect(dateOrdinal('2024-02-30')).toBeUndefined();
+        expect(dateOrdinal('0024-02-30')).toBeUndefined();
+    });
+});

@@ -21,6 +21,8 @@
  * @module stores/TimeSeriesStore
  */
 
+import {utcMs} from '../../utils/dateOnly';
+
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -51,7 +53,7 @@ export interface RangeResult<T extends TimeSeriesPoint> {
 /** Parse ISO date string to Date object (midnight UTC) */
 function parseDate(iso: string): Date {
     const [y, m, d] = iso.split('-').map(Number);
-    return new Date(Date.UTC(y, m - 1, d));
+    return new Date(utcMs(y, m - 1, d)); // not Date.UTC: it reads the year 24 as 1924
 }
 
 /** Format Date to ISO YYYY-MM-DD string */
@@ -59,7 +61,7 @@ function formatDate(date: Date): string {
     const y = date.getUTCFullYear();
     const m = String(date.getUTCMonth() + 1).padStart(2, '0');
     const d = String(date.getUTCDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
+    return `${String(y).padStart(4, '0')}-${m}-${d}`;
 }
 
 /** Advance a date by N days (returns new Date) */
