@@ -12,7 +12,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from typing import Protocol
 
-from backend.app.schemas.common import Currency, DateRangeModel
+from backend.app.schemas.common import Currency, DateRangeModel, DateSpan
 from backend.app.schemas.portfolio import (
     DataQualityExcludedAsset,
     DataQualityExclusionReason,
@@ -29,6 +29,7 @@ from backend.app.schemas.risk import (
 )
 from backend.app.services.assets.market_calendar import is_market_closed_repeat
 from backend.app.services.financial_math.returns import float_price_return, observed_annualization
+from backend.app.services.financial_math.series_steps import merged_spans
 from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
 
 
@@ -553,7 +554,7 @@ def _prepare_from_inputs(  # noqa: C901 — sequential pipeline stages with earl
     fresh_quote_coverage = fresh_quote_points / fresh_quote_denominator if fresh_quote_denominator else 0.0
 
     data_quality = DataQualityReport(
-        incomplete_valuation_dates=incomplete_valuation_dates,
+        incomplete_valuation_ranges=[DateSpan(start=first, end=last) for first, last in merged_spans((day, day) for day in incomplete_valuation_dates)],
         carried_forward_price_points=carried_price_points,
         carried_forward_fx_points=carried_fx_points,
         carried_forward_price_asset_ids=sorted(carried_price_asset_ids),
