@@ -70,6 +70,7 @@ vi.mock('$lib/features/instance/instanceConfig.svelte', () => ({instanceConfig: 
 
 import {axiosInstance} from './zodios-client';
 import {instanceBlock} from '$lib/features/instance/instanceBlock.svelte';
+import {userLimit} from '$lib/features/instance/userLimit.svelte';
 import {loginUrl} from '$lib/utils/internalPath';
 
 const BLOCKED_BODY = {detail: {code: 'instance_blocked', message: 'This instance is blocked by its hosting provider'}};
@@ -97,6 +98,7 @@ async function requestAnswered(status: number, data: unknown): Promise<AxiosErro
 
 beforeEach(() => {
     instanceBlock.clear();
+    userLimit.clear();
     mocks.goto.mockClear();
     mocks.loadInstanceConfig.mockClear();
     mocks.environment.browser = false;
@@ -135,6 +137,31 @@ describe('zodios-client — a 423 instance_blocked turns the block on', () => {
         expect(error).toBeNull();
         expect(mocks.notifyPortfolioMutation, 'Barrier: the success went through the response interceptor').toHaveBeenCalled();
         expect(instanceBlock.blocked).toBe(false);
+    });
+});
+
+describe('zodios-client — a 423 user_limit_exceeded marks the instance over its plan (A5-7)', () => {
+    const USER_LIMIT_BODY = {detail: {code: 'user_limit_exceeded', message: 'This instance has more active users than its plan holds'}};
+
+    it('marks it, the caller still receives the refusal, and the block stays off', async () => {
+        const error = await requestAnswered(423, USER_LIMIT_BODY);
+
+        expect(userLimit.exceeded, 'the interceptor must mark the state').toBe(true);
+        expect(instanceBlock.blocked, 'being over the plan is not a block').toBe(false);
+        expect([error?.response?.status, error?.response?.data]).toEqual([423, USER_LIMIT_BODY]);
+        expect(mocks.goto, 'a 423 never navigates').not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['a 403 with the same body', 403, USER_LIMIT_BODY],
+        ['a 423 instance_blocked', 423, BLOCKED_BODY],
+        ['a 423 with another code', 423, {detail: {code: 'locked'}}],
+        ['a 423 without a body', 423, undefined],
+    ])('leaves it off on %s', async (_case, status, data) => {
+        const error = await requestAnswered(status, data);
+
+        expect(error?.response?.status).toBe(status);
+        expect(userLimit.exceeded).toBe(false);
     });
 });
 
