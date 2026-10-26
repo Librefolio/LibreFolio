@@ -104,12 +104,12 @@
     // The asset dimension (Y5-2, #48): today's weight per asset, and its history with the assets that left the portfolio.
     const allocationByAssetItems = $derived((summary?.allocation_by_asset ?? []) as any[]);
     const allocationByAsset = $derived(toAllocEntries(allocationByAssetItems));
-    const allocationHistoryAsset = $derived((allocationHistory?.asset ?? []) as Array<{date: string; components: any[]}>);
+    const allocationHistoryAsset = $derived((allocationHistory?.asset ?? []) as Array<{date: string; through: string; components: any[]}>);
     /** One colour rank per asset, shared by the pie and the history: the heaviest today first, then the closed ones, the latest closed first. */
     const assetColorRanks = $derived(
         rankAssetsByWeight(
             allocationByAssetItems.map((item) => ({id: item?.id ?? null, amount: parseFloat(item?.amount ?? '0')})),
-            allocationHistoryAsset.map((point) => ({date: point.date, components: (point.components ?? []).map((component) => ({id: component?.id ?? null, amount: parseFloat(component?.amount ?? '0')}))})),
+            allocationHistoryAsset.map((point) => ({date: point.date, through: point.through, components: (point.components ?? []).map((component) => ({id: component?.id ?? null, amount: parseFloat(component?.amount ?? '0')}))})),
         ),
     );
     // Type and sector carry the cash; geography never does. The history chart draws it below zero by itself.
