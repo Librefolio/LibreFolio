@@ -42,7 +42,8 @@
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {formatDay} from '$lib/utils/core/formatAxisDate';
     import {formatPercent} from '$lib/utils/core/formatPercent';
-    import type {PositionLine, PositionsChartView} from './positionsSeries';
+    import {dayOfAxisValue} from '$lib/utils/stepSeries';
+    import {lineOnDay, type PositionLine, type PositionsChartView} from './positionsSeries';
 
     interface Props {
         lines: ReadonlyArray<PositionLine>;
@@ -76,6 +77,8 @@
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chart: echarts.ECharts | null = null;
     let lastWidth = 0;
+    /** The day the pointer is on, kept from ECharts' `updateAxisPointer` (the tooltip of a step line reads it). */
+    let pointedDay: string | null = null;
     /** Bumped by a theme switch and by the Designer Lab's colour edits (C4): the whole option is built again. */
     let redrawRevision = $state(0);
     const resizeWatcher = createResizeWatcher(() => {
@@ -254,12 +257,25 @@
                 trigger: 'axis',
                 confine: true,
                 position: tooltipPositionSide,
-                axisPointer: {type: 'line', lineStyle: {color: neutrals.axisPointer.line}},
+                // `snap: false`: the pointer's own day, which the tooltip of a step line reads (`pointedDay`).
+                axisPointer: {type: 'line', snap: false, lineStyle: {color: neutrals.axisPointer.line}},
                 backgroundColor: box.bg,
                 borderColor: box.border,
                 borderWidth: 1,
                 textStyle: {color: box.textColor, fontSize: 12},
                 formatter: (params: unknown) => {
+                    // The steps: each drawn line says what it says on the pointed day (the point holding it), a line that does not
+                    // exist that day is not listed. ECharts would hand each line the point nearest to the pointer.
+                    const day = pointedDay;
+                    if (day !== null && drawn.some((line) => line.stepped)) {
+                        const onDay = drawn
+                            .map((line) => ({id: line.id, value: lineOnDay(line, day)?.value ?? null}))
+                            .filter((row): row is {id: string; value: number} => row.value !== null)
+                            .sort((left, right) => right.value - left.value);
+                        if (onDay.length === 0) return '';
+                        const dayHeader = buildTooltipHeader(escapeHtml(formatDay(day)), box.mutedColor);
+                        return dayHeader + onDay.map((row) => buildTooltipRow(escapeHtml(labelById.get(row.id) ?? row.id), tooltipValue(row.value, box.mutedColor), colorOf(row.id))).join('');
+                    }
                     const items = (Array.isArray(params) ? params : [params]) as TooltipItem[];
                     const rows = items
                         .map((item) => ({id: item.seriesId, value: itemValue(item), date: itemDate(item)}))
@@ -272,6 +288,7 @@
             },
             xAxis: {
                 type: 'time',
+                axisPointer: {snap: false},
                 ...(xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber} : {}),
                 axisLabel: {color: neutrals.dashboard.text, fontSize: 12, rotate: 0, formatter: xAxisPolicy.formatter, ...(xAxisPolicy.axisLabel ?? {})},
                 axisLine: {lineStyle: {color: neutrals.dashboard.gridLine}},
@@ -304,6 +321,11 @@
         if (!chart) {
             chart = echarts.init(container, CHART_INIT_THEME, chartInitOptions(container));
             attachChartReady(chart, container, 'positions-return');
+            // The day the pointer is on, exact because the time axis sets `snap: false`.
+            chart.on('updateAxisPointer', (event: unknown) => {
+                const value = (event as {axesInfo?: Array<{value?: unknown}>}).axesInfo?.[0]?.value;
+                pointedDay = typeof value === 'number' && Number.isFinite(value) ? dayOfAxisValue(value) : null;
+            });
             scheduleFirstRenderStabilityFix(chart, container);
         }
         resizeWatcher.observe(container);

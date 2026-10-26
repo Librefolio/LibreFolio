@@ -145,6 +145,7 @@ function seriesFor(assetId: number, brokerId: number | null, pnls: Array<[string
         complete: true,
         points: pnls.map(([pnl, pct], i) => ({
             date: `2026-01-0${i + 2}`,
+            through: `2026-01-0${i + 2}`,
             quantity: '10',
             market_value: '1000',
             cost_basis: '900',
@@ -157,7 +158,7 @@ function seriesFor(assetId: number, brokerId: number | null, pnls: Array<[string
     };
 }
 
-const response = (...list: PositionSeries[]): PositionsSeriesResponse => ({currency: 'EUR', date_from: '2026-01-02', date_to: '2026-01-04', series: list, missing_fx_pairs: []});
+const response = (...list: PositionSeries[]): PositionsSeriesResponse => ({currency: 'EUR', date_from: '2026-01-02', date_to: '2026-01-04', range: {start: '2026-01-02', end: '2026-01-04'}, series: list, missing_fx_pairs: []});
 
 type PanelProps = Record<string, unknown>;
 

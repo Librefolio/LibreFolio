@@ -446,6 +446,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/dashboard/AllocationPanel.test.ts",
             "src/lib/features/dashboard/AllocationPanel.asset.test.ts",
             "src/lib/features/dashboard/PositionsReturnChart.test.ts",
+            "src/lib/features/dashboard/PositionsReturnChart.steps.test.ts",
             "src/lib/features/dashboard/PositionsPanel.test.ts",
             "src/lib/components/table/DataTableHeaderTooltip.test.ts",
             "src/lib/features/transactions/import/FixFlaggedStep.test.ts",

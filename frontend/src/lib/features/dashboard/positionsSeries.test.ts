@@ -14,7 +14,7 @@
  */
 
 import {describe, expect, it} from 'vitest';
-import {MAX_CHART_POSITIONS, PORTFOLIO_LINE_ID, lineValue, portfolioLine, positionLine, positionLineId, positionLines, rankAssetsByWeight, selectionKeys, type HistoryPointLike, type PositionSeries, type PositionSeriesPoint, type PositionsSeriesResponse} from './positionsSeries';
+import {MAX_CHART_POSITIONS, PORTFOLIO_LINE_ID, lineOnDay, lineValue, portfolioLine, positionLine, positionLineId, positionLines, rankAssetsByWeight, selectionKeys, type HistoryPointLike, type PositionSeries, type PositionSeriesPoint, type PositionsSeriesResponse} from './positionsSeries';
 import {makePositionKey} from '$lib/utils/core/positionKey';
 
 // =============================================================================
@@ -24,6 +24,7 @@ import {makePositionKey} from '$lib/utils/core/positionKey';
 function point(date: string, overrides: Partial<PositionSeriesPoint> = {}): PositionSeriesPoint {
     return {
         date,
+        through: date,
         quantity: '10',
         market_value: '1100',
         cost_basis: '1000',
@@ -54,7 +55,7 @@ function series(overrides: Partial<PositionSeries> = {}): PositionSeries {
 }
 
 function response(list: PositionSeries[]): PositionsSeriesResponse {
-    return {currency: 'EUR', date_from: '2026-01-02', date_to: '2026-01-04', series: list, missing_fx_pairs: []};
+    return {currency: 'EUR', date_from: '2026-01-02', date_to: '2026-01-04', range: {start: '2026-01-02', end: '2026-01-04'}, series: list, missing_fx_pairs: []};
 }
 
 function historyPoint(date: string, amount: string, twrr?: string | null): HistoryPointLike {
@@ -610,5 +611,64 @@ describe('positionsSeries — rankAssetsByWeight', () => {
 
     it('empty inputs give an empty map', () => {
         expect(rankAssetsByWeight([], []).size).toBe(0);
+    });
+});
+
+// =============================================================================
+// positionLine on steps, lineOnDay
+// =============================================================================
+
+describe('positionsSeries — a position as steps (D-P4)', () => {
+    /** Three steps: 2 to 10 January at +100, 11 to 20 January at -50, 21 to 31 January at 0. */
+    const steps = series({
+        first_date: '2026-01-02',
+        last_date: '2026-01-31',
+        points: [point('2026-01-02', {through: '2026-01-10'}), point('2026-01-11', {through: '2026-01-20', pnl: '-50', pnl_percent: '-0.05'}), point('2026-01-21', {through: '2026-01-31', pnl: '0', pnl_percent: '0'})],
+    });
+
+    it('is one point per step and a closing point on the last day of the last step, drawn as steps', () => {
+        const line = positionLine(steps, 'absolute');
+        expect(line.stepped).toBe(true);
+        expect(line.points).toEqual([
+            {date: '2026-01-02', value: 100},
+            {date: '2026-01-11', value: -50},
+            {date: '2026-01-21', value: 0},
+            {date: '2026-01-31', value: 0},
+        ]);
+    });
+
+    it('a closed position ends on its last day: the closing point is that day', () => {
+        const closed = series({closed_on: '2026-01-20', held_at_end: false, last_date: '2026-01-20', points: [point('2026-01-02', {through: '2026-01-10'}), point('2026-01-11', {through: '2026-01-20', pnl: '-50', pnl_percent: '-0.05'})]});
+        expect(positionLine(closed, 'absolute').points.map((entry) => entry.date)).toEqual(['2026-01-02', '2026-01-11', '2026-01-20']);
+    });
+
+    it('a one-day step needs no closing point', () => {
+        expect(positionLine(series(), 'absolute').points).toHaveLength(3);
+    });
+
+    it('a history that starts in the year 1 is a handful of points', () => {
+        const long = series({first_date: '0001-01-01', last_date: '2026-03-01', points: [point('0001-01-01', {through: '2025-12-31'}), point('2026-01-01', {through: '2026-03-01'})]});
+        expect(positionLine(long, 'absolute').points).toHaveLength(3);
+    });
+
+    it('lineOnDay reads the step holding the day, with its own date', () => {
+        const line = positionLine(steps, 'absolute');
+        expect(lineOnDay(line, '2026-01-02')).toEqual({date: '2026-01-02', value: 100});
+        expect(lineOnDay(line, '2026-01-10')).toEqual({date: '2026-01-02', value: 100});
+        expect(lineOnDay(line, '2026-01-11')).toEqual({date: '2026-01-11', value: -50});
+        expect(lineOnDay(line, '2026-01-19')).toEqual({date: '2026-01-11', value: -50});
+        expect(lineOnDay(line, '2026-01-31')).toEqual({date: '2026-01-31', value: 0});
+    });
+
+    it('lineOnDay is null before the first point and after the last: the line does not exist that day', () => {
+        const line = positionLine(steps, 'absolute');
+        expect(lineOnDay(line, '2026-01-01')).toBeNull();
+        expect(lineOnDay(line, '2026-02-01')).toBeNull();
+        expect(lineOnDay({...line, points: []}, '2026-01-05')).toBeNull();
+    });
+
+    it('lineOnDay keeps an unknown value null (the line breaks there), not zero', () => {
+        const unknown = series({points: [point('2026-01-02', {through: '2026-01-10', pnl: null, pnl_percent: null}), point('2026-01-11', {through: '2026-01-31'})]});
+        expect(lineOnDay(positionLine(unknown, 'absolute'), '2026-01-05')).toEqual({date: '2026-01-02', value: null});
     });
 });
