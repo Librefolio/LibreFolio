@@ -213,6 +213,9 @@ def _report_view(report: StagingReport) -> RestoreStageReport:
         restorable=report.restorable,
         expires_at=report.expires_at,
         owner_choice=_owner_choice_view(report),
+        users_active=report.users_active,
+        users_limit=report.users_limit,
+        users_over_limit=report.users_over_limit,
     )
 
 

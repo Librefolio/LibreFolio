@@ -151,7 +151,8 @@
         },
         "expires": "La copia controllata resta disponibile fino al {date}.",
         "drop": "Scarta questo archivio",
-        "ownAccountMissing": "Il tuo account non è tra gli amministratori di questo backup: dopo il riavvio non potrai accedere con questo account."
+        "ownAccountMissing": "Il tuo account non è tra gli amministratori di questo backup: dopo il riavvio non potrai accedere con questo account.",
+        "usersOverLimit": "Questo backup contiene {active} account attivi, ma questa istanza ne accetta {limit}. Il ripristino prosegue; quando un amministratore accede, sceglie chi tiene l'accesso, e gli altri account vengono disattivati, non cancellati."
       },
       "confirm": {
         "word": "ripristina",

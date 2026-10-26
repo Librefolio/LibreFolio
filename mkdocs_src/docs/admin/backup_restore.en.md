@@ -237,7 +237,7 @@ A restore replaces the data of the installation with the archive's: the database
     - the ledger totals: the same as when the backup was made, different on the lines listed ([how to read them](backup_moving.md#check-refused)), not recorded, recorded by another version of the method, or unreadable;
     - the administrators of the backup, with *After the restore you sign in with one of them, with the password of then; every session open now ends.*
     - *Invitations and links sent before the restore will have expired: send them again if needed.*
-    - the warnings, which let the restore go on, and the blocker, which forbids it: a backup without an active administrator;
+    - the warnings, which let the restore go on, among them a backup with more active accounts than the plan allows ([More Accounts Than the Plan Allows](#users-limit)), and the blocker, which forbids it: a backup without an active administrator;
     - until when the checked copy is kept: 24 hours after the check.
 
     **Drop this archive** drops the check and its copy: nothing is restored.
@@ -267,7 +267,7 @@ Good to know:
 - 💽 The disk of the data directory needs room for the archive and, while it is checked, for its copy, and for a secure backup for its decrypted archive too: [Check a Backup](#check) says how much.
 - 🔑 The password of a secure backup goes to the server only with the request that starts the check, which tries it at once: it is never stored, written to the log or sent back. The field empties as soon as you submit it.
 - 🔄 A reload of the page, in the same tab, keeps following the check and its report. The checked copy is kept 24 hours: after that, the confirmation answers *The check is too old: check the archive again.*
-- 🚪 The restore ends every session, everyone signs in again with an account of the backup, and the links sent before it stop working: see [What the Next Start Does](#next-start).
+- 🚪 The restore ends every session (but the owner's, in [the one case where the hosting panel keeps their password](#owner-kept)), everyone signs in again with an account of the backup, and the links sent before it stop working: see [What the Next Start Does](#next-start).
 - ❌ A refused upload, check or confirmation, or a server that does not answer, shows on the card with the reason. **Try again** reads the state of the restore again; to send an archive again, choose it again with **Choose an archive…**. The check refuses the same archives as the command line: see [The Check Refuses the Archive](backup_moving.md#check-refused).
 - 🖥️ With nothing that starts LibreFolio again, such as a host installation started by hand, [start the server](cli_tools.md#start-the-server) yourself once it has stopped: the page waits for it.
 - 🔒 On an instance its hosting provider has [blocked](hosting_instances.md#instance-block), the app shows the block page instead of Settings: there is no restore from the app there. A restore confirmed before the block waits for the unblock: the first start after it applies it. If the start that follows **Restore and restart** finds the instance blocked, the window says why the restore was not applied, and **Back to Backup** leads to the block page.
@@ -322,14 +322,66 @@ A restore confirmed on the command line (`backup restore`) or by the hosting pan
 3. Otherwise nobody: with none marked, with two or more marked, or with a marked account that is not an active administrator. LibreFolio never takes "the first one".
 
 - 👤 **An account picked.** Everything is as in the app: at the restore its password is closed (it stops working and its sessions end), it gets the owner's address, becomes an active administrator and the instance's owner. The first start sends the link to choose a new password to `LIBREFOLIO_ADMIN_EMAIL`, never to an address of the backup; without email, the link is written in the log of the instance, to be given **only to the owner**; if it expires, the owner uses **Forgot Password?**. The report of the command names the account by its username, never by an address. `backup pending` prints the same lines as above.
-- 🚫 **Nobody picked.** The restore goes on without an owner, with a warning in the log. The report of the command and `backup pending` say *No owner* and give the command to name one afterwards, `./dev.py user reassign-owner <username>` (see the note below). The instance serves its data meanwhile.
+- 🚫 **Nobody picked.** The restore goes on without an owner, with a warning in the log. The report of the command and `backup pending` say *No owner* and give the command to name one afterwards, `./dev.py user reassign-owner <username>` ([Giving the Instance Back](hosting_instances.md#owner-reassign)). The instance serves its data meanwhile.
 - 🛑 **A backup with owner conflicts** (two accounts on one address or one name, the owner's address as another account's name, an administrator still waiting for its setup link) is refused here as from the app, with `owner_conflict`: the command prints `❌ <reason> (owner_conflict)` and the panel answers HTTP 409. Remove the duplicate account or free the address in the instance the backup comes from, make a new backup, and check it again.
 - 🔁 **A report read for another owner's address** than the current one is refused with `restore_stage_outdated`: check the archive again.
 - ❌ **If the assignment fails after the swap** (a refusal such as the address already taken), the instance serves nothing but the recovery until `./dev.py backup pending --recover owner` ([Follow or Cancel a Restore](cli_backup.md#backup-pending)): now for a restore from the command line or the panel too, not only from the app.
 
-!!! note "The command to name an owner"
+### 🔑 The Owner Keeps Their Password: Restore from the Hosting Panel {: #owner-kept }
 
-    `user reassign-owner` is not in this version of the command-line tools yet: it arrives with a later change. Until then, the lines that name it describe what to do, not a command that runs.
+There is one exception to [the owner's password being closed at a restore](#owner-account). When the hosting provider restores the **same instance** from its panel after a fault, the restore must be transparent: the owner comes back with their password and their open sessions, and no email goes out. Nobody has to choose a new password because the provider restored last night's copy.
+
+The exception holds only when **all four** conditions are true together:
+
+1. 🖥️ **The channel is the hosting panel.** A restore confirmed from the app or on the command line never qualifies.
+2. 🏢 **The instance is `managed`** and `LIBREFOLIO_ADMIN_EMAIL` is set.
+3. 🏷️ **Exactly one account of the backup is marked as the instance's owner**, counting every account of any role, active or not, and that account is an **active administrator**. Two marked accounts, or one marked account that is not an active administrator, is not enough.
+4. 📧 **That account holds the address of `LIBREFOLIO_ADMIN_EMAIL`** (the capitals of the letters do not matter).
+
+```mermaid
+flowchart TD
+    A[Restore confirmed] --> B{From the hosting panel?}
+    B -- no --> N[Treatment of the owner's account<br/>and Without Anyone to Ask]
+    B -- yes --> C{managed profile and<br/>LIBREFOLIO_ADMIN_EMAIL set?}
+    C -- no --> N
+    C -- yes --> D{Exactly one account marked as owner,<br/>an active administrator?}
+    D -- no --> N
+    D -- yes --> E{It holds the address of<br/>LIBREFOLIO_ADMIN_EMAIL?}
+    E -- no --> N
+    E -- yes --> F[Owner keeps password and sessions]
+    F --> G{Still true at the commit,<br/>on the restored database?}
+    G -- yes --> H[Nothing is emailed]
+    G -- no --> N
+```
+
+- ✅ **What is kept.** The owner's account keeps its **password**, its own **open sessions** and its **owner mark**. Its role, address and every other field are those of the backup.
+- 🔒 **What is done as always.** The sessions of every other account end. Every one-time link of the backup, the owner's too, is revoked. The other accounts keep their passwords as before, and the owner mark is cleared on every account but the owner's. The restore is kept at the first start like any other ([What the Next Start Does](#next-start)).
+- 📭 **Nothing is sent.** The first start does not give the owner an account or send them a link, and `backup pending` says that the account kept its password ([Follow or Cancel a Restore](cli_backup.md#backup-pending)).
+- 🔁 **The check is made again at the commit.** The conditions are first read on the checked copy, when the panel confirms. At the first start on the restored data, before it serves anything, they are read again on the restored database. If the account no longer fits (it is not an administrator any more, it is disabled, it has another address, a second account is marked, or `LIBREFOLIO_ADMIN_EMAIL` is no longer set), the restore is handled **as one without the exception**: the account's password is closed, and the first start sends the link ([The Owner's Account on a Hosted Instance](#owner-account)).
+- 📝 **The log line.** When the password is really kept, the log of the instance has a warning, `Panel restore: the owner's password and sessions are kept`, with the restore and the account number. It carries no address. The commit's own line then says *Restore committed: every session ended but the owner's, the backup's one-time links revoked*, where every other restore says *every session ended*.
+- 🚫 **Every other case is unchanged.** A restore from the app, `backup restore` on the command line (it never keeps the owner's password), or a panel restore that fails any of the four conditions follows [The Owner's Account on a Hosted Instance](#owner-account) and [Without Anyone to Ask](#owner-pick). The refusals (`owner_conflict`, `restore_stage_outdated`) come first, as for any restore on a hosted instance.
+
+!!! warning "For the host: the accepted risk"
+
+    This exception has **no check that the copy comes from this same instance**. The provider's panel cannot show the instance's recipients or its key, and a sealed backup carries neither the instance key nor, as far as the instance can tell, the recipients it was sealed for. So the instance cannot tell its own copy from another.
+
+    Whoever can write into the provider's store of copies could fabricate a backup whose owner holds the owner's address and a password they know. A restore from the panel would keep that password, and they would sign in as the owner.
+
+    The developer accepted this risk (decision of 2026-10-26), because an automatic restore of the same instance must be transparent. In return:
+
+    - keep the store of copies **as protected as the instance's keys**: let nobody write into it but the provider's own backup job;
+    - let **only the provider's panel** restore, and keep the panel's credentials as you keep the keys.
+
+    The exception does not apply to a restore from the app or on the command line: those never keep the owner's password.
+
+### 👥 More Accounts Than the Plan Allows {: #users-limit }
+
+A restore is **never refused** because the backup holds more active accounts than `LIBREFOLIO_MAX_USERS` allows. The check only warns you, before you confirm: in the app, in the report of `backup restore` and in the report the hosting panel reads. For instance, a backup that holds *anna*, *bruno*, *carla*, *dario* and *elena* as active accounts, restored on an instance that accepts 3, is confirmed like any other.
+
+- 🧮 **What it counts.** The active accounts of the backup, plus, on a `managed` instance with `LIBREFOLIO_ADMIN_EMAIL` set, the inactive account that holds the owner's address: the restore activates it ([The Owner's Account on a Hosted Instance](#owner-account)). The warning appears when that number is above the limit. It carries the two numbers, the accounts counted and the limit, and no name and no address.
+- 🔢 **A limit that is not a number** is no limit for this warning: a typo in `LIBREFOLIO_MAX_USERS` never makes it appear. With no limit set, there is nothing to warn about.
+- 🖱️ **In the app,** the report window shows a notice apart from the other warnings, such as *This backup holds 5 active accounts, but this instance accepts 3.* The confirmation does not change: you type the word, and choose the owner's account when it is asked. [From the command line](cli_backup.md#backup-restore), `restore --yes` and `--dry-run` go on as for any other backup.
+- 🪪 **After the restore,** at the first sign-in of an administrator the instance sees more active accounts than the plan allows, and asks that administrator to choose who keeps access. The others are **deactivated**, never deleted: a deactivated account keeps its password and its data, so reactivating it brings it back as it was, when a place is free. The full backup can be downloaded first from that screen.
 
 ### ⌨️ Restore from the Command Line {: #restore-command }
 
