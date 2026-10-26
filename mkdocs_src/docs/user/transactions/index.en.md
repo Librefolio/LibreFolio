@@ -69,7 +69,7 @@ The workspace is a grid of draft rows — marked **new**, **edit** or **del** �
 
     - **red** — rows the importer did not fully understand: **Save All** stays disabled until you complete them;
     - **amber** — auto-derived fields to verify: **Save All** first asks you to **Review** them or **Save anyway**;
-    - **amber, dates** — rows dated before 1 January 1900, listed one by one (click a line to go to the row): **Save All** asks once for all of them (*Yes, the dates are right*). A date that early is usually a typo; LibreFolio still stores no date before 1900, so a confirmed one is refused at save with the date range in the message.
+    - **amber, dates** — rows dated before 1 January 1900, listed one by one (click a line to go to the row): **Save All** asks once for all of them (*Yes, the dates are right*). A date that early is usually a typo; once confirmed it is saved like any other.
     - **amber** — rows that may be stock splits (Revolut and Trading212 imports): link a Split event to each, or create it from the banner; see [Revolut](import/revolut.md#stock-splits).
 
     Click a banner to unfold its list, then an entry: the grid turns to that row's page and highlights it. Balance problems list the rows that cause them (*Workspace rows: …*), and a click opens the first one in the current sort order. If your column filters hide the row, a message tells you so.

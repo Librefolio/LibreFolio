@@ -295,9 +295,7 @@ Le righe arrivano nel workspace bulk non salvate. Controllale o modificale, poi 
 ambra che non hai verificato (**Salva comunque**). Una riga la cui quantità ha più di 10 decimali, il cui
 importo ne ha più di 6, o il cui costo di carico per unità ne ha più di 12, è rifiutata a **Salva tutto**, col
 massimo nel messaggio (*Quantità: Al massimo 10 decimali*): LibreFolio non la arrotonda mai.
-Le date delle transazioni vanno dal 1° gennaio 1900 a domani: una riga del report con una data
-fuori da questo intervallo è rifiutata anch'essa a **Salva tutto**, con l'intervallo nel messaggio (*Data: Tra
-1900-01-01 e 2026-10-18* se oggi è il 17 ottobre 2026).
+Le date delle transazioni possono risalire fino all'anno 1 e arrivare a domani. Una riga datata prima del 1900 è segnata in ambra nella revisione (una nota sopra la tabella le conta) e lo spazio di lavoro bulk chiede una sola volta di confermarle, perché una data così è di solito un refuso; una volta confermata si salva come le altre. Una riga datata dopo domani è rifiutata a **Salva tutto**, con l'ultimo giorno ammesso nel messaggio (*Data: Non oltre il 2026-10-18* se oggi è il 17 ottobre 2026).
 
 ---
 

@@ -277,7 +277,7 @@
       "decimalPlacesExceeded": "Como máximo {max} decimales",
       "significantDigitsExceeded": "Como máximo {max} cifras significativas",
       "integerDigitsExceeded": "Como máximo {max} cifras en la parte entera",
-      "dateOutOfRange": "Entre {min} y {max}",
+      "dateOutOfRange": "No posterior al {max}",
       "autoCostUnreadable": "Coste automático no disponible: {count, plural, one {# transacción usada} other {# transacciones usadas}} para el coste medio de este activo {count, plural, one {contiene} other {contienen}} un valor que no es un número. Introduce el coste a mano.",
       "autoCostEmptyPool": "Coste automático no disponible: en esa fecha no había unidades de este activo que promediar. Elige Manual e introduce lo que te costaron estas unidades; si las recibiste como regalo, escribe 0.",
       "autoCostUnknownPool": "Coste automático no disponible: las unidades de este activo que había en esa fecha no tienen un coste conocido que promediar. Elige Manual e introduce lo que te costaron.",

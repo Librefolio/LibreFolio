@@ -277,7 +277,7 @@
       "decimalPlacesExceeded": "Al massimo {max} decimali",
       "significantDigitsExceeded": "Al massimo {max} cifre significative",
       "integerDigitsExceeded": "Al massimo {max} cifre prima della virgola",
-      "dateOutOfRange": "Tra {min} e {max}",
+      "dateOutOfRange": "Non oltre il {max}",
       "autoCostUnreadable": "Costo automatico non disponibile: {count, plural, one {# transazione usata} other {# transazioni usate}} per il costo medio di questo asset {count, plural, one {contiene} other {contengono}} un valore che non è un numero. Inserisci il costo a mano.",
       "autoCostEmptyPool": "Costo automatico non disponibile: in quella data non c'erano unità di questo asset di cui fare la media. Scegli Manuale e scrivi quanto ti sono costate; se le hai ricevute in regalo, scrivi 0.",
       "autoCostUnknownPool": "Costo automatico non disponibile: le unità di questo asset detenute in quella data non hanno un costo noto di cui fare la media. Scegli Manuale e scrivi quanto ti sono costate.",

@@ -582,7 +582,7 @@ class TestAdditionalEdgeCases:
 
         Contract, kept small (the whole of it is ``test_transaction_decimal_places.py``'s ``TestTheDateIsCheckedAtWrite``):
         the same DEPOSIT, through the same ``create_bulk``, has no success; the batch's one issue is ``dateOutOfRange`` on
-        ``field="date"`` of create 0, ``params.max`` the server's tomorrow — its date read before and after the batch, so
+        ``field="date"`` of create 0, ``params`` exactly ``{"max": <the server's tomorrow>}`` (D-P4 lot L3: no ``min``) — its date read before and after the batch, so
         that a midnight in between cannot fail the test; nothing is written. Nothing is committed either: the session
         fixture's rollback takes whatever the batch flushed (today, the DEPOSIT).
         """
@@ -606,6 +606,7 @@ class TestAdditionalEdgeCases:
         issues = calls[0].response.issues
         assert [(issue.operation, issue.index, issue.code, issue.field) for issue in issues] == [("create", 0, "dateOutOfRange", "date")], [(issue.code, issue.field, issue.params) for issue in issues]
         assert (issues[0].params or {}).get("max") in tomorrows, f"N74: params.max is the server's tomorrow ({sorted(tomorrows)}), got {issues[0].params}"
+        assert set(issues[0].params or {}) == {"max"}, f"D-P4 lot L3: the date check has a ceiling and no floor, so params is exactly {{max}}, with no min; got {issues[0].params}"
         written = (await session.execute(select(Transaction.id).where(Transaction.broker_id == broker_id))).scalars().all()
         assert written == [], f"N74: the refused DEPOSIT must not be written, the broker holds rows {written}"
 

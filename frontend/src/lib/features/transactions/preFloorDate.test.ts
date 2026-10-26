@@ -1,8 +1,8 @@
 /**
  * preFloorDate — the warning for a transaction dated before 1 January 1900 (D-P4, W5-10).
  *
- * Pure helpers, no DOM. The backend still refuses such a date at save; the frontend warns and asks for one
- * confirmation. Dates are `YYYY-MM-DD` text compared as text, so the boundary is exact: 1899-12-31 is before the
+ * Pure helpers, no DOM. The backend no longer refuses such a date at save (D-P4, lot L3: only the ceiling stays); the
+ * frontend warns and asks for one confirmation, the only protection against a typo. Dates are `YYYY-MM-DD` text compared as text, so the boundary is exact: 1899-12-31 is before the
  * floor, 1900-01-01 is not. A blank or unreadable date is never "before" (the required-field check owns that case).
  *
  * The last block proves the wording of the import review's todo exists in the four languages and carries the date
@@ -19,7 +19,7 @@ import frImport from '$lib/i18n/importWizard/fr.json';
 import esImport from '$lib/i18n/importWizard/es.json';
 
 describe('constants', () => {
-    it('the limit is the first day the backend accepts, and the reason code is the one the catalogue words', () => {
+    it('the limit is the day the warning starts from (the old floor), and the reason code is the one the catalogue words', () => {
         expect(PRE_FLOOR_DATE_LIMIT).toBe('1900-01-01');
         expect(PRE_FLOOR_DATE_REASON).toBe('date_before_1900');
     });

@@ -131,7 +131,8 @@ class TXValidationCode(StrEnum):
     DECIMAL_PLACES_EXCEEDED = "decimalPlacesExceeded"
     SIGNIFICANT_DIGITS_EXCEEDED = "significantDigitsExceeded"
     INTEGER_DIGITS_EXCEEDED = "integerDigitsExceeded"
-    # N74 (R13-SEC7-3): a date outside 1900-01-01 … tomorrow by the server's calendar, params {min, max} (ISO dates).
+    # N74 (R13-SEC7-3): a date after tomorrow by the server's calendar, params {max} (an ISO date). There is no first date since
+    # D-P4 (26/10/2026): the code kept its name, the text and the params lost their lower bound.
     DATE_OUT_OF_RANGE = "dateOutOfRange"
     # W-B69: an Auto cost over a pool holding rows that cannot be read, params {count}.
     AUTO_COST_UNREADABLE = "autoCostUnreadable"
