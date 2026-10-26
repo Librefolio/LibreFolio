@@ -15,8 +15,11 @@ The routes' contract for their consumer (workstream X, the Assets and FX tables'
   decision, aligned with Z-25): at most 1 000 items for both routes (Z-25's ``MAX_BULK_ITEMS``, ``bulk_too_many_items``
   with ``max_items`` and ``items`` — no longer pydantic's ``too_long`` list error, and no longer 10 000 for the assets),
   at most 5 distinct ``as_of`` and 5 distinct ``range_start`` (``period_changes_too_many_days`` with ``field``,
-  ``max_days``, ``days``). Every ``as_of`` is 1900-01-01 or later (MF-P2b, R13-SEC8: on or before 0005-12-30 its 5Y
-  reference, 1825 days back, overflowed ``date``: a 500), a pydantic error on the item. The limits are written out, not
+  ``max_days``, ``days``). ``as_of`` and ``range_start`` accept ANY day of the
+  calendar, 0001-01-01 to 9999-12-31 (X5-6, D-P4 L4, developer decision: R13-SEC8's floor of 1900-01-01, set because the 5Y
+  reference of an ``as_of`` on or before 0005-12-30 overflowed ``date``, is withdrawn). A period whose reference day
+  (``as_of`` − ``days``) would fall before 0001-01-01 has a null ``change_ratio`` — as a change with no data —, never a 500 or
+  a 422, and the other periods of the item are real. A day no ``date`` holds (year 0) is the calendar's own 422. The limits are written out, not
   imported: the contract. The function itself is tested pure in ``test_schemas/test_period_changes_bounds.py``.
 
 The services' cases (young and stale histories, currencies, missing rates, bulk order) are
@@ -27,17 +30,22 @@ else in the repository uses, dated 1981-1987, deleted (``delete_all``) before se
 after. The bounds' tests write nothing: their assets are an id no row can carry, their pair AWG/TMT, read only, and they
 assert the status, the request's own items and the 422's ``detail``, never a value.
 
-X-R59 (rule 10, decision N80): an item may ask ``range_start`` (≤ ``as_of``, ≥ 1900-01-01, at most 5 distinct per
+X-R59 (rule 10, decision N80): an item may ask ``range_start`` (≤ ``as_of``, any day of the calendar, at most 5 distinct per
 request), and its result carries ``range_change`` — null when the item asked none, so every item above now lists it, as
 null. The happy paths compare it, as Decimals, with the first and last point of the series the pages load today for
 ``[range_start, as_of]``: ``POST /assets/prices/query`` for two assets of the test's own (one priced from before the
 range, one from inside it), ``POST /fx/currencies/convert`` for GYD/HTG — another pair nothing else uses, wiped before
-and after like AWG/TMT — read both ways. The bounds' refusals are only evidence next to an acceptance of the same
+and after like AWG/TMT — read both ways. X5-6: the early days. The bounds' tests write nothing (an asset id no row carries, the AWG/TMT pair nothing stores before 1981): they
+assert that 1899-12-31, 0005-12-30 and 0001-01-01 are answered, all nine periods null. The values are the happy paths of the
+end: ``TestEarlyDays`` writes its own prices (an asset of the test's) and rates (KPW/SLE, a pair nothing else in the repository
+uses, wiped before and after) in 1844-1850 and in the years 1 and 3, and compares every period with the reference day derived
+with ``timedelta`` (1 825 days back is not five calendar years: 1848 had a 29 February), the last price or rate on or before it.
+The bounds' refusals are only evidence next to an acceptance of the same
 shape: HEAD refuses ``range_start`` itself (``extra_forbidden``, a 422 that even names the field), so each refusal test
 first proves the field is accepted, and is RED on HEAD at that barrier.
 
 X-R59, the asset page's live quote (decision c): ``POST /assets/prices/current`` takes an optional query parameter
-``range_start`` (before 1900-01-01: 422); with it each result carries ``range_change`` (``reference_date``,
+``range_start`` (any day up to tomorrow; after it: 422); with it each result carries ``range_change`` (``reference_date``,
 ``change_abs``, ``change_ratio``) from the period changes' reference to the result's own price, null without it. The
 asset of that test has stored prices only, so its current price is the last stored one (``db:last_known``): its
 ``range_change`` must be the period changes' for ``as_of`` = that price's day — the same reference, the same anchor.
@@ -79,9 +87,10 @@ RATES_LAST = date(1987, 4, 30)
 PAGE_RANGE_DAYS = 1825 + 10
 EXPECTED_PERIODS = [list(period) for period in PAGE_PERIODS]
 
-# The bounds of a request, written out: the items (Z-25's MAX_BULK_ITEMS, both routes), the distinct days, the floor.
+# The bounds of a request, written out: the items (Z-25's MAX_BULK_ITEMS, both routes) and the distinct days.
 MAX_ITEMS = 1_000
 MAX_AS_OF_DAYS = 5
+#: The old floor (R13-SEC8), a landmark only: answered like every other day since X5-6.
 AS_OF_FLOOR = date(1900, 1, 1)
 #: An asset id no row can carry: the 1 000 items of the cap's guard value nothing, ten grouped queries that find nothing.
 UNKNOWN_ASSET_ID = 2**62 - 1
@@ -246,8 +255,8 @@ BOUNDED_ROUTES = [
     pytest.param(_Route(FX_PATH, _fx_item), id="fx"),
 ]
 
-#: Days before the floor: the day before it; the first day whose 5Y reference exists (``0001-01-01``) and the day before
-#: it, the last whose 5Y reference overflowed ``date`` (a 500, as the first day was).
+#: Days the old floor refused, answered now: the day before it; the first day whose 5Y reference exists (``0005-12-31``)
+#: and the last whose 5Y reference overflowed ``date`` (``0005-12-30``, a 500); the first day of the calendar.
 BEFORE_THE_FLOOR = [
     pytest.param(date(1899, 12, 31), id="1899-12-31"),
     pytest.param(date(5, 12, 31), id="0005-12-31"),
@@ -346,21 +355,39 @@ async def test_period_changes_refuse_a_sixth_distinct_as_of(test_server, route):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("as_of", BEFORE_THE_FLOOR)
 @pytest.mark.parametrize("route", BOUNDED_ROUTES)
-async def test_period_changes_refuse_as_of_before_1900(test_server, route, as_of):
-    """An ``as_of`` before 1900-01-01 is a 422 on that item's ``as_of`` — on or before 0005-12-30 it was a 500."""
-    print_section(f"MF-P2b: {route.path} at {as_of.isoformat()}")
+async def test_period_changes_accept_as_of_before_1900(test_server, route, as_of):
+    """RED (X5-6): an ``as_of`` before 1900-01-01 is answered — 200, one item, its nine periods in display order, every
+    change null (nothing is stored for that asset or before 1981 for that pair). On or before 0005-12-30 it was a 500 before
+    the floor and a 422 on the item's ``as_of`` after it."""
+    print_section(f"X5-6: {route.path} at {as_of.isoformat()}")
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)
         resp = await _post(client, route, [as_of])
+    assert resp.status_code == 200, f"expected 200 at {as_of}, got {resp.status_code}: {resp.text[:500]}"
+    [item] = resp.json()["items"]
+    assert item["as_of"] == as_of.isoformat()
+    assert [[period["key"], period["days"]] for period in item["periods"]] == EXPECTED_PERIODS
+    assert all(period["change_ratio"] is None for period in item["periods"]), item["periods"]
+    print_success(f"as_of {as_of.isoformat()} answered, all periods null")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("route", BOUNDED_ROUTES)
+async def test_period_changes_still_refuse_a_day_the_calendar_has_not(test_server, route):
+    """Guard: year 0 is no ``date``: a 422 on the item's ``as_of`` — the calendar's, which no rule of ours is behind."""
+    print_section(f"X5-6: {route.path} at 0000-12-31")
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        resp = await client.post(route.path, json=[{**route.item(SUNDAY), "as_of": "0000-12-31"}], timeout=TIMEOUT)
     detail = _refusal(resp)
     assert ["body", 0, "as_of"] in _locs(detail), f"the 422 must be on the item's as_of: {detail}"
-    print_success(f"as_of {as_of.isoformat()} refused with 422")
+    print_success("year 0 refused with 422")
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("route", BOUNDED_ROUTES)
 async def test_period_changes_accept_as_of_from_1900(test_server, route):
-    """Guard: the floor itself, 1900-01-01, is answered."""
+    """Guard: the old floor, 1900-01-01, is answered."""
     print_section(f"MF-P2b: {route.path} at {AS_OF_FLOOR.isoformat()}")
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)
@@ -408,6 +435,22 @@ async def test_period_changes_refuse_range_start_after_as_of(test_server, route)
         resp = await _post_ranges(client, route, [RANGE_AS_OF + timedelta(days=1)])
     assert resp.status_code == 422, f"expected 422 for range_start after as_of, got {resp.status_code}: {resp.text[:500]}"
     print_success("range_start after as_of refused with 422")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("as_of", [pytest.param(date(1850, 6, 15), id="as_of-1850-06-15"), pytest.param(date(1, 1, 1), id="as_of-0001-01-01")])
+@pytest.mark.parametrize("route", BOUNDED_ROUTES)
+async def test_period_changes_accept_range_start_on_the_first_day_of_the_calendar(test_server, route, as_of):
+    """RED (X5-6): ``range_start`` 0001-01-01 is answered (200, a ``range_change`` object) with an ``as_of`` of 1850 or of the
+    same first day; with nothing stored in the range, the object is the empty one (all null)."""
+    print_section(f"X5-6: {route.path} with range_start 0001-01-01, as_of {as_of.isoformat()}")
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        resp = await client.post(route.path, json=[{**route.item(as_of), "range_start": date.min.isoformat()}], timeout=TIMEOUT)
+    assert resp.status_code == 200, f"expected 200, got {resp.status_code}: {resp.text[:500]}"
+    [item] = resp.json()["items"]
+    assert item["range_change"] is not None and all(value is None for value in item["range_change"].values()), item["range_change"]
+    print_success("range_start 0001-01-01 answered")
 
 
 # ============================================================================
@@ -647,17 +690,63 @@ CURRENT_PATH = f"{API_BASE}/assets/prices/current"
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("range_start", BEFORE_THE_FLOOR)
-async def test_current_prices_refuse_range_start_before_1900(test_server, range_start):
-    """RED: a ``range_start`` before 1900-01-01 is a 422 — HEAD ignores the parameter and answers 200. The floor itself
-    is answered (the barrier: the refusal is about the day, not about the parameter)."""
-    print_section(f"X-R59: {CURRENT_PATH}?range_start={range_start.isoformat()}")
+async def test_current_prices_accept_range_start_before_1900(test_server, range_start):
+    """RED (X5-6): a ``range_start`` before 1900-01-01 — down to 0001-01-01 — is answered 200, one result for the id (no
+    price: its ``range_change`` is the empty one). The old floor itself is answered too (the barrier)."""
+    print_section(f"X5-6: {CURRENT_PATH}?range_start={range_start.isoformat()}")
     async with httpx.AsyncClient() as client:
         await create_user_and_login(client)
         floor = await client.post(CURRENT_PATH, params={"range_start": AS_OF_FLOOR.isoformat()}, json=[UNKNOWN_ASSET_ID], timeout=TIMEOUT)
-        assert floor.status_code == 200, f"expected 200 at the floor, got {floor.status_code}: {floor.text[:500]}"
+        assert floor.status_code == 200, f"expected 200 at the old floor, got {floor.status_code}: {floor.text[:500]}"
         resp = await client.post(CURRENT_PATH, params={"range_start": range_start.isoformat()}, json=[UNKNOWN_ASSET_ID], timeout=TIMEOUT)
-    assert resp.status_code == 422, f"expected 422 for range_start {range_start}, got {resp.status_code}: {resp.text[:500]}"
-    print_success(f"range_start {range_start.isoformat()} refused with 422")
+    assert resp.status_code == 200, f"expected 200 for range_start {range_start}, got {resp.status_code}: {resp.text[:500]}"
+    [result] = resp.json()["results"]
+    assert result["asset_id"] == UNKNOWN_ASSET_ID and result["value"] is None, result
+    print_success(f"range_start {range_start.isoformat()} answered")
+
+
+@pytest.mark.asyncio
+async def test_current_prices_refuse_range_start_after_tomorrow(test_server):
+    """Guard: the ceiling stays — a ``range_start`` after tomorrow (9999-12-31) is a 422 on ``query.range_start``, while
+    the first day of the calendar is answered (the barrier)."""
+    print_section(f"X5-6: {CURRENT_PATH}?range_start after tomorrow")
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        first = await client.post(CURRENT_PATH, params={"range_start": date.min.isoformat()}, json=[UNKNOWN_ASSET_ID], timeout=TIMEOUT)
+        assert first.status_code == 200, f"expected 200 at 0001-01-01, got {first.status_code}: {first.text[:500]}"
+        resp = await client.post(CURRENT_PATH, params={"range_start": date(9999, 12, 31).isoformat()}, json=[UNKNOWN_ASSET_ID], timeout=TIMEOUT)
+    assert resp.status_code == 422, f"expected 422 after tomorrow, got {resp.status_code}: {resp.text[:500]}"
+    assert ["query", "range_start"] in _locs(resp.json()["detail"]), resp.json()["detail"]
+    print_success("range_start 9999-12-31 refused with 422")
+
+
+@pytest.mark.asyncio
+async def test_current_price_range_change_from_the_first_day_of_the_calendar(test_server):
+    """RED (X5-6): an asset whose only stored prices are in 1850 (its current price is the last one, ``db:last_known``)
+    asked with ``range_start`` 0001-01-01: nothing is stored on or before the range start, so the reference is the first
+    price inside the range — 1850-01-04 — and the change is ``last − first``, ``last / first − 1`` of the stored closes."""
+    print_section(f"X5-6: {CURRENT_PATH}?range_start=0001-01-01 on an 1850 asset")
+    first_day, last_day, first_close, last_close = date(1850, 1, 4), date(1850, 6, 15), Decimal("100"), Decimal("160")
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        asset_id = await _create_asset(client)
+        try:
+            prices = [{"date": first_day.isoformat(), "close": str(first_close)}, {"date": last_day.isoformat(), "close": str(last_close)}]
+            upsert = await client.post(f"{API_BASE}/assets/prices", json=[{"asset_id": asset_id, "prices": prices}], timeout=TIMEOUT)
+            assert upsert.status_code == 200, f"upsert prices: {upsert.status_code} {upsert.text}"
+
+            resp = await client.post(CURRENT_PATH, params={"range_start": date.min.isoformat()}, json=[asset_id], timeout=TIMEOUT)
+
+            assert resp.status_code == 200, f"current prices: {resp.status_code} {resp.text}"
+            [result] = resp.json()["results"]
+            assert (result["asset_id"], result["source"], result["as_of_date"], Decimal(result["value"])) == (asset_id, "db:last_known", last_day.isoformat(), last_close), f"precondition: the last stored price: {result}"
+            change = result["range_change"]
+            assert change is not None and set(change) == RANGE_ASSET_KEYS, change
+            assert change["reference_date"] == first_day.isoformat(), change
+            assert Decimal(change["change_abs"]) == last_close - first_close and Decimal(change["change_ratio"]) == last_close / first_close - 1, change
+            print_success("Live range change from 0001-01-01: the first price inside the range")
+        finally:
+            await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
 
 
 @pytest.mark.asyncio
@@ -735,3 +824,227 @@ async def test_current_price_range_change_is_the_period_changes_one(test_server)
         finally:
             if created:
                 await client.delete(f"{API_BASE}/assets", params={"asset_ids": list(created.values())}, timeout=TIMEOUT)
+
+
+# ============================================================================
+# X5-6: THE EARLY DAYS HAVE REAL VALUES (1850), AND A NULL WHERE THE REFERENCE IS BEFORE YEAR 1
+# ============================================================================
+
+#: KPW < SLE: the stored orientation. Nothing else in the repository uses either currency.
+EARLY_FX_BASE, EARLY_FX_QUOTE = "KPW", "SLE"
+EARLY_RATE_SOURCE = "X56-API-TEST"
+EARLY_AS_OF_1850 = date(1850, 6, 15)
+FIRST_DAY = date.min
+YEAR_3_AS_OF = date(3, 6, 15)
+YEAR_3_PREVIOUS = date(3, 6, 14)
+PERIOD_DAYS = dict(PAGE_PERIODS)
+
+
+def _fits(as_of: date, days: int) -> bool:
+    """Whether ``as_of − days`` is a day of the calendar (on or after 0001-01-01), by ordinals."""
+    return (as_of - date.min).days >= days
+
+
+def _expected_ratios(stored: dict[date, Decimal], as_of: date) -> dict[str, tuple[Decimal | None, Decimal | None]]:
+    """Each period's ``(change_ratio, inverse_change_ratio)`` of a series of the test's own: the value on
+    ``as_of − days`` (derived with ``timedelta``) is the last stored one on or before it; None where that day is before
+    0001-01-01 or nothing is stored on or before it."""
+    anchor = last_on_or_before(stored, as_of)
+    expected: dict[str, tuple[Decimal | None, Decimal | None]] = {}
+    for key, days in PAGE_PERIODS:
+        reference = last_on_or_before(stored, as_of - timedelta(days=days)) if _fits(as_of, days) else None
+        expected[key] = (None, None) if reference is None or anchor is None else (anchor / reference - 1, reference / anchor - 1)
+    return expected
+
+
+def _early_prices() -> dict[date, Decimal]:
+    """Closes from 1844 to ``EARLY_AS_OF_1850``; the 5Y reference day (1 825 days back, derived) and both its neighbours carry
+    a close of their own, so a reference read on the wrong day (five calendar years back) is a different number."""
+    prices = series(scattered_days(date(1844, 1, 1), EARLY_AS_OF_1850, (9, 13, 4, 21, 6)), TERMINATING_PRICES, 7)
+    reference = EARLY_AS_OF_1850 - timedelta(days=1825)
+    prices.update({reference - timedelta(days=1): Decimal("250"), reference: Decimal("64"), reference + timedelta(days=1): Decimal("40"), EARLY_AS_OF_1850: Decimal("160")})
+    return prices
+
+
+def _early_rates() -> dict[date, Decimal]:
+    """KPW/SLE from 1844 to ``EARLY_AS_OF_1850``, with a rate of its own on the 5Y reference day and its neighbours."""
+    rates = series(scattered_days(date(1844, 1, 1), EARLY_AS_OF_1850, (9, 13, 4, 21, 6)), TERMINATING_RATES, 3)
+    reference = EARLY_AS_OF_1850 - timedelta(days=1825)
+    rates.update({reference - timedelta(days=1): Decimal("5"), reference: Decimal("1.6"), reference + timedelta(days=1): Decimal("0.8"), EARLY_AS_OF_1850: Decimal("2.5")})
+    return rates
+
+
+def _year_3_prices() -> dict[date, Decimal]:
+    """A close on the calendar's first day and on the two days before the anchor: the first day is the (carried) reference of
+    every period up to 2Y, and what a 3Y or 5Y period must NOT read."""
+    return {FIRST_DAY: Decimal("200"), YEAR_3_PREVIOUS: Decimal("125"), YEAR_3_AS_OF: Decimal("160")}
+
+
+def _year_3_rates() -> dict[date, Decimal]:
+    return {FIRST_DAY: Decimal("2"), YEAR_3_PREVIOUS: Decimal("1.25"), YEAR_3_AS_OF: Decimal("2.5")}
+
+
+async def _upsert_prices(client: httpx.AsyncClient, asset_id: int, prices: dict[date, Decimal]) -> None:
+    upsert = await client.post(f"{API_BASE}/assets/prices", json=[{"asset_id": asset_id, "prices": [{"date": day.isoformat(), "close": str(close)} for day, close in prices.items()]}], timeout=TIMEOUT)
+    assert upsert.status_code == 200, f"upsert prices: {upsert.status_code} {upsert.text}"
+
+
+async def _upsert_rates(client: httpx.AsyncClient, rates: dict[date, Decimal]) -> None:
+    upsert = await client.post(f"{API_BASE}/fx/currencies/rate", json=[{"date": day.isoformat(), "base": EARLY_FX_BASE, "quote": EARLY_FX_QUOTE, "rate": str(rate), "source": EARLY_RATE_SOURCE} for day, rate in rates.items()], timeout=TIMEOUT)
+    assert upsert.status_code == 200, f"upsert rates: {upsert.status_code} {upsert.text}"
+    assert upsert.json()["success_count"] == len(rates) and upsert.json()["errors"] == [], upsert.json()["errors"]
+
+
+def _ratio(value: str | None) -> Decimal | None:
+    return None if value is None else Decimal(value)
+
+
+def _assert_asset_periods(item: dict, expected: dict[str, tuple[Decimal | None, Decimal | None]]) -> None:
+    assert [[period["key"], period["days"]] for period in item["periods"]] == EXPECTED_PERIODS
+    assert {period["key"]: _ratio(period["change_ratio"]) for period in item["periods"]} == {key: ratios[0] for key, ratios in expected.items()}, item["periods"]
+
+
+def _assert_fx_periods(item: dict, expected: dict[str, tuple[Decimal | None, Decimal | None]]) -> None:
+    assert [[period["key"], period["days"]] for period in item["periods"]] == EXPECTED_PERIODS
+    assert {period["key"]: (_ratio(period["change_ratio"]), _ratio(period["inverse_change_ratio"])) for period in item["periods"]} == expected, item["periods"]
+
+
+@pytest.mark.asyncio
+async def test_asset_period_changes_in_1850_are_real_to_the_five_year_reference(test_server):
+    """RED (X5-6): an asset priced from 1844, ``as_of`` 1850-06-15 — a day the 1900 floor refused: all nine periods are
+    numbers, each the change from the last close on or before ``as_of − days`` (the 5Y one 1 825 days back, 1845-06-16 by
+    ``timedelta``, with a close of its own), and asking ``range_start`` 0001-01-01 gives a ``range_change`` from the asset's
+    first close (nothing is stored on or before the range start) to the anchor."""
+    print_section("X5-6: POST /assets/prices/period-changes in 1850")
+    prices = _early_prices()
+    expected = _expected_ratios(prices, EARLY_AS_OF_1850)
+    assert all(ratios[0] is not None for ratios in expected.values()), "precondition: every reference of 1850 is stored"
+    first_day = min(prices)
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        asset_id = await _create_asset(client)
+        try:
+            await _upsert_prices(client, asset_id, prices)
+
+            resp = await client.post(ASSET_PATH, json=[{"asset_id": asset_id, "as_of": EARLY_AS_OF_1850.isoformat()}, {"asset_id": asset_id, "as_of": EARLY_AS_OF_1850.isoformat(), "range_start": FIRST_DAY.isoformat()}], timeout=TIMEOUT)
+
+            assert resp.status_code == 200, f"period changes: {resp.status_code} {resp.text}"
+            plain, ranged = resp.json()["items"]
+            for item in (plain, ranged):
+                assert (item["asset_id"], item["as_of"], item["currency"], item["errors"]) == (asset_id, EARLY_AS_OF_1850.isoformat(), ASSET_CURRENCY, [])
+                _assert_asset_periods(item, expected)
+            assert plain["range_change"] is None
+            change = ranged["range_change"]
+            assert change is not None and set(change) == RANGE_ASSET_KEYS, change
+            assert change["reference_date"] == first_day.isoformat(), change
+            anchor, first = prices[EARLY_AS_OF_1850], prices[first_day]
+            assert Decimal(change["change_abs"]) == anchor - first and Decimal(change["change_ratio"]) == anchor / first - 1, change
+            print_success("1850: nine real periods and a range change from 0001-01-01")
+        finally:
+            await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+
+
+@pytest.mark.asyncio
+async def test_asset_period_changes_in_year_3_are_null_where_the_reference_is_before_year_1(test_server):
+    """RED (X5-6): an asset priced on 0001-01-01, 0003-06-14 and 0003-06-15. For ``as_of`` 0003-06-15 the 1D change is a true
+    value (160 over 125), 1W … 2Y read the carried close of the first day (160 over 200), and 3Y and 5Y — whose reference
+    days are before 0001-01-01 — are null, although a close IS stored on the first day (no clamping onto it): no 500, no
+    422. For ``as_of`` = 0001-01-01 every period is null (no reference exists) and ``range_start`` 0001-01-01 is the
+    range's own anchor (0 change, reference_date the first day)."""
+    print_section("X5-6: POST /assets/prices/period-changes in the year 3")
+    prices = _year_3_prices()
+    expected = _expected_ratios(prices, YEAR_3_AS_OF)
+    assert expected["1D"][0] == Decimal("0.28") and expected["2Y"][0] == Decimal("-0.2") and expected["3Y"][0] is None and expected["5Y"][0] is None, f"precondition: {expected}"
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        asset_id = await _create_asset(client)
+        try:
+            await _upsert_prices(client, asset_id, prices)
+            body = [
+                {"asset_id": asset_id, "as_of": YEAR_3_AS_OF.isoformat()},
+                {"asset_id": asset_id, "as_of": YEAR_3_AS_OF.isoformat(), "range_start": FIRST_DAY.isoformat()},
+                {"asset_id": asset_id, "as_of": FIRST_DAY.isoformat(), "range_start": FIRST_DAY.isoformat()},
+            ]
+
+            resp = await client.post(ASSET_PATH, json=body, timeout=TIMEOUT)
+
+            assert resp.status_code == 200, f"period changes: {resp.status_code} {resp.text}"
+            plain, ranged, first = resp.json()["items"]
+            _assert_asset_periods(plain, expected)
+            _assert_asset_periods(ranged, expected)
+            _assert_asset_periods(first, _expected_ratios(prices, FIRST_DAY))
+            assert all(period["change_ratio"] is None for period in first["periods"]), first["periods"]
+            assert plain["range_change"] is None
+            assert ranged["range_change"]["reference_date"] == FIRST_DAY.isoformat() and Decimal(ranged["range_change"]["change_ratio"]) == Decimal("-0.2"), ranged["range_change"]
+            assert first["range_change"]["reference_date"] == FIRST_DAY.isoformat() and Decimal(first["range_change"]["change_ratio"]) == 0, first["range_change"]
+            print_success("Year 3: 1D … 2Y real, 3Y and 5Y null; the first day all null")
+        finally:
+            await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+
+
+@pytest.mark.asyncio
+async def test_fx_period_changes_in_1850_are_real_to_the_five_year_reference(test_server):
+    """RED (X5-6): the FX twin of the 1850 asset test, KPW/SLE: nine real periods in both orientations from the last rate on
+    or before ``as_of − days`` (1 825 days back for 5Y), and ``range_start`` 0001-01-01 answered with the pair's first rate as
+    the reference. The reversed pair swaps the orientations."""
+    print_section("X5-6: POST /fx/currencies/period-changes in 1850")
+    rates = _early_rates()
+    expected = _expected_ratios(rates, EARLY_AS_OF_1850)
+    assert all(ratios[0] is not None for ratios in expected.values()), "precondition: every reference of 1850 has a rate"
+    first_day = min(rates)
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        await _wipe_rates(client, EARLY_FX_BASE, EARLY_FX_QUOTE)
+        try:
+            await _upsert_rates(client, rates)
+            pair = {"base": EARLY_FX_BASE, "quote": EARLY_FX_QUOTE, "as_of": EARLY_AS_OF_1850.isoformat()}
+            body = [pair, {**pair, "range_start": FIRST_DAY.isoformat()}, {"base": EARLY_FX_QUOTE, "quote": EARLY_FX_BASE, "as_of": EARLY_AS_OF_1850.isoformat()}]
+
+            resp = await client.post(FX_PATH, json=body, timeout=TIMEOUT)
+
+            assert resp.status_code == 200, f"period changes: {resp.status_code} {resp.text}"
+            plain, ranged, reverse = resp.json()["items"]
+            for item in (plain, ranged):
+                _assert_fx_periods(item, expected)
+            _assert_fx_periods(reverse, {key: (inverse, direct) for key, (direct, inverse) in expected.items()})
+            assert plain["range_change"] is None
+            change = ranged["range_change"]
+            assert change is not None and set(change) == RANGE_FX_KEYS, change
+            assert change["reference_date"] == first_day.isoformat(), change
+            anchor, first = rates[EARLY_AS_OF_1850], rates[first_day]
+            assert Decimal(change["change_ratio"]) == anchor / first - 1 and Decimal(change["inverse_change_ratio"]) == first / anchor - 1, change
+            print_success("FX 1850: nine real periods both ways and a range change from 0001-01-01")
+        finally:
+            await _wipe_rates(client, EARLY_FX_BASE, EARLY_FX_QUOTE)
+
+
+@pytest.mark.asyncio
+async def test_fx_period_changes_in_year_3_are_null_where_the_reference_is_before_year_1(test_server):
+    """RED (X5-6): the FX twin of the year-3 asset test: a rate on 0001-01-01, 0003-06-14 and 0003-06-15 gives a true 1D
+    (2.5 over 1.25), 1W … 2Y from the first day's rate (2.5 over 2), 3Y and 5Y null both ways, and ``as_of`` 0001-01-01
+    every period null both ways."""
+    print_section("X5-6: POST /fx/currencies/period-changes in the year 3")
+    rates = _year_3_rates()
+    expected = _expected_ratios(rates, YEAR_3_AS_OF)
+    assert expected["1D"] == (Decimal("1"), Decimal("-0.5")) and expected["2Y"] == (Decimal("0.25"), Decimal("-0.2")) and expected["3Y"] == expected["5Y"] == (None, None), f"precondition: {expected}"
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        await _wipe_rates(client, EARLY_FX_BASE, EARLY_FX_QUOTE)
+        try:
+            await _upsert_rates(client, rates)
+            pair = {"base": EARLY_FX_BASE, "quote": EARLY_FX_QUOTE}
+            body = [{**pair, "as_of": YEAR_3_AS_OF.isoformat()}, {**pair, "as_of": YEAR_3_AS_OF.isoformat(), "range_start": FIRST_DAY.isoformat()}, {**pair, "as_of": FIRST_DAY.isoformat(), "range_start": FIRST_DAY.isoformat()}]
+
+            resp = await client.post(FX_PATH, json=body, timeout=TIMEOUT)
+
+            assert resp.status_code == 200, f"period changes: {resp.status_code} {resp.text}"
+            plain, ranged, first = resp.json()["items"]
+            _assert_fx_periods(plain, expected)
+            _assert_fx_periods(ranged, expected)
+            _assert_fx_periods(first, dict.fromkeys(PERIOD_DAYS, (None, None)))
+            assert plain["range_change"] is None
+            assert ranged["range_change"]["reference_date"] == FIRST_DAY.isoformat() and Decimal(ranged["range_change"]["change_ratio"]) == Decimal("0.25"), ranged["range_change"]
+            assert first["range_change"]["reference_date"] == FIRST_DAY.isoformat() and Decimal(first["range_change"]["change_ratio"]) == 0, first["range_change"]
+            print_success("FX year 3: 1D … 2Y real, 3Y and 5Y null; the first day all null")
+        finally:
+            await _wipe_rates(client, EARLY_FX_BASE, EARLY_FX_QUOTE)

@@ -11,13 +11,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.db.models import (
     Asset,
     AssetEvent,
-    AssetEventType,
     AssetProviderAssignment,
     PriceHistory,
     Transaction,
 )
 from backend.app.services.assets import core
 from backend.app.services.assets.base import AssetSourceError
+from backend.app.services.financial_math.splits import not_split_event_condition, split_event_condition
 
 logger = structlog.get_logger(__name__)
 
@@ -31,7 +31,7 @@ def events_that_go(asset_ids: Sequence[int]):
     A dividend or an interest carries a currency, a split is a ratio: it means the same in any currency, and the
     adjustments linked to it keep their meaning (N68, developer decision of 19/10/2026).
     """
-    return and_(AssetEvent.asset_id.in_(list(asset_ids)), AssetEvent.type != AssetEventType.SPLIT)
+    return and_(AssetEvent.asset_id.in_(list(asset_ids)), not_split_event_condition())
 
 
 async def delete_market_data_of_assets(session: AsyncSession, asset_ids: Sequence[int]) -> None:
@@ -136,7 +136,7 @@ class CurrencyChangeOperations:
         events_provider_res = await session.execute(select(func.count()).select_from(AssetEvent).where(events_that_go([asset_id]), AssetEvent.provider_assignment_id.is_not(None)))
         events_provider_count = int(events_provider_res.scalar() or 0)
 
-        splits_kept_res = await session.execute(select(func.count()).select_from(AssetEvent).where(AssetEvent.asset_id == asset_id, AssetEvent.type == AssetEventType.SPLIT))
+        splits_kept_res = await session.execute(select(func.count()).select_from(AssetEvent).where(AssetEvent.asset_id == asset_id, split_event_condition()))
         splits_kept_count = int(splits_kept_res.scalar() or 0)
 
         linked_tx_res = await session.execute(select(func.count()).select_from(Transaction).where(Transaction.asset_event_id.in_(select(AssetEvent.id).where(events_that_go([asset_id])))))

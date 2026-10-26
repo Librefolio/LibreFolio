@@ -243,7 +243,7 @@ Tests for Pydantic/SQLModel schema validation:
         "period-changes-bounds",
         schemas_period_changes_bounds,
         name="Period Changes Bounds",
-        desc="R13-SEC8 (MF-P2b): the as_of of an asset or FX period-changes item is 1900-01-01 or later (no upper bound)",
+        desc="X5-6 (R13-SEC8 withdrawn): the as_of and range_start of an asset or FX period-changes item are any day of the calendar (0001-01-01 …, no floor, no upper bound); range_start not after as_of",
         # PURE: imports schemas.prices and schemas.fx only and validates items; no row, no server, no network.
         isolation="pure",
     )

@@ -110,12 +110,13 @@ describe('fetchSeriesRangeDelta — the stored series’ Δ over the range on sc
         expect(sentCall()).toStrictEqual([PATH, [{asset_id: ASSET_ID, as_of: AS_OF, range_start: DATE_START, ...sent}]]);
     });
 
-    it('raises a first day before 1900 to 1900-01-01, the first day the backend values', async () => {
+    // X5-6 (D-P4 L4): the backend values any day, so the true first day goes out, not 1900-01-01.
+    it('sends a first day before 1900 as it is', async () => {
         post.mockResolvedValueOnce({items: [item(ASSET_ID, SERIES_CHANGE)]});
 
         await fetchSeriesRangeDelta({assetId: ASSET_ID, asOf: AS_OF, dateStart: '1850-06-01', targetCurrency: 'EUR'});
 
-        expect(sentCall()).toStrictEqual([PATH, [{asset_id: ASSET_ID, as_of: AS_OF, range_start: '1900-01-01', target_currency: 'EUR'}]]);
+        expect(sentCall()).toStrictEqual([PATH, [{asset_id: ASSET_ID, as_of: AS_OF, range_start: '1850-06-01', target_currency: 'EUR'}]]);
     });
 
     it.each([
