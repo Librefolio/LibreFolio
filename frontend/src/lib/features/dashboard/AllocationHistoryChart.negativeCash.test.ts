@@ -344,8 +344,8 @@ beforeEach(() => {
 });
 
 /** The chart's `data` prop for `days`: the backend's decimal strings. The amounts are synthetic: the chart draws the shares. */
-function historyOf(days: readonly Day[]): Array<{date: string; components: Array<{name: string; value: string; amount: string}>}> {
-    return days.map(({date, weights}) => ({date, components: weights.map(([name, percent]) => ({name, value: String(percent), amount: String(percent * 100)}))}));
+function historyOf(days: readonly Day[]): Array<{date: string; through: string; components: Array<{name: string; value: string; amount: string}>}> {
+    return days.map(({date, weights}) => ({date, through: date, components: weights.map(([name, percent]) => ({name, value: String(percent), amount: String(percent * 100)}))}));
 }
 
 /** Mounts the chart on `days`, as the allocation panel does, and waits for its first full option. */

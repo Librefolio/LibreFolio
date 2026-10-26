@@ -163,6 +163,7 @@ describe('KpiSection — daily change percentage (V2)', () => {
     function point(date: string, totalPnl: string, navValue: string) {
         return {
             date,
+            through: date,
             cash_value: EUR('500'),
             market_value: EUR('10000'),
             nav_value: EUR(navValue),
@@ -642,6 +643,7 @@ describe('KpiSection — percentages in the UI language (M-18)', () => {
     function historyPoint(date: string, totalPnl: string) {
         return {
             date,
+            through: date,
             cash_value: EUR('500'),
             market_value: EUR('10000'),
             nav_value: EUR(NAV),
@@ -900,6 +902,7 @@ describe('KpiSection — the day change and the timing effect come from the summ
     function historyPoint(date: string, totalPnl: string) {
         return {
             date,
+            through: date,
             cash_value: EUR('500'),
             market_value: EUR('19500'),
             nav_value: EUR('20000'),

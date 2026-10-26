@@ -618,8 +618,8 @@ interface AllocationComponent {
 }
 
 /** The chart's `data` prop for `days`. The amounts are synthetic: the chart draws the weights. */
-function historyOf(days: readonly Day[]): Array<{date: string; components: AllocationComponent[]}> {
-    return days.map(({date, weights}) => ({date, components: weights.map(([name, percent]) => ({name, value: String(percent), amount: String(percent * 1000)}))}));
+function historyOf(days: readonly Day[]): Array<{date: string; through: string; components: AllocationComponent[]}> {
+    return days.map(({date, weights}) => ({date, through: date, components: weights.map(([name, percent]) => ({name, value: String(percent), amount: String(percent * 1000)}))}));
 }
 
 /** Mounts the chart on `days`, as the allocation panel does, in `theme`, and waits for its first full option. */
@@ -1907,9 +1907,9 @@ describe('AllocationHistoryChart — the asset dimension: a series per asset, in
 
     /** Alpha is held throughout, Gamma was sold after the second day, Beta was bought on the third; the cash has no id. */
     const ASSET_DAYS = [
-        {date: '2025-01-01', components: [part('Alpha', 50, 11), part('Gamma', 30, 13), part(CASH_BUCKET, 20, null)]},
-        {date: '2025-01-02', components: [part('Alpha', 55, 11), part('Gamma', 25, 13), part(CASH_BUCKET, 20, null)]},
-        {date: '2025-01-03', components: [part('Alpha', 60, 11), part('Beta', 20, 12), part(CASH_BUCKET, 20, null)]},
+        {date: '2025-01-01', through: '2025-01-01', components: [part('Alpha', 50, 11), part('Gamma', 30, 13), part(CASH_BUCKET, 20, null)]},
+        {date: '2025-01-02', through: '2025-01-02', components: [part('Alpha', 55, 11), part('Gamma', 25, 13), part(CASH_BUCKET, 20, null)]},
+        {date: '2025-01-03', through: '2025-01-03', components: [part('Alpha', 60, 11), part('Beta', 20, 12), part(CASH_BUCKET, 20, null)]},
     ];
     /** Ranks that follow neither the weights nor the order the assets appear in, and reach the second round of the sequence. */
     const ASSET_RANKS = new Map<number, number>([

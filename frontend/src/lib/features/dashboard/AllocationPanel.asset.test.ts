@@ -115,10 +115,10 @@ const TODAY: Item[] = [item('Alpha', '60.00', '6000.00', 11), item('Beta', '30.0
 const OVERDRAWN: Item[] = [item('Alpha', '70.00', '7000.00', 11), item('Beta', '50.00', '5000.00', 12), item('Liquidity', '-20.00', '-2000.00', null)];
 
 /** The history: Gamma and Delta are gone today; Delta was last held on the first day, Gamma on the second. */
-const HISTORY: Array<{date: string; components: Item[]}> = [
-    {date: '2025-01-01', components: [item('Alpha', '40.00', '4000.00', 11), item('Gamma', '20.00', '2000.00', 13), item('Delta', '30.00', '3000.00', 14), item('Liquidity', '10.00', '1000.00', null)]},
-    {date: '2025-01-02', components: [item('Alpha', '50.00', '5000.00', 11), item('Gamma', '40.00', '4000.00', 13), item('Liquidity', '10.00', '1000.00', null)]},
-    {date: '2025-01-03', components: [item('Alpha', '60.00', '6000.00', 11), item('Beta', '30.00', '3000.00', 12), item('Liquidity', '10.00', '1000.00', null)]},
+const HISTORY: Array<{date: string; through: string; components: Item[]}> = [
+    {date: '2025-01-01', through: '2025-01-01', components: [item('Alpha', '40.00', '4000.00', 11), item('Gamma', '20.00', '2000.00', 13), item('Delta', '30.00', '3000.00', 14), item('Liquidity', '10.00', '1000.00', null)]},
+    {date: '2025-01-02', through: '2025-01-02', components: [item('Alpha', '50.00', '5000.00', 11), item('Gamma', '40.00', '4000.00', 13), item('Liquidity', '10.00', '1000.00', null)]},
+    {date: '2025-01-03', through: '2025-01-03', components: [item('Alpha', '60.00', '6000.00', 11), item('Beta', '30.00', '3000.00', 12), item('Liquidity', '10.00', '1000.00', null)]},
 ];
 
 /** The ranks the fixture gives, spelled out: the heaviest held first, then the closed ones, the most recently closed first. */
