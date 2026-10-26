@@ -58,7 +58,7 @@ from backend.app.services.financial_math.price_marks import AssetPriceSeries, Ma
 from backend.app.services.financial_math.series_steps import merged_spans
 from backend.app.services.financial_math.splits import load_split_links
 from backend.app.services.financial_math.valuation import normalize_quote_base_quantity
-from backend.app.utils.datetime_utils import EARLIEST_RANGE_START, latest_range_end
+from backend.app.utils.datetime_utils import latest_range_end
 
 _WARNING_ISSUE_CODES = {
     IssueCode.REFERENCE_PRICE_FALLBACK,
@@ -145,9 +145,9 @@ class LotsAnalysisService:
                 status="COMPLETE",
             )
 
-        # R13-SEC8: a row stored before EARLIEST_RANGE_START still opens or closes its lots, but no history day, price
-        # window or per-day rate starts before it.
-        computed_from = max(transactions[0].date, EARLIEST_RANGE_START)
+        # The window starts on the scope's first transaction, whatever its year (D-P4, L2): the histories are steps and
+        # the prices and rates are read on the days that change something, so a row of 1850 or of year 1 costs its changes.
+        computed_from = transactions[0].date
         split_ratios_by_tx_id = await self._load_split_ratios(transactions)
         broker_shorting = await self._load_broker_shorting(scope_broker_ids)
         prices = await self._load_prices(
@@ -258,7 +258,7 @@ class LotsAnalysisService:
             unconvertible_trade_ids=unconvertible_trade_ids,
             trade_currency_by_id={tx_id: tx.currency or asset.currency for tx_id, tx in tx_by_id.items()},
         )
-        display_from = max(date_from or computed_from, EARLIEST_RANGE_START)
+        display_from = date_from or computed_from
         # The days the histories cover: no row before the scope's first transaction, none past the end of the window.
         range_start = max(display_from, computed_from)
         calendar = DayRange(computed_from, actual_to)

@@ -413,8 +413,8 @@ async def test_red_a_buy_typed_in_year_one_costs_steps_not_days(session, keep_al
         base._tx(broker, asset, T.BUY, YEAR_ONE_DAY, "10", "-1000"),
         *_mondays(asset, date(2024, 1, 1), TO),
     )
-    patched = _lower_the_floor(monkeypatch, date(1, 1, 1))
-    assert "backend.app.utils.datetime_utils" in patched and "backend.app.services.financial_math.portfolio.engine" in patched, f"precondition: the floor is lowered where it is defined and where the engine reads it, {patched}"
+    # D-P4 L1 takes the engine's floor away: until it lands the floor is lowered where the engine reads it, after it there is nothing to lower
+    _lower_the_floor(monkeypatch, date(1, 1, 1))
 
     calls = [0]
     original_on = position_series_module._PositionReader.on

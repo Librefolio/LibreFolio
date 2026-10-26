@@ -527,18 +527,16 @@ at_cost_until = last_day_without_observation(price_series, history_dates)
 `utils/datetime_utils.py`): the histories walk every day of that range, and an end far in the future held the instance
 (R13-SEC7-1). The response's `requested_date_to` and `computed_date_to` carry that bounded end.
 
-`computed_from` is the first transaction's date, and `EARLIEST_RANGE_START` (1 January 1900, same module) at the
-earliest (R13-SEC8): a transaction stored centuries back made every history walk every day since. The response's
-`computed_date_from` carries it. From it start `history_dates`, the window `_load_prices()` reads and the per-day rates
-of the market series (`collect_fx_needs()`). `display_from`, the first day `expand_to_days()` fills the histories from
-(see [Change Days](#change-days)), is the requested `date_from` (or `computed_from`), clamped to the same floor;
-`requested_date_from` stays as requested. A
-transaction dated before the floor still enters the FIFO engine on its own date, so the lot it opens or closes counts,
-its history points from the floor on; `build_performance_history()` carries the flows dated before the first NAV day
-into that day, like any flow before the first mark. A transfer leg needs the value of its own day: dated before the
-floor, that day has no observation on or before it, so the leg moves the cost of its units, as on any day valued at
-cost (J-33); only when the first history day already has an observation, a quote stored before the floor, has the leg
-neither a price nor a cost, and the ROI/TWRR series stops from its date on — here, the whole series.
+`computed_from` is the first transaction's date, whatever its year (D-P4, L2: the 1 January 1900 floor of R13-SEC8 is gone,
+because the histories are steps and the prices and rates are read on the days that change something: a transaction of 1850
+or of year 1 costs its changes, not its days; the year-1 test holds the price series to 2 000 reads and the peak under
+150 MB). The response's `computed_date_from` carries it. From it start `history_dates`, the window `_load_prices()` reads
+and the rates of the market series (`collect_fx_needs()`). `display_from`, the first day the histories are cut from (see
+[Change Days](#change-days)), is the requested `date_from` (or `computed_from`); `requested_date_from` stays as requested,
+and the response's `range` starts on the later of `display_from` and `computed_from`. A transfer leg needs the value of its
+own day: when that day has no observation on or before it, the leg moves the cost of its units, as on any day valued at cost
+(J-33); only when the first history day already has an observation, a quote stored before it, has the leg neither a price
+nor a cost, and the ROI/TWRR series stops from its date on — here, the whole series.
 
 `last_day_without_observation()` (`financial_math/lots/prices.py`) returns the last of the ascending days whose `price_series.resolve()` is `MISSING`: the day before the first observation, `actual_to` when the asset has none, `None` when the first transaction's day already has one — a quote before it included. `resolve(day).is_missing` is true up to the first observation and false after it, so the days with an observation are a tail of the days: the function finds the first of them by bisection (`bisect.bisect_left()`), a few `resolve()` calls whatever the length of the history, where it used to resolve every day up to that observation. The days valued at cost are `[computed_from, at_cost_until]`, whether or not the asset is priced later:
 

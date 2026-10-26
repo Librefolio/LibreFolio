@@ -5,7 +5,7 @@ Workstream J «Numeri e analisi», lot L1a. The pure contract (``lot_change_days
 lane's database, through ``lots_analysis_service.get_lots_analysis``.
 
 WHY. ``get_lots_analysis`` builds ``history_dates`` — every calendar day from the scope's first transaction (floored at
-1900-01-01) to ``date_to`` — and hands them to the per-day builders (``financial_math/lots/histories.py``,
+1900-01-01 until L2) to ``date_to`` — and hands them to the per-day builders (``financial_math/lots/histories.py``,
 ``lots/average_cost_lines.py``), then trims to the window. A lot bought on 2 Jan 1900 and read on 15 Feb 2021 is valued on
 44 240 days, whatever the window: ``_lot_snapshot_on_date`` twice a day (value and return histories) and
 ``_open_value_on_date`` three times (once inside each snapshot, once in the performance NAV) — about 221 000 calls to
@@ -98,13 +98,12 @@ J5-5 (steps, contract MF-P4b §1.3, §8): the seven histories become STEPS (``da
 ``range``. The reds at the end of the file (RED until the cure): ``test_red_every_history_is_a_list_of_steps`` (shape,
 maximality, A == B once expanded, over every PARITY case), ``test_red_the_1900_lot_is_a_few_steps``,
 ``test_red_a_price_representation_change_is_a_step_boundary`` (8 Apr 2024 of book ``representation``) and
-``test_red_a_year_one_typo_costs_steps_not_days`` (floor lowered in this process, measured on HEAD: 737 854 calls of
+``test_red_a_year_one_typo_costs_steps_not_days`` (since L2 with no floor to lower; measured on HEAD: 737 854 calls of
 ``AssetPriceSeries.resolve``, 613 s, 3.9 GB). The ``test_guard_the_step_checker_*`` tests prove the checker itself on
 pure cases and on the real books. The answer is read as ``model_dump(mode="json")`` dicts: no new class is imported.
 """
 
 import random
-import sys
 import time
 import tracemalloc
 from collections import Counter
@@ -1075,21 +1074,10 @@ async def seed_year_one(session: AsyncSession) -> Book:
     return Book(asset=asset, users={"owner": owner}, brokers=brokers, rows=rows)
 
 
-def _lower_the_floor(monkeypatch: pytest.MonkeyPatch, floor: date) -> list[str]:
-    """``EARLIEST_RANGE_START`` is ``floor`` in this process only: in the module that defines it and in every backend module
-    that imported it by value. The names of the modules patched are returned."""
-    patched = []
-    for name, module in list(sys.modules.items()):
-        if name.startswith("backend.app") and module is not None and "EARLIEST_RANGE_START" in vars(module):
-            monkeypatch.setattr(module, "EARLIEST_RANGE_START", floor)
-            patched.append(name)
-    return patched
-
-
 @pytest.mark.asyncio
 async def test_red_a_year_one_typo_costs_steps_not_days(session, monkeypatch):
-    """RED until J5-5. A lot bought on 3 Jan of year 1 and read over its whole life (``date_from`` None), every analysis,
-    with the product's floor lowered to 1 Jan of year 1 in this process only: the 737 834 days since the BUY are never
+    """A lot bought on 3 Jan of year 1 and read over its whole life (``date_from`` None), every analysis, with no floor
+    (L2, D-P4: the window starts on the first transaction, whatever its year): the 737 834 days since the BUY are never
     walked.
     (a) every section has at most ``STEP_ROWS_PER_SECTION`` rows, and the lot's value steps and the price line cover every
         day from the first to ``date_to`` (summed lengths, no day built);
@@ -1097,11 +1085,9 @@ async def test_red_a_year_one_typo_costs_steps_not_days(session, monkeypatch):
     (c) the peak of ``tracemalloc`` is under 150 MB;
     (d) the answer comes in under 20 s (and no list of every day is built: (b) bounds the price loop, the peak the lists).
 
-    Today: the price loop asks the series once per calendar day — the spy raises at 5 000 calls.
+    Before L2: the window started at the floor (1900-01-01), so the ``range`` and the coverage of (a) fail.
     """
     book = await seed_year_one(session)
-    patched = _lower_the_floor(monkeypatch, date(1, 1, 1))
-    assert "backend.app.utils.datetime_utils" in patched and "backend.app.services.lots_analysis_service" in patched, f"precondition: the floor is lowered where it is defined and where the service reads it, {patched}"
 
     resolved = Counter[str]()
     original_resolve = AssetPriceSeries.resolve

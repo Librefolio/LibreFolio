@@ -2,7 +2,7 @@
 
 Workstream Y, release 1.3: the service-level reds of the series, through ``lots_analysis_service.get_lots_analysis``. The
 FAILED half (the series stays when the replay fails, its rate gaps stay in the data quality) is beside J-12's contract in
-``test_lots_failed_analysis_withholding.py``; the pure builder and the 1900 floor in ``test_lots_analysis_pure.py``; the
+``test_lots_failed_analysis_withholding.py``; the pure builder and the window of a long-opened lot in ``test_lots_analysis_pure.py``; the
 endpoint in ``test_api/test_portfolio_api.py``.
 
 WHY. The price/WAC chart drew its price line from ``PRICE_HISTORY``, which is per lot: a point for each day of each
@@ -14,7 +14,7 @@ THE CONTRACT.
 - ``LotAnalysisType.MARKET_PRICE_HISTORY`` asks for ``LotsAnalysisResponse.market_price_history``, a list of
   ``MarketPriceHistoryPoint`` (``date``, ``market_price``, ``currency`` = the target currency, ``estimated``): the
   per-lot point without ``lot_id``. None unless requested.
-- One point per day of the computed window — from the first transaction of the scope (never before 1900-01-01) to
+- One point per day of the computed window — from the first transaction of the scope (whatever its year, L2) to
   ``date_to`` — trimmed to ``[date_from or that first day, date_to]`` like the other histories, on each day that has a
   mark convertible to the target currency. The mark is the unified price resolver's (``financial_math/price_marks.py``):
   a market quote, exact or carried forward, is not estimated; else the last BUY or SELL, estimated. A day with no
