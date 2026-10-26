@@ -52,7 +52,7 @@ class PanelStatusResponse(BaseModel):
 
     No email, no username: the panel learns whether the customer has activated the instance, until when the setup link
     works, two counts (``users_used``, ``users_limit``) and whether the owner's new address waits for its confirmation
-    (``owner_email_change``), and whether the instance key is the one its data was written with (``instance_key``), never who the users
+    (``owner_email_change``), and whether the instance key is the one its data was written with (``instance_key``) and whether the active accounts outnumber the limit (``users_over_limit``), never who the users
     are, an address nor the key's check value.
     """
 
@@ -74,6 +74,10 @@ class PanelStatusResponse(BaseModel):
     instance_key: Literal["ok", "mismatch"] = Field(
         ...,
         description="ok: the instance key is the one this instance's data was written with, or nothing can tell (no key yet, a check file that cannot be read); mismatch: it is another key, so the panel's backup jobs (409 backup_instance_key_mismatch) and wake-sync are stopped while the instance keeps serving. Recomputed at every request: the right key put back is ok at the next one. Never the key nor its check value (H5-7)",
+    )
+    users_over_limit: bool = Field(
+        ...,
+        description="True while the active accounts outnumber the valid limit (LIBREFOLIO_MAX_USERS), for example after the move to a smaller plan: ordinary users are refused until an administrator chooses who keeps access. Invitations and accounts waiting for their verification take places (users_used) but never make it true; false without a limit. A yes or no, never who (H5-8)",
     )
 
 

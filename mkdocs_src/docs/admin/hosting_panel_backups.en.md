@@ -189,7 +189,7 @@ While the mode is on, only these API calls answer:
 
 | For | Endpoints |
 | --- | --- |
-| Probes and version | `GET /api/v1/system/health`, `GET /api/v1/system/ready`, `GET /api/v1/system/info`. `/system/ready` adds `"mode": "awaiting_restore"`, and `ready` then means ready to receive the backup |
+| Probes and version | `GET /api/v1/system/health`, `GET /api/v1/system/ready`, `GET /api/v1/system/info`. `/system/ready` adds `"mode": "awaiting_restore"`, and `ready` then means ready to receive the backup; its `app_version` is the version that is running |
 | The public configuration of the instance, with `"mode": "awaiting_restore"` | `GET /api/v1/system/instance` |
 | The [scheduled wake-up](wake_sync.md#wake-sync), with its own token: it answers `awaiting_restore` and runs no job | `POST /api/v1/system/wake-sync` |
 | Your panel's [status](hosting_panel_api.md#panel-status), with `mode` and `restore` | `GET /api/v1/panel/status` |
