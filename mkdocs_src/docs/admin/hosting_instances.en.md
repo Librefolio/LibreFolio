@@ -283,7 +283,11 @@ the report of the restore says only that the link is in the log, and never conta
 administrator. Pass the link to the owner. When the email went, the link is in no log.
 
 If the first start after the restore is repeated, the step is repeated too: the previous link stops working and a new one is
-sent. A restore made from the hosting panel does none of this. The whole restore is described in
+sent. A restore made from your hosting panel has nobody to ask, so the confirmation picks the owner's account itself from the
+checked copy, by the rules of [Without Anyone to Ask](backup_restore.md#owner-pick), and then does the same steps. In one case it
+leaves the owner's password alone: when the panel restores the same instance after a fault and the owner of the backup already
+holds the address of `LIBREFOLIO_ADMIN_EMAIL`, the owner keeps their password and their open sessions, and no link is sent
+([The Owner Keeps Their Password](backup_restore.md#owner-kept)). The whole restore is described in
 [Backup & Restore](backup_restore.md).
 
 ---
