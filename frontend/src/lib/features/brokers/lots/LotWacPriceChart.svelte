@@ -59,6 +59,9 @@
     import {themed} from '$lib/theme/themePair';
     import {chartNeutrals, LOT_WAC_COLORS} from '$lib/theme/chartTheme';
     import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
+    import {expandAtDays, lotWitnessDays, withBucketEnds} from './lotStepRows';
+    import {paramsAtDay} from '$lib/components/charts/stepTooltip';
+    import {dayOfAxisValue} from '$lib/utils/stepSeries';
 
     type BrokerWACHistoryPoint = z.infer<typeof schemas.BrokerWACHistoryPoint>;
     type CumulativeWACHistoryPoint = z.infer<typeof schemas.CumulativeWACHistoryPoint>;
@@ -104,6 +107,8 @@
         /** The asset's market price each day of the analysis, whatever lots are open (Y-30): the price line, the
          * axis dates and the bubbles' opening price. It stays with a FAILED analysis, as the average-cost lines do. */
         marketPriceHistory: MarketPriceHistoryPoint[];
+        /** The days the histories cover (the analysis' `range`); null: what the steps span. The three histories above are steps (D-P4): each point holds from its `date` to its `through`. */
+        range?: {start: string; end: string} | null;
         lotEvents: LotTimelineEventSchema[];
         /** Lots to overlay as per-lot performance bubbles (plan v3 round-2). Only LONG lots are drawn. */
         lots?: LotSummarySchema[];
@@ -209,9 +214,10 @@
     }
 
     let {
-        brokerWacHistory = [],
-        cumulativeWacHistory = [],
-        marketPriceHistory = [],
+        brokerWacHistory: brokerWacSteps = [],
+        cumulativeWacHistory: cumulativeWacSteps = [],
+        marketPriceHistory: marketPriceSteps = [],
+        range = null,
         lotEvents = [],
         lots = [],
         selectedLotIds = [],
@@ -228,6 +234,22 @@
         onEventDoubleClick,
         onSelectionChange,
     }: ComponentProps = $props();
+
+    /**
+     * The three histories are steps; the chart reads points with one date each. So they become the points of their witness days
+     * (`lotStepRows.ts`): the first day of every step, the last day each series holds, the ends of the range and of its weeks and months.
+     */
+    const seriesKey = (point: object): string => ('broker_id' in point ? String((point as {broker_id?: number | null}).broker_id) : 'total');
+    const witnessDays = $derived(lotWitnessDays<BrokerWACHistoryPoint | CumulativeWACHistoryPoint | MarketPriceHistoryPoint>([brokerWacSteps, cumulativeWacSteps, marketPriceSteps], seriesKey, range, withBucketEnds(range)));
+    const brokerWacHistory = $derived(expandAtDays(brokerWacSteps, seriesKey, witnessDays));
+    const cumulativeWacHistory = $derived(expandAtDays(cumulativeWacSteps, seriesKey, witnessDays));
+    const marketPriceHistory = $derived(expandAtDays(marketPriceSteps, seriesKey, witnessDays));
+
+    /** The day the pointer is on, kept from ECharts' `updateAxisPointer`: the tooltip of a step line reads it. */
+    let pointedDay: string | null = null;
+
+    /** The lines hold each value to the next date while the chart draws the steps themselves (the daily resolution); a coarser one joins its buckets. */
+    const stepLine = (): {step?: 'end'} => (currentResolution === 'daily' ? {step: 'end'} : {});
 
     let displayMode = $state<DisplayMode>('absolute');
     // #3: absolute Y axis — automatic (data-fit) or anchored at 0. Mirrors the LotComparisonChart
@@ -1259,6 +1281,7 @@
                 symbol: 'circle',
                 connectNulls: false,
                 smooth: false,
+                ...stepLine(),
                 lineStyle: {width: 2, color},
                 itemStyle: {color},
             });
@@ -1277,6 +1300,7 @@
                     symbol: 'circle',
                     connectNulls: false,
                     smooth: false,
+                    ...stepLine(),
                     lineStyle: {width: 2.5, color, type: 'dashed'},
                     itemStyle: {color},
                 });
@@ -1300,6 +1324,7 @@
                 symbol: 'circle',
                 connectNulls: false,
                 smooth: false,
+                ...stepLine(),
                 lineStyle: {width: 2.5, color: marketColor},
                 itemStyle: {color: marketColor},
             });
@@ -1563,15 +1588,25 @@
                 textStyle: {color: theme.textColor},
                 axisPointer: {
                     type: 'line',
+                    // The pointer's own day, which the tooltip of a step line reads (`pointedDay`).
+                    snap: false,
                     lineStyle: {
                         color: gridColors.gridColor,
                         width: 1,
                     },
                 },
-                formatter: (params: any) => buildTooltip(Array.isArray(params) ? params : [params]),
+                formatter: (params: any) => {
+                    if (!Array.isArray(params)) return buildTooltip([params]);
+                    // The steps themselves: each line says what it says on the pointed day, not at the drawn point nearest to it. The event markers are not lines.
+                    const day = currentResolution === 'daily' ? pointedDay : null;
+                    const lines = params.filter((param) => param?.seriesType === 'line');
+                    const others = params.filter((param) => param?.seriesType !== 'line');
+                    return buildTooltip([...paramsAtDay(lines, day, series as Array<{id?: unknown; data?: unknown}>), ...others]);
+                },
             },
             xAxis: {
                 type: 'time',
+                axisPointer: {snap: false},
                 ...(xAxisBounds ? {min: xAxisBounds.min, max: xAxisBounds.max} : {}),
                 ...(xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber} : {}),
                 axisLine: {
@@ -1666,7 +1701,15 @@
             const zoomInstance = chartInstance;
             const onDataZoom = () => scheduleResolutionSync();
             zoomInstance.on('dataZoom', onDataZoom);
-            dataZoomResolutionCleanup = () => zoomInstance.off('dataZoom', onDataZoom);
+            const onAxisPointer = (event: unknown) => {
+                const value = (event as {axesInfo?: Array<{value?: unknown}>}).axesInfo?.[0]?.value;
+                pointedDay = typeof value === 'number' && Number.isFinite(value) ? dayOfAxisValue(value) : null;
+            };
+            zoomInstance.on('updateAxisPointer', onAxisPointer);
+            dataZoomResolutionCleanup = () => {
+                zoomInstance.off('dataZoom', onDataZoom);
+                zoomInstance.off('updateAxisPointer', onAxisPointer);
+            };
             chartInstance.on('dblclick', (params: any) => {
                 const event = (params?.seriesType === 'scatter' ? (params?.data?.meta as EventMarkerDatum | undefined)?.event : undefined) ?? null;
                 if (event) onEventDoubleClick?.(event);

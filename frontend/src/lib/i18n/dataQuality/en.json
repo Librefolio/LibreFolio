@@ -39,7 +39,6 @@
     "valuedAtCost": "{count} asset(s) valued at cost — no price available for over 2 weeks (as of {as_of_date})",
     "transferShareMismatch": "{count} transfer(s) between brokers where your share differs — the difference counts as a gain or loss",
     "invalidSplitRatio": "{count} asset(s) have a split with an invalid ratio — ignored until you fix it in the asset's events",
-    "transactionsBeforeFloor": "{count} transaction(s) dated before 1900 (the earliest on {earliest}) — the history starts on 1 January 1900: correct their dates",
     "nonIsoCurrencySuggestion": "Amounts in “{value}”, not an ISO currency code (it stands for {suggestion}) — their conversions may be missing, and their rows cannot be saved again until the code is corrected",
     "nonIsoCurrencyCandidates": "Amounts in “{value}”, not an ISO currency code (it may stand for {candidates}) — their conversions may be missing, and their rows cannot be saved again until the code is corrected",
     "nonIsoCurrencyUnknown": "Amounts in “{value}”, not an ISO currency code — their conversions may be missing, and their rows cannot be saved again until the code is corrected",

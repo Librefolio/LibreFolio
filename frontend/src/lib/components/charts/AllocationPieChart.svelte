@@ -1,11 +1,15 @@
 <!--
   AllocationPieChart — Pie chart for allocation distribution (sector or asset type).
 
-  Supports two modes:
+  Supports three modes:
   - 'sector' (default): shows each sector's emoji inside its slice — read from the sector
     store, i.e. the backend's one map (GET /utilities/sectors), never from the data;
   - 'type': translates asset-type keys via assets.types.*; shows the PNG icon
-    inside each slice (ECharts rich text), icon + label in legend and tooltip.
+    inside each slice (ECharts rich text), icon + label in legend and tooltip;
+  - 'asset': one ring, one slice per asset, the name exactly as sent (nobody's translation
+    key, no emoji, no families), each slice in the colour of its weight rank (`colorRanks`,
+    asset id -> rank) in the designer's sequence; an entry without an id (the cash) wears
+    the Liquidity type colour.
 
   Every slice wears its category's own colour (GR1 of the designer's round 2): the same
   family or sector is the same colour in every view, portfolio and period, read through
@@ -14,7 +18,8 @@
   Props:
   - data: AllocationEntry[] — name, value (0-100%), amount (abs)
   - height: CSS height (default "280px")
-  - mode: 'sector' | 'type' (default 'sector')
+  - mode: 'sector' | 'type' | 'asset' (default 'sector')
+  - colorRanks: asset id -> colour rank, read in 'asset' mode only
   - currency: currency code for absolute value formatting (default 'EUR')
 
   Used by:
@@ -39,7 +44,7 @@
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {ALLOCATION_CHART_COLORS, chartNeutrals} from '$lib/theme/chartTheme';
-    import {categoryColor} from '$lib/theme/chartCategories';
+    import {CATEGORY_SEQUENCE, categoryColor, sequenceColor} from '$lib/theme/chartCategories';
     import {familyShade, shadePoles} from '$lib/theme/chartShades';
     import {chartRoles} from '$lib/theme/roleColors';
     import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
@@ -55,6 +60,8 @@
         value: number;
         /** Absolute amount in base currency */
         amount: number;
+        /** The asset's id, in 'asset' mode: the key of its colour rank. The cash slice has none. */
+        id?: number | null;
     }
 
     interface Props {
@@ -63,7 +70,9 @@
         /** CSS height of the chart container */
         height?: string;
         /** Display mode: 'sector' uses the sector store's emoji + i18n labels; 'type' uses asset type PNG icons */
-        mode?: 'sector' | 'type';
+        mode?: 'sector' | 'type' | 'asset';
+        /** 'asset' mode: asset id -> rank of its colour in the designer's sequence (0 = the heaviest held asset) */
+        colorRanks?: ReadonlyMap<number, number>;
         /**
          * Legend placement strategy.
          * - 'auto' (default): legend on the right when wide, below when narrow (<400px)
@@ -74,7 +83,7 @@
         currency?: string;
     }
 
-    let {data = [], height = '280px', mode = 'sector', legendPosition = 'auto', currency = 'EUR'}: Props = $props();
+    let {data = [], height = '280px', mode = 'sector', legendPosition = 'auto', currency = 'EUR', colorRanks}: Props = $props();
 
     // =========================================================================
     // State
@@ -115,6 +124,8 @@
     // back to one would leave the two ring series of the old option on screen. Only that
     // transition asks ECharts to replace the series; every other rebuild merges as before.
     let lastRings = false;
+    /** The colour ranks the last full build painted the asset pie with: new ranks rebuild in full. */
+    let lastRanksKey = '';
     let needsInitialLayoutStabilityPass = false;
     /** The sector store's version the last full build wrote its emoji from: a new list rebuilds the names. */
     let lastEmojiVersion = -1;
@@ -154,6 +165,8 @@
         void uiLocale();
         // The sector names carry their emoji, which arrive with the sector store: a new list redraws them.
         if (mode === 'sector') void sectorEmojiVersion();
+        // The asset colours are a function of the ranks, not of the data: new ranks redraw the pie.
+        if (mode === 'asset') void [...(colorRanks ?? [])];
 
         if (chartContainer) {
             tick().then(() => {
@@ -206,7 +219,10 @@
         // Build chart data with name for ECharts diffing
         const mappedEntries = entries.map((entry) => {
             let displayName: string;
-            if (mode === 'sector') {
+            if (mode === 'asset') {
+                // An asset's name is nobody's translation key: shown exactly as sent.
+                displayName = entry.name;
+            } else if (mode === 'sector') {
                 const i18nKey = `sectors.${sectorI18nKey(entry.name)}`;
                 const translated = tr(i18nKey) !== i18nKey ? tr(i18nKey) : entry.name.replace(/_/g, ' ');
                 const emoji = getSectorEmoji(entry.name);
@@ -219,7 +235,7 @@
                 const translated = tr(typeKey);
                 displayName = translated !== typeKey ? translated : entry.name;
             }
-            return {name: displayName, value: entry.value, amount: entry.amount, rawName: entry.name};
+            return {name: displayName, value: entry.value, amount: entry.amount, rawName: entry.name, assetId: entry.id ?? null};
         });
 
         // Asset-type subtypes sit inside their family, adjacent to it: two similar colours
@@ -237,6 +253,13 @@
                       {resolvePrimary: assetTypeFamily, colorOf: (primary) => categoryColor('type', primary, isDark, chartContainer), shade},
                   )
                 : [];
+        // 'asset': the colour is the asset's rank in the designer's sequence; no id (the cash) is the Liquidity type,
+        // an id the ranks do not know is an unknown type.
+        const assetColor = (item: {assetId: number | null}) => {
+            if (item.assetId == null) return categoryColor('type', 'Liquidity', isDark, chartContainer);
+            const rank = colorRanks?.get(item.assetId);
+            return rank === undefined ? categoryColor('type', 'Unknown', isDark, chartContainer) : sequenceColor(CATEGORY_SEQUENCE, rank, isDark, poles, chartContainer);
+        };
         const chartData =
             mode === 'type'
                 ? hierarchy.map(({item, color, primary, groupSize, primaryTotal}) => ({
@@ -246,7 +269,7 @@
                       groupSize,
                       primaryTotal,
                   }))
-                : mappedEntries.sort((a, b) => b.value - a.value).map((item) => ({...item, itemStyle: {color: categoryColor('sector', item.rawName, isDark, chartContainer)}}));
+                : mappedEntries.sort((a, b) => b.value - a.value).map((item) => ({...item, itemStyle: {color: mode === 'asset' ? assetColor(item) : categoryColor('sector', item.rawName, isDark, chartContainer)}}));
 
         // D72: as soon as one family contains a subtype, the relation is drawn as a
         // second ring, separate from the first, instead of a shade (R12). With no
@@ -285,7 +308,10 @@
         // build — a new type needs richStyles/legend/label formatters rebuilt so its
         // icon actually registers (see lastRawTypeKeys declaration above for why).
         const currentRawTypeKeys = mode === 'type' ? [...new Set(chartData.map((d) => d.rawName.toUpperCase()))].sort().join(',') + (rings ? '|rings' : '') : '';
-        const sameTypeSet = mode !== 'type' || currentRawTypeKeys === lastRawTypeKeys;
+        const ranksKey = mode === 'asset' ? chartData.map((d) => `${d.assetId ?? ''}:${d.assetId == null ? '' : (colorRanks?.get(d.assetId) ?? '')}`).join(',') : '';
+        // The asset colours follow the ranks: a new rank order is not a data-only change.
+        const sameTypeSet = (mode !== 'type' || currentRawTypeKeys === lastRawTypeKeys) && ranksKey === lastRanksKey;
+        // A change of the ranks alone (same assets, same amounts) forces a full rebuild.
         // A language switch rebuilds in full, as a theme switch does: the legend's name map and
         // the label formatters were built for the previous language (M-18). So does a new list of
         // sector emoji: the names carry them.
@@ -310,6 +336,7 @@
             return;
         }
         lastRawTypeKeys = currentRawTypeKeys;
+        lastRanksKey = ranksKey;
 
         // Build ECharts rich-text image styles for type mode (one key per asset type)
         const richStyles: Record<string, any> = {};
@@ -398,41 +425,44 @@
         const pieCenter = legendBelow ? ['50%', '40%'] : ['35%', '50%'];
         const pieRadius = legendBelow ? ['25%', '55%'] : ['35%', '70%'];
 
-        // Inner label — sector: emoji only (from the sector store, in the display name); type: PNG icon via rich text.
+        // Inner label — sector: emoji only (from the sector store, in the display name); type: PNG icon via rich text;
+        // asset: none (the name is no emoji and no type key).
         const labelConfig: any =
-            mode === 'sector'
-                ? {
-                      show: true,
-                      position: 'inner',
-                      // Show only the emoji (first token before the space in display name)
-                      formatter: (params: any) => {
-                          const first = (params.name as string).split(' ')[0];
-                          // If it looks like an emoji (non-ASCII), use it; otherwise skip
-                          return first && first.codePointAt(0)! > 127 ? first : '';
-                      },
-                      fontSize: 14,
-                      backgroundColor: ALLOCATION_CHART_COLORS.iconBubble,
-                      borderRadius: 20,
-                      padding: [4, 4],
-                  }
-                : {
-                      show: true,
-                      position: 'inner',
-                      formatter: (params: any) => {
-                          // Bugfix: use the raw backend type carried on the data item
-                          // (params.data.rawName) instead of re-deriving a key from
-                          // params.name (already translated — would produce a mismatched
-                          // key for languages whose translation differs from the enum,
-                          // e.g. IT/FR/ES "Crowdfunding" -> "CROWDFUNDING" != "CROWDFUND").
-                          const rawSource = params.data?.rawName ?? params.name;
-                          const rawKey = (rawSource as string).toUpperCase().replace(/[^A-Z_]/g, '');
-                          return `{img_${rawKey}|}`;
-                      },
-                      rich: richStyles,
-                      backgroundColor: ALLOCATION_CHART_COLORS.iconBubble,
-                      borderRadius: 20,
-                      padding: [4, 4],
-                  };
+            mode === 'asset'
+                ? {show: false}
+                : mode === 'sector'
+                  ? {
+                        show: true,
+                        position: 'inner',
+                        // Show only the emoji (first token before the space in display name)
+                        formatter: (params: any) => {
+                            const first = (params.name as string).split(' ')[0];
+                            // If it looks like an emoji (non-ASCII), use it; otherwise skip
+                            return first && first.codePointAt(0)! > 127 ? first : '';
+                        },
+                        fontSize: 14,
+                        backgroundColor: ALLOCATION_CHART_COLORS.iconBubble,
+                        borderRadius: 20,
+                        padding: [4, 4],
+                    }
+                  : {
+                        show: true,
+                        position: 'inner',
+                        formatter: (params: any) => {
+                            // Bugfix: use the raw backend type carried on the data item
+                            // (params.data.rawName) instead of re-deriving a key from
+                            // params.name (already translated — would produce a mismatched
+                            // key for languages whose translation differs from the enum,
+                            // e.g. IT/FR/ES "Crowdfunding" -> "CROWDFUNDING" != "CROWDFUND").
+                            const rawSource = params.data?.rawName ?? params.name;
+                            const rawKey = (rawSource as string).toUpperCase().replace(/[^A-Z_]/g, '');
+                            return `{img_${rawKey}|}`;
+                        },
+                        rich: richStyles,
+                        backgroundColor: ALLOCATION_CHART_COLORS.iconBubble,
+                        borderRadius: 20,
+                        padding: [4, 4],
+                    };
 
         // Build amount lookup by display name for tooltip
         const amountByName: Record<string, number> = {};

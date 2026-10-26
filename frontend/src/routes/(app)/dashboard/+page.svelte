@@ -16,7 +16,7 @@
     import {onDestroy, onMount, tick, untrack} from 'svelte';
     import {page} from '$app/stores';
     import {_} from '$lib/i18n';
-    import {RefreshCw, Briefcase, TrendingUp, ArrowRightLeft, Wallet, Shield} from 'lucide-svelte';
+    import {ArrowLeft, RefreshCw, Briefcase, TrendingUp, ArrowRightLeft, Wallet, Shield} from 'lucide-svelte';
     import AiExportMenu from '$lib/features/ai-export/AiExportMenu.svelte';
     import {prepareAiExport, type PreparedAiExport} from '$lib/features/ai-export/aiExportClipboard';
     import type {AiExportOptionsSelection} from '$lib/features/ai-export/aiExportOptions';
@@ -40,6 +40,8 @@
         type PortfolioReport,
         type PortfolioSummary,
         type PortfolioHistoryPoint,
+        type PortfolioRange,
+        type PortfolioMwrrLinePoint,
         type AllocationHistoryDimensions,
         type PositionsContribution,
         type PortfolioBrokerPnlHistory,
@@ -69,6 +71,7 @@
     import KpiSection from '$lib/features/dashboard/KpiSection.svelte';
     import RiskLevelsPanel from '$lib/features/risk/levels/RiskLevelsPanel.svelte';
     import PositionsPanel from '$lib/features/dashboard/PositionsPanel.svelte';
+    import {createPositionsSeriesController, type PositionsSeriesScope} from '$lib/features/dashboard/positionsSeriesController';
     import LotsAnalysisPanel from '$lib/features/brokers/lots/LotsAnalysisPanel.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
@@ -99,6 +102,9 @@
 
     let summary = $state<PortfolioSummary | null>(null);
     let history = $state<PortfolioHistoryPoint[]>([]);
+    /** The days the report's step series cover, and the history's MWRR as true points (D-P4). */
+    let historyRange = $state<PortfolioRange | null>(null);
+    let mwrrLine = $state<PortfolioMwrrLinePoint[]>([]);
     let brokerPnlHistory = $state<PortfolioBrokerPnlHistory[]>([]);
     let pnlCandles = $state<PortfolioPnlCandleSeries | null>(null);
     let pnlCandlesLoading = $state(false);
@@ -157,11 +163,22 @@
         return activeAssetId != null ? getAssetInfo(activeAssetId) : undefined;
     });
 
+    /** Whether the lot detail on screen was opened by a step of this page (not by a reload on its URL): going back then undoes it. */
+    let assetPanelOpenedHere = false;
+
+    // The lot detail takes the place of the portfolio view (#48): opening it is a step of the browser's history, so «back»
+    // (or «← Portfolio») returns to the portfolio.
     function openAssetPanel(assetId: number) {
-        void goto(buildAssetPanelUrl($page.url, assetId), {replaceState: true, noScroll: true});
+        assetPanelOpenedHere = true;
+        void goto(buildAssetPanelUrl($page.url, assetId), {noScroll: true});
     }
 
     function closeAssetPanel() {
+        if (assetPanelOpenedHere) {
+            assetPanelOpenedHere = false;
+            window.history.back();
+            return;
+        }
         void goto(buildAssetPanelUrl($page.url, null), {replaceState: true, noScroll: true});
     }
 
@@ -528,6 +545,8 @@
         // Cast from the Zodios union types to the concrete types the dashboard expects
         summary = (report?.summary as PortfolioSummary | null | undefined) ?? null;
         history = (report?.history as PortfolioHistoryPoint[] | null | undefined) ?? [];
+        historyRange = (report?.range as PortfolioRange | null | undefined) ?? null;
+        mwrrLine = (report?.mwrr_line as PortfolioMwrrLinePoint[] | null | undefined) ?? [];
         brokerPnlHistory = (report?.broker_pnl_history as PortfolioBrokerPnlHistory[] | null | undefined) ?? [];
         // Always reassigned (defaulting to null since loadAll() never requests candles):
         // this is also what invalidates a stale candle series from a prior broker/date-range
@@ -679,6 +698,25 @@
             contributionInBackground = false;
         }
     }
+
+    /**
+     * The per-position return chart (Y5-2): the lines of the positions the user ticked, asked for the scope on screen —
+     * its brokers, period and currency — and asked again when the scope or `refreshVersion` moves.
+     */
+    const positionsSeriesCtl = createPositionsSeriesController();
+    const positionsSeriesScope = $derived<PositionsSeriesScope>({
+        brokerIds: activeBrokerIds,
+        start: dateRangeCtl.start || undefined,
+        end: dateRangeCtl.end || undefined,
+        currency: targetCurrency,
+        ready: canAsk,
+        version: refreshVersion,
+    });
+    $effect(() => {
+        const scope = positionsSeriesScope;
+        untrack(() => positionsSeriesCtl.sync(scope));
+    });
+    onDestroy(() => positionsSeriesCtl.dispose());
 
     /** Lazy-load the synthetic P&L candle series (G1b — called by GrowthChart's
      *  onRequestPnlCandles when the user first activates the candles submode; caller
@@ -1062,7 +1100,7 @@
             <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
                 <!-- Growth Chart — 3/5 -->
                 <div class="lg:col-span-3">
-                    <GrowthChart {history} {brokerPnlHistory} {pnlCandles} onRequestPnlCandles={() => void pageBusy.join('dashboard-pnl-candles', loadPnlCandles)} {incomeHistory} {costHistory} {depositHistory} {acquisitionFunding} loading={historyLoading} baseCurrency={appliedCurrency} />
+                    <GrowthChart {history} range={historyRange} {mwrrLine} {brokerPnlHistory} {pnlCandles} onRequestPnlCandles={() => void pageBusy.join('dashboard-pnl-candles', loadPnlCandles)} {incomeHistory} {costHistory} {depositHistory} {acquisitionFunding} loading={historyLoading} baseCurrency={appliedCurrency} />
                 </div>
 
                 <!-- Allocation Panel — 2/5 -->
@@ -1071,29 +1109,44 @@
         </div>
     {:else if activeTab === 'posizioni'}
         <div data-testid="dashboard-positions-tab">
-            <!-- F2: nothing is asked before the owned brokers are known — the prop arrives with them. -->
-            <PositionsPanel
-                {summary}
-                contribution={positionsContribution}
-                loading={summaryLoading}
-                {contributionLoading}
-                {assetsHref}
-                brokers={allBrokers}
-                onRequestContribution={canAsk ? () => void pageBusy.join('dashboard-contribution', loadContribution) : undefined}
-                onAnalyze={openAssetPanel}
-                analyzedAssetId={activeAssetId}
-            />
-            <LotsAnalysisPanel
-                open={activeAssetId != null}
-                assetId={activeAssetId}
-                brokerIds={activeBrokerIds ?? allBrokers.map((b) => b.id)}
-                brokers={allBrokers}
-                currency={activeAsset?.currency ?? appliedCurrency}
-                assetName={activeAsset?.display_name ?? null}
-                onClose={closeAssetPanel}
-                ready={canAsk}
-                {refreshVersion}
-            />
+            {#if activeAssetId != null}
+                <!-- «Lot detail» takes the place of the portfolio view; «← Portfolio» (or the browser's back) returns to it (#48). -->
+                <div class="mb-3">
+                    <button type="button" class="inline-flex items-center gap-1.5 rounded-lg border border-lf-subtle bg-lf-card px-2.5 py-1.5 text-xs font-medium text-lf-secondary transition-colors hover:bg-lf-hover" onclick={closeAssetPanel} data-testid="positions-back-to-portfolio">
+                        <ArrowLeft size={14} />
+                        {$_('dashboard.backToPortfolio')}
+                    </button>
+                </div>
+                <LotsAnalysisPanel
+                    open={true}
+                    assetId={activeAssetId}
+                    brokerIds={activeBrokerIds ?? allBrokers.map((b) => b.id)}
+                    brokers={allBrokers}
+                    currency={activeAsset?.currency ?? appliedCurrency}
+                    assetName={activeAsset?.display_name ?? null}
+                    onClose={closeAssetPanel}
+                    ready={canAsk}
+                    {refreshVersion}
+                />
+            {:else}
+                <!-- F2: nothing is asked before the owned brokers are known — the prop arrives with them. -->
+                <PositionsPanel
+                    {summary}
+                    contribution={positionsContribution}
+                    loading={summaryLoading}
+                    {contributionLoading}
+                    {assetsHref}
+                    brokers={allBrokers}
+                    onRequestContribution={canAsk ? () => void pageBusy.join('dashboard-contribution', loadContribution) : undefined}
+                    onAnalyze={openAssetPanel}
+                    analyzedAssetId={activeAssetId}
+                    portfolioHistory={history}
+                    positionsSeries={$positionsSeriesCtl.response}
+                    positionsSeriesLoading={$positionsSeriesCtl.loading}
+                    positionsSeriesFailed={$positionsSeriesCtl.failed}
+                    onRequestPositionsSeries={(keys) => positionsSeriesCtl.request(keys, positionsSeriesScope)}
+                />
+            {/if}
         </div>
     {:else if activeTab === 'rischio'}
         <div data-testid="dashboard-risk-tab">

@@ -43,6 +43,7 @@
     import {slide} from 'svelte/transition';
     import {goto} from '$app/navigation';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
+    import {onPricesCaughtUp} from '$lib/features/price-refresh/onPricesCaughtUp';
     import {_} from '$lib/i18n';
     import {ExternalLink, X} from 'lucide-svelte';
     import {schemas} from '$lib/api';
@@ -114,6 +115,9 @@
     let computedRange = $state<DateRange | null>(null);
 
     let selectedLotIds = $state<number[]>([]);
+    /** The days the histories cover (each response's `range`): the main answer's for the average-cost and price lines, the selection's for the lots' value and return. */
+    let mainRange = $state<{start: string; end: string} | null>(null);
+    let selectionRange = $state<{start: string; end: string} | null>(null);
     let valueHistory = $state<LotValueHistoryPoint[]>([]);
     let returnHistory = $state<LotReturnHistoryPoint[]>([]);
     let selectionLoading = $state(false);
@@ -206,6 +210,7 @@
         marketPriceHistory = asArray<MarketPriceHistoryPoint>(response.market_price_history);
         brokerWacHistory = asArray<BrokerWACHistoryPoint>(response.broker_wac_history);
         cumulativeWacHistory = asArray<CumulativeWACHistoryPoint>(response.cumulative_wac_history);
+        mainRange = asObject<{start: string; end: string}>(response.range);
         quoteBaseQuantity = normalizeQuoteBaseQuantity(response.quote_base_quantity);
         incomeEvents = lotSection<{type: 'DIVIDEND' | 'INTEREST'; date: string; broker_id?: number | null; amount: string | null; lot_ids?: number[]}>(response.income_events).map((event) => ({
             type: event.type,
@@ -282,6 +287,7 @@
         shownSelection = response;
         valueHistory = asArray<LotValueHistoryPoint>(response.value_history);
         returnHistory = asArray<LotReturnHistoryPoint>(response.return_history);
+        selectionRange = asObject<{start: string; end: string}>(response.range);
     }
 
     async function loadSelectionHistories(currentAssetId: number, currentBrokerIds: number[], currentCurrency: string, ids: number[], force = false) {
@@ -372,9 +378,18 @@
         untrack(() => void pageBusy.track('lots-panel-load', () => loadMain(currentAssetId, currentBrokerIds, currentCurrency)));
     });
 
+    // `effectiveSelectionIds` is a new array whenever an answer lands, even with the same lots (a silent reload after a
+    // price catch-up): the load is the page's only when the selection changes by value, not by identity (Y5-1).
+    let askedSelectionKey: string | null = null;
     $effect(() => {
-        if (!(open && assetId != null && ready)) return;
+        if (!(open && assetId != null && ready)) {
+            askedSelectionKey = null;
+            return;
+        }
         const [currentAssetId, currentBrokerIds, currentCurrency, ids] = [assetId, brokerIds, currency, effectiveSelectionIds];
+        const key = JSON.stringify([currentAssetId, currentBrokerIds, currentCurrency, ids]);
+        if (key === askedSelectionKey) return;
+        askedSelectionKey = key;
         untrack(() => void pageBusy.track('lots-selection-load', () => loadSelectionHistories(currentAssetId, currentBrokerIds, currentCurrency, ids)));
     });
 
@@ -390,6 +405,17 @@
             void pageBusy.track('lots-selection-refresh', () => loadSelectionHistories(currentAssetId, currentBrokerIds, currentCurrency, ids, true));
         });
     });
+
+    // A price catch-up (the bus's `{kind: 'prices'}`, Y5-1, N-Z15-2): the lots on screen are asked again, in silence — the cache
+    // answers them stale, so they stay up with no loading state — and outside `pageBusy`: it is not the page's Refresh.
+    $effect(() =>
+        onPricesCaughtUp(() => {
+            if (!(open && assetId != null && ready)) return;
+            const [currentAssetId, currentBrokerIds, currentCurrency, ids] = [assetId, brokerIds, currency, effectiveSelectionIds];
+            void loadMain(currentAssetId, currentBrokerIds, currentCurrency);
+            void loadSelectionHistories(currentAssetId, currentBrokerIds, currentCurrency, ids);
+        }),
+    );
 
     $effect(() => {
         const isPanelOpen = open && assetId != null;
@@ -520,6 +546,7 @@
                     {brokerWacHistory}
                     {cumulativeWacHistory}
                     {marketPriceHistory}
+                    range={mainRange}
                     {lotEvents}
                     {incomeEvents}
                     {brokers}
@@ -567,7 +594,7 @@
                         onRowDoubleClick={handleTableRowDoubleClick}
                     />
 
-                    <LotComparisonChart selectedLots={effectiveSelectedLots} {valueHistory} {returnHistory} {incomeEvents} {brokers} {currency} {xAxisRange} />
+                    <LotComparisonChart selectedLots={effectiveSelectedLots} {valueHistory} {returnHistory} range={selectionRange} {incomeEvents} {brokers} {currency} {xAxisRange} />
                 {/if}
             {/if}
         </div>

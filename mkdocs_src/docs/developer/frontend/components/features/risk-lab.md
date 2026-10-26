@@ -420,6 +420,8 @@ current-composition `historical_kpi` and `asset_risk_return` and the on-demand `
   l.695-698), which the controller turns into `loadBase(true)`
   (`frontend/src/lib/features/risk/riskPanelController.svelte.ts:647-656`). Re-asks, `answer_discarded`,
   the page cache and `loadError` are in [The Panel Controller](../../../backend/risk/architecture.md#panel-controller).
+  A price catch-up reloads the base waves on screen by itself, in silence (`loadBase(false, true)`),
+  not through `refreshVersion`; the on-demand analyses are left alone.
   Here `onrefreshfailed` toasts `risk.states.loadFailed` (`RiskLevelsPanel.svelte:82`),
   `setTweenHydration()` stops cached cards from counting up (l.106), and `loadError` replaces the notice
   and the levels (l.328).

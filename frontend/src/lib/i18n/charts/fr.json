@@ -218,7 +218,10 @@
     },
     "comparisonAsset": {
       "placeholder": "Sélectionner l’actif de comparaison",
-      "loadError": "Impossible de charger les actifs."
+      "loadError": "Impossible de charger les actifs.",
+      "blocked": "Non disponibles",
+      "isMainAsset": "C'est l'actif du graphique",
+      "alreadyCompared": "Déjà comparé dans un autre signal"
     }
   }
 }

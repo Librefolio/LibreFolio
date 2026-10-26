@@ -25,6 +25,7 @@
  */
 import {untrack} from 'svelte';
 import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
+import {onPricesCaughtUp} from '$lib/features/price-refresh/onPricesCaughtUp';
 
 import {buildRiskAnalyticRequest, buildRiskQueryRequest, canonicalizeScope, type RiskAnalyticParameters} from '$lib/features/risk/riskRequest';
 import {riskDataQuality, type RiskDataQualityReport} from '$lib/features/risk/riskTypes';
@@ -398,16 +399,20 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
     }
 
     /** The public entry: the bound on re-asks stays private, so no caller can start past it. */
-    function loadBase(force: boolean): Promise<void> {
-        return loadBaseAttempt(force, 1);
+    function loadBase(force: boolean, silent = false): Promise<void> {
+        return loadBaseAttempt(force, 1, silent);
     }
 
-    async function loadBaseAttempt(force: boolean, attempt: number): Promise<void> {
+    /**
+     * `silent`: the reload after a price catch-up (Y5-1, D1) — the figures on screen stay as they are and the panel does not
+     * say it is refreshing (no spinning icon, no dimmed section): it is not a load the user asked for.
+     */
+    async function loadBaseAttempt(force: boolean, attempt: number, silent = false): Promise<void> {
         const generation = ++requestGeneration;
         const {scope, dateStart, dateEnd, targetCurrency, appliedRiskFreePercent, assetSetBenchmarkId} = inputs();
         const hadResults = historicalResults.length > 0 || currentResults.length > 0;
         initialLoading = !hadResults;
-        refreshing = hadResults;
+        refreshing = hadResults && !silent;
         loadError = false;
         loadDiscarded = false;
         let question: string | null = null;
@@ -461,7 +466,7 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
                 shownQuestion = question;
                 if (initialLoading) hydratedFromCache = true;
                 initialLoading = false;
-                refreshing = true;
+                refreshing = !silent;
             }
 
             const [historical, current] = await Promise.all([historicalRequest ? queryRisk(historicalRequest, force) : null, currentRequest ? queryRisk(currentRequest, force) : null]);
@@ -488,7 +493,7 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
                 // indistinguishable from an absence of data. A superseded attempt never gets
                 // here: the generation check above returns first.
                 if (attempt < RISK_DISCARD_ATTEMPTS) {
-                    await loadBaseAttempt(force, attempt + 1);
+                    await loadBaseAttempt(force, attempt + 1, silent);
                     return;
                 }
                 loadDiscarded = true;
@@ -646,6 +651,17 @@ export function createRiskPanelController(inputs: () => RiskControllerInputs, op
     $effect(() => {
         applyBaseSignature(baseSignature(inputs()));
     });
+
+    // A price catch-up (the bus's `{kind: 'prices'}`): what is on screen is asked again, in silence and outside `pageBusy` (Y5-1,
+    // D1: the figures change when the new ones arrive; D2: the on-demand analyses the user ran stay as they are). Without force: the
+    // stale mark `riskStore` put on its answers is what makes the store ask. Nothing on screen yet, nothing to reload — the first
+    // load is its own.
+    $effect(() =>
+        onPricesCaughtUp(() => {
+            if (historicalResults.length === 0 && currentResults.length === 0) return;
+            return loadBase(false, true);
+        }),
+    );
 
     $effect(() => {
         const version = inputs().refreshVersion;

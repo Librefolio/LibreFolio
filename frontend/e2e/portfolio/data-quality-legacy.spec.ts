@@ -352,24 +352,12 @@ test.describe('MISSING_COST_BASIS from legacy rows — dashboard (item 22)', () 
         await expect(row.getByTestId(`data-quality-nav-asset-${assetT}`)).toHaveText(nameT);
         await expect(row.getByTestId(`data-quality-nav-asset-${assetJ}`)).toHaveText(nameJ);
 
-        // 3. The positions, holdings × table (both controls are setters, not toggles).
-        const panel = page.getByTestId('positions-panel');
-        await expect(panel).toHaveAttribute('data-busy', 'false', {timeout: 25_000});
-        await panel.getByTestId('positions-toggle-holdings').click();
-        await panel.getByTestId('positions-toggle-table').click();
-        const table = panel.getByTestId('exposure-table');
-        await expect(table.getByTestId('dt-header-pnl')).toBeVisible({timeout: 10_000});
-        await revealColumn(page, panel, table, 'pmc');
-        const cell = (assetId: number, brokerId: number, columnId: string) => table.locator(`tbody tr[data-row-id="${assetId}-${brokerId}"] td[data-column-id="${columnId}"]`);
-        for (const columnId of COST_COLUMNS) {
-            await expect(cell(assetT, brokerB, columnId), `${columnId} of the units transferred to B`).toHaveText(UNKNOWN);
-            await expect(cell(assetJ, brokerB, columnId), `${columnId} of the units adjusted in at B`).toHaveText(UNKNOWN);
-            await expect(cell(assetT, brokerA, columnId), `${columnId} of the units A paid for`).toHaveText(/\d/);
-        }
-
-        // 4. The lots panel of T, opened by the `asset` parameter: the same warning, from the same rows.
+        // 4. The lots panel of T, opened by the `asset` parameter: the same warning, from the same rows. The URL opens
+        //    the lot detail alone (Y5-2): the positions panel is not on the page until «← Portfolio» is pressed (step 3).
         const lotsPanel = page.getByTestId('lots-analysis-panel');
+        const panel = page.getByTestId('positions-panel');
         await expect(lotsPanel).toBeVisible({timeout: 15_000});
+        await expect(panel, 'the lot detail replaces the portfolio view: no positions panel beside it').toHaveCount(0);
         const lots = await jsonFrom<LotsBody>(lotsResponse, 'lots analysis of the transferred asset');
         const lotIssues = (lots.data_quality?.issues ?? []).filter((issue) => issue.code === 'MISSING_COST_BASIS');
         // The analysis covers one asset of this test's own: one issue is a count it created.
@@ -386,6 +374,24 @@ test.describe('MISSING_COST_BASIS from legacy rows — dashboard (item 22)', () 
         const lotBanner = lotsPanel.getByTestId('lot-data-quality-banner');
         await expandStrict(lotBanner.getByTestId('lot-data-quality-toggle'));
         await expect(lotBanner.getByTestId('lot-data-quality-issue-MISSING_COST_BASIS')).toBeVisible();
+
+        // 3. The positions, holdings × table (both controls are setters, not toggles). The lot detail replaced the
+        //    portfolio view (Y5-2): «← Portfolio» brings the positions panel back, and the lots panel goes.
+        await page.getByTestId('positions-back-to-portfolio').click();
+        await expect(lotsPanel).toBeHidden({timeout: 15_000});
+        await expect(panel).toBeVisible({timeout: 15_000});
+        await expect(panel).toHaveAttribute('data-busy', 'false', {timeout: 25_000});
+        await panel.getByTestId('positions-toggle-holdings').click();
+        await panel.getByTestId('positions-toggle-table').click();
+        const table = panel.getByTestId('exposure-table');
+        await expect(table.getByTestId('dt-header-pnl')).toBeVisible({timeout: 10_000});
+        await revealColumn(page, panel, table, 'pmc');
+        const cell = (assetId: number, brokerId: number, columnId: string) => table.locator(`tbody tr[data-row-id="${assetId}-${brokerId}"] td[data-column-id="${columnId}"]`);
+        for (const columnId of COST_COLUMNS) {
+            await expect(cell(assetT, brokerB, columnId), `${columnId} of the units transferred to B`).toHaveText(UNKNOWN);
+            await expect(cell(assetJ, brokerB, columnId), `${columnId} of the units adjusted in at B`).toHaveText(UNKNOWN);
+            await expect(cell(assetT, brokerA, columnId), `${columnId} of the units A paid for`).toHaveText(/\d/);
+        }
 
         // 5. The adjusted asset's link opens its page.
         await expandStrict(banner.getByTestId('data-quality-toggle'));

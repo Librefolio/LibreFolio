@@ -297,6 +297,16 @@ async function analyzeLots(page: Page, rowId: string): Promise<Locator> {
     return panel;
 }
 
+/**
+ * «← Portfolio»: the lot detail replaces the portfolio view (Y5-2), so the button takes the lots panel off the page and puts
+ * the positions panel back, with no wait on the panel's own settled state (a refresh may be held on purpose). Ends on both facts.
+ */
+async function backToPortfolio(page: Page): Promise<void> {
+    await page.getByTestId('positions-back-to-portfolio').click();
+    await expect(page.getByTestId('lots-analysis-panel')).toBeHidden({timeout: PAGE_TIMEOUT});
+    await expect(page.getByTestId('positions-panel')).toBeVisible({timeout: PAGE_TIMEOUT});
+}
+
 /** Leaves the Dashboard through the sidebar and waits for Transactions to be the page. */
 async function goToTransactions(page: Page): Promise<void> {
     await page.getByTestId('nav-transactions').click();
@@ -411,6 +421,10 @@ test.describe('Dashboard page cache (R2 / N, phase 1)', () => {
             const before = mark(traffic);
             await page.getByTestId('asset-detail-back-btn').click();
             await expect(page.getByTestId('dashboard-positions-tab'), 'the ‹ arrow did not return to the Positions tab').toBeVisible({timeout: PAGE_TIMEOUT});
+            // The ‹ arrow lands on the lot detail the user came from (the URL keeps `asset`); «← Portfolio» is one more step to the table (Y5-2).
+            await expect(page.getByTestId('lots-analysis-panel'), 'the ‹ arrow did not return to the lot detail').toBeVisible({timeout: PAGE_TIMEOUT});
+            await expect(page.getByTestId('positions-panel'), 'the lot detail replaces the portfolio view: no positions panel beside it').toHaveCount(0);
+            await backToPortfolio(page);
 
             // While the refresh is held: the cached Performance rows, not a skeleton…
             await expect(page.getByTestId('contribution-table').locator(`tbody tr[data-row-id="${rowId}"]`), 'the Performance table shows a skeleton while its refresh is held, instead of the rows it had').toBeVisible({timeout: 10_000});
@@ -456,16 +470,21 @@ test.describe('Dashboard page cache (R2 / N, phase 1)', () => {
             await analyzeLots(page, rowId);
             await expect(page).toHaveURL(new RegExp(`[?&]asset=${assetId}(?:&|$)`));
 
-            // Out through the sidebar, back with the browser's own Back.
+            // Out through the sidebar, back with the browser's own Back: it lands on the lot detail, which replaces the portfolio view (Y5-2).
             await goToTransactions(page);
             const before = mark(traffic);
             await page.goBack();
             await expect(page.getByTestId('dashboard-positions-tab'), 'Back did not return to the Positions tab').toBeVisible({timeout: PAGE_TIMEOUT});
             await waitForSettled(dashboard(page), PAGE_TIMEOUT);
-            await waitForSettled(page.getByTestId('positions-panel'), PAGE_TIMEOUT);
             const lotsPanel = page.getByTestId('lots-analysis-panel');
             await expect(lotsPanel).toBeVisible({timeout: PAGE_TIMEOUT});
             await expect(lotsPanel.getByTestId('lots-analysis-panel-loading')).toHaveCount(0, {timeout: PAGE_TIMEOUT});
+            await expect(page.getByTestId('positions-panel'), 'the lot detail replaces the portfolio view: no positions panel beside it').toHaveCount(0);
+
+            // «← Portfolio»: the Performance table comes back (the view is remembered) and asks, if at all, only for the owned brokers.
+            await backToPortfolio(page);
+            await waitForSettled(page.getByTestId('positions-panel'), PAGE_TIMEOUT);
+            await expect(page.getByTestId('contribution-table')).toBeVisible({timeout: PAGE_TIMEOUT});
 
             // Owned now or when the test began: a neighbour may create or delete a broker of this user meanwhile.
             const allowed = new Set([...ownedBefore, ...(await ownedBrokerIds(page))]);
