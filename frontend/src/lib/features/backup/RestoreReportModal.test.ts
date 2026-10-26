@@ -102,7 +102,7 @@ vi.mock('$lib/api', () => {
 
 type GeneratedStageReport = z.infer<typeof schemas.RestoreStageReport>;
 /** L3: the two warnings of the accounts, written out until the client is generated again. */
-type Warning = GeneratedStageReport['warnings'][number] | 'credentials_from_backup' | 'confirming_account_not_in_backup';
+type Warning = GeneratedStageReport['warnings'][number] | 'credentials_from_backup' | 'confirming_account_not_in_backup' | 'users_over_limit';
 type RestoreStageReport = Omit<GeneratedStageReport, 'warnings'> & {warnings: Warning[]};
 type Difference = RestoreStageReport['control_totals_differences'][number];
 
@@ -835,5 +835,145 @@ describe('B5-1b — RestoreReportModal: the owner to choose (managed)', () => {
         await view.rerender({open: true, report: answer, busy: true, random: view.random, onConfirm: view.onConfirm, onDrop: view.onDrop, onClose: view.onClose});
 
         expect(within(ownerModal()).getByTestId('owner-choice-confirm')).toBeDisabled();
+    });
+});
+
+// =====================================================================================================================
+// B5-1k2 — a backup with more active accounts than the instance accepts: a notice before the confirmation, no refusal
+// =====================================================================================================================
+
+/*
+ * The contract (`B-5-1k2-contratto.md`, «Frontend»):
+ *   - `RestoreReportModal` draws a notice of its own, `restore-users-over-limit`, when `report.users_over_limit > 0`, worded by
+ *     `backup.restore.report.usersOverLimit` with the values `{active, limit}` (from `users_active` and `users_limit`). Absent
+ *     otherwise: the fields missing (a report of before the client was generated), 0, or no limit;
+ *   - the code `users_over_limit` of `warnings` is not a line of the warnings box (`WARNINGS_SHOWN_APART`);
+ *   - the confirmation does not change: the word typed → the owner's choice, if the report has one → `onConfirm(ownerUserId)`.
+ *     No step more, no second argument.
+ *
+ * The translator of this file renders a key as itself followed by its values as JSON, so the values are read, never a
+ * sentence. Red today: the notice does not exist, and the code, unknown to `WARNINGS_SHOWN_APART`, is drawn as a line of
+ * the warnings box under the unknown fallback.
+ */
+
+type UsersFields = {users_active: number; users_limit: number | null; users_over_limit: number};
+
+const OVER_LIMIT: UsersFields = {users_active: 5, users_limit: 3, users_over_limit: 2};
+const USERS_OVER_LIMIT = 'users_over_limit';
+const USERS_KEY = 'backup.restore.report.usersOverLimit';
+
+const noticeOf = () => screen.queryByTestId('restore-users-over-limit');
+
+/** The values the translator was given for the notice: `key {json}` → the json. */
+function noticeValues(): unknown {
+    const notice = screen.getByTestId('restore-users-over-limit');
+    const text = (notice.textContent ?? '').trim();
+    expect(text, 'the notice is worded by backup.restore.report.usersOverLimit').toContain(USERS_KEY);
+    return JSON.parse(text.slice(text.indexOf('{', text.indexOf(USERS_KEY))));
+}
+
+const overLimit = (extra: Partial<RestoreStageReport & ReportB4Fields> = {}, fields: Partial<UsersFields> = {}) => report({...OVER_LIMIT, ...fields, warnings: [USERS_OVER_LIMIT, CREDENTIALS], ...extra} as Partial<RestoreStageReport & ReportB4Fields>);
+
+describe('B5-1k2 — RestoreReportModal: the notice of too many accounts', () => {
+    it('users_over_limit > 0: restore-users-over-limit, worded by backup.restore.report.usersOverLimit with {active, limit}', () => {
+        mount(overLimit());
+
+        expect(noticeOf(), 'the notice is not drawn').toBeInTheDocument();
+        expect(noticeValues()).toEqual({active: 5, limit: 3});
+        expect(i18n.asked).toContain(USERS_KEY);
+    });
+
+    it('the values follow the report: users_active and users_limit, not users_over_limit', () => {
+        mount(overLimit({}, {users_active: 12, users_limit: 10, users_over_limit: 2}));
+
+        expect(noticeValues()).toEqual({active: 12, limit: 10});
+    });
+
+    it.each<[string, () => RestoreStageReport]>([
+        ['the fields absent (a report of before)', () => report()],
+        ['users_over_limit 0 (at the limit)', () => report({users_active: 3, users_limit: 3, users_over_limit: 0} as Partial<RestoreStageReport & ReportB4Fields>)],
+        ['no limit (null)', () => report({users_active: 9, users_limit: null, users_over_limit: 0} as Partial<RestoreStageReport & ReportB4Fields>)],
+    ])('%s: no notice', (_case, answer) => {
+        // The presence barrier: the same modal does draw the notice over the limit.
+        const control = mount(overLimit());
+        expect(noticeOf(), 'barrier: the notice is drawn over the limit').toBeInTheDocument();
+        control.unmount();
+        i18n.asked.length = 0; // the barrier asked the key; only what the next mount asks counts
+
+        mount(answer());
+
+        expect(noticeOf()).toBeNull();
+        expect(i18n.asked, 'a key asked for a notice that is not drawn').not.toContain(USERS_KEY);
+    });
+
+    it('the code is not a line of the warnings box: alone it draws no box; with another warning the box lists the other only', () => {
+        const alone = mount(overLimit());
+        expect(noticeOf(), 'barrier: the notice is drawn').toBeInTheDocument();
+        expect(within(screen.getByTestId('restore-report')).queryByTestId('restore-report-warnings'), 'a box for a warning drawn apart').toBeNull();
+        alone.unmount();
+
+        mount(overLimit({warnings: ['rows_changed', USERS_OVER_LIMIT, CREDENTIALS]}));
+
+        const box = within(screen.getByTestId('restore-report')).getByTestId('restore-report-warnings');
+        expect(
+            within(box)
+                .getAllByTestId('restore-report-warning')
+                .map((line) => line.getAttribute('data-warning')),
+        ).toEqual(['rows_changed']);
+        expect(screen.getByTestId('restore-report').querySelector(`[data-warning="${USERS_OVER_LIMIT}"]`)).toBeNull();
+        expect(i18n.asked, 'the code was drawn as the unknown warning').not.toContain('backup.restore.report.warning.unknown');
+    });
+});
+
+describe('B5-1k2 — RestoreReportModal: the confirmation is the one of before', () => {
+    it('no owner to choose: the word typed, restore-confirm → onConfirm(null) once, with no argument more, and no step in between', async () => {
+        const {onConfirm} = mount(overLimit());
+        expect(noticeOf(), 'barrier: the notice is drawn').toBeInTheDocument();
+
+        await typeAndConfirm();
+
+        expect(onConfirm).toHaveBeenCalledTimes(1);
+        expect(onConfirm).toHaveBeenCalledWith(null);
+        expect(screen.queryByTestId('owner-choice-modal')).toBeNull();
+        expect(screen.queryByTestId('restore-trim-modal')).toBeNull();
+    });
+
+    it('Enter in the field confirms as before', async () => {
+        const {onConfirm} = mount(overLimit());
+        await type('violet');
+        expect(noticeOf(), 'barrier: the notice is drawn').toBeInTheDocument();
+
+        await fireEvent.keyDown(field(), {key: 'Enter'});
+
+        expect(onConfirm).toHaveBeenCalledTimes(1);
+        expect(onConfirm).toHaveBeenCalledWith(null);
+    });
+
+    it('the word rule is untouched: nothing typed, or another word, keeps restore-confirm disabled whatever the notice says', async () => {
+        const {onConfirm} = mount(overLimit());
+        expect(noticeOf(), 'barrier: the notice is drawn').toBeInTheDocument();
+
+        expect(confirmButton()).toBeDisabled();
+        await type('garden');
+        expect(confirmButton()).toBeDisabled();
+        await fireEvent.click(confirmButton());
+
+        expect(onConfirm).not.toHaveBeenCalled();
+    });
+
+    it('with an owner to choose (managed): the word typed opens the owner modal, its confirm calls onConfirm(id) once', async () => {
+        const {onConfirm} = mount(overLimit({owner_choice: ownerChoice()}));
+        expect(noticeOf(), 'barrier: the notice is drawn').toBeInTheDocument();
+
+        await typeAndConfirm();
+
+        expect(onConfirm, 'confirmed before the owner was chosen').not.toHaveBeenCalled();
+        expect(screen.getByTestId('owner-choice-modal')).toBeInTheDocument();
+        expect(screen.queryByTestId('restore-trim-modal')).toBeNull();
+        await fireEvent.click(option(ADMIN_NO_EMAIL.user_id));
+        await fireEvent.click(within(ownerModal()).getByTestId('owner-choice-confirm'));
+
+        expect(onConfirm).toHaveBeenCalledTimes(1);
+        expect(onConfirm).toHaveBeenCalledWith(ADMIN_NO_EMAIL.user_id);
     });
 });

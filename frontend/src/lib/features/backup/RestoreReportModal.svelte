@@ -46,6 +46,8 @@
     // report missing from the backup is a red notice of its own. Neither is a line of the warnings box.
     const listedWarnings = $derived(report.warnings.filter((warning) => !WARNINGS_SHOWN_APART.has(warning)));
     const ownAccountMissing = $derived(report.warnings.includes('confirming_account_not_in_backup'));
+    // B5-1k2: more active accounts than the instance accepts is said, never refused: the administrator chooses at the first sign-in.
+    const usersOverLimit = $derived((report.users_over_limit ?? 0) > 0);
 
     // B5-1: on a managed instance the confirmation names the backup's account that becomes the owner's. Offered: the one
     // with the owner's address when there is one, otherwise the backup's active administrators.
@@ -178,6 +180,13 @@
             <p class="flex items-start gap-2 rounded-lg border border-lf-danger-line bg-lf-danger-soft p-3 text-sm text-lf-danger-on-soft" role="alert" data-testid="restore-report-own-account">
                 <ShieldAlert class="mt-0.5 shrink-0" size={16} aria-hidden="true" />
                 <span>{$_('backup.restore.report.ownAccountMissing')}</span>
+            </p>
+        {/if}
+
+        {#if usersOverLimit}
+            <p class="flex items-start gap-2 rounded-lg border border-lf-warning-line bg-lf-warning-soft p-3 text-sm text-lf-warning-on-soft" role="note" data-testid="restore-users-over-limit">
+                <Users class="mt-0.5 shrink-0" size={16} aria-hidden="true" />
+                <span>{$_('backup.restore.report.usersOverLimit', {values: {active: report.users_active ?? 0, limit: report.users_limit ?? null}})}</span>
             </p>
         {/if}
 
