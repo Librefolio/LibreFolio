@@ -115,6 +115,23 @@ Under test, in ``backend/app/services/platform/instance_backup/``:
     /backup/restore/stage/{stage_id}`` (its route function, called directly), answers a finished check whose report is
     a folder, ``done``, without its report, with one warning «A finished restore check has no readable report» naming
     its stage: never a 500.
+(q) Lot B5-1, the owner's candidates (interface ``B-b51-interface.md`` §1; written RED before it): every check names,
+    in ``StagingReport.owner_candidates`` (``staging.OwnerCandidate``: ``user_id``, ``username``, ``email``,
+    ``is_superuser``, ``is_active``), the copy's active administrators and the account whose email is the configured
+    owner's (``LIBREFOLIO_ADMIN_EMAIL``, A–Z case aside, whatever its role or state), ordered by username: an inactive
+    administrator and a plain user are not candidates. Unset, or not an address: the active administrators only, the
+    check never raising for it. An owner email holding a quote or SQL-like text is matched as a value (a parameter,
+    never SQL built from it): the account holding it found, nobody else. ``report.json`` keeps the candidates and
+    ``read_report`` gives them back; a report written before B5-1 (no key) reads ``[]``. No log line of the check holds
+    a candidate's email or the configured one. The owner's variables are this process's environment, set per test.
+(r) Lot B5-1, security addendum (interface ``B-b51-interface.md`` §7.1; written RED before it): ``StagingReport`` gains
+    ``owner_email_checked`` (the address ``configured_owner_email()`` gave the check; ``None`` unset or not an address)
+    and ``owner_conflicts`` (codes, sorted, unique: ``duplicate_email``, ``duplicate_username``,
+    ``address_is_a_username``), both kept in ``report.json``, a report written before reading ``None`` and ``[]``. Its
+    archives are crafted backups (``crafted_backup``): ``ux_users_email_lower`` dropped before two accounts share an
+    address in two cases; ``users`` rebuilt (``users_loosened``) so that ``id`` holds text and ``username`` NULL — an
+    account row no account can be, which fails the check ``database_damaged``. No log line holds an address or a
+    username.
 
 Real databases: two, made once for the module by ``alembic upgrade`` in a process of their own (at the head, and at
 ``OLDER``), then copied for every data directory and given accounts by SQL. Two more ``alembic`` processes
@@ -3967,3 +3984,542 @@ def test_the_view_of_a_finished_check_whose_report_is_a_folder_answers_it_withou
     warned = [(event.get("log_level"), event.get("event"), event.get("stage_id")) for event in events if event.get("event") != ROUTE_CANARY and event.get("log_level") in ("warning", "error", "critical")]
     assert warned == [("warning", NO_READABLE_REPORT, checked.stage_id)], f"one warning, naming the check's stage: {warned}"
     print_success("a report that is a folder: the check answered without it, one warning")
+
+
+# =============================================================================
+# (q) Lot B5-1: the owner's candidates
+# =============================================================================
+#
+# In the ``managed`` profile, a restore confirmed by an administrator names the owner's account (A's ``assign_owner_and_send
+# _reset`` then gives it the owner's email, a password nobody knows and a reset link). The check offers the choice: the
+# copy's active administrators, and the account that already holds the owner's email, which the choice must then be.
+
+#: The variables of the initial administrator (F02), the owner's in the ``managed`` profile; only the email matters here.
+OWNER_EMAIL_VARIABLE = "LIBREFOLIO_ADMIN_EMAIL"
+OWNER_SIDE_VARIABLES = ("LIBREFOLIO_ADMIN_USERNAME", "LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN", "LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN_FILE")
+#: The owner's email as the operator writes it; the copy holds the same address in another A–Z case.
+OWNER_EMAIL = "Owner.B51@Example.COM"
+OWNER_EMAIL_STORED = "OWNER.b51@EXAMPLE.com"
+#: The accounts of (q)'s backups: (username, email, is_active, is_superuser).
+OWNER_ACCOUNTS = (
+    ("zoe_admin", "zoe.b51@example.com", 1, 1),
+    ("bob_user", "bob.b51@example.com", 1, 0),
+    ("olga_former_admin", "olga.b51@example.com", 0, 1),
+    ("owen_user", OWNER_EMAIL_STORED, 1, 0),
+    ("ada_admin", "ada.b51@example.com", 1, 1),
+)
+#: Who a check names, with the owner's email set and without it (or with one that is no address).
+CANDIDATES_WITH_OWNER = ["ada_admin", "owen_user", "zoe_admin"]
+CANDIDATES_WITHOUT_OWNER = ["ada_admin", "zoe_admin"]
+#: B5-1j: a candidate also says whether the copy marks it as the instance's owner (``users.is_instance_owner``), the hint
+#: ``apply.pick_owner`` reads after a restore confirmed from the command line or the hosting panel.
+CANDIDATE_FIELDS = ("user_id", "username", "email", "is_superuser", "is_active", "is_instance_owner")
+
+
+def owner_email_is(monkeypatch: pytest.MonkeyPatch, value: str | None) -> None:
+    """``LIBREFOLIO_ADMIN_EMAIL`` set to ``value`` (``None``: unset) in this process, the other F02 variables unset, so
+    that ``admin_bootstrap_config()`` reads the email alone."""
+    for name in OWNER_SIDE_VARIABLES:
+        monkeypatch.delenv(name, raising=False)
+    if value is None:
+        monkeypatch.delenv(OWNER_EMAIL_VARIABLE, raising=False)
+    else:
+        monkeypatch.setenv(OWNER_EMAIL_VARIABLE, value)
+
+
+def backup_with_accounts(tmp_path: Path, databases: Databases, accounts, *, flagged: tuple[str, ...] = ()) -> tuple[BuiltArchive, dict[str, dict[str, Any]]]:
+    """An archive at the head whose accounts are ``accounts`` (their emails as given), and each account as a candidate
+    would describe it, by username: its id in the database, its email, its role and state as booleans, and whether the
+    backup's author marked it as the instance's owner (``flagged``: the usernames, at most one: a partial unique index)."""
+    data = make_data_dir(tmp_path / "data", databases.head, accounts=())
+    database = data / DATABASE_ENTRY
+    with closing(sqlite3.connect(database)) as conn, conn:
+        conn.executemany(INSERT_ACCOUNT, [(name, email, "$argon2id$v=19$not-a-real-hash", active, admin, CREATED, CREATED) for name, email, active, admin in accounts])
+        conn.executemany("UPDATE users SET is_instance_owner = 1 WHERE username = ?", [(name,) for name in flagged])
+    described = {
+        name: {"user_id": user_id, "username": name, "email": email, "is_superuser": bool(admin), "is_active": bool(active), "is_instance_owner": bool(marked)}
+        for user_id, name, email, active, admin, marked in rows_of(database, "SELECT id, username, email, is_active, is_superuser, is_instance_owner FROM users")
+    }
+    assert sorted(described) == sorted(entry[0] for entry in accounts), f"precondition: the backup holds exactly these accounts: {sorted(described)}"
+    return build_into(data, tmp_path / "work"), described
+
+
+def candidates_of(report: StagingReport) -> list[dict[str, Any]]:
+    """The report's ``owner_candidates``, each as a dict of its fields; before B5-1, a failure that says so."""
+    found = getattr(report, "owner_candidates", None)
+    if found is None:
+        pytest.fail("[new] B5-1: StagingReport has no owner_candidates yet (interface §1)", pytrace=False)
+    return [candidate.model_dump() if hasattr(candidate, "model_dump") else dict(candidate) for candidate in found]
+
+
+def expected_candidates(described: dict[str, dict[str, Any]], names: list[str]) -> list[dict[str, Any]]:
+    return [described[name] for name in names]
+
+
+@pytest.mark.parametrize(
+    ("configured", "names"),
+    [
+        pytest.param(OWNER_EMAIL, CANDIDATES_WITH_OWNER, id="owner-email-set"),
+        pytest.param(None, CANDIDATES_WITHOUT_OWNER, id="owner-email-unset"),
+        pytest.param("not an address", CANDIDATES_WITHOUT_OWNER, id="owner-email-not-an-address"),
+    ],
+)
+def test_the_owner_s_candidates_are_the_active_administrators_and_the_account_with_the_owner_s_email(instance, databases, tmp_path, monkeypatch, configured, names):
+    """(q) B5-1: two active administrators, an inactive one, a plain user and a plain user holding the owner's email in
+    another A–Z case. Set, the owner's email adds its holder to the active administrators, by username; unset or not an
+    address, the active administrators only, the check ending as usual. Never the inactive administrator, never the
+    plain user; ``administrators`` unchanged."""
+    print_section("(q) B5-1 the owner's candidates")
+    owner_email_is(monkeypatch, configured)
+    archive, described = backup_with_accounts(tmp_path, databases, OWNER_ACCOUNTS)
+    report = stage_archive(archive.path, instance.root)
+    assert (report.administrators, report.restorable) == (ADMINISTRATORS, True), f"barrier: the check ends as usual, its administrators unchanged: {report.administrators}, {report.blockers}"
+    found = candidates_of(report)
+    assert [list(candidate) for candidate in found] == [list(CANDIDATE_FIELDS)] * len(found), f"each candidate has exactly {CANDIDATE_FIELDS}: {found}"
+    assert found == expected_candidates(described, names), f"{OWNER_EMAIL_VARIABLE}={configured!r}: the candidates are {names}, as the copy holds them: {found}"
+    print_success(f"{configured!r}: {[candidate['username'] for candidate in found]}")
+
+
+@pytest.mark.parametrize("owner_email", ["o'brien.b51@example.com", "x'OR'1'='1@example.com"], ids=["a-quote", "sql-like"])
+def test_an_owner_email_holding_a_quote_or_sql_is_matched_as_a_value(instance, databases, tmp_path, monkeypatch, owner_email):
+    """(q) B5-1: the owner's email is a parameter of the query, never SQL built from it. One holding a quote, or SQL-like
+    text, finds the account that holds it (stored in upper case) and nobody else: the plain user stays out, the check
+    never fails on it."""
+    owner_email_is(monkeypatch, owner_email)
+    accounts = (("ada_admin", "ada.b51@example.com", 1, 1), ("bob_user", "bob.b51@example.com", 1, 0), ("quinn_user", owner_email.upper(), 1, 0))
+    archive, described = backup_with_accounts(tmp_path, databases, accounts)
+    report = stage_archive(archive.path, instance.root)
+    assert candidates_of(report) == expected_candidates(described, ["ada_admin", "quinn_user"]), f"{owner_email!r}: ada and the account holding that address, not bob: {candidates_of(report)}"
+    print_success(f"{owner_email!r}: matched as a value")
+
+
+def test_the_candidates_are_kept_in_report_json_and_read_back(instance, databases, tmp_path, monkeypatch):
+    """(q) B5-1: ``report.json`` holds the candidates as the check returned them; ``read_report`` gives the same report."""
+    owner_email_is(monkeypatch, OWNER_EMAIL)
+    archive, described = backup_with_accounts(tmp_path, databases, OWNER_ACCOUNTS)
+    report = stage_archive(archive.path, instance.root)
+    written = json.loads((stage_dir(instance.root, report.stage_id) / STAGE_REPORT_FILE).read_text(encoding="utf-8"))
+    assert written.get("owner_candidates") == expected_candidates(described, CANDIDATES_WITH_OWNER), f"report.json keeps the candidates: {written.get('owner_candidates')}"
+    assert candidates_of(read_report(instance.root, report.stage_id)) == candidates_of(report), "read_report gives them back"
+    print_success("report.json: candidates kept, read back")
+
+
+def test_a_report_written_before_b5_1_reads_no_candidate(tmp_path, finished_check):
+    """(q) B5-1: a ``report.json`` without the key ``owner_candidates`` — every report written before B5-1 — still reads,
+    its candidates ``[]``."""
+    path = a_finished_check_in(tmp_path / "instance", finished_check)
+    record = json.loads(path.read_text(encoding="utf-8"))
+    record.pop("owner_candidates", None)
+    path.write_text(json.dumps(record), encoding="utf-8")
+    report = read_report(tmp_path / "instance", finished_check.report.stage_id)
+    assert candidates_of(report) == [], f"a report of before B5-1: no candidate: {candidates_of(report)}"
+    print_success("no key: []")
+
+
+def test_no_log_line_of_a_check_holds_an_email(instance, databases, tmp_path, monkeypatch):
+    """(q) B5-1: the check reads the emails of the copy and the owner's; no line it logs holds one of them, in any case.
+    Barrier: the candidates were read (the owner's holder among them)."""
+    owner_email_is(monkeypatch, OWNER_EMAIL)
+    archive, described = backup_with_accounts(tmp_path, databases, OWNER_ACCOUNTS)
+    with capture_logs() as events:
+        staging.logger.warning(ROUTE_CANARY)
+        assert any(event.get("event") == ROUTE_CANARY for event in events), f"barrier: staging's logger does not reach capture_logs: {events}"
+        report = stage_archive(archive.path, instance.root)
+    assert [candidate["username"] for candidate in candidates_of(report)] == CANDIDATES_WITH_OWNER, f"barrier: the candidates were read: {candidates_of(report)}"
+    lines = repr([event for event in events if event.get("event") != ROUTE_CANARY]).lower()
+    emails = {OWNER_EMAIL, *(entry["email"] for entry in described.values())}
+    shown = sorted(email for email in emails if email.lower() in lines)
+    assert shown == [], f"no log line holds an email: {shown}"
+    print_success(f"{len(events) - 1} log lines, no email")
+
+
+# -----------------------------------------------------------------------------
+# (q) Lot B5-1j: a candidate says whether the copy marks it as the instance's owner
+# -----------------------------------------------------------------------------
+#
+# After a restore confirmed from the command line or by the hosting panel on a managed instance, the code picks the
+# owner's account itself (``apply.pick_owner``): the account that holds the owner's address, else the one active
+# administrator the backup marks as its owner. So the check records, for each candidate, the copy's
+# ``users.is_instance_owner``. The candidate set is unchanged (active administrators, and the holder of the owner's
+# address whatever its role); a column a crafted or old copy does not have reads as not marked.
+
+
+def flag_of(candidates: list[Any], name: str) -> Any:
+    """``is_instance_owner`` of the candidate called ``name``; before B5-1j a marker that says so."""
+    found = [candidate for candidate in candidates if candidate.username == name]
+    assert len(found) == 1, f"precondition: {name} is one candidate: {[candidate.username for candidate in candidates]}"
+    return getattr(found[0], "is_instance_owner", "<no is_instance_owner field yet>")
+
+
+def owner_check_copy(tmp_path: Path, databases: Databases, *, flagged: tuple[str, ...] = (), column: bool = True) -> Path:
+    """A database of a copy at the head with ``OWNER_ACCOUNTS``, ``flagged`` marked as the instance's owner, and with
+    ``column`` False the way an old or crafted copy is: the owner column and its index dropped (after the marks)."""
+    database = tmp_path / "owner-check-copy.db"
+    shutil.copyfile(databases.head, database)
+    with closing(sqlite3.connect(database)) as conn, conn:
+        conn.executemany(INSERT_ACCOUNT, [(name, email, "$argon2id$v=19$not-a-real-hash", active, admin, CREATED, CREATED) for name, email, active, admin in OWNER_ACCOUNTS])
+        conn.executemany("UPDATE users SET is_instance_owner = 1 WHERE username = ?", [(name,) for name in flagged])
+        if not column:
+            conn.execute("DROP INDEX ux_users_instance_owner")
+            conn.execute("ALTER TABLE users DROP COLUMN is_instance_owner")
+    return database
+
+
+#: (the account marked in the copy): an active administrator; the plain user that holds the owner's address.
+MARKED_IN_THE_COPY = [pytest.param("ada_admin", id="an-active-administrator"), pytest.param("owen_user", id="the-holder-of-the-owner-s-address")]
+
+
+@pytest.mark.parametrize("marked", MARKED_IN_THE_COPY)
+def test_a_candidate_says_whether_the_copy_marks_it_as_the_instance_owner(tmp_path, databases, monkeypatch, marked):
+    """(q) B5-1j: ``_owner_check`` of a copy that marks one account as the instance's owner: that candidate says
+    ``is_instance_owner`` True and every other one False; the candidates are the same as before (the two active
+    administrators and the holder of the owner's address), an inactive administrator marked in the copy is still no
+    candidate. Red before B5-1j: a candidate has no such field."""
+    print_section("(q) B5-1j is_instance_owner of a candidate")
+    owner_email_is(monkeypatch, OWNER_EMAIL)
+    database = owner_check_copy(tmp_path, databases, flagged=(marked,))
+    _address, candidates, conflicts = staging._owner_check(database)
+    assert sorted(candidate.username for candidate in candidates) == CANDIDATES_WITH_OWNER, f"the candidates are those of B5-1: {[candidate.username for candidate in candidates]}"
+    assert conflicts == [], f"barrier: the copy holds no conflict: {conflicts}"
+    flags = {candidate.username: flag_of(candidates, candidate.username) for candidate in candidates}
+    assert flags == {name: name == marked for name in CANDIDATES_WITH_OWNER}, f"only {marked} is marked: {flags}"
+    print_success(f"{marked}: marked, the others not")
+
+
+def test_an_inactive_administrator_marked_in_the_copy_is_still_no_candidate(tmp_path, databases, monkeypatch):
+    """(q) B5-1j: the candidate set does not grow with the mark: a marked inactive administrator is no candidate, and every
+    candidate reads not marked."""
+    owner_email_is(monkeypatch, OWNER_EMAIL)
+    database = owner_check_copy(tmp_path, databases, flagged=("olga_former_admin",))
+    _address, candidates, _conflicts = staging._owner_check(database)
+    assert sorted(candidate.username for candidate in candidates) == CANDIDATES_WITH_OWNER, f"olga is no candidate: {[candidate.username for candidate in candidates]}"
+    assert {candidate.username: flag_of(candidates, candidate.username) for candidate in candidates} == dict.fromkeys(CANDIDATES_WITH_OWNER, False), "nobody the check names is marked"
+    print_success("a marked inactive administrator: no candidate")
+
+
+def test_a_copy_without_the_owner_column_reads_every_candidate_as_not_marked(tmp_path, databases, monkeypatch):
+    """(q) B5-1j: a copy whose ``users`` has no ``is_instance_owner`` column (an old or crafted backup): the check does not
+    fail and every candidate reads False. Barrier: the copy really has no such column."""
+    owner_email_is(monkeypatch, OWNER_EMAIL)
+    database = owner_check_copy(tmp_path, databases, column=False)
+    assert "is_instance_owner" not in [row[1] for row in rows_of(database, "PRAGMA table_info(users)")], "precondition: the copy has no owner column"
+    _address, candidates, _conflicts = staging._owner_check(database)
+    assert sorted(candidate.username for candidate in candidates) == CANDIDATES_WITH_OWNER, f"the same candidates: {[candidate.username for candidate in candidates]}"
+    assert {candidate.username: flag_of(candidates, candidate.username) for candidate in candidates} == dict.fromkeys(CANDIDATES_WITH_OWNER, False), "no column: nobody is marked"
+    print_success("no column: False")
+
+
+def test_the_mark_of_a_candidate_is_kept_in_report_json_and_read_back(instance, databases, tmp_path, monkeypatch):
+    """(q) B5-1j: a check of a backup that marks ``ada_admin``: ``report.json`` holds ``is_instance_owner`` for each
+    candidate (True for ada only) and ``read_report`` gives the same."""
+    owner_email_is(monkeypatch, OWNER_EMAIL)
+    archive, described = backup_with_accounts(tmp_path, databases, OWNER_ACCOUNTS, flagged=("ada_admin",))
+    report = stage_archive(archive.path, instance.root)
+    written = json.loads((stage_dir(instance.root, report.stage_id) / STAGE_REPORT_FILE).read_text(encoding="utf-8"))
+    assert written.get("owner_candidates") == expected_candidates(described, CANDIDATES_WITH_OWNER), f"report.json keeps the marks: {written.get('owner_candidates')}"
+    assert [candidate.get("is_instance_owner") for candidate in written["owner_candidates"]] == [True, False, False], f"ada (the first by username) is marked: {written['owner_candidates']}"
+    again = read_report(instance.root, report.stage_id)
+    assert {candidate.username: flag_of(again.owner_candidates, candidate.username) for candidate in again.owner_candidates} == {"ada_admin": True, "owen_user": False, "zoe_admin": False}, "read_report gives them back"
+    print_success("report.json: the mark kept, read back")
+
+
+def test_a_report_written_before_b5_1j_reads_every_candidate_as_not_marked(tmp_path, finished_check):
+    """(q) B5-1j: a ``report.json`` whose candidates have no ``is_instance_owner`` key — every report written before
+    B5-1j — still reads, each candidate False."""
+    path = a_finished_check_in(tmp_path / "instance", finished_check)
+    record = json.loads(path.read_text(encoding="utf-8"))
+    record["owner_candidates"] = [{"user_id": 4, "username": "ada_admin", "email": "ada.b51@example.com", "is_superuser": True, "is_active": True}]
+    path.write_text(json.dumps(record), encoding="utf-8")
+    report = read_report(tmp_path / "instance", finished_check.report.stage_id)
+    assert [candidate.username for candidate in report.owner_candidates] == ["ada_admin"], "barrier: the candidate is read"
+    assert flag_of(report.owner_candidates, "ada_admin") is False, f"no key: not marked: {flag_of(report.owner_candidates, 'ada_admin')!r}"
+    print_success("no key: False")
+
+
+# =============================================================================
+# (r) Lot B5-1, security addendum: the owner's conflicts and robust account rows
+# =============================================================================
+#
+# A backup an administrator uploads may have been crafted: its ``users`` table without the unique index on
+# ``lower(email)``, two accounts whose usernames differ only in case, an account whose username is the owner's address,
+# an id that is no integer, a username that is NULL. The check records the address it used (``owner_email_checked``) so
+# that the confirmation sees whether it changed, and the conflicts that would make A's assignment refuse
+# (``owner_conflicts``); a row no account can be fails the check ``database_damaged``.
+
+#: The index that keeps two accounts from sharing an address in two A–Z cases (migration 005).
+EMAIL_INDEX = "ux_users_email_lower"
+#: The codes of ``StagingReport.owner_conflicts`` (interface §7.1).
+CONFLICT_CODES = ("address_is_a_username", "duplicate_email", "duplicate_username")
+#: An active administrator, always there: the check ends as usual (restorable) whatever the other accounts.
+ADA_ROW = ("ada_admin", "ada.b51@example.com", 1, 1)
+#: The username a crafted account takes: the owner's address, in another A–Z case.
+ADDRESS_AS_USERNAME = "oWNER.b51@example.COM"
+#: What an id that is no integer, and a username that is no text, look like in a crafted copy.
+NOT_AN_INTEGER_ID = "b51-not-an-integer-id"
+#: The id given to a crafted row: ``users.id`` is no rowid alias any more in such a copy, so it is never assigned.
+CRAFTED_ID = 900
+INSERT_ACCOUNT_WITH_ID = "INSERT INTO users (id, username, email, hashed_password, is_active, is_superuser, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+
+
+def b51_report_field(report: StagingReport, name: str) -> Any:
+    """``report.<name>``, a field the security addendum adds; before it, a failure that says so."""
+    if name not in type(report).model_fields:
+        pytest.fail(f"[new] B5-1 §7.1: StagingReport has no {name} yet", pytrace=False)
+    return getattr(report, name)
+
+
+def users_loosened(database: Path) -> None:
+    """``users`` rebuilt as a crafted backup may hold it: ``id`` a ``NUMERIC PRIMARY KEY`` — no rowid alias, so it holds
+    text — and ``username`` without ``NOT NULL``; every other column, row and index as they were. Its DDL keeps the word
+    ``AUTOINCREMENT`` in a comment, so that the post-migration fix that adds it (``autoincrement.py``) leaves the table
+    alone: what is under test is the check's reading of the accounts, not that fix."""
+    with closing(sqlite3.connect(database)) as conn:
+        (ddl,) = conn.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'users'").fetchone()
+        loose, ids = re.subn(r"\bid\s+INTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT\b", "id NUMERIC PRIMARY KEY /* AUTOINCREMENT kept off by the test */", ddl, flags=re.IGNORECASE)
+        loose, names = re.subn(r"\busername(\s+VARCHAR\(50\))\s+NOT\s+NULL\b", r"username\1", loose, flags=re.IGNORECASE)
+        assert (ids, names) == (1, 1), f"precondition: users declares its id and username as migration 001 does: {ddl}"
+        indexes = [row[0] for row in conn.execute("SELECT sql FROM sqlite_master WHERE type = 'index' AND tbl_name = 'users' AND sql IS NOT NULL")]
+        conn.execute("PRAGMA foreign_keys = OFF")
+        conn.execute(re.sub(r"^CREATE TABLE users\b", "CREATE TABLE users_b51_loose", loose, count=1))
+        with conn:
+            conn.execute("INSERT INTO users_b51_loose SELECT * FROM users")
+        conn.execute("DROP TABLE users")
+        conn.execute("ALTER TABLE users_b51_loose RENAME TO users")
+        for index in indexes:
+            conn.execute(index)
+        conn.commit()
+
+
+#: A one-time link of an account, as the database stores it: only the hash of the token is kept (here a made-up one).
+INSERT_TOKEN = "INSERT INTO account_tokens (purpose, token_hash, user_id, grants_admin, created_at, expires_at, consumed_at) VALUES (?, ?, (SELECT id FROM users WHERE username = ?), 0, ?, ?, ?)"
+#: When a link planted by a test ends, and when its consumed ones were used.
+TOKEN_EXPIRES = "2099-01-01 00:00:00.000000"
+
+
+def add_tokens(database: Path, tokens) -> None:
+    """The one-time links ``tokens``, ``(username, purpose, consumed)``, planted for the accounts of ``database`` (not
+    expired, not revoked; ``consumed`` links used at ``CREATED``). Each gets a hash of its own."""
+    with closing(sqlite3.connect(database)) as conn, conn:
+        for number, (username, purpose, consumed) in enumerate(tokens, start=1):
+            token_hash = hashlib.sha256(f"b51g-{number}-{username}-{purpose}".encode()).hexdigest()
+            conn.execute(INSERT_TOKEN, (purpose, token_hash, username, CREATED, TOKEN_EXPIRES, CREATED if consumed else None))
+    held = rows_of(database, "SELECT count(*) FROM account_tokens")
+    assert held == [(len(tokens),)], f"precondition: the database had no link and now holds the ones given: {held}"
+
+
+def crafted_backup(tmp_path: Path, databases: Databases, accounts, *, drop_email_index: bool = False, loosen_users: bool = False, crafted_rows=(), tokens=()) -> BuiltArchive:
+    """An archive at the head whose accounts are ``accounts`` (``backup_with_accounts``'s shape, ids 1, 2, …), its
+    database first crafted: without ``EMAIL_INDEX``, ``users`` loosened (``users_loosened``); then ``crafted_rows``
+    added with their own id, ``(id, username, email, is_active, is_superuser)``; and the one-time links ``tokens``,
+    ``(username, purpose, consumed)``, planted (``add_tokens``)."""
+    data = make_data_dir(tmp_path / "data", databases.head, accounts=())
+    database = data / DATABASE_ENTRY
+    if drop_email_index:
+        assert rows_of(database, f"SELECT count(*) FROM sqlite_master WHERE type = 'index' AND name = '{EMAIL_INDEX}'") == [(1,)], f"precondition: the head database has {EMAIL_INDEX}"
+        execute(database, f"DROP INDEX {EMAIL_INDEX}")
+    if loosen_users:
+        users_loosened(database)
+    with closing(sqlite3.connect(database)) as conn, conn:
+        # Ids given: in a loosened ``users`` the id is no rowid alias, and SQLite would leave it NULL.
+        conn.executemany(INSERT_ACCOUNT_WITH_ID, [(row_id, name, email, "$argon2id$v=19$not-a-real-hash", active, admin, CREATED, CREATED) for row_id, (name, email, active, admin) in enumerate(accounts, start=1)])
+        conn.executemany(INSERT_ACCOUNT_WITH_ID, [(row_id, name, email, "$argon2id$v=19$not-a-real-hash", active, admin, CREATED, CREATED) for row_id, name, email, active, admin in crafted_rows])
+    held = rows_of(database, "SELECT count(*) FROM users")
+    assert held == [(len(accounts) + len(crafted_rows),)], f"precondition: the crafted database holds every account given: {held}"
+    if tokens:
+        add_tokens(database, tokens)
+    return build_into(data, tmp_path / "work")
+
+
+def nothing_personal_logged(events: list[dict[str, Any]], *texts: str | None) -> None:
+    """No log line holds one of ``texts`` (addresses, usernames), in any A–Z case; the canary left out."""
+    lines = repr([event for event in events if event.get("event") != ROUTE_CANARY]).lower()
+    shown = sorted({text for text in texts if text and text.lower() in lines})
+    assert shown == [], f"no log line holds an address or a username: {shown}"
+
+
+def checked_with_logs(archive: Path, root: Path) -> tuple[StagingReport, list[dict[str, Any]]]:
+    """``stage_archive`` with its log captured behind a barrier."""
+    with capture_logs() as events:
+        staging.logger.warning(ROUTE_CANARY)
+        assert any(event.get("event") == ROUTE_CANARY for event in events), f"barrier: staging's logger does not reach capture_logs: {events}"
+        report = stage_archive(archive, root)
+    return report, events
+
+
+@pytest.mark.parametrize(
+    ("configured", "recorded"),
+    [
+        pytest.param(OWNER_EMAIL, "configured", id="owner-email-set"),
+        pytest.param(None, None, id="owner-email-unset"),
+        pytest.param("not an address", None, id="owner-email-not-an-address"),
+    ],
+)
+def test_the_check_records_the_owner_s_address_it_used(instance, databases, tmp_path, monkeypatch, configured, recorded):
+    """(r) B5-1 §7.1: ``owner_email_checked`` is the owner's address the check used, as ``configured_owner_email()``
+    read it then; ``None`` when unset or not an address. ``report.json`` keeps it; ``read_report`` gives it back."""
+    print_section("(r) B5-1 §7.1 owner_email_checked")
+    from backend.app.services.platform.instance_backup.owner import configured_owner_email  # noqa: PLC0415
+
+    owner_email_is(monkeypatch, configured)
+    expected = configured_owner_email() if recorded == "configured" else None
+    assert (expected is not None) is (recorded == "configured"), f"barrier: the configuration reads {configured!r} as {expected!r}"
+    archive, _described = backup_with_accounts(tmp_path, databases, OWNER_ACCOUNTS)
+    report = stage_archive(archive.path, instance.root)
+    assert b51_report_field(report, "owner_email_checked") == expected, f"{configured!r}: the address used is {expected!r}: {report.owner_email_checked!r}"
+    written = json.loads((stage_dir(instance.root, report.stage_id) / STAGE_REPORT_FILE).read_text(encoding="utf-8"))
+    assert written.get("owner_email_checked", "<missing>") == expected, f"report.json keeps it: {written.get('owner_email_checked', '<missing>')!r}"
+    assert read_report(instance.root, report.stage_id).owner_email_checked == expected, "read_report gives it back"
+    print_success(f"{configured!r}: {expected!r}")
+
+
+#: (the owner's address, the accounts, the crafted rows, whether the email index is dropped, the conflicts expected).
+CONFLICT_CASES = [
+    pytest.param(OWNER_EMAIL, OWNER_ACCOUNTS, (), False, [], id="none"),
+    pytest.param(None, OWNER_ACCOUNTS, (), False, [], id="none-owner-email-unset"),
+    pytest.param(OWNER_EMAIL, (ADA_ROW, (ADDRESS_AS_USERNAME, OWNER_EMAIL_STORED, 1, 0)), (), False, [], id="the-owner-s-account-named-after-its-own-address"),
+    pytest.param(None, (ADA_ROW, ("owen_user", "owen.b51@example.com", 1, 0), (ADDRESS_AS_USERNAME, "other.b51@example.com", 1, 0)), (), False, [], id="an-address-as-username-owner-email-unset"),
+    pytest.param(OWNER_EMAIL, (ADA_ROW, ("dup_one", "Dup.B51@example.com", 1, 0), ("dup_two", "dup.b51@EXAMPLE.com", 1, 0)), (), True, ["duplicate_email"], id="duplicate-email"),
+    pytest.param(OWNER_EMAIL, (ADA_ROW, ("owen_user", OWNER_EMAIL_STORED, 1, 0), ("owen_again", OWNER_EMAIL.lower(), 1, 0)), (), True, ["duplicate_email"], id="duplicate-email-the-owner-s"),
+    pytest.param(OWNER_EMAIL, (ADA_ROW, ("bob_user", "bob.b51@example.com", 1, 0), ("Bob_User", "bob2.b51@example.com", 1, 0)), (), False, ["duplicate_username"], id="duplicate-username"),
+    pytest.param(OWNER_EMAIL, (ADA_ROW, ("owen_user", OWNER_EMAIL_STORED, 1, 0), (ADDRESS_AS_USERNAME, "other.b51@example.com", 1, 0)), (), False, ["address_is_a_username"], id="address-is-a-username"),
+    pytest.param(OWNER_EMAIL, (ADA_ROW, (ADDRESS_AS_USERNAME, "other.b51@example.com", 1, 0)), (), False, ["address_is_a_username"], id="address-is-a-username-nobody-holding-the-address"),
+    pytest.param(
+        OWNER_EMAIL,
+        (
+            ADA_ROW,
+            ("dup_one", "Dup.B51@example.com", 1, 0),
+            ("dup_two", "dup.b51@EXAMPLE.com", 1, 0),
+            ("dup_three", "DUP.B51@EXAMPLE.COM", 1, 0),
+            ("bob_user", "bob.b51@example.com", 1, 0),
+            ("BOB_USER", "bob2.b51@example.com", 1, 0),
+            (ADDRESS_AS_USERNAME, "other.b51@example.com", 1, 0),
+        ),
+        (),
+        True,
+        list(CONFLICT_CODES),
+        id="all-three-sorted-and-unique",
+    ),
+]
+
+
+@pytest.mark.parametrize(("configured", "accounts", "crafted", "drop_index", "conflicts"), CONFLICT_CASES)
+def test_the_check_names_the_owner_s_conflicts_of_the_copy(instance, databases, tmp_path, monkeypatch, configured, accounts, crafted, drop_index, conflicts):
+    """(r) B5-1 §7.1: ``owner_conflicts``, sorted and unique: ``duplicate_email`` (two accounts share ``lower(email)``:
+    a copy without ``ux_users_email_lower``), ``duplicate_username`` (two share ``lower(username)``),
+    ``address_is_a_username`` (the owner's address, when set, is the username, A–Z case aside, of an account other than
+    the one holding the address). None of them: ``[]``. The check ends as usual (the administrators read, restorable);
+    ``report.json`` keeps the codes; no log line holds an address or a username of the copy."""
+    print_section("(r) B5-1 §7.1 owner_conflicts")
+    owner_email_is(monkeypatch, configured)
+    archive = crafted_backup(tmp_path, databases, accounts, drop_email_index=drop_index, crafted_rows=crafted)
+    report, events = checked_with_logs(archive.path, instance.root)
+    assert ("ada_admin" in report.administrators, report.restorable) == (True, True), f"barrier: the check ends as usual: {report.administrators}, {report.blockers}"
+    assert b51_report_field(report, "owner_conflicts") == conflicts, f"the copy's conflicts are {conflicts}: {report.owner_conflicts}"
+    written = json.loads((stage_dir(instance.root, report.stage_id) / STAGE_REPORT_FILE).read_text(encoding="utf-8"))
+    assert written.get("owner_conflicts", "<missing>") == conflicts, f"report.json keeps them: {written.get('owner_conflicts', '<missing>')}"
+    nothing_personal_logged(events, configured, *(text for row in accounts for text in row[:2]))
+    print_success(f"{conflicts}")
+
+
+# -----------------------------------------------------------------------------
+# (r) Lot B5-1g: a pending administrator in the backup
+# -----------------------------------------------------------------------------
+#
+# Admin-bootstrap runs at the first start BEFORE ``restore-commit``: an inactive account with an admin-setup link nobody
+# used (an administrator waiting for its F02 setup, ``registration_service.pending_admin_filter``) takes the owner's
+# address, unless some account already holds it. A's assignment then fails with EMAIL_TAKEN, terminally. So the check
+# names it: ``pending_administrator``, in ``owner_conflicts``, when the owner's address is set, the copy has such an
+# account, and no account of the copy holds the owner's address (A–Z case aside).
+
+#: The administrator waiting for its setup: inactive, an administrator.
+PENDING_ROW = ("pend_admin", "pend.b51@example.com", 0, 1)
+#: Its setup link, unused; and used.
+SETUP_UNUSED = ("pend_admin", "admin_setup", False)
+SETUP_USED = ("pend_admin", "admin_setup", True)
+#: An account holding the owner's address, in another case.
+HOLDER_ROW = ("owen_user", OWNER_EMAIL_STORED, 1, 0)
+PENDING = "pending_administrator"
+
+#: (the owner's address, the accounts, the links, the conflicts expected). Red before B5-1g: the cases that expect
+#: ``pending_administrator``; every other is a case that is no conflict (green: the guards).
+PENDING_CASES = [
+    pytest.param(OWNER_EMAIL, (ADA_ROW, PENDING_ROW), [SETUP_UNUSED], [PENDING], id="pending-and-nobody-holds-the-address"),
+    pytest.param(OWNER_EMAIL, (ADA_ROW, PENDING_ROW, HOLDER_ROW), [SETUP_UNUSED], [], id="pending-but-another-account-holds-the-address"),
+    pytest.param(OWNER_EMAIL, (ADA_ROW, PENDING_ROW, ("owen_user", OWNER_EMAIL.upper(), 1, 0)), [SETUP_UNUSED], [], id="pending-but-another-holds-it-in-upper-case"),
+    pytest.param(OWNER_EMAIL, (ADA_ROW, ("pend_admin", OWNER_EMAIL_STORED, 0, 1)), [SETUP_UNUSED], [], id="the-pending-administrator-holds-the-address-itself"),
+    pytest.param(OWNER_EMAIL, (ADA_ROW, PENDING_ROW), [SETUP_USED], [], id="its-setup-link-was-used"),
+    pytest.param(OWNER_EMAIL, (ADA_ROW, PENDING_ROW), [SETUP_UNUSED, SETUP_USED], [], id="one-setup-link-used-and-one-not"),
+    pytest.param(OWNER_EMAIL, (ADA_ROW, PENDING_ROW, ("pend_admin_two", "pend2.b51@example.com", 0, 1)), [SETUP_UNUSED, ("pend_admin_two", "admin_setup", False)], [PENDING], id="two-pending-administrators-one-code"),
+    pytest.param(OWNER_EMAIL, (ADA_ROW, ("pend_admin", "pend.b51@example.com", 1, 1)), [SETUP_UNUSED], [], id="an-active-account-with-an-unused-setup-link"),
+    pytest.param(OWNER_EMAIL, (ADA_ROW, PENDING_ROW), [("pend_admin", "password_reset", False), ("pend_admin", "invite", False)], [], id="inactive-with-links-of-other-purposes"),
+    pytest.param(OWNER_EMAIL, (ADA_ROW, PENDING_ROW), [], [], id="inactive-without-any-link"),
+    pytest.param(None, (ADA_ROW, PENDING_ROW), [SETUP_UNUSED], [], id="the-owner-s-address-is-not-set"),
+    pytest.param(OWNER_EMAIL, (ADA_ROW, PENDING_ROW, ("Bob_User", "bob.b51@example.com", 1, 0), ("bob_user", "bob2.b51@example.com", 1, 0)), [SETUP_UNUSED], ["duplicate_username", PENDING], id="with-another-conflict-sorted"),
+]
+
+
+@pytest.mark.parametrize(("configured", "accounts", "tokens", "conflicts"), PENDING_CASES)
+def test_the_check_names_a_pending_administrator_that_would_take_the_owner_s_address(instance, databases, tmp_path, monkeypatch, configured, accounts, tokens, conflicts):
+    """(r) B5-1g: ``owner_conflicts`` holds ``pending_administrator`` exactly when the owner's address is set, an inactive
+    account of the copy has an admin-setup link and none of its admin-setup links was used, and no account of the copy
+    holds the owner's address (compared as SQLite's ``lower()``). Sorted and unique with the other codes. The check ends
+    as usual (restorable); ``report.json`` keeps the codes; no log line holds an address or a username."""
+    print_section("(r) B5-1g pending_administrator")
+    owner_email_is(monkeypatch, configured)
+    archive = crafted_backup(tmp_path, databases, accounts, drop_email_index=False, tokens=tokens, loosen_users=False)
+    report, events = checked_with_logs(archive.path, instance.root)
+    assert ("ada_admin" in report.administrators, report.restorable) == (True, True), f"barrier: the check ends as usual: {report.administrators}, {report.blockers}"
+    assert b51_report_field(report, "owner_conflicts") == conflicts, f"the copy's conflicts are {conflicts}: {report.owner_conflicts}"
+    written = json.loads((stage_dir(instance.root, report.stage_id) / STAGE_REPORT_FILE).read_text(encoding="utf-8"))
+    assert written.get("owner_conflicts", "<missing>") == conflicts, f"report.json keeps them: {written.get('owner_conflicts', '<missing>')}"
+    nothing_personal_logged(events, configured, *(text for row in accounts for text in row[:2]))
+    print_success(f"{conflicts}")
+
+
+def test_a_report_written_before_the_addendum_reads_no_conflict_and_no_address(tmp_path, finished_check):
+    """(r) B5-1 §7.1: a ``report.json`` without ``owner_email_checked`` and ``owner_conflicts`` still reads: ``None``
+    and ``[]`` (the confirmation then asks for a new check, §7.2)."""
+    path = a_finished_check_in(tmp_path / "instance", finished_check)
+    record = json.loads(path.read_text(encoding="utf-8"))
+    record.pop("owner_email_checked", None)
+    record.pop("owner_conflicts", None)
+    path.write_text(json.dumps(record), encoding="utf-8")
+    report = read_report(tmp_path / "instance", finished_check.report.stage_id)
+    assert (b51_report_field(report, "owner_email_checked"), b51_report_field(report, "owner_conflicts")) == (None, []), f"no key: None, []: {report.owner_email_checked!r}, {report.owner_conflicts}"
+    print_success("no keys: None, []")
+
+
+#: (the crafted row: id, username, email, is_active, is_superuser). Each in a copy whose ``users`` is loosened.
+DAMAGED_ROWS = [
+    pytest.param((NOT_AN_INTEGER_ID, "carl_admin", "carl.b51@example.com", 1, 1), id="an-administrator-whose-id-is-text"),
+    pytest.param((NOT_AN_INTEGER_ID, "carl_user", "carl.b51@example.com", 1, 0), id="a-plain-user-whose-id-is-text"),
+    pytest.param((CRAFTED_ID, None, "carl.b51@example.com", 1, 1), id="an-administrator-without-a-username"),
+    pytest.param((CRAFTED_ID, None, "carl.b51@example.com", 1, 0), id="a-plain-user-without-a-username"),
+    pytest.param((NOT_AN_INTEGER_ID, "carl_owner", OWNER_EMAIL_STORED, 1, 0), id="the-owner-s-address-holder-whose-id-is-text"),
+]
+
+
+@pytest.mark.parametrize("row", DAMAGED_ROWS)
+def test_an_account_row_no_account_can_be_fails_the_check_as_database_damaged(instance, databases, tmp_path, monkeypatch, row):
+    """(r) B5-1 §7.1: an account whose ``id`` is not an integer, or whose ``username`` is NULL — possible only in a
+    crafted copy (``users`` loosened) — fails the check ``database_damaged``, whatever the account's role and whatever
+    query meets it: never ``stage_failed``, never another exception. Nothing of the copy left; no log line holds an
+    address or a username. Barrier: the same copy without that row is checked as usual."""
+    print_section("(r) B5-1 §7.1 a damaged account row")
+    owner_email_is(monkeypatch, OWNER_EMAIL)
+    accounts = (ADA_ROW, ("bob_user", "bob.b51@example.com", 1, 0))
+    clean = crafted_backup(tmp_path / "clean", databases, accounts, loosen_users=True)
+    report = stage_archive(clean.path, instance.root)
+    assert report.restorable and report.administrators == ["ada_admin"], f"barrier: a loosened copy without the row is checked as usual: {report.administrators}, {report.blockers}"
+    remove_stage(instance.root, report.stage_id)
+    archive = crafted_backup(tmp_path / "crafted", databases, accounts, loosen_users=True, crafted_rows=(row,))
+    with capture_logs() as events:
+        staging.logger.warning(ROUTE_CANARY)
+        assert any(event.get("event") == ROUTE_CANARY for event in events), f"barrier: staging's logger does not reach capture_logs: {events}"
+        try:
+            error, _progress = refused(archive.path, instance)
+        except Exception as exc:  # noqa: BLE001 — reported as the failure: the check must answer a StagingError
+            pytest.fail(f"the check must refuse with database_damaged, not raise {type(exc).__name__}: {exc}", pytrace=False)
+    assert error.code == "database_damaged", f"refused database_damaged, not {error.code}: {error}"
+    nothing_personal_logged(events, OWNER_EMAIL, row[1], row[2], "ada_admin", "bob_user", "ada.b51@example.com", "bob.b51@example.com")
+    print_success(f"{row[0]!r}/{row[1]!r}: database_damaged")

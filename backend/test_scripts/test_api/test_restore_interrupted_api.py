@@ -2,7 +2,7 @@
 An unreadable restore state serves no data, through the API (LibreFolio 1.3, workstream H, lot B-33, the start's part).
 Developer decision (22/10, via the coordinator): while the state of the restore cannot be read, the instance serves no
 data; the web app shows «the restore stopped half way: call the administrator», and the administrator chooses with
-``./dev.py backup pending --recover`` (workstream B). D7 (developer, contract L3 §10 option A), the last lot of wave
+``./dev.py backup pending --recover previous`` (workstream B). D7 (developer, contract L3 §10 option A), the last lot of wave
 4: ``panel/status`` says it (200, ``restore.state == "unreadable"`` with its reason, instead of Q7's 500), and the
 panel's backup does not start in this state.
 

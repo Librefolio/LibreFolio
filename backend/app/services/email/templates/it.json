@@ -10,7 +10,12 @@
     "intro": "Abbiamo ricevuto una richiesta di reimpostare la password del tuo account su $instance.",
     "action": "Scegli una nuova password",
     "expiry": "Il link funziona una sola volta e scade tra $duration.",
-    "ignore": "Se non l'hai chiesto tu, ignora questa email: la tua password resta quella di prima."
+    "ignore": "Se non l'hai chiesto tu, ignora questa email: la tua password resta quella di prima.",
+    "restore_subject": "Scegli una nuova password per LibreFolio",
+    "restore_intro": "Il tuo account su $instance è stato ripristinato da un backup.",
+    "restore_note": "Per la tua sicurezza, la password è stata revocata dopo il ripristino. Usa il pulsante qui sotto per sceglierne una nuova.",
+    "restore_fallback": "Se il link è scaduto, scegli «Password dimenticata?» nella pagina di accesso, con questo indirizzo email, per ottenerne uno nuovo.",
+    "restore_unexpected": "Se non te lo aspettavi, contatta chi gestisce questo LibreFolio."
   },
   "invite": {
     "subject": "Un invito per LibreFolio",
@@ -44,5 +49,12 @@
     "subject": "L'indirizzo email del tuo account LibreFolio è cambiato",
     "intro": "L'indirizzo email del tuo account su $instance è stato cambiato. Questo messaggio va all'indirizzo che aveva prima.",
     "advice": "Se il cambio l'hai fatto tu, non devi fare niente. Se no, qualcuno potrebbe usare il tuo account: cambia subito la password, se riesci ancora ad accedere, e avvisa l'amministratore di $instance."
+  },
+  "email_change_confirmation": {
+    "subject": "Conferma il nuovo indirizzo email del tuo account amministratore di LibreFolio",
+    "intro": "Questo indirizzo email è stato indicato come indirizzo dell'account amministratore della tua istanza LibreFolio $instance. Conferma che è tuo per completare il cambio: finché non lo fai non cambia nulla e l'account mantiene il suo indirizzo attuale.",
+    "action": "Conferma questo indirizzo",
+    "expiry": "Il link funziona una sola volta e scade tra $duration. Dopo la conferma l'account accede con questo indirizzo e le sue sessioni aperte terminano.",
+    "ignore": "Se non aspettavi questa email puoi ignorarla: non cambia nulla."
   }
 }

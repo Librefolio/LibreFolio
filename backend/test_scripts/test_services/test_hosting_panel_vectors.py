@@ -3,7 +3,7 @@ H-61 checkpoint 2 · level L2 of the hosting panel (LibreFolio 1.3, workstream H
 documentation, checked by a test that reads them. The contract is H-61 CP2's, §6: «The vectors of the docs, checked by a
 test that reads them».
 
-Under test: the page ``mkdocs_src/docs/admin/hosting_providers.en.md``, the heading carrying the attribute
+Under test: the page ``mkdocs_src/docs/admin/hosting_panel_api.en.md``, the heading carrying the attribute
 ``{: #panel-api-test-vectors }``, and the first fenced block opened with ``json`` after it. A hosting provider that writes
 its own panel (not the one LibreFolio ships) is given that block to check its signer against: a published test key, a
 ticket, and what an instance answers to that ticket at several moments, in several scopes, for several public addresses.
@@ -76,7 +76,7 @@ from backend.test_scripts.test_utils import print_section, print_success
 #: The root of the repository: this file is ``backend/test_scripts/test_services/<name>.py``.
 REPO_ROOT = Path(__file__).resolve().parents[3]
 #: The page of the vectors, relative to the root, and the anchor of the heading they follow.
-PAGE = "mkdocs_src/docs/admin/hosting_providers.en.md"
+PAGE = "mkdocs_src/docs/admin/hosting_panel_api.en.md"
 ANCHOR_ID = "panel-api-test-vectors"
 ANCHOR = re.compile(r"\{:\s*#" + re.escape(ANCHOR_ID) + r"\s*\}")
 #: What the page says of itself when the block is not there: the same words for every test that needs it.

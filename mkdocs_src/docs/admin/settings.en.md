@@ -103,7 +103,7 @@ The **Registration** setting decides who can create an account:
   exists, the login page shows **Register here**, and the account it creates becomes the
   administrator. With `LIBREFOLIO_ADMIN_EMAIL`, LibreFolio creates that administrator itself at its
   first start, and nobody can register in its place: see
-  [The Initial Administrator](configuration.md#initial-admin).
+  [The Initial Administrator](configuration_accounts.md#initial-admin).
 - 🆕 A new instance starts **By invitation**. An instance upgraded from an earlier version keeps
   the mode it had: one that was **Open**, the earlier default, stays **Open** until you change it
   (**Reset to Default** proposes **By invitation**). Once everyone has an account, choose
@@ -116,10 +116,10 @@ The **Registration** setting decides who can create an account:
 - 💻 Whatever the mode, the [command line](cli_tools.md) can still create accounts with
   `user create`.
 - 📏 With a user limit, nobody can sign up without an invitation once the instance is full: see
-  [When the Instance Is Full](configuration.md#user-limit).
+  [When the Instance Is Full](configuration_accounts.md#user-limit).
 - 🔒 If the server's configuration sets `LIBREFOLIO_REGISTRATION`, that value decides: the field
   shows it, cannot be changed, and says *Set on the server by LIBREFOLIO_REGISTRATION: change it
-  there*. **Reset All to Defaults** leaves it alone. See [Accounts and Sign-ups](configuration.md#accounts).
+  there*. **Reset All to Defaults** leaves it alone. See [Accounts and Sign-ups](configuration_accounts.md#accounts).
 - ⬆️ This setting replaces the **Enable Registration** switch of earlier versions, and the upgrade
   keeps your choice: a switch that was on becomes **Open**, a switch that was off becomes **Closed**.
 
@@ -142,7 +142,7 @@ The **Registration** setting decides who can create an account:
 
     Or give LibreFolio `LIBREFOLIO_ADMIN_EMAIL` before its first start: it then creates the
     administrator itself, with a setup link for you, and nobody can register in its place
-    ([The Initial Administrator](configuration.md#initial-admin)).
+    ([The Initial Administrator](configuration_accounts.md#initial-admin)).
 
 ### 📢 The Open-Registration Warning {: #open-registration-warning }
 
@@ -155,7 +155,7 @@ finds it can create an account.*
 Its link, **Change who can sign up**, opens **Settings › Administration › Global Settings**, where
 this setting is. When `LIBREFOLIO_REGISTRATION` sets the mode on the server, the warning names that
 variable instead, and has no link: only the server's configuration can change the mode
-([Accounts and Sign-ups](configuration.md#accounts)).
+([Accounts and Sign-ups](configuration_accounts.md#accounts)).
 
 - 👑 Only administrators see it.
 - 🌐 Your browser decides, from the name or IP address in its address bar (the port does not
@@ -295,7 +295,7 @@ findings keep the order of this table.
 | Secrets set twice | ⚠️ A secret is set both directly and through its `_FILE` variable: the direct value wins | — |
 | Instance key | ❌ It cannot be used. ⚠️ Its folder or its file is open to other users | — |
 | Session cookie | ⚠️ `SESSION_COOKIE_SECURE=never`: the cookie also travels over plain HTTP | — |
-| Visitor's address | ⚠️ Since the start, requests came through a reverse proxy that LibreFolio does not trust: the limits per visitor's address do not apply to them. ℹ️ Since the start, forwarding headers from a public address were ignored. What to do: [The Visitor's Address](connection_checks.md#client-address) | — |
+| Visitor's address | ⚠️ Since the start, requests came through a reverse proxy that LibreFolio does not trust: the limits per visitor's address do not apply to them. ℹ️ Since the start, forwarding headers from a public address were ignored. What to do: [The Visitor's Address](connection_proxy.md#client-address) | — |
 | Frame protection | ⚠️ `LIBREFOLIO_FRAME_PROTECTION` is off in the `managed` profile: any site can show LibreFolio in a frame | — |
 | Report-only policy | ℹ️ `LIBREFOLIO_CSP_REPORT_ONLY` is off in the `managed` profile: browsers list nothing it would block | — |
 | Log level | ℹ️ `DEBUG` or `TRACE` | — |
@@ -310,7 +310,7 @@ findings keep the order of this table.
 | Links in emails | ℹ️ Email works, but `LIBREFOLIO_PUBLIC_URL` is not set. ⚠️ `LIBREFOLIO_PUBLIC_URL` cannot start a link | **Open the Email tab** |
 | Plugin secrets | ❌ Instance-wide plugin secrets cannot be read with the instance key | **Open the plugin settings**, to **Settings › Plugins** |
 | Open registration, checked by your browser | ⚠️ **Registration** is **Open**, and you reached LibreFolio at an address outside your local network, as for [the warning above the pages](#open-registration-warning) | **Change who can sign up**, to **Global Settings**. None when `LIBREFOLIO_REGISTRATION` sets the mode: the finding names that variable instead |
-| A blocked script, checked by your browser | ⚠️ A script that LibreFolio did not send, added by a proxy, a CDN or a browser extension, was blocked in this browser tab: the finding names its sources. It goes when you close the tab. Not fixed on the server, but in the proxy, the CDN or the extension: [A Script You Did Not Send](configuration.md#csp-blocked-script) | — |
+| A blocked script, checked by your browser | ⚠️ A script that LibreFolio did not send, added by a proxy, a CDN or a browser extension, was blocked in this browser tab: the finding names its sources. It goes when you close the tab. Not fixed on the server, but in the proxy, the CDN or the extension: [A Script You Did Not Send](configuration_security.md#csp-blocked-script) | — |
 
 Every row has a 📖 **Guide** button, passed checks included, that opens the page of this guide which
 explains that check, in a new tab and in your language when it is translated. A check that has no

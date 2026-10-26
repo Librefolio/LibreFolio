@@ -1157,7 +1157,19 @@ div.lf-screenshot-carousel-item.alloc-crop-container img.gallery-img {
     filter: none !important;
 }
 
+/* DOC-2: «search the other languages too», first in the result area of the search dialog */
+.lf-search-language {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.8rem;
+    font-size: 0.7rem;
+    color: var(--md-default-fg-color--light);
+    border-bottom: 0.05rem solid var(--md-default-fg-color--lightest);
+    cursor: pointer;
+}
 
-
-
-
+.lf-search-language input {
+    accent-color: var(--md-accent-fg-color);
+    cursor: pointer;
+}

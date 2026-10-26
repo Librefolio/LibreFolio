@@ -10,6 +10,7 @@ from typing import Annotated, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.api import account_protection
 from backend.app.api.v1.auth import deletion_preview_read, get_current_user
 from backend.app.api.v1.settings import require_admin
 from backend.app.db.models import AccountToken, AccountTokenPurpose, User
@@ -27,11 +28,15 @@ from backend.app.schemas.users import (
     InviteRead,
     LinkTokenResponse,
     OnboardingResetRequest,
+    OverLimitRead,
+    OverLimitResolveRequest,
+    OverLimitResolveResponse,
+    OverLimitUserRead,
     UserSearchItem,
     UserSearchResponse,
     UserUsageRead,
 )
-from backend.app.services.accounts import address_probe, registration_service, token_service, user_service
+from backend.app.services.accounts import address_probe, registration_service, token_service, user_limit_service, user_service
 from backend.app.services.accounts.onboarding_service import reset_onboarding_progress
 from backend.app.services.accounts.registration_service import RegistrationError
 from backend.app.services.accounts.user_service import search_users
@@ -104,12 +109,9 @@ def _admin_user_read(user: User, *, holds_place: bool = False, pending_setup: bo
     )
 
 
-def _protected(user: User) -> Optional[HTTPException]:
-    """409 ``ACCOUNT_PROTECTED`` when nobody may delete, deactivate or demote ``user``."""
-    reason = user_service.account_protection(user)
-    if reason is None:
-        return None
-    return HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error_code": "ACCOUNT_PROTECTED", "message": "This account cannot be deleted, deactivated or demoted", "reason": reason})
+def _protected(user: User, message: str = account_protection.CHANGE_MESSAGE) -> Optional[HTTPException]:
+    """409 ``ACCOUNT_PROTECTED`` when nobody may delete, deactivate or demote ``user``; ``message`` words it (the shared answer: ``api/account_protection.py``)."""
+    return account_protection.protection_refusal(user, message)
 
 
 def _user_not_found() -> HTTPException:
@@ -154,6 +156,39 @@ async def revoke_invite(invite_id: int, admin: Annotated[User, Depends(require_a
     await session.commit()
     logger.info("Invitation revoked by an administrator", invite_id=invite_id, admin_id=admin.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/over-limit", response_model=OverLimitRead, summary="The accounts over the plan, and who may stay (admin)")
+async def list_over_limit(admin: Annotated[User, Depends(require_admin)], session: AsyncSession = Depends(get_session_generator)) -> OverLimitRead:
+    """When the active accounts outnumber ``LIBREFOLIO_MAX_USERS``: the numbers and the active accounts to choose from
+    (who must stay is marked ``protected``). Otherwise ``over_limit`` is false and ``users`` is empty."""
+    choice = await user_limit_service.list_for_choice(session, admin)
+    return OverLimitRead(
+        over_limit=choice.over_limit,
+        active=choice.active,
+        max_users=choice.max_users,
+        live_invites=choice.live_invites,
+        waiting_accounts=choice.waiting_accounts,
+        max_keep=choice.max_keep,
+        users=[OverLimitUserRead(id=row.id, username=row.username, email=row.email, is_superuser=row.is_superuser, protected=row.protected, owned_brokers_alone=row.owned_brokers_alone) for row in choice.users],
+    )
+
+
+_OVER_LIMIT_REFUSALS = {"NOT_OVER_LIMIT": status.HTTP_409_CONFLICT}
+
+
+@router.post("/over-limit/resolve", response_model=OverLimitResolveResponse, summary="Choose who keeps the access when the accounts are over the plan (admin)")
+async def resolve_over_limit(request: OverLimitResolveRequest, admin: Annotated[User, Depends(require_admin)], session: AsyncSession = Depends(get_session_generator)) -> OverLimitResolveResponse:
+    """Keep the accounts of ``keep_user_ids``; deactivate every other active account (sessions end, nothing is deleted).
+    Live invitations are revoked only as far as the kept accounts need their places. All or nothing, in one transaction.
+
+    409 ``NOT_OVER_LIMIT``: the instance is not over its limit (another administrator chose first). 422 ``UNKNOWN_USER``,
+    ``TOO_MANY_KEPT``, ``PROTECTED_MISSING`` or ``NO_ADMIN_KEPT``: the choice breaks a rule, and nothing changed."""
+    try:
+        resolution = await user_limit_service.resolve(session, admin, request.keep_user_ids)
+    except user_limit_service.UserLimitError as refused:
+        raise HTTPException(status_code=_OVER_LIMIT_REFUSALS.get(refused.code, status.HTTP_422_UNPROCESSABLE_CONTENT), detail={"error_code": refused.code, "message": str(refused)}) from None
+    return OverLimitResolveResponse(kept=resolution.kept, deactivated=resolution.deactivated, revoked_invites=resolution.revoked_invites)
 
 
 @router.post("/address-probe", response_model=AddressProbeIssued, summary="A nonce to check that this instance answers at another address (admin)")
@@ -303,9 +338,12 @@ async def delete_account(user_id: int, admin: Annotated[User, Depends(require_ad
 async def create_password_reset_link(user_id: int, admin: Annotated[User, Depends(require_admin)], session: AsyncSession = Depends(get_session_generator)) -> LinkTokenResponse:
     """A single-use link to set a new password, shown once; the links issued before for that account stop working.
 
-    An account deleted since the route read it answers 404 (A-54).
+    An account deleted since the route read it answers 404 (A-54). A protected account (the paying administrator of a
+    managed instance) answers 409 ``ACCOUNT_PROTECTED`` before anything else: no link is made and none is revoked.
     """
     user = await _user_or_404(session, user_id)
+    if refusal := _protected(user, account_protection.ELSEWHERE_MESSAGE):
+        raise refusal
     if not await user_service.refreshed_under_lock(session, user):
         raise _user_not_found()
     issued = await user_service.create_password_reset(session, user, created_by_user_id=admin.id)
@@ -317,9 +355,12 @@ async def create_password_reset_link(user_id: int, admin: Annotated[User, Depend
 @router.post("/{user_id}/sessions/revoke", status_code=status.HTTP_204_NO_CONTENT, summary="Sign an account out everywhere (admin)")
 async def revoke_account_sessions(user_id: int, admin: Annotated[User, Depends(require_admin)], session: AsyncSession = Depends(get_session_generator)) -> Response:
     """End every session of the account: each device is signed out at its next request. An account deleted since the
-    route read it answers 404 (A-54).
+    route read it answers 404 (A-54). A protected account (the paying administrator of a managed instance) answers 409
+    ``ACCOUNT_PROTECTED`` before anything else: no session ends.
     """
     user = await _user_or_404(session, user_id)
+    if refusal := _protected(user, account_protection.ELSEWHERE_MESSAGE):
+        raise refusal
     if not await user_service.refreshed_under_lock(session, user):
         raise _user_not_found()
     await user_service.end_sessions(session, user)

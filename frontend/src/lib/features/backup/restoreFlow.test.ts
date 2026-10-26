@@ -184,7 +184,8 @@ interface RestoreApi {
     startCheck(uploadId: string): Promise<RestoreStage>;
     getCheck(stageId: string): Promise<RestoreStage>;
     dropCheck(stageId: string): Promise<void>;
-    confirm(stageId: string): Promise<RestoreStatus>;
+    /** B5-1b (interface §8): `ownerUserId`, the owner's account chosen in the report, `null` when none. */
+    confirm(stageId: string, ownerUserId?: number | null): Promise<RestoreStatus>;
     cancelPending(): Promise<void>;
     restart(): Promise<RestoreRestartAccepted>;
     probeServer(): Promise<'up' | 'down'>;
@@ -219,7 +220,8 @@ interface RestoreFlowController {
     upload(file: File): Promise<void>;
     abortUpload(): void;
     dropCheck(): Promise<void>;
-    confirm(): Promise<void>;
+    /** B5-1b (interface §8): passed to `api.confirm(stage_id, ownerUserId)` unchanged, `null` when not given. */
+    confirm(ownerUserId?: number | null): Promise<void>;
     cancelPending(): Promise<void>;
     restartNow(): Promise<void>;
     retry(): Promise<void>;
@@ -1395,7 +1397,8 @@ describe('confirm(): the restore confirmed, then the server restarted at once (�
         void controller.confirm();
         await flush();
 
-        expect(api.confirm.mock.calls).toEqual([[STAGE_ID]]);
+        // B5-1b (interface §8): no owner given → `null`, passed explicitly.
+        expect(api.confirm.mock.calls).toEqual([[STAGE_ID, null]]);
         expect(controller.state).toBe('confirming');
         expect(controller.busy).toBe(true);
         expect(api.restart, 'the restart waits for the confirmation').not.toHaveBeenCalled();
@@ -3264,5 +3267,109 @@ describe('B-15 — a proxy refused the archive: proxy_too_large', () => {
             ['backup.restore.uploaded', {upload_id: UPLOAD_ID, size: 4096}],
             ['backup.restore.failed', {code: 'unexpected', what: 'check'}],
         ]);
+    });
+});
+
+// =====================================================================================================================
+// B5-1b — the owner's choice at the confirmation (interface B-b51 §8; written red first)
+// =====================================================================================================================
+
+/*
+ * The contract: `confirm(ownerUserId = null)` passes the id to `api.confirm(stage_id, ownerUserId)` unchanged — `null`
+ * when not given —, and nothing else changes (the same states, the same events: no owner id in their detail). Four new
+ * refusals of the confirmation, each `failed` with failure `confirm` and its code, worded by
+ * `backup.restore.errors.<code>` (`restoreErrorKey`): `owner_choice_required`, `owner_choice_invalid` and
+ * `owner_email_not_set` keep the check (still remembered, `retry()` brings the report back); `owner_conflict` joins
+ * `CHECK_GONE`: the check is forgotten, as for `restore_not_restorable`.
+ *
+ * Red today: `confirm()` calls `api.confirm(stage_id)` with one argument and ignores its own; `owner_conflict` keeps the
+ * check; `restoreErrorKey` knows none of the four codes. The case of `restore_not_restorable` is a guard (green today):
+ * the presence barrier for «forgotten».
+ */
+
+const OWNER_ID = 7;
+
+describe('B5-1b — confirm(ownerUserId): the owner chosen in the report goes with the confirmation', () => {
+    it.each<[string, (controller: RestoreFlowController) => Promise<void>, number | null]>([
+        ['confirm(): null', (controller) => controller.confirm(), null],
+        ['confirm(null): null', (controller) => controller.confirm(null), null],
+        [`confirm(${OWNER_ID}): ${OWNER_ID}`, (controller) => controller.confirm(OWNER_ID), OWNER_ID],
+    ])('%s is passed to api.confirm(stage_id, ownerUserId) unchanged; then the restart at once, the events as today', async (_case, call, owner) => {
+        const {controller, api, events} = await reportShown();
+        api.confirm.mockResolvedValueOnce(pending());
+        api.restart.mockResolvedValueOnce(accepted());
+        api.probeServer.mockResolvedValue('down');
+
+        void call(controller);
+        await flush();
+
+        expect(api.confirm.mock.calls, 'the owner chosen is not what the confirmation sent').toEqual([[STAGE_ID, owner]]);
+        expect(api.restart).toHaveBeenCalledTimes(1);
+        expect(controller.state).toBe('restarting');
+        expect(controller.outcome).toBe('waiting');
+        expect(events(), 'nothing else changes: no owner id in the events').toEqual([
+            ['backup.restore.confirmed', {stage_id: STAGE_ID}],
+            ['backup.restore.restart.requested', {}],
+        ]);
+    });
+
+    it.each(['owner_choice_required', 'owner_choice_invalid', 'owner_email_not_set'])('409 %s: failed (confirm), announced, nothing restarted, the check kept — retry() brings the report back; worded by backup.restore.errors.<code>', async (code) => {
+        const {controller, api, storage, events} = await reportShown();
+        api.confirm.mockRejectedValueOnce(refusal(409, code));
+
+        await controller.confirm(OWNER_ID);
+        await flush();
+
+        expect(controller.state).toBe('failed');
+        expect(controller.errorCode).toBe(code);
+        expect(controller.failure).toBe('confirm');
+        expect(controller.busy).toBe(false);
+        expect(api.restart, 'a restore that was not confirmed is not restarted').not.toHaveBeenCalled();
+        expect(events()).toEqual([['backup.restore.failed', {code, what: 'confirm'}]]);
+        expect(storage.items.get(KEY), 'the check is still there: kept, so the choice can be made again').toBe(STAGE_ID);
+
+        const readsBefore = api.getCheck.mock.calls.length;
+        api.status.mockResolvedValueOnce(none());
+        api.getCheck.mockResolvedValueOnce(doneStage());
+        await controller.retry();
+        await flush();
+
+        expect(api.getCheck.mock.calls.slice(readsBefore), 'retry() did not read the kept check again').toEqual([[STAGE_ID]]);
+        expect(controller.state, 'retry() did not bring the report back').toBe('report');
+        expect(controller.report).toEqual(report());
+        expect(restoreErrorKey(code), 'the sentence the card shows').toBe(`backup.restore.errors.${code}`);
+        // Last, so that a red above names the flow: the owner sent with the refused confirmation.
+        expect(api.confirm.mock.calls).toEqual([[STAGE_ID, OWNER_ID]]);
+    });
+
+    it.each<[string, string]>([
+        ['409 restore_not_restorable (green today: the guard)', 'restore_not_restorable'],
+        ['409 owner_conflict: the backup holds accounts that conflict on the owner — nothing to choose again', 'owner_conflict'],
+    ])('%s: failed (confirm), the check forgotten — retry() reads the status only, idle', async (_case, code) => {
+        const {controller, api, storage, events} = await reportShown();
+        api.confirm.mockRejectedValueOnce(refusal(409, code));
+
+        await controller.confirm(OWNER_ID);
+        await flush();
+
+        expect(controller.state).toBe('failed');
+        expect(controller.errorCode).toBe(code);
+        expect(controller.failure).toBe('confirm');
+        expect(api.restart).not.toHaveBeenCalled();
+        expect(events()).toEqual([['backup.restore.failed', {code, what: 'confirm'}]]);
+        expect(controller.stage, 'a check that cannot be confirmed is still followed').toBeNull();
+        expect(storage.items.has(KEY), 'a check that cannot be confirmed is still remembered').toBe(false);
+
+        const readsBefore = api.getCheck.mock.calls.length;
+        api.status.mockResolvedValueOnce(none());
+        await controller.retry();
+        await flush();
+
+        expect(api.getCheck.mock.calls.length, 'the forgotten check was read again').toBe(readsBefore);
+        expect(controller.state).toBe('idle');
+    });
+
+    it('409 owner_conflict is worded by backup.restore.errors.owner_conflict', () => {
+        expect(restoreErrorKey('owner_conflict')).toBe('backup.restore.errors.owner_conflict');
     });
 });

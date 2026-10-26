@@ -10,7 +10,12 @@
     "intro": "Hemos recibido una solicitud para restablecer la contraseña de tu cuenta en $instance.",
     "action": "Elegir una nueva contraseña",
     "expiry": "El enlace funciona una sola vez y caduca en $duration.",
-    "ignore": "Si no lo has solicitado, ignora este correo: tu contraseña sigue siendo la misma."
+    "ignore": "Si no lo has solicitado, ignora este correo: tu contraseña sigue siendo la misma.",
+    "restore_subject": "Elige una nueva contraseña para LibreFolio",
+    "restore_intro": "Tu cuenta en $instance se ha restaurado a partir de una copia de seguridad.",
+    "restore_note": "Por tu seguridad, tu contraseña se revocó tras la restauración. Usa el botón de abajo para elegir una nueva.",
+    "restore_fallback": "Si el enlace ha caducado, elige «¿Olvidaste tu contraseña?» en la página de acceso, con esta dirección de correo, para recibir uno nuevo.",
+    "restore_unexpected": "Si no lo esperabas, ponte en contacto con quien gestiona este LibreFolio."
   },
   "invite": {
     "subject": "Una invitación a LibreFolio",
@@ -44,5 +49,12 @@
     "subject": "La dirección de correo de tu cuenta de LibreFolio ha cambiado",
     "intro": "La dirección de correo de tu cuenta en $instance se ha cambiado. Este mensaje va a la dirección que tenía antes.",
     "advice": "Si hiciste tú el cambio, no tienes que hacer nada. Si no, puede que alguien esté usando tu cuenta: cambia tu contraseña enseguida si aún puedes iniciar sesión y avisa al administrador de $instance."
+  },
+  "email_change_confirmation": {
+    "subject": "Confirma la nueva dirección de correo de tu cuenta de administrador de LibreFolio",
+    "intro": "Esta dirección de correo se ha indicado como la dirección de la cuenta de administrador de tu instancia de LibreFolio $instance. Confirma que es tuya para completar el cambio: hasta que lo hagas no cambia nada y la cuenta conserva su dirección actual.",
+    "action": "Confirmar esta dirección",
+    "expiry": "El enlace funciona una sola vez y caduca en $duration. Una vez confirmado, la cuenta inicia sesión con esta dirección y sus sesiones abiertas terminan.",
+    "ignore": "Si no esperabas este correo, puedes ignorarlo: no cambia nada."
   }
 }

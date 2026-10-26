@@ -471,6 +471,24 @@ def utils_docs_fr_typography(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Docs French typography tests", verbose=verbose)
 
 
+def utils_docs_search_split(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the MkDocs hook that splits the search index by language after the build (DOC-2)."""
+    print_section("Utils: Docs Search Language Split")
+    print_info("Testing: mkdocs_src/hooks/search_language_split.py (language_of, split_index, on_post_build), its registration in mkdocs_src/mkdocs.yml and overrides/main.html, the built site's search_index.<lang>.json")
+    print_info("Tests: first path segment decides the language (it/ fr/ es/, anything else en), every doc in exactly one file, same config, input untouched, four UTF-8 files written beside the full index, a missing index warns and does nothing, the built site's files and script order")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_docs_search_split.py", test_names)
+    return run_command(cmd, "Docs search language split tests", verbose=verbose)
+
+
+def utils_docs_admin_references(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that every reference to the admin guide reaches a page and an anchor, and no anchor was lost by the split (DOC-1)."""
+    print_section("Utils: Docs Admin References")
+    print_info("Testing: admin/<page>/#<anchor> in the non-test sources (frontend/src, backend/app, scripts, dev.py, README) vs mkdocs_src/docs/admin/*.en.md, backend/test_scripts/fixtures/docs_admin/old_anchors.json vs mkdocs_src/docs/javascripts/moved-anchors.js, the built site")
+    print_info("Tests: the scanner and the page reader on synthetic samples, the reader against MkDocs' own render, every reference reaches an existing page and anchor, every old anchor kept or moved, the map's stale entries, the built pages and ids and the built script")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_docs_admin_references.py", test_names)
+    return run_command(cmd, "Docs admin references tests", verbose=verbose)
+
+
 def utils_normalize_dashboard_fixture(verbose: bool = False, test_names: list = None) -> bool:
     """Test the gallery dashboard fixture normalizer: money scaled, shares and fractions left alone, invariants loud and value-free."""
     print_section("Utils: Dashboard Fixture Normalizer")
@@ -512,6 +530,14 @@ def utils_backup_cli_sealed(verbose: bool = False, test_names: list = None) -> b
     print_info("Testing: scripts/backup_cli.py (keygen, create --recipient / --sealed, inspect, decrypt and restore --dry-run of a sealed .tar with --identity-file)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_backup_cli_sealed.py", test_names)
     return run_command(cmd, "Backup CLI sealed backup tests", verbose=verbose)
+
+
+def utils_backup_cli_recover(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the restore recovery from the command line: pending --json and pending --recover <choice>."""
+    print_section("Utils: Backup CLI recover and --json")
+    print_info("Testing: scripts/backup_cli.py (pending --json: one line, the six states, privacy; pending --recover previous|cancel: exit codes 0/3/4/5, idempotency)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_backup_cli_recover.py", test_names)
+    return run_command(cmd, "Backup CLI recover tests", verbose=verbose)
 
 
 def utils_all(verbose: bool = False) -> bool:
@@ -952,6 +978,26 @@ Tests for utility modules and helper functions:
     )
     add_test(
         cat,
+        "docs-search-split",
+        utils_docs_search_split,
+        name="Docs Search Language Split",
+        desc="The search_language_split MkDocs hook writes, after the build, one search index per language beside the full one (search_index.en/it/fr/es.json, same config): the language of a doc is its location's first path segment, exactly it, fr or es alone or before / or #, anything else (a name that only starts like one, a language that is not first, an English-only page) is en; every doc of the full index is in exactly one file, unchanged, none lost or duplicated, the input untouched; on_post_build writes four UTF-8 JSON files equal to the split and nothing else, leaves the full index byte for byte, and a missing index warns without raising; the real built index splits with counts adding up and the Italian pages not in en; mkdocs.yml lists the hook and not the script as extra_javascript, main.html loads search-language.js in extrahead; the built site has the four files, every page's html lang among the four languages, and each home page loads the script in the head before Material's bundle",
+        # Dictionaries and files under tmp_path, the hook loaded by path. Reads mkdocs_src/mkdocs.yml, overrides/main.html
+        # and (read only) the built mkdocs_src/site/. No DB, no server, no network, no writes outside tmp_path.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "docs-admin-references",
+        utils_docs_admin_references,
+        name="Docs Admin References",
+        desc="Every address of the admin guide that the app and the repository carry (admin/<page>/ and admin/<page>/#<anchor>, bare, under /mkdocs/ or as the public URL, in the non-test sources of frontend/src, backend/app, scripts, dev.py and the README) reaches an existing mkdocs_src/docs/admin/<page>.en.md that defines the anchor exactly once ({: #anchor } or the automatic slug of a heading, code fences ignored), the scanner and the page reader shown on synthetic samples (an invented page and an invented anchor both reported) and against MkDocs' own render; every anchor the five split pages had (fixture old_anchors.json) is still on its page or moved by MOVED_ANCHORS of moved-anchors.js to a page that defines it, no stale or foreign entry; the built site has each referenced id, every admin page and the built script loaded by a page (red until ./dev.py mkdocs build runs on the split)",
+        # Reads files (sources, docs, fixture, read-only built site) and renders pages in memory with MkDocs; synthetic samples under
+        # tmp_path. No DB, no server, no network, no writes outside tmp_path.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "normalize-dashboard-fixture",
         utils_normalize_dashboard_fixture,
         name="Dashboard Fixture Normalizer",
@@ -993,10 +1039,20 @@ Tests for utility modules and helper functions:
     )
     add_test(
         cat,
+        "backup-cli-recover",
+        utils_backup_cli_recover,
+        name="Backup CLI Recover",
+        desc="scripts/backup_cli.py (lot B5-2): pending --json (exactly one line on stdout for none, pending, in_progress, committed, rolled_back and unreadable io/not_a_file/invalid; keys, choices, waiting, backup_created_at in UTC with Z, safety_copy from .restore/previous/; no username, path or stage id; no log line on stdout; exit 5 for a missing data directory; usage errors exit 2); pending --recover previous|cancel (exit 0 done, 3 nothing to recover, 4 choice not valid, 5 failed; idempotent; with and without --json; --json adds recover and error); B5-1j: --recover owner and the pending --json choices (reason owner_assignment, choices owner) hold for an error: outcome of a restore confirmed via cli or panel too, and not for one where nobody was picked",
+        # Data directories under tmp_path seen through monkeypatched LIBREFOLIO_* variables, as test_backup_cli_restore.py
+        # sets them; a few cases run the script in a process of its own: no lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "backup-cli-restore",
         utils_backup_cli_restore,
         name="Backup CLI Restore",
-        desc="scripts/backup_cli.py restore ARCHIVE without --dry-run: the check and its report, then the confirmation (--yes; the word restore typed on a terminal, spaces ignored, case kept; a pipe refused naming --yes; anything else declined, Nothing restored) → exit 0, the restore pending for the next start (.restore/restore.json 0600, confirmed_by cli), the copy kept, the live data untouched; exit 1 with the copy removed when declined, blocked (no administrator) or refused by the confirmation (its code in parentheses); an active restore stops the command before its check (restore_already_pending), --dry-run unchanged meanwhile; pending (none, each phase, waiting and reason codes in parentheses) and pending --cancel (the restore and its copy dropped; restore_not_pending with exit 1, nothing created); the script end to end; B-32: a state the file system cannot read (an open refused here, EACCES or EIO; for the script a state of mode 000, or a .restore it cannot search) → ❌ The state of the restore cannot be read: <reason> (restore_state_unreadable), exit 1, never «no restore», from pending, pending --cancel (the restore and its copy kept) and restore --yes (nothing checked; --dry-run unchanged); a cancel refused before the drop (the state's removal refused, a read-only .restore) → (restore_cancel_failed), exit 1, the restore kept; a drop whose copy stays (its removal raising, or leaving it) → ✅ … dropped without «with its copy», then ⚠️ its copy stays, exit 0; the usual drop keeps «with its copy»; B-18: restore --instance-key-file FILE gives the old instance key (a clear archive whose saved provider keys K1 encrypted, the instance on K2): --dry-run exit 0 with «Instance key: not included; given with --instance-key-file» and the re-encrypted count, nothing unreadable, the copy removed; --yes confirmed with the copy under K2, pending shows it; a file missing, blank or unreadable → (instance_key_unreadable), exit 1, no copy, the password never asked; a key under 32 characters → (instance_key_invalid), no copy; D1 an archive carrying its own key uses it (ℹ️ the file not used); D2 a wrong key → ⚠️ it reads none, before the unreadable line, or ⚠️ this instance's own key cannot be used (its problem) instead; as root (fake identity) the file read before the switch; no key text on stdout or stderr; B-35: restore honours LIBREFOLIO_BACKUP_MAX_RESTORE_MB (the total a check unpacks, MB of 1024², 0 no limit): over it → exactly one ❌ (unpacked_too_large), exit 1, after the 🔎 line, no copy; unreadable (abc; managed with the upload limit's profile entry of the wrong type) → one ❌ naming the variable (backup_restore_unavailable), exit 1, before the 🔎 line, no copy; 0 lifts the profile's limit for one command (after the barrier that unset refuses); managed, unset, upload 1 MB → a limit of 8 MB, over refused, under checked; B-34: with no instance key yet and none creatable (secrets/ 0500, skipped as root), K1 given → ⚠️ this instance's own key cannot be used: <secrets/instance.key>: there is no instance key yet, and it could not be created, right before the unreadable line, never the line that blames the key given; B-43: restore --dry-run of an archive whose index calls a function this LibreFolio lacks → exactly one ❌ (database_damaged) after the 🔎 line, exit 1, no traceback, no copy left, the function's name on neither output",
+        desc="scripts/backup_cli.py restore ARCHIVE without --dry-run: the check and its report, then the confirmation (--yes; the word restore typed on a terminal, spaces ignored, case kept; a pipe refused naming --yes; anything else declined, Nothing restored) → exit 0, the restore pending for the next start (.restore/restore.json 0600, confirmed_by cli), the copy kept, the live data untouched; exit 1 with the copy removed when declined, blocked (no administrator) or refused by the confirmation (its code in parentheses); an active restore stops the command before its check (restore_already_pending), --dry-run unchanged meanwhile; pending (none, each phase, waiting and reason codes in parentheses) and pending --cancel (the restore and its copy dropped; restore_not_pending with exit 1, nothing created); the script end to end; B-32: a state the file system cannot read (an open refused here, EACCES or EIO; for the script a state of mode 000, or a .restore it cannot search) → ❌ The state of the restore cannot be read: <reason> (restore_state_unreadable), exit 1, never «no restore», from pending, pending --cancel (the restore and its copy kept) and restore --yes (nothing checked; --dry-run unchanged); a cancel refused before the drop (the state's removal refused, a read-only .restore) → (restore_cancel_failed), exit 1, the restore kept; a drop whose copy stays (its removal raising, or leaving it) → ✅ … dropped without «with its copy», then ⚠️ its copy stays, exit 0; the usual drop keeps «with its copy»; B-18: restore --instance-key-file FILE gives the old instance key (a clear archive whose saved provider keys K1 encrypted, the instance on K2): --dry-run exit 0 with «Instance key: not included; given with --instance-key-file» and the re-encrypted count, nothing unreadable, the copy removed; --yes confirmed with the copy under K2, pending shows it; a file missing, blank or unreadable → (instance_key_unreadable), exit 1, no copy, the password never asked; a key under 32 characters → (instance_key_invalid), no copy; D1 an archive carrying its own key uses it (ℹ️ the file not used); D2 a wrong key → ⚠️ it reads none, before the unreadable line, or ⚠️ this instance's own key cannot be used (its problem) instead; as root (fake identity) the file read before the switch; no key text on stdout or stderr; B-35: restore honours LIBREFOLIO_BACKUP_MAX_RESTORE_MB (the total a check unpacks, MB of 1024², 0 no limit): over it → exactly one ❌ (unpacked_too_large), exit 1, after the 🔎 line, no copy; unreadable (abc; managed with the upload limit's profile entry of the wrong type) → one ❌ naming the variable (backup_restore_unavailable), exit 1, before the 🔎 line, no copy; 0 lifts the profile's limit for one command (after the barrier that unset refuses); managed, unset, upload 1 MB → a limit of 8 MB, over refused, under checked; B-34: with no instance key yet and none creatable (secrets/ 0500, skipped as root), K1 given → ⚠️ this instance's own key cannot be used: <secrets/instance.key>: there is no instance key yet, and it could not be created, right before the unreadable line, never the line that blames the key given; B-43: restore --dry-run of an archive whose index calls a function this LibreFolio lacks → exactly one ❌ (database_damaged) after the 🔎 line, exit 1, no traceback, no copy left, the function's name on neither output; B5-1j (n): on a managed instance with LIBREFOLIO_ADMIN_EMAIL the report says ONE owner line (the picked account by username, never an address; or no owner with ./dev.py user reassign-owner <username>; or a failing line to make a new backup for owner conflicts), restore --yes repeats it after the confirmation and refuses conflicts as (owner_conflict) with exit 1, nothing about an owner self-hosted or without the address; pending says what became of the owner of a cli or panel restore like the app's and gives the command when nobody was picked",
         # Data directories under tmp_path seen through monkeypatched LIBREFOLIO_* variables (production mode, checked),
         # a database at the head made once by alembic in its own process, a pty or a pipe for stdin; restart.send_signal
         # and os.kill as restart sees them record and must stay unused: no lane DB, no server, no network, no writes

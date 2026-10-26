@@ -334,12 +334,15 @@ Each kind of email has a keyword-only builder that returns an `EmailContent`, a 
 | `EmailKind` | Builder | Arguments | Greeting | Link |
 |-------------|---------|-----------|----------|------|
 | `password_reset` | `build_password_reset()` | `language`, `link`, `ttl`, `instance` | Anonymous | Yes |
+| `password_reset` | `build_password_reset_after_restore()` | `language`, `link`, `ttl`, `instance` | Anonymous | Yes |
 | `invite` | `build_invite()` | `language`, `link`, `ttl`, `instance`, `inviter=None`, `grants_admin=False` | Anonymous | Yes |
 | `email_verification` | `build_verification()` | `language`, `link`, `ttl`, `instance` | Anonymous | Yes |
 | `admin_setup` | `build_admin_setup()` | `language`, `username`, `link`, `ttl`, `instance` | By username | Yes |
+| `email_change_confirmation` | `build_email_change_confirmation()` | `language`, `username`, `link`, `ttl`, `instance` | By username | Yes |
 | `test` | `build_test_message()` | `language`, `username`, `instance` | By username | No |
 | `email_changed` | `build_email_changed()` | `language`, `instance` | Anonymous | No |
 
+- `build_password_reset_after_restore()` is the same kind with other words (the `restore_*` keys of the `password_reset` section): it tells the owner of an instance restored from a backup that the password was revoked after the restore and points to «Forgot Password?» for when the link expires. Only `instance_owner.assign_owner_and_send_reset()` uses it; it does not say who restored the backup, and shows no address and no name.
 - The greeting is the catalogue's `common.greeting_anonymous`, «Hello,», or `common.greeting`, «Hello $username,»,
   for the two kinds whose sender is trusted ([No Stranger's Text](#no-strangers-text)).
 - The four link kinds share their values with the purposes of the
@@ -1517,7 +1520,7 @@ gives a new key, and only the hourly budget of the instance bounds them.
 
 * 📧 **[Email](../../admin/email.md)** — The administrator's guide: the variables, the Email tab, what to check
   when email does not work
-* 📝 **[Configuration](../../admin/configuration.md)** — `LIBREFOLIO_PUBLIC_URL`, in its «Accounts and Sign-ups»
+* 📝 **[Configuration](../../admin/configuration_accounts.md#accounts)** — `LIBREFOLIO_PUBLIC_URL`, in its «Accounts and Sign-ups»
   section
 * 🔐 **[Secrets from Files](../architecture/security.md#secrets-from-files)** — `env_secret()` and the `_FILE` form
   of a secret
