@@ -637,3 +637,21 @@ describe('transactions.pydantic.stringTooLong — in the four catalogues, with {
         });
     }
 });
+
+// D-P4 lot L3: a transaction date is refused only past the server's tomorrow, `params: {max}` and no `min`. The code
+// still resolves to `transactions.errors.dateOutOfRange`, the field label in front; the text is the fake's here (the four
+// real sources are read by dateOutOfRangeCatalogue.test.ts).
+describe('resolveIssueMessage — dateOutOfRange carries the ceiling alone (D-P4, lot L3)', () => {
+    const t = makeT({'transactions.errors.dateOutOfRange': 'Up to {max}', 'transactions.fields.date': 'Date'});
+
+    it('params {max} fill the key, behind the label of the date field', () => {
+        expect(resolveIssueMessage({code: 'dateOutOfRange', field: 'date', params: {max: '2026-10-27'}, error: 'English fallback'}, t)).toBe('Date: Up to 2026-10-27');
+    });
+
+    it('the catalogue text, not the backend English error, is what the user reads', () => {
+        const message = resolveIssueMessage({code: 'dateOutOfRange', field: 'date', params: {max: '2026-10-27'}, error: 'English fallback'}, t);
+
+        expect(message).not.toContain('English fallback');
+        expect(message).not.toMatch(/[{}]/);
+    });
+});

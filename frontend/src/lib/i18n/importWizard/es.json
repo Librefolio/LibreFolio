@@ -204,7 +204,9 @@
       "fineco_not_yet_settled": "{count, plural, one {# fila aún no está liquidada (su fecha valor es posterior a hoy) y no se importó: llegará con la próxima exportación.} other {# filas aún no están liquidadas (su fecha valor es posterior a hoy) y no se importaron: llegarán con la próxima exportación.}}",
       "fineco_incomplete_rows": "Esta importación podría ser incorrecta: {count, plural, one {# fila no tiene} other {# filas no tienen}} un número necesario (cantidad o importe). Revisa las filas de abajo; si el archivo es correcto, probablemente sea un error de la importación, y puedes ayudarnos a corregirlo:",
       "rows_not_recognized": "{count, plural, one {# fila se excluyó o se importó solo en parte} other {# filas se excluyeron o se importaron solo en parte}}: la importación no reconoce, o aún no importa, lo que describen. Revisa las filas de abajo; si afecta a tus participaciones o a tu efectivo, notifica el caso para que podamos tratarlo:",
-      "rows_unreadable": "{count, plural, one {# fila se excluyó} other {# filas se excluyeron}} porque un valor necesario no se puede leer. Revisa las filas de abajo; si el archivo es correcto, notifica el caso para que podamos tratarlo:"
+      "rows_unreadable": "{count, plural, one {# fila se excluyó} other {# filas se excluyeron}} porque un valor necesario no se puede leer. Revisa las filas de abajo; si el archivo es correcto, notifica el caso para que podamos tratarlo:",
+      "possible_split": "Posible split de {ticker}: {added_quantity} acciones nuevas a coste cero. Vincula un evento SPLIT o crea uno.",
+      "date_before_1900": "La fecha {date} es anterior al 1 de enero de 1900: comprueba el año."
     },
     "evidenceRowsTitle": "Filas del archivo",
     "evidenceRowCount": "{n} filas",
@@ -436,7 +438,11 @@
         "column": {
           "point": "Punto"
         },
-        "noProposals": "Este punto no necesita correcciones."
+        "noProposals": "Este punto no necesita correcciones.",
+        "ledgerUnreadable": {
+          "currency_codes": "Los saldos de LibreFolio de este bróker no se pueden comparar con el banco: sus transacciones tienen códigos de moneda que no son códigos ISO 4217: {codes}{more, plural, =0 {} other { y # más}}. Corríjalos primero.",
+          "values": "Los saldos de LibreFolio de este bróker no se pueden comparar con el banco: {count, plural, one {# de sus transacciones tiene un valor que no es un número} other {# de sus transacciones tienen un valor que no es un número}}. Pida al administrador que las repare."
+        }
       },
       "badge": {
         "column": "Conjunto de informes",
@@ -513,7 +519,22 @@
       "missing_columns": "{count, plural, one {No se encontró la columna obligatoria {columns} en el encabezado del CSV.} other {No se encontraron las columnas obligatorias {columns} en el encabezado del CSV.}}",
       "no_movement_rows": "El archivo no tiene filas de movimientos.",
       "degiro_csv_only": "Solo se lee la exportación CSV: descarga el Extracto de cuenta en formato CSV.",
-      "degiro_not_account_statement": "Esto no es un Extracto de cuenta de DEGIRO: se esperan 12 columnas, con el ISIN en quinta posición, columnas de importe sin nombre en novena y undécima posición, y fechas en formato DD-MM-AAAA."
+      "degiro_not_account_statement": "Esto no es un Extracto de cuenta de DEGIRO: se esperan 12 columnas, con el ISIN en quinta posición, columnas de importe sin nombre en novena y undécima posición, y fechas en formato DD-MM-AAAA.",
+      "file_not_found": "No se encontró el archivo.",
+      "header_mismatch": "La fila de encabezado no es la de esta exportación.",
+      "header_row_not_found": "No se encontró en el archivo la fila de encabezado de la tabla.",
+      "no_valid_transactions": "El archivo no contiene transacciones válidas.",
+      "file_empty": "El archivo está vacío.",
+      "intesa_layout_unknown": "El formato no es ninguna de las dos exportaciones de Intesa Sanpaolo (movimientos o patrimonio).",
+      "scalable_not_export": "Esto no es una exportación de Scalable Capital.",
+      "danske_custody_columns_missing": "Esto no es una exportación de custodia de Danske Bank: faltan las columnas de las transacciones.",
+      "danske_cash_columns_missing": "Esto no es un extracto de cuenta de Danske Bank: faltan las columnas de la cuenta.",
+      "danske_combined_columns_missing": "Esto no es un archivo combinado de Danske Bank: faltan las columnas {missing}.",
+      "danske_not_combined_file": "Esto no es un archivo combinado de Danske Bank.",
+      "danske_combined_line_unknown_kind": "La línea {line} del archivo combinado tiene un tipo desconocido ({kind}).",
+      "danske_combined_line_incomplete": "La línea {line} del archivo combinado está incompleta.",
+      "danske_combined_line_not_cash": "La línea {line} del archivo combinado no es una fila de efectivo independiente.",
+      "danske_no_dated_rows": "Las exportaciones de custodia no tienen filas con fecha: no hay nada que combinar."
     },
     "brimEvidence": {
       "scalable_unreadable_rows": "En estas filas falta, o no se puede leer, una fecha, un importe, una divisa, las participaciones o el valor.",
@@ -532,6 +553,14 @@
       "rows_unreadable": "La última columna dice qué no se pudo leer en cada fila."
     },
     "notesCount": "{n, plural, one {# nota} other {# notas}}",
-    "noNotices": "Sin advertencias ni notas"
+    "noNotices": "Sin advertencias ni notas",
+    "parseFailed": "El plugin {plugin_name} no pudo leer el archivo: {reason}",
+    "parseFailedNoReason": "No se pudo leer el archivo y el plugin no indicó el motivo.",
+    "previewFailed": {
+      "preview_unsupported": "Este tipo de archivo no tiene vista previa.",
+      "preview_unreadable": "El archivo parece dañado o no es lo que indica su extensión: no se puede mostrar la vista previa."
+    },
+    "reviewPossibleSplitNote": "{n, plural, one {# fila parece un split: las acciones nuevas entran a coste cero.} other {# filas parecen splits: las acciones nuevas entran a coste cero.}} En el editor puedes vincular o crear el evento SPLIT.",
+    "reviewPreFloorNote": "{n} filas seleccionadas tienen una fecha anterior al 1 de enero de 1900. Comprueba el año: suele ser un error de escritura. Se te pedirá confirmarlas al guardar."
   }
 }

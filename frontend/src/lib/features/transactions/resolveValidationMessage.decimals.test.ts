@@ -43,16 +43,16 @@
  * label), and the app's catalogue in English and Italian (today the key is missing, and the backend's English `error`
  * comes back behind the label); the French and Spanish texts of the catalogue too.
  *
- * R13-SEC7-3 (E's R13-SEC7, night decision N74). The batch checks a row's date at write, `1900-01-01 ≤ date ≤ tomorrow`
- * (the server's tomorrow since lot N74, which replaced today + 1 year), and refuses one out of range with
- * `{code: 'dateOutOfRange', params: {min, max}, field: 'date'}` (ISO dates).
- * The catalogue gains `transactions.errors.dateOutOfRange` (EN «Between {min} and {max}», IT «Tra {min} e {max}», FR
- * «Entre {min} et {max}», ES «Entre {min} y {max}»), and the code joins `FIELD_PREFIXED_CODES`: the label of
- * `transactions.fields.date` goes in front (read from the catalogue: EN «Date», IT «Data», FR «Date», ES «Fecha»), so
- * `{min: '1900-01-01', max: '2026-10-20'}` reads «Date: Between 1900-01-01 and 2026-10-20», «Data: Tra 1900-01-01 e
- * 2026-10-20». The same two halves, reds today: the resolver with the faked catalogue (the text comes back without its
- * label), and the app's catalogue in every language (the key is missing: the backend's English `error` comes back
- * behind the label).
+ * R13-SEC7-3 (E's R13-SEC7, night decision N74), as D-P4 lot L3 revised it. The batch checks a row's date at write against
+ * one bound, `date ≤ tomorrow` (the server's): the floor of 1900-01-01 is gone (the frontend asks one confirmation before
+ * a date before 1900 instead), and a date past the ceiling is refused with `{code: 'dateOutOfRange', params: {max},
+ * field: 'date'}` (an ISO date; NO `min`). The catalogue text `transactions.errors.dateOutOfRange` is ceiling-only: it
+ * uses `{max}` and no `{min}` in any language (`dateOutOfRangeCatalogue.test.ts` reads the four sources), and the code
+ * stays in `FIELD_PREFIXED_CODES`: the label of `transactions.fields.date` goes in front (read from the catalogue: EN
+ * «Date», IT «Data», FR «Date», ES «Fecha»). The resolver is checked with a faked catalogue (the exact text is the
+ * fake's), and against the app's catalogue in every language by what the contract fixes and not by the sentence: the
+ * label in front, the ceiling date in the text, and nothing of a floor or of a missing `{min}` (reds today: the text
+ * still asks for `{min}`, which the issue no longer carries).
  */
 import {afterEach, beforeAll, describe, expect, it} from 'vitest';
 import {get} from 'svelte/store';
@@ -278,32 +278,28 @@ describe('R13-SEC2 — the app catalogue: integerDigitsExceeded reads «label: t
 });
 
 // ---------------------------------------------------------------------------------------------------------------------
-// R13-SEC7-3 — dateOutOfRange (night decision N74: 1900-01-01 ≤ date ≤ tomorrow, the server's, since lot N74)
+// R13-SEC7-3 — dateOutOfRange (night decision N74, revised by D-P4 lot L3: date ≤ tomorrow, the server's; no floor)
 // ---------------------------------------------------------------------------------------------------------------------
 
-/** The issue the batch's date stage writes on a create dated out of range: its English `error` differs from the catalogue's text. */
-const DATE_ISSUE: ResolvableIssue = {operation: 'create', code: 'dateOutOfRange', params: {min: '1900-01-01', max: '2026-10-20'}, field: 'date', error: 'date 1899-12-31 is outside 1900-01-01 .. 2026-10-20'};
+/** The ceiling the issue carries, and the first day of the old floor: the text must show the first and never the second. */
+const DATE_CEILING = '2026-10-20';
+const OLD_FLOOR = '1900-01-01';
 
-/** The contract's texts of `transactions.errors.dateOutOfRange`, `{min}` and `{max}` filled in from `DATE_ISSUE`. */
-const DATE_TEXT: Record<Speech, string> = {
-    en: 'Between 1900-01-01 and 2026-10-20',
-    it: 'Tra 1900-01-01 e 2026-10-20',
-    fr: 'Entre 1900-01-01 et 2026-10-20',
-    es: 'Entre 1900-01-01 y 2026-10-20',
-};
+/** The issue the batch's date stage writes on a create dated past the ceiling: `params` is `{max}` alone; its English `error` differs from the catalogue's text. */
+const DATE_ISSUE: ResolvableIssue = {operation: 'create', code: 'dateOutOfRange', params: {max: DATE_CEILING}, field: 'date', error: `date 2026-10-25 is after ${DATE_CEILING}`};
 
 /** `transactions.fields.date` as the catalogue reads it (`src/lib/i18n/transactions/<lang>.json`), checked by a control in each test. */
 const DATE_LABEL: Record<Speech, string> = {en: 'Date', it: 'Data', fr: 'Date', es: 'Fecha'};
 
 describe('R13-SEC7-3 — the resolver puts the field label in front of dateOutOfRange (catalogue faked)', () => {
     const t = makeT({
-        'transactions.errors.dateOutOfRange': 'Between {min} and {max}',
+        'transactions.errors.dateOutOfRange': 'On or before {max}',
         'transactions.fields.date': DATE_LABEL.en,
     });
 
-    // Red today: dateOutOfRange is not in FIELD_PREFIXED_CODES, so its text comes back without the label.
-    it('dateOutOfRange on date reads «Date: Between 1900-01-01 and 2026-10-20»', () => {
-        expect(resolveIssueMessage(DATE_ISSUE, t)).toBe(`${DATE_LABEL.en}: ${DATE_TEXT.en}`);
+    // Guard (green today and after): the resolver maps the code with `params: {max}` to the key, label in front. The text is the fake's.
+    it('dateOutOfRange on date with params {max} reads «Date: <the key filled with max>»', () => {
+        expect(resolveIssueMessage(DATE_ISSUE, t)).toBe(`${DATE_LABEL.en}: On or before ${DATE_CEILING}`);
     });
 });
 
@@ -325,28 +321,23 @@ describe('R13-SEC7-3 — the app catalogue: dateOutOfRange reads «label: text»
         await speak('en');
     });
 
-    // Red today: the key is missing, so the backend's English `error` comes back behind the label.
-    it('English: dateOutOfRange reads «Date: Between 1900-01-01 and 2026-10-20»', async () => {
-        const t = await speak('en');
-        expect(t('transactions.fields.date'), 'control: the catalogue labels the date field «Date»').toBe(DATE_LABEL.en);
-
-        expect(resolveIssueMessage(DATE_ISSUE, t)).toBe('Date: Between 1900-01-01 and 2026-10-20');
-    });
-
-    // Red today: as in English.
-    it('Italian: dateOutOfRange reads «Data: Tra 1900-01-01 e 2026-10-20»', async () => {
-        const t = await speak('it');
-        expect(t('transactions.fields.date'), 'control: the catalogue labels the date field «Data»').toBe(DATE_LABEL.it);
-
-        expect(resolveIssueMessage(DATE_ISSUE, t)).toBe('Data: Tra 1900-01-01 e 2026-10-20');
-    });
-
-    // Red today: the key is missing in French and Spanish too.
-    it.each(['fr', 'es'] as const)('%s: dateOutOfRange reads «label: text»', async (lang) => {
+    /** What the contract fixes of the resolved message in `lang`, whatever the sentence: the date label in front, the ceiling date, no floor, no unfilled `{min}`. */
+    async function expectCeilingMessage(lang: Speech): Promise<void> {
         const t = await speak(lang);
         expect(t('transactions.errors.decimalPlacesExceeded', {values: {max: 10}}), 'control: the language switched (a C-97a text of the catalogue)').toBe(DECIMALS_10[lang]);
         expect(t('transactions.fields.date'), 'control: the catalogue labels the date field').toBe(DATE_LABEL[lang]);
 
-        expect(resolveIssueMessage(DATE_ISSUE, t)).toBe(`${DATE_LABEL[lang]}: ${DATE_TEXT[lang]}`);
+        const message = resolveIssueMessage(DATE_ISSUE, t);
+
+        expect(message.startsWith(`${DATE_LABEL[lang]}: `), `${lang}: the label of the date field leads the message`).toBe(true);
+        expect(message, `${lang}: the text shows the ceiling the issue carries`).toContain(DATE_CEILING);
+        expect(message, `${lang}: no trace of the old floor`).not.toContain(OLD_FLOOR);
+        expect(message, `${lang}: the text is the catalogue's, not the backend's English fallback`).not.toBe(`${DATE_LABEL[lang]}: ${DATE_ISSUE.error}`);
+        expect(message, `${lang}: no placeholder is left unfilled`).not.toMatch(/[{}]/);
+    }
+
+    // Red today: the catalogue text asks for `{min}`, which the issue no longer carries, so it cannot be filled.
+    it.each(['en', 'it', 'fr', 'es'] as const)('%s: dateOutOfRange reads «label: text» with the ceiling and no floor', async (lang) => {
+        await expectCeilingMessage(lang);
     });
 });

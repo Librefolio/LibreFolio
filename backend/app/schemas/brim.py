@@ -143,10 +143,13 @@ class BRIMFileInfo(StrictModel):
         last_parse_result: Cached result from last successful parse
         parsed_plugin_code: Plugin code used at last successful parse
         parsed_plugin_version: Plugin version at last successful parse
+        parsed_settings_fingerprint: Fingerprint of the plugin settings the last
+            parse received (internal, never serialised).
         parse_is_stale: Computed flag. True iff status==PARSED and
             parsed_plugin_version differs from the plugin's current
             version (i.e., the plugin code has been updated since the
-            cached parse was produced). The UI can use this to surface a
+            cached parse was produced), or the user's plugin settings
+            moved since (set by the file routes, which know the user). The UI can use this to surface a
             "Re-parse available" hint without introducing a new
             persisted status.
     """
@@ -166,7 +169,8 @@ class BRIMFileInfo(StrictModel):
     # Plugin versioning (for cache invalidation)
     parsed_plugin_code: Optional[str] = Field(default=None, description="Plugin code used at last successful parse")
     parsed_plugin_version: Optional[str] = Field(default=None, description="Plugin version at last successful parse")
-    parse_is_stale: bool = Field(default=False, description="True if cached parse was produced by an older plugin version and a re-parse is recommended")
+    parsed_settings_fingerprint: Optional[str] = Field(default=None, exclude=True, description="Fingerprint of the plugin settings the last parse received; compared in memory only, never serialised")
+    parse_is_stale: bool = Field(default=False, description="True if cached parse was produced by an older plugin version, or over plugin settings that have changed since, and a re-parse is recommended")
     # Report sets: files uploaded together, and the combined file derived from them
     batch_id: Optional[str] = Field(default=None, description="Upload batch the file belongs to; files uploaded together form a report set")
     kind: Literal["original", "combined"] = Field(default="original", description="original = uploaded by the user; combined = derived by a report-set plugin")

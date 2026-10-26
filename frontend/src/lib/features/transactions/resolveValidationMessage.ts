@@ -57,8 +57,8 @@ const FIELD_ERROR_OVERRIDES: Record<string, string> = {
 
 /**
  * Codes about one field's value whose text names no field (C-97: a value over its column's limit, `params.max`; the
- * digits before the decimal point since W-B58; a date outside its bounds, `params.min` and `params.max`, since N74): the
- * translated field label goes in front, e.g. "Quantity: At most 10 decimal places", "Date: Between 1900-01-01 and …".
+ * digits before the decimal point since W-B58; a date past the ceiling, `params.max`, since N74): the
+ * translated field label goes in front, e.g. "Quantity: At most 10 decimal places", "Date: Not after 2026-10-27".
  */
 const FIELD_PREFIXED_CODES = new Set(['decimalPlacesExceeded', 'significantDigitsExceeded', 'integerDigitsExceeded', 'dateOutOfRange']);
 

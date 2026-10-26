@@ -40,6 +40,7 @@ from backend.app.schemas.transactions.promotion import TXTransferPromoteRequest
 from backend.app.schemas.transactions.transactions import TXCreateItem, TXQueryParams, TXUpdateItem
 from backend.app.schemas.transactions.type_metadata import EVENT_TYPE_METADATA, TX_TYPE_METADATA, PairFieldConstraint, TXTypesResponse
 from backend.app.services.transactions import balances as balances_module
+from backend.app.services.transactions.transaction_batch_context import BalanceValidationError
 from backend.app.services.transactions.transaction_batch_stages import _parse_lenient
 from backend.app.services.transactions.transaction_service import TransactionService
 from backend.app.utils.datetime_utils import utcnow
@@ -1391,6 +1392,41 @@ class TestWB74AnUnreadableRowInTheReplay:
 
         got = [(issue.operation, issue.index, issue.code, Decimal(issue.params["balance"]) if issue.params and "balance" in issue.params else None, (issue.params or {}).get("date")) for issue in response.issues]
         assert (response.committed, got) == (not refusals, refusals), f"A readable ledger (DEPOSIT 50, WITHDRAWAL {withdrawn}) and a WITHDRAWAL of 30: expected committed={not refusals}, refusals {refusals}; {_wb74_today(response)}"
+
+
+class TestWB74TheErrorDateWithoutAWindow:
+    """D-P4 lot L3: the replay that starts from the beginning of time (``from_date=None``, as a broker's settings change
+    does) refuses an unreadable ledger with an error dated ``date.min`` (0001-01-01) — the first day of the calendar —
+    and no longer ``EARLIEST_RANGE_START`` (1900-01-01): a transaction may be older than that now, so the error must
+    not claim the walk began later than its rows."""
+
+    @pytest.mark.asyncio
+    async def test_the_unreadable_ledger_error_without_a_window_is_dated_the_first_day_of_the_calendar(self, session, test_broker):
+        """Red today: the error is dated 1900-01-01 (``EARLIEST_RANGE_START``).
+
+        Contract: ``_validate_broker_balances(broker_id)`` (no ``from_date``) over a broker whose WITHDRAWAL reads None
+        raises ``BalanceValidationError`` ``ledgerUnreadable`` ``{brokerId, count: 1}`` with ``date == date.min``.
+        """
+        broker_id = test_broker.id
+        await _cash_ledger(session, broker_id)
+
+        with pytest.raises(BalanceValidationError) as raised:
+            await TransactionService(session)._validate_broker_balances(broker_id)
+
+        error = raised.value
+        assert (error.code, error.params) == (LEDGER_UNREADABLE, {"brokerId": broker_id, "count": 1}), f"scaffold: the error must be W-B74's refusal; got code={error.code!r}, params={error.params}"
+        assert error.date == date.min, f"D-P4 lot L3: with no from_date the error is dated the first day of the calendar ({date.min}); it is dated {error.date}"
+
+    @pytest.mark.asyncio
+    async def test_guard_the_unreadable_ledger_error_with_a_window_keeps_its_from_date(self, session, test_broker):
+        """Guard: green today and after. With a ``from_date`` the error carries it, as before."""
+        broker_id = test_broker.id
+        await _cash_ledger(session, broker_id)
+
+        with pytest.raises(BalanceValidationError) as raised:
+            await TransactionService(session)._validate_broker_balances(broker_id, WB74_BATCH_DAY)
+
+        assert raised.value.date == WB74_BATCH_DAY, f"the error of a replay from {WB74_BATCH_DAY} is dated that day; it is dated {raised.value.date}"
 
 
 # ============================================================================

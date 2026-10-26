@@ -1,7 +1,7 @@
 {
   "brimPlugins": {
     "broker_swissquote": {
-      "description": "Import Swissquote CSV exports for trades, dividends, cash movements, fees, taxes, and interest. Forex legs are skipped.",
+      "description": "Import Swissquote CSV exports for trades, dividends, cash movements, fees, taxes, interest and currency exchanges.",
       "name": "Swissquote"
     }
   }

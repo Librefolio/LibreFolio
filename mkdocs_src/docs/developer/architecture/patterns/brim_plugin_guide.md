@@ -224,6 +224,18 @@ mandatory for every new plugin:
       column the user maps is the transaction date, whatever it means (`trade_date`,
       `value_date` and `settlement_date` are all aliases of its `date` column,
       [Generic CSV](../../backend/brim/generic_csv.md)).
+    - **Which date each plugin records** (inventory W-B88, 23/10/2026; a column that only the
+      plugin's own tests read is not a date the plugin uses). Every plugin that has both
+      dates in its report records the operation date: Directa (`Data operazione`), DEGIRO
+      (`Datum` / `Date`), InvestEngine (`Trade Date/Time`), Saxo (`Trade Date`), Crédit
+      Agricole (`Data operazione` for securities, `Data Op.` for cash), Schwab (`Date`: of
+      `03/01/2025 as of 02/28/2025` the first date counts), Fineco and Danske Bank. Disnat
+      records `Date de transaction` and falls back to `Date de règlement` only for a row
+      whose trade date is `-` (a dividend has no other date). Avanza, Intesa and Rabobank
+      only have a *currency* column called `Valuta`, never a value date. The test
+      `test_brim_operation_date.py` (`./dev.py test external brim-operation-date`) fixes
+      this per plugin, on rows whose two dates differ: a plugin that switches to the value
+      date fails it.
 - **Known rows quietly, unknown rows loudly.** Leave a row out only for a reason the plugin
   can name (lot W-B85, the developer's principle of 19/10/2026):
     - **Known and safe to leave out** — a blank, header or total row, a reservation, a row
@@ -519,6 +531,113 @@ ICU Messages*, in the [frontend i18n guide](../../frontend/i18n.md)). `TestGener
 `TestRefusalCodes` (`test_brim_degiro.py`) pin the codes and contexts of the two plugins file by
 file; `defaultPluginCheck.test.ts` (`./dev.py test front-transaction tx-unit`) checks that every
 code has its key in the four languages.
+
+### 📮 How a failed parse reaches the wizard {: #parse-failed }
+
+`POST /api/v1/brokers/import/files/{file_id}/parse` answers a failed parse with **400** and a `detail` **object**, never an
+English sentence the wizard would show as it is (lot W5-5, C-70b):
+
+```json
+{"code": "parse_failed", "message": "Parse error: …", "plugin_code": "broker_x", "plugin_name": "Broker X",
+ "reason": {"code": "missing_columns", "message": "…", "context": {"columns": "date", "count": 1}}}
+```
+
+- A `BRIMParseError(message, details={"code": …, "context": …})` gives `reason` from its `details` (`code` and `context` are
+  `null` and `{}` when the plugin gave none) and `message` as the diagnostic `Parse error: <message>`.
+- The parse guard (`can_parse` false, `BRIMCannotParseError`, a `ValueError`) gives `reason` from the plugin's
+  [`cannot_parse_detail`](#cannot-parse-detail); `message` is the guard's own sentence.
+- Any other `ValueError` (an unknown plugin) keeps a plain string `detail`; a missing file is still 404.
+- The file goes to `failed` with the English text as its stored `error_message`, as before: it is the diagnostic, not what the
+  user reads.
+
+```mermaid
+flowchart LR
+    A["Plugin raises<br/>BRIMParseError(message, details={code, context})"] --> B["API: 400 detail<br/>parse_failed {reason: code, context}"]
+    A -. "English message" .-> L["logs and error_message<br/>of the failed file"]
+    B --> C["Wizard: resolveParseFailureMessage<br/>(parseFailure.ts)"]
+    C --> D["frame importWizard.parseFailed"]
+    C --> E["reason importWizard.parseRefusal.&lt;code&gt;<br/>with context as values"]
+```
+
+The wizard (`resolveParseFailureMessage`, `parseFailure.ts`) shows `importWizard.parseFailed` with the plugin's name and the
+reason, translated as `importWizard.parseRefusal.<code>` with the `context` (the keys of the [refusals](#cannot-parse-detail),
+and the ones of every `BRIMParseError` code), else the plugin's own sentence (`resolveParseRefusalMessage`,
+`defaultPluginCheck.ts`). A failure with no reason at all shows `importWizard.parseFailedNoReason`. The same helper reads the 400
+of the two file previews (`GET …/files/{file_id}/preview` and `GET /api/v1/uploads/file/{file_id}/preview`):
+`{"code": "preview_unsupported" | "preview_unreadable", "message": "…"}`, translated as `importWizard.previewFailed.<code>`.
+
+#### 📏 The rule: every `BRIMParseError` carries a code {: #parse-error-code-rule }
+
+Since lot W5-6 (backlog E-21) this is **mandatory**, for every `raise BRIMParseError(...)` in a plugin
+(`backend/app/services/brim_providers/`, shared readers such as `_scalable.py` included):
+
+- **A `code`.** `details={"code": "<code>", ...}`: a string constant, or a refusal's code (`refused.code`, as `_scalable.py`
+  does for `scalable_not_export`). A raise without one would show the user an English sentence.
+- **A `context` when the text has placeholders.** A dict **literal** whose keys are exactly the placeholders of the user text
+  (`{"file": file_path.name}`, `{"columns": "date", "count": 1}`). `plugin_name` is the one placeholder you never supply: the
+  wizard adds it.
+- **The English `message` stays the diagnostic.** It goes to the logs and to the `error_message` of the failed file; the
+  user never needs to read it. Write it for the developer who reads the log.
+- **The user text lives in `importWizard.parseRefusal.<code>`, in the four languages.** Add it with the i18n tool (the
+  placeholders must be the same names in all four):
+
+    ```bash
+    ./dev.py i18n add "importWizard.parseRefusal.<code>" --en "…" --it "…" --fr "…" --es "…"
+    ```
+
+- **Other `details` keys stay.** Keys such as `"file"` or `"headers"` keep sitting beside `code` and `context`; they are for
+  diagnostics and are not sent to the wizard.
+- **Do not lose the code on the way out.** A coded raise inside a `try` needs `except BRIMParseError: raise` **before** any
+  broad `except Exception`, otherwise the broad handler catches it and re-wraps it in a new `BRIMParseError` that has the
+  code of the wrapper, not yours (or none).
+
+```python
+try:
+    rows = self._read_rows(file_path)  # may raise BRIMParseError(…, details={"code": "header_row_not_found", …})
+    ...
+except BRIMParseError:
+    raise
+except Exception as e:
+    raise BRIMParseError(f"Error parsing file: {e}", details={"code": "file_unreadable", "context": {"error": str(e)}}) from e
+```
+
+**Shared codes plugins reuse.** Reuse these, with their translations, before adding a code of your own:
+
+| `code` | `context` | Cause |
+|--------|-----------|-------|
+| `file_not_found` | `file` | the path to parse does not exist (the plugin raises it in its `except FileNotFoundError`) |
+| `file_unreadable` | `error` | the file could not be read or decoded |
+| `header_mismatch` | none | the header row is not the one of this export |
+| `header_row_not_found` | `layout`, `expected` (both optional) | the table's header row was not found in the file |
+| `missing_columns` | `columns`, `count` | required columns are not in the header (`count` picks the plural) |
+| `no_valid_transactions` | none | the file holds no valid transactions |
+| `file_empty` | none | the file is empty |
+| `no_movement_rows` | none | the file has no movement rows |
+| `no_header_row` | none | the file has no header row |
+
+**Plugin-specific codes** are prefixed with the plugin's name, so they never collide: `danske_*` (Danske Bank: the cash,
+custody and combined layouts), `degiro_*` (`degiro_csv_only`, `degiro_not_account_statement`), `intesa_layout_unknown` and
+`scalable_*` (the [Scalable refusals](#cannot-parse-detail), plus `scalable_not_export`). The catalogue
+`frontend/src/lib/i18n/importWizard/en.json`, under `parseRefusal`, is the list that is always current.
+
+**The tests that guard it.** `./dev.py test services brim-parse-error-codes`
+(`backend/test_scripts/test_services/test_brim_parse_error_codes.py`) reads every plugin file statically (`ast`), so a new
+plugin or a new raise is caught without anybody remembering it, and names each offender by `file:line`:
+
+- every `BRIMParseError` has a `code` (and a `context` literal has string-constant keys);
+- a coded raise is not swallowed: a broad `except Exception` after it in the same `try` must be preceded by an
+  `except BRIMParseError` that re-raises;
+- every code has a text in the four languages, with the same placeholders, and the placeholders are all supplied by the
+  `context` of the raise sites of that code.
+
+#### 🧮 The gap-fix 409 is translated the same way {: #gap-fix-failure }
+
+`POST /brokers/import/gap-fix` ([below](#report-sets)) refuses with **409**
+`{code: "ledger_unreadable", message, reason: "values" | "currency_codes", params}` when LibreFolio's side of the comparison
+cannot be computed (`BRIMLedgerUnreadable`, `_set_error_detail` in `api/v1/brokers.py`). The wizard shows it through
+`resolveGapFixFailureMessage` (`parseFailure.ts`) as `importWizard.reportSet.gapFix.ledgerUnreadable.<reason>` with `params`
+(`values`: `count`; `currency_codes`: `codes` and `more`). `message` stays English, the fallback when the key or the `reason`
+is missing; every other set error still shows its `message`.
 
 ### 🧰 Base-class helpers you should use
 
@@ -1073,6 +1192,7 @@ BRIMFieldTodo(
 | `blocker` | anything else (e.g. `cost_basis_override`) | Carried on the transaction, but **not** shown in the correction step — that screen cannot fix it. |
 | `warning` | `asset_id` | Correction step, **"charges" panel** — a fee or an income with no instrument. |
 | `warning` | any, with `context.split_hint` | Correction step, **"split" panel** — see below. |
+| `warning` | `asset_event_id`, `reason_code="possible_split"` | Not in the correction step: it is carried to the Bulk editor, which marks the row «may be a split» and answers it with a SPLIT event (`_brim_io.possible_split_todo`, Revolut and Trading 212: [Possible splits](#possible-split)). |
 
 A row is filed by its **worst** todo: a `blocker` that also carries `split_hint` lands in the
 trades panel, and its split zone appears there as soon as the user types the row into a
@@ -1086,6 +1206,17 @@ one, and its total is bundled for exactly the same reason.
     purchase the plugin could only record as a cash withdrawal gets compared against cash
     withdrawals — a real duplicate is missed, an imaginary one invented. Correcting after
     the comparison cannot repair that; correcting before it can.
+
+### ✂️ A broker's split row: the possible split {: #possible-split }
+
+A broker that reports a **multiplicative** split as a row (Revolut `STOCK SPLIT`, Trading 212 `Stock split close` + `open`) does not say how
+the position is meant to be read. The plugin imports the **shares added** as an incoming `ADJUSTMENT` with `cost_basis_override` of `0`
+(the new shares of a split cost nothing; a positive adjustment requires a cost) and sends `_brim_io.possible_split_todo(...)`: a
+`BRIMFieldTodo` on `asset_event_id`, `severity="warning"`, `reason_code="possible_split"`, with `context` `{ticker, added_quantity, isin?}`
+and the source row as evidence. Without an event, those shares would dilute the average cost like a gift; linked to a SPLIT event,
+`financial_math/splits.py` makes the cost follow the old shares. **A plugin never creates the event**: the user does, in the Bulk editor.
+A split with no readable positive quantity (a reverse split), equal shares or no partner row is **not imported**: `skips.unknown(...)`,
+the notice with the link to open an issue. Pair rows by a key the file gives (the ISIN) and the time, never by position.
 
 ### 🗝️ `context` keys the frontend understands
 
@@ -1265,7 +1396,7 @@ return info !== null && txDate !== '' && txDate < info.openedAt;
 
 Rows before the broker opening date are deselected and non-importable; rows on the opening day remain importable. The wizard offers **Edit broker date** and re-checks after broker data refresh.
 
-Do not re-check the batch's date range either: the import confirms through the transaction batch, which checks every row's date (`check_dates()`, decision N74): from 1900-01-01 to tomorrow by the server's calendar (`latest_range_end()`). A row outside it gets `dateOutOfRange` on `date` and the batch is not saved (see [Transaction dates](../../backend/transactions/service.md#transaction-dates)). For the rows it keeps, a plugin emits the operation date the report states. A row whose value or settlement date is after the server's today (`server_today()`) — or whose operation date is, when the report has no other date — is provisional: leave it out, with an info notice, under the rule *The operation date, and only settled rows* ([Import philosophy](#import-philosophy-currency-rules)), rather than emit it. The batch would refuse anything after tomorrow with `dateOutOfRange` anyway.
+Do not re-check the batch's date range either: the import confirms through the transaction batch, which checks every row's date (`check_dates()`, decision N74): no later than tomorrow by the server's calendar (`latest_range_end()`; there is no first date since D-P4, the wizard asks a confirmation before a date earlier than 1900). A row past it gets `dateOutOfRange` on `date` and the batch is not saved (see [Transaction dates](../../backend/transactions/service.md#transaction-dates)). For the rows it keeps, a plugin emits the operation date the report states. A row whose value or settlement date is after the server's today (`server_today()`) — or whose operation date is, when the report has no other date — is provisional: leave it out, with an info notice, under the rule *The operation date, and only settled rows* ([Import philosophy](#import-philosophy-currency-rules)), rather than emit it. The batch would refuse anything after tomorrow with `dateOutOfRange` anyway.
 
 ## 🔀 One plugin, several export formats
 
@@ -1286,6 +1417,25 @@ def test_file_patterns(self) -> List[str]:
 ```
 
 The test suite loops over every matching sample, so each variant is exercised.
+
+## 🎛️ A plugin with a setting {: #plugin-with-setting }
+
+A plugin may declare a setting the user (or the admin) can change in **Settings › Plugins › Broker imports**:
+the first one is `date_order` of the generic CSV plugin, the order of day and month of a date such as
+`03/04/2025`. The contract, the wiring and the staleness rule are written once, in
+[BRIM Architecture → A field in a BRIM plugin](../../backend/brim/architecture.md#brim-field-contract); how to
+declare a field is in [Plugin Settings → Declaring Fields](plugin_settings.md#declaring-fields). Do not copy them
+here. Four rules for the author of the plugin:
+
+1. **The default is the old behaviour.** A plugin that already imports files must give the same result as before
+   the field existed when nobody configured it.
+2. **Read it inside `parse()` only**, as `self.settings.get("key", <default>)`, never in `__init__`, `can_parse()` or
+   `combine()`: those run without the values.
+3. **The parse stores the fingerprint**: nothing to write in the plugin. `parse_file_offloaded()` takes the values
+   the parse route resolved, and the route saves their fingerprint with the result, so a file parsed under another
+   value shows the «parsed again» banner. Do not keep a copy of the value in the result.
+4. **Translations under `pluginSettings.brim.<code>…`** (`label`, `description` and `option` keys, four languages,
+   in the plugin's own `i18n/` fragment). The ownership gate does not check them yet.
 
 ## 🧺 Multi-report plugins (report sets) {: #report-sets }
 
@@ -1659,7 +1809,8 @@ When a transaction of the broker dated up to a checkpoint's `as_of` (and not amo
 endpoint answers **409** `{"code": "ledger_unreadable", "message": …}` instead of comparing a
 wrong balance with the bank, which would propose a correction duplicating the row it cannot read
 (`get_balances_at_end_of` raises `UnreadableLedgerError`, `brim_gap_fix` turns it into
-`BRIMLedgerUnreadable`; W-B74). The wizard shows the message in that broker's group.
+`BRIMLedgerUnreadable`; W-B74). The wizard shows the refusal in that broker's group, in the UI language
+([how it is translated](#gap-fix-failure)).
 
 When those transactions hold a cash currency that is not a canonical ISO 4217 code — a name or a number an earlier
 version saved as written (`978`, `EURO`), or a code in another case (`eur`) — the endpoint answers the same **409**

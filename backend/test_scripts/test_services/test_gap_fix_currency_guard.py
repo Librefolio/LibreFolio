@@ -42,6 +42,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlmodel import SQLModel
 
+from backend.app.api.v1.brokers import _set_error_detail
 from backend.app.db.models import Asset, Broker, Transaction, TransactionType
 from backend.app.schemas.brim import BRIMAbsorbed, BRIMCheckpoint, BRIMGapFixRequest, BRIMTruthCash, BRIMTruthPosition
 from backend.app.services.brim import brim_report_sets
@@ -287,6 +288,66 @@ async def test_long_code_is_quoted_on_16_characters(db_session: AsyncSession) ->
     message = await _refusal(db_session, "a row of the broker holds its cash in a 40-character text")
     assert "Q" * 16 in message and "Q" * 17 not in message, f"16 characters of the code, never more: {message!r}"
     assert "…" in message and "(no ISO code)" in message, message
+
+
+# =============================================================================
+# 1b. THE REFUSAL CARRIES A REASON AND PARAMS THE WIZARD TRANSLATES (E-21 / W-B80)
+# =============================================================================
+
+ENGLISH_HEAD = "LibreFolio's balances of this broker cannot be compared with the bank: its transactions hold currency codes that are not ISO 4217 codes: "
+ENGLISH_TAIL = ". Correct them first."
+
+
+async def _refused(session: AsyncSession) -> brim_report_sets.BRIMLedgerUnreadable:
+    """The ``BRIMLedgerUnreadable`` the gap-fix raises for this ledger (the test fails when it answers)."""
+    with pytest.raises(brim_report_sets.BRIMLedgerUnreadable) as refused:
+        await compute_gap_fix(session, _request())
+    return refused.value
+
+
+@pytest.mark.asyncio
+async def test_currency_refusal_carries_reason_and_params(db_session: AsyncSession) -> None:  # red until E-21
+    """GFC-020 — RED: two bad codes, ``'978'`` and ``'EURO'`` (sorted, in that order), both for EUR: the refusal carries
+    ``reason == "currency_codes"`` and ``params == {"codes": "'978' (EUR), 'EURO' (EUR)", "more": 0}`` (``more`` an int, 0
+    when none); the API detail has the four keys and the English message is unchanged."""
+    ledger = await _seed_ledger(db_session)
+    await _plant(db_session, ledger["deposit_usd"], "EURO")
+    await _plant(db_session, ledger["deposit_eur"], "978")
+    error = await _refused(db_session)
+    codes = "'978' (EUR), 'EURO' (EUR)"
+    english = f"{ENGLISH_HEAD}{codes}{ENGLISH_TAIL}"
+    assert error.message == english, "the English message must not change"
+    assert (getattr(error, "reason", None), getattr(error, "params", None)) == ("currency_codes", {"codes": codes, "more": 0}), "E-21: reason='currency_codes' and params={'codes': <the named codes text>, 'more': <int>}"
+    assert isinstance(error.params["more"], int) and not isinstance(error.params["more"], bool)
+    assert _set_error_detail(error) == {"code": "ledger_unreadable", "message": english, "reason": "currency_codes", "params": {"codes": codes, "more": 0}}
+
+
+@pytest.mark.asyncio
+async def test_currency_refusal_counts_the_codes_past_five(db_session: AsyncSession) -> None:  # red until E-21
+    """GFC-021 — RED: seven bad codes: ``params["codes"]`` names the first five, sorted, ``params["more"]`` is 2, and the
+    English message keeps ``and 2 more`` after the named codes."""
+    await _seed_ledger(db_session)
+    extra = await _add(db_session, *[_saved(DEPOSIT, f"2024-03-{day:02d}", amount="1", currency="EUR") for day in range(10, 10 + len(SEVEN_CODES))])
+    for row, (code, _) in zip(extra, reversed(SEVEN_CODES), strict=True):
+        await _plant(db_session, row, code)
+    error = await _refused(db_session)
+    codes = ", ".join(f"'{code}' ({iso})" for code, iso in SEVEN_CODES[:5])
+    assert error.message == f"{ENGLISH_HEAD}{codes} and 2 more{ENGLISH_TAIL}", "the English message must not change"
+    assert (getattr(error, "reason", None), getattr(error, "params", None)) == ("currency_codes", {"codes": codes, "more": 2})
+    assert _set_error_detail(error) == {"code": "ledger_unreadable", "message": error.message, "reason": "currency_codes", "params": {"codes": codes, "more": 2}}
+
+
+@pytest.mark.asyncio
+async def test_currency_refusal_params_quote_a_long_code_like_the_message(db_session: AsyncSession) -> None:  # red until E-21
+    """GFC-022 — RED: a 40-character code is quoted on 16 characters, ``…``, ``(no ISO code)`` in ``params["codes"]``
+    too: the text of the params is the very text inside the message."""
+    ledger = await _seed_ledger(db_session)
+    await _plant(db_session, ledger["deposit_usd"], "Q" * 40)
+    error = await _refused(db_session)
+    params = getattr(error, "params", None)
+    assert isinstance(params, dict) and "codes" in params, f"E-21: params must carry the named codes: {params!r}"
+    assert params["codes"] in error.message
+    assert "Q" * 16 in params["codes"] and "Q" * 17 not in params["codes"] and "…" in params["codes"] and "(no ISO code)" in params["codes"], params
 
 
 # =============================================================================

@@ -530,3 +530,248 @@ describe('initialCostBasisMode — Q-J57-5 (a): the mode a row handed over by th
         expect(todos, 'the todos, in their order').toEqual(todosBefore);
     });
 });
+
+// ---------------------------------------------------------------------------
+// W-B87 — the `possible_split` todo: told apart, taken out of the generic list, listed on its own
+// ---------------------------------------------------------------------------
+
+/**
+ * A stock split an importer enters as an incoming ADJUSTMENT carries a todo on `asset_event_id`, reason `possible_split`,
+ * whose `context` holds the ticker, the shares added (a decimal string), the ISIN when known and — when the plugin knows
+ * the shares held before the split — `held_before`, `ratio`, `suggested_ratio` and `rounding_delta`, all decimal strings.
+ * The Bulk shows it in its own banner, one row per ROW (not per todo), and keeps it out of the generic «fields to verify»
+ * banner. Three pure helpers carry that: `isPossibleSplitTodo`, `withoutPossibleSplit`, `possibleSplitEntries`.
+ *
+ * Every test loads the helper it needs on its own, so while an export is missing each one fails by name.
+ */
+
+/** What `possibleSplitEntries` hands the banner, per row (the contract of W-B87, with the ratio of the same day). */
+interface PossibleSplitEntryLike {
+    tempId: string;
+    rowId: string;
+    rowNumber: string;
+    assetId: number | null;
+    date: string;
+    ticker: string;
+    addedQuantity: string;
+    isin: string | null;
+    ratio: string | null;
+    suggestedRatio: string | null;
+    roundingDelta: string | null;
+    heldBefore: string | null;
+}
+
+interface SplitTodoLike {
+    field: string;
+    reasonCode?: string;
+    context?: Record<string, unknown>;
+}
+
+interface SplitOpLike {
+    tempId: string;
+    pairedWith?: string;
+    fields: {asset_id: number | null; date: string; asset_event_id: number | null};
+    todos?: SplitTodoLike[];
+}
+
+async function splitModule(): Promise<Record<string, unknown>> {
+    return (await import('./bulkTodos')) as Record<string, unknown>;
+}
+
+async function splitHelper<T>(name: string): Promise<T> {
+    const helper: unknown = Reflect.get(await splitModule(), name);
+    if (typeof helper !== 'function') throw new Error(`bulkTodos.${name} is not implemented yet (W-B87)`);
+    return helper as T;
+}
+
+const isPossibleSplit = () => splitHelper<(todo: {field: string; reasonCode?: string}) => boolean>('isPossibleSplitTodo');
+const withoutSplit = () => splitHelper<<T extends {field: string; reasonCode?: string}>(todos: ReadonlyArray<T>) => T[]>('withoutPossibleSplit');
+const splitEntries = () => splitHelper<(ops: SplitOpLike[], rowLabel: (tempId: string) => string) => PossibleSplitEntryLike[]>('possibleSplitEntries');
+
+/** A `possible_split` todo as the backend sends it, `context` merged over a minimal one. */
+function splitTodo(context: Record<string, unknown> = {}): SplitTodoLike & {severity: 'warning'} {
+    return {field: 'asset_event_id', severity: 'warning', reasonCode: 'possible_split', context: {ticker: 'TSLA', added_quantity: '0.16431924', ...context}};
+}
+
+function splitOp(tempId: string, todos: SplitTodoLike[] | undefined, extra: Partial<SplitOpLike> = {}): SplitOpLike {
+    return {tempId, fields: {asset_id: 41, date: '2022-08-25', asset_event_id: null}, ...(todos ? {todos} : {}), ...extra};
+}
+
+const labelOf = (tempId: string): string => `#${tempId}`;
+
+describe('POSSIBLE_SPLIT_REASON', () => {
+    it('is the reason code the backend sends', async () => {
+        expect(Reflect.get(await splitModule(), 'POSSIBLE_SPLIT_REASON')).toBe('possible_split');
+    });
+});
+
+describe('isPossibleSplitTodo — the field and the reason, both', () => {
+    it('is true for a todo on asset_event_id whose reason is possible_split', async () => {
+        expect((await isPossibleSplit())({field: 'asset_event_id', reasonCode: 'possible_split'})).toBe(true);
+    });
+
+    it.each([
+        ['another reason on asset_event_id', {field: 'asset_event_id', reasonCode: 'something_else'}],
+        ['the reason on another field', {field: 'cost_basis_override', reasonCode: 'possible_split'}],
+        ['no reason on asset_event_id', {field: 'asset_event_id'}],
+        ['another field and another reason', {field: 'asset_id', reasonCode: 'probe_asset_id'}],
+    ])('is false for %s', async (_label, candidate) => {
+        expect((await isPossibleSplit())(candidate)).toBe(false);
+    });
+});
+
+describe('withoutPossibleSplit — the generic list loses only the split todos', () => {
+    it('keeps the other todos, in their order, even another todo on the same field', async () => {
+        const without = await withoutSplit();
+        const before = {field: 'cost_basis_override', reasonCode: 'corporate_action'};
+        const sameField = {field: 'asset_event_id', reasonCode: 'something_else'};
+        const after = {field: 'asset_id', reasonCode: 'probe_asset_id'};
+
+        expect(without([before, {field: 'asset_event_id', reasonCode: 'possible_split'}, sameField, after])).toEqual([before, sameField, after]);
+    });
+
+    it('returns the elements themselves, not copies', async () => {
+        const kept = {field: 'asset_id', reasonCode: 'probe'};
+        const [out] = (await withoutSplit())([kept]);
+        expect(out).toBe(kept);
+    });
+
+    it('does not change the list it is given', async () => {
+        const input = Object.freeze([Object.freeze({field: 'asset_event_id', reasonCode: 'possible_split'}), Object.freeze({field: 'asset_id', reasonCode: 'probe'})]);
+        const result = (await withoutSplit())(input);
+        expect(input, 'the input still has both').toHaveLength(2);
+        expect(result).toHaveLength(1);
+        expect(result, 'a new array').not.toBe(input);
+    });
+
+    it('answers an empty list, and a list of split todos only, with an empty list', async () => {
+        const without = await withoutSplit();
+        expect(without([])).toEqual([]);
+        expect(
+            without([
+                {field: 'asset_event_id', reasonCode: 'possible_split'},
+                {field: 'asset_event_id', reasonCode: 'possible_split'},
+            ]),
+        ).toEqual([]);
+    });
+});
+
+describe('possibleSplitEntries — one entry per row that still has the todo', () => {
+    it('reads the entry off the row and the todo context, the row labelled by the caller', async () => {
+        const entries = (await splitEntries())([splitOp('row-a', [splitTodo({isin: 'US88160R1014'})], {fields: {asset_id: 77, date: '2022-08-25', asset_event_id: null}})], (tempId) => `n${tempId.length}`);
+
+        expect(entries).toEqual([
+            {
+                tempId: 'row-a',
+                rowId: 'row-a',
+                rowNumber: 'n5',
+                assetId: 77,
+                date: '2022-08-25',
+                ticker: 'TSLA',
+                addedQuantity: '0.16431924',
+                isin: 'US88160R1014',
+                ratio: null,
+                suggestedRatio: null,
+                roundingDelta: null,
+                heldBefore: null,
+            },
+        ]);
+    });
+
+    it('rowId is the visible row: the pair partner when the row is hidden behind one, else the row itself', async () => {
+        const entries = (await splitEntries())([splitOp('hidden', [splitTodo()], {pairedWith: 'shown'}), splitOp('alone', [splitTodo()])], labelOf);
+
+        expect(entries.map((e) => [e.tempId, e.rowId])).toEqual([
+            ['hidden', 'shown'],
+            ['alone', 'alone'],
+        ]);
+    });
+
+    it('keeps the order of the rows and leaves out those without the todo', async () => {
+        const ops = [
+            splitOp('first', [splitTodo({ticker: 'AAA'})]),
+            splitOp('plain', undefined),
+            splitOp('other-todo', [{field: 'asset_event_id', reasonCode: 'something_else'}]),
+            splitOp('empty-todos', []),
+            splitOp('second', [{field: 'cost_basis_override', reasonCode: 'probe'}, splitTodo({ticker: 'BBB'})]),
+        ];
+
+        const entries = (await splitEntries())(ops, labelOf);
+
+        expect(entries.map((e) => [e.tempId, e.ticker, e.rowNumber])).toEqual([
+            ['first', 'AAA', '#first'],
+            ['second', 'BBB', '#second'],
+        ]);
+    });
+
+    it('is one entry per row, not per todo', async () => {
+        const entries = (await splitEntries())([splitOp('row', [splitTodo({ticker: 'ONE'}), splitTodo({ticker: 'TWO'})])], labelOf);
+        expect(entries).toHaveLength(1);
+    });
+
+    it('is empty for no rows and for rows with nothing to say', async () => {
+        const entries = await splitEntries();
+        expect(entries([], labelOf)).toEqual([]);
+        expect(entries([splitOp('a', undefined), splitOp('b', [])], labelOf)).toEqual([]);
+    });
+
+    it('carries an unresolved asset as null, and the row date as it is', async () => {
+        const [entry] = (await splitEntries())([splitOp('row', [splitTodo()], {fields: {asset_id: null, date: '2024-01-31', asset_event_id: null}})], labelOf);
+        expect(entry.assetId).toBeNull();
+        expect(entry.date).toBe('2024-01-31');
+    });
+
+    it('answers a todo with no context with empty text and no ISIN, and writes numbers as text', async () => {
+        const entries = await splitEntries();
+        const [bare] = entries([splitOp('bare', [{field: 'asset_event_id', reasonCode: 'possible_split'}])], labelOf);
+        expect(bare).toMatchObject({ticker: '', addedQuantity: '', isin: null});
+
+        const [numeric] = entries([splitOp('num', [{field: 'asset_event_id', reasonCode: 'possible_split', context: {ticker: 'X', added_quantity: 3, isin: ''}}])], labelOf);
+        expect(numeric.addedQuantity).toBe('3');
+        expect(numeric.isin, 'an empty ISIN is none').toBeNull();
+    });
+
+    describe('the ratio the plugin worked out (all text, any of them may be missing)', () => {
+        it('carries held_before, ratio and suggested_ratio as they are', async () => {
+            const [entry] = (await splitEntries())([splitOp('r', [splitTodo({held_before: '0.08215962', ratio: '3', suggested_ratio: '3', rounding_delta: '0'})])], labelOf);
+            expect(entry).toMatchObject({heldBefore: '0.08215962', ratio: '3', suggestedRatio: '3'});
+        });
+
+        it('a rounding delta of nothing worth saying is null: "0", "0.0", "0.000000", "-0"', async () => {
+            const entries = await splitEntries();
+            for (const zero of ['0', '0.0', '0.000000', '-0']) {
+                const [entry] = entries([splitOp('z', [splitTodo({held_before: '1', ratio: '3', suggested_ratio: '3', rounding_delta: zero})])], labelOf);
+                expect(entry.roundingDelta, `a delta of ${zero}`).toBeNull();
+            }
+        });
+
+        it('a rounding delta that is not zero is kept as the plugin wrote it, whichever its sign', async () => {
+            const entries = await splitEntries();
+            const [positive] = entries([splitOp('p', [splitTodo({held_before: '1', ratio: '2.97', suggested_ratio: '3', rounding_delta: '0.02'})])], labelOf);
+            const [negative] = entries([splitOp('n', [splitTodo({held_before: '1', ratio: '3.04', suggested_ratio: '3', rounding_delta: '-0.04'})])], labelOf);
+            expect(positive.roundingDelta).toBe('0.02');
+            expect(negative.roundingDelta).toBe('-0.04');
+        });
+
+        it('a file with no history has no ratio at all: the four fields are null', async () => {
+            const [entry] = (await splitEntries())([splitOp('r', [splitTodo()])], labelOf);
+            expect(entry).toMatchObject({heldBefore: null, ratio: null, suggestedRatio: null, roundingDelta: null});
+        });
+
+        it('each field is told apart: a ratio without a suggestion keeps the ratio and leaves the suggestion null', async () => {
+            const [entry] = (await splitEntries())([splitOp('r', [splitTodo({ratio: '2.5'})])], labelOf);
+            expect(entry).toMatchObject({ratio: '2.5', suggestedRatio: null, roundingDelta: null, heldBefore: null});
+        });
+    });
+});
+
+describe('the split todo and the editor: the row answers it by linking an event', () => {
+    // Guard, green today: `remainingTodos` already closes a todo on asset_event_id once the row holds an event id; the banner
+    // relies on it for the row to leave the list (onSplitLink writes asset_event_id and recomputes the todos).
+    it('closes the possible_split todo once the row holds an event, and keeps it while the row has none', async () => {
+        const remainingTodos = await remaining();
+        const split = todo('asset_event_id', 'warning', 'possible_split');
+        expect(remainingTodos([split], fields({asset_event_id: null}))).toEqual([split]);
+        expect(remainingTodos([split], fields({asset_event_id: 555}))).toEqual([]);
+    });
+});

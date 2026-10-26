@@ -7,6 +7,7 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import AssetEvent, Transaction, TransactionType
+from backend.app.schemas.transactions.batch import TXValidationCode
 from backend.app.schemas.transactions.type_metadata import cost_basis_required
 
 
@@ -97,6 +98,31 @@ class TransactionValidationMixin:
                 {"brokerA": a.broker_id, "brokerB": b.broker_id},
             )
         return None
+
+    @staticmethod
+    def _pair_order_warning(a: Transaction, b: Transaction) -> Optional[tuple[str, str, dict]]:
+        """A linked TRANSFER or CASH_TRANSFER whose arrival is dated before its departure (B2).
+
+        A remark, never a refusal and never a correction: the pair is saved as sent. The departure is the leg that gives
+        (a negative quantity, or a negative amount for cash), the arrival the one that receives. Equal dates are in order,
+        and so is every other type of pair.
+
+        Returns None when the pair is in order, otherwise (message, code, params).
+        """
+        if a.type != b.type or a.type not in (TransactionType.TRANSFER, TransactionType.CASH_TRANSFER):
+            return None
+        key = "quantity" if a.type == TransactionType.TRANSFER else "amount"
+        value_a, value_b = getattr(a, key), getattr(b, key)
+        if value_a is None or value_b is None or value_a == value_b:
+            return None
+        departure, arrival = (a, b) if value_a < value_b else (b, a)
+        if arrival.date >= departure.date:
+            return None
+        return (
+            f"the arrival ({arrival.date.isoformat()}) is dated before the departure ({departure.date.isoformat()})",
+            TXValidationCode.PAIR_ARRIVAL_BEFORE_DEPARTURE.value,
+            {"departureDate": departure.date.isoformat(), "arrivalDate": arrival.date.isoformat()},
+        )
 
     @staticmethod
     def _validate_pair_description_tags(a: Transaction, b: Transaction) -> Optional[tuple[str, str, dict]]:

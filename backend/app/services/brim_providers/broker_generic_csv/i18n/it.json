@@ -4,5 +4,23 @@
       "name": "CSV generico",
       "description": "Importa le transazioni da un file CSV generico. Riconosce le colonne dai nomi dell’intestazione. Supporta vari formati di data e di numero."
     }
+  },
+  "pluginSettings": {
+    "brim": {
+      "broker_generic_csv": {
+        "label": {
+          "date_order": "Ordine di giorno e mese"
+        },
+        "description": {
+          "date_order": "Come si legge una data come 03/04/2025 in un CSV generico: prima il giorno (3 aprile) o prima il mese (4 marzo). Una data che non si può leggere nel primo modo si legge nell'altro (25/12/2025 è sempre il 25 dicembre)."
+        },
+        "option": {
+          "date_order": {
+            "day_first": "Prima il giorno (03/04 = 3 aprile)",
+            "month_first": "Prima il mese (03/04 = 4 marzo)"
+          }
+        }
+      }
+    }
   }
 }

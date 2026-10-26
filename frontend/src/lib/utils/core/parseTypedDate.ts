@@ -19,14 +19,19 @@ const PARTS_RE = /^\s*(\d{1,4})\s*[-/.]\s*(\d{1,2})\s*[-/.]\s*(\d{1,4})\s*$/;
 /** Already-canonical input, accepted verbatim. */
 const ISO_RE = /^\s*(\d{4})-(\d{2})-(\d{2})\s*$/;
 
+import {utcMs} from '$lib/utils/dateOnly';
+
 function pad(n: number): string {
     return String(n).padStart(2, '0');
 }
 
-/** True when the triple is a real calendar date (rejects 2026-02-30). */
+/**
+ * True when the triple is a real calendar date (rejects 2026-02-30). The year runs from 1 (`0001-01-01`, the first day a
+ * stored date may have) to 9999; the short years 1 to 99 are read as they are, not as 19xx (`utcMs`, W5-11).
+ */
 function isRealDate(year: number, month: number, day: number): boolean {
-    if (month < 1 || month > 12 || day < 1 || day > 31) return false;
-    const d = new Date(Date.UTC(year, month - 1, day));
+    if (year < 1 || year > 9999 || month < 1 || month > 12 || day < 1 || day > 31) return false;
+    const d = new Date(utcMs(year, month - 1, day));
     return d.getUTCFullYear() === year && d.getUTCMonth() === month - 1 && d.getUTCDate() === day;
 }
 
@@ -65,5 +70,5 @@ export function parseTypedDate(input: string): string | null {
     }
 
     if (!isRealDate(year, month, day)) return null;
-    return `${year}-${pad(month)}-${pad(day)}`;
+    return `${String(year).padStart(4, '0')}-${pad(month)}-${pad(day)}`;
 }
