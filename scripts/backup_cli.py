@@ -560,10 +560,11 @@ _STAGE_WARNINGS = {
     "non_iso_currencies": "Some currency codes in the backup are not ISO 4217 codes, names or numbers an earlier version saved: an edit of their rows is refused until they are corrected (./dev.py db currencies lists them after the restore)",
     "credentials_from_backup": "After a restore you sign in with the backup's credentials; every session open now ends",
     "confirming_account_not_in_backup": "Your account is not among the administrators of this backup: after the restart you cannot sign in with it",
+    "users_over_limit": "The backup holds more active accounts than this instance accepts (said above, with the numbers)",
 }
 #: Said apart, never as a ⚠️ line (L3): the first is the sentence under the administrators; the second comes only from
 #: the API, for the administrator who reads the report.
-_STAGE_WARNINGS_SAID_APART = frozenset({"credentials_from_backup", "confirming_account_not_in_backup"})
+_STAGE_WARNINGS_SAID_APART = frozenset({"credentials_from_backup", "confirming_account_not_in_backup", "users_over_limit"})
 _STAGE_BLOCKERS = {
     "no_administrator": "The backup has no active administrator: after a restore nobody could manage the instance",
 }
@@ -650,7 +651,7 @@ def _print_stage_report(report, *, instance_key_given: bool = False) -> None:
         print(f"   Administrators: {', '.join(_safe(name) for name in report.administrators)}")
         print("   After a restore you sign in with one of them, with the password of then; every session open now ends.")
         print("   Invitations and links sent before the restore will have expired: send them again if needed.")
-    for line in _owner_lines(report):
+    for line in [*_owner_lines(report), *_users_lines(report)]:
         print(line)
     for code in report.warnings:
         if code not in _STAGE_WARNINGS_SAID_APART:
@@ -664,6 +665,14 @@ _NO_OWNER_LINE = "⚠️  No owner: no account of the backup can be taken for it
 
 
 _NO_OWNER_PENDING_LINE = "⚠️  No owner was assigned at the restore: no account of the backup could be taken for it. Name one with ./dev.py user reassign-owner <username>"
+
+
+def _users_lines(report) -> list[str]:
+    """A backup with more active accounts than ``LIBREFOLIO_MAX_USERS`` allows (B5-1k2): said, never refused. No name or
+    address. Nothing when it fits."""
+    if report.users_over_limit <= 0:
+        return []
+    return [f"⚠️  The backup holds {report.users_active} active accounts; this instance accepts {report.users_limit} (LIBREFOLIO_MAX_USERS): at the first sign-in the administrator chooses who keeps access, the others are deactivated (not deleted)"]
 
 
 def _owner_lines(report) -> list[str]:
