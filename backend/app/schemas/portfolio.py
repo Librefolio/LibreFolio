@@ -223,6 +223,14 @@ class DataQualityIssue(StrictModel):
     group_key: Optional[str] = None
 
 
+class StaleFxPair(StrictModel):
+    """An exchange rate read from a stored row older than the stale threshold (D-P4, like a stale price)."""
+
+    pair: str = Field(..., description="FX pair code (e.g. 'USD/EUR')")
+    last_rate_date: date_type = Field(..., description="Date of the stored rate in use")
+    stale_days: int = Field(..., ge=0, description="Days since that rate, on the valuation day")
+
+
 class DataQualityReport(StrictModel):
     """Aggregated data quality information for a portfolio calculation."""
 
@@ -234,6 +242,11 @@ class DataQualityReport(StrictModel):
     incomplete_book_value_dates: List[date_type] = Field(default_factory=list)
     incomplete_allocation_dates: List[date_type] = Field(default_factory=list)
     incomplete_valuation_dates: List[date_type] = Field(default_factory=list)
+    incomplete_nav_ranges: List[DateSpan] = Field(default_factory=list, description="The days with an incomplete NAV, as ranges (D-P4)")
+    incomplete_book_value_ranges: List[DateSpan] = Field(default_factory=list)
+    incomplete_allocation_ranges: List[DateSpan] = Field(default_factory=list)
+    incomplete_valuation_ranges: List[DateSpan] = Field(default_factory=list)
+    stale_fx_pairs: List[StaleFxPair] = Field(default_factory=list, description="FX pairs read on the valuation day from a stored rate older than the stale threshold")
     carried_forward_price_points: int = Field(0, ge=0)
     carried_forward_fx_points: int = Field(0, ge=0)
     carried_forward_price_asset_ids: List[int] = Field(default_factory=list)
@@ -260,10 +273,9 @@ class DataQualityReport(StrictModel):
 # =============================================================================
 
 
-class AllocationHistoryPoint(StrictModel):
-    """Single point in the allocation history time series."""
+class AllocationHistoryPoint(StepSpan):
+    """One step of the allocation history (D-P4): the components hold from ``date`` to ``through``."""
 
-    date: date_type
     components: List[AllocationItem]
 
 
@@ -594,10 +606,10 @@ class PortfolioSummary(StrictModel):
     data_quality: Optional[DataQualityReport] = Field(None, description="Aggregated data quality report")
 
 
-class PortfolioHistoryPoint(BaseModel):
-    """Single point in the portfolio value time series."""
+class PortfolioHistoryPoint(StepSpan):
+    """One step of the portfolio value series (D-P4): the values hold from ``date`` to ``through``, during which nothing
+    changes. The MWRR, which moves every day, is in ``PortfolioReportResponse.mwrr_line``."""
 
-    date: date_type
     cash_value: Currency
     market_value: Currency = Field(..., description="Total mark-to-market value of held assets")
     broker_nav_value: Optional[Currency] = Field(None, description="market_value + cash_value (before in-transit)")
@@ -616,15 +628,21 @@ class PortfolioHistoryPoint(BaseModel):
     total_pnl: Currency = Field(..., description="NAV - Capital Baseline (total P&L vs external capital)")
     unrealized_gain_loss: Optional[Currency] = Field(None, description="nav_value - book_value")
     twrr: Optional[SafeDecimal] = Field(None, description="Time-Weighted Return series point")
-    mwrr_annualized: Optional[SafeDecimal] = Field(None, description="Annualized MWRR at this point")
-    mwrr_cumulative: Optional[SafeDecimal] = Field(None, description="Cumulative MWRR at this point: (1+r_ann)^(days/365)-1")
     roi: Optional[SafeDecimal] = Field(None, description="Simple ROI series point")
 
 
-class BrokerPnlHistoryPoint(BaseModel):
-    """Single day's additive P&L contribution for one broker (G1a)."""
+class MwrrLinePoint(StrictModel):
+    """A true point of the history's MWRR line (D-P4): the MWRR of the period up to ``date``, solved on that day. The line
+    has a point at the start and the end of every history step, and one a month inside the steps longer than 62 days."""
 
     date: date_type
+    annualized: Optional[SafeDecimal] = Field(None, description="Annualized MWRR on this day; None where there is no rate")
+    cumulative: Optional[SafeDecimal] = Field(None, description="Cumulative MWRR on this day: (1+r_ann)^(days/365)-1")
+
+
+class BrokerPnlHistoryPoint(StepSpan):
+    """One step of a broker's additive P&L contribution (G1a, D-P4)."""
+
     total_pnl: Currency = Field(..., description="This broker's slice of the scope total_pnl for this day")
 
 
@@ -642,17 +660,16 @@ class BrokerPnlHistory(StrictModel):
     points: List[BrokerPnlHistoryPoint] = Field(default_factory=list)
 
 
-class PnlCandlePoint(BaseModel):
+class PnlCandlePoint(StepSpan):
     """One day's synthetic total-P&L candle (G1b, plan §4.3).
 
     ``close`` always equals the canonical ``PortfolioHistoryPoint.total_pnl`` for the
     same date exactly (built by construction from the same Decimal components, not a
     residual check). Days whose candle is unavailable (a held asset's valuation was
     MISSING that day) are omitted from the series entirely — a genuine gap, never a
-    guessed or zeroed candle.
+    guessed or zeroed candle. A step (D-P4): a quiet day carries the candle of the last computed day.
     """
 
-    date: date_type
     open: Currency
     high: Currency
     low: Currency
@@ -1712,6 +1729,8 @@ class PortfolioReportResponse(StrictModel):
     summary: Optional[PortfolioSummary] = None
     history: Optional[List[PortfolioHistoryPoint]] = None
     allocation_history: Optional[AllocationHistoryDimensions] = None
+    range: Optional[DateSpan] = Field(None, description="The days the step series cover (D-P4): the first day of the window with a state, and its end")
+    mwrr_line: Optional[List[MwrrLinePoint]] = Field(None, description="The history's MWRR as true points (D-P4). Only when include_history=True.")
     data_quality: Optional[DataQualityReport] = None
     positions_contribution: Optional[PositionsContribution] = Field(None, description="Per-asset period P&L contribution. Only when include_positions_contribution=True.")
     broker_pnl_history: Optional[List[BrokerPnlHistory]] = Field(None, description="Per-broker additive P&L history (G1a). Only when include_broker_pnl_history=True.")
