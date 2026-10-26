@@ -5033,3 +5033,26 @@ Passi:
    > **⚠️ Fuori pista**: nel frontend restano la chiave `dataQuality.transactionsBeforeFloor` (`i18n/dataQuality/*.json`),
    > un dato di test in `DataQualityBanner.layout.test.ts` e il membro dell'enum nei tipi generati: li toglie Y (o W)
    > dopo il merge, con `api sync`.
+
+#### MF-PAV-L5 · chiusura di D-P4 sul candidato del treno 11 (26/10, `train11b` `d2dc09a9a`, worktree `gate-coord`)
+Via del coordinatore: la costante, i testi del pavimento, il testo unico del CHANGELOG.
+1. ✅ `EARLIEST_RANGE_START` tolta da `utils/datetime_utils.py`. L'ultimo lettore, il caricamento «storia intera» dei
+   segnali (Z-30), legge `price_query.FULL_HISTORY_LOAD_START` (= `ASSET_HISTORY_MIN_FALLBACK`, 1900-01-01: l'inizio
+   della storia di ogni provider; tetto di costo del riempimento giornaliero, stesso comportamento). Docstring di
+   `date_range_limits.py` riscritto.
+   > **Note implementazione**: scelto il nome proprio e non `range_span_floor`: tiene il comportamento al bit (un indice
+   > dal 1927 resta intero) e lega il valore alla regola dei provider.
+2. ✅ Test (test-author): `test_price_query_observations.py` (38), `test_asked_day_rates.py` (197, letterale
+   `FLOOR_1900`), `test_replay_floor.py` (14, guardia «la costante non c'è più»), `test_asset_signals.py` (30).
+3. ✅ Docs (docs-writer): `assets/architecture.md` (7 passi), `fx/architecture.md` (3), `signal_plugin_guide.md`,
+   `transactions/wac.md` (descriveva un taglio al 1900 che il codice non fa più), `transactions/service.md`. Build strict
+   0, check-links 0 (`ondata5/MF-L5-docs-*.log`).
+4. ✅ `ondata5/CHANGELOG-DP4.md`: la voce unica di «⚠️ Breaking changes» (MF + J + W), le 4 righe del capitolo che la
+   contraddicono (132, 353, 367, 371) e una riga per `stale_fx_pairs`.
+5. ✅ Porte (`ondata5/MF-L5-gates.log`, lane 6193 / `/tmp/librefolio-r13-c5b`): `financial-math` **3788**,
+   `portfolio-engine` **41**, `api portfolio` **58**, `asset-source` **62**, `price-query-sampling` **198**,
+   `asset-signals` **30**, `api assets-price` **32**; `roi-fifo-utils` **2473 + 14 rossi** in
+   `test_split_adjustment_ledger.py`. I 14 rossi ci sono uguali sul candidato senza le mie modifiche
+   (`git archive d2dc09a9a`, `ondata5/MF-L5-split-ledger-on-d2dc09a9a.log`): il test di W5-2b legge `wac_points[giorno]`
+   per data, mentre la linea del costo medio è a gradini da J5-5 → serve `value_at`. Integrazione W × J, non L5.
+   CHECKPOINT READY inviato, FROZEN.

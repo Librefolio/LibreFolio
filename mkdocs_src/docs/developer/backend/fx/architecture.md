@@ -48,8 +48,8 @@ included, passes. The provider sync has no floor either: in `sync_pairs_bulk()`,
 path, `_is_date_within_sync_range()` (`backend/app/services/fx/sync.py`) keeps the dates of the
 requested range and nothing else, so a provider's rate dated before 1900 inside it,
 `start: "min"` included, is kept like any other; its end stays the requested one, today at the
-latest. Before N83's revision it was false before `EARLIEST_RANGE_START` (1900-01-01), whatever
-the start.
+latest. Before N83's revision it was false for a day before 1 January 1900, whatever
+the start; that floor no longer exists.
 {: #stored-rate-dates }
 
 ## 🔢 Priority System
@@ -352,8 +352,9 @@ included.
 `fixed_period_changes()` ([Financial Math Layer](../financial_math.md#fixed-period-changes)).
 
 - **Request**: a list of `{base, quote, as_of, range_start?}`. From the schema, 422 when `base` and `quote` are the
-  same, when `as_of` or `range_start` falls before `EARLIEST_RANGE_START` (1 January 1900; up to 0005-12-30 the 5Y
-  day fell before year 1, a 500), or when `range_start` is after `as_of`. The route then checks the request with
+  same, or when `range_start` is after `as_of`; `as_of` and `range_start` are any day of the calendar, with no first
+  day (D-P4, 26/10/2026; the schema once refused a day before 1 January 1900). A period whose reference day falls
+  before 0001-01-01 has none: its change is null (`day_before()` in `financial_math/returns.py`). The route then checks the request with
   `period_changes_request_refusal()` (`backend/app/schemas/common.py`), before any conversion (MF-P2b, finding
   R13-SEC8, aligned with Z-25):
     - more than `MAX_BULK_ITEMS` (1,000) pairs get the 422 `{"code": "bulk_too_many_items", "message", "max_items",
@@ -401,8 +402,8 @@ the FX pages (X-R59, decision N80); its limits are in the **Request** bullet abo
 The change is on this endpoint, not on `POST /api/v1/fx/currencies/convert`: the FX store composes a pair's series
 from the gaps it loads separately (`ensureFxRangeLoaded()`), so a change attached to a series response would not be
 the visible range's. The web app sends it: `fetchFxPeriodChanges(pairs, asOf, rangeStart)`
-(`frontend/src/lib/utils/periodChanges.ts`) gives each item the first day of the range on screen, raised
-to 1 January 1900 by `rangeStartFor()` (`frontend/src/lib/utils/rangeChange.ts`), none for a day the backend would
+(`frontend/src/lib/utils/periodChanges.ts`) gives each item the first day of the range on screen, as it is
+(`rangeStartFor()`, `frontend/src/lib/utils/rangeChange.ts`; no longer raised to 1 January 1900), none for a day the backend would
 refuse (after `as_of`, or not a calendar day), and reads `range_change` both ways with `fxRangeDeltas()`. The FX table's
 Δ Abs and Δ % columns, the FX card's Δ % and the pair page's summary show it, from the `inverse_*` fields for a pair
 shown the other way round; the browser no longer computes it (`displayFxDelta()` is gone). The FX list keeps those

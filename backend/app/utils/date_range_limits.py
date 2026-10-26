@@ -8,9 +8,11 @@ server's tomorrow. A per-day walk with no data of its own to stop at goes back a
 its end (``range_span_floor``).
 
 A stored price or rate carries a date no later than ``latest_stored_date()``, tomorrow (X-R65, N83): a manual write with
-a later date is refused, a provider's later point is skipped. There is no first date (N83, developer, 19/10): the walks
-that read stored dates keep their own floors (``EARLIEST_RANGE_START`` for replays and full histories,
-``range_span_floor``), so a price at 0001-01-01 no longer makes a walk of about 740,000 days (J's SEC8-1b).
+a later date is refused, a provider's later point is skipped. There is no first date (N83, developer, 19/10), and since
+D-P4 (26/10) no portfolio walk has one either: the portfolio, the lots and the positions read their stored dates as
+steps, so their cost follows the days something changes. The per-day walks of prices, rates and risk keep their own
+limits (``range_span_floor``; a full-history price load starts at ``price_query.FULL_HISTORY_LOAD_START``), so a price
+at 0001-01-01 never makes a walk of about 740,000 days (J's SEC8-1b).
 """
 
 from datetime import date, timedelta

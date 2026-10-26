@@ -52,13 +52,13 @@ from backend.app.schemas import SignalCadence, SignalDomain, SignalExecutionCont
 from backend.app.schemas.common import Currency, DateRangeModel
 from backend.app.schemas.prices import AssetBackwardFillInfo, FAPricePoint, FAPriceQueryItem
 from backend.app.services.assets import price_query
-from backend.app.services.assets.price_query import RISK_WARMUP_DAY_MULTIPLIER, PriceQueryOperations
+from backend.app.services.assets.price_query import FULL_HISTORY_LOAD_START, RISK_WARMUP_DAY_MULTIPLIER, PriceQueryOperations
 from backend.app.services.fx import conversion as fx_conversion
 from backend.app.services.fx.conversion import convert_bulk as head_convert_bulk
 from backend.app.services.market_series import mark_market_closed_carries, prepare_asset_series_set
 from backend.app.services.signals.execution import SignalPreparedSeriesBundle
 from backend.app.services.signals.service import SignalService
-from backend.app.utils.datetime_utils import EARLIEST_RANGE_START, utcnow
+from backend.app.utils.datetime_utils import utcnow
 
 FETCHED_AT = utcnow()
 
@@ -521,7 +521,7 @@ async def head_signals(world: _World, item: FAPriceQueryItem) -> tuple[list[FAPr
     plan = service.prepare_plan(item.signals, context, item.annotation_requests)
     warmup_days = max(plan.max_history_days_before_visible, plan.max_prepared_history_points_before_visible * RISK_WARMUP_DAY_MULTIPLIER)
     if plan.requires_full_history:
-        warmup_days = max(warmup_days, (start - EARLIEST_RANGE_START).days)
+        warmup_days = max(warmup_days, (start - FULL_HISTORY_LOAD_START).days)
     warmup_days = min(warmup_days, (start - date.min).days)
     load_start = start - timedelta(days=warmup_days)
     asset = next(name for name, asset_id in IDS.items() if asset_id == item.asset_id)
