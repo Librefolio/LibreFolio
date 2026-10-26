@@ -48,6 +48,7 @@ from backend.app.schemas.refresh import FXSyncBulkResponse, FXSyncPairRequest, F
 from backend.app.services.fx import catalog as fx_catalog
 from backend.app.services.fx import storage as fx_storage
 from backend.app.services.fx.storage import fx_rate_refusal, normalize_storable_rate
+from backend.test_scripts.fx_steps_double import steps_double
 from backend.test_scripts.test_utils import print_section, print_success
 
 
@@ -1204,6 +1205,7 @@ def _xr41_convert_bulk(monkeypatch: pytest.MonkeyPatch, rates: dict[tuple[str, s
 
     double = AsyncMock(side_effect=_convert)
     monkeypatch.setattr(fx_currencies_api, "convert_bulk", double)
+    monkeypatch.setattr(fx_currencies_api, "unit_rate_steps", steps_double(lambda source, destination, day: day if source == destination else filled.get(day, day)))
     return double
 
 
@@ -1243,8 +1245,8 @@ async def test_xr41_convert_currency_bulk_converts_an_amount_of_0_as_one_unit(mo
 
     Red on HEAD ab74aafbf: the double gets the 0 itself and answers USD 0; the handler divides that 0 by the amount, 0, and
     ``decimal.InvalidOperation`` escapes it: the server's 500, the 100's conversions lost with it.
-    Contract: 200, no error. The double gets one unit, EUR 1 → USD, for each day of the 0, and EUR 100 for each day of the
-    100. The answer, in request order and days ascending: each day of the 0 is EUR 0 as requested → USD 0, at the rate of
+    Contract: 200, no error. The double gets one unit, EUR 1 → USD, for the 0, and EUR 100 for the 100, each once (X-Q3: both
+    days read the same rate row). The answer, in request order and days ascending: each day of the 0 is EUR 0 as requested → USD 0, at the rate of
     the double's unit, 1.1, with the backward fill of the 100's same day; the 100's are USD 110 at 1.1, the first day not
     filled, the second filled 1 day back. The ``derived-`` case reads the same rule with a 0 written 0.00.
     """
@@ -1256,8 +1258,9 @@ async def test_xr41_convert_currency_bulk_converts_an_amount_of_0_as_one_unit(mo
     response = await _xr41_convert([_xr41_request("EUR", zero, "USD"), _xr41_request("EUR", "100", "USD")], double, story)
 
     handed = sorted(_xr41_handed(double))
-    expected_handed = sorted(("EUR", amount, "USD", day) for amount in (Decimal("1"), Decimal("100")) for day in XR41_DAYS)
-    assert handed == expected_handed, f"X-R41: {story}: convert_bulk received {handed}, expected one unit, EUR 1 → USD, for each day of the {zero}, and EUR 100 for each day of the 100"
+    # X-Q3: both days read the first day's rate row (the double fills it back), so each amount is converted once, on the first day
+    expected_handed = sorted(("EUR", amount, "USD", XR41_DAYS[0]) for amount in (Decimal("1"), Decimal("100")))
+    assert handed == expected_handed, f"X-R41: {story}: convert_bulk received {handed}, expected one unit, EUR 1 → USD, for the {zero}, and EUR 100 for the 100, each once for the stretch of the two days"
     assert (response.success_count, response.errors) == (4, []), f"{story}: {response}"
     answers = _xr41_answers(response)
     filled_back = (XR41_DAYS[0], 1)

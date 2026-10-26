@@ -398,7 +398,7 @@ class TestNavIncompleteIssue:
         states = [_incomplete_state("2025-01-01")]
         views = _make_views(states)
         report = views.build_data_quality_report()
-        assert date(2025, 1, 1) in report.incomplete_nav_dates
+        assert any(span.start <= date(2025, 1, 1) <= span.end for span in report.incomplete_nav_ranges)
 
     def test_nav_incomplete_outside_period_is_not_reported(self):
         """A gap before the displayed window must not raise an issue.
@@ -412,7 +412,7 @@ class TestNavIncompleteIssue:
         views = _make_views(states)
         report = views.build_data_quality_report(period_from=date(2025, 6, 1), period_to=date(2025, 6, 30))
         assert not any(i.code == IssueCode.NAV_INCOMPLETE for i in report.issues)
-        assert report.incomplete_nav_dates == []
+        assert report.incomplete_nav_ranges == []
 
     def test_nav_incomplete_inside_period_is_reported(self):
         states = [_incomplete_state("2019-03-04"), _incomplete_state("2025-06-10"), _complete_state("2025-06-30")]

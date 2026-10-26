@@ -300,6 +300,50 @@ and the native cash:
 Tests: `./dev.py test services fx-rate-steps` (`backend/test_scripts/test_services/test_fx_rate_steps.py`, 63 cases,
 isolation `pure`) pins the match with an oracle against `convert_bulk()` on every day of every window.
 
+### 🧩 Converting once for each stretch {: #convert-by-stretch }
+
+A rate row stays in force until the next one is stored, so the days of a long range between two rows
+convert the same amount under the same rate. `convert_by_stretch()`
+(`backend/app/services/fx/stretch_conversion.py`, X-Q3) answers a list exactly as
+`convert_bulk(session, conversions, raise_on_error=False)` does (same results to the digit, same errors),
+but hands `convert` one conversion for each distinct (amount as printed, pair, rate row), on the first day
+it meets it, and copies the answer to the other days of the stretch.
+
+```mermaid
+flowchart LR
+    I["conversions<br/>(Currency, to, day)"] --> K{"item"}
+    K -- "same currency" --> A["answered:<br/>amount, dated as asked"]
+    K -- "no rate on or before day" --> E["answered: own error<br/>'Conversion N: No FX rate found…'"]
+    K -- "rate row R" --> G["group (amount, pair, R)"]
+    G -- "first day of each group" --> C["convert = convert_bulk"]
+    C --> X["copied to every day of the group<br/>backward-fill flag: rate date before day"]
+```
+
+- **The rate row** of each day comes from `unit_rate_steps()` ([above](#unit-rate-steps)), which reads the
+  same usable rows as `convert_bulk()`.
+- **Per item, as in `convert_bulk()`:** an identity (the amount, dated as asked, no backward fill); a day
+  with no usable rate (its own error, numbered by its position in the list, never asked of `convert`);
+  the backward-fill flag (`rate date < day`).
+- **The amount counts as printed.** `Decimal("1.0")` and `Decimal("1")` convert to different exponents,
+  so they are different groups.
+- **A failure of `convert`** for a group fails each of its days, each error numbered by its own item.
+- **The seams** are the keyword arguments `convert` (default `convert_bulk`) and `steps` (default
+  `unit_rate_steps`), so a test can stand in for either read.
+
+`POST /api/v1/fx/currencies/convert` (`convert_currency_bulk()` in `backend/app/api/v1/fx/currencies.py`)
+calls it for its daily and signal blocks, so the expansion into one item per day is unchanged while
+`convert_bulk()` receives fewer items. The [price query](../assets/architecture.md#price-query-observation)
+applies the same idea to a price series through `observed_prices.py`, which asks `convert_bulk()` itself for
+each (price row, rate row) pair. Measured on a 10-year USD asset asked in EUR (3,650 points, rates on every
+weekday): 2,608 conversions instead of 3,650 with identical points, in the same time (0.26 s against 0.25 s),
+so it saves conversions, not time.
+
+Tests: `./dev.py test services fx-stretch-conversion`
+(`backend/test_scripts/test_services/test_fx_stretch_conversion.py`, isolation `pure`): item-for-item parity
+with `convert_bulk()` (direct, inverse, identity, no rate, gap, amount exponent), `convert` handed stretches
+and not days, and the handler answering what it answered with every day converted, signals and samples
+included.
+
 ### 📅 Fixed-Period Changes {: #fixed-period-changes }
 
 `POST /api/v1/fx/currencies/period-changes` returns the fixed-period changes of the FX table: 1D, 1W, 1M, 3M, 6M,

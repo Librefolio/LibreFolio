@@ -94,6 +94,7 @@ from backend.app.schemas.prices import FAPriceQueryItem, FAPriceQueryResponse, F
 from backend.app.schemas.signals import SignalRequest
 from backend.app.services.assets import price_query
 from backend.app.services.assets.price_query import PriceQueryOperations
+from backend.app.services.fx.conversion import UnitRateSteps
 from backend.app.utils import date_range_limits
 
 #: Where the item-day budget is applied: the modules that import ``MAX_BULK_ITEM_DAYS`` by name (BL-002).
@@ -368,8 +369,19 @@ def _conversion(amount: str, start: date, end: date | None, *, signals: Iterable
     return FXConversionRequest(from_amount=Currency(code="EUR", amount=Decimal(amount)), to_currency="USD", date_range=DateRangeModel(start=start, end=end), signals=list(signals))
 
 
+async def _every_day_a_step(_session: Any, requests: dict) -> dict:
+    """In-process ``unit_rate_steps`` to match ``_Converter``: a rate row on every day, so every day is its own stretch and
+    the converter is handed what it was handed when the handler converted every day (X-Q3 asks one conversion per stretch)."""
+    steps = {}
+    for (source, destination), windows in requests.items():
+        days = tuple(sorted({first + timedelta(days=n) for first, last in windows for n in range((last - first).days + 1)}))
+        steps[(source, destination)] = UnitRateSteps(source=source, destination=destination, days=days, values=tuple(Decimal(1) for _ in days), rate_days=days)
+    return steps
+
+
 async def _convert(monkeypatch: pytest.MonkeyPatch, converter: _Converter, *conversions: FXConversionRequest) -> FXConvertResponse:
     monkeypatch.setattr(currencies, "convert_bulk", converter)
+    monkeypatch.setattr(currencies, "unit_rate_steps", _every_day_a_step)
     return await currencies.convert_currency_bulk(request=list(conversions), session=None, _current_user=None)
 
 
@@ -478,7 +490,8 @@ async def test_bli04_exactly_1000_items_pass(monkeypatch):
     converter = _Converter()
     converted = await _convert(monkeypatch, converter, *[_conversion("100", FROZEN_TODAY, FROZEN_TODAY) for _ in range(MAX_ITEMS)])
     assert len(converted.results) == MAX_ITEMS
-    assert len(converter.handed) == MAX_ITEMS
+    # X-Q3: the 1 000 conversions are one amount on one day under one rate row: one conversion asked, 1 000 results
+    assert len(converter.handed) == 1
 
 
 # =============================================================================
