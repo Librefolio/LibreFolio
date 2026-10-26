@@ -330,6 +330,37 @@ hands it to the account it opens; an account waiting for its email verification 
 live. A value that is not a whole number of at least 1 is a limit of 0, logged like an invalid mode
 (`_max_users()`).
 
+#### Over the limit (A5-7)
+
+The state «over the limit» is **never stored**: `user_limit_service.over_limit_state()` reads it from the accounts
+every time (`active > max_users`, one `COUNT`; no limit, or a limit `max_users()` cannot read, is never a state). A
+restore needs no code of its own: the restored accounts are counted like any other.
+
+```mermaid
+flowchart TD
+    A[Request of a signed-in user] --> B{allowed for everyone?}
+    B -- yes --> OK[answers as usual]
+    B -- no --> C{active > limit?}
+    C -- no --> OK
+    C -- yes --> D{administrator and on the admin list?}
+    D -- yes --> OK
+    D -- no --> E[423 user_limit_exceeded]
+```
+
+- `api/v1/user_limit.py`: the dependency `refuse_when_over_limit`, the **fourth** of the `/api/v1` router, after the
+  block, the awaiting-restore mode and the interrupted restore (the first that stands answers). `ALLOWED_WHEN_OVER_LIMIT`
+  is `ALLOWED_WHEN_BLOCKED` less the five routes of the administrator's backup; `ALLOWED_WHEN_OVER_LIMIT_ADMIN` holds
+  those five and the two routes of the choice. The app's own restore is in neither list.
+- `GET /users/over-limit` lists the active accounts (who is `protected`, how many brokers each owns alone);
+  `POST /users/over-limit/resolve {keep_user_ids}` deactivates the others in **one transaction** under SQLite's write
+  lock, as `update_user_status(is_active=False)` does (sessions end, links retired), never `delete_user`. Refusals:
+  409 `NOT_OVER_LIMIT`; 422 `UNKNOWN_USER`, `TOO_MANY_KEPT`, `PROTECTED_MISSING`, `NO_ADMIN_KEPT`.
+- Protected: the managed owner (`account_protection`); with none, the administrator who chooses. At least one
+  administrator stays. Live invitations are revoked newest first only as far as the kept accounts need their places;
+  accounts waiting for a verification keep theirs.
+- The web app shows `UserLimitPage` instead of the app on the first `423 user_limit_exceeded`
+  (`features/instance/userLimit*.ts`, the same shape as the instance block).
+
 | Request | When `used >= max_users` |
 |---------|--------------------------|
 | `POST /auth/register` without an invitation | The account is inserted, then counted in the same transaction: over the limit, rollback and `409` `USER_LIMIT_REACHED`, with no numbers and no link, as the caller is anonymous. The first writer holds SQLite's write lock until it commits, so two registrations racing for the last place cannot both take it |
