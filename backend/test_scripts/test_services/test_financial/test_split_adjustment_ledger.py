@@ -51,6 +51,7 @@ from backend.app.db.models import Asset, AssetEvent, AssetEventType, AssetType, 
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.common import Currency
 from backend.app.schemas.portfolio import LotAnalysisType, LotsAnalysisResponse, PortfolioSummary
+from backend.app.services.financial_math.series_steps import value_at
 from backend.app.services.lots_analysis_service import LotsAnalysisService
 from backend.app.services.portfolio_service import PortfolioService
 from backend.test_scripts.test_utils import print_section, print_success
@@ -183,14 +184,14 @@ def _amount(value: Optional[Currency]) -> Optional[Decimal]:
 def _ledger_view(lots: LotsAnalysisResponse, summary: PortfolioSummary, book: Book, *, on: date = READING_DAY) -> dict:
     """What the two pages say of the asset on ``on``: the FIFO lots' quantity and cost, the average-cost line's point, the Dashboard's holdings."""
     lot_rows = lots.lots or []
-    wac_points = {point.date: point for point in lots.cumulative_wac_history or []}
+    wac_point = value_at(lots.cumulative_wac_history or [], on)
     holdings = [holding for holding in summary.holdings if holding.asset_id == book.asset.id]
     return {
         "lots status": lots.calculation_status,
         "lots: open quantity": sum((lot.open_quantity for lot in lot_rows), Decimal("0")),
         "lots: original cost of the open lots": sum((lot.original_cost for lot in lot_rows if lot.open_quantity > 0), Decimal("0")),
-        "average-cost line: quantity": wac_points[on].pool_qty if on in wac_points else None,
-        "average-cost line: cost per share": wac_points[on].wac if on in wac_points else None,
+        "average-cost line: quantity": None if wac_point is None else wac_point.pool_qty,
+        "average-cost line: cost per share": None if wac_point is None else wac_point.wac,
         "dashboard: quantity": sum((holding.quantity for holding in holdings), Decimal("0")),
         "dashboard: open cost basis": _amount(summary.open_cost_basis),
         "dashboard: total invested": _amount(summary.total_invested),
@@ -327,7 +328,8 @@ class TestRoundingOfTheRow:
         lots = await _lots(session, book)
 
         (lot,) = lots.lots or []
-        (point,) = [p for p in lots.cumulative_wac_history or [] if p.date == READING_DAY]
+        point = value_at(lots.cumulative_wac_history or [], READING_DAY)
+        assert point is not None
 
         assert abs(lot.opening_unit_price - point.wac) < Decimal("1e-9"), f"lot {lot.opening_unit_price}, line {point.wac}"
 
@@ -519,7 +521,14 @@ class TestTwoBrokersOnOneEvent:
 
         response = await _lots(session, book)
 
-        points = {point.broker_id: (point.pool_qty, point.wac) for point in response.broker_wac_history or [] if point.date == READING_DAY}
+        by_broker: dict = {}
+        for point in response.broker_wac_history or []:
+            by_broker.setdefault(point.broker_id, []).append(point)
+        points = {}
+        for broker_id, steps in by_broker.items():
+            held = value_at(steps, READING_DAY)
+            if held is not None:
+                points[broker_id] = (held.pool_qty, held.wac)
         assert points == {broker_a.id: (Decimal("20"), Decimal("50")), broker_b.id: (Decimal("12"), Decimal("50"))}
 
 
