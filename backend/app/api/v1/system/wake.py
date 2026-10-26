@@ -17,7 +17,8 @@ once, one every ``WAKE_KEEPALIVE_SECONDS`` while the jobs run, then the JSON of 
 whitespace leaves valid. Once the first space has left, the status is 200 whatever happens, and the body's ``status``
 tells how the run ended: ``blocked`` on an instance its hosting provider blocked, where the route stays allowed
 (``api/v1/instance_block.py``) and no job runs, ``awaiting_restore`` on an instance its panel is restoring (H-62), where
-no job runs either. A wake-up is never the user's presence (``sleep_wake/activity.py``).
+no job runs either, ``instance_key_mismatch`` on an instance whose key is not the one its data was written with (D6, H5-7):
+no job runs, the instance keeps serving. A wake-up is never the user's presence (``sleep_wake/activity.py``).
 """
 
 import asyncio
@@ -27,11 +28,14 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.config.platform import awaiting_restore
+from backend.app.db.session import get_async_engine
 from backend.app.logging_config import get_logger
 from backend.app.schemas.sleep_wake import WakeSyncJob, WakeSyncResponse
 from backend.app.services.platform.hosting_panel.access import PanelCaller, PanelScope, panel_access
+from backend.app.services.platform.instance_key_check import instance_key_state
 from backend.app.services.platform.restore_guard import restore_interrupted
 from backend.app.services.platform.scheduler.scheduler import RunReport, run_due_jobs
 from backend.app.services.platform.sleep_wake import idle_monitor
@@ -93,6 +97,9 @@ async def _wake_run() -> WakeSyncResponse:
             result = WakeSyncResponse(status="awaiting_restore", started_at=started_at, finished_at=_utc_now())
         elif restore_interrupted():
             result = WakeSyncResponse(status="restore_interrupted", started_at=started_at, finished_at=_utc_now())
+        elif await _instance_key_mismatch():
+            # D6, H5-7: with a key that is not the one the data was written with, no job runs; the instance keeps serving
+            result = WakeSyncResponse(status="instance_key_mismatch", started_at=started_at, finished_at=_utc_now())
         else:
             result = _response(await run_due_jobs("wake"))
     except Exception as exc:
@@ -102,6 +109,12 @@ async def _wake_run() -> WakeSyncResponse:
     # With nobody around, the machine goes back to sleep at once (Z2b): the check comes when this request has ended.
     idle_monitor.request_idle_check(idle_monitor.WAKE_CHECK_DELAY_SECONDS)
     return result
+
+
+async def _instance_key_mismatch() -> bool:
+    """Whether the instance key is not the one the data was written with, on a session of the run's own."""
+    async with AsyncSession(get_async_engine()) as session:
+        return await instance_key_state(session) == "mismatch"
 
 
 def _in_progress() -> bool:

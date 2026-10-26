@@ -10,13 +10,13 @@
  * The contract under test:
  *   - `checkGuides.json`, next to this file, new: `{"server": {<check id>: <guide>}, "browser": {<finding id>:
  *     <guide>}}`. `server`: every check of `GET /security/checks`, the ids of `run_config_checks()` then
- *     `platform.plugin_secrets`; `browser`: the findings the browser adds, today `OPEN_REGISTRATION_NOTICE_ID` and, since
+ *     `platform.plugin_secrets`, then (H5-7) `platform.instance_key_check`; `browser`: the findings the browser adds, today `OPEN_REGISTRATION_NOTICE_ID` and, since
  *     H-55 v2, `platform.blockedScript`.
  *   - `checkGuides.ts`, next to it, new: `CHECK_GUIDES`, the two halves merged and frozen; `checkGuidePath(checkId)`,
  *     the guide of an own key only (`Object.hasOwn`), so `undefined` for an unknown id and for `constructor`,
  *     `__proto__`, `toString` and `hasOwnProperty`.
  *   - A guide is `admin/<page>/#<anchor>`, matching `^admin/[a-z0-9_]+/#[a-z0-9-]+$`: no language prefix (`DocsLink`
- *     adds it), no leading `/`, no `.md`, a folder URL, an explicit anchor. The 22 guides are `EXPECTED_GUIDES` below.
+ *     adds it), no leading `/`, no `.md`, a folder URL, an explicit anchor. The 23 guides are `EXPECTED_GUIDES` below.
  *
  * The cases: §2's five — the shape, the anchors exist, the lookup, the browser half, the translation ratchet — and §1's
  * table pinned whole, so that a changed guide is a visible change of this file.
@@ -101,8 +101,8 @@ vi.mock('$lib/api', () => {
 // =============================================================================
 
 /**
- * The 22 guides of §1, whole: check id → guide. A changed guide is a change of this table. Written in the order of the
- * checks (`CONFIG_CHECKS`, then `platform.plugin_secrets`), then the browser's finding, and compared as a record: the
+ * The 23 guides of §1, whole: check id → guide. A changed guide is a change of this table. Written in the order of the
+ * checks (`CONFIG_CHECKS`, then `platform.plugin_secrets`, then `platform.instance_key_check`), then the browser's finding, and compared as a record: the
  * order is pinned by §3, against the checks themselves.
  */
 const EXPECTED_GUIDES: Readonly<Record<string, string>> = {
@@ -129,6 +129,9 @@ const EXPECTED_GUIDES: Readonly<Record<string, string>> = {
     'email.smtp_encryption': 'admin/email/#encryption-modes',
     'email.links': 'admin/email/#links-check',
     'platform.plugin_secrets': 'admin/configuration_secrets/#plugin-secrets',
+    // H5-7 (D6): the instance key check (the key does not match what the data were saved with), right after the plugin secrets'.
+    // Not `platform.instance_key`: that id is the key file's own check, mapped above to `#instance-key` (ID COLLISION, see test_instance_key_check.py).
+    'platform.instance_key_check': 'admin/configuration_secrets/#instance-key-check',
     // The browser's half: the open-registration warning, `OPEN_REGISTRATION_NOTICE_ID`
     'accounts.openRegistration': 'admin/settings/#open-registration-warning',
     // H-55 v2: a script the enforced policy blocked and this instance did not send (`cspNotice.ts`)
@@ -439,7 +442,7 @@ describe('checkGuides — the guide of each finding of the Security tab (N69d)',
     // H-61: red until checkGuides.json holds platform.hosting_panel (contract §5)
     // H-55 v2: red until checkGuides.json holds platform.blockedScript → admin/configuration_security/#csp
     // H5-4: red until checkGuides.json holds accounts.owner_email_change → admin/hosting_instances/#owner-email-change
-    it('§1 pinned whole: CHECK_GUIDES is the table of the 22 guides — a changed guide is a change of this file', async () => {
+    it('§1 pinned whole: CHECK_GUIDES is the table of the 23 guides — a changed guide is a change of this file', async () => {
         expect((await checkGuides()).CHECK_GUIDES, 'CHECK_GUIDES, check id → guide').toEqual(EXPECTED_GUIDES);
     });
 });

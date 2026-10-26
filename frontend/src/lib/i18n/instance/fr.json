@@ -17,7 +17,8 @@
       "instanceKey": {
         "ok": "La clé d'instance est utilisable.",
         "unusable": "La clé d'instance est inutilisable : {reason}",
-        "permissions": "{path} est accessible aux autres utilisateurs : le dossier devrait être en 0700 et le fichier en 0600."
+        "permissions": "{path} est accessible aux autres utilisateurs : le dossier devrait être en 0700 et le fichier en 0600.",
+        "mismatch": "La clé de l'instance n'est pas celle avec laquelle les données ont été écrites : les sauvegardes du panneau d'hébergement et les réveils programmés sont arrêtés. Remettez la bonne clé et redémarrez ; pour un changement voulu, démarrez une fois avec LIBREFOLIO_INSTANCE_KEY_ACCEPT=1."
       },
       "sessionCookie": {
         "ok": "Le cookie de session est Secure dès que le navigateur utilise HTTPS.",

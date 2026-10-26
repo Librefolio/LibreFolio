@@ -217,6 +217,8 @@ SEVERITIES = frozenset({"ok", "info", "warning", "error"})
 LOGIN_LIMIT_CHECK = "accounts.login_limit"
 JWT_SECRET_CHECK = "platform.jwt_secret"
 PLUGIN_SECRETS_CHECK = "platform.plugin_secrets"
+INSTANCE_KEY_CHECK = "platform.instance_key_check"  # not platform.instance_key: the key file's own check (ID COLLISION, see test_instance_key_check.py)
+INSTANCE_KEY_CHECK_MODULE = "backend.app.services.platform.instance_key_check"
 SMTP_CHECK = "email.smtp"
 SMTP_ENCRYPTION_CHECK = "email.smtp_encryption"
 
@@ -880,15 +882,17 @@ class TestSecurityChecks:
         after = _evaluated()
         async with AsyncSession(private_api.engine) as session:
             plugin_secrets = await check_plugin_secrets(session)
+            instance_key = await importlib.import_module(INSTANCE_KEY_CHECK_MODULE).check_instance_key(session)  # H5-7: red until the module exists
 
         by_id = _items(response, "GET /api/v1/security/checks as an administrator")
-        named = [check_id for check_id in (LOGIN_LIMIT_CHECK, JWT_SECRET_CHECK, PLUGIN_SECRETS_CHECK) if check_id not in by_id]
+        named = [check_id for check_id in (LOGIN_LIMIT_CHECK, JWT_SECRET_CHECK, PLUGIN_SECRETS_CHECK, INSTANCE_KEY_CHECK) if check_id not in by_id]
         assert not named, f"the checks {named} must be listed: {sorted(by_id)}"
         missing = sorted(set(before) - set(by_id))
         assert not missing, f"every check run_config_checks() evaluates must be listed — the answer filters none, ok included —: missing {missing}"
         differing = {check_id: _state(by_id[check_id]) for check_id in before if _state(by_id[check_id]) not in (before[check_id], after.get(check_id))}
         assert not differing, f"each check as run_config_checks() evaluates it: {differing}, evaluated {({check_id: before[check_id] for check_id in differing})}"
         assert _state(by_id[PLUGIN_SECRETS_CHECK]) == (plugin_secrets.severity, plugin_secrets.i18n_key, dict(plugin_secrets.detail)), f"platform.plugin_secrets as check_plugin_secrets evaluates it on the database served: {by_id[PLUGIN_SECRETS_CHECK]}"
+        assert _state(by_id[INSTANCE_KEY_CHECK]) == (instance_key.severity, instance_key.i18n_key, dict(instance_key.detail)), f"platform.instance_key_check as check_instance_key evaluates it on the database served (H5-7): {by_id[INSTANCE_KEY_CHECK]}"
         print_success(f"{len(by_id)} checks, each as evaluated")
 
     # red until A8a
