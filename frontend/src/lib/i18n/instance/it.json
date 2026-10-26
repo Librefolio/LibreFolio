@@ -17,7 +17,8 @@
       "instanceKey": {
         "ok": "La chiave d'istanza è utilizzabile.",
         "unusable": "La chiave d'istanza non è utilizzabile: {reason}",
-        "permissions": "{path} è accessibile ad altri utenti: la cartella dovrebbe essere 0700 e il file 0600."
+        "permissions": "{path} è accessibile ad altri utenti: la cartella dovrebbe essere 0700 e il file 0600.",
+        "mismatch": "La chiave dell'istanza non è quella con cui sono stati scritti i dati: i backup del pannello di hosting e i risvegli programmati sono fermi. Rimetti la chiave giusta e riavvia; per un cambio voluto, avvia una volta con LIBREFOLIO_INSTANCE_KEY_ACCEPT=1."
       },
       "sessionCookie": {
         "ok": "Il cookie di sessione è Secure ogni volta che il browser usa HTTPS.",

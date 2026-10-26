@@ -99,7 +99,7 @@ and an English summary for the log. ``log_configuration_audit()`` runs them at s
     ``frontend/src/lib/features/instance/checkGuides.json``, which ``checkGuides.ts`` wraps for the frontend: a
     ``server`` half, one key per check of ``GET /api/v1/security/checks``, and a ``browser`` half, the findings the
     browser adds. Under the ``configuration`` fixture, the ids of ``run_config_checks()`` then
-    ``plugin_secrets_check.CHECK_ID``, the list that endpoint returns, are the keys of ``server``, in order. The file is
+    ``plugin_secrets_check.CHECK_ID`` then (H5-7) ``platform.instance_key_check``, the list that endpoint returns, are the keys of ``server``, in order. The file is
     read with ``json.load`` from the repository root, located from this file, and never written: no TS parsing in
     Python. A failure names the ids without a guide and the guide entries without a check, since a new check needs a
     guide there; while the file does not exist, the test fails naming the lot and listing the keys it must hold. The
@@ -1719,15 +1719,17 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
 #: (j) The map from each check of the «Security» tab to its guide, relative to ``REPOSITORY_ROOT``: frontend data, read
 #: here with ``json.load``, so there is no TS parsing in Python.
 CHECK_GUIDES_JSON = "frontend/src/lib/features/instance/checkGuides.json"
+#: (j) H5-7: the check of the instance key (``services/platform/instance_key_check.py``), listed by the endpoint after the plugin secrets'.
+INSTANCE_KEY_CHECK_ID = "platform.instance_key_check"  # not platform.instance_key: that id is the key file's own check (ID COLLISION, see test_instance_key_check.py)
 
 
 def test_every_server_check_has_a_guide(configuration):
-    """(j) N69d: the ids of ``GET /security/checks``, ``run_config_checks()`` then the stored plugin secrets' check, are
+    """(j) N69d: the ids of ``GET /security/checks``, ``run_config_checks()`` then the stored plugin secrets' check, then (H5-7) the instance key's, are
     the keys of the map's ``server`` half, in order: an id without a guide, or a guide entry without a check, is named.
     Barrier: the repository root located from this file holds the map's folder, so a missing map is the map's absence,
     never a wrong path."""
     print_section("N69d: every server check has a guide")
-    ids = [result.check_id for result in run_config_checks()] + [plugin_secrets_check.CHECK_ID]
+    ids = [result.check_id for result in run_config_checks()] + [plugin_secrets_check.CHECK_ID, INSTANCE_KEY_CHECK_ID]
     path = REPOSITORY_ROOT / CHECK_GUIDES_JSON
     folder = Path(CHECK_GUIDES_JSON).parent.as_posix()
     assert path.parent.is_dir(), f"Precondition: the repository root located from this file, {REPOSITORY_ROOT}, must hold the map's folder, {folder}: else a missing map would only mean a wrong root"

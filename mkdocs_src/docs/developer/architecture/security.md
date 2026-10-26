@@ -816,6 +816,41 @@ known answers computed with `derive_key()` before the two shared their helpers. 
 administrator sees and does is in [Configuration](../../admin/configuration_secrets.md#instance-key), section «The
 Instance Key».
 
+### 🔏 The Key Check (D6) {: #instance-key-check }
+
+A key that is valid but not the one the data was written with starts the instance all the same: the plugin
+secrets stop reading, and the log says so only when some are stored. The hosting panel needs to know it before
+its nightly backup pushes a good copy out of the ones it keeps (contract L3, D6; lot H5-7, developer decision
+26/10/2026). `backend/app/services/platform/instance_key_check.py`, workstream H:
+
+- **The reference** is `secrets/instance.key.check` in the data directory (`KEY_CHECK_FILE`, folder `0700`, file `0600`): the
+  64 hex characters of `key_check_value()`, an HMAC-SHA256 of a fixed label with `derive_key("instance.key-check.v1")`.
+  Not the key, not a derived key that anything else uses. The folder is not in the backup (`ARCHIVED_FOLDERS`), and a restore
+  re-encrypts the secrets with this instance's key, so a restore never moves it.
+- **`instance_key_state(session) -> "ok" | "mismatch"`** is evaluated at every call (nothing is kept in the process: a value read
+  once at the start stays old, the lesson of the owner's guard, lot H5-5) and never raises. A key that is not created yet, or
+  cannot be used, is `ok` (nothing to compare; this never generates the key). With the file: equal is `ok`, different is
+  `mismatch`; a file that cannot be read or is not 64 hex characters is `ok` and one warning per process, because a
+  broken file must not stop the backups. Without the file, the stored secrets decide (**R1**): `mismatch` only when there is at least one
+  row with a secret, in either plugin table, and the `key_id` of every one is not the current key's; one readable row, or
+  none, is `ok`.
+- **The start**, step `instance-key-check` right after `plugin-secrets-check`, no `skip_when`, never raises
+  (`check_instance_key_at_start()`): the file absent and the state `ok` writes it (exclusive create: of several workers the first
+  wins); absent and `mismatch` writes nothing and logs an error, since writing would bless the wrong key; present
+  and `mismatch` logs an error and rewrites nothing.
+- **`LIBREFOLIO_INSTANCE_KEY_ACCEPT`** (`instance_key_accept()` in `config/platform.py`, the values of `awaiting_restore()`; one that cannot be
+  read stops the start, in `log_configuration_audit()`) replaces the file with the current key's value, atomically, and logs a
+  warning at every start while it is set. It is the only way to make a changed key `ok` without the old one.
+- **Where it shows**: `PanelStatusResponse.instance_key` (the [panel's status](access_control.md#setup-status), a required
+  key, eight in all); `start_panel_backup` answers `409 backup_instance_key_mismatch` through a dependency declared
+  after the panel's credential, so a caller without one learns nothing (`backup_awaiting_restore` keeps its own answer first);
+  `_wake_run()` answers the status `instance_key_mismatch` and runs no job; `GET /security/checks` adds
+  `platform.instance_key` (`error`, `instance.checks.instanceKey.*`). **The instance keeps serving**: no 423, no page, nothing
+  in `GET /system/instance`. The panel's other backup routes and its restore are not stopped.
+
+Tests: `./dev.py test services instance-key-check` and `./dev.py test api instance-key-check`. The administrator's side is
+«The Key Check» in [Configuration](../../admin/configuration_secrets.md#instance-key-check).
+
 ### 🔐 Secure Backups (`.lfbk`) {: #secure-backups }
 
 A secure backup (lot B4: decisions 38 and 39, P12) is the zip of a clear backup encrypted with a password its maker
@@ -1610,7 +1645,7 @@ dependency checks all its routes: `panel_access(scope)` in `backend/app/services
 |-------|--------|------------------------------|---------------|---------------------|
 | `backup` | The four `/backup/panel/jobs…` routes, `backend/app/api/v1/backup/panel.py` (workstream B) | `backup_download_token()`: `SecretFileError`, `BackupConfigError` | `BackupPanelToken` | `backup_panel_unauthorized` / `backup_panel_unavailable` |
 | `wake` | `POST /system/wake-sync`, `backend/app/api/v1/system/wake.py` (workstream Z) | `wake_token()`: `SecretFileError`, `SleepWakeConfigError` | `WakeToken` | `wake_unauthorized` / `wake_unavailable` |
-| `status` | `GET /panel/status`, the [setup status](../../admin/hosting_panel_api.md#panel-status), read by [`admin_setup_status()`](access_control.md#setup-status), with the instance's `mode` and its `restore` (lot H-62), the two counts `users_used` and `users_limit` (lot H5-1), and `owner_email_change` (lot H5-4) | `panel_status_token()` (`backend/app/config/hosting_panel.py`): `SecretFileError`, `HostingPanelConfigError` | `PanelStatusToken` | `panel_status_unauthorized` / `panel_status_unavailable` |
+| `status` | `GET /panel/status`, the [setup status](../../admin/hosting_panel_api.md#panel-status), read by [`admin_setup_status()`](access_control.md#setup-status), with the instance's `mode` and its `restore` (lot H-62), the two counts `users_used` and `users_limit` (lot H5-1), `owner_email_change` (lot H5-4) and `instance_key` (lot H5-7, [The Key Check](#instance-key-check)) | `panel_status_token()` (`backend/app/config/hosting_panel.py`): `SecretFileError`, `HostingPanelConfigError` | `PanelStatusToken` | `panel_status_unauthorized` / `panel_status_unavailable` |
 | `backup:restore` (`PanelScope.BACKUP_RESTORE`) | The seven `/backup/panel/restore…` routes, `backend/app/api/v1/backup/panel_restore.py` (lot H-62): see [Awaiting Restore](#await-restore) | None: `read_token` always answers `None`, so no token opens it and, without the panel's public keys, it is off (`404`); a signed ticket of this scope only | `BackupRestorePanelTicket` | `backup_restore_unauthorized` / `backup_restore_unavailable` |
 
 `panel_access(scope)` returns the same function for the same scope, so FastAPI runs it once per request. It takes the

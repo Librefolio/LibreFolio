@@ -17,7 +17,8 @@
       "instanceKey": {
         "ok": "La clave de instancia se puede usar.",
         "unusable": "No se puede usar la clave de instancia: {reason}",
-        "permissions": "{path} es accesible para otros usuarios: la carpeta debería ser 0700 y el archivo 0600."
+        "permissions": "{path} es accesible para otros usuarios: la carpeta debería ser 0700 y el archivo 0600.",
+        "mismatch": "La clave de la instancia no es la que se usó para escribir los datos: las copias de seguridad del panel de alojamiento y los despertares programados están detenidos. Pon la clave correcta y reinicia; para un cambio deliberado, arranca una vez con LIBREFOLIO_INSTANCE_KEY_ACCEPT=1."
       },
       "sessionCookie": {
         "ok": "La cookie de sesión es Secure siempre que el navegador usa HTTPS.",

@@ -146,6 +146,42 @@ the data directory. Give every instance its own key: never share one key between
       move the key to the environment or to a Docker secret, use the content of `secrets/instance.key`
       as the value.
 
+### 🔏 The Key Check {: #instance-key-check }
+
+LibreFolio keeps, next to the key, a **check value**: a short fingerprint of the key in the file
+`secrets/instance.key.check` of the data directory (folder `0700`, file `0600`). It is not the key and the key
+cannot be worked out from it. At each start, and each time a hosting panel asks, LibreFolio compares the fingerprint of
+the key it has now with the one it stored. They differ when LibreFolio starts with **another key than the one the
+data was written with**: a machine that got the wrong key, a key file replaced by a new one.
+
+- **The first start** writes the file. If saved plugin secrets already exist and the current key reads
+  none of them, LibreFolio does not write it: it would take the wrong key for the right one. The check
+  then says the key does not match until you put the right key back.
+- **With a key that does not match**, the log has an error (`check` is `platform.instance_key`), the
+  Security tab of Settings › Administration says so, and the [status of the hosting panel](hosting_panel_api.md#panel-status)
+  answers `"instance_key": "mismatch"`. Two things stop, and only these: the backups that the panel starts
+  (a start answers `409` with the code `backup_instance_key_mismatch`, see
+  [Backup Jobs](hosting_panel_backups.md#panel-jobs)) and the [scheduled wake-up](wake_sync.md#wake-sync)
+  (status `instance_key_mismatch`, no job runs). **The instance keeps serving**: your data does not depend on this
+  key, only the saved plugin secrets do. The backup that an administrator starts from the app is not stopped.
+  Why the panel's backups stop: a copy made with the wrong key would push a good one out of the copies you keep.
+  They resume by themselves when the key is right again: [When the Instance Key Does Not Match](hosting_panel_backups.md#instance-key-mismatch).
+- **The way out is the right key.** Put it back, with `LIBREFOLIO_INSTANCE_KEY`, its `_FILE` or the
+  `secrets/instance.key` of the data, and start LibreFolio again: the next answer is `ok`, with nothing else to do.
+- **To really change the key**, for example when you decide that the old secrets are lost and the plugin
+  secrets are entered again, set `LIBREFOLIO_INSTANCE_KEY_ACCEPT=1` for **one start**. That start replaces the stored
+  check value with the one of the key it has, and logs a warning. **Then remove the variable and start again**: while it is
+  set, every start accepts whatever key it has, and the protection does nothing (the warning is logged at every start, as a reminder).
+  The values are `1` or `0`, `true` or `false`, `yes` or `no`, `on` or `off`; any other value stops the start, naming the variable.
+
+!!! note "📏 What the check cannot see"
+
+    Without a stored check value and without any saved plugin secret, there is nothing to compare, so
+    the answer is `ok`: the first start of an instance whose key was already wrong cannot be told. From
+    then on, the stored value protects it. If the data comes back without its `secrets/` folder, the value
+    is written again at the next start, and the plugin secrets decide while it is missing. A check value that cannot be read
+    (a permission, a damaged file) never stops a backup: the answer is `ok` and the log has a warning, once.
+
 ---
 
 ## 🧩 Plugin Settings {: #plugin-settings }

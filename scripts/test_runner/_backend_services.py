@@ -1652,6 +1652,14 @@ def services_restore_guard(verbose: bool = False, test_names: list = None) -> bo
     return run_command(cmd, "Restore guard tests", verbose=verbose)
 
 
+def services_instance_key_check(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the instance key check: the check value, the state (file, then stored secrets), the start's four paths, the step (H5-7, H)."""
+    print_section("Services: Instance Key Check")
+    print_info("Testing: backend/app/services/platform/instance_key_check.py (key_check_value, instance_key_state, check_instance_key_at_start, check_instance_key), instance_key_accept, the step instance-key-check")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_instance_key_check.py", test_names)
+    return run_command(cmd, "Instance key check tests", verbose=verbose)
+
+
 def services_restore_owner_guard(verbose: bool = False, test_names: list = None) -> bool:
     """Test the guard's owner part: a restored instance serves no data until the owner has an account (H5-3, H)."""
     print_section("Services: Restore Owner Guard")
@@ -3184,6 +3192,16 @@ Note: No backend server required.
         desc="B-33 (H, 22/10): probe_restore_state asks apply.restore_state_problem (the given or the instance's data directory), keeps the answer, logs one error line with the reason and never the state's content; restore_interrupted() False in a process that never probed; restore-state right after pending-restore, never stops the start; while interrupted post-migration-fixes, lone-transfer-legs and the six steps of the mode call nothing, the kept steps carry no skip",
         # PURE: B's hook replaced by monkeypatch (or a state file under tmp_path), the steps run alone with their calls
         # recorded, one child interpreter that only imports the module. No DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "instance-key-check",
+        services_instance_key_check,
+        name="Instance Key Check",
+        desc="H5-7 (H, D6): a wrong instance key is told, not served around: key_check_value (64 lowercase hex, HMAC under a purpose key, never the key), instance_key_state (an unusable key or none is ok and creates nothing; the check file decides, malformed or unreadable is ok with one warning per process; no file: R1, mismatch only when every stored secret, system and user, is under another key; recomputed at every call, never raises), check_instance_key_at_start (accept writes and warns at every start; no file and mismatch is one error and nothing written; otherwise exclusive 0600 in 0700, one winner among workers; a file mismatch is one error and never rewritten; never raises; no key or value in a log), instance_key_accept (the values of awaiting_restore, an invalid value stops the start), the step instance-key-check right after plugin-secrets-check, check_instance_key for the Security tab",
+        # PURE: a private SQLite file with the real tables, the data directory and the key in tmp_path/environment by monkeypatch;
+        # the once-per-process warning in child interpreters. No lane DB, no server, no network.
         isolation="pure",
     )
     add_test(
