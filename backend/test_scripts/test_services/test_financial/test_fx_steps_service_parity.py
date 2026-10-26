@@ -57,7 +57,9 @@ What is tested:
 3. ``TestTheReportIsBitIdentical`` — the whole report (summary with breakdown, history, positions contribution, broker
    P&L history, P&L candles, income, cost, deposit histories, acquisition funding) computed by the product and computed
    with HEAD's dense readers (``_preload_fx_rates_today``, ``_compute_native_cash_today``, verbatim) patched in: every
-   field equal, every Decimal by ``as_tuple()``.
+   field equal, every Decimal by ``as_tuple()``. The one field left out is ``data_quality.stale_fx_pairs`` (D-P4 cure B,
+   new): it needs the date of the stored row behind each rate (``rate_days`` of the unit-rate steps), which today's dense
+   readers do not carry, so they cannot report it; the product's own list is checked to be there.
 4. ``TestTheCost`` — ``_preload_fx_rates`` hands ``convert_bulk`` nothing and calls ``unit_rate_steps`` once, with
    windows covering exactly today's needs; its work (``convert_bulk`` items + steps returned) does not grow when the range
    grows from 30 to 3000 days; ``compute_native_cash`` hands ``convert_bulk`` the foreign movements only, calls
@@ -138,6 +140,7 @@ from backend.app.services.financial_math.portfolio.classifier import ScopeAwareT
 from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
 from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction, InTransitInterval
 from backend.app.services.fx import conversion as fx_conversion
+from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.portfolio_service import PortfolioService
 from backend.app.utils.datetime_utils import EARLIEST_RANGE_START
 from backend.test_scripts.test_utils import print_section, print_success
@@ -239,6 +242,15 @@ def _deep_bits(value: object) -> object:
     if isinstance(value, (set, frozenset)):
         return sorted((_deep_bits(item) for item in value), key=repr)
     return value
+
+
+def _without(tree: object, field: str) -> object:
+    """A ``_deep_bits`` tree without every dict key named ``field`` (at any depth)."""
+    if isinstance(tree, dict):
+        return {key: _without(item, field) for key, item in tree.items() if key != field}
+    if isinstance(tree, list):
+        return [_without(item, field) for item in tree]
+    return tree
 
 
 def _differences(left: object, right: object, path: str = "report") -> list[str]:
@@ -934,7 +946,11 @@ class TestTheReportIsBitIdentical:
                 patch.setattr(portfolio_service_module, "compute_native_cash", _compute_native_cash_today)
                 today = _deep_bits(await _report(book))
         assert product["history"] and product["summary"], "precondition: the report has a history and a summary"
-        differences = _differences(product, today)
+        # The new stale-rate list is the product's alone (see the module docstring): present and well formed here, left out below.
+        stale = product["data_quality"]["stale_fx_pairs"]
+        assert stale, "precondition: the book has a rate older than the threshold, the product lists it in data_quality.stale_fx_pairs"
+        assert all(item["stale_days"] > STALE_PRICE_THRESHOLD_DAYS for item in stale), f"a listed pair is not stale: {stale}"
+        differences = _differences(_without(product, "stale_fx_pairs"), _without(today, "stale_fx_pairs"))
         assert not differences, f"the report differs from today's ({len(differences)} path(s)):{_show(differences)}"
         print_success(f"✓ {len(product['history'])} history points and every section equal, bit for bit")
 

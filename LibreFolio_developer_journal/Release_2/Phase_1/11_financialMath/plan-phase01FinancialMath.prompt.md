@@ -4940,3 +4940,52 @@ nel frontend (Y), `value_at` lato backend per l'AI Export (Z).
   **220 casi, 0 differenze** (nessun comportamento cambia: solo funzioni e modelli nuovi); `mkdocs build` 0, `check-links`
   0. **CHECKPOINT READY** inviato, FROZEN. Poi il secondo checkpoint (report a gradini, `mwrr_line`, prezzo vecchio,
   `fx_stale`, intervalli, `unit_rate_steps` con `as_of`).
+
+#### MF-P4b · secondo checkpoint — il report a gradini (25/10, base `1164a1e65`)
+- ✅ **Rossi** (test-author): `test_financial/test_report_in_steps.py` (60), `test_financial/test_data_quality_ranges.py`
+  (39), `test_financial_math/test_stale_turn_refined.py` (12): rossi su `1164a1e65` (`git archive` + `PYTHONPATH`,
+  `ondata5/MF-p4b2-red-*.log`). Scelte: P&L per broker massimale per broker (corretto il contratto §1.2); primo punto di
+  storia e di `mwrr_line` a 0; i giorni MWRR dai tratti fusi della storia.
+- ✅ **Motore** (`daily_state.py`, `models.py`, `fx_rates.py`): «prezzo vecchio» rifinito (`_stale_turn_days`, da
+  `mark_series[*].observation_dates`: novità solo all'ultima osservazione prima di un buco > soglia); cambio vecchio
+  (`AskedDayRates.stale_turn_days` / `rate_day_at`, che leggono `UnitRateSteps.rate_days`: l'`as_of` c'era già,
+  `fx/conversion.py` non cambia — X rivede le due funzioni); `DailyPortfolioState.stale_fx_pairs: dict[coppia, data riga]`.
+  > **⚠️ Fuori pista**: C901 su `_collect_dirty_days` → estratto `_stale_turn_days()`.
+- ✅ **Viste a gradini** (`derived_views.py`): `window_range`, `_change_rows` (inizio finestra + inizi dei segmenti +
+  giorni extra, senza costruire giorni fermi), `build_history(metrics=, extra_days=)`, P&L per broker (chiave, buchi),
+  candele (buchi), allocazioni e asset; `mwrr_line_days`; `build_performance_inputs(days=)` rado sui DailyStates (apertura,
+  inizi dei segmenti, ultimo giorno: TWRR/ROI/MWRR uguali al bit al giornaliero); `build_acquisition_funding` dagli
+  inizi dei segmenti; tolto `_window_days`.
+- ✅ **Servizio** (`portfolio_service.py`): `get_history_steps` → `HistorySteps(range, history, mwrr_line)`;
+  `get_history` lo avvolge; `_mwrr_line` (`period_mwrr_series` sui giorni della linea, primo punto 0); `range` nel report;
+  `_engine_missing_fx_pairs` (date = movimenti, `ranges` = giorni di valutazione fusi); `_merge_missing_pairs` tiene i
+  `ranges`. Qualità dei dati (`data_quality.py`): `incomplete_nav_ranges`, conteggio NAV_INCOMPLETE dagli intervalli,
+  `stale_fx_pairs` del giorno di valutazione; `*_dates` restano (li legge il rischio, li toglie J).
+  `series_steps.merged_spans` (nuovo).
+- ✅ **Verdi** i tre file nuovi: 111/111 (`ondata5/MF-p4b2-green-1.log`). ruff, black puliti.
+- ✅ **Docs** (docs-writer): `portfolio-engine/index.en.md` §9 (regola rifinita, cambio vecchio, «Daily States as Steps»)
+  e `mwrr.en.md` (linea MWRR di punti veri); build strict 0, check-links 0; debito di traduzione reale (niente stamp).
+- ✅ **Prima porta** (`ondata5/MF-p4b2-gates*.log`): `financial-math` 61 rossi, `roi-fifo-utils` 95, `api portfolio`
+  setup rosso (`populate_mock_data.py` leggeva `history[].mwrr_annualized`): tutti di forma (giornaliero, conteggi di
+  chiamate, ingressi densi, `mwrr_*` nella storia, golden).
+  > **⚠️ Fuori pista**: `_stale_fx_pairs` cadeva sugli stati finti (Mock) dei test → `getattr` + `Mapping`.
+  > **⚠️ Fuori pista**: `populate_mock_data.py` (condiviso, 6 righe): il controllo MWRR legge `get_history_steps().mwrr_line`.
+- ✅ **Riparazioni** (test-author, due lotti su file distinti): A `test_financial_math/` 4 file, 502 verdi; B
+  `test_financial/` 11 file + golden `eur_only_golden.json` (espanso = vecchio al bit, solo campi nuovi), 2078/2079 (il
+  rosso rimasto è il lettore del rischio di J). `test_portfolio_api.py`: 14 sezioni (`range`, `mwrr_line`), a mano.
+- ✅ **Porte** (`ondata5/MF-p4b2-verify.log`, slot 11:58–12:23): `financial-math` **3673**, `portfolio-engine` **41**,
+  `roi-fifo-utils` **2078 + 1 rosso atteso** (J), `api portfolio` **54 + 1** (le 14 sezioni, poi corretto).
+- ✅ **Parità con espansione** (`ondata5/MF-p4b2-parity.log`, `MF-p4/compare_steps.py`): 214 casi su 6 copie, **0
+  differenze**; `mwrr_line` uguale al bit al MWRR giornaliero di `1164a1e65` in ogni punto; storia 15 552 → 11 456 punti
+  (base), 94 338 → 1 304 (copie del 1900); digest degli stati uguali senza `stale_fx_pairs` e `pnl_candle`.
+  > **⚠️ Fuori pista (eccezione da segnalare)**: le candele di 6–78 sabati/domeniche per copia: HEAD calcolava il «venerdì
+  > + 8» spurio, e un giorno fermo calcolato ha la candela piatta; ora quel giorno è fermo e porta la candela dell'ultimo
+  > giorno calcolato, come ogni altro fine settimana (contratto §1.2). Nessun altro campo cambia.
+  > **⚠️ Fuori pista (bug preso dalla parità)**: MISSING_FX_RATES contava `dates_count`/`date_from`/`date_to` solo sulle
+  > `dates` → ora su `dates` ∪ giorni dei `ranges` (`merged_spans`); test di guardia
+  > `TestMissingFxRatesCountsTheRanges` (test-author, 4 test).
+- ✅ **Lettori fuori dal mio lotto** (`ondata5/MF-p4b2-readers.log`): `services ai-export` 40 rossi, tutti doppi di test
+  che costruiscono `PortfolioHistoryPoint` senza `through` (Z, con `value_at`); `services risk-all` 925 verdi; il rosso del
+  rischio è `test_date_range_bounds::…analyzed_range…` (`risk/results.py`, J). Dopo le ultime correzioni: `api portfolio`
+  **55**, file della qualità dei dati e del report **204** (`ondata5/MF-p4b2-final-*.log`). `api sync` non lanciato: il
+  client generato è ignorato da git, lo rigenera Y. **CHECKPOINT READY** inviato, FROZEN.

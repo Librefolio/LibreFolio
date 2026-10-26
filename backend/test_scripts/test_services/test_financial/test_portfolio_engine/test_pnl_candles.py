@@ -37,7 +37,7 @@ exact class of cache-key regression.
 """
 
 import sys
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock
 
@@ -597,9 +597,12 @@ class TestDerivedViewsBuilderPnlCandles:
         result = _golden_result()
         points = DerivedViewsBuilder(result.daily_states, "EUR").build_pnl_candles()
 
+        # Steps (D-P4): a candle holds from its ``date`` to its ``through``; the two golden days have different candles,
+        # so each is its own one-day step.
         assert len(points) == 2
+        assert [(p["date"], p["through"]) for p in points] == [(date(2025, 1, 1), date(2025, 1, 1)), (date(2025, 1, 2), date(2025, 1, 2))]
         for point in points:
-            assert set(point.keys()) == {"date", "open", "high", "low", "close"}
+            assert set(point.keys()) == {"date", "through", "open", "high", "low", "close"}
             for field in ("open", "high", "low", "close"):
                 assert isinstance(point[field], CurrencySchema)
                 assert point[field].code == "EUR"
@@ -617,7 +620,11 @@ class TestDerivedViewsBuilderPnlCandles:
 
         assert points  # sanity: the golden scenario has no gaps
         for point in points:
-            assert point["close"].amount == states_by_date[point["date"]].total_pnl
+            # Per day, by expanding the step: every day it holds closes at that day's total P&L.
+            day = point["date"]
+            while day <= point["through"]:
+                assert point["close"].amount == states_by_date[day].total_pnl
+                day += timedelta(days=1)
 
     def test_missing_day_is_omitted_not_zeroed(self):
         """Reuses the MISSING-gating scenario above: day 2's candle is None, so
