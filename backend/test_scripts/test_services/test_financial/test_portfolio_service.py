@@ -2188,7 +2188,7 @@ class TestStalePriceDataQuality:
         # "Nothing worse": each of these would make the status PARTIAL instead.
         assert dq.missing_price_assets == []
         assert dq.missing_fx_pairs == []
-        assert dq.incomplete_nav_dates == []
+        assert dq.incomplete_nav_ranges == []
         assert asset.id in {stale.asset_id for stale in dq.stale_prices}
         assert dq.data_quality_status == DataQualityStatus.CARRIED_FORWARD
 

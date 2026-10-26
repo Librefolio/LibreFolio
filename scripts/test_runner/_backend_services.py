@@ -250,6 +250,27 @@ def services_price_query_sampling(verbose: bool = False, test_names: list = None
     return run_command(cmd, "Price query sampling tests", verbose=verbose)
 
 
+def services_price_query_observations(verbose: bool = False, test_names: list = None) -> bool:
+    """X-Q1/Q2/S1 («formule veloci»): the price query reads a series by observation and converts once for each stretch of unchanged price row and rate row."""
+    print_section("Services: Price Query Observations (X-Q1, X-Q2)")
+    print_info("Testing: observed_prices (observe, series_points, ObservedPrices), PriceQueryOperations.observed_prices, get_prices_bulk")
+    print_info("Parity: the public points and conversion errors equal the 1fd80c481 pipeline's (a copy in the test), on 18 asset/target/window cases and 7 signal cases (EMA, calendar rolling return, drawdown)")
+    print_info("Count: convert_bulk is handed one conversion for each stretch of unchanged price row and rate row, not one for each day")
+    print_info("Object: first_point_date, observation_dates and point_on(day), the point the public series has on that day (J's R1)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_price_query_observations.py", test_names)
+    return run_command(cmd, "Price query observation tests", verbose=verbose)
+
+
+def services_fx_stretch_conversion(verbose: bool = False, test_names: list = None) -> bool:
+    """X-Q3: POST /fx/currencies/convert converts once for each stretch of days on which the rate row is the same."""
+    print_section("Services: FX Stretch Conversion (X-Q3)")
+    print_info("Testing: convert_by_stretch (services/fx/stretch_conversion.py), convert_currency_bulk")
+    print_info("Parity: item for item, convert_bulk's results and error texts (direct, inverse, identity, no rate, rate gap, exponent of the amount); the handler's answer with every day converted")
+    print_info("Count: convert is handed one conversion for each distinct (amount, pair, rate row)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_fx_stretch_conversion.py", test_names)
+    return run_command(cmd, "FX stretch conversion tests", verbose=verbose)
+
+
 def services_provider_registry(verbose: bool = False, test_names: list = None) -> bool:
     """Test registry dei provider (asset & fx)."""
     print_section("Services: Provider Registry")
@@ -2149,6 +2170,24 @@ Note: No backend server required.
         # price_query; the FX rates of the conversion case are rows of that file; the route is called as a function on a
         # session of that file; statements and ORM loads are counted by listeners the tests register and remove; the
         # case table is a file of the repository, read only.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "price-query-observations",
+        services_price_query_observations,
+        name="Price Query Observations",
+        desc="X-Q1/Q2/S1: get_prices_bulk reads a series by observation and converts once for each stretch of unchanged price row and rate row; the public points and conversion errors equal the 1fd80c481 pipeline's (18 cases, 7 with signals); convert_bulk handed the stretches, not the days; ObservedPrices (first_point_date, observation_dates, point_on) for the risk",
+        # PURE: a private SQLite file under tmp_path built with create_all; the market holiday table replaced by monkeypatch; no lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "fx-stretch-conversion",
+        services_fx_stretch_conversion,
+        name="FX Stretch Conversion",
+        desc="X-Q3: convert_by_stretch answers item for item what convert_bulk answers (direct, inverse, identity, no rate, gap, amount exponent) and hands convert one conversion per (amount, pair, rate row); convert_currency_bulk answers what it answered with every day converted, signals and samples included",
+        # PURE: a private SQLite file under tmp_path built with create_all; no lane DB, no server, no network.
         isolation="pure",
     )
     add_test(cat, "provider-registry", services_provider_registry, name="Provider Registry", desc="Registration, lookup, priority, fallback")

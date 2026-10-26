@@ -55,6 +55,17 @@ test's transaction and comes back with the rollback — then the test's rates ar
 position in a collection.
 
 TODAY (HEAD ``2879ae3e4``): the two reds fail on their assertion; every PARITY and resolver case is green.
+
+J5-5 (D-P4 cure B, contract MF-P4b §1.3): the seven histories are STEPS (``date`` .. ``through``) and the service reads the market
+price only on the days it can change on (``price_candidate_days``: an observation, a rate step — ``FxRateResolver.rate_change_days``
+—, an event, with the day after each), converting a stretch with ``convert_through``. What this battery protects is unchanged: the
+rates read as steps give the answer the per-day conversions gave. Three things follow. (1) The legacy copy gains the two methods the
+service now calls, written so that it stays the reader of EVERY day: ``rate_change_days`` is every day it was asked for (so B reads
+the price on every calendar day of a market currency's window, as HEAD did) and ``convert_through`` asks each day of the stretch
+one by one. (2) A and B both end in steps, built by the same ``history_steps`` and both maximal, so their JSON is equal as it
+stands (no expansion needed: equal days AND equal grouping); B is the day-by-day reading, A the one on candidates. (3) Whatever a
+test says of "a point on each day" reads the steps through ``_lots_steps.daily_points``; the cost budgets (r1, r2) count what the
+resolver is asked, which the days never changed.
 """
 
 import random
@@ -93,6 +104,7 @@ from backend.app.services.financial_math.price_marks import AssetPriceSeries
 from backend.app.services.fx import conversion as fx_conversion
 from backend.app.services.fx.conversion import convert_bulk
 from backend.app.services.lots_analysis_service import get_lots_analysis
+from backend.test_scripts.test_services._lots_steps import daily_points, fold_gap_ranges
 
 # Non-test names of the L1a battery: its books, readings and comparison helpers. Never its ``test_*`` functions.
 from backend.test_scripts.test_services.test_financial.test_lots_change_days_parity import (
@@ -187,6 +199,23 @@ class LegacyFxRateResolver:
     def missing_pairs(self) -> list[WACMissingPairInfo]:
         """Every conversion asked for and not made, one entry per pair, as the data-quality report lists them."""
         return [WACMissingPairInfo(pair=pair, dates=sorted(dates)) for pair, dates in sorted(self._missing.items())]
+
+    # The two methods the service has called since J5-5 (D-P4 cure B: the market price is read on the days a rate can change,
+    # not on every day). They are not copies of HEAD: they make this resolver what it was, the reader of EVERY day.
+
+    def rate_change_days(self) -> tuple[date_type, ...]:
+        """Every day a rate was asked for. The legacy resolver reads the rate of each day on its own, one ``convert_bulk`` unit
+        a need: for it every asked day is a day the rate can change on, so the service reads the market price on all of them —
+        today's day-by-day computation, the reference of the battery."""
+        return tuple(sorted({day for _currency, day in self._needs}))
+
+    def convert_through(self, amount: Decimal | None, currency: str | None, first: date_type, last: date_type) -> Decimal | None:
+        """``convert`` for the stretch ``first``..``last``, each of its days asked one by one, as the days did. The answer is
+        the first day's; a day with no rate is a gap of the pair, whatever the day before it said."""
+        converted = self.convert(amount, currency, first)
+        for offset in range(1, (last - first).days + 1):
+            self.convert(amount, currency, first + timedelta(days=offset))
+        return converted
 
 
 def legacy_collect_fx_needs(  # noqa: C901 — independent per-analysis fx-need collection blocks, no decision tree
@@ -334,7 +363,7 @@ async def _read(
 def _assert_1900_is_valued(book: Book, result: LotsAnalysisResponse) -> None:
     """Precondition of the reds, green today and after: the BUY's lot has a value point, worth something in USD, on each of
     the 31 days of the window."""
-    lot_days = [point.date for point in result.value_history or [] if point.lot_id == book.rows["buy"].id and point.open_value > 0]
+    lot_days = [point.date for point in daily_points(result.value_history) if point.lot_id == book.rows["buy"].id and point.open_value > 0]
     assert lot_days == _calendar(BOOK_1900_DATE_FROM, BOOK_1900_DATE_TO), f"precondition: {len(lot_days)} value points worth something for the lot of the BUY"
 
 
@@ -405,9 +434,9 @@ _HUF_FX_DAILY = Scenario(seed_fx_daily_in_huf, FX_FIRST_DAY, FX_DATE_TO, ("owner
 def _check_1900_in_usd(_book: Book, result: LotsAnalysisResponse) -> None:
     """The 1900-usd book is what it says: the market price line has a USD point on every day from the BUY (2 Jan 1900, converted
     at the rate of 29 Dec 1899, backward-filled) to ``date_to``, and the BUY's lot is valued on the last day."""
-    marked = [point.date for point in result.market_price_history or []]
+    marked = [point.date for point in daily_points(result.market_price_history)]
     assert marked == _calendar(BOOK_1900_BUY_DAY, BOOK_1900_DATE_TO), f"precondition: {len(marked)} marked days, from {marked[:1]} to {marked[-1:]}"
-    assert any(point.date == BOOK_1900_DATE_TO and point.open_value > 0 for point in result.value_history or []), "precondition: the lot is valued on the reading day"
+    assert any(point.date == BOOK_1900_DATE_TO and point.open_value > 0 for point in daily_points(result.value_history)), "precondition: the lot is valued on the reading day"
 
 
 _1900_IN_USD = Scenario(
@@ -479,7 +508,7 @@ async def test_parity_the_steps_answer_what_the_days_answered(session, monkeypat
             assert handed > 0, f"precondition: today's resolver handed convert_bulk {handed} conversions on a book with a foreign currency"
     if (target, scenario_name) == (USD, "1900-usd") and not empty_window:
         assert handed >= LEGACY_FLOOR, f"precondition: the legacy copy handed convert_bulk {handed} conversions, the 44 240 days of today's computation are missing"
-    difference = _first_difference(_dump(as_is), _dump(legacy))
+    difference = _first_difference(fold_gap_ranges(_dump(as_is)), fold_gap_ranges(_dump(legacy)))
     assert difference is None, f"{target} / {scenario_name} / {window} / {scope}: the steps' answer differs from the days' at {difference} — points A/B {_point_counts(as_is, legacy)}"
 
 

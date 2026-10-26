@@ -8497,11 +8497,26 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   «Ondata 3 (21/10 notte) — TC-23 poi L1b», passo A2.
   - ✅ 22/10 (ondata 4): `RiskPanelHeader` e `RiskAnalysisPanel` leggono `buildSyncTargets`. Unico effetto visibile: nella
     modale di sync di `RiskAnalysisPanel` gli asset stanno in ordine di id, non nell'ordine dell'ambito.
-- **R1 · Il rischio sulle osservazioni, dopo Q1 di X** — medio-basso, prestazioni; J, 22/10. **Ondata 5 della 1.3,
+- ✅ **R1 · Il rischio sulle osservazioni, dopo Q1 di X** — medio-basso, prestazioni; J, 22/10. **Ondata 5 della 1.3,
   dopo X-Q1** (correzione del coordinatore, 22/10: il developer tiene nella 1.3 le formule veloci, MF-FV e X-Q1; la prima
   stesura la diceva «dopo la 1.3»). Q1 non esiste ancora: `price_query._build_backward_filled_series` è ancora la
   serie densa. Nessun caso di test scritto; 7 scenari di parità descritti nel [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md),
   «Analisi breve di R1 e L1». Il pavimento SEC8-1b resta finché R1 non c'è. ~3 h più la parità.
+  ✅ 23/10 (ondata 5, J5-2): `prepare_asset_series` legge ogni asset con `observed_prices` (Q1 di Z) e
+  `market_series.prepare_asset_series_set_from_readings` costruisce i punti solo nei giorni che servono; 10 casi di parità
+  contro i prezzi densi (puri) e 4 sul DB con Q1 vero, tetto J-50 invariato. Il pavimento SEC8-1b (`bounded_range`) si toglie
+  adesso (MF).
+
+- **J5-4 · La serie dell'asset sommato non ha base per le quote in viaggio all'inizio del periodo** — basso, numeri
+  della serie delle posizioni (#48); J, 24/10 (nata dalla domanda 3 di MF su J5-1). Con `broker_id` None e un trasferimento
+  tra broker partito prima di `date_from` e arrivato dopo, le quote non sono di nessun broker all'inizio e non si
+  comprano dopo: il destinatario le tiene (pnl dal costo), ma la somma toglie dalla base ciò che il trasferimento «porta
+  dentro» (`brought_in`), quindi la base dell'asset è 0 e `pnl_percent` è None mentre il pnl c'è. Nelle serie per singolo
+  broker il caso è giusto (base = costo spostato, dopo J5-3). Cura da decidere: nella somma, non togliere `brought_in`
+  per i trasferimenti non contati (`counted_tract` falso), che sono capitale entrato prima dell'inizio. Prova: un caso
+  puro in `test_position_series.py` con date_from dopo la partenza e arrivo dopo. Collegata: in un trasferimento
+  parziale il mittente mostra un avvallo di qualche giorno in viaggio (limite dichiarato in J5-1). Dettagli:
+  [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), passo 10 dell'ondata 5.
 
 ## Z · Sospensione e risveglio (fase 01)
 

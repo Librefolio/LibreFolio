@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import date as date_type
-from datetime import timedelta
 
 from sqlalchemy import select
 
@@ -136,8 +135,6 @@ def build_data_quality_report(  # noqa: C901 — flat sequential issue-section a
     else:
         incomplete_spans = [(s.date, s.date) for s in daily_states if not s.nav_complete and (period_from is None or s.date >= period_from) and (period_to is None or s.date <= period_to)]
     incomplete_nav_ranges = merged_spans(incomplete_spans)
-    # The days one by one, until the risk side reads the ranges (workstream J removes them; D-P4)
-    incomplete_nav = [first + timedelta(days=offset) for first, last in incomplete_nav_ranges for offset in range((last - first).days + 1)]
     incomplete_nav_days = sum((last - first).days + 1 for first, last in incomplete_nav_ranges)
 
     # NON_ISO_CURRENCY (E-19b): the stored values that are no ISO 4217 code, from the missing pairs' sides, the held assets
@@ -406,7 +403,6 @@ def build_data_quality_report(  # noqa: C901 — flat sequential issue-section a
         missing_price_assets=missing_price_assets_dto or [],
         missing_fx_pairs=missing_fx_pairs_dto or [],
         stale_prices=stale_prices_dto or [],
-        incomplete_nav_dates=incomplete_nav,
         incomplete_nav_ranges=[DateSpan(start=first, end=last) for first, last in incomplete_nav_ranges],
         stale_fx_pairs=_stale_fx_pairs(daily_states, period_to),
         share_mismatch_warnings=[_share_mismatch_text(mismatch) for mismatch in reported_mismatches],

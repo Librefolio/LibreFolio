@@ -55,6 +55,7 @@ from backend.app.db.models import PriceHistory, TransactionType
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.portfolio import LotAnalysisType, LotsAnalysisResponse
 from backend.app.services.lots_analysis_service import get_lots_analysis
+from backend.test_scripts.test_services._lots_steps import daily_points
 from backend.test_scripts.test_services._scope_boundary_books import add_prices, asset_row, new_asset, new_broker, new_user
 from backend.test_scripts.test_services.test_financial.test_lots_change_days_parity import Book, _as_is_and_every_day, _assert_not_vacuous, _dump, _first_difference, _own_no_rate, _point_counts, _windows
 
@@ -106,7 +107,7 @@ async def test_the_worked_example_shows_the_shorts_gain(session):
 
     # Precondition, green today and after: the replay is not FAILED, so the performance history is given (J-12).
     assert result.performance_history is not None, (result.calculation_status, result.data_quality)
-    observed = [(point.date, point.roi, point.twrr) for point in result.performance_history]
+    observed = [(point.date, point.roi, point.twrr) for point in daily_points(result.performance_history)]
     assert observed == [
         (date(2025, 1, 5), Decimal("0"), None),
         (date(2025, 1, 6), Decimal("0.1"), Decimal("0.1")),
@@ -162,8 +163,8 @@ def _check_short_partial_no_rate(book: Book, result: LotsAnalysisResponse) -> No
     on 21–25 Feb and have one on 19 and 26 Feb; the opening sale's and the buy-back's days change no price."""
     short = next((lot for lot in result.lots or [] if lot.lot_id == book.rows["short"].id), None)
     pairs = sorted(item.pair for item in result.data_quality.missing_fx_pairs) if result.data_quality else []
-    priced = {point.date: point.market_price for point in result.market_price_history or []}
-    performance = {point.date: point.roi for point in result.performance_history or []}
+    priced = {point.date: point.market_price for point in daily_points(result.market_price_history)}
+    performance = {point.date: point.roi for point in daily_points(result.performance_history)}
     no_rate_days = [PARITY_NO_RATE[0] + timedelta(days=offset) for offset in range((PARITY_NO_RATE[1] - PARITY_NO_RATE[0]).days + 1)]
     observed = {
         "status": result.calculation_status != "FAILED",

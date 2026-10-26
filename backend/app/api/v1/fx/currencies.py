@@ -36,10 +36,11 @@ from backend.app.schemas.refresh import FXSyncBulkResponse, FXSyncPairRequest
 from backend.app.schemas.signals import SignalCadence, SignalCatalogResponse, SignalDomain, SignalExecutionContext, SignalPricePoint
 from backend.app.services.assets.price_sampling import SampleReferenceError, resolve_sample_references, sample_reference_detail
 from backend.app.services.fx.base import FXServiceError
-from backend.app.services.fx.conversion import convert_bulk
+from backend.app.services.fx.conversion import convert_bulk, unit_rate_steps
 from backend.app.services.fx.period_changes import get_fx_period_changes_bulk
 from backend.app.services.fx.sampling import plan_conversion_samples
 from backend.app.services.fx.storage import FXRateNotStorableError, delete_rates_bulk, fx_rate_refusal, normalize_storable_rate, upsert_rates_bulk
+from backend.app.services.fx.stretch_conversion import convert_by_stretch
 from backend.app.services.fx.sync import sync_pairs_bulk
 from backend.app.services.signals.planning import SignalExecutionPlan, SignalRequestValidationError
 from backend.app.services.signals.registry import SignalPluginRegistry
@@ -555,10 +556,13 @@ async def convert_currency_bulk(  # noqa: C901 — sequential bulk pipeline: exp
             )
             current_date += timedelta(days=1)
 
-    bulk_results, bulk_errors = await convert_bulk(
+    # X-Q3: one conversion for each stretch of days on which the rate row is the same, the results of every day as if each
+    # had been converted (``convert_by_stretch``)
+    bulk_results, bulk_errors = await convert_by_stretch(
         session,
         bulk_conversions,
-        raise_on_error=False,
+        convert=convert_bulk,
+        steps=unit_rate_steps,
     )
 
     results = []
