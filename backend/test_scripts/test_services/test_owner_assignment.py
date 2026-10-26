@@ -35,6 +35,8 @@ import argparse
 import asyncio
 import dataclasses
 import importlib
+import inspect
+import json
 import os
 from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass
@@ -57,8 +59,8 @@ from backend.app.db.models import AccountToken, AccountTokenPurpose, User
 from backend.app.services.accounts import auth_service, token_service, user_service
 from backend.app.services.accounts.settings_service import initialize_global_settings
 from backend.app.services.accounts.token_service import hash_token
-from backend.app.services.email import delivery, flows, smtp
-from backend.app.services.email.messages import EmailContent
+from backend.app.services.email import delivery, flows, messages, smtp
+from backend.app.services.email.messages import EMAIL_LANGUAGES, EmailContent, EmailKind, build_password_reset
 from backend.app.utils.datetime_utils import ensure_utc
 from backend.app.utils.runtime.rate_window import SlidingWindowLimiter
 from backend.test_scripts.test_utils import print_section
@@ -769,3 +771,66 @@ async def test_a_new_address_revokes_the_live_email_change_links_of_the_account(
     assert await revoked(mine) and not await revoked(others)
     async with AsyncSession(engine) as session:
         assert (await session.get(AccountToken, consumed.record.id)).revoked_at is None, "a spent link stays as it was"
+
+
+# =============================================================================
+# A5-5: the email of the owner after a restore says why the password is gone
+# =============================================================================
+
+FRONTEND_AUTH = Path(__file__).resolve().parents[3] / "frontend" / "src" / "lib" / "i18n" / "auth"
+TTL = timedelta(minutes=30)
+LINK = "https://folio.zq-assign.example.com/reset-password#token=abc123"
+INSTANCE = "Zq <Folio> & Co"
+
+
+def _after_restore() -> Any:
+    builder = getattr(messages, "build_password_reset_after_restore", None)
+    if builder is None:
+        pytest.fail("red until A5-5: messages has no build_password_reset_after_restore", pytrace=False)
+    return builder
+
+
+def test_the_after_restore_builder_takes_what_the_plain_reset_takes_and_no_name() -> None:
+    """A55-010: ``build_password_reset_after_restore(*, language, link, ttl, instance)``, keyword-only, no username and no address (the owner's address is not even a parameter): the signature of ``build_password_reset``."""
+    builder = _after_restore()
+    parameters = inspect.signature(builder).parameters
+    assert set(parameters) == {"language", "link", "ttl", "instance"} == set(inspect.signature(build_password_reset).parameters)
+    assert all(parameter.kind is inspect.Parameter.KEYWORD_ONLY for parameter in parameters.values())
+
+
+@pytest.mark.parametrize("language", EMAIL_LANGUAGES)
+def test_the_after_restore_email_is_a_reset_with_the_reason_and_the_fallback(language: str) -> None:
+    """A55-020: in each language the email is a password-reset email (same kind), with the link verbatim in the text and escaped in the HTML, its own subject and MORE text than the plain reset; it names the sign-in page's «forgot password» label exactly as the interface writes it, and leaves no placeholder behind; the instance is escaped in the HTML."""
+    builder = _after_restore()
+    plain = build_password_reset(language=language, link=LINK, ttl=TTL, instance=INSTANCE)
+    content = builder(language=language, link=LINK, ttl=TTL, instance=INSTANCE)
+
+    assert content.kind is EmailKind.PASSWORD_RESET and content.language == language
+    assert LINK in content.text and LINK in content.html
+    assert content.subject != plain.subject and len(content.text) > len(plain.text)
+    label = json.loads((FRONTEND_AUTH / f"{language}.json").read_text(encoding="utf-8"))["auth"]["forgotPassword"]
+    assert label in content.text and label in content.html.replace("&#x27;", "'"), "the fallback names the label of the sign-in page"
+    assert "$" not in content.text and "$" not in content.html
+    assert "<Folio>" not in content.html and "&lt;Folio&gt;" in content.html
+    assert "{" not in content.subject
+
+
+@pytest.mark.asyncio
+async def test_the_owner_assignment_sends_the_after_restore_email(engine: AsyncEngine, owner: ModuleType, outbox: Outbox, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A55-030: the reset email ``assign_owner_and_send_reset`` sends — the app's restore, and any other caller — is built by ``build_password_reset_after_restore``, once, with the link, the validity and the instance and nothing of the account."""
+    real = _after_restore()
+    calls: list[dict[str, Any]] = []
+
+    def recorded(**keywords: Any) -> EmailContent:
+        calls.append(keywords)
+        return real(**keywords)
+
+    monkeypatch.setattr(owner, "build_password_reset_after_restore", recorded, raising=False)
+    user_id = await _scene(engine, monkeypatch)
+
+    result = await _assign(owner, engine, user_id, now=NOW)
+
+    assert result.outcome == "sent" and len(calls) == 1
+    assert set(calls[0]) == {"language", "link", "ttl", "instance"}
+    assert calls[0]["link"].startswith(f"{PUBLIC_URL}{RESET_PAGE}#token=")
+    assert outbox.attempts[0].content.text == real(**calls[0]).text

@@ -1,6 +1,6 @@
 """The emails LibreFolio sends: their texts in the four languages of the interface, and the message with its headers.
 
-Each kind of email has a builder (``build_password_reset``, ``build_invite``, ``build_verification``,
+Each kind of email has a builder (``build_password_reset``, ``build_password_reset_after_restore``, ``build_invite``, ``build_verification``,
 ``build_admin_setup``, ``build_test_message``, ``build_email_changed``, ``build_email_change_confirmation``) that returns an ``EmailContent``: a subject, a plain-text part and an
 HTML part, in the language asked for (``email_language``: an unknown one is English). The texts live in
 ``templates/<language>.json``, one file per language with the same keys and the same ``$placeholders``; the HTML layout
@@ -118,6 +118,7 @@ def _render(
     after: list[str],
     values: Mapping[str, str],
     link: str | None = None,
+    subject_key: str = "subject",
 ) -> EmailContent:
     """Assemble the two parts of an email from the keys of its section, filled with ``values`` (each on one line)."""
     catalog = _CATALOGS[language]
@@ -140,8 +141,8 @@ def _render(
     html_blocks.extend(_PARAGRAPH.format(html.escape(line)) for line in lines_after)
 
     text = "\n\n".join(text_blocks) + f"\n\n-- \n{footer}\n"
-    page = _LAYOUT.substitute(lang=language, subject=html.escape(section["subject"]), body="\n".join(html_blocks), footer=html.escape(footer))
-    return EmailContent(kind=kind, language=language, subject=section["subject"], text=text, html=page)
+    page = _LAYOUT.substitute(lang=language, subject=html.escape(section[subject_key]), body="\n".join(html_blocks), footer=html.escape(footer))
+    return EmailContent(kind=kind, language=language, subject=section[subject_key], text=text, html=page)
 
 
 def _duration(ttl: timedelta, language: str) -> str:
@@ -153,6 +154,28 @@ def build_password_reset(*, language: str | None, link: str, ttl: timedelta, ins
     lang = email_language(language)
     values = {"instance": instance, "duration": _duration(ttl, lang)}
     return _render(EmailKind.PASSWORD_RESET, lang, greeting="greeting_anonymous", before=["intro"], after=["expiry", "ignore"], values=values, link=_checked_link(link))
+
+
+def build_password_reset_after_restore(*, language: str | None, link: str, ttl: timedelta, instance: str) -> EmailContent:
+    """The reset link for the owner of an instance restored from a backup (A5-5): the same email, with why the password is gone.
+
+    The password of the owner's account was revoked at the restore, for the owner's security, whoever asked for the restore:
+    the text says so, offers the link, and names «forgot password» for when the link expires. All its words are the keys
+    ``restore_*`` of the ``password_reset`` section, one place for the four languages. Like the plain reset it takes no user name and
+    no address, and it does not say who restored the backup.
+    """
+    lang = email_language(language)
+    values = {"instance": instance, "duration": _duration(ttl, lang)}
+    return _render(
+        EmailKind.PASSWORD_RESET,
+        lang,
+        greeting="greeting_anonymous",
+        before=["restore_intro", "restore_note"],
+        after=["expiry", "restore_fallback", "restore_unexpected"],
+        values=values,
+        link=_checked_link(link),
+        subject_key="restore_subject",
+    )
 
 
 def build_invite(

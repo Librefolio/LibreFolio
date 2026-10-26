@@ -487,7 +487,7 @@ account of that backup is the owner, and then, in one step:
    open sessions end;
 3. every one-time link of that account that the backup carried is cancelled: its password-reset links are deleted and its
    other links (email verification, setup, email change) are revoked, whatever they said;
-4. one new password-reset link is emailed to the address of `LIBREFOLIO_ADMIN_EMAIL`, so the real owner chooses a password.
+4. one new password-reset link is emailed to the address of `LIBREFOLIO_ADMIN_EMAIL`, so the real owner chooses a password. The email says that, for the owner's security, the password was revoked after the restore, and that *Forgot Password?* on the sign-in page gives a new link if this one expires. It does not say who restored the backup.
 
 If the email cannot go (email off or unusable, no `LIBREFOLIO_PUBLIC_URL`, the hourly limit, a refusal by the SMTP server), the
 link is written in the **log of the instance** as a `warning`, *Password-reset link for the instance owner*, and nowhere else:
