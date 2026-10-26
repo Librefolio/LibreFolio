@@ -4989,3 +4989,13 @@ nel frontend (Y), `value_at` lato backend per l'AI Export (Z).
   rischio è `test_date_range_bounds::…analyzed_range…` (`risk/results.py`, J). Dopo le ultime correzioni: `api portfolio`
   **55**, file della qualità dei dati e del report **204** (`ondata5/MF-p4b2-final-*.log`). `api sync` non lanciato: il
   client generato è ignorato da git, lo rigenera Y. **CHECKPOINT READY** inviato, FROZEN.
+
+#### MF-PAV · inventario dei pavimenti delle date (26/10, base `01e180028`) — solo analisi
+- ✅ `salvataggi-worktrees-20261021/ondata5/MF-pavimenti-inventario.md`:
+  - pavimenti del portafoglio da togliere: P1–P11, motore e report (MF), lotti (J), scrittura e messaggi (W), costante;
+  - limiti delle variazioni 1G…5A: Q1–Q3 (X/Y), decisione del developer, raccomandato 0006-01-01;
+  - tetti di costo che restano: R1–R6 (100 anni delle serie giornaliere, carico Z-30, periodo AI Export, «min» dei
+    provider, calendari a 2200, domani);
+  - lotti: L1 MF ∥ L2 J → L3 W → L5 chiusura (+ L4 X se deciso); rischi.
+  > **Note implementazione**: `git grep` sulle refs MF `01e180028`, J `7336910f9`, W `8db10d43d`, Y `36eaffa4d`, Z
+  > `a8d1aab57` (storia committata, nessun worktree altrui). Nessun codice, nessun test. CHECKPOINT READY inviato, FROZEN.
