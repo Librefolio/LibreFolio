@@ -76,3 +76,25 @@ describe('AI Export options', () => {
         expect(areAiExportOptionsEqual(base, {...base, period: {...base.period, customAmount: 6}})).toBe(false);
     });
 });
+
+// D-P4: a snapshot date typed in the year 24 or 1 must stay there. `Date.UTC(24, …)` reads the year as 1924: the snapshot was
+// refused as «invalid», and a period that falls before the year 100 came out a century later.
+describe('AI Export period with a year before 100', () => {
+    it('resolves a period that ends in the year 24 in the year 24', () => {
+        expect(resolveAiExportPeriod('0024-03-31', {preset: '3m', customAmount: 3, customUnit: 'months'})).toEqual({start: '0023-12-31', end: '0024-03-31'});
+        expect(resolveAiExportPeriod('0024-03-31', {preset: 'custom', customAmount: 14, customUnit: 'days'})).toEqual({start: '0024-03-17', end: '0024-03-31'});
+    });
+
+    it('resolves the first year', () => {
+        expect(resolveAiExportPeriod('0001-03-31', {preset: '3m', customAmount: 3, customUnit: 'months'})).toEqual({start: '0000-12-31', end: '0001-03-31'});
+    });
+
+    it('goes back across the year 100 without landing in the 1900s', () => {
+        expect(resolveAiExportPeriod('0100-01-31', {preset: '3m', customAmount: 3, customUnit: 'months'})).toEqual({start: '0099-10-31', end: '0100-01-31'});
+        expect(resolveAiExportPeriod('0100-03-31', {preset: '1y', customAmount: 3, customUnit: 'months'})).toEqual({start: '0099-03-31', end: '0100-03-31'});
+    });
+
+    it('still refuses a date that does not exist', () => {
+        expect(() => resolveAiExportPeriod('0024-02-30', {preset: '3m', customAmount: 3, customUnit: 'months'})).toThrow(TypeError);
+    });
+});
