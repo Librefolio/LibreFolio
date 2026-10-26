@@ -1780,6 +1780,14 @@ def services_backup_owner_real(verbose: bool = False, test_names: list = None) -
     return run_command(cmd, "Restore owner (real) tests", verbose=verbose)
 
 
+def services_backup_users_limit(verbose: bool = False, test_names: list = None) -> bool:
+    """Test a backup with more active accounts than LIBREFOLIO_MAX_USERS: the check only warns, the confirmation never refuses (lot B5-1k2)."""
+    print_section("Backup users limit: the report warns, the confirmation never refuses")
+    print_info("Testing: instance_backup/staging.py (users_active, users_limit, users_over_limit, the warning users_over_limit), apply.py (confirm_restore accepts, the state gains nothing)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_users_limit.py", test_names)
+    return run_command(cmd, "Backup users limit tests", verbose=verbose)
+
+
 def services_backup_secure_rules(verbose: bool = False, test_names: list = None) -> bool:
     """Test the rules of a secure backup: its password (the accounts' rules, at least 12 characters) and the key it carries."""
     print_section("Services: Secure Backup Rules")
@@ -3331,6 +3339,17 @@ Note: No backend server required.
         desc="The owner's account after a restore with A's real instance_owner.assign_owner_and_send_reset (lot B5-1e), nothing played but the mail (instance_owner.send_email an outbox, the SMTP transport a tripwire): a real backup at the migration head confirmed from the app in the managed profile, applied and committed, then owner.assign_restored_owner. The chosen account gets the owner's address, administrator, active, is_instance_owner (no other account marked), its password opens nothing; ONE live password-reset link (a planted one dated in the future is gone), one email to the owner, outcome sent; the token is in no restore.json, read_restore, backup pending (with and without --json) or log line; email failing or SMTP off gives link_only with the link in A's instance-log line only; another account holding the address gives error:EMAIL_TAKEN, owner_assignment_problem EMAIL_TAKEN, the database unchanged, and after the administrator frees it backup pending --recover owner (nobody serving) assigns the owner; a crash between the call and the record makes the next start call A again (old link dead, one live link, a second email, outcome recorded); A receives the chosen id only, on a fresh session (no since, no now)",
         # PURE: the data directory under tmp_path, the restore real, a migrated copy of the staging tests' database (alembic in
         # a process of its own); only the mail is fake. No lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-users-limit",
+        services_backup_users_limit,
+        name="Backup Users Limit",
+        desc="Lot B5-1k2, a backup with more active accounts than LIBREFOLIO_MAX_USERS: the check only warns. The report carries users_active (the copy's active accounts, plus the inactive holder of LIBREFOLIO_ADMIN_EMAIL on a managed instance, which the restore activates; always computed), users_limit (None when unset, blank or invalid: an invalid value never fires the warning) and users_over_limit (max(0, active - limit)), and the warning users_over_limit before credentials_from_backup, which stays last; no warning when not over, at the limit or without a limit; report.json gains those three numbers and nothing that names an account; a report written before reads the defaults. The confirmation never refuses: the example (5 active accounts, limit 3) is accepted through the app, the command line and the hosting panel, self-hosted and managed with an owner, with the state's fields unchanged, and a limit that changed after the check is not restore_stage_outdated",
+        tests="Report users_* + warning order → limits, holder, report.json → confirm accepted on every channel, state unchanged, moved limit",
+        # PURE: every data directory and database under tmp_path (the staging tests' migrated database, the apply tests' instance);
+        # no lane DB, no server, no network.
         isolation="pure",
     )
     add_test(

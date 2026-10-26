@@ -516,6 +516,15 @@ def utils_backup_cli_restore(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Backup CLI restore tests", verbose=verbose)
 
 
+def utils_backup_cli_users_limit(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the restore of a backup with more active accounts than LIBREFOLIO_MAX_USERS from the command line: one warning line, no refusal (lot B5-1k2)."""
+    print_section("Utils: Backup CLI users limit")
+    print_info("Testing: scripts/backup_cli.py (_print_stage_report, cmd_restore --yes and --dry-run, the help)")
+    print_info("Tests: the one line «The backup holds N active accounts; this instance accepts M», no name or address, never twice, restore --yes confirms, --dry-run exits 0, no --remove-user")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_backup_cli_users_limit.py", test_names)
+    return run_command(cmd, "Backup CLI users limit tests", verbose=verbose)
+
+
 def utils_backup_cli_secure(verbose: bool = False, test_names: list = None) -> bool:
     """Test the secure backup from the command line: create with a password, inspect and restore an envelope, decrypt."""
     print_section("Utils: Backup CLI secure backup")
@@ -1057,6 +1066,17 @@ Tests for utility modules and helper functions:
         # a database at the head made once by alembic in its own process, a pty or a pipe for stdin; restart.send_signal
         # and os.kill as restart sees them record and must stay unused: no lane DB, no server, no network, no writes
         # outside tmp_path.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-cli-users-limit",
+        utils_backup_cli_users_limit,
+        name="Backup CLI Users Limit",
+        desc="Lot B5-1k2, scripts/backup_cli.py with a backup that holds more active accounts than LIBREFOLIO_MAX_USERS: the report prints ONE line «The backup holds N active accounts; this instance accepts M (LIBREFOLIO_MAX_USERS)» (N users_active, M users_limit) with no username or address and not a second time through the generic warnings loop; nothing when not over, at the limit, without a limit or with an invalid one; restore ARCHIVE --yes of the example confirms (exit 0, the restore pending, nothing else changed) and --dry-run exits 0 saying the archive can be restored; the command takes no --remove-user (argparse exit 2, not in the help)",
+        tests="Report line (N, M, once, no names) → restore --yes pending → --dry-run exit 0 → no --remove-user",
+        # Data directories under tmp_path seen through monkeypatched LIBREFOLIO_* variables, a database at the head made once
+        # by alembic in its own process; no lane DB, no server, no network, no writes outside tmp_path.
         isolation="pure",
     )
     add_test(cat, "all", utils_all, test_names=False, name="All Utils Tests", desc="Run all utility tests")

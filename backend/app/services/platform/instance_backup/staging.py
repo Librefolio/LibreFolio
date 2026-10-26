@@ -225,6 +225,14 @@ class StagingReport(BaseModel):
     owner_candidates: list[OwnerCandidate] = []
     owner_email_checked: str | None = None
     owner_conflicts: list[str] = []
+    #: B5-1k2: the accounts that will be active after the restore (the copy's active ones, plus the inactive account that
+    #: holds the owner's address on a managed instance, which the restore activates), ``LIBREFOLIO_MAX_USERS`` at the check
+    #: (``None``: no limit, or a value that is not valid, which never fires the warning) and how many accounts are over it.
+    #: Information only: a restore refuses nothing for too many users, the warning ``users_over_limit`` says that the
+    #: administrator chooses who keeps access at the first sign-in (workstream A, A5-7).
+    users_active: int = Field(default=0, ge=0)
+    users_limit: int | None = None
+    users_over_limit: int = Field(default=0, ge=0)
     #: Defaults, so that a report written before lot B-13 still reads.
     control_totals: TotalsStatus = "absent"
     control_totals_differences: list[TotalsDifference] = []
@@ -388,7 +396,18 @@ def _stage(archive_path: Path, root: Path, stage_id: str, progress: StageProgres
     # Outside the wrap above: this read refuses nothing, so its failure must never become database_damaged (E-19b1)
     non_iso_currencies = _holds_non_iso_currencies(database, stage_id)
     report = _report(stage_id, manifest, before, after, action, migrations, head, fixes, administrators, totals, encrypted=encrypted, secrets_rekeyed=rekeyed, secrets_unreadable=unreadable, non_iso_currencies=non_iso_currencies)
-    report = report.model_copy(update={"owner_candidates": owner_candidates, "owner_email_checked": owner_email_checked, "owner_conflicts": owner_conflicts})
+    users_active, users_limit, users_over_limit = _users_check(database, owner_email_checked, owner_candidates)
+    report = report.model_copy(
+        update={
+            "owner_candidates": owner_candidates,
+            "owner_email_checked": owner_email_checked,
+            "owner_conflicts": owner_conflicts,
+            "users_active": users_active,
+            "users_limit": users_limit,
+            "users_over_limit": users_over_limit,
+            "warnings": _with_users_warning(report.warnings, users_over_limit),
+        }
+    )
     _write_report(root, report)
     return report
 
@@ -881,6 +900,34 @@ def _owner_check(database: Path) -> tuple[str | None, list[OwnerCandidate], list
             raise StagingError("database_damaged", "The backup's accounts are not ones LibreFolio writes: it cannot be restored")
         candidates.append(OwnerCandidate(user_id=user_id, username=str(username), email=None if email is None else str(email), is_superuser=bool(is_superuser), is_active=bool(is_active), is_instance_owner=marked == 1))
     return owner_email, candidates, sorted(set(conflicts))
+
+
+def _users_check(database: Path, owner_email: str | None, candidates: list[OwnerCandidate]) -> tuple[int, int | None, int]:
+    """The accounts against ``LIBREFOLIO_MAX_USERS`` (B5-1k2), for information: how many will be active after the restore,
+    the limit, and how many are over it. The inactive account that holds the owner's address counts when the instance is
+    managed: the restore activates it (A5-2). A limit that is not valid is no limit here, as for workstream A's «over the
+    limit» state: a typo never closes the instance. Read-only; no name or address read."""
+    from backend.app.config.accounts import max_users  # noqa: PLC0415
+    from backend.app.services.accounts.user_service import same_email  # noqa: PLC0415
+    from backend.app.services.platform.instance_backup.owner import owner_choice_required  # noqa: PLC0415 — owner imports apply, which imports this module
+
+    try:
+        limit = max_users()
+    except ValueError:
+        limit = None
+    with closing(sqlite3.connect(f"{database.resolve().as_uri()}?mode=ro", uri=True)) as conn:
+        conn.execute("PRAGMA trusted_schema=OFF")
+        active = int(conn.execute("SELECT COUNT(*) FROM users WHERE is_active = 1").fetchone()[0])
+    if owner_choice_required() and owner_email is not None and any(not candidate.is_active and candidate.email is not None and same_email(candidate.email, owner_email) for candidate in candidates):
+        active += 1
+    return active, limit, max(0, active - limit) if limit is not None else 0
+
+
+def _with_users_warning(warnings: list[str], over: int) -> list[str]:
+    """``warnings`` with ``users_over_limit`` before ``credentials_from_backup``, which stays last, when some accounts are over."""
+    if over <= 0:
+        return warnings
+    return [*(code for code in warnings if code != "credentials_from_backup"), "users_over_limit", "credentials_from_backup"]
 
 
 def _holds_non_iso_currencies(database: Path, stage_id: str) -> bool:

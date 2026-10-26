@@ -859,6 +859,22 @@ def api_panel_restore(verbose: bool = False, test_names: list[str] | None = None
     return run_command(cmd, "Hosting panel restore API tests", verbose=verbose)
 
 
+def api_backup_users_limit(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Test a backup with more active accounts than LIBREFOLIO_MAX_USERS through the API: the report warns, the confirmation never refuses (lot B5-1k2)."""
+    print_section("Backup API: users limit")
+    print_info("Testing: GET /backup/restore/stage/{id} (users_active, users_limit, users_over_limit, the warning), POST .../confirm (202, body unchanged), the hosting panel's view (the warning, no numbers), OpenAPI")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_users_limit_api.py", test_names)
+    return run_command(cmd, "Backup API users limit tests", verbose=verbose)
+
+
+def api_backup_users_limit_panel(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Test the hosting panel's side of a backup with more active accounts than LIBREFOLIO_MAX_USERS (lot B5-1k2)."""
+    print_section("Backup API: users limit, hosting panel")
+    print_info("Testing: the panel's stage report carries the warning users_over_limit and no number, its confirmation is accepted (panel_restore.py, H's, untouched)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_users_limit_panel_api.py", test_names)
+    return run_command(cmd, "Backup API users limit panel tests", verbose=verbose)
+
+
 def api_backup_owner_channels(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run the tests of the owner of a restore confirmed by the hosting panel or from the command line (B5-1j)."""
     print_section("Restore Owner, Panel and Command Line API")
@@ -1442,6 +1458,29 @@ Tests for REST API endpoints (server auto-started):
         # directory under tmp_path, the database session a stand-in that fails if reached, restart recorded, fake
         # threads; the archives from test_backup_staging.py's alembic databases under tmp_path: no lane server, DB or
         # network is reached (the api category still starts the lane's backend around it).
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "backup-users-limit",
+        api_backup_users_limit,
+        name="Backup Users Limit API",
+        desc="Lot B5-1k2, a backup with more active accounts than LIBREFOLIO_MAX_USERS through the routes: the administrators' stage report (RestoreStageReport) carries users_active, users_limit, users_over_limit (exact keys) and the warning users_over_limit before credentials_from_backup, nothing about who; the confirmation is 202 with the body unchanged ({owner_user_id}), for a regular and a managed instance; the hosting panel's view (PanelRestoreStageReport, its twenty fields) carries the warning code and no number, and its confirmation is accepted; OpenAPI documents the three fields and the code in the warnings, and no new field in the confirmation's body",
+        tests="Report users_* + warning → confirm 202 → panel view (code only) and confirm → OpenAPI",
+        # PURE: an app of the test holds backup_router (get_current_user overridden) / the app of main.py for the panel, data
+        # directories under tmp_path, real archives from the staging tests' alembic database; no lane server, DB or network is
+        # reached (the api category still starts the lane's backend around it).
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "backup-users-limit-panel",
+        api_backup_users_limit_panel,
+        name="Backup Users Limit, Hosting Panel",
+        desc="Lot B5-1k2: the hosting panel (H's panel_restore.py and PanelRestoreStageReport, untouched) and a sealed backup with more active accounts than LIBREFOLIO_MAX_USERS: the panel's stage report carries the warning users_over_limit in warnings (before credentials_from_backup) and NO number or account (its twenty fields are the same, users_active, users_limit and users_over_limit are not among them), its confirmation is 202 pending via the panel, also when the limit changed after the check (not restore_stage_outdated)",
+        tests="Panel check of a backup over the limit → report: the code, no number → confirm 202",
+        # PURE: the app of main.py in this process (ASGI), the panel's fixtures of test_panel_restore_api.py, data directories
+        # under tmp_path; no lane server, DB or network is reached.
         isolation="pure",
     )
     add_test(
