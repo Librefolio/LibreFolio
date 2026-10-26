@@ -10789,3 +10789,15 @@ DOC-2 (ricerca per lingua), DOC-1 (riordino della guida admin, con le guide Tail
     > (la chiave del messaggio `ok` è condivisa). Un dizionario di sette chiavi in `test_panel_status_api.py` (riga 1068) era sfuggito al test-author: aggiornato a mano.
     > Il limite vero, scritto nella doc: un'istanza 1.2 che passa alla 1.3 con la chiave già sbagliata e senza segreti salvati non si può scoprire. `contratto-istanza.md` del cloud va
     > aggiornato da loro (`instance_key`, `instance_key_mismatch`, `backup_instance_key_mismatch`).
+11. ✅ **H5-8 · `app_version` in `/system/ready` e `users_over_limit` in `panel/status`** (26/10). Dal cloud (approvato): il controllo dopo un aggiornamento usa la sola sonda, e la
+    macchina non resta sveglia (una visita a `/system/info` o `/system/instance` conta come presenza, la sonda no). Più `users_over_limit` (R-2), dopo l'unione di A5-7.
+    > **Note implementazione**: `ReadinessResponse.app_version: str` (obbligatorio, ultimo campo), riempito da `check_readiness` con `get_git_version()` (la stessa che `/system/info` dà senza
+    > sessione: niente di nuovo esposto; letta in `asyncio.to_thread` perché la prima lettura può lanciare `git`); c'è anche nel corpo 503 e con `awaiting_restore`.
+    > `PanelStatusResponse.users_over_limit: bool` (obbligatorio, dopo `instance_key`: nove chiavi) = `await user_limit_service.over_limit_state(session) is not None` (solo gli attivi
+    > oltre il limite valido; inviti vivi e account in attesa non lo fanno scattare; senza limite mai; mai chi). Test (test-author, rossi prima): `services platform-readiness` (le
+    > liste esatte e la classe `TestReadinessAppVersion`), `api system`, `api panel-status` (R1-18…R1-26: soglia, inviti e attese, cambio alla richiesta dopo, sostituto di
+    > `over_limit_state`, nessun nome, istanza bloccata/in attesa/interrotta, OpenAPI, 401 invariato), `await-restore-mode`, `restore-interrupted`, `instance-key-check` a nove chiavi;
+    > fixture e2e `backup.spec.ts` con `app_version`. Doc: `docker_advanced`, `curl-testing`, `security.md` (corpo di `/system/ready`, riga `status` del pannello, frase sulle risposte
+    > anonime), `api/index.md`, `hosting_panel_api` (JSON, riga della tabella, «nine keys»), `hosting_instances`, `hosting_panel_backups`, `sleep_wake`. `api sync` fatto.
+    > **⚠️ Fuori pista**: un valore non valido di `LIBREFOLIO_MAX_USERS` non è coperto da un test sul pannello: il servizio lo tratta come «mai oltre il limite» e `users_limit` legge la stessa
+    > variabile, quindi la risposta del pannello segue la regola di A; nessuna scelta mia. `contratto-istanza.md` del cloud va aggiornato da loro (`app_version`, `users_over_limit`).

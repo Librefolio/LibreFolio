@@ -886,7 +886,7 @@ def api_restore_interrupted(verbose: bool = False, test_names: list[str] | None 
 def api_instance_key_check(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run the instance key check's API tests: the panel's status, its backup start, wake-sync, the Security list, the way back (H5-7, H)."""
     print_section("Instance Key Check API")
-    print_info("Testing: GET /panel/status instance_key ok|mismatch (eight keys), POST /backup/panel/jobs 409 backup_instance_key_mismatch after the credential, wake-sync instance_key_mismatch, the instance keeps serving, /security/checks platform.instance_key_check, the state read at every request, the way back on real files")
+    print_info("Testing: GET /panel/status instance_key ok|mismatch (nine keys since H5-8), POST /backup/panel/jobs 409 backup_instance_key_mismatch after the credential, wake-sync instance_key_mismatch, the instance keeps serving, /security/checks platform.instance_key_check, the state read at every request, the way back on real files")
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_instance_key_check_api.py", test_names)
     return run_command(cmd, "Instance key check API tests", verbose=verbose)
 
@@ -1202,7 +1202,7 @@ Tests for REST API endpoints (server auto-started):
         name="Utilities API: Currency Suggestion (E-19b1)",
         desc="GET /utilities/currencies/suggest: canonical, the one ISO code a stored value stands for (978, EURO -> EUR), the candidates of an ambiguous one (VED, VES), none for a subunit; public; value of 1 to 200 characters, else 422",
     )
-    add_test(api, "system", api_system, name="System API", desc="parse_pipfile, deps, info (public or full), connection, instance, ready, route order")
+    add_test(api, "system", api_system, name="System API", desc="parse_pipfile, deps, info (public or full), connection, instance, ready (codes, database_revision, mode, app_version: required string last, the public info's, in the 200 and the 503, no session), route order")
     # Read-only on the lane (one anonymous GET); every case with a variable runs in-process on a private database.
     add_test(api, "instance-legal", api_instance_config_legal, name="Instance Configuration: Legal Links (A9)", desc="GET /system/instance legal {terms_url, privacy_url}: valid, unset, invalid (null, still 200), no secret; the schema and the OpenAPI document; live on the lane: both null")
     add_test(
@@ -1437,7 +1437,7 @@ Tests for REST API endpoints (server auto-started):
         "panel-status",
         api_panel_status,
         name="Hosting Panel Status API",
-        desc="H-61 R1: GET /panel/status off 404 without a token, panel_status_unauthorized, the four states of the initial administrator's setup with the expiry of a pending one only, no personal data, answered on a blocked instance, its OpenAPI schema",
+        desc="H-61 R1: GET /panel/status off 404 without a token, panel_status_unauthorized, the four states of the initial administrator's setup with the expiry of a pending one only, no personal data, answered on a blocked instance, its OpenAPI schema; the places taken and the limit, owner_email_change, instance_key (nine keys in all); H5-8 users_over_limit: true only while the ACTIVE accounts outnumber LIBREFOLIO_MAX_USERS (invitations and waiting accounts do not count, a deactivated one neither), recomputed at each request, never who, on a blocked, awaiting-restore or unreadable-restore instance, a required boolean right after instance_key in the OpenAPI",
         isolation="pure",
     )
     add_test(

@@ -20,7 +20,7 @@ from backend.app.config import get_data_dir
 from backend.app.config.platform import awaiting_restore
 from backend.app.db.session import get_session_generator
 from backend.app.schemas.hosting_panel import PanelRestoreSummary, PanelStatusResponse
-from backend.app.services.accounts import instance_owner
+from backend.app.services.accounts import instance_owner, user_limit_service
 from backend.app.services.accounts.bootstrap_admin_service import AdminSetupState, admin_setup_status
 from backend.app.services.accounts.registration_service import user_usage
 from backend.app.services.platform.hosting_panel.access import PanelCaller, PanelScope, panel_access
@@ -61,6 +61,7 @@ async def get_panel_status(
         users_limit=usage.max_users,
         owner_email_change=await instance_owner.owner_change_status(session),
         instance_key=await instance_key_state(session),
+        users_over_limit=await user_limit_service.over_limit_state(session) is not None,
     )
 
 

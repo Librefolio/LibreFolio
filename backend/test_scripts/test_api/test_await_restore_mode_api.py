@@ -145,7 +145,8 @@ PANEL_ENVIRONMENT = tuple(name for variable in (STATUS_TOKEN_VARIABLE, WAKE_TOKE
 #: H5-1: the answer also holds the two counts of the places taken, ``users_used`` and ``users_limit``.
 #: H5-4: and ``owner_email_change`` (pending, blocked or null): seven keys.
 #: H5-7: and ``instance_key`` (``ok`` or ``mismatch``): eight keys.
-PANEL_STATUS_KEYS = frozenset({"admin_setup", "setup_expires_at", "mode", "restore", "users_used", "users_limit", "owner_email_change", "instance_key"})
+#: H5-8: and ``users_over_limit`` (a boolean: the active accounts outnumber ``LIBREFOLIO_MAX_USERS``): nine keys.
+PANEL_STATUS_KEYS = frozenset({"admin_setup", "setup_expires_at", "mode", "restore", "users_used", "users_limit", "owner_email_change", "instance_key", "users_over_limit"})
 PANEL_RESTORE_KEYS = frozenset({"state", "reason", "waiting", "backup_created_at", "stage_id"})
 STAGE_ID = "0123456789abcdef0123456789abcdef"
 BACKUP_CREATED_AT = datetime(2026, 10, 23, 3, 0, 12, tzinfo=UTC)
@@ -493,6 +494,9 @@ async def test_readiness_and_the_public_configuration_say_the_mode(instance, awa
 
     expected = "awaiting_restore" if awaiting else "normal"
     assert ready.status_code == 200 and ready.json().get("status") == "ready", f"readiness answers 200 ready: {shown(ready)}"
+    # H5-8: the version of the app is in the probe in the mode too, the one /system/info gives anyone
+    info = await send(instance, "GET", f"{API_V1_PREFIX}/system/info")
+    assert info.status_code == 200 and ready.json().get("app_version") == info.json().get("app_version") and ready.json().get("app_version"), f"H5-8: readiness says the app version /system/info says, in the mode too: {shown(ready)} / {shown(info)}"
     assert (ready.json().get("mode"), config.status_code, config.json().get("mode")) == (expected, 200, expected), f"mode {expected!r} in readiness and in the public configuration: {shown(ready)} / {shown(config)}"
 
 
@@ -665,7 +669,7 @@ async def test_the_panel_status_says_why_a_restore_waits(instance):
 @pytest.mark.parametrize("reason", UNREADABLE_REASONS)
 async def test_a_restore_state_that_cannot_be_read_is_200_with_restore_unreadable_and_its_reason(instance, reason, awaiting):
     """AM-043 (D7, contract L3 §10 option A; replaces Q7's 500): a restore state on disk that B's reader refuses with
-    ``reason`` (``io``, ``not_a_file``, ``invalid``) → ``GET /panel/status`` answers 200 with exactly its eight keys (H5-1, H5-4, H5-7),
+    ``reason`` (``io``, ``not_a_file``, ``invalid``) → ``GET /panel/status`` answers 200 with exactly its nine keys (H5-1, H5-4, H5-7, H5-8),
     ``mode`` as the switch says, and ``restore`` exactly ``{state: unreadable, reason, waiting: null,
     backup_created_at: null, stage_id: null}``; never ``restore: null`` (a restore may wait behind it), never the 500."""
     write_unreadable_state(instance.root, reason, instance.monkeypatch)
