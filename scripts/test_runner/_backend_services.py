@@ -648,6 +648,28 @@ def services_owner_assignment(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "Owner assignment tests", verbose=verbose)
 
 
+def services_user_limit(verbose: bool = False, test_names: list = None) -> bool:
+    """Test A5-7: the accounts over LIBREFOLIO_MAX_USERS, and the administrator's choice of who keeps the access."""
+    print_section("Services: Over the User Limit (A5-7)")
+    print_info("Testing: services/accounts/user_limit_service.py over_limit_state, list_for_choice, resolve")
+    print_info("Tests: the state only when active > limit (never for a limit that cannot be read), the protected accounts, the example of 5 accounts and a limit of 3, nothing deleted, the refusals, the invitations revoked only as far as needed, one commit")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_user_limit.py", test_names)
+    return run_command(cmd, "User limit tests", verbose=verbose)
+
+
+def services_user_limit_api(verbose: bool = False, test_names: list = None) -> bool:
+    """Test A5-7: the guard and the two routes of the state over the user limit, on the app in process."""
+    print_section("Services: Over the User Limit on the API (A5-7)")
+    print_info("Testing: api/v1/user_limit.py refuse_when_over_limit and its lists, GET /users/over-limit, POST /users/over-limit/resolve")
+    print_info(
+        "Tests: 423 user_limit_exceeded for an ordinary user, the allowed routes, the administrator's choice and backup, the order of the guards, an instance not over the limit or with an unreadable limit changes no answer, the lists pinned, exact keys, the refusals with their codes, the example through the API"
+    )
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_user_limit_api.py", test_names)
+    return run_command(cmd, "User limit API tests", verbose=verbose)
+
+
 def services_email_case(verbose: bool = False, test_names: list = None) -> bool:
     """Test P18: email addresses unique regardless of A–Z case, in the rule, the index, the lookups and the writes."""
     print_section("Services: Email Addresses Regardless of Case (P18)")
@@ -2393,6 +2415,26 @@ Note: No backend server required.
         desc="assign_owner_and_send_reset: nothing in a restored database is trusted, so every call gives the full treatment: the account the owner chose gets the address of LIBREFOLIO_ADMIN_EMAIL, becomes an active administrator and the one instance owner (the flag of the others cleared), its password becomes an unusable bcrypt hash, its sessions end, its password_reset rows are deleted (planted consumed/revoked/expired/live/future-dated ones included) and its other live tokens revoked, one new reset link is emailed or, if the email cannot go, written in the instance log (link_only; never in the result or its repr); NOT_MANAGED / OWNER_EMAIL_NOT_SET / USER_NOT_FOUND / EMAIL_TAKEN change nothing; a second call kills the first link; two calls at once leave one live link; A5-4: `user reassign-owner <username>` runs the same treatment from the command line (managed only; ✅ and one link emailed, or link_only with the link in the log and never printed; refusals for not managed / no variable / unknown user / address taken change nothing; registered in both parsers and the dispatch) and a new address in update_profile also revokes the account's live email_change links",
         # PURE: every database is a private file under tmp_path built with create_all; profile and variables set with
         # monkeypatch; the email faked in this process (outbox); no lane DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "user-limit",
+        services_user_limit,
+        name="Over the User Limit (A5-7)",
+        desc="The state «over the limit» is read from the accounts, never stored: active > LIBREFOLIO_MAX_USERS strictly (no limit, active = limit, and a limit that cannot be read never trigger it; inactive accounts do not count; live invitations and accounts waiting for their verification take places), the list for the choice (the managed owner protected, else the administrator who chooses; the brokers an account owns alone), the resolution (5 accounts and a limit of 3: the others are deactivated with their sessions ended, nothing deleted, the kept ones unchanged; UNKNOWN_USER / TOO_MANY_KEPT / PROTECTED_MISSING / NO_ADMIN_KEPT / NOT_OVER_LIMIT change nothing; live invitations revoked only as far as the kept accounts need their places; one commit; the log without names)",
+        # PURE: every database is a private file under tmp_path built with create_all; variables set with monkeypatch;
+        # no lane DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "user-limit-api",
+        services_user_limit_api,
+        name="Over the User Limit, API (A5-7)",
+        desc="refuse_when_over_limit on the app in process and a private database: 423 user_limit_exceeded for a signed-in ordinary user on every route but the allowed list (login, logout, me, the public configuration, the probes, links, the own account's deletion, the panel's routes, the restore outcome); the administrator also reaches the choice and the full backup; the 401 of any caller without a session; an instance not over the limit, or with a limit that cannot be read, changes no answer; the order of the guards (block, restore interrupted, then this one); the two lists pinned against the block's list; GET /users/over-limit and POST /users/over-limit/resolve with exact keys, their refusals (409 NOT_OVER_LIMIT; 422 UNKNOWN_USER, TOO_MANY_KEPT, PROTECTED_MISSING) and the example of 5 accounts and a limit of 3",
+        # PURE: the app of the server in process, its session dependency overridden with a private file under tmp_path;
+        # no lane DB, no server.
         isolation="pure",
     )
     add_test(

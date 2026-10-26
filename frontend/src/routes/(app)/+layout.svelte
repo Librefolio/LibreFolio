@@ -30,6 +30,8 @@
     import ServerUnreachable from '$lib/components/layout/ServerUnreachable.svelte';
     import InstanceNotices from '$lib/features/instance/components/InstanceNotices.svelte';
     import InstanceBlockedPage from '$lib/features/instance/components/InstanceBlockedPage.svelte';
+    import UserLimitPage from '$lib/features/instance/components/UserLimitPage.svelte';
+    import {userLimit} from '$lib/features/instance/userLimit.svelte';
     import {instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
     import {instanceBlock} from '$lib/features/instance/instanceBlock.svelte';
 
@@ -245,6 +247,9 @@
 {:else if $isAuthenticated && instanceBlock.blocked}
     <!-- The hosting provider blocked this instance: the block page instead of the app, before its bootstrap -->
     <InstanceBlockedPage onlogout={logout} />
+{:else if $isAuthenticated && userLimit.exceeded}
+    <!-- More active accounts than the plan holds (A5-7): the choice for an administrator, the wait for anyone else, before the app's bootstrap -->
+    <UserLimitPage onlogout={logout} />
 {:else if $isAuthenticated && appBootstrap.state === 'blocked'}
     <OnboardingBootstrapBlock error={appBootstrap.error} onretry={retryBootstrap} onlogout={logout} />
 {:else if $isAuthenticated && !appBootstrap.ready}

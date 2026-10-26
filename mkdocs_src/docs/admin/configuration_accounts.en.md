@@ -65,6 +65,32 @@ expires, or when the link of an account waiting for its email verification expir
 *Email Verification* in [Email](email.md)). The first account of a new instance can always be
 created.
 
+### 📉 When the Plan Gets Smaller {: #user-limit-over }
+
+If the **active** accounts outnumber `LIBREFOLIO_MAX_USERS` — you lowered the limit and restarted, or you
+restored a backup that holds more users than the limit allows — the instance is *over the limit*. LibreFolio
+does not delete anybody; it asks an administrator to choose.
+
+- **Who is concerned**: only `active > limit`. With exactly as many active accounts as the limit, nothing
+  happens. Invitations and accounts waiting for their verification take places but never start this state.
+- **What an administrator sees**: at the first sign-in, before any other page, the list of the active
+  accounts. The owner of a [managed instance](hosting_instances.md) is checked and cannot be unchecked; so
+  is the administrator who is choosing, when the instance has no owner to protect. Each row says how many
+  brokers the account owns **alone**: those brokers stay, but nobody else can reach them until the account is
+  reactivated. A counter shows how many accounts are chosen against how many the limit allows.
+- **The full backup first**: the same page offers it, so the data can be taken away before anybody is
+  deactivated.
+- **What happens on «Deactivate the others and continue»**: the accounts not chosen are **deactivated**, not
+  deleted: they are signed out, cannot sign in, and keep all their data. You can reactivate one later when a
+  place is free ([When the Instance Is Full](#user-limit)). Pending invitations are cancelled, newest first,
+  only as far as the chosen accounts need their places; the page says how many before you confirm.
+- **What everybody else sees** until the choice is made: a message that an administrator has to choose who
+  keeps the access. Nobody but an administrator enters, and the administrators see nothing but this choice.
+- **A limit LibreFolio cannot read** (`LIBREFOLIO_MAX_USERS=abc`, `0`) never starts this state: it only
+  keeps the registration closed, as before, so a typo cannot lock everybody out.
+
+No special step is needed after a restore: the restored accounts are counted the same way.
+
 ### 🚦 Failed Sign-ins {: #login-limit }
 
 LibreFolio stops checking passwords for a while when sign-ins keep failing, so that nobody can try
