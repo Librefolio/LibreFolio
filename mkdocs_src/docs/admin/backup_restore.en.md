@@ -322,14 +322,10 @@ A restore confirmed on the command line (`backup restore`) or by the hosting pan
 3. Otherwise nobody: with none marked, with two or more marked, or with a marked account that is not an active administrator. LibreFolio never takes "the first one".
 
 - 👤 **An account picked.** Everything is as in the app: at the restore its password is closed (it stops working and its sessions end), it gets the owner's address, becomes an active administrator and the instance's owner. The first start sends the link to choose a new password to `LIBREFOLIO_ADMIN_EMAIL`, never to an address of the backup; without email, the link is written in the log of the instance, to be given **only to the owner**; if it expires, the owner uses **Forgot Password?**. The report of the command names the account by its username, never by an address. `backup pending` prints the same lines as above.
-- 🚫 **Nobody picked.** The restore goes on without an owner, with a warning in the log. The report of the command and `backup pending` say *No owner* and give the command to name one afterwards, `./dev.py user reassign-owner <username>` (see the note below). The instance serves its data meanwhile.
+- 🚫 **Nobody picked.** The restore goes on without an owner, with a warning in the log. The report of the command and `backup pending` say *No owner* and give the command to name one afterwards, `./dev.py user reassign-owner <username>` ([Giving the Instance Back](hosting_instances.md#owner-reassign)). The instance serves its data meanwhile.
 - 🛑 **A backup with owner conflicts** (two accounts on one address or one name, the owner's address as another account's name, an administrator still waiting for its setup link) is refused here as from the app, with `owner_conflict`: the command prints `❌ <reason> (owner_conflict)` and the panel answers HTTP 409. Remove the duplicate account or free the address in the instance the backup comes from, make a new backup, and check it again.
 - 🔁 **A report read for another owner's address** than the current one is refused with `restore_stage_outdated`: check the archive again.
 - ❌ **If the assignment fails after the swap** (a refusal such as the address already taken), the instance serves nothing but the recovery until `./dev.py backup pending --recover owner` ([Follow or Cancel a Restore](cli_backup.md#backup-pending)): now for a restore from the command line or the panel too, not only from the app.
-
-!!! note "The command to name an owner"
-
-    `user reassign-owner` is not in this version of the command-line tools yet: it arrives with a later change. Until then, the lines that name it describe what to do, not a command that runs.
 
 ### ⌨️ Restore from the Command Line {: #restore-command }
 
