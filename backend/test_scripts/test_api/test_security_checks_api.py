@@ -48,6 +48,8 @@ E2E_USER = ("e2e_test_user", "E2eTestPass123!")
 
 LIMIT_VARIABLE = "LIBREFOLIO_LOGIN_LIMIT"
 LOGIN_LIMIT_CHECK = "accounts.login_limit"
+#: H5-4: A's check of the host-started change of the owner's email.
+OWNER_EMAIL_CHANGE_CHECK = "accounts.owner_email_change"
 #: Checks of workstream H the lane's server lists beside A's.
 PLATFORM_CHECKS = ("platform.jwt_secret", "platform.plugin_secrets")
 SEVERITIES = frozenset({"ok", "info", "warning", "error"})
@@ -143,6 +145,21 @@ class TestSecurityChecksOnTheLane:
         assert item.get("severity") in SEVERITIES and isinstance(item.get("i18n_key"), str) and item["i18n_key"] and isinstance(item.get("detail"), dict), f"{LOGIN_LIMIT_CHECK} has a severity of {sorted(SEVERITIES)}, an i18n key and a detail object: {item}"
         assert item["severity"] == severity, f"{LOGIN_LIMIT_CHECK} on the lane's server must be {severity} ({why}): {item}"
         print_success(f"{LOGIN_LIMIT_CHECK}: {severity}")
+
+    # red until H5-4
+    @pytest.mark.asyncio
+    async def test_the_lanes_server_lists_the_owner_email_change_check_once_and_ok(self, lane_sessions: _LaneSessions) -> None:
+        """SC-LANE-04 (H5-4): ``e2e_test_admin`` → 200; ``accounts.owner_email_change`` is listed exactly once (``_items`` fails on a repeated id), well formed — a severity, an i18n key, a detail object —, ``ok`` with ``auth.checks.ownerEmailChange.ok``: no host change waits on the lane's instance (not managed, no ``LIBREFOLIO_ADMIN_EMAIL``). The other states are pinned in-process (``test_login_throttle_api.py``, SC-API-OE) and in ``run_config_checks()`` (``test_accounts_checks.py``)."""
+        print_section("SC-LANE-04: the lane's server lists the owner email change check")
+
+        response = await _get_checks(lane_sessions.admin)
+
+        by_id = _items(response, "the lane's GET /api/v1/security/checks as e2e_test_admin")
+        item = by_id.get(OWNER_EMAIL_CHANGE_CHECK)
+        assert item is not None, f"red until H5-4: the lane's server must list {OWNER_EMAIL_CHANGE_CHECK}: {sorted(by_id)}"
+        assert item.get("severity") in SEVERITIES and isinstance(item.get("i18n_key"), str) and isinstance(item.get("detail"), dict), f"{OWNER_EMAIL_CHANGE_CHECK} is well formed: {item}"
+        assert (item["severity"], item["i18n_key"]) == ("ok", "auth.checks.ownerEmailChange.ok"), f"nothing waits on the lane's instance: {item}"
+        print_success(f"{OWNER_EMAIL_CHANGE_CHECK}: ok")
 
     # red until A8a
     @pytest.mark.asyncio

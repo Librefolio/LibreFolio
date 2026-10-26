@@ -77,10 +77,37 @@
     "restoreInterrupted": {
       "title": "La restauration s'est arrêtée à mi-chemin",
       "message": "LibreFolio ne sait pas quelles données il contient : il n'en affiche aucune tant que votre administrateur n'a pas choisi comment continuer.",
-      "adminHint": "Administrateur : arrêtez LibreFolio, puis lancez ./dev.py backup pending pour voir ce qui s'est passé et --recover pour remettre les données d'avant.",
+      "adminHint": "Administrateur : arrêtez LibreFolio, puis lancez ./dev.py backup pending pour voir ce qui s'est passé et --recover previous pour remettre les données d'avant.",
       "docs": "Comment récupérer",
       "autoReload": "Cette page se recharge d'elle-même dès que LibreFolio sert à nouveau les données.",
-      "support": "Contacter l'assistance"
+      "support": "Contacter l'assistance",
+      "ownerTitle": "Le compte du propriétaire n'est pas prêt",
+      "ownerMessage": "Les données ont été restaurées, mais le propriétaire n'a pas encore son compte : LibreFolio n'en affiche aucune tant que votre administrateur ne l'a pas défini.",
+      "ownerAdminHint": "Administrateur : arrêtez LibreFolio, lancez ./dev.py backup pending --recover owner pour redéfinir le compte du propriétaire, puis relancez LibreFolio."
+    },
+    "userLimit": {
+      "title": "Plus d'utilisateurs que votre offre n'en permet",
+      "description": "Cette instance compte {active} utilisateurs actifs, mais l'offre en permet {max}. Choisissez qui garde l'accès : les autres sont désactivés, pas supprimés, donc aucune donnée n'est perdue, et vous pourrez les réactiver si une place se libère.",
+      "counter": "{chosen} choisis sur {max}",
+      "administrator": "Administrateur",
+      "protectedOwner": "Titulaire de l'instance : reste toujours",
+      "protectedYou": "Vous : vous choisissez",
+      "brokersAlone": "Seul propriétaire de {count} courtier(s) : les autres en perdent l'accès",
+      "noAdministrator": "Gardez au moins un administrateur.",
+      "invitesCancelled": "{count} invitation(s) en attente seront annulées pour faire de la place.",
+      "confirm": "Désactiver les autres et continuer",
+      "backupTitle": "Téléchargez d'abord une sauvegarde complète",
+      "waitingTitle": "L'administrateur doit encore choisir qui garde l'accès",
+      "waitingDescription": "Cette instance compte plus d'utilisateurs actifs que l'offre n'en permet. Tant qu'un administrateur n'a pas choisi qui garde l'accès, personne d'autre ne peut l'utiliser. Réessayez plus tard.",
+      "checkAgain": "Vérifier à nouveau",
+      "error": {
+        "load": "La liste n'a pas pu être chargée. Réessayez.",
+        "generic": "Le choix n'a pas pu être enregistré. Réessayez.",
+        "UNKNOWN_USER": "Un des comptes choisis n'est plus actif. Rechargez la page.",
+        "TOO_MANY_KEPT": "Trop de comptes choisis pour l'offre.",
+        "PROTECTED_MISSING": "Le titulaire de l'instance, ou vous, doit rester.",
+        "NO_ADMIN_KEPT": "Au moins un administrateur doit garder l'accès."
+      }
     }
   }
 }

@@ -107,6 +107,11 @@ export const ERROR_KEYS: Record<string, string> = {
     restore_cancel_failed: 'backup.restore.errors.restore_cancel_failed',
     restore_restart_failed: 'backup.restore.errors.restore_restart_failed',
     restore_state_unreadable: 'backup.restore.errors.restore_state_unreadable',
+    // The owner's account of a managed instance (B5-1)
+    owner_choice_required: 'backup.restore.errors.owner_choice_required',
+    owner_choice_invalid: 'backup.restore.errors.owner_choice_invalid',
+    owner_email_not_set: 'backup.restore.errors.owner_email_not_set',
+    owner_conflict: 'backup.restore.errors.owner_conflict',
     // No usable answer
     network: 'backup.restore.errors.network',
     unexpected: 'backup.restore.errors.unexpected',

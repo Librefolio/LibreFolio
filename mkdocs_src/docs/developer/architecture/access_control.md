@@ -198,6 +198,11 @@ Besides the broker roles, every account carries one system-wide flag, `users.is_
   for the current password: see [Changing the Email](security.md#email-change)). The device that
   made the change gets a new cookie and stays signed in; a username change ends no session. Every
   change that ends sessions is in [Session Revocation](security.md#session-revocation).
+- **A new address revokes the account's live `email_change` links** together with its password-reset and setup links
+  (`user_service.update_profile`, A5-4): a change of address asked for before cannot move it again. On a managed
+  instance, `./dev.py user reassign-owner <username>` (`cmd_reassign_owner`) takes an account back to the address of
+  `LIBREFOLIO_ADMIN_EMAIL`: it runs `instance_owner.assign_owner_and_send_reset`, the treatment of a restore (unusable
+  password, sessions ended, links neutralised, one reset link), and refuses on a non-managed profile.
 - **Password rules**: `create` and `reset` call `validate_password()` in `scripts/user_cli.py`,
   a thin wrapper over `password_policy.failed_rules()`: the same rules as the API and the app
   ([Password Rules](security.md#password-rules)), checked before anything is read from the
@@ -324,6 +329,37 @@ deleted account frees its place; an invitation holds one from its creation until
 hands it to the account it opens; an account waiting for its email verification holds one while its link is
 live. A value that is not a whole number of at least 1 is a limit of 0, logged like an invalid mode
 (`_max_users()`).
+
+#### Over the limit (A5-7)
+
+The state «over the limit» is **never stored**: `user_limit_service.over_limit_state()` reads it from the accounts
+every time (`active > max_users`, one `COUNT`; no limit, or a limit `max_users()` cannot read, is never a state). A
+restore needs no code of its own: the restored accounts are counted like any other.
+
+```mermaid
+flowchart TD
+    A[Request of a signed-in user] --> B{allowed for everyone?}
+    B -- yes --> OK[answers as usual]
+    B -- no --> C{active > limit?}
+    C -- no --> OK
+    C -- yes --> D{administrator and on the admin list?}
+    D -- yes --> OK
+    D -- no --> E[423 user_limit_exceeded]
+```
+
+- `api/v1/user_limit.py`: the dependency `refuse_when_over_limit`, the **fourth** of the `/api/v1` router, after the
+  block, the awaiting-restore mode and the interrupted restore (the first that stands answers). `ALLOWED_WHEN_OVER_LIMIT`
+  is `ALLOWED_WHEN_BLOCKED` less the five routes of the administrator's backup; `ALLOWED_WHEN_OVER_LIMIT_ADMIN` holds
+  those five and the two routes of the choice. The app's own restore is in neither list.
+- `GET /users/over-limit` lists the active accounts (who is `protected`, how many brokers each owns alone);
+  `POST /users/over-limit/resolve {keep_user_ids}` deactivates the others in **one transaction** under SQLite's write
+  lock, as `update_user_status(is_active=False)` does (sessions end, links retired), never `delete_user`. Refusals:
+  409 `NOT_OVER_LIMIT`; 422 `UNKNOWN_USER`, `TOO_MANY_KEPT`, `PROTECTED_MISSING`, `NO_ADMIN_KEPT`.
+- Protected: the managed owner (`account_protection`); with none, the administrator who chooses. At least one
+  administrator stays. Live invitations are revoked newest first only as far as the kept accounts need their places;
+  accounts waiting for a verification keep theirs.
+- The web app shows `UserLimitPage` instead of the app on the first `423 user_limit_exceeded`
+  (`features/instance/userLimit*.ts`, the same shape as the instance block).
 
 | Request | When `used >= max_users` |
 |---------|--------------------------|
@@ -452,9 +488,18 @@ deletion failed: nothing was deleted*. The deleted account's sessions get `401` 
 ### 🛡️ Protected Accounts {: #account-protection }
 
 `user_service.account_protection(user) -> Optional[str]` gives the reason why nobody may delete, deactivate
-or demote an account, or `None`. It is the hook for the administrator created from the environment on a
-managed instance, who pays for it. The [initial administrator](#initial-admin) of lot A7a is not protected
-yet: the hook still returns `None` for every account.
+or demote an account, or `None`. It is the hook for the owner of a managed instance, the administrator who pays
+for it (`PAYING_ADMINISTRATOR`). On any other profile it returns `None` for every account. On a managed instance
+(`LIBREFOLIO_PROFILE=managed`):
+
+- the account recorded as the instance owner (`users.is_instance_owner`) is protected by that mark alone, whatever
+  its address and whatever the variable says;
+- once the startup step `owner-sync` has read the owner (`user_service.note_recorded_owner()`), the mark decides alone when
+  an owner is recorded: an account that holds the address of a variable changed in conflict is a stranger and never
+  receives the owner's protection;
+- when the step recorded nobody, the account with the address of `LIBREFOLIO_ADMIN_EMAIL` (A–Z case aside) is protected by
+  its address only while it is an active administrator (the criterion by which the step records an owner);
+- before the step has run (a command, a test) the A5-1 address rule is the fallback: the address alone protects.
 
 - `GET /users` reflects it in `protected` (`AdminUserRead`), as do the accounts `PATCH` returns.
 - `DELETE /users/{user_id}`, and a `PATCH /users/{user_id}` that deactivates or demotes the account,
@@ -466,6 +511,33 @@ yet: the hook still returns `None` for every account.
 - The command line stays above protection: `./dev.py user deactivate`, `user demote` and the other
   user commands never read the hook, as the operator of the server may do what the administrator
   API refuses.
+
+### 📬 The Owner's Address {: #owner-email-change }
+
+The protected owner cannot change its address from the app (`PUT /auth/profile` answers `409 ACCOUNT_PROTECTED`).
+The real change starts at the host, and `services/accounts/instance_owner.py` runs it:
+
+- **`startup_owner_sync()`**, the startup step `owner-sync` (right after `restore-commit`, which revokes every live
+  one-time link after a restore and would kill a link issued before it; skipped while the instance serves no data): managed only, with a usable variable. A waiting initial administrator
+  (`pending_admin`): nothing, `bootstrap_admin_service` follows the variable as before. No owner recorded: the
+  account with the variable's address is recorded (heal) only if it is an active administrator, else an error is logged and
+  nobody is recorded. The owner has the variable's address: nothing, stale links
+  revoked. Otherwise: another account holds the address → `blocked`, an error line, no change; a live `email_change`
+  link already carries it → `waiting`, nothing resent; else the owner's older links are revoked, a new one is issued
+  (7 days, `email` = the new address) under SQLite's write lock (two workers issue one) and emailed to the NEW address
+  in a background task (`build_email_change_confirmation()`). The link is logged at `warning` only when the email did
+  not go.
+- **`owner_change_status(session)`** answers `"pending"`, `"blocked"` or `None` for the security checks and the
+  hosting panel. It reads only and never returns an address.
+- **`POST /email/email-change/confirm`** (`confirm_owner_email_change`, no session): `confirm_email_change()` spends the
+  link and, in the same transaction, checks that the instance is managed, that the token's account is the recorded
+  owner, that the token's address is still the variable's and that no other account holds it; then sets the address
+  (verified), ends the owner's sessions, and revokes its other change links and its reset links. A link that no longer
+  matches is revoked and answers `TOKEN_INVALID` `revoked`. The notice to the old address is
+  `flows.email_changed_work`, as for the profile.
+
+Tests: `./dev.py test services owner-email-change`, `./dev.py test api owner-email-change`,
+`./dev.py test db migration-005`.
 
 ### 🔑 Password-Reset Links {: #reset-links }
 
@@ -522,7 +594,7 @@ scripted install, names the administrator of a new instance in the environment. 
 it, inactive, with a single-use setup link; whoever spends the link chooses the password, activates
 the account and is signed in. The variables are read in `backend/app/config/accounts.py`, the rest
 is in `backend/app/services/accounts/bootstrap_admin_service.py`. Administrator side:
-[Hosting for Others](../../admin/hosting_providers.md#initial-admin), and «The Initial
+[Hosting for Others](../../admin/hosting_instances.md#initial-admin), and «The Initial
 Administrator» in [Configuration](../../admin/configuration.md).
 
 **The variables.** `admin_bootstrap_config()` returns an `AdminBootstrapConfig(email, username, token)`,

@@ -42,7 +42,7 @@ does.
     |---|---|
     | *Nothing was saved: check the settings below.* | A setting was refused. Under it: *The value is not valid for this setting.*, *Only an administrator can change this setting.*, *A server variable sets it: it cannot be changed here.* or *This setting no longer exists: reload the page.* |
     | *These settings changed meanwhile: they have been reloaded, save again.* | Someone saved the same settings at the same moment: nothing of yours was saved. Check the values shown, then save again. |
-    | *Secrets cannot be saved: this instance's key cannot be used (see the configuration checks).* | Nothing was saved: a secret cannot be encrypted. An administrator finds the cause in the [startup checks](../../admin/configuration.md). |
+    | *Secrets cannot be saved: this instance's key cannot be used (see the configuration checks).* | Nothing was saved: a secret cannot be encrypted. An administrator finds the cause in the [startup checks](../../admin/configuration_security.md#startup-checks). |
     | *The settings could not be saved.* | No answer from the server: try again. |
 
 ---
@@ -65,7 +65,7 @@ user's choice: for them, a personal setting always takes the plugin's default.
 
     You change the whole-instance settings here, like everybody else changes their personal ones. A
     whole-instance setting can also be given by the server's configuration instead: see
-    [Set by the Server](#set-by-the-server), and [Plugin Settings](../../admin/configuration.md)
+    [Set by the Server](#set-by-the-server), and [Plugin Settings](../../admin/configuration_secrets.md#plugin-settings)
     in the administrators' manual for the variables.
 
 ---
@@ -84,7 +84,7 @@ Some settings are secrets, such as an API key. A secret is write-only:
 
 Users who are not administrators see a whole-instance secret as *Set on …* (*Set* when the
 [server sets it](#set-by-the-server)) or *Not set*, and nothing else. LibreFolio keeps a saved
-secret encrypted: see [Saved Secrets and the Instance Key](../../admin/configuration.md).
+secret encrypted: see [Saved Secrets and the Instance Key](../../admin/configuration_secrets.md#plugin-secrets).
 
 ---
 
@@ -96,7 +96,7 @@ environment variable. The setting then shows its value read-only, a secret only 
 Administrators also see the name of the variable, *Set by the server variable* followed by it.
 
 To change such a setting, an administrator changes the variable and restarts LibreFolio: see
-[A Variable Locks the Setting](../../admin/configuration.md).
+[A Variable Locks the Setting](../../admin/configuration_secrets.md#plugin-variable-lock).
 
 ---
 
@@ -116,7 +116,7 @@ plugin's default: *The saved value will be deleted when you save: the default ap
 |---|---|---|
 | *The server variable … is invalid: the plugin stays unconfigured until it is fixed.* | The variable that sets it holds a value the setting refuses, or names a file that cannot be read. LibreFolio never falls back to a saved value or to the default. Administrators see the variable's name | An administrator fixes the variable and restarts LibreFolio |
 | *The saved value is no longer valid: the default applies.* | The plugin no longer accepts the value saved earlier, after an update for example | Choose a value again and save it, or leave it: the default applies meanwhile |
-| *Saved, but this instance's key cannot read it. If an administrator can put the old key back, that comes first; otherwise enter it again.* | A saved secret can no longer be read, because the instance's encryption key has changed. LibreFolio keeps it, but never uses it | If an administrator can still put the old instance key back, that comes first: a secret saved under the new key would become unreadable once the old key is back (see [Saved Secrets and the Instance Key](../../admin/configuration.md)). Otherwise, type the secret again and save it; for a whole-instance secret, an administrator does |
+| *Saved, but this instance's key cannot read it. If an administrator can put the old key back, that comes first; otherwise enter it again.* | A saved secret can no longer be read, because the instance's encryption key has changed. LibreFolio keeps it, but never uses it | If an administrator can still put the old instance key back, that comes first: a secret saved under the new key would become unreadable once the old key is back (see [Saved Secrets and the Instance Key](../../admin/configuration_secrets.md#plugin-secrets)). Otherwise, type the secret again and save it; for a whole-instance secret, an administrator does |
 
 ---
 
@@ -183,5 +183,5 @@ How the currency of a justETF asset works: [Pick the Currency in Search](../asse
 - 🎛️ **[User Preferences](preferences.md)** — Language, base currency, theme and guides
 - ⚙️ **[Settings Overview](index.md)** — Every tab of Settings
 - 📡 **[justETF](../assets/providers/justetf.md)** and 🇮🇹 **[Borsa Italiana](../assets/providers/borsa-italiana.md)** — The two providers with a search preference
-- 🛠️ **[Plugin Settings for administrators](../../admin/configuration.md)** — The server variables, the instance key and the encryption of the secrets
+- 🛠️ **[Plugin Settings for administrators](../../admin/configuration_secrets.md#plugin-settings)** — The server variables, the instance key and the encryption of the secrets
 - 🧩 **[Plugin Settings for developers](../../developer/architecture/patterns/plugin_settings.md)** — How a plugin declares its settings

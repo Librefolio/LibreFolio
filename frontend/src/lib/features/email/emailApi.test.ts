@@ -47,7 +47,6 @@ import {spyOnApi} from '$test/spyOnApi';
 import {AxiosError, AxiosHeaders, type AxiosAdapter, type AxiosResponse, type InternalAxiosRequestConfig} from 'axios';
 import {ApiError, axiosInstance, zodiosApi} from '$lib/api';
 import {fetchEmailStatus, issueProbeNonce, readTestFailure, refusalBody, refusalDetail, refusalStatus, retryAfterOf, sendTestEmail, type EmailBudget, type EmailCheck, type EmailLinks, type EmailStatus, type EmailTestFailure} from './emailApi';
-import {spyOnApi} from '$test/spyOnApi';
 
 /** What `GET /email/status` answers, as the generated client types it: wider than its schema. */
 type StatusAnswer = Awaited<ReturnType<typeof zodiosApi.get_email_status_api_v1_email_status_get>>;

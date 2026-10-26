@@ -43,7 +43,6 @@ vi.mock('$lib/features/instance/instanceConfig.svelte', () => ({
 
 import {ApiError, axiosInstance, zodiosApi} from '$lib/api';
 import {readLinkSendFailure, sendByEmailVisible, sendLinkByEmail, tokenFromLink, type LinkSendFailure} from './sendLinkApi';
-import {spyOnApi} from '$test/spyOnApi';
 
 const ALIAS = 'send_link_api_v1_email_links_post';
 const TOKEN = 'inv-Token_0123';

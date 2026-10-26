@@ -37,8 +37,11 @@ from backend.app.config.backup import BackupConfigError, backup_max_restore_mb, 
 from backend.app.db.models import User
 from backend.app.logging_config import get_logger
 from backend.app.schemas.backup import (
+    RestoreConfirmRequest,
     RestoreMigration,
     RestoreOutcome,
+    RestoreOwnerCandidate,
+    RestoreOwnerChoice,
     RestoreRestartAccepted,
     RestoreSecretCounts,
     RestoreStage,
@@ -209,7 +212,38 @@ def _report_view(report: StagingReport) -> RestoreStageReport:
         blockers=report.blockers,
         restorable=report.restorable,
         expires_at=report.expires_at,
+        owner_choice=_owner_choice_view(report),
     )
+
+
+def _owner_choice_view(report: StagingReport) -> RestoreOwnerChoice | None:
+    """B5-1: the accounts of the backup the owner may choose, with their addresses, on a managed instance only; the
+    administrators' route alone shows it (never the hosting panel, never a log)."""
+    from backend.app.services.accounts.user_service import same_email  # noqa: PLC0415
+    from backend.app.services.platform.instance_backup.apply import owner_choices  # noqa: PLC0415
+    from backend.app.services.platform.instance_backup.owner import configured_owner_email, owner_choice_required  # noqa: PLC0415
+
+    if not owner_choice_required():
+        return None
+    owner_email = configured_owner_email()
+    if owner_email is None:
+        return None
+    _allowed, forced = owner_choices(report.owner_candidates, owner_email)
+    # Every candidate of the report, so the owner sees the backup's administrators; when one holds the owner's address
+    # it is the only choice (forced_user_id), and the confirmation refuses any other (apply.confirm_restore).
+    candidates = [
+        RestoreOwnerCandidate(
+            user_id=candidate.user_id,
+            username=candidate.username,
+            email=candidate.email,
+            owner_email=candidate.email is not None and same_email(candidate.email, owner_email),
+            administrator=candidate.is_superuser and candidate.is_active,
+            is_superuser=candidate.is_superuser,
+            is_active=candidate.is_active,
+        )
+        for candidate in report.owner_candidates
+    ]
+    return RestoreOwnerChoice(required=True, owner_email=owner_email, forced_user_id=forced, candidates=candidates)
 
 
 def _stage_view(check: restore_jobs.RestoreCheck, *, reader: str | None = None) -> RestoreStage:
@@ -313,7 +347,7 @@ def delete_restore_check(stage_id: str, _admin: User = Depends(require_admin)) -
 # =============================================================================
 
 #: The answer of each refusal of a confirmation; any other ``RestoreStateError`` is a conflict.
-_CONFIRM_STATUS = {"restore_stage_not_found": status.HTTP_404_NOT_FOUND, "restore_stage_expired": status.HTTP_410_GONE}
+_CONFIRM_STATUS = {"restore_stage_not_found": status.HTTP_404_NOT_FOUND, "restore_stage_expired": status.HTTP_410_GONE, "owner_choice_not_applicable": status.HTTP_400_BAD_REQUEST}
 _NOT_PENDING = "No restore waits for the next start"
 _IN_PROGRESS = frozenset({"applying", "applied", "rolling_back"})
 
@@ -352,23 +386,25 @@ def _status_view(state: RestoreState | None) -> RestoreStatus:
     status_code=status.HTTP_202_ACCEPTED,
     response_model=RestoreStatus,
     responses={
+        400: {"description": "An owner's account named on an instance that is not managed (code `owner_choice_not_applicable`): nothing confirmed"},
         404: {"description": "No check has this id, or its copy is gone (code `restore_stage_not_found`)"},
         409: {
-            "description": "The check still runs (code `restore_stage_running`); it refused the archive, or found what forbids a restore (code `restore_not_restorable`); LibreFolio was updated since the check (code `restore_stage_outdated`); or another restore waits (code `restore_already_pending`)"
+            "description": "The check still runs (code `restore_stage_running`); it refused the archive, or found what forbids a restore (code `restore_not_restorable`); LibreFolio was updated since the check (code `restore_stage_outdated`); or another restore waits (code `restore_already_pending`). On a managed instance (B5-1): no owner's account named (code `owner_choice_required`), one the report does not offer (code `owner_choice_invalid`), no `LIBREFOLIO_ADMIN_EMAIL` (code `owner_email_not_set`), the owner's address changed since the check (code `restore_stage_outdated`), or the backup holds two accounts on one address or one name, the owner's address as another account's name, or an administrator still waiting for its setup link while no account holds the owner's address (code `owner_conflict`)"
         },
         410: {"description": "The check expired: check the archive again (code `restore_stage_expired`)"},
         500: _CONFIRM_FAILED,
         507: {"description": "Not enough free space to confirm the restore (code `backup_no_space`): nothing confirmed"},
     },
 )
-def confirm_restore_check(stage_id: str, admin: User = Depends(require_admin)) -> RestoreStatus:
+def confirm_restore_check(stage_id: str, body: RestoreConfirmRequest | None = None, admin: User = Depends(require_admin)) -> RestoreStatus:
     """Confirm the restore of a checked archive. Nothing changes yet: the next start of the server applies it, and ends
     every session; ``POST /backup/restore/restart`` stops the server for that start. A full disk answers 507
     ``backup_no_space``, any other failure to write the confirmation 500 ``restore_confirm_failed``: either way nothing
     is confirmed, since the state is written last and atomically (B-31). A state that cannot be read answers 500
     ``restore_state_unreadable``: a restore that may be half applied is never written over (B-32)."""
     try:
-        return _status_view(restore_jobs.confirm_check(stage_id, confirmed_by=admin.username, data_dir=get_data_dir()))
+        owner_user_id = body.owner_user_id if body is not None else None
+        return _status_view(restore_jobs.confirm_check(stage_id, confirmed_by=admin.username, owner_user_id=owner_user_id, data_dir=get_data_dir()))
     except restore_jobs.CheckNotFoundError:
         raise backup_error(status.HTTP_404_NOT_FOUND, "restore_stage_not_found", "No check has this id") from None
     except restore_jobs.CheckRunningError:

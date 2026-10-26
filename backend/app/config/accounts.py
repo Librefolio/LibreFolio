@@ -216,3 +216,19 @@ def admin_bootstrap_config() -> AdminBootstrapConfig | None:
             f"expected a username without {USERNAME_RESERVED_CHARACTER}, as registration asks: the sign-in reads a name with one as an email address, and the administrator signs in with {ADMIN_EMAIL_VARIABLE} anyway",
         )
     return AdminBootstrapConfig(email=address, username=name, token=token)
+
+
+def owner_admin_email() -> str | None:
+    """A5-1: the address of ``LIBREFOLIO_ADMIN_EMAIL`` as the account protection reads it, at every call; None when it cannot be used.
+
+    The variable stripped and checked as an address. Unlike ``admin_bootstrap_config()``, which raises on a bad value so
+    that the startup audit stops the server, this reader NEVER raises: the account protection asks it on every request
+    that touches an account, and an unset, blank or invalid variable simply names nobody.
+    """
+    email = _blank_to_none(ADMIN_EMAIL_VARIABLE)
+    if email is None:
+        return None
+    try:
+        return str(_EMAIL.validate_python(email))
+    except ValidationError:
+        return None

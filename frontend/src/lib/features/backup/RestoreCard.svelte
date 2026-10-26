@@ -229,7 +229,7 @@
                 {$_('backup.restore.openReport')}
             </button>
         </div>
-        <RestoreReportModal open={reportOpen} report={controller.report} busy={false} onConfirm={() => controller.confirm()} onDrop={() => controller.dropCheck()} onClose={() => (reportOpen = false)} />
+        <RestoreReportModal open={reportOpen} report={controller.report} busy={false} onConfirm={(ownerUserId) => controller.confirm(ownerUserId)} onDrop={() => controller.dropCheck()} onClose={() => (reportOpen = false)} />
     {/if}
 
     {#if controller.state === 'confirming' || controller.state === 'cancelling'}

@@ -614,6 +614,22 @@ describe('AccountDeletionDialog — when the deletion is refused', () => {
         expect(ui.dialog()).toBeInTheDocument();
     });
 
+    // A5-1 (23/10/2026): the paying administrator of a managed instance may not delete its own account from the profile (409, before the last-administrator rule)
+    it('ADEL-21b (self): the 409 ACCOUNT_PROTECTED of the profile deletion is shown with its code, nothing is reported, and the dialog stays open', async () => {
+        deleteOwn().mockRejectedValue(httpError(409, {detail: {error_code: 'ACCOUNT_PROTECTED', message: 'This account cannot be deleted from here: ask the host of this instance', reason: 'paying_administrator'}}));
+        const ui = mountDialog(SELF);
+        await settled(ui, ownPreview());
+        await arm(ui, SELF.account.username);
+
+        await fireEvent.click(ui.part('confirm'));
+
+        await waitFor(() => expect(ui.part('error')).toHaveAttribute('data-error-code', 'ACCOUNT_PROTECTED'));
+        expect(ui.part('error')).not.toHaveTextContent('ask the host');
+        expect(ui.onDeleted).not.toHaveBeenCalled();
+        expect(ui.onClose).not.toHaveBeenCalled();
+        expect(ui.dialog()).toBeInTheDocument();
+    });
+
     it.each(MODES)('ADEL-22 ($mode): a 500 is DELETION_FAILED — nothing was deleted — and the dialog stays open', async (m) => {
         m.remove().mockRejectedValue(httpError(500, NOTHING_DELETED));
         const ui = mountDialog(m);

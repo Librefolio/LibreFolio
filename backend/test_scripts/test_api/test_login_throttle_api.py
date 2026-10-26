@@ -949,6 +949,23 @@ class TestSecurityChecks:
         assert not shown, f"the SMTP configuration is never returned (F04): {shown} in the answer — an item is the check's i18n key and detail, never its log summary"
         print_success("neither the SMTP server nor its user in the answer")
 
+    # red until H5-4
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(("state", "severity", "key"), [(None, "ok", "ok"), ("pending", "info", "pending"), ("blocked", "warning", "blocked")], ids=["none-ok", "pending-info", "blocked-warning"])
+    async def test_the_owner_email_change_check_follows_the_startup_state(self, private_api: _Private, monkeypatch: pytest.MonkeyPatch, state: Optional[str], severity: str, key: str) -> None:
+        """SC-API-OE: ``accounts.owner_email_change`` (H5-4) is listed once, well formed (a severity, an i18n key, a detail object), with the severity and key of ``instance_owner.startup_change_state()`` — patched here, the app runs in this process —: ``ok`` / ``auth.checks.ownerEmailChange.ok`` for None, ``info`` / ``.pending``, ``warning`` / ``.blocked``; its item holds no ``@``."""
+        owner_module = importlib.import_module("backend.app.services.accounts.instance_owner")
+        monkeypatch.setattr(owner_module, "startup_change_state", lambda: state)
+        cookie = await _signed_in_for_checks(private_api, monkeypatch, admin=True)
+
+        by_id = _items(await _checks(private_api, cookie), f"GET /api/v1/security/checks, the owner's email change {state!r}")
+
+        item = by_id.get("accounts.owner_email_change")
+        assert item is not None, f"red until H5-4: accounts.owner_email_change must be listed: {sorted(by_id)}"
+        assert isinstance(item.get("detail"), dict) and item.get("severity") in SEVERITIES, f"well formed: {item}"
+        assert (item["severity"], item["i18n_key"]) == (severity, f"auth.checks.ownerEmailChange.{key}"), f"state {state!r}: expected {severity} / auth.checks.ownerEmailChange.{key}: {item}"
+        assert "@" not in repr(item), f"no address in the item: {item}"
+
 
 # ============================================================================
 # 7. POST /email/verification/resend — THE SIGN-IN'S CREDENTIALS, UNDER THE SIGN-IN'S LIMIT

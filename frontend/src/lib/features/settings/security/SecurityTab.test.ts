@@ -709,7 +709,7 @@ describe('SecurityTab — the guide of each check (SGUIDE-01…08, N69d)', () =>
         expect(button.tagName).toBe('BUTTON');
         expect(button).toHaveAccessibleName(containing(say(GUIDE)));
         expect(button.querySelector('svg'), 'the book').not.toBeNull();
-        expect(await opened(button)).toEqual(['/mkdocs/admin/configuration/#login-limit', '_blank', 'noopener']);
+        expect(await opened(button)).toEqual(['/mkdocs/admin/configuration_accounts/#login-limit', '_blank', 'noopener']);
     });
 
     it('SGUIDE-02: in another language the page is the translated one — /mkdocs/<lang>/… — and the anchor is the same', async () => {
@@ -778,6 +778,6 @@ describe('SecurityTab — the guide of each check (SGUIDE-01…08, N69d)', () =>
         await answer(mounted, 0, MIXED);
         await waitForStatus('ready');
 
-        expect(await opened(guideOf(finding('platform.blockedScript')))).toEqual(['/mkdocs/admin/configuration/#csp', '_blank', 'noopener']);
+        expect(await opened(guideOf(finding('platform.blockedScript')))).toEqual(['/mkdocs/admin/configuration_security/#csp', '_blank', 'noopener']);
     });
 });

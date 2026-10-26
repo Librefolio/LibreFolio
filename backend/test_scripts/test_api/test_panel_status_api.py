@@ -77,11 +77,15 @@ from backend.app.api.v1.auth import SESSION_COOKIE_NAME
 from backend.app.config import API_V1_PREFIX, is_test_mode
 from backend.app.config.platform import instance_blocked
 from backend.app.db.base import SQLModel  # imports every model: the in-memory database gets the whole ORM schema
-from backend.app.db.models import User
+from backend.app.db.models import AccountTokenPurpose, User
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
+from backend.app.services.accounts import instance_owner, registration_service, token_service
 from backend.app.services.accounts.auth_service import create_jwt_token
+from backend.app.services.accounts.token_service import DEFAULT_TTL
+from backend.app.services.platform.instance_backup import apply as restore_apply
 from backend.app.services.platform.sleep_wake import activity as activity_module
+from backend.app.utils.datetime_utils import utcnow
 from backend.app.utils.runtime.rate_window import SlidingWindowLimiter
 from backend.test_scripts.test_utils import print_section, print_success
 
@@ -102,6 +106,7 @@ BACKUP_TOKEN_VARIABLE = "LIBREFOLIO_BACKUP_DOWNLOAD_TOKEN"
 SECRET_FILE_SUFFIX = "_FILE"
 BLOCKED_VARIABLE = "LIBREFOLIO_BLOCKED"
 DELETION_DATE_VARIABLE = "LIBREFOLIO_DELETION_DATE"
+MAX_USERS_VARIABLE = "LIBREFOLIO_MAX_USERS"
 
 #: The route's answers, whole: off, and without its token; and the block's answer to a signed-in caller elsewhere.
 OFF_ANSWER = {"detail": "Not Found"}
@@ -111,7 +116,10 @@ BLOCKED_ANSWER = {"detail": {"code": "instance_blocked", "message": "This instan
 #: The keys of the answer, exactly, and the four states of the initial administrator's setup (A's ``AdminSetupState``).
 #: H-62 (contract L3 §6) adds ``mode`` (normal or awaiting_restore) and ``restore`` (null without a restore recorded):
 #: red until H-62.
-ANSWER_KEYS = {"admin_setup", "setup_expires_at", "mode", "restore"}
+#: H5-1 adds the counts of the places taken, ``users_used`` and ``users_limit`` (and nothing that names a user): red
+#: until H5-1.
+#: H5-4 adds ``owner_email_change`` (pending, blocked or null, never an address): the seventh key, red until H5-4.
+ANSWER_KEYS = {"admin_setup", "setup_expires_at", "mode", "restore", "users_used", "users_limit", "owner_email_change"}
 SETUP_STATES = ("none", "pending", "done", "expired")
 
 #: The OpenAPI document: the route's responses, exactly; its one tag; the scheme of its token.
@@ -136,7 +144,9 @@ SETUP_EXPIRES_AT = datetime(2026, 10, 23, 9, 41, 27, 125000, tzinfo=UTC)
 STRAY_DATE = datetime(2026, 10, 17, 6, 5, 0, tzinfo=UTC)
 #: The answer to the token while the setup waits, ``setup_expires_at`` read as an instant (``_status_answer``).
 #: H-62: outside the «awaiting restore» mode and without a restore recorded, ``mode`` normal and ``restore`` null.
-PENDING_ANSWER = {"admin_setup": "pending", "setup_expires_at": SETUP_EXPIRES_AT, "mode": "normal", "restore": None}
+#: H5-1: an instance without accounts and without a limit: no place taken (``users_used`` 0), ``users_limit`` null.
+#: H5-4: and no change of the owner's address waiting (``owner_email_change`` null).
+PENDING_ANSWER = {"admin_setup": "pending", "setup_expires_at": SETUP_EXPIRES_AT, "mode": "normal", "restore": None, "users_used": 0, "users_limit": None, "owner_email_change": None}
 
 #: Logged through a logger of this file inside the capture first: a capture that sees nothing proves nothing.
 LOG_CANARY = "R1-04 canary: a line written inside the capture reaches it"
@@ -278,6 +288,10 @@ def _no_panel_variables(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv(DELETION_DATE_VARIABLE, raising=False)
     # H-62: neither is the «awaiting restore» mode on
     monkeypatch.delenv("LIBREFOLIO_AWAIT_RESTORE", raising=False)
+    # H5-1: nor a limit of users: ``users_limit`` is null until a test sets it
+    monkeypatch.delenv(MAX_USERS_VARIABLE, raising=False)
+    # H5-4: nor a variable naming the owner's address: ``owner_email_change`` is null until a test stands in for the function
+    monkeypatch.delenv("LIBREFOLIO_ADMIN_EMAIL", raising=False)
 
 
 async def _request(app: FastAPI, method: str, path: str, headers: dict[str, str] | None = None) -> httpx.Response:
@@ -523,6 +537,9 @@ async def test_the_status_answers_the_setup_state_and_the_expiry_of_a_pending_se
         "setup_expires_at": answered,
         "mode": "normal",
         "restore": None,
+        "users_used": 0,
+        "users_limit": None,
+        "owner_email_change": None,
     }, f"the setup {state}, its status holding {held.isoformat()}: expected admin_setup {state!r} and setup_expires_at {answered.isoformat() if answered else None} (ISO 8601 with the UTC offset, for pending only), got {response.text}"
     assert len(reader.calls) == 1, f"admin_setup_status is called once per request: {reader.calls}"
     call = reader.calls[0]
@@ -607,7 +624,9 @@ async def test_on_a_blocked_instance_the_status_answers_its_token_and_its_own_40
 
     assert _answer(refused_elsewhere) == (423, BLOCKED_ANSWER), f"Barrier: the block is on and refuses this signed-in caller outside the list, GET {REFUSED_PATH} answers 423: {refused_elsewhere.status_code} {refused_elsewhere.text}"
     answers = {label: _status_answer(response) for label, response in responses.items()}
-    expected = {"the token": (200, PENDING_ANSWER), "the token and a session": (200, PENDING_ANSWER), "no credential": (401, UNAUTHORIZED_ANSWER), "a session without the token": (401, UNAUTHORIZED_ANSWER)}
+    # the signed-in account is an active one of the database: one place taken
+    pending_with_one_user = {**PENDING_ANSWER, "users_used": 1}
+    expected = {"the token": (200, pending_with_one_user), "the token and a session": (200, pending_with_one_user), "no credential": (401, UNAUTHORIZED_ANSWER), "a session without the token": (401, UNAUTHORIZED_ANSWER)}
     assert answers == expected, f"on a blocked instance GET {STATUS_PATH} answers its token 200 and anyone else the scope's own 401, never the 423 of the block: {answers}"
     challenges = {label: responses[label].headers.get_list("www-authenticate") for label in ("no credential", "a session without the token")}
     assert challenges == dict.fromkeys(challenges, ["Bearer"]), f"each 401 asks for a bearer token: {challenges}"
@@ -638,9 +657,9 @@ def _resolved(schema: dict[str, Any], document: dict[str, Any]) -> dict[str, Any
 
 # red today: the OpenAPI document has no GET /api/v1/panel/status
 def test_openapi_documents_the_status_answer_and_its_five_responses(app):
-    """R1-06 (§4): the 200 of ``GET /api/v1/panel/status`` is ``PanelStatusResponse``, with exactly two properties and no
-    other (``extra="forbid"``): ``admin_setup``, required, a string enum of the four states, and ``setup_expires_at``, a
-    date-time or null. The responses documented are 200, 401, 404, 429 and 503; D7: a 500 only if it does not name
+    """R1-06 (§4): the 200 of ``GET /api/v1/panel/status`` is ``PanelStatusResponse``, with exactly its six properties and
+    no other (``extra="forbid"``): ``admin_setup``, required, a string enum of the four states, ``setup_expires_at``, a
+    date-time or null, ``mode``, ``restore`` and (H5-1) the two counts, pinned in R1-08. The responses documented are 200, 401, 404, 429 and 503; D7: a 500 only if it does not name
     ``restore_state_unreadable`` (an unreadable restore state is a 200 now)."""
     print_section("R1-06: GET /panel/status in the OpenAPI document")
     document = app.openapi()
@@ -654,7 +673,7 @@ def test_openapi_documents_the_status_answer_and_its_five_responses(app):
     assert schema == {"$ref": "#/components/schemas/PanelStatusResponse"}, f"the 200 of GET {STATUS_PATH} is PanelStatusResponse: {schema}"
     component = document.get("components", {}).get("schemas", {}).get("PanelStatusResponse", {})
     properties = component.get("properties", {})
-    assert set(properties) == ANSWER_KEYS, f"PanelStatusResponse has exactly the properties {sorted(ANSWER_KEYS)}: {component}"
+    assert set(properties) == ANSWER_KEYS, f"PanelStatusResponse has exactly the properties {sorted(ANSWER_KEYS)} (H5-1: the two counts of the places): {component}"
     assert component.get("additionalProperties") is False, f"PanelStatusResponse forbids any other property (extra='forbid'): {component}"
     assert "admin_setup" in component.get("required", []), f"admin_setup is always in the answer: {component}"
     admin_setup = _resolved(properties["admin_setup"], document)
@@ -677,3 +696,372 @@ def test_openapi_lists_the_status_route_under_the_hosting_panel_with_a_token_of_
     assert operation.get("security") == [{STATUS_SCHEME: []}], f"GET {STATUS_PATH} asks for the status scope's own scheme {STATUS_SCHEME}: {operation.get('security')}"
     assert (scheme.get("type"), scheme.get("scheme")) == ("http", "bearer"), f"{STATUS_SCHEME} is an HTTP bearer scheme: {scheme}"
     print_success(f"GET {STATUS_PATH}: tag {HOSTING_PANEL_TAG!r}, scheme {STATUS_SCHEME} (bearer)")
+
+
+# =============================================================================
+# R1-08 .. R1-12 — H5-1: the counts of the places taken, and nothing that names a user
+# =============================================================================
+
+#: The two counts H5-1 adds to the answer: ``users_used`` (``registration_service.user_usage(session).used``) and
+#: ``users_limit`` (``config.accounts.max_users()``, ``LIBREFOLIO_MAX_USERS``). Red until H5-1: the route answers neither.
+COUNT_KEYS = ("users_used", "users_limit")
+INVITE = AccountTokenPurpose.INVITE
+VERIFICATION = AccountTokenPurpose.EMAIL_VERIFICATION
+ADMIN_SETUP = AccountTokenPurpose.ADMIN_SETUP
+
+
+async def _account(session: AsyncSession, *, active: bool = True, email: str | None = None) -> User:
+    """An account of the in-memory database, with a username of its own."""
+    username = f"h51_{uuid4().hex[:12]}"
+    account = User(username=username, email=email or f"{username}@example.com", hashed_password="not-a-password-hash", is_active=active)
+    session.add(account)
+    await session.commit()
+    return account
+
+
+async def _token_of(session: AsyncSession, purpose: AccountTokenPurpose, *, state: str = "live", **arguments: Any) -> None:
+    """A token of ``purpose`` in ``state``: ``live``, ``expired``, ``revoked`` or ``consumed``."""
+    moment = utcnow()
+    created = moment - DEFAULT_TTL[purpose] - timedelta(hours=1) if state == "expired" else moment - timedelta(minutes=5)
+    issued = await token_service.issue_token(session, purpose, now=created, **arguments)
+    if state == "consumed":
+        assert await token_service.consume_token(session, issued.token, purpose, now=moment) is not None, "setup: the token was not consumed"
+    elif state == "revoked":
+        assert await token_service.revoke_tokens(session, token_id=issued.record.id, now=moment) == 1, "setup: the token was not revoked"
+    await session.commit()
+
+
+async def _seed(session: AsyncSession, *, active: int = 0, invitations: int = 0, waiting_verification: int = 0, waiting_setup: int = 0) -> None:
+    """The places taken, by what each one is: active accounts, live invitations, inactive accounts with a live
+    verification link, inactive accounts with a setup link none of which was used."""
+    for _ in range(active):
+        await _account(session)
+    for _ in range(invitations):
+        await _token_of(session, INVITE)
+    for _ in range(waiting_verification):
+        await _token_of(session, VERIFICATION, user_id=(await _account(session, active=False)).id)
+    for _ in range(waiting_setup):
+        await _token_of(session, ADMIN_SETUP, user_id=(await _account(session, active=False)).id)
+
+
+async def _seed_places_that_do_not_count(session: AsyncSession) -> None:
+    """What holds no place: an inactive account without a link, a spent or expired or withdrawn invitation, an inactive
+    account whose verification link expired or was withdrawn, one whose setup link was consumed."""
+    await _account(session, active=False)
+    for state in ("expired", "revoked", "consumed"):
+        await _token_of(session, INVITE, state=state)
+    for state in ("expired", "revoked"):
+        await _token_of(session, VERIFICATION, state=state, user_id=(await _account(session, active=False)).id)
+    await _token_of(session, ADMIN_SETUP, state="consumed", user_id=(await _account(session, active=False)).id)
+
+
+async def _once_only(session: AsyncSession) -> None:
+    """Accounts that hold one place, whatever they wait for: an active account with a live verification link, and a
+    waiting account with two live links."""
+    await _token_of(session, VERIFICATION, user_id=(await _account(session)).id)
+    waiting = await _account(session, active=False)
+    await _token_of(session, VERIFICATION, user_id=waiting.id)
+    await _token_of(session, VERIFICATION, user_id=waiting.id)
+
+
+async def _status_body(instance: InProcess, monkeypatch: pytest.MonkeyPatch) -> tuple[httpx.Response, dict[str, Any]]:
+    """``GET /panel/status`` with the status token, the setup read through the stand-in (none): the response and its JSON
+    body, the test failing when the answer is not a 200 with a JSON object."""
+    _install_route(monkeypatch, SetupStatusStandIn(SetupStateStandIn.NONE))
+    token = _token()
+    monkeypatch.setenv(STATUS_TOKEN_VARIABLE, token)
+    response = await _send(instance.app, "GET", STATUS_PATH, _bearer(token))
+    status, body = _answer(response)
+    assert status == 200 and isinstance(body, dict), f"GET {STATUS_PATH} with its token answers 200 with an object: {response.status_code} {response.text}"
+    return response, body
+
+
+# red today: the answer has no users_used and no users_limit
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("seeding", "used"),
+    [
+        pytest.param({}, 0, id="no-user"),
+        pytest.param({"active": 3}, 3, id="active-accounts"),
+        pytest.param({"invitations": 2}, 2, id="live-invitations"),
+        pytest.param({"waiting_verification": 2}, 2, id="accounts-waiting-for-their-email-verification"),
+        pytest.param({"waiting_setup": 1}, 1, id="the-account-waiting-for-its-setup"),
+        pytest.param({"active": 2, "invitations": 3, "waiting_verification": 2, "waiting_setup": 1}, 8, id="all-of-them-together"),
+    ],
+)
+async def test_the_status_counts_the_places_taken(in_process, monkeypatch, seeding, used):
+    """R1-08 (H5-1): ``users_used`` is ``registration_service.user_usage(session).used``: the active accounts, the live
+    invitations, and the inactive accounts that wait for their email verification (a live link) or for the initial
+    administrator's setup (a link none of which was used). Barrier: what the service itself counts on the same session
+    equals the expected figure, so the seeding is what the case says."""
+    print_section(f"R1-08: users_used with {seeding or 'no user'}")
+    await _seed(in_process.session, **seeding)
+    assert (await registration_service.user_usage(in_process.session)).used == used, f"Barrier: user_usage counts {used} places for {seeding}"
+
+    response, body = await _status_body(in_process, monkeypatch)
+
+    assert body.get("users_used") == used and isinstance(body.get("users_used"), int), f"users_used is the {used} places user_usage counts, an integer: {response.text}"
+    print_success(f"{seeding or 'no user'}: users_used {used}")
+
+
+# red today: the answer has no users_used
+@pytest.mark.asyncio
+async def test_the_status_counts_each_account_and_only_the_places_that_hold_one(in_process, monkeypatch):
+    """R1-08b (H5-1): an account counts once whatever it waits for (an active account with a live verification link; a
+    waiting account with two live links), and what holds no place does not count (an inactive account without a link, an
+    invitation expired, withdrawn or spent, a verification link expired or withdrawn, a setup link consumed). One active
+    account beside them: ``users_used`` 3. Barrier: ``user_usage`` says 3 on the same session."""
+    print_section("R1-08b: each account once, the places that hold none not at all")
+    await _account(in_process.session)
+    await _once_only(in_process.session)
+    await _seed_places_that_do_not_count(in_process.session)
+    assert (await registration_service.user_usage(in_process.session)).used == 3, "Barrier: user_usage counts 3 places"
+
+    response, body = await _status_body(in_process, monkeypatch)
+
+    assert body.get("users_used") == 3, f"users_used counts each account once and no place that holds none: {response.text}"
+    print_success("users_used 3: once each, nothing for what holds no place")
+
+
+# red today: the answer has no users_limit
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("variable", "limit"), [(None, None), ("5", 5)], ids=["unset", "five"])
+async def test_the_status_gives_the_limit_of_users_or_null(in_process, monkeypatch, variable, limit):
+    """R1-09 (H5-1): ``users_limit`` is ``config.accounts.max_users()``: null while ``LIBREFOLIO_MAX_USERS`` is unset, the
+    number with ``LIBREFOLIO_MAX_USERS=5``, an integer. The count beside it (two active accounts) does not move with the
+    limit."""
+    print_section(f"R1-09: users_limit with {MAX_USERS_VARIABLE}={variable!r}")
+    await _seed(in_process.session, active=2)
+    if variable is not None:
+        monkeypatch.setenv(MAX_USERS_VARIABLE, variable)
+
+    response, body = await _status_body(in_process, monkeypatch)
+
+    assert "users_limit" in body and body["users_limit"] == limit, f"{MAX_USERS_VARIABLE}={variable!r}: users_limit is {limit!r}: {response.text}"
+    assert limit is None or (isinstance(body["users_limit"], int) and not isinstance(body["users_limit"], bool)), f"users_limit is an integer: {response.text}"
+    assert body.get("users_used") == 2, f"users_used does not depend on the limit: {response.text}"
+    print_success(f"{MAX_USERS_VARIABLE}={variable!r}: users_limit {limit!r}")
+
+
+# red today: the answer has no counts, so the barrier holding them fails
+@pytest.mark.asyncio
+async def test_the_status_never_shows_the_username_or_email_of_a_user(in_process, monkeypatch):
+    """R1-10 (H5-1): counts only. Accounts of every kind the count reads (an active one, one waiting for its email
+    verification, the one waiting for its setup) and an invitation addressed to an email carry canary usernames and
+    emails of this test; no canary is anywhere in the answer, status, headers and raw body alike. Barriers: the four
+    places are counted (``users_used`` 4), so the canaries are in the rows the count read, and the two keys are in the
+    answer."""
+    print_section("R1-10: GET /panel/status shows no username and no email")
+    canaries: list[str] = []
+
+    async def canary_account(active: bool) -> User:
+        marker = f"h51-canary-{uuid4().hex[:12]}"
+        account = await _account(in_process.session, active=active, email=f"{marker}@canary.example")
+        account.username = marker
+        in_process.session.add(account)
+        await in_process.session.commit()
+        canaries.extend((account.username, account.email))
+        return account
+
+    await canary_account(active=True)
+    await _token_of(in_process.session, VERIFICATION, user_id=(await canary_account(active=False)).id)
+    await _token_of(in_process.session, ADMIN_SETUP, user_id=(await canary_account(active=False)).id)
+    invited = f"h51-canary-{uuid4().hex[:12]}@canary.example"
+    canaries.append(invited)
+    await _token_of(in_process.session, INVITE, email=invited)
+    assert (await registration_service.user_usage(in_process.session)).used == 4, "Barrier: the four places are counted"
+
+    response, body = await _status_body(in_process, monkeypatch)
+
+    assert body.get("users_used") == 4 and set(COUNT_KEYS) <= set(body), f"Barrier: the answer carries the counts of the four places: {response.text}"
+    shown = _everything_shown(response)
+    assert [canary for canary in canaries if canary in shown] == [], f"the answer shows a username or an email: {shown}"
+    print_success("four places counted, none of the eight canaries in the answer")
+
+
+# red today: PanelStatusResponse has neither property
+def test_openapi_documents_the_two_counts_as_integers(app):
+    """R1-11 (H5-1): in the document, ``PanelStatusResponse`` has the properties ``users_used``, an integer with a minimum
+    of 0, and ``users_limit``, an integer with a minimum of 1 or null, and no other property (``additionalProperties: false``): the answer
+    holds exactly ``ANSWER_KEYS``."""
+    print_section("R1-11: PanelStatusResponse in the OpenAPI document, the two counts")
+    document = app.openapi()
+    component = document.get("components", {}).get("schemas", {}).get("PanelStatusResponse", {})
+    properties = component.get("properties", {})
+
+    assert set(properties) == ANSWER_KEYS, f"PanelStatusResponse has exactly the properties {sorted(ANSWER_KEYS)}: {sorted(properties)}"
+    assert component.get("additionalProperties") is False, f"PanelStatusResponse forbids any other property: {component}"
+    used = _resolved(properties.get("users_used", {}), document)
+    assert (used.get("type"), used.get("minimum")) == ("integer", 0), f"users_used is an integer with a minimum of 0: {used}"
+    variants = properties.get("users_limit", {}).get("anyOf", [])
+    integer_variants = [variant for variant in variants if variant.get("type") == "integer"]
+    assert len(variants) == 2 and {"type": "null"} in variants and len(integer_variants) == 1, f"users_limit is an integer or null: {properties.get('users_limit')}"
+    assert integer_variants[0].get("minimum") == 1, f"users_limit, when a number, is at least 1 (LIBREFOLIO_MAX_USERS): {integer_variants[0]}"
+    print_success("users_used: integer, minimum 0; users_limit: integer (minimum 1) or null; no other property")
+
+
+# red today: the answer has no counts in either case
+@pytest.mark.asyncio
+@pytest.mark.parametrize("case", ["awaiting-restore", "restore-unreadable"])
+async def test_the_counts_are_in_the_answer_while_awaiting_restore_and_with_an_unreadable_restore(in_process, monkeypatch, case):
+    """R1-12 (H5-1): the answer carries both keys in the awaiting-restore mode and when the state of the restore cannot be
+    read (200 with ``restore.state`` ``unreadable``, D7), with the figures of the database (two active accounts, the
+    limit 7). Barrier: the mode or the restore says what the case claims."""
+    print_section(f"R1-12: the counts while {case}")
+    await _seed(in_process.session, active=2)
+    monkeypatch.setenv(MAX_USERS_VARIABLE, "7")
+    if case == "awaiting-restore":
+        monkeypatch.setenv("LIBREFOLIO_AWAIT_RESTORE", "1")
+    else:
+
+        def unreadable(_root: Any) -> Any:
+            raise restore_apply.RestoreStateUnreadableError("invalid")
+
+        monkeypatch.setattr(restore_apply, "read_restore", unreadable)
+
+    response, body = await _status_body(in_process, monkeypatch)
+
+    if case == "awaiting-restore":
+        assert body.get("mode") == "awaiting_restore", f"Barrier: the mode is awaiting_restore: {response.text}"
+    else:
+        assert (body.get("restore") or {}).get("state") == "unreadable", f"Barrier: the restore is unreadable: {response.text}"
+    assert set(body) == ANSWER_KEYS, f"{case}: the answer holds exactly {sorted(ANSWER_KEYS)}: {response.text}"
+    assert (body["users_used"], body["users_limit"]) == (2, 7), f"{case}: users_used 2 and users_limit 7: {response.text}"
+    print_success(f"{case}: users_used 2, users_limit 7")
+
+
+# =============================================================================
+# R1-13 .. R1-17 — H5-4: the change of the owner's address, as ``owner_email_change``
+# =============================================================================
+
+#: The key H5-4 adds (``Literal["pending", "blocked"] | None``, default null) and the function that fills it, read through the
+#: module so that a test can stand in for it: ``instance_owner.owner_change_status(session)``.
+OWNER_KEY = "owner_email_change"
+OWNER_STATES = (None, "pending", "blocked")
+#: Sentinel addresses and names: the fake knows them, the answer must not.
+OWNER_CANARIES = ("h54-old-owner-canary@canary.example", "h54-new-owner-canary@canary.example", "h54-owner-username-canary")
+
+
+@dataclass
+class OwnerChangeStandIn:
+    """The stand-in of ``instance_owner.owner_change_status(session)``: records the sessions it gets, answers ``answer``, and
+    holds sentinel addresses and a name in its own state, which the route has no way to read."""
+
+    answer: Any
+    sessions: list[Any]
+    holds: tuple[str, ...] = OWNER_CANARIES
+
+    async def __call__(self, session: Any) -> Any:
+        self.sessions.append(session)
+        return self.answer
+
+
+def _stand_in_for_owner_change(monkeypatch: pytest.MonkeyPatch, answer: Any) -> OwnerChangeStandIn:
+    """Until the test ends, ``instance_owner.owner_change_status`` is the recording stand-in answering ``answer``. The route
+    must call it through the module (``instance_owner.owner_change_status``), or this patch never reaches it."""
+    stand_in = OwnerChangeStandIn(answer, [])
+    monkeypatch.setattr(instance_owner, "owner_change_status", stand_in)
+    return stand_in
+
+
+# red today: the answer has no owner_email_change
+@pytest.mark.asyncio
+@pytest.mark.parametrize("state", OWNER_STATES, ids=["none", "pending", "blocked"])
+async def test_the_status_gives_the_state_of_the_owners_email_change(in_process, monkeypatch, state):
+    """R1-13 (H5-4): ``owner_email_change`` is what ``instance_owner.owner_change_status(session)`` answers: null for None,
+    ``pending``, ``blocked``; the function is called once, with the request's own database session. Barrier: the stand-in was
+    called (the patch reached the route's call)."""
+    print_section(f"R1-13: owner_email_change {state!r}")
+    stand_in = _stand_in_for_owner_change(monkeypatch, state)
+
+    response, body = await _status_body(in_process, monkeypatch)
+
+    assert OWNER_KEY in body, f"the answer always carries {OWNER_KEY}: {response.text}"
+    assert body[OWNER_KEY] == state, f"owner_change_status answered {state!r}: {OWNER_KEY} says the same: {response.text}"
+    assert len(stand_in.sessions) == 1 and stand_in.sessions[0] is in_process.session, f"owner_change_status is called once per request, with the request's own session: {stand_in.sessions!r}"
+    print_success(f"owner_email_change {state!r}")
+
+
+# red today: the answer has no owner_email_change
+@pytest.mark.asyncio
+async def test_the_owner_key_is_present_in_every_mode_and_the_answer_keeps_its_seven_keys(in_process, monkeypatch):
+    """R1-14 (H5-4): the key is in the answer whatever the instance does: the default (nothing waits, real function on an empty
+    database: null), the awaiting-restore mode, and an unreadable restore; the answer holds exactly ``ANSWER_KEYS``, seven keys."""
+    print_section("R1-14: owner_email_change always present, seven keys")
+    assert len(ANSWER_KEYS) == 7, "Barrier: ANSWER_KEYS is the seven keys of the contract"
+
+    response, body = await _status_body(in_process, monkeypatch)
+    assert set(body) == ANSWER_KEYS and body[OWNER_KEY] is None, f"default: exactly the seven keys, {OWNER_KEY} null (an empty database, no managed profile): {response.text}"
+
+    monkeypatch.setenv("LIBREFOLIO_AWAIT_RESTORE", "1")
+    response, body = await _status_body(in_process, monkeypatch)
+    assert body.get("mode") == "awaiting_restore", f"Barrier: the mode is awaiting_restore: {response.text}"
+    assert set(body) == ANSWER_KEYS and body[OWNER_KEY] is None, f"awaiting restore: exactly the seven keys: {response.text}"
+
+    def unreadable(_root: Any) -> Any:
+        raise restore_apply.RestoreStateUnreadableError("invalid")
+
+    monkeypatch.delenv("LIBREFOLIO_AWAIT_RESTORE")
+    monkeypatch.setattr(restore_apply, "read_restore", unreadable)
+    response, body = await _status_body(in_process, monkeypatch)
+    assert (body.get("restore") or {}).get("state") == "unreadable", f"Barrier: the restore is unreadable: {response.text}"
+    assert set(body) == ANSWER_KEYS and body[OWNER_KEY] is None, f"unreadable restore: exactly the seven keys: {response.text}"
+    print_success("seven keys in every mode")
+
+
+# red today: the answer has no owner_email_change, so the barrier on it fails
+@pytest.mark.asyncio
+@pytest.mark.parametrize("state", ["pending", "blocked"])
+async def test_the_status_never_shows_an_address_or_a_username_of_the_owner(in_process, monkeypatch, state):
+    """R1-15 (H5-4): the state only. The stand-in holds sentinel addresses and a user name; neither is anywhere in the answer
+    (status, headers, raw body), and the value of the key is the bare word. Barriers: the key says ``state`` (so the answer was
+    built from the function), and the stand-in was called."""
+    print_section(f"R1-15: no address with owner_email_change {state!r}")
+    stand_in = _stand_in_for_owner_change(monkeypatch, state)
+
+    response, body = await _status_body(in_process, monkeypatch)
+
+    assert body.get(OWNER_KEY) == state and stand_in.sessions, f"Barrier: the answer carries {OWNER_KEY} {state!r} from the function: {response.text}"
+    shown = _everything_shown(response)
+    assert [canary for canary in OWNER_CANARIES if canary in shown] == [], f"the answer shows an address or a name of the owner: {shown}"
+    assert "@" not in response.text, f"no address of any kind in the body: {response.text}"
+    print_success(f"{state}: no sentinel in the answer")
+
+
+# red today: PanelStatusResponse has no such property
+def test_openapi_documents_owner_email_change_as_pending_blocked_or_null(app):
+    """R1-16 (H5-4): in the document, ``PanelStatusResponse.owner_email_change`` is the enum ``pending`` / ``blocked`` or null
+    (an ``anyOf`` of the two), not required, with a description; ``additionalProperties`` stays false and the properties are
+    exactly ``ANSWER_KEYS``."""
+    print_section("R1-16: owner_email_change in the OpenAPI document")
+    document = app.openapi()
+    component = document.get("components", {}).get("schemas", {}).get("PanelStatusResponse", {})
+    properties = component.get("properties", {})
+
+    assert set(properties) == ANSWER_KEYS, f"PanelStatusResponse has exactly the properties {sorted(ANSWER_KEYS)}: {sorted(properties)}"
+    assert component.get("additionalProperties") is False, f"PanelStatusResponse forbids any other property: {component}"
+    schema = properties[OWNER_KEY]
+    variants = schema.get("anyOf", [])
+    enums = [_resolved(variant, document) for variant in variants if variant != {"type": "null"}]
+    assert len(variants) == 2 and {"type": "null"} in variants and len(enums) == 1, f"{OWNER_KEY} is an enum or null: {schema}"
+    assert (enums[0].get("type"), sorted(enums[0].get("enum", []))) == ("string", ["blocked", "pending"]), f"{OWNER_KEY} is pending or blocked when it is not null: {enums[0]}"
+    assert OWNER_KEY not in component.get("required", []), f"{OWNER_KEY} has a default (null), so it is not required: {component.get('required')}"
+    assert schema.get("default") is None and schema.get("description"), f"{OWNER_KEY} defaults to null and is described: {schema}"
+    print_success("owner_email_change: pending | blocked | null, default null")
+
+
+# red today: the answer has no owner_email_change
+@pytest.mark.asyncio
+async def test_the_owner_change_does_not_change_the_other_answers_or_the_refusals(in_process, monkeypatch):
+    """R1-17 (H5-4): a ``blocked`` change moves nothing else: the setup, mode, restore and counts are what they were, and the
+    answer to a request without the token is still the scope's own 401, whole (the function is not even called for it)."""
+    print_section("R1-17: the owner change touches nothing else")
+    stand_in = _stand_in_for_owner_change(monkeypatch, "blocked")
+    response, body = await _status_body(in_process, monkeypatch)
+    assert body == {"admin_setup": "none", "setup_expires_at": None, "mode": "normal", "restore": None, "users_used": 0, "users_limit": None, OWNER_KEY: "blocked"}, f"the whole answer, blocked change: {response.text}"
+
+    calls = len(stand_in.sessions)
+    refused = await _send(in_process.app, "GET", STATUS_PATH, None)
+    assert _answer(refused) == (401, UNAUTHORIZED_ANSWER), f"without the token the 401 is unchanged: {refused.status_code} {refused.text}"
+    assert len(stand_in.sessions) == calls, "a refused request does not read the owner's change"
+    print_success("answer whole; 401 unchanged")

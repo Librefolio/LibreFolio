@@ -1,7 +1,9 @@
 <!--
-  The page of an instance whose restore stopped half way (B-33): the state of the restore cannot be read, LibreFolio
-  cannot tell which data it holds, and every API route but a few answers 423 `instance_restore_interrupted` until the
-  administrator chooses with `./dev.py backup pending --recover`. The page says so on the login's animated background,
+  The page of an instance that serves no data until its administrator acts: the state of its restore cannot be read
+  (B-33, `reason` `restore_state`: LibreFolio cannot tell which data it holds, the administrator chooses with
+  `./dev.py backup pending --recover previous`) or the owner of the restored data has no account yet (H5-3, `reason`
+  `owner_assignment`: `./dev.py backup pending --recover owner`). Every API route but a few answers 423
+  `instance_restore_interrupted`. The page says so on the login's animated background,
   links the recovery's documentation and, when the instance names one, its support (D7), asks the instance every `pollMs` whether it serves the data again, and reloads
   once it does.
 -->
@@ -24,9 +26,11 @@
         pollMs?: number;
         /** The instance's support address (`LIBREFOLIO_SUPPORT_URL`); `instanceConfig.config.support_url` by default. */
         supportUrl?: string | null;
+        /** Why the instance serves no data (`restore_interrupted_reason` of `GET /system/instance`); null or absent reads as `restore_state`. */
+        reason?: 'restore_state' | 'owner_assignment' | null;
     }
 
-    let {onretry = () => window.location.reload(), fetchInterrupted = defaultFetchInterrupted, pollMs = 30_000, supportUrl = configuredSupportUrl()}: Props = $props();
+    let {onretry = () => window.location.reload(), fetchInterrupted = defaultFetchInterrupted, pollMs = 30_000, supportUrl = configuredSupportUrl(), reason = null}: Props = $props();
 
     /** The generated type of a nullable string with a description also admits an array (a quirk of the client
      *  generator, as in `AssetSearchAutocomplete`); the response's validator accepts only a string or null. */
@@ -39,8 +43,11 @@
     const support = $derived(supportChannel(supportUrl, {githubFallback: false}));
     const supportHref = $derived(support?.kind === 'mailto' ? `mailto:${support.address}` : support?.kind === 'page' ? support.url : null);
 
-    /** The admin CLI page of the recovery, in the interface language (the docs' rule: English at the root). */
-    const docsHref = $derived(`/mkdocs/${$currentLanguage && $currentLanguage !== 'en' ? `${$currentLanguage}/` : ''}admin/cli_tools/#backup-pending-unreadable`);
+    const ownerAssignment = $derived(reason === 'owner_assignment');
+
+    /** The admin page of the recovery, in the interface language (the docs' rule: English at the root): the CLI's section for an
+     *  unreadable state, the panel guide's section on the owner's account for the owner's. */
+    const docsHref = $derived(`/mkdocs/${$currentLanguage && $currentLanguage !== 'en' ? `${$currentLanguage}/` : ''}admin/${ownerAssignment ? 'hosting_panel_backups/#restore-owner-pending' : 'cli_backup/#backup-pending-unreadable'}`);
 
     async function defaultFetchInterrupted(): Promise<boolean | undefined> {
         return (await zodiosApi.get_instance_config_api_v1_system_instance_get()).restore_interrupted;
@@ -76,11 +83,11 @@
         <section class="flex items-start gap-3" role="alert">
             <TriangleAlert class="mt-0.5 h-6 w-6 shrink-0 text-lf-warning" aria-hidden="true" />
             <div>
-                <h1 class="text-xl font-semibold text-lf-primary">{$_('instance.restoreInterrupted.title')}</h1>
-                <p class="mt-2 text-sm text-lf-secondary" data-testid="instance-restore-interrupted-message">{$_('instance.restoreInterrupted.message')}</p>
+                <h1 class="text-xl font-semibold text-lf-primary">{$_(ownerAssignment ? 'instance.restoreInterrupted.ownerTitle' : 'instance.restoreInterrupted.title')}</h1>
+                <p class="mt-2 text-sm text-lf-secondary" data-testid="instance-restore-interrupted-message">{$_(ownerAssignment ? 'instance.restoreInterrupted.ownerMessage' : 'instance.restoreInterrupted.message')}</p>
             </div>
         </section>
-        <p class="mt-3 rounded-lg border border-lf-warning-line bg-lf-warning-soft px-3 py-2 text-sm text-lf-warning-on-soft" data-testid="instance-restore-interrupted-admin">{$_('instance.restoreInterrupted.adminHint')}</p>
+        <p class="mt-3 rounded-lg border border-lf-warning-line bg-lf-warning-soft px-3 py-2 text-sm text-lf-warning-on-soft" data-testid="instance-restore-interrupted-admin">{$_(ownerAssignment ? 'instance.restoreInterrupted.ownerAdminHint' : 'instance.restoreInterrupted.adminHint')}</p>
         <p class="mt-3 text-xs text-lf-muted" data-testid="instance-restore-interrupted-auto">{$_('instance.restoreInterrupted.autoReload')}</p>
         <div class="mt-5 flex flex-wrap items-center justify-end gap-2">
             {#if supportHref}

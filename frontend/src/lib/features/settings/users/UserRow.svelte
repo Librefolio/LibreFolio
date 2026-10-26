@@ -54,6 +54,8 @@ another button.
     const cancelReason = $derived<Reason | null>(account.protected ? 'protected' : null);
     const demoteReason = $derived<Reason | null>(account.protected ? 'protected' : pendingSetup ? 'pending-setup' : account.is_active && isOnlyActiveAdmin ? 'last-admin' : null);
     const deleteReason = $derived<Reason | null>(account.protected ? 'protected' : account.is_superuser && !pendingSetup ? 'demote-first' : null);
+    // Nobody else resets the password of a protected account or signs it out (A5-1): the server answers 409, and the row says so first
+    const protectedReason = $derived<Reason | null>(account.protected ? 'protected' : null);
     const reasons = $derived([...new Set([account.is_active ? deactivateReason : pendingSetup ? cancelReason : reactivateReason, account.is_superuser ? demoteReason : null, deleteReason].filter((reason): reason is Reason => reason !== null))]);
 
     const ACTION_BUTTON = 'inline-flex items-center gap-1.5 rounded-md border border-lf-input bg-lf-card px-2.5 py-1.5 text-xs font-medium text-lf-secondary hover:bg-lf-hover disabled:cursor-not-allowed disabled:opacity-50';
@@ -142,10 +144,10 @@ another button.
                             <ShieldCheck class="h-3.5 w-3.5" />{$_('settings.usersTab.actions.promote')}
                         </button>
                     {/if}
-                    <button class={ACTION_BUTTON} data-testid="users-action-reset-link" onclick={() => onAction('reset-link', account)} type="button">
+                    <button class={ACTION_BUTTON} data-disabled-reason={protectedReason ?? undefined} data-testid="users-action-reset-link" disabled={protectedReason !== null} onclick={() => onAction('reset-link', account)} type="button">
                         <KeyRound class="h-3.5 w-3.5" />{$_('settings.usersTab.actions.resetLink')}
                     </button>
-                    <button class={ACTION_BUTTON} data-testid="users-action-sign-out" onclick={() => onAction('sign-out', account)} type="button">
+                    <button class={ACTION_BUTTON} data-disabled-reason={protectedReason ?? undefined} data-testid="users-action-sign-out" disabled={protectedReason !== null} onclick={() => onAction('sign-out', account)} type="button">
                         <LogOut class="h-3.5 w-3.5" />{$_('settings.usersTab.actions.signOut')}
                     </button>
                     <button class={ACTION_BUTTON} data-testid="users-action-restart-guides" onclick={() => onAction('restart-guides', account)} type="button">

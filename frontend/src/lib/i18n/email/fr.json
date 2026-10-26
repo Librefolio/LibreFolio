@@ -151,6 +151,22 @@
         "EMAIL_RATE_LIMITED": "Trop de demandes pour le moment : réessayez dans {minutes} min.",
         "generic": "La demande n'a pas pu être envoyée : réessayez."
       }
+    },
+    "emailChange": {
+      "page": {
+        "ready": "Confirmez la nouvelle adresse e-mail de votre compte. Désormais, vous vous connecterez et recevrez les e-mails avec cette adresse.",
+        "checking": "Vérification du lien…",
+        "expired": "Ce lien a expiré. Un nouveau est envoyé au prochain redémarrage de l'instance avec la nouvelle adresse : demandez-le à l'hébergeur si vous en avez besoin tout de suite.",
+        "consumed": "Ce lien a déjà été utilisé : si votre adresse a été changée, connectez-vous avec la nouvelle.",
+        "revoked": "Ce lien ne fonctionne plus : l'adresse a de nouveau été changée, ou un autre compte l'utilise déjà. Demandez à l'hébergeur de l'instance.",
+        "unknown": "Ce lien n'est pas valide : ouvrez-le à nouveau, en entier, depuis l'e-mail. S'il échoue encore, demandez à l'hébergeur de l'instance.",
+        "blocked": "Cette instance est bloquée par son hébergeur : le lien ne peut pas être vérifié maintenant. Rouvrez-le une fois l'instance débloquée.",
+        "missing": "Ce lien est incomplet : ouvrez-le à nouveau depuis l'e-mail.",
+        "error": "Le lien n'a pas pu être vérifié : réessayez.",
+        "confirm": "Confirmer la nouvelle adresse",
+        "notExpected": "Si vous n'attendiez pas ce changement, fermez cette page : il ne se passe rien."
+      },
+      "changed": "Votre adresse e-mail a été changée : reconnectez-vous."
     }
   }
 }

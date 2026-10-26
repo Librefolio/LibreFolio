@@ -151,6 +151,22 @@
         "EMAIL_RATE_LIMITED": "Troppe richieste per ora: riprova tra {minutes} min.",
         "generic": "Non è stato possibile inviare la richiesta: riprova."
       }
+    },
+    "emailChange": {
+      "page": {
+        "ready": "Conferma il nuovo indirizzo email del tuo account. Da ora accederai e riceverai le email con questo indirizzo.",
+        "checking": "Controllo del link…",
+        "expired": "Questo link è scaduto. Ne arriva uno nuovo al prossimo riavvio dell'istanza con il nuovo indirizzo: se ti serve subito, chiedilo a chi ospita l'istanza.",
+        "consumed": "Questo link è già stato usato: se l'indirizzo è stato cambiato, accedi con quello nuovo.",
+        "revoked": "Questo link non funziona più: l'indirizzo è stato cambiato di nuovo, oppure lo usa già un altro account. Chiedi a chi ospita l'istanza.",
+        "unknown": "Questo link non è valido: aprilo di nuovo, per intero, dall'email. Se non funziona ancora, chiedi a chi ospita l'istanza.",
+        "blocked": "Questa istanza è bloccata da chi la ospita, quindi il link non si può controllare ora. Riaprilo quando l'istanza sarà sbloccata.",
+        "missing": "Questo link è incompleto: aprilo di nuovo dall'email.",
+        "error": "Non è stato possibile controllare il link: riprova.",
+        "confirm": "Conferma il nuovo indirizzo",
+        "notExpected": "Se non ti aspettavi questo cambio, chiudi questa pagina: non succede nulla."
+      },
+      "changed": "Il tuo indirizzo email è stato cambiato: accedi di nuovo."
     }
   }
 }

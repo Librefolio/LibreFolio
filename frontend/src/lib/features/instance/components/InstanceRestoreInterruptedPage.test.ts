@@ -6,7 +6,7 @@
  * When `.restore/restore.json` cannot be read the backend serves no data: `GET /api/v1/system/instance` answers
  * `restore_interrupted: true` and every other route answers `423 {"detail": {"code": "instance_restore_interrupted"}}`
  * to anyone. The root layout's `AwaitingRestoreGate` then shows this page instead of the app or the login: the restore
- * stopped half way, the administrator must run `./dev.py backup pending --recover`.
+ * stopped half way, the administrator must run `./dev.py backup pending --recover previous`.
  *
  * The contract under test:
  *   - the root `instance-restore-interrupted` holds a `role="alert"` section (an error: something is broken) with an
@@ -19,7 +19,7 @@
  *   - the docs link is an anchor to the admin CLI page's anchor `#backup-pending-unreadable`, built by the app's docs-URL
  *     rule — the one of `DocsLink` and of `connectionSecurityDocsUrl` (`$lib/utils/security/connectionSecurity`):
  *     `/mkdocs/` + the language prefix (none in English, `<lang>/` otherwise, from `currentLanguage`) + the path
- *     `admin/cli_tools/#backup-pending-unreadable` — opened in a new tab (`target="_blank"`,
+ *     `admin/cli_backup/#backup-pending-unreadable` — opened in a new tab (`target="_blank"`,
  *     `rel="noopener noreferrer"`);
  *   - nothing else to act on: the retry is the only button, no form, no field, no logout; the docs link is the only
  *     link, and, when the instance has a usable support address, the support link (D7) is the other one;
@@ -60,6 +60,18 @@
  * have no `instance.restoreInterrupted` keys. The D7 cases are red until the support link (contract §3): the page has
  * no `supportUrl` prop nor support link, and the catalogues have no `instance.restoreInterrupted.support`.
  *
+ * Lot H5-3 (the owner's choice after a restore from the app on a managed instance): `GET /system/instance` also answers
+ * `restore_interrupted_reason: 'restore_state' | 'owner_assignment' | null`. The page gains the prop
+ * `reason?: 'restore_state' | 'owner_assignment' | null`. Absent, null and `'restore_state'` are today's page (same keys,
+ * same docs link `admin/cli_backup/#backup-pending-unreadable`). `'owner_assignment'` reads
+ * `instance.restoreInterrupted.ownerTitle` (the h1), `.ownerMessage` (`instance-restore-interrupted-message`) and
+ * `.ownerAdminHint` (`instance-restore-interrupted-admin`), and its docs link is the section
+ * `admin/hosting_panel_backups/#restore-owner-pending` (the same language-prefix rule). Support link, retry button and the polling are the
+ * same for both reasons. The three keys exist in the `instance` subsystem source of all four languages (the generated
+ * catalogue fills a missing translation from English, so the sources themselves are read: no generic parity gate
+ * would catch a missing it/fr/es entry). Red until H5-3: the page has no `reason` prop (the owner cases read today's
+ * keys and link) and the sources have no owner keys.
+ *
  * Registered in `front_component_unit` (`scripts/test_runner/_frontend_utility.py`, action `component-unit`).
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, onTestFinished, vi} from 'vitest';
@@ -96,6 +108,12 @@ const NEW_KEYS = {
     docs: 'instance.restoreInterrupted.docs',
     autoReload: 'instance.restoreInterrupted.autoReload',
 } as const;
+/** H5-3: the three keys of the `owner_assignment` reason. */
+const OWNER_KEYS = {
+    title: 'instance.restoreInterrupted.ownerTitle',
+    message: 'instance.restoreInterrupted.ownerMessage',
+    adminHint: 'instance.restoreInterrupted.ownerAdminHint',
+} as const;
 /** The retry label: the awaiting page's key, reused. */
 const RETRY_KEY = 'instance.awaitingRestore.retry';
 /** D7: the label of the support link, a sixth key of this page. */
@@ -110,8 +128,10 @@ const DEFAULT_POLL_MS = 30_000;
 const POLL_MS = 1_000;
 
 /** The admin guide's section on an unreadable restore state: a path below `/mkdocs/`, no language, no leading `/`. */
-const DOCS_PATH = 'admin/cli_tools/#backup-pending-unreadable';
+const DOCS_PATH = 'admin/cli_backup/#backup-pending-unreadable';
 const DOCS_ANCHOR = '#backup-pending-unreadable';
+/** H5-3: the owner reason's docs path, the section of the panel guide on an owner with no account. */
+const OWNER_DOCS_PATH = 'admin/hosting_panel_backups/#restore-owner-pending';
 
 /**
  * The app's docs-URL rule (`DocsLink`'s `getDocsUrl`, `connectionSecurityDocsUrl`): `/mkdocs/`, the language prefix,
@@ -149,7 +169,7 @@ function catalogueGaps(keys: readonly string[]): Record<string, string[]> {
 /** Switch svelte-i18n to the marker locale: every key of the English catalogue, and each key of this page, reads as its marker. */
 async function useMarkerLocale(): Promise<void> {
     const messages: Record<string, string> = Object.fromEntries(stringKeysOf(en).map((key) => [key, marked(key)]));
-    for (const key of [...Object.values(NEW_KEYS), RETRY_KEY, SUPPORT_KEY]) messages[key] = marked(key);
+    for (const key of [...Object.values(NEW_KEYS), ...Object.values(OWNER_KEYS), RETRY_KEY, SUPPORT_KEY]) messages[key] = marked(key);
     addMessages(MARKER_LOCALE, messages);
     await setupI18n(MARKER_LOCALE);
 }
@@ -181,6 +201,29 @@ function expectDocsLink(link: HTMLElement, href: string): void {
     expect(link.tagName, 'the docs link is an anchor').toBe('A');
     expect(link.getAttribute('href'), 'the admin guide, at the unreadable-state section').toBe(href);
     expect(link.getAttribute('href') ?? '', 'the anchor of the section').toMatch(/#backup-pending-unreadable$/);
+    expect(link, 'in a new tab').toHaveAttribute('target', '_blank');
+    const rel = (link.getAttribute('rel') ?? '').split(/\s+/);
+    expect(rel, 'without a window.opener').toContain('noopener');
+    expect(rel, 'without a referrer').toContain('noreferrer');
+}
+
+/** The sources of the `instance` subsystem, by language: what the catalogue build reads (no fallback applied). */
+const INSTANCE_SOURCE_DIR = join(dirname(fileURLToPath(import.meta.url)), '../../../i18n/instance');
+const SOURCE_LANGUAGES = ['en', 'it', 'fr', 'es'] as const;
+
+/** Each language of the subsystem source that has no non-empty string for `key`. */
+function sourceGaps(key: string): string[] {
+    return SOURCE_LANGUAGES.filter((lang) => {
+        const leaf = leafOf(JSON.parse(readFileSync(join(INSTANCE_SOURCE_DIR, `${lang}.json`), 'utf8')), key);
+        return typeof leaf !== 'string' || leaf.trim() === '';
+    });
+}
+
+/** The docs link of the owner reason: an anchor to the owner section of the panel guide, in a new tab. */
+function expectOwnerDocsLink(link: HTMLElement, href: string): void {
+    expect(link.tagName, 'the docs link is an anchor').toBe('A');
+    expect(link.getAttribute('href'), 'the panel guide, the section on the owner').toBe(href);
+    expect(link.getAttribute('href') ?? '', 'the anchor of the section').toContain('#restore-owner-pending');
     expect(link, 'in a new tab').toHaveAttribute('target', '_blank');
     const rel = (link.getAttribute('rel') ?? '').split(/\s+/);
     expect(rel, 'without a window.opener').toContain('noopener');
@@ -271,7 +314,7 @@ describe('InstanceRestoreInterruptedPage — what it shows', () => {
         const link = within(screen.getByTestId('instance-restore-interrupted')).getByTestId('instance-restore-interrupted-docs');
 
         expectDocsLink(link, docsUrl('en', DOCS_PATH));
-        expect(docsUrl('en', DOCS_PATH), 'the expected English href, spelled out').toBe(`/mkdocs/admin/cli_tools/${DOCS_ANCHOR}`);
+        expect(docsUrl('en', DOCS_PATH), 'the expected English href, spelled out').toBe(`/mkdocs/admin/cli_backup/${DOCS_ANCHOR}`);
     });
 
     it('the docs link follows the current language', async () => {
@@ -284,7 +327,7 @@ describe('InstanceRestoreInterruptedPage — what it shows', () => {
             const link = within(screen.getByTestId('instance-restore-interrupted')).getByTestId('instance-restore-interrupted-docs');
 
             expectDocsLink(link, docsUrl('it', DOCS_PATH));
-            expect(docsUrl('it', DOCS_PATH), 'the expected Italian href, spelled out').toBe(`/mkdocs/it/admin/cli_tools/${DOCS_ANCHOR}`);
+            expect(docsUrl('it', DOCS_PATH), 'the expected Italian href, spelled out').toBe(`/mkdocs/it/admin/cli_backup/${DOCS_ANCHOR}`);
         } finally {
             currentLanguage.set('en');
             await waitLocale('en');
@@ -561,5 +604,173 @@ describe('InstanceRestoreInterruptedPage — polling the state', () => {
 
         expect(mocks.getInstanceConfig, 'Barrier: GET /system/instance was asked at each interval').toHaveBeenCalledTimes(atMount + 2);
         expect(onretry, 'still interrupted: no reload').not.toHaveBeenCalled();
+    });
+});
+
+describe('InstanceRestoreInterruptedPage — H5-3, the reason', () => {
+    it.each(SOURCE_LANGUAGES)('has a string for each of the three owner keys in the instance source of %s', (lang) => {
+        expect(
+            Object.values(OWNER_KEYS).filter((key) => sourceGaps(key).includes(lang)),
+            `owner keys missing in the ${lang} source`,
+        ).toEqual([]);
+    });
+
+    it('has a string for each of the three owner keys in all four generated catalogues', () => {
+        expect(catalogueGaps(Object.values(OWNER_KEYS))).toEqual({});
+    });
+
+    describe.each([
+        ['no reason', undefined],
+        ['reason null', null],
+        ["reason 'restore_state'", 'restore_state'],
+    ] as const)('%s: today’s page', (_label, reason) => {
+        const extra = (): Record<string, unknown> => (reason === undefined ? {} : {reason});
+
+        it('reads the restore-state title, message and admin hint, never the owner’s', () => {
+            mountPolling(neverAnswers, POLL_MS, extra());
+            const root = screen.getByTestId('instance-restore-interrupted');
+
+            expect(text(within(root).getByRole('heading', {level: 1}))).toBe(marked(NEW_KEYS.title));
+            expect(text(within(root).getByTestId('instance-restore-interrupted-message'))).toBe(marked(NEW_KEYS.message));
+            expect(text(within(root).getByTestId('instance-restore-interrupted-admin'))).toBe(marked(NEW_KEYS.adminHint));
+            expect(root.textContent ?? '', 'no owner key on screen').not.toMatch(/ownerTitle|ownerMessage|ownerAdminHint/);
+        });
+
+        it('links the admin CLI page at #backup-pending-unreadable', () => {
+            mountPolling(neverAnswers, POLL_MS, extra());
+
+            const link = within(screen.getByTestId('instance-restore-interrupted')).getByTestId('instance-restore-interrupted-docs');
+
+            expectDocsLink(link, docsUrl('en', DOCS_PATH));
+        });
+    });
+
+    describe("reason 'owner_assignment'", () => {
+        const OWNER = {reason: 'owner_assignment'};
+
+        it('reads the owner title (the h1), message and admin hint from the catalogue, in the same testids', () => {
+            mountPolling(neverAnswers, POLL_MS, OWNER);
+            const root = screen.getByTestId('instance-restore-interrupted');
+
+            expect(text(within(root).getByRole('heading', {level: 1}))).toBe(marked(OWNER_KEYS.title));
+            expect(text(within(root).getByTestId('instance-restore-interrupted-message'))).toBe(marked(OWNER_KEYS.message));
+            expect(text(within(root).getByTestId('instance-restore-interrupted-admin'))).toBe(marked(OWNER_KEYS.adminHint));
+        });
+
+        it('shows none of the restore-state keys', () => {
+            mountPolling(neverAnswers, POLL_MS, OWNER);
+            const root = screen.getByTestId('instance-restore-interrupted');
+            // Presence barrier: the owner page painted, so the absence below is not "nothing rendered yet".
+            expect(text(within(root).getByRole('heading', {level: 1}))).toBe(marked(OWNER_KEYS.title));
+
+            const shown = text(root);
+            expect(shown, 'not the restore-state title').not.toContain(marked(NEW_KEYS.title));
+            expect(shown, 'not the restore-state message').not.toContain(marked(NEW_KEYS.message));
+            expect(shown, 'not the restore-state admin hint').not.toContain(marked(NEW_KEYS.adminHint));
+        });
+
+        it('announces the owner title and message as an alert, as today', () => {
+            mountPolling(neverAnswers, POLL_MS, OWNER);
+            const alert = within(screen.getByTestId('instance-restore-interrupted')).getByRole('alert');
+
+            expect(within(alert).getByRole('heading', {level: 1}), 'the h1 is inside the alert').toBeInTheDocument();
+            expect(within(alert).getByTestId('instance-restore-interrupted-message'), 'the message is inside the alert').toBeInTheDocument();
+        });
+
+        it('keeps the docs label, the reload note and the retry label of the page', () => {
+            mountPolling(neverAnswers, POLL_MS, OWNER);
+            const root = screen.getByTestId('instance-restore-interrupted');
+            // Presence barrier: the owner page painted.
+            expect(text(within(root).getByRole('heading', {level: 1}))).toBe(marked(OWNER_KEYS.title));
+
+            expect(within(root).getByTestId('instance-restore-interrupted-docs')).toHaveAccessibleName(marked(NEW_KEYS.docs));
+            expect(text(within(root).getByTestId('instance-restore-interrupted-auto'))).toBe(marked(NEW_KEYS.autoReload));
+            expect(within(root).getByTestId('instance-restore-interrupted-retry')).toHaveAccessibleName(marked(RETRY_KEY));
+        });
+
+        it('links the owner section of the panel guide in English, by the app’s docs-URL rule', () => {
+            expect(docsUrl('en', CONNECTION_SECURITY_DOCS_PATH), 'premise: the rule is the exported helper’s').toBe(connectionSecurityDocsUrl('en'));
+            expect(get(currentLanguage), 'premise: the documentation language is English').toBe('en');
+            mountPolling(neverAnswers, POLL_MS, OWNER);
+
+            const link = within(screen.getByTestId('instance-restore-interrupted')).getByTestId('instance-restore-interrupted-docs');
+
+            expectOwnerDocsLink(link, docsUrl('en', OWNER_DOCS_PATH));
+            expect(docsUrl('en', OWNER_DOCS_PATH), 'the expected English href, spelled out').toBe('/mkdocs/admin/hosting_panel_backups/#restore-owner-pending');
+        });
+
+        it('the owner docs link follows the current language', async () => {
+            currentLanguage.set('it');
+            await waitLocale('it');
+            try {
+                mountPolling(neverAnswers, POLL_MS, OWNER);
+
+                const link = within(screen.getByTestId('instance-restore-interrupted')).getByTestId('instance-restore-interrupted-docs');
+
+                expectOwnerDocsLink(link, docsUrl('it', OWNER_DOCS_PATH));
+                expect(docsUrl('it', OWNER_DOCS_PATH), 'the expected Italian href, spelled out').toBe('/mkdocs/it/admin/hosting_panel_backups/#restore-owner-pending');
+            } finally {
+                currentLanguage.set('en');
+                await waitLocale('en');
+            }
+        });
+
+        it('has the same controls: retry the only button, the docs link the only link without a support address', async () => {
+            await useInstanceSupportUrl(null);
+            mountPolling(neverAnswers, POLL_MS, OWNER);
+            const root = screen.getByTestId('instance-restore-interrupted');
+            expect(text(within(root).getByRole('heading', {level: 1})), 'Barrier: the owner page painted').toBe(marked(OWNER_KEYS.title));
+            const retry = within(root).getByTestId('instance-restore-interrupted-retry');
+            const docs = within(root).getByTestId('instance-restore-interrupted-docs');
+
+            expect(within(root).getAllByRole('button'), 'the retry is the only button').toEqual([retry]);
+            expect([...document.body.querySelectorAll('a')], 'the docs link is the only link').toEqual([docs]);
+            expect(document.body.querySelectorAll('form, input, select, textarea'), 'no form, no field').toHaveLength(0);
+        });
+
+        it('shows the support link, from the prop, when the instance names one', () => {
+            mountPolling(neverAnswers, POLL_MS, {...OWNER, supportUrl: 'mailto:help@example.org'});
+            const root = screen.getByTestId('instance-restore-interrupted');
+            expect(text(within(root).getByRole('heading', {level: 1})), 'Barrier: the owner page painted').toBe(marked(OWNER_KEYS.title));
+
+            expectSupportLink(within(root).getByTestId('instance-restore-interrupted-support'), 'mailto:help@example.org');
+        });
+
+        it('calls onretry when retry is clicked', async () => {
+            const {onretry} = mountPolling(neverAnswers, POLL_MS, OWNER);
+            expect(text(within(screen.getByTestId('instance-restore-interrupted')).getByRole('heading', {level: 1})), 'Barrier: the owner page painted').toBe(marked(OWNER_KEYS.title));
+
+            await fireEvent.click(screen.getByTestId('instance-restore-interrupted-retry'));
+
+            expect(onretry).toHaveBeenCalledTimes(1);
+        });
+
+        it('polls as today: false ends the wait with onretry once, and stops polling', async () => {
+            useFakeTimers();
+            const answers = [true, false];
+            const {fetchInterrupted, onretry} = mountPolling(() => Promise.resolve(answers.shift() ?? false), POLL_MS, OWNER);
+            expect(text(within(screen.getByTestId('instance-restore-interrupted')).getByRole('heading', {level: 1})), 'Barrier: the owner page painted').toBe(marked(OWNER_KEYS.title));
+            const atMount = fetchInterrupted.mock.calls.length;
+            await vi.advanceTimersByTimeAsync(POLL_MS * (2 - atMount));
+            expect(answers, 'Barrier: false has been answered').toEqual([]);
+
+            expect(onretry, 'the administrator recovered: the app starts again').toHaveBeenCalledTimes(1);
+            const afterFalse = fetchInterrupted.mock.calls.length;
+            await vi.advanceTimersByTimeAsync(POLL_MS * 5);
+            expect(fetchInterrupted, 'no polling after false').toHaveBeenCalledTimes(afterFalse);
+            expect(onretry, 'onretry once, not once per interval').toHaveBeenCalledTimes(1);
+        });
+
+        it('keeps polling while the instance still answers true', async () => {
+            useFakeTimers();
+            const {fetchInterrupted, onretry} = mountPolling(() => Promise.resolve(true), POLL_MS, OWNER);
+            expect(text(within(screen.getByTestId('instance-restore-interrupted')).getByRole('heading', {level: 1})), 'Barrier: the owner page painted').toBe(marked(OWNER_KEYS.title));
+            const atMount = fetchInterrupted.mock.calls.length;
+
+            await vi.advanceTimersByTimeAsync(POLL_MS * 3);
+
+            expect(fetchInterrupted).toHaveBeenCalledTimes(atMount + 3);
+            expect(onretry).not.toHaveBeenCalled();
+        });
     });
 });

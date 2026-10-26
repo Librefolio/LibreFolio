@@ -12,6 +12,10 @@
  *     mode's), a code outside `detail`, a `detail` that is not an object, or no body at all is not that refusal;
  *   - the three recognisers do not overlap: the interrupted body is neither a block nor the awaiting mode.
  *
+ * H5-3: the refusal carries no reason. `restore_interrupted_reason` (`restore_state` | `owner_assignment`) is read from
+ * `GET /system/instance` only; the 423 is recognised by its code alone, the same for both reasons, so the predicate's
+ * answer does not change with any reason-like field a body might carry. (Green on arrival: a pin of what stays.)
+ *
  * Node environment: a pure function, nothing to render. The helper is read off the module namespace, so while it does
  * not exist each case fails on its own premise («a function») instead of the whole file failing to import.
  *
@@ -73,5 +77,29 @@ describe('the three recognisers do not overlap', () => {
         ['the awaiting mode', {detail: {code: 'instance_awaiting_restore'}}],
     ])('the body of %s is not an interrupted restore', (_case, body) => {
         expect(recogniser()(423, body)).toBe(false);
+    });
+});
+
+describe('isInstanceRestoreInterruptedError — H5-3, the code decides, never the reason', () => {
+    it.each([
+        ['no reason', {detail: {code: 'instance_restore_interrupted'}}],
+        ['restore_state beside the code (detail)', {detail: {code: 'instance_restore_interrupted', restore_interrupted_reason: 'restore_state'}}],
+        ['owner_assignment beside the code (detail)', {detail: {code: 'instance_restore_interrupted', restore_interrupted_reason: 'owner_assignment'}}],
+        ['owner_assignment at the body root', {restore_interrupted_reason: 'owner_assignment', detail: {code: 'instance_restore_interrupted'}}],
+        ['a null reason', {detail: {code: 'instance_restore_interrupted', restore_interrupted_reason: null}}],
+    ])('is true for a 423 with the code and %s: the same answer for both reasons', (_case, body) => {
+        expect(recogniser()(423, body)).toBe(true);
+    });
+
+    it.each([
+        ['restore_state', 'restore_state'],
+        ['owner_assignment', 'owner_assignment'],
+    ])('is false for a reason %s without the code: a reason is not a refusal', (_case, reason) => {
+        expect(recogniser()(423, {detail: {code: 'locked', restore_interrupted_reason: reason}})).toBe(false);
+        expect(recogniser()(423, {restore_interrupted_reason: reason})).toBe(false);
+    });
+
+    it('takes the status and the body only: nothing else to read a reason from', () => {
+        expect(recogniser().length, 'the refusal predicate receives (status, data), no reason argument').toBe(2);
     });
 });

@@ -15,7 +15,8 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import set_committed_value
 
-from backend.app.config.accounts import USERNAME_LENGTH_MESSAGE, USERNAME_MAX_LENGTH, USERNAME_MIN_LENGTH, USERNAME_RESERVED_CHARACTER, USERNAME_RESERVED_MESSAGE
+from backend.app.config import get_settings
+from backend.app.config.accounts import USERNAME_LENGTH_MESSAGE, USERNAME_MAX_LENGTH, USERNAME_MIN_LENGTH, USERNAME_RESERVED_CHARACTER, USERNAME_RESERVED_MESSAGE, owner_admin_email
 from backend.app.db.models import AccountTokenPurpose, Broker, BrokerUserAccess, Transaction, User, UserRole, UserSettings
 from backend.app.db.session import begin_writes
 from backend.app.services.accounts import token_service, whats_new_service
@@ -378,10 +379,15 @@ async def create_password_reset(
     *,
     created_by_user_id: Optional[int] = None,
     now: Optional[datetime] = None,
+    email: Optional[str] = None,
 ) -> token_service.IssuedToken:
-    """Issue a password-reset link for ``user``, revoking the live ones issued before; flushed, not committed."""
+    """Issue a password-reset link for ``user``, revoking the live ones issued before; flushed, not committed.
+
+    ``email`` marks the link with an address, which nothing else reads: the restore's owner assignment (A5-2,
+    ``instance_owner.assign_owner_and_send_reset``) finds its own link by the owner's address.
+    """
     await token_service.revoke_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.PASSWORD_RESET, now=now)
-    issued = await token_service.issue_token(session, AccountTokenPurpose.PASSWORD_RESET, user_id=user.id, created_by_user_id=created_by_user_id, now=now)
+    issued = await token_service.issue_token(session, AccountTokenPurpose.PASSWORD_RESET, user_id=user.id, email=email, created_by_user_id=created_by_user_id, now=now)
     logger.info("Password reset link created", user_id=user.id, token_id=issued.record.id, created_by_user_id=created_by_user_id)
     return issued
 
@@ -475,6 +481,19 @@ async def update_user_status(
         await session.refresh(user)
         logger.info("User status changed", user_id=user.id, username=user.username, is_active=user.is_active, is_superuser=user.is_superuser)
     return None
+
+
+async def deactivate_for_limit(session: AsyncSession, user: User) -> None:
+    """Deactivate an active ``user`` chosen to lose the access because the instance is over its limit of users (A5-7). Not committed.
+
+    The caller holds SQLite's write lock and has decided: the last-administrator rule is its own check (it keeps an
+    administrator). As ``update_user_status(is_active=False)`` does: the verification and setup links are retired and the
+    sessions end; nothing is deleted.
+    """
+    await _apply_active_flag(session, user, False, False)
+    await end_sessions(session, user)
+    user.updated_at = utcnow()
+    session.add(user)
 
 
 async def _apply_active_flag(session: AsyncSession, user: User, is_active: Optional[bool], waiting: bool) -> bool:
@@ -690,6 +709,8 @@ async def update_profile(
         await token_service.revoke_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.PASSWORD_RESET)
         # The setup link of the waiting initial administrator went to the old address too: revoked, it waits for a new one (A-33)
         await token_service.revoke_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.ADMIN_SETUP)
+        # A pending change of address was asked for before this one: its link must not move the address again (A5-4)
+        await token_service.revoke_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.EMAIL_CHANGE)
     elif email is not None:
         # The same address written in another case: the stored form follows, nothing else changes.
         user.email = email
@@ -839,13 +860,55 @@ async def delete_account(session: AsyncSession, user: User) -> AccountDeletionRe
     return AccountDeletionResult(deleted_broker_ids=deleted_ids, files_removed=files_removed)
 
 
-def account_protection(user: User) -> Optional[str]:
-    """Why ``user`` may be neither deleted, deactivated nor demoted by anyone; ``None`` when nothing protects it.
+#: Why the account of ``LIBREFOLIO_ADMIN_EMAIL`` on a managed instance is protected: a stable word, sent as ``detail.reason``.
+PAYING_ADMINISTRATOR = "paying_administrator"
 
-    The hook of lot A7: on a managed instance the administrator created from the environment, who pays for it, is
-    protected. Until then no account is.
+
+#: What this process knows of the recorded instance owner (A5-1b): ``_UNKNOWN`` until the startup sync has read it, then the
+#: owner's id, or ``None`` when no account is recorded. A plain value, set by ``note_recorded_owner``: ``account_protection``
+#: is a function of one ``User`` and runs on every request that touches an account, so it asks no query.
+_UNKNOWN: object = object()
+_recorded_owner: object = _UNKNOWN
+
+
+def note_recorded_owner(owner_id: Optional[int]) -> None:
+    """Tell the account protection who the recorded owner is (``None``: nobody): the startup sync calls it after reading ``users.is_instance_owner``."""
+    global _recorded_owner  # noqa: PLW0603 — the one piece of state of this rule, see ``_recorded_owner``
+    _recorded_owner = owner_id
+
+
+def account_protection(user: User) -> Optional[str]:
+    """Why ``user`` may be neither deleted, deactivated nor demoted by anyone from the app; ``None`` when nothing protects it.
+
+    On a managed instance (``LIBREFOLIO_PROFILE=managed``) the paying administrator is protected (``PAYING_ADMINISTRATOR``):
+
+    - the account recorded as the instance owner (``users.is_instance_owner``, A5-1b) is protected by that mark alone: a
+      variable that changed, an address not yet confirmed, a variable unset — none of them takes it away;
+    - once the startup sync has read the owner (``note_recorded_owner``), the mark decides alone when one is recorded: an
+      account that holds the address of a variable changed in conflict is a stranger and never receives the owner's
+      protection;
+    - when the sync recorded NOBODY, the account with the address of ``LIBREFOLIO_ADMIN_EMAIL`` (A–Z case aside) is protected
+      by its address only while it is an active administrator, the criterion by which the sync records an owner: an ordinary
+      user, or an inactive administrator, who put that address in their profile is not;
+    - before the sync has run in this process (a command, a test, the moments before the startup step) the address rule of
+      A5-1 is the fallback, as it was: the address alone protects, administrator or not.
+
+    In any other profile nobody is protected. The routes of ``api/v1/users.py`` ask it; the command line (``./dev.py user``)
+    does not: it is the operator's emergency exit. The profile and the variable are read at every call.
     """
-    return None
+    if get_settings().LIBREFOLIO_PROFILE != "managed":
+        return None
+    if user.is_instance_owner:
+        return PAYING_ADMINISTRATOR
+    recorded = _recorded_owner
+    if isinstance(recorded, int):
+        return PAYING_ADMINISTRATOR if user.id == recorded else None
+    owner = owner_admin_email()
+    if owner is None or not same_email(user.email, owner):
+        return None
+    if recorded is None and not (user.is_superuser and user.is_active):
+        return None
+    return PAYING_ADMINISTRATOR
 
 
 async def search_users(

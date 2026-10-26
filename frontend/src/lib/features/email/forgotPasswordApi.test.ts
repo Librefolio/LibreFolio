@@ -19,7 +19,6 @@ import {spyOnApi} from '$test/spyOnApi';
 import {AxiosError, AxiosHeaders, type AxiosAdapter, type AxiosResponse, type InternalAxiosRequestConfig} from 'axios';
 import {ApiError, axiosInstance, zodiosApi} from '$lib/api';
 import {readForgotFailure, requestPasswordResetEmail, type ForgotFailure} from './forgotPasswordApi';
-import {spyOnApi} from '$test/spyOnApi';
 
 const ALIAS = 'request_password_reset_email_api_v1_email_password_reset_post';
 const ACCEPTED = {message: 'If an active account matches, its owner gets an email with a link to choose a new password'};
