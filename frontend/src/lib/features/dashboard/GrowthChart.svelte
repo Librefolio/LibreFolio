@@ -33,12 +33,24 @@
     import {axisLabelMeasure, buildResponsiveXAxisPolicy, timeAxisGridRight} from '$lib/components/charts/responsiveXAxis';
     import {clampGrowthLogicalRange, type GrowthLogicalRange} from './growthChartRange';
     import {planLadderAxis, ladderAxisOption, type LadderAxisPlan} from './growthLadderAxis';
-    import {countCalendarBuckets} from './growthLadderBuckets';
+    import {countSpannedPeriods} from './growthLadderBuckets';
+    import {bucketEndDays, buildAggregationInputs, rungWitnessDays, type StepSources} from './growthStepInputs';
     import {todayIso} from '$lib/utils/dateOnly';
+    import {coveredRange, dayOfAxisValue, nearestPoint} from '$lib/utils/stepSeries';
     import ResolutionBadge from '$lib/components/charts/ResolutionBadge.svelte';
     import {cascadeResolution, chooseInitialResolution, computeDensity, type ChartGrammar} from '$lib/components/charts/timeSeriesAggregation';
     import type {ChartResolution} from '$lib/components/charts/timeSeriesAggregation';
-    import type {PortfolioHistoryPoint, PortfolioBrokerPnlHistory, PortfolioPnlCandleSeries, PortfolioIncomeHistorySeries, PortfolioCostHistorySeries, PortfolioDepositHistorySeries, PortfolioAcquisitionFundingSeries} from '$lib/stores/portfolio/portfolioStore.svelte';
+    import type {
+        PortfolioHistoryPoint,
+        PortfolioBrokerPnlHistory,
+        PortfolioPnlCandleSeries,
+        PortfolioIncomeHistorySeries,
+        PortfolioCostHistorySeries,
+        PortfolioDepositHistorySeries,
+        PortfolioAcquisitionFundingSeries,
+        PortfolioRange,
+        PortfolioMwrrLinePoint,
+    } from '$lib/stores/portfolio/portfolioStore.svelte';
     import {buildTooltipTheme, tooltipPositionSide, setupTooltipAutoHide, scheduleFirstRenderStabilityFix} from '$lib/components/charts/echartsTooltipHelpers';
     import {INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG} from '$lib/components/charts/chartCoreHelpers';
     import {attachDataZoomTouchPan, type DataZoomTouchPanHandle} from '$lib/components/charts/echartsDataZoomTouchPan';
@@ -47,22 +59,7 @@
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {chartNeutrals} from '$lib/theme/chartTheme';
     import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
-    import {
-        alignFlowToDates,
-        buildLadderData,
-        buildResolutionData,
-        buildZoomWindow,
-        cascadeIndicesAt,
-        countBuckets,
-        ladderIndicesAt,
-        mapBrokerPnlSeries,
-        mapCandlesByDate,
-        mapEurStackedData,
-        mapPctValues,
-        type AggregatedResolutionData,
-        type AggregationInputs,
-        type CandleWidth,
-    } from './growthChartData';
+    import {buildLadderData, buildResolutionData, buildZoomWindow, cascadeIndicesAt, countBuckets, ladderIndicesAt, type AggregatedResolutionData, type AggregationInputs, type CandleWidth} from './growthChartData';
     import {buildGrowthFullSeries, buildGrowthUpdateSeries, INCOME_BAR_SHARE, PNL_REFERENCE_SERIES_NAME, type GrowthMode, type GrowthSeriesContext, type GrowthSeriesData, type PnlSubmode} from './growthChartSeries';
     import {buildGrowthTooltip, type GrowthTooltipView} from './growthChartTooltip';
 
@@ -71,7 +68,12 @@
     // =========================================================================
 
     interface Props {
+        /** The history as steps: each point holds from its `date` to its `through`, both included (D-P4). */
         history: PortfolioHistoryPoint[];
+        /** The days the step series cover (the report's `range`); null: what the history spans. */
+        range?: PortfolioRange | null;
+        /** The history's MWRR as true points (the report's `mwrr_line`): the % view's MWRR line joins them. */
+        mwrrLine?: PortfolioMwrrLinePoint[];
         /** G1a — per-broker additive P&L overlay. Empty/omitted: total-only P&L mode
          *  (single-broker scope or broker-detail mount, per plan §3.2). */
         brokerPnlHistory?: PortfolioBrokerPnlHistory[];
@@ -98,7 +100,21 @@
         baseCurrency?: string;
     }
 
-    let {history = [], brokerPnlHistory = [], pnlCandles = null, onRequestPnlCandles, incomeHistory = undefined, costHistory = undefined, depositHistory = undefined, acquisitionFunding = undefined, height = '360px', loading = false, baseCurrency = 'EUR'}: Props = $props();
+    let {
+        history = [],
+        range = null,
+        mwrrLine = [],
+        brokerPnlHistory = [],
+        pnlCandles = null,
+        onRequestPnlCandles,
+        incomeHistory = undefined,
+        costHistory = undefined,
+        depositHistory = undefined,
+        acquisitionFunding = undefined,
+        height = '360px',
+        loading = false,
+        baseCurrency = 'EUR',
+    }: Props = $props();
 
     // =========================================================================
     // State
@@ -264,6 +280,10 @@
      *  under the P&L line changes this list, which the partial path cannot express: it sends
      *  `{name, data}` only, and ECharts would keep the old series and legend entries. */
     let lastRenderedSeriesKey: string | null = null;
+    /** Whether the series on screen were built stepped: `step` is set when a series is created, so a change needs a full rebuild. */
+    let lastRenderedStepped: boolean | null = null;
+    /** The day the pointer is on, kept from ECharts' `updateAxisPointer` (the tooltip of a step line reads it). */
+    let pointedDay: string | null = null;
     let lastHistoryRef: PortfolioHistoryPoint[] | null = null;
     /**
      * First|last day of the data currently on screen.
@@ -356,15 +376,16 @@
      */
     const availableCandleWidths = $derived.by(() => {
         const dayCount = dates.length;
+        const covered = coveredDays;
         const plotPx = plotWidthPxMeasured;
         const income = ladderActive && pnlSubmode === 'income';
         const floor = income ? CANDLE_WIDTH_ORDER.indexOf(INCOME_MIN_WIDTH) : 0;
-        if (dayCount === 0 || plotPx <= 0) return CANDLE_WIDTH_ORDER.slice(floor);
+        if (dayCount === 0 || !covered || plotPx <= 0) return CANDLE_WIDTH_ORDER.slice(floor);
 
         const offered = CANDLE_WIDTH_ORDER.slice(floor).filter((width) => {
             // The buckets the ladder will actually draw: calendar periods, so the offer and the
             // drawing count the same thing.
-            const bodies = countCalendarBuckets(dates, width);
+            const bodies = countSpannedPeriods(covered.start, covered.end, width);
             const density = computeDensity(bodies, plotPx);
             if (!(density > 0)) return false;
             const slotPx = 1 / density;
@@ -438,10 +459,19 @@
     // Derived data for chart
     // =========================================================================
 
-    const dates = $derived(history.map((pt) => pt.date));
+    /** Everything the steps are read from; the inputs of the pipeline are built from it (`growthStepInputs.ts`). */
+    const stepSources: StepSources = $derived({range, history, brokerPnlHistory, pnlCandles, mwrrLine, incomeHistory, costHistory, depositHistory, acquisitionFunding} as StepSources);
 
-    // EUR mode: the Capital Baseline narrative (stacked book value, NAV and baseline); see `mapEurStackedData`.
-    const eurStackedData = $derived(mapEurStackedData(history));
+    /** The days the report covers: its `range`, else what the history spans. */
+    const coveredDays = $derived(range ?? coveredRange(history));
+
+    /**
+     * The inputs of the pipeline: one date per stretch without news (and the days the series start, end or leave a hole on),
+     * with one value per date for every series; EUR mode is the Capital Baseline narrative (stacked book value, NAV and
+     * baseline). The aggregations, the candle ladder and the zoom read these as they always read a daily history.
+     */
+    const aggregationInputs: AggregationInputs = $derived(buildAggregationInputs(stepSources));
+    const dates = $derived(aggregationInputs.dates);
 
     // Translated labels for EUR mode (tracked for reactivity on locale change)
     const eurLabels = $derived({
@@ -472,29 +502,9 @@
         bookValue: $_('dashboard.bookValue'),
     });
 
-    /** P&L mode broker overlay (G1a): one line per broker, aligned to `dates`; see `mapBrokerPnlSeries`. */
-    const pnlBrokerSeriesRaw = $derived(mapBrokerPnlSeries(brokerPnlHistory, dates));
-
-    /** P&L candles submode (G1b): per-date OHLC lookup; a date absent from it is a genuine gap, never guessed. */
-    const pnlCandleByDate = $derived(mapCandlesByDate(pnlCandles));
-
-    /** P&L income submode (G1c): signed dividend/interest values aligned to `dates`.
-     *  A date absent from incomeHistory.points means no DIVIDEND/INTEREST that day —
-     *  rendered as 0 (a sparse-flow series, distinct from candle "gap" semantics). */
-    const dividendValues = $derived(alignFlowToDates(dates, incomeHistory?.points ?? [], (p) => Number(p.dividend.amount)));
-    const interestValues = $derived(alignFlowToDates(dates, incomeHistory?.points ?? [], (p) => Number(p.interest.amount)));
-
-    /** Batch 2 income-submode dimensions: costs (FEE+TAX, signed/negative), deposits
-     *  (fresh external cash), and the new-vs-reinvested BUY funding split. Same sparse
-     *  "absent date -> 0" semantics as dividend/interest above. */
-    const costValues = $derived(alignFlowToDates(dates, costHistory?.points ?? [], (p) => Number(p.cost.amount)));
-    const depositValues = $derived(alignFlowToDates(dates, depositHistory?.points ?? [], (p) => Number(p.deposit.amount)));
-    const acqFromNewCapitalValues = $derived(alignFlowToDates(dates, acquisitionFunding?.points ?? [], (p) => Number(p.from_new_capital.amount)));
-    const acqFromReinvestedValues = $derived(alignFlowToDates(dates, acquisitionFunding?.points ?? [], (p) => Number(p.from_reinvested.amount)));
-
     // Values are split from labels deliberately: the aggregation memo reads ONLY these,
     // so a language switch rebuilds `pctSeriesRaw` (names) without invalidating the cache.
-    const pctValuesRaw = $derived(mapPctValues(history));
+    const pctValuesRaw = $derived(aggregationInputs.pctValuesRaw);
 
     const pctSeriesRaw = $derived([
         {
@@ -522,44 +532,17 @@
     // Filter out series with all-null data (e.g. MWRR when marked unreliable)
     const pctSeries = $derived(pctSeriesRaw.filter((s) => s.values.some((v) => v != null)));
 
-    /**
-     * The COMPLETE set of reactive values an aggregation is allowed to read.
-     *
-     * This exists to make cache invalidation correct *by construction* rather than by a
-     * hand-maintained list somebody must remember to join. Because it is `$derived`, Svelte
-     * rebuilds this object — giving it a fresh identity — whenever any member changes; and
-     * because the aggregations (`buildResolutionData`, `buildLadderData`) receive their inputs
-     * ONLY from here, a new input physically cannot be consumed without first becoming a
-     * member, which automatically enrols it in invalidation. Adding a field (here and in
-     * `AggregationInputs`) is the whole ceremony.
-     *
-     * The bug this replaces (G1b): seven inputs woke the render effect while exactly ONE
-     * (`history`) cleared `resolutionCache`, whose key spanned only `resolution`. A lazily
-     * arriving prop (`pnlCandles`) therefore re-rendered against an entry computed before
-     * its data existed — every candle a `'-'` gap, forever, surviving re-entry.
-     *
-     * Deliberately EXCLUDED, and the exclusion matters: `eurLabels`, `pnlLabels`, `uiLocale()`
-     * and `baseCurrency`. They are in the render effect's dependency list (labels must
-     * re-render on a language switch) but the aggregation never reads them — only
-     * `pctValuesRaw`, which is split from the labels for exactly this reason. Invalidating on them would trade a
-     * silent-wrong bug for a silent-slow one, discarding a memo that exists for a reason.
+    /*
+     * `aggregationInputs` above is the COMPLETE set of reactive values an aggregation is allowed to read, and it is `$derived`
+     * from `stepSources`: Svelte rebuilds it, with a fresh identity, whenever any source changes, and the memo of each
+     * aggregation is keyed on that identity, so a stale entry cannot be returned by construction (the bug of G1b: a lazily
+     * arriving prop re-rendered against an entry computed before its data existed). Deliberately NOT in it: `eurLabels`,
+     * `pnlLabels`, `uiLocale()` and `baseCurrency`, which wake the render effect but are never read by an aggregation
+     * (`pctValuesRaw` is split from the labels for the same reason).
      */
-    const aggregationInputs: AggregationInputs = $derived({
-        dates,
-        eurStackedData,
-        pctValuesRaw,
-        pnlBrokerSeriesRaw,
-        pnlCandleByDate,
-        dividendValues,
-        interestValues,
-        costValues,
-        depositValues,
-        acqFromNewCapitalValues,
-        acqFromReinvestedValues,
-    });
 
-    const hasPctData = $derived(history.some((pt) => pt.mwrr_cumulative != null || pt.twrr != null || pt.roi != null));
-    const hasNonZeroPctData = $derived(history.some((pt) => Number(pt.mwrr_cumulative ?? 0) !== 0 || Number(pt.twrr ?? 0) !== 0 || Number(pt.roi ?? 0) !== 0));
+    const hasPctData = $derived(pctValuesRaw.mwrrCum.some((value) => value != null) || pctValuesRaw.twrr.some((value) => value != null) || pctValuesRaw.roi.some((value) => value != null));
+    const hasNonZeroPctData = $derived(pctValuesRaw.mwrrCum.some((value) => value != null && value !== 0) || pctValuesRaw.twrr.some((value) => value != null && value !== 0) || pctValuesRaw.roi.some((value) => value != null && value !== 0));
 
     // The % button is disabled without % data, so a % view must not outlive a completed load that has none — a %
     // view restored from storage, or one the user picked before switching to a period or a broker without %
@@ -595,6 +578,20 @@
         return {startDate: visibleStartDate, endDate: visibleEndDate};
     }
 
+    /**
+     * The resolution the chart can draw: a weekly or monthly one needs a date in every bucket, and a range with more buckets
+     * than `MAX_EXTRA_WITNESS_DAYS` (a date typed in the year 1) draws the steps themselves instead.
+     */
+    function drawableResolution(resolution: ChartResolution): ChartResolution {
+        if (resolution === 'daily' || !coveredDays) return 'daily';
+        return bucketEndDays(coveredDays, resolution) === null ? 'daily' : resolution;
+    }
+
+    /** The steps are drawn as they are: the daily resolution of the density cascade, never the ladder. */
+    function isStepped(entry: AggregatedResolutionData | null): boolean {
+        return entry !== null && !entry.ladder && entry.resolution === 'daily';
+    }
+
     function getResolutionData(resolution: ChartResolution): AggregatedResolutionData {
         // Identity check, not an equality list: `aggregationInputs` is rebuilt by Svelte
         // whenever any input changes, so a stale entry cannot be returned by construction.
@@ -602,7 +599,9 @@
         const cached = resolutionCache.get(resolution);
         if (cached && cached.inputs === inputs) return cached.data;
 
-        const entry = buildResolutionData(inputs, resolution);
+        // A coarser resolution has a date in every bucket: the inputs are built again with the bucket ends.
+        const extra = resolution !== 'daily' && coveredDays ? bucketEndDays(coveredDays, resolution) : null;
+        const entry = buildResolutionData(extra ? buildAggregationInputs(stepSources, extra) : inputs, resolution);
         resolutionCache.set(resolution, {inputs, data: entry});
         return entry;
     }
@@ -617,7 +616,9 @@
         const cached = ladderCache.get(width);
         if (cached && cached.inputs === inputs && cached.today === today) return cached.data;
 
-        const entry = buildLadderData(inputs, width, today);
+        // Each period of the rung has a date at both its edges: the inputs are built again with them.
+        const extra = coveredDays ? rungWitnessDays(coveredDays, width) : null;
+        const entry = buildLadderData(extra ? buildAggregationInputs(stepSources, extra) : inputs, width, today);
         ladderCache.set(width, {inputs, today, data: entry});
         return entry;
     }
@@ -784,16 +785,16 @@
     }
 
     /** The view on screen, read now: what the series are built for. */
-    function seriesContext(): GrowthSeriesContext {
-        return {viewMode, pnlSubmode, eurLabels, pnlLabels, pctSeries, aggregationInputs};
+    function seriesContext(stepped: boolean): GrowthSeriesContext {
+        return {viewMode, pnlSubmode, eurLabels, pnlLabels, pctSeries, aggregationInputs, stepped};
     }
 
     function buildChartUpdateSeries(_isDark: boolean, entry: AggregatedResolutionData, referenceDate: string | null = null): GrowthSeriesData[] {
-        return buildGrowthUpdateSeries(seriesContext(), entry, referenceDate);
+        return buildGrowthUpdateSeries(seriesContext(isStepped(entry)), entry, referenceDate);
     }
 
     function buildFullSeries(isDark: boolean, seriesData: GrowthSeriesData[]): echarts.SeriesOption[] {
-        return buildGrowthFullSeries(seriesContext(), isDark, seriesData);
+        return buildGrowthFullSeries(seriesContext(isStepped(activeChartData)), isDark, seriesData);
     }
 
     /**
@@ -801,7 +802,25 @@
      * formatter always has. The theme it is drawn in is the one the option was built with.
      */
     function tooltipView(): Omit<GrowthTooltipView, 'isDark' | 'theme'> {
-        return {entry: activeChartData, viewMode, pnlSubmode, ladderActive, candleWidthCaption: () => candleWidthLabel(candleWidth), eurLabels, pnlLabels, baseCurrency, t: $_};
+        return {
+            entry: activeChartData,
+            viewMode,
+            pnlSubmode,
+            ladderActive,
+            candleWidthCaption: () => candleWidthLabel(candleWidth),
+            eurLabels,
+            pnlLabels,
+            baseCurrency,
+            t: $_,
+            // On a stepped line the tooltip reads the day the pointer is on, not the drawn point nearest to it.
+            pointedDay: isStepped(activeChartData) ? pointedDay : null,
+            pctRows: pctSeries.map((series) => ({key: series.key, name: series.name, colorKey: series.colorKey})),
+            mwrrAt: (day: string) => {
+                const point = nearestPoint(mwrrLine, day);
+                const value = point?.cumulative != null ? Number(point.cumulative) * 100 : null;
+                return point && value !== null && Number.isFinite(value) ? {date: point.date, value} : null;
+            },
+        };
     }
 
     function updateChartData(entry: AggregatedResolutionData, isDark: boolean, zoomWindow: {start: number; end: number}, skipAnimation: boolean, referenceDate: string | null = null) {
@@ -817,6 +836,14 @@
         // replaceMerge. Hiding the tooltip first clears that internal state safely.
         if (skipAnimation) {
             chartInstance.dispatchAction({type: 'hideTip'});
+        }
+
+        // `step` is set when a series is created: going from the steps to a coarser resolution (or back) rebuilds the series.
+        const stepped = isStepped(entry);
+        if (lastRenderedStepped !== null && stepped !== lastRenderedStepped) {
+            applyFullOption(isDark, buildFullSeries(isDark, seriesData), zoomWindow);
+            lastRenderedStepped = stepped;
+            return;
         }
 
         let xAxis: Record<string, unknown>;
@@ -903,7 +930,7 @@
 
         const counts = computeBucketCounts(logicalRange.startDate, logicalRange.endDate);
         const plotWidthPx = chartInstance.getWidth();
-        const targetResolution = cascadeResolution(currentResolution, counts, plotWidthPx, resolutionGrammar);
+        const targetResolution = drawableResolution(cascadeResolution(currentResolution, counts, plotWidthPx, resolutionGrammar));
 
         if (targetResolution === currentResolution) return;
 
@@ -991,6 +1018,8 @@
         // the four income-family props in one contiguous block, so `incomeHistory` used to
         // wake the effect for the other three — correct by adjacency, not by design.
         void history;
+        void range;
+        void mwrrLine;
         void viewMode;
         void pnlSubmode;
         void pctSeries;
@@ -1067,6 +1096,7 @@
             lastRenderedDark = null;
             lastRenderedMasked = null;
             lastRenderedSeriesKey = null;
+            lastRenderedStepped = null;
             lastLadderPlanKey = null;
         }
 
@@ -1086,7 +1116,16 @@
             const zoomInstance = chartInstance;
             const onDataZoom = () => scheduleResolutionSync();
             zoomInstance.on('dataZoom', onDataZoom);
-            dataZoomCleanup = () => zoomInstance.off('dataZoom', onDataZoom);
+            // The day the pointer is on, exact because the time axis sets `snap: false`; the tooltip of a step line reads it.
+            const onAxisPointer = (event: unknown) => {
+                const value = (event as {axesInfo?: Array<{value?: unknown}>}).axesInfo?.[0]?.value;
+                pointedDay = typeof value === 'number' && Number.isFinite(value) ? dayOfAxisValue(value) : null;
+            };
+            zoomInstance.on('updateAxisPointer', onAxisPointer);
+            dataZoomCleanup = () => {
+                zoomInstance.off('dataZoom', onDataZoom);
+                zoomInstance.off('updateAxisPointer', onAxisPointer);
+            };
         }
 
         const isDark = isDarkTheme();
@@ -1100,7 +1139,7 @@
 
         if (resolutionResetPending) {
             const counts = computeBucketCounts(logicalRange.startDate, logicalRange.endDate);
-            currentResolution = chooseInitialResolution(counts, chartInstance.getWidth(), resolutionGrammar);
+            currentResolution = drawableResolution(chooseInitialResolution(counts, chartInstance.getWidth(), resolutionGrammar));
             resolutionResetPending = false;
         }
 
@@ -1119,7 +1158,8 @@
         const masked = shouldMaskAmount();
         const seriesData = buildChartUpdateSeries(isDark, activeData, logicalRange.startDate);
         const seriesKey = seriesData.map((series) => series.name).join('\u0000');
-        const needsFullInit = forceFullXAxisRebuild || lastRenderedMode !== renderedModeKey || lastRenderedDark !== isDark || lastRenderedMasked !== masked || lastRenderedSeriesKey !== seriesKey;
+        const stepped = isStepped(activeData);
+        const needsFullInit = forceFullXAxisRebuild || lastRenderedMode !== renderedModeKey || lastRenderedDark !== isDark || lastRenderedMasked !== masked || lastRenderedSeriesKey !== seriesKey || lastRenderedStepped !== stepped;
 
         if (needsFullInit) {
             applyFullOption(isDark, buildFullSeries(isDark, seriesData), zoomWindow);
@@ -1131,6 +1171,7 @@
         lastRenderedDark = isDark;
         lastRenderedMasked = masked;
         lastRenderedSeriesKey = seriesKey;
+        lastRenderedStepped = stepped;
     }
 
     function applyFullOption(isDark: boolean, series: echarts.SeriesOption[], zoomWindow: {start: number; end: number}) {
@@ -1239,7 +1280,8 @@
                 // ancestor.
                 confine: true,
                 position: tooltipPositionSide,
-                axisPointer: {type: 'line', lineStyle: {color: neutrals.axisPointer.line}},
+                // `snap: false`: the pointer's own day, which the tooltip of a step line reads (`pointedDay`).
+                axisPointer: {type: 'line', snap: false, lineStyle: {color: neutrals.axisPointer.line}},
                 backgroundColor: tooltipBg,
                 borderColor: tooltipBorder,
                 borderWidth: 1,
@@ -1283,6 +1325,7 @@
                   }
                 : {
                       type: 'time',
+                      axisPointer: {snap: false},
                       ...(xAxisPolicy?.compact ? {splitNumber: xAxisPolicy.splitNumber} : {}),
                       axisLabel: {
                           color: textColor,

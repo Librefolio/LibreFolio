@@ -198,3 +198,24 @@ describe('AssetCard — the overlay lines it draws (Y-41)', () => {
         expect(card).toHaveAttribute('data-overlay-count', '1');
     });
 });
+
+/**
+ * Y5-F3 — the card tells how its series was sampled: the page's `resolution` (the step the backend applied to `chartData`)
+ * reaches the mini-chart as `sampledResolution`, which draws the aggregation badge (`PriceChartCompact.test.ts`). Without
+ * it, the card sends nothing coarser than daily.
+ *
+ * Red today: the card takes no `resolution`.
+ */
+describe('AssetCard — the step its series was sampled at (Y5-F3)', () => {
+    it.each(['weekly', 'monthly'] as const)('hands the chart the page’s %s resolution as sampledResolution', (resolution) => {
+        const {card} = mount({primaryView: 'percentage', resolution});
+
+        expect(chart(card).sampledResolution).toBe(resolution);
+    });
+
+    it('without a resolution, hands the chart nothing coarser than daily', () => {
+        const {card} = mount({primaryView: 'percentage'});
+
+        expect([undefined, 'daily']).toContain(chart(card).sampledResolution);
+    });
+});

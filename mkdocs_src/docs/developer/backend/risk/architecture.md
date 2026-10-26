@@ -752,6 +752,12 @@ panel; it has no markup.
   refresh of the very question on screen fails and the host passed `onrefreshfailed`, the figures
   stay and that callback runs; in every other case `loadError` is set, and the panels render it in
   place of the levels. `handleSynced()` marks answers stale instead of forgetting them.
+- **After a price catch-up.** The controller listens to the portfolio bus through
+  `onPricesCaughtUp()`: when a base wave is on screen it calls `loadBase(false, true)`, the
+  `silent` reload — the stale mark of `markRiskStale()` makes the store ask, `refreshing` stays
+  false, the figures stay until the new ones land, outside `pageBusy`. With nothing on screen it
+  does nothing, and the on-demand runs are not relaunched. Never `refreshVersion`: that is the
+  user's Refresh.
 - **Data quality.** `mergeQualityIssues()` merges the results' banner issues on
   `code + group_key`, so several controllers — the lab runs several — can feed one banner.
 

@@ -10,7 +10,7 @@
     import {_ as t} from '$lib/i18n';
     import {CalendarSync, ChartLine, Merge, Percent, RefreshCw, RotateCw, Settings, Trash2} from 'lucide-svelte';
     import PriceChartCompact from '$lib/components/charts/PriceChartCompact.svelte';
-    import {compactPlotWidth} from '$lib/components/charts/timeSeriesAggregation';
+    import {compactPlotWidth, type ChartResolution} from '$lib/components/charts/timeSeriesAggregation';
     import AssetIcon from './AssetIcon.svelte';
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
@@ -76,6 +76,8 @@
          * it, the first point is the base.
          */
         baseValue?: number | null;
+        /** The step the backend sampled `chartData` at (`daily` when it did not): the card's badge says it, as the detail's does (Y5-F3). */
+        resolution?: ChartResolution;
         /** The width of the chart's plot, reported when it is measured or changes (Z-29b): the page asks the series for it. */
         onplotwidth?: (assetId: number, plotWidthPx: number) => void;
         /** Loading state */
@@ -107,6 +109,7 @@
         renderSignals,
         chartData = [],
         baseValue = null,
+        resolution = 'daily',
         onplotwidth,
         loading = false,
         syncing = false,
@@ -303,6 +306,7 @@
                     showGradient={chartSettings?.staleGradient ?? true}
                     {overlaySignals}
                     secondaryAxisScales={chartSettings?.axisScales.secondary}
+                    sampledResolution={isCalendarView ? 'daily' : resolution}
                 />
             {:else if loading}
                 <div class="h-20 flex items-center justify-center">

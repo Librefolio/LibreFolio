@@ -151,6 +151,23 @@
     "fxOnCash": "Effet de change sur les liquidités",
     "allocationNegativeCash": "Liquidités négatives : {amount}",
     "startValueTooltip": "Valeur de la position au début de la période, calculée comme la colonne Valeur du Portefeuille ; 0 si la position n'existait pas encore. C'est la base des pourcentages de la période.",
-    "endValueTooltip": "Valeur de la position à la fin de la période, calculée comme la colonne Valeur du Portefeuille ; 0 si la position était déjà fermée."
+    "endValueTooltip": "Valeur de la position à la fin de la période, calculée comme la colonne Valeur du Portefeuille ; 0 si la position était déjà fermée.",
+    "transfersAtMarketValue": "Transferts à la valeur de marché",
+    "assetAllocation": "Par actif",
+    "backToPortfolio": "Portefeuille",
+    "positionsChart": {
+      "title": "Rendement des positions",
+      "viewAbsolute": "Abs",
+      "viewPercentage": "%",
+      "viewAbsoluteHint": "Gain ou perte en argent, depuis le début de la période",
+      "viewPercentageHint": "Rendement, base 100 au début de la période",
+      "portfolio": "Portefeuille (rendement du tableau de bord)",
+      "portfolioNote": "La ligne du portefeuille est le rendement que mesure le tableau de bord, pas le gain des positions sur le capital employé : les deux peuvent différer.",
+      "hint": "Cochez des lignes du tableau pour comparer leur rendement à celui du portefeuille.",
+      "failed": "Les séries des positions n'ont pas pu être chargées.",
+      "closedOn": "Clôturée le {date}",
+      "incomplete": "Certaines valeurs manquent (un prix ou un taux) : la ligne les laisse de côté.",
+      "rowSelect": "Sélectionnez la ligne pour tracer son rendement"
+    }
   }
 }

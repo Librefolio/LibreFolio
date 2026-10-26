@@ -218,7 +218,10 @@
     },
     "comparisonAsset": {
       "placeholder": "Seleccionar activo de comparación",
-      "loadError": "No se pudieron cargar los activos."
+      "loadError": "No se pudieron cargar los activos.",
+      "blocked": "No disponibles",
+      "isMainAsset": "Es el activo del gráfico",
+      "alreadyCompared": "Ya comparado en otra señal"
     }
   }
 }

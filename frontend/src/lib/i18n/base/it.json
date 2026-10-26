@@ -341,7 +341,10 @@
     "syncAll": "Sinc. Tutto",
     "refreshAll": "Ricarica Tutto",
     "settings": "Impostazioni",
-    "syncSelection": "Sinc. selezione"
+    "syncSelection": "Sinc. selezione",
+    "settingsHint": "Cambia l'aspetto dei grafici e gli indicatori e i confronti che disegnano. Vale per tutti i grafici della lista.",
+    "syncAllHint": "Chiede ai fornitori di dati i dati nuovi e li salva in LibreFolio.",
+    "refreshAllHint": "Ricarica quello che vedi da LibreFolio, senza interrogare i fornitori di dati."
   },
   "table": {
     "columns": "Colonne",

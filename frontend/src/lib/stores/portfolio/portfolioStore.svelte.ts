@@ -32,9 +32,17 @@ export type PortfolioReport = ApiReturnType<typeof zodiosApi.get_portfolio_repor
 type RawSummary = PortfolioReport['summary'];
 export type PortfolioSummary = NonNullable<RawSummary> extends infer S ? (S extends {net_worth: unknown} ? S : never) : never;
 
-// History point type — define inline (generated type is not exported)
+/** The days the report's step series cover, `start` and `end` included (the report's `range`). */
+export type PortfolioRange = {start: string; end: string};
+
+/** A point of the history's MWRR line (the report's `mwrr_line`): a true value on its day, not a step. */
+export type PortfolioMwrrLinePoint = {date: string; annualized?: string | null; cumulative?: string | null};
+
+// History point type — define inline (generated type is not exported). One point per stretch without news (D-P4): it
+// holds from `date` to `through`, both included; the history's MWRR is the report's `mwrr_line`, not a field of the point.
 export type PortfolioHistoryPoint = {
     date: string;
+    through: string;
     cash_value: {code: string; amount: string};
     market_value: {code: string; amount: string};
     broker_nav_value?: {code: string; amount: string} | null;
@@ -53,8 +61,6 @@ export type PortfolioHistoryPoint = {
     total_pnl: {code: string; amount: string};
     unrealized_gain_loss?: {code: string; amount: string} | null;
     twrr?: string | null;
-    mwrr_annualized?: string | null;
-    mwrr_cumulative?: string | null;
     roi?: string | null;
 };
 
@@ -62,6 +68,7 @@ export type PortfolioHistoryPoint = {
 // mirroring PortfolioHistoryPoint above. G1a: additive per-broker P&L overlay for GrowthChart.
 export type PortfolioBrokerPnlHistoryPoint = {
     date: string;
+    through: string;
     total_pnl: {code: string; amount: string};
 };
 
@@ -75,6 +82,7 @@ export type PortfolioBrokerPnlHistory = {
 // the pattern above. G1b: total-only candle series for GrowthChart's P&L candles submode.
 export type PortfolioPnlCandlePoint = {
     date: string;
+    through: string;
     open: {code: string; amount: string};
     high: {code: string; amount: string};
     low: {code: string; amount: string};
