@@ -1130,6 +1130,15 @@ def e2e_backup_roundtrip_owner(verbose: bool = False, test_names: list = None) -
     return run_command(cmd, "Backup round trip owner E2E tests", verbose=verbose)
 
 
+def e2e_backup_roundtrip_over_limit(verbose: bool = False, test_names: list = None) -> bool:
+    """Test a backup with more active accounts than LIBREFOLIO_MAX_USERS restored and then met by the over-limit state: real servers on Unix sockets (B5-1k2)."""
+    print_section("E2E: Backup With More Accounts Than the Plan Holds (B5-1k2)")
+    print_info("Testing: the check's numbers and warning users_over_limit, the confirmation never refused, the restore of every account, then A5-7's over-limit state (423 user_limit_exceeded, GET /users/over-limit, POST /users/over-limit/resolve)")
+    print_info("Tests: self-hosted app, managed app (the owner protected), self-hosted command line: nothing is removed, the others are deactivated by the administrator's choice")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_e2e/test_backup_roundtrip_over_limit.py", test_names)
+    return run_command(cmd, "Backup round trip over-limit E2E tests", verbose=verbose)
+
+
 def e2e_test(verbose: bool = False) -> bool:
     """Run all E2E tests."""
     if _common.nothing_left_to_run("e2e"):
@@ -1681,6 +1690,18 @@ Complete workflow tests via REST API:
         name="Backup Round Trip Owner",
         desc="Lot B5-1f: a backup uploaded and restored from the app on a managed instance (LIBREFOLIO_PROFILE=managed, LIBREFOLIO_ADMIN_EMAIL, no SMTP), real uvicorn children on Unix sockets across pending-restore, admin-bootstrap, restore-commit, restore-owner, owner-sync: the check offers owner_choice, a confirmation without an owner is 409 owner_choice_required, with the backup's administrator 202; the restart exits and a new process commits; the chosen account has the owner's address, is an active administrator and the only owner, its old password and a session of before are refused, the owner's link is only in the child's log (not in the status, the state file or the data directory), is spent once and the owner signs in; another start calls nothing again; an address change that A refuses (EMAIL_TAKEN) serves no data until backup pending --recover owner; B5-1j, the real CLI restore on the same managed instance picks the owner itself: Anna, the only flagged active administrator with an old address, holds LIBREFOLIO_ADMIN_EMAIL after the restart and is the only flagged account, her old password and old session are refused, her password-reset link is only in the child's log and spends once, and the CLI names her by username and prints no address; with a flag on an ordinary account, or two flagged administrators, nobody is picked: outcome none, the CLI gives ./dev.py user reassign-owner <username>, the instance serves, nobody is flagged, no account is closed and the warning names nobody",
         tests="Managed target → Upload, check, confirm (owner), restart → Committed → Owner link in the log → Spent once; restart: nothing again; fail closed → recover; CLI restore: Anna picked, link only in the log; nobody picked: outcome none",
+        # PURE: every data directory and archive under tmp_path, every server a child uvicorn of the test on a Unix socket
+        # under /tmp (never a TCP port), in test mode on its own data directory; the lane's data directory, database and
+        # server are never read nor written.
+        isolation="pure",
+    )
+    add_test(
+        e2e,
+        "backup-roundtrip-over-limit",
+        e2e_backup_roundtrip_over_limit,
+        name="Backup Round Trip Over Limit",
+        desc="Lot B5-1k2, last piece: a backup of five active accounts (and a disabled one, eight brokers, twenty transactions) restored on an instance that accepts LIBREFOLIO_MAX_USERS=3, real uvicorn children on Unix sockets across pending-restore, restore-commit (and, managed, restore-owner): the check says users_active 5, users_limit 3, users_over_limit 2 and carries the warning users_over_limit before credentials_from_backup; the confirmation (no account in the body) is 202, never refused; after the start every account, broker, access and transaction is there and the ledger's control totals are the source's; then workstream A's over-limit state (A5-7): an administrator and a plain user sign in and a data route answers 423 user_limit_exceeded, GET /users/over-limit lists the five active accounts (numbers, brokers owned alone, protected) for the administrator only, the full backup's routes answer the administrator; POST /users/over-limit/resolve keeping three accounts is 200 and the others are deactivated (ACCOUNT_DISABLED) with nothing deleted and the same totals; on a managed instance the owner's password is closed (link_only), the owner is protected in the choice, a choice without the owner is 422 PROTECTED_MISSING and one with her works; the real CLI restore --yes of the same backup exits 0, leaves the restore pending with ONE warning line (5 active accounts, 3 accepted) that names nobody, and the next start commits all six accounts",
+        tests="Self-hosted app: check 5/3/2 + warning → confirm 202 → restart → all data → 423 → choice → resolve; managed app: owner link_only, protected, PROTECTED_MISSING, resolve; CLI: confirmed with one warning line, committed with every account",
         # PURE: every data directory and archive under tmp_path, every server a child uvicorn of the test on a Unix socket
         # under /tmp (never a TCP port), in test mode on its own data directory; the lane's data directory, database and
         # server are never read nor written.
