@@ -1,3 +1,4 @@
+import {utcMs} from '../../../utils/dateOnly';
 import {escapeMarkdownTableCell, normalizeJsonSafeValue, serializeYaml} from '../serialization';
 
 type JsonRecord = Record<string, unknown>;
@@ -419,13 +420,13 @@ interface HistoryDateContext {
     readonly end: string;
 }
 
-function dateOrdinal(value: string): number | undefined {
+export function dateOrdinal(value: string): number | undefined {
     const match = /^(\d{4})[/-](\d{2})[/-](\d{2})$/.exec(value);
     if (!match) return undefined;
     const year = Number(match[1]);
     const month = Number(match[2]);
     const day = Number(match[3]);
-    const timestamp = Date.UTC(year, month - 1, day);
+    const timestamp = utcMs(year, month - 1, day);
     const parsed = new Date(timestamp);
     if (parsed.getUTCFullYear() !== year || parsed.getUTCMonth() !== month - 1 || parsed.getUTCDate() !== day) return undefined;
     return timestamp / 86_400_000;

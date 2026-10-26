@@ -7455,3 +7455,69 @@ dello slot visibile: da non spostare; (c) gli errori di conversione portano l'in
    `signal-service` 69. Frontend (in `flock`, `LC_ALL=en_US.UTF-8`): Vitest `lib/charts/signals`, `lib/components/charts`,
    `lib/components/assets/detail` 58 file / 2009 test; `front check` 0 errori 0 avvisi (dopo `api sync`); `i18n check` e
    `i18n audit` puliti (0 chiavi mancanti, 0 inutilizzate). Prettier, ruff e black puliti.
+
+### MF-P4b lato AI Export — rossi (25/10, ondata 5)
+
+> Contratto `ondata5/CONTRATTO-P4b.md` §6 e revisione `REVISIONI-P4b.md`: la storia del report diventa a tratti
+> (`date`, `through`); l'AI Export la legge in `build_performance_bucket_rows` (`payloads/portfolio_broker.py:322`, usata da
+> `portfolio_financial` e `broker_financial`) e in `broker_cost_efficiency._average_nav` (`:563`).
+
+1. ✅ 25/10 — Rossi. `test_ai_export_performance_steps.py` (nuovo, 43 test, registrato come `services
+   ai-export-performance-steps`, PURE). L'oracolo è una **copia congelata** della funzione per giorno a `d96519b86` dentro il
+   test, applicata alla stessa storia espansa a un punto al giorno. APS-01 parità campo per campo su 7 storie (copre il
+   periodo, parte tardi, finisce presto, entrambi, un tratto, un giorno, vuota) × 5 piani di bucket (1, 4, 8, 16, 30); APS-02
+   il giorno di un estremo e della chiusura precedente è un giorno, mai la `date` di un tratto; APS-03 parità di NAV fra tratti
+   lontani, vince il giorno più vecchio; APS-04 la media è pesata per la lunghezza, il conteggio è in giorni, il periodo va dalla
+   prima `date` all'ultima `through`. **26 rossi per la ragione giusta** (un tratto conta come un giorno), 17 verdi (le storie
+   con un bucket solo, il giorno solo, la vuota: coincidono per costruzione).
+2. ✅ 25/10 — Cura (dopo il checkpoint piccolo di MF, `79468ddd2`). `build_performance_bucket_rows` legge i tratti con
+   `points_between` (taglio ai bordi): `min`/`max` per confronto stretto sui tratti (il primo a raggiungere il valore vince;
+   la data è quella del tratto tagliato, cioè `max(date, inizio bucket)`), la chiusura precedente è il **giorno** `through`
+   dell'ultimo tratto del bucket prima (`variation_start_date`). `_average_nav` pesa ogni tratto per la sua lunghezza
+   (`through - date + 1`), il conteggio è in giorni e il periodo va da `history[0].date` a `history[-1].through`. Verdi: i 43
+   rossi; `services ai-export` 1 133 (dopo l'adattamento delle fixture).
+   > **Note implementazione**: due file di test dell'AI Export (`..._portfolio_broker_financial`, `..._portfolio_broker_integration`)
+   > costruivano `PortfolioHistoryPoint` di un giorno senza `through`: 27 rossi, previsti. Il loro `_history_point` ora
+   > costruisce un `_StepHistoryPoint` (sottoclasse con `through`, un giorno se non dato) finché il modello non porta
+   > `through` (secondo checkpoint di MF): allora la sottoclasse si toglie.
+   > **⚠️ Fuori pista**: sul percorso vero (`load_portfolio_report`) il report è ancora giornaliero e senza `through`: i due
+   > lettori falliscono finché non arriva il report a tratti di MF. Non c'è ripiego, è voluto (nessun doppio percorso).
+3. ✅ 26/10 — Report a tratti di MF (unione `f6ca43fdc`): le due fixture tornano a `PortfolioHistoryPoint` (che ha `through`), via
+   `_StepHistoryPoint`. `services ai-export` 1 133 passati sul percorso vero.
+4. ✅ 26/10 — Probe di diff sulle 6 copie (`base`, `eur1900`, `usd1900`, `buy1900`, `typo1500`, `nocrypto`, quelle di MF in
+   `ondata5/MF-p4/corpora`): per ognuna `portfolio.overview_and_history` e `portfolio.asset_history` (tutti i broker) e
+   `broker.overview_and_history` per ogni broker dell'utente `e2e_test_user`, più `broker.asset_history` di un broker, a 3 livelli
+   di dettaglio e 2 periodi (3M, 1Y): 60 costruzioni per copia, 360 in tutto, HEAD (`MF-p4/head_tree`) contro il ramo, entrambe
+   da una copia fresca. Script in `ondata5/Z-probe/` (`dump.py`, `compare.py`, `run.sh`).
+   **0 differenze** in tutte le sezioni, tranne due motivi spiegati sotto.
+   > **⚠️ Fuori pista**: il probe ha trovato una differenza vera nel NAV medio, che i miei test non vedevano: nell'ultima cifra
+   > (`...342` contro `...351`, 18 costruzioni). Un NAV convertito ha più di 28 cifre significative e il contesto Decimal
+   > arrotonda ogni addizione, quindi `nav × giorni` non è la somma di `giorni` addizioni. `_average_nav` ora somma il NAV una
+   > volta per ogni giorno del tratto, in ordine (parità al bit); test nuovo `APS-05` (rosso prima, 44 verdi dopo). Il costo è
+   > un'addizione per giorno, nulla rispetto al resto.
+   > **Resta di J, non mio**: la sezione `portfolio.drawdown_summary` / `broker.drawdown_summary` (30 costruzioni su 60 per copia
+   > nel `base`) cambia `n_observations` (388 → 285) e `coverage_ratio` (1,0 → 0,73) perché `risk/results.py:80-82` conta i punti
+   > della storia come giorni; con essa cambiano le statistiche di dimensione. Il confronto finale le esclude
+   > (`Z_PROBE_IGNORE_RISK=1`), cosa dichiarata qui; senza l'esclusione le uniche differenze sono quelle.
+   > **Note implementazione**: i punti del test sono un dataclass con `date`/`through`/`nav_value`/`capital_baseline`/
+   > `total_pnl`/`twrr`, perché i lettori funzionano su ogni punto con `date` e `through` (contratto §6): quando arriva
+   > `StepSpan` basta cambiare il tipo, non le asserzioni.
+
+### Anno breve nei punti di Z (25/10, ondata 5, D-P4)
+
+> `Date.UTC(24, …)` legge l'anno 24 come 1924. Elenco di Y: `ondata5/Y-anno-breve-fuori-ambito.md`; cura: `utcMs` di
+> `utils/dateOnly.ts` (nel ramo con `ac26cfd97`).
+
+1. ✅ 25/10 — Rossi. 8 test in 3 file già registrati: `TimeSeriesStore.test.ts` (serie con `0024-03-01`, `0001-01-01` e a
+   cavallo del 100: i punti si trovano, nessun gap nel 19xx; l'invalidazione di un intervallo corto non tocca il 1924),
+   `aiExportOptions.test.ts` (periodo che finisce nell'anno 24 e nell'anno 1; indietro oltre l'anno 100 senza cadere nel 1999;
+   una data che non esiste continua a lanciare), `snapshotDataRenderer.test.ts` (`dateOrdinal` di `0024-03-01` = −710 702 e di
+   `0001-01-01` = −719 162).
+2. ✅ 25/10 — Cura. `TimeSeriesStore.parseDate` e `formatDate` (l'anno si scrive a quattro cifre), `aiExportOptions.parseIsoDate` e
+   `subtractMonths`, `snapshotDataRenderer.dateOrdinal` (esportata per il test): `utcMs` al posto di `Date.UTC`. Verdi: Vitest
+   `stores`, `features/ai-export`, `utils`, `components/charts` 135 file / 4 088 test; `front check` 0 errori 0 avvisi (dopo
+   `api sync`: il client generato era vecchio e dava 4 errori in `txTradeAmountApi.ts`, non miei); Prettier pulito.
+5. ✅ 26/10 — Probe rifatto dopo l'unione di J (`7c33de840`, J `968cff655`: il lettore del rischio a tratti), **senza**
+   `Z_PROBE_IGNORE_RISK`: stesse 6 copie, stesse 60 costruzioni per copia (360), HEAD contro il ramo. **0 differenze** su
+   tutte, comprese `portfolio.drawdown_summary` e `broker.drawdown_summary` (`n_observations`, `coverage_ratio`) e le
+   statistiche di dimensione. Log: `ondata5/Z-probe/out_full.log`.
