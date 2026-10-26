@@ -19,4 +19,7 @@
 {% block extrahead %}
   {{ super() }}
   <script>window.LF_GALLERY_FALLBACK_BASE = {{ (lf_canonical_site_url | default(config.site_url, true) or "") | tojson }};</script>
+  {#- DOC-2: before Material's bundle, which starts fetching the search index when it loads: the page asks for the index
+      of its own language (hooks/search_language_split.py writes them), and the search dialog gets its checkbox -#}
+  <script src="{{ 'javascripts/search-language.js' | url }}"></script>
 {% endblock %}

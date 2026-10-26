@@ -65,7 +65,7 @@ erDiagram
 
     ACCOUNT_TOKEN {
         int id PK
-        string purpose "invite, password_reset, email_verification, admin_setup"
+        string purpose "invite, password_reset, email_verification, admin_setup, email_change"
         string token_hash UK "SHA-256, 64 hex characters"
         int user_id FK "nullable, ON DELETE CASCADE"
         string email "nullable"
@@ -139,6 +139,16 @@ Step 1 of migration `005_release_1_3_0_schema` adds three columns:
   before the feature, or one created while the
   running version named no release (`unknown`, or a checkout with no tag): it sees the running release's chapter once
   ([What's new](../../frontend/onboarding.md#whats-new)).
+
+- 👑 **`is_instance_owner`** (`BOOLEAN NOT NULL DEFAULT 0`, migration `005_release_1_3_0_schema`): the account that owns a
+  managed instance, the paying administrator. At most one row holds `1`: the partial unique index
+  `ux_users_instance_owner ON users (is_instance_owner) WHERE is_instance_owner = 1`, read by
+  `SELECT id FROM users WHERE is_instance_owner = 1` (`SEARCH users USING COVERING INDEX ux_users_instance_owner`).
+  It exists because the address of `LIBREFOLIO_ADMIN_EMAIL` cannot identify the owner once the host has changed it.
+  Set by the managed bootstrap that creates the initial administrator and by the startup step `owner-sync`
+  (`services/accounts/instance_owner.py`), never in another profile; read by `user_service.account_protection()` and
+  by `instance_owner`. It is in no API schema, and no setting: a global setting is readable by every signed-in user and
+  editable by any administrator. See [The Owner's Address](../access_control.md#owner-email-change).
 
 Only `confirm_email()` gives `email_verified_at` a date. The accounts that existed before lot C-54 hold
 `last_seen_version` `NULL`, and keep it until their user closes the window once. The
@@ -317,7 +327,7 @@ row holds the SHA-256 of the token, never the token itself. How tokens are issue
 [Single-use Account Tokens](../security.md#account-tokens).
 
 - 🎯 **`purpose`** (`VARCHAR(32)`): an `AccountTokenPurpose` value — `invite`, `password_reset`,
-  `email_verification` or `admin_setup` — enforced by `CHECK` (`ck_account_tokens_purpose`). A token is looked up
+  `email_verification`, `admin_setup` or `email_change` — enforced by `CHECK` (`ck_account_tokens_purpose`). A token is looked up
   by hash *and* purpose, so a token of one purpose is never accepted for another.
 - 🔐 **`token_hash`** (`VARCHAR(64)`): the SHA-256 of the token, 64 lowercase hex characters, `UNIQUE`
   (`uq_account_tokens_token_hash`). Its unique index serves the lookups.

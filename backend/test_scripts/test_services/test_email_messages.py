@@ -81,6 +81,7 @@ from backend.app.services.email.messages import (
     EmailContent,
     EmailKind,
     build_admin_setup,
+    build_email_change_confirmation,
     build_email_changed,
     build_invite,
     build_password_reset,
@@ -111,17 +112,18 @@ NEW_DOMAIN = "Example.ORG"
 #: What may never reach a subject, in any case: the cores of the user's values, and any trace of the link.
 NOT_IN_A_SUBJECT = ("zq-alice", "zq family", "brien", "://", "folio.example.com", TOKEN.lower(), "example.org")
 
-PASSWORD_RESET, INVITE, EMAIL_VERIFICATION, ADMIN_SETUP, TEST, EMAIL_CHANGED = (
+PASSWORD_RESET, INVITE, EMAIL_VERIFICATION, ADMIN_SETUP, TEST, EMAIL_CHANGED, EMAIL_CHANGE_CONFIRMATION = (
     EmailKind.PASSWORD_RESET,
     EmailKind.INVITE,
     EmailKind.EMAIL_VERIFICATION,
     EmailKind.ADMIN_SETUP,
     EmailKind.TEST,
     EmailKind.EMAIL_CHANGED,
+    EmailKind.EMAIL_CHANGE_CONFIRMATION,
 )
-ALL_KINDS = (PASSWORD_RESET, INVITE, EMAIL_VERIFICATION, ADMIN_SETUP, TEST, EMAIL_CHANGED)
-LINK_KINDS = (PASSWORD_RESET, INVITE, EMAIL_VERIFICATION, ADMIN_SETUP)
-TTL = {PASSWORD_RESET: timedelta(minutes=30), INVITE: timedelta(days=7), EMAIL_VERIFICATION: timedelta(hours=24), ADMIN_SETUP: timedelta(hours=72)}
+ALL_KINDS = (PASSWORD_RESET, INVITE, EMAIL_VERIFICATION, ADMIN_SETUP, TEST, EMAIL_CHANGED, EMAIL_CHANGE_CONFIRMATION)
+LINK_KINDS = (PASSWORD_RESET, INVITE, EMAIL_VERIFICATION, ADMIN_SETUP, EMAIL_CHANGE_CONFIRMATION)
+TTL = {PASSWORD_RESET: timedelta(minutes=30), INVITE: timedelta(days=7), EMAIL_VERIFICATION: timedelta(hours=24), ADMIN_SETUP: timedelta(hours=72), EMAIL_CHANGE_CONFIRMATION: timedelta(days=7)}
 
 #: Each builder with the arguments this module gives it, the language aside: exactly the keywords it takes. The three
 #: kinds an untrusted party can address take no username, and the notice no new address (decision N62, contract 9).
@@ -132,6 +134,8 @@ BUILDERS = {
     ADMIN_SETUP: (build_admin_setup, {"username": USERNAME, "link": LINK, "ttl": TTL[ADMIN_SETUP], "instance": INSTANCE}),
     TEST: (build_test_message, {"username": USERNAME, "instance": INSTANCE}),
     EMAIL_CHANGED: (build_email_changed, {"instance": INSTANCE}),
+    # A5-1b: the confirmation of the owner's new address goes to an address the HOST chose (an env variable), never to one a user chose: its sender is trusted, like the setup link's
+    EMAIL_CHANGE_CONFIRMATION: (build_email_change_confirmation, {"username": USERNAME, "link": LINK, "ttl": TTL[EMAIL_CHANGE_CONFIRMATION], "instance": INSTANCE}),
 }
 #: The user's values each kind shows.
 SHOWN_VALUES = {
@@ -141,6 +145,7 @@ SHOWN_VALUES = {
     ADMIN_SETUP: (USERNAME, INSTANCE),
     TEST: (USERNAME, INSTANCE),
     EMAIL_CHANGED: (INSTANCE,),
+    EMAIL_CHANGE_CONFIRMATION: (USERNAME, INSTANCE),
 }
 #: The parameters of each builder, all keyword-only, and the defaults of the optional ones.
 SIGNATURES = {
@@ -150,6 +155,7 @@ SIGNATURES = {
     "build_admin_setup": ({"language", "username", "link", "ttl", "instance"}, {}),
     "build_test_message": ({"language", "username", "instance"}, {}),
     "build_email_changed": ({"language", "instance"}, {}),
+    "build_email_change_confirmation": ({"language", "username", "link", "ttl", "instance"}, {}),
 }
 #: The arguments of each builder that an e-mail shows to its reader (the three kinds an untrusted party can address
 #: show no username, and the notice no part of the new address: EMM-036 to EMM-041).
@@ -160,6 +166,7 @@ SHOWN_FIELDS = {
     ADMIN_SETUP: ("username", "instance"),
     TEST: ("username", "instance"),
     EMAIL_CHANGED: ("instance",),
+    EMAIL_CHANGE_CONFIRMATION: ("username", "instance"),
 }
 SHOWN_FIELD_CASES = [pytest.param(kind, field, id=f"{kind.value}-{field}") for kind, fields in SHOWN_FIELDS.items() for field in fields]
 #: Characters that would break a line of the plain-text part, or hide in it: control characters (Cc), the line and
@@ -268,7 +275,7 @@ def test_the_email_languages_are_those_of_default_language() -> None:
 
 
 def test_the_kinds_of_email_have_their_values() -> None:
-    """EMM-002 — contract 1: six kinds, a StrEnum of lowercase values (``email_changed`` since lot E4a)."""
+    """EMM-002 — contract 1: seven kinds, a StrEnum of lowercase values (``email_changed`` since lot E4a, ``email_change_confirmation`` since A5-1b)."""
     print_section("EMM-002: EmailKind")
 
     assert issubclass(EmailKind, StrEnum)
@@ -279,8 +286,9 @@ def test_the_kinds_of_email_have_their_values() -> None:
         "ADMIN_SETUP": "admin_setup",
         "TEST": "test",
         "EMAIL_CHANGED": "email_changed",
+        "EMAIL_CHANGE_CONFIRMATION": "email_change_confirmation",
     }
-    print_success("6 kinds")
+    print_success("7 kinds")
 
 
 @pytest.mark.parametrize(

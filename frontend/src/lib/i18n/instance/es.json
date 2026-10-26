@@ -77,10 +77,37 @@
     "restoreInterrupted": {
       "title": "La restauración se detuvo a medias",
       "message": "LibreFolio no sabe qué datos contiene, así que no muestra ninguno hasta que tu administrador elija cómo seguir.",
-      "adminHint": "Administrador: detén LibreFolio y ejecuta ./dev.py backup pending para ver qué pasó y --recover para devolver los datos de antes.",
+      "adminHint": "Administrador: detén LibreFolio y ejecuta ./dev.py backup pending para ver qué pasó y --recover previous para devolver los datos de antes.",
       "docs": "Cómo recuperar",
       "autoReload": "Esta página se recarga sola cuando LibreFolio vuelva a servir los datos.",
-      "support": "Contactar con soporte"
+      "support": "Contactar con soporte",
+      "ownerTitle": "La cuenta del titular no está lista",
+      "ownerMessage": "Los datos se restauraron, pero el titular aún no tiene su cuenta, así que LibreFolio no muestra ninguno hasta que tu administrador la configure.",
+      "ownerAdminHint": "Administrador: detén LibreFolio, ejecuta ./dev.py backup pending --recover owner para configurar de nuevo la cuenta del titular y vuelve a iniciar LibreFolio."
+    },
+    "userLimit": {
+      "title": "Más usuarios de los que permite tu plan",
+      "description": "Esta instancia tiene {active} usuarios activos pero el plan permite {max}. Elige quién conserva el acceso: los demás se desactivan, no se eliminan, así que no se pierde ningún dato, y podrás reactivarlos si queda un hueco.",
+      "counter": "{chosen} elegidos de {max}",
+      "administrator": "Administrador",
+      "protectedOwner": "Titular de la instancia: siempre se queda",
+      "protectedYou": "Tú: estás eligiendo",
+      "brokersAlone": "Único titular de {count} bróker(s): los demás pierden el acceso",
+      "noAdministrator": "Conserva al menos un administrador.",
+      "invitesCancelled": "{count} invitación(es) pendiente(s) se cancelarán para dejar sitio.",
+      "confirm": "Desactivar a los demás y continuar",
+      "backupTitle": "Descarga primero una copia de seguridad completa",
+      "waitingTitle": "El administrador debe elegir quién conserva el acceso",
+      "waitingDescription": "Esta instancia tiene más usuarios activos de los que permite el plan. Hasta que un administrador elija quién conserva el acceso, nadie más puede usarla. Inténtalo de nuevo más tarde.",
+      "checkAgain": "Comprobar de nuevo",
+      "error": {
+        "load": "No se pudo cargar la lista. Inténtalo de nuevo.",
+        "generic": "No se pudo guardar la elección. Inténtalo de nuevo.",
+        "UNKNOWN_USER": "Una de las cuentas elegidas ya no está activa. Recarga la página.",
+        "TOO_MANY_KEPT": "Has elegido demasiadas cuentas para el plan.",
+        "PROTECTED_MISSING": "El titular de la instancia, o tú, debe quedarse.",
+        "NO_ADMIN_KEPT": "Al menos un administrador debe conservar el acceso."
+      }
     }
   }
 }

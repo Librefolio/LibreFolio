@@ -212,7 +212,7 @@
         "post_migration_failed": "Une correction de la copie a échoué : le journal du serveur donne la cause.",
         "restore_interrupted": "La vérification a été interrompue : vérifiez de nouveau l'archive.",
         "restore_stage_expired": "La vérification est trop ancienne : vérifiez de nouveau l'archive.",
-        "restore_stage_outdated": "LibreFolio a été mis à jour depuis la vérification : vérifiez de nouveau l'archive.",
+        "restore_stage_outdated": "LibreFolio a été mis à jour, ou l'adresse du propriétaire a changé, depuis la vérification : vérifiez de nouveau l'archive.",
         "restore_not_restorable": "Cette archive ne peut pas être restaurée.",
         "restore_already_pending": "Une autre restauration attend déjà le prochain démarrage.",
         "restore_not_pending": "Aucune restauration n'attend le prochain démarrage.",
@@ -228,7 +228,11 @@
         "envelope_damaged": "La sauvegarde sécurisée est endommagée ou a été modifiée : elle ne peut pas être ouverte.",
         "envelope_unsupported": "La sauvegarde sécurisée provient d'un LibreFolio plus récent : mettez d'abord LibreFolio à jour.",
         "proxy_too_large": "Un proxy placé devant LibreFolio a refusé une archive aussi grande : demandez à la personne qui le gère d'accepter des téléversements plus volumineux, ou restaurez depuis la ligne de commande.",
-        "sealed_backup_needs_key": "Ceci est une sauvegarde scellée d'un panneau d'hébergement : son mot de passe est chiffré pour la clé du fournisseur. Extrayez backup.lfbk, ouvrez password.age avec age, puis restaurez backup.lfbk avec ce mot de passe."
+        "sealed_backup_needs_key": "Ceci est une sauvegarde scellée d'un panneau d'hébergement : son mot de passe est chiffré pour la clé du fournisseur. Extrayez backup.lfbk, ouvrez password.age avec age, puis restaurez backup.lfbk avec ce mot de passe.",
+        "owner_choice_required": "Choisissez le compte qui devient celui du propriétaire avant de confirmer.",
+        "owner_choice_invalid": "Le compte choisi ne peut pas devenir celui du propriétaire : choisissez-en un parmi ceux proposés.",
+        "owner_email_not_set": "LIBREFOLIO_ADMIN_EMAIL n'est pas définie : le compte du propriétaire ne peut pas être choisi. Demandez à l'hébergeur.",
+        "owner_conflict": "La sauvegarde contient deux comptes avec la même adresse ou le même nom, l'adresse du titulaire comme nom d'un autre compte, ou un administrateur qui attend encore son lien de configuration : elle ne peut pas être restaurée ici."
       },
       "password": {
         "intro": "Une sauvegarde sécurisée : saisissez le mot de passe avec lequel elle a été faite.",
@@ -263,6 +267,18 @@
         "invalid": "LIBREFOLIO_BACKUP_RECIPIENTS ne peut pas être utilisée ({reason}) : un ou deux destinataires age1…, séparés par une virgule. Les sauvegardes du panneau de l'hébergeur répondent 503 tant qu'elle n'est pas corrigée.",
         "missingManaged": "LIBREFOLIO_BACKUP_RECIPIENTS n'est pas définie : une instance gérée ne remet jamais une sauvegarde en clair au panneau de l'hébergeur, dont les sauvegardes répondent 503 tant qu'elle n'est pas définie."
       }
+    },
+    "ownerChoice": {
+      "title": "Qui est le titulaire de cette instance ?",
+      "intro": "Choisissez quel utilisateur de cette sauvegarde devient l'administrateur qui paie l'instance.",
+      "notice": "Cet utilisateur recevra l'adresse e-mail du titulaire ({email}) et deviendra administrateur protégé. Son mot de passe sera réinitialisé : un lien pour en choisir un nouveau est envoyé à cette adresse. Si l'e-mail ne peut pas partir, le lien est écrit dans le journal de l'instance, pour que l'hébergeur le remette au titulaire.",
+      "locked": "Un utilisateur de cette sauvegarde a déjà l'adresse e-mail du titulaire : c'est lui le titulaire.",
+      "adminBadge": "Administrateur",
+      "inactiveBadge": "Désactivé",
+      "ownerBadge": "E-mail du titulaire",
+      "empty": "Cette sauvegarde n'a aucun utilisateur à choisir.",
+      "confirm": "Confirmer et restaurer",
+      "cancel": "Annuler"
     }
   }
 }

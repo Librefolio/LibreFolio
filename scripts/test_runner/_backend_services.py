@@ -667,6 +667,50 @@ def services_admin_bootstrap(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Initial administrator tests", verbose=verbose)
 
 
+def services_owner_email_change(verbose: bool = False, test_names: list = None) -> bool:
+    """Test A5-1b part 2: the instance owner's flag, the startup sync and the confirmation link of its new address."""
+    print_section("Services: Instance Owner Email Change (A5-1b)")
+    print_info("Testing: services/accounts/instance_owner.py (run_owner_sync, deliver_owner_change_link, startup_owner_sync, owner_change_status), user_service.account_protection, bootstrap_admin_service, email messages, the owner-sync startup step")
+    print_info("Tests: the owner flag and the protection rule, each branch of the sync (heal, same, conflict, live link, new link by email, link in the log), the status, the four-language email, the step order")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_owner_email_change.py", test_names)
+    return run_command(cmd, "Instance owner email change tests", verbose=verbose)
+
+
+def services_owner_assignment(verbose: bool = False, test_names: list = None) -> bool:
+    """Test A5-2: a restore on a managed instance gives the instance to the owner the administrator chose."""
+    print_section("Services: Owner Assignment after a Restore (A5-2)")
+    print_info("Testing: services/accounts/instance_owner.py assign_owner_and_send_reset, auth_service.unusable_password_hash, user_service.create_password_reset(email=)")
+    print_info(
+        "Tests: the four precondition codes, the owner flag moved, an unusable password and ended sessions, the planted tokens of a backup neutralised (the four attacks), one new reset link (sent; link_only with the link in the instance's log, never in the result), a second call starting again, two calls at once"
+    )
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_owner_assignment.py", test_names)
+    return run_command(cmd, "Owner assignment tests", verbose=verbose)
+
+
+def services_user_limit(verbose: bool = False, test_names: list = None) -> bool:
+    """Test A5-7: the accounts over LIBREFOLIO_MAX_USERS, and the administrator's choice of who keeps the access."""
+    print_section("Services: Over the User Limit (A5-7)")
+    print_info("Testing: services/accounts/user_limit_service.py over_limit_state, list_for_choice, resolve")
+    print_info("Tests: the state only when active > limit (never for a limit that cannot be read), the protected accounts, the example of 5 accounts and a limit of 3, nothing deleted, the refusals, the invitations revoked only as far as needed, one commit")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_user_limit.py", test_names)
+    return run_command(cmd, "User limit tests", verbose=verbose)
+
+
+def services_user_limit_api(verbose: bool = False, test_names: list = None) -> bool:
+    """Test A5-7: the guard and the two routes of the state over the user limit, on the app in process."""
+    print_section("Services: Over the User Limit on the API (A5-7)")
+    print_info("Testing: api/v1/user_limit.py refuse_when_over_limit and its lists, GET /users/over-limit, POST /users/over-limit/resolve")
+    print_info(
+        "Tests: 423 user_limit_exceeded for an ordinary user, the allowed routes, the administrator's choice and backup, the order of the guards, an instance not over the limit or with an unreadable limit changes no answer, the lists pinned, exact keys, the refusals with their codes, the example through the API"
+    )
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_user_limit_api.py", test_names)
+    return run_command(cmd, "User limit API tests", verbose=verbose)
+
+
 def services_email_case(verbose: bool = False, test_names: list = None) -> bool:
     """Test P18: email addresses unique regardless of A–Z case, in the rule, the index, the lookups and the writes."""
     print_section("Services: Email Addresses Regardless of Case (P18)")
@@ -685,6 +729,16 @@ def services_username_rules(verbose: bool = False, test_names: list = None) -> b
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_username_rules.py", test_names)
     return run_command(cmd, "Username rules tests", verbose=verbose)
+
+
+def services_account_protection(verbose: bool = False, test_names: list = None) -> bool:
+    """Test A5-1: on a managed instance the account of LIBREFOLIO_ADMIN_EMAIL is protected; the command line is not bound by it."""
+    print_section("Services: Account Protection (A5-1)")
+    print_info("Testing: config/accounts.py owner_admin_email, user_service.account_protection, scripts/user_cli.py deactivate and demote")
+    print_info("Tests: the reader never raises, the managed profile protects the address of the variable in any A-Z case, any other profile or an unusable variable protects nobody, the command line and the deleting service stay above the protection")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_account_protection.py", test_names)
+    return run_command(cmd, "Account protection tests", verbose=verbose)
 
 
 def services_username_lookup(verbose: bool = False, test_names: list = None) -> bool:
@@ -1627,7 +1681,7 @@ def services_hosting_panel_access_tickets(verbose: bool = False, test_names: lis
 def services_hosting_panel_vectors(verbose: bool = False, test_names: list = None) -> bool:
     """Test the hosting panel's ticket test vectors in the admin guide (H-61, L2): the key, the ticket and every verdict, checked against the code."""
     print_section("Services: Hosting Panel Ticket Test Vectors")
-    print_info("Testing: mkdocs_src/docs/admin/hosting_providers.en.md (#panel-api-test-vectors) against backend/app/services/platform/hosting_panel/tickets.py")
+    print_info("Testing: mkdocs_src/docs/admin/hosting_panel_api.en.md (#panel-api-test-vectors) against backend/app/services/platform/hosting_panel/tickets.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_hosting_panel_vectors.py", test_names)
     return run_command(cmd, "Hosting panel ticket vector tests", verbose=verbose)
 
@@ -1718,6 +1772,14 @@ def services_restore_guard(verbose: bool = False, test_names: list = None) -> bo
     print_info("Testing: services/platform/restore_guard.py (probe_restore_state, restore_interrupted), app_lifespan.STARTUP_STEPS restore-state and the eight skipped steps")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_restore_guard.py", test_names)
     return run_command(cmd, "Restore guard tests", verbose=verbose)
+
+
+def services_restore_owner_guard(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the guard's owner part: a restored instance serves no data until the owner has an account (H5-3, H)."""
+    print_section("Services: Restore Owner Guard")
+    print_info("Testing: restore_guard probe_owner_assignment, refresh_restore_state, restore_interrupted_reason, app_lifespan restore-owner step and the five steps skipped while the owner has no account, two-worker healing")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_restore_owner_guard.py", test_names)
+    return run_command(cmd, "Restore owner guard tests", verbose=verbose)
 
 
 def services_app_lifecycle(verbose: bool = False, test_names: list = None) -> bool:
@@ -1822,6 +1884,22 @@ def services_backup_sealed(verbose: bool = False, test_names: list = None) -> bo
     print_info("Testing: backend/app/services/platform/instance_backup/sealed.py, envelope.py (unlock_header), fixtures/backup_l3/")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_sealed.py", test_names)
     return run_command(cmd, "Sealed backup tests", verbose=verbose)
+
+
+def services_backup_owner(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the owner's account after a restore in the managed profile (lot B5-1): the step after the commit."""
+    print_section("Services: Restore Owner")
+    print_info("Testing: backend/app/services/platform/instance_backup/owner.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_owner.py", test_names)
+    return run_command(cmd, "Restore owner tests", verbose=verbose)
+
+
+def services_backup_owner_real(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the owner's account after a restore with workstream A's real function (lot B5-1e): only the mail is played."""
+    print_section("Services: Restore Owner, the real call")
+    print_info("Testing: backend/app/services/platform/instance_backup/owner.py with backend/app/services/accounts/instance_owner.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_owner_real.py", test_names)
+    return run_command(cmd, "Restore owner (real) tests", verbose=verbose)
 
 
 def services_backup_secure_rules(verbose: bool = False, test_names: list = None) -> bool:
@@ -2462,6 +2540,56 @@ Note: No backend server required.
         desc="No @ in a new username (user create, LIBREFOLIO_ADMIN_USERNAME), spaces, accents and punctuation still taken, legacy names left as they are; no address equal to another account's username, A–Z case aside (register_user, user set-email, user create)",
         # PURE: every database is a private file under tmp_path built with create_all; the command line runs in this
         # process on that file, get_async_engine a tripwire; variables removed with monkeypatch. No lane DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "owner-email-change",
+        services_owner_email_change,
+        name="Instance Owner Email Change (A5-1b)",
+        desc="users.is_instance_owner and the protection rule (the click not made: the owner stays protected; a stranger holding the new address is not), the startup sync owner-sync (pending administrator untouched, heal, same address, conflict blocked, live link not resent, new link emailed to the NEW address, link in the log only when the email did not go, expired and changed-again links, two workers), owner_change_status, build_email_change_confirmation in four languages, the step after admin-bootstrap",
+        # PURE: every database is a private file under tmp_path built with create_all; profile and variables set with
+        # monkeypatch; the email faked in this process (outbox); no lane DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "owner-assignment",
+        services_owner_assignment,
+        name="Owner Assignment after a Restore (A5-2)",
+        desc="assign_owner_and_send_reset: nothing in a restored database is trusted, so every call gives the full treatment: the account the owner chose gets the address of LIBREFOLIO_ADMIN_EMAIL, becomes an active administrator and the one instance owner (the flag of the others cleared), its password becomes an unusable bcrypt hash, its sessions end, its password_reset rows are deleted (planted consumed/revoked/expired/live/future-dated ones included) and its other live tokens revoked, one new reset link is emailed or, if the email cannot go, written in the instance log (link_only; never in the result or its repr); NOT_MANAGED / OWNER_EMAIL_NOT_SET / USER_NOT_FOUND / EMAIL_TAKEN change nothing; a second call kills the first link; two calls at once leave one live link; A5-4: `user reassign-owner <username>` runs the same treatment from the command line (managed only; ✅ and one link emailed, or link_only with the link in the log and never printed; refusals for not managed / no variable / unknown user / address taken change nothing; registered in both parsers and the dispatch) and a new address in update_profile also revokes the account's live email_change links",
+        # PURE: every database is a private file under tmp_path built with create_all; profile and variables set with
+        # monkeypatch; the email faked in this process (outbox); no lane DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "user-limit",
+        services_user_limit,
+        name="Over the User Limit (A5-7)",
+        desc="The state «over the limit» is read from the accounts, never stored: active > LIBREFOLIO_MAX_USERS strictly (no limit, active = limit, and a limit that cannot be read never trigger it; inactive accounts do not count; live invitations and accounts waiting for their verification take places), the list for the choice (the managed owner protected, else the administrator who chooses; the brokers an account owns alone), the resolution (5 accounts and a limit of 3: the others are deactivated with their sessions ended, nothing deleted, the kept ones unchanged; UNKNOWN_USER / TOO_MANY_KEPT / PROTECTED_MISSING / NO_ADMIN_KEPT / NOT_OVER_LIMIT change nothing; live invitations revoked only as far as the kept accounts need their places; one commit; the log without names)",
+        # PURE: every database is a private file under tmp_path built with create_all; variables set with monkeypatch;
+        # no lane DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "user-limit-api",
+        services_user_limit_api,
+        name="Over the User Limit, API (A5-7)",
+        desc="refuse_when_over_limit on the app in process and a private database: 423 user_limit_exceeded for a signed-in ordinary user on every route but the allowed list (login, logout, me, the public configuration, the probes, links, the own account's deletion, the panel's routes, the restore outcome); the administrator also reaches the choice and the full backup; the 401 of any caller without a session; an instance not over the limit, or with a limit that cannot be read, changes no answer; the order of the guards (block, restore interrupted, then this one); the two lists pinned against the block's list; GET /users/over-limit and POST /users/over-limit/resolve with exact keys, their refusals (409 NOT_OVER_LIMIT; 422 UNKNOWN_USER, TOO_MANY_KEPT, PROTECTED_MISSING) and the example of 5 accounts and a limit of 3",
+        # PURE: the app of the server in process, its session dependency overridden with a private file under tmp_path;
+        # no lane DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "account-protection",
+        services_account_protection,
+        name="Account Protection (A5-1)",
+        desc="The paying administrator of a managed instance (LIBREFOLIO_ADMIN_EMAIL, any A-Z case) is protected, no one in another profile or with an unusable variable, the reader never raises; the command line and the deleting service stay above it",
+        # PURE: users built in memory, the command line on a private file under tmp_path, get_settings() read from the
+        # environment with monkeypatch. No lane DB, no server.
         isolation="pure",
     )
     add_test(
@@ -3314,6 +3442,17 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "restore-owner-guard",
+        services_restore_owner_guard,
+        name="Restore Owner Guard",
+        desc="H5-3 (H): after a restore from the app the instance serves no data until the owner has an account (B's assign_restored_owner), on B-33's mechanism: restore_guard keeps _owner_problem, probe_owner_assignment (one error line with the value only), restore_interrupted() = _interrupted or an owner problem (pure), restore_interrupted_reason() (restore_state wins over owner_assignment), refresh_restore_state re-asks a pending answer in a thread every OWNER_RECHECK_SECONDS and never a code or None, never raises; the step restore-owner right after restore-commit awaits assign_restored_owner then probes; the five serving steps after it skip while an owner problem is set; two workers: the one stuck in pending heals once the other records the outcome in a real restore.json",
+        # PURE: B's hook replaced by monkeypatch, the guard's clock patched; the two-worker case uses a restore.json and a
+        # migrated database copy under tmp_path (the fixtures of test_backup_owner.py) and a fake of A's function. No lane
+        # DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "static-cache-policy",
         services_static_cache_policy,
         name="Static Cache Policy",
@@ -3370,7 +3509,7 @@ Note: No backend server required.
         "backup-staging",
         services_backup_staging,
         name="Instance Backup Staging",
-        desc="restore --dry-run's check, on a copy in .restore/stage/<id>/: a backup at the head restored as it is (database and files byte for byte, 0700/0600, report.json read back equal, 24 h expiry), an older one upgraded for real by alembic in its own process (migrations after its revision, oldest first, as the migration files describe them; the copy at the head, its data converted; rows before/after); the active administrators named, none a blocker (no_administrator); every StagingError code (not a backup, unreadable or damaged zip, manifest codes, too many entries, duplicates even by case or Unicode form or as the folder of another, unexpected, folder/link/encrypted/bzip2/lzma entries, size or SHA-256 mismatch, missing entry, no space before or while writing, write failure, damaged database, manifest mismatch, revision missing, unknown (never downgraded) or unreadable head, upgrade failed, post-migration fix failed), each leaving no stage, the lock free, no path in its message, a refusal from the directory before any byte written; one check at a time (StagingBusyError, a caller's lock kept for it to release, the check's own released); .restore links refused, stages never written over, a linked stage unlinked, nothing removed while .restore or its stage folder is a link or a file; progress phases; warnings rows_changed, foreign_key_violations(_added); the live data directory (WAL database, files, secrets) byte-identical; B-28: a database holding a trigger, a view or a virtual table refused as database_foreign_objects (a schema SQLite refuses to read, database_damaged) before anything else opens the copy, its schema read by its SQL, read only, the warning without names; this LibreFolio's own schema only tables and indexes; trusted_schema=OFF first on every connection B opens on the copy; B-35 (m): stage_archive(max_unpacked=) checks an archive at or under the cap on its declared total, refuses one above it unpacked_too_large before the free space and before a byte is written (no data/, progress never past checking), a secure archive decrypted first, None unchanged; B-37 (l): the post-migration fixes' connection to the copy recorded too, trusted_schema=OFF first like every other; B-43 (n): a function the reader lacks in an index, a generated column or a CHECK ends the check with database_damaged (the CHECK past the read-only description, which finds it intact), never a raw sqlite3 error, the copy removed and the live data untouched, one warning with the error's class and sqlite_errorname, its name in no message nor log line; a CHECK on abs() checked as usual; B-43 part 1 (n): an index or a generated column calling regexp or floor, which the server's connections register (deterministic, never innocuous) with trusted_schema off, refused database_damaged where the copy's schema is first read with stand-ins, before describe_database opens the copy, the same one warning, no line naming the function; this LibreFolio's own lower(email) index read with the stand-ins, its backup checked as usual; B-49 (o): text that is not UTF-8 refused database_damaged before the upgrade, before anything writes in the copy (a TEXT column, a DATE column, a table LibreFolio does not have, a character split over two rows, rowids at both ends of int64, a VIRTUAL or STORED generated column table_info hides), one warning with the number of tables and no text, byte, name nor path; its read only mode=ro, trusted_schema=OFF first, by storage class; valid text beyond ASCII and the same bytes as a BLOB checked as usual",
+        desc="restore --dry-run's check, on a copy in .restore/stage/<id>/: a backup at the head restored as it is (database and files byte for byte, 0700/0600, report.json read back equal, 24 h expiry), an older one upgraded for real by alembic in its own process (migrations after its revision, oldest first, as the migration files describe them; the copy at the head, its data converted; rows before/after); the active administrators named, none a blocker (no_administrator); every StagingError code (not a backup, unreadable or damaged zip, manifest codes, too many entries, duplicates even by case or Unicode form or as the folder of another, unexpected, folder/link/encrypted/bzip2/lzma entries, size or SHA-256 mismatch, missing entry, no space before or while writing, write failure, damaged database, manifest mismatch, revision missing, unknown (never downgraded) or unreadable head, upgrade failed, post-migration fix failed), each leaving no stage, the lock free, no path in its message, a refusal from the directory before any byte written; one check at a time (StagingBusyError, a caller's lock kept for it to release, the check's own released); .restore links refused, stages never written over, a linked stage unlinked, nothing removed while .restore or its stage folder is a link or a file; progress phases; warnings rows_changed, foreign_key_violations(_added); the live data directory (WAL database, files, secrets) byte-identical; B-28: a database holding a trigger, a view or a virtual table refused as database_foreign_objects (a schema SQLite refuses to read, database_damaged) before anything else opens the copy, its schema read by its SQL, read only, the warning without names; this LibreFolio's own schema only tables and indexes; trusted_schema=OFF first on every connection B opens on the copy; B-35 (m): stage_archive(max_unpacked=) checks an archive at or under the cap on its declared total, refuses one above it unpacked_too_large before the free space and before a byte is written (no data/, progress never past checking), a secure archive decrypted first, None unchanged; B-37 (l): the post-migration fixes' connection to the copy recorded too, trusted_schema=OFF first like every other; B-43 (n): a function the reader lacks in an index, a generated column or a CHECK ends the check with database_damaged (the CHECK past the read-only description, which finds it intact), never a raw sqlite3 error, the copy removed and the live data untouched, one warning with the error's class and sqlite_errorname, its name in no message nor log line; a CHECK on abs() checked as usual; B-43 part 1 (n): an index or a generated column calling regexp or floor, which the server's connections register (deterministic, never innocuous) with trusted_schema off, refused database_damaged where the copy's schema is first read with stand-ins, before describe_database opens the copy, the same one warning, no line naming the function; this LibreFolio's own lower(email) index read with the stand-ins, its backup checked as usual; B-49 (o): text that is not UTF-8 refused database_damaged before the upgrade, before anything writes in the copy (a TEXT column, a DATE column, a table LibreFolio does not have, a character split over two rows, rowids at both ends of int64, a VIRTUAL or STORED generated column table_info hides), one warning with the number of tables and no text, byte, name nor path; its read only mode=ro, trusted_schema=OFF first, by storage class; valid text beyond ASCII and the same bytes as a BLOB checked as usual; B5-1g (r): owner_conflicts names pending_administrator (the owner's address set, an inactive account with an admin_setup link none of whose admin_setup links was used, and no account holding the address, A-Z case aside), not when another account or the pending one itself holds it, the link was used, the account is active, the links are of another purpose, or the address is not set; sorted and unique with the other codes; B5-1j (q): a candidate says whether the copy marks it as the instance's owner (is_instance_owner, False for a copy without the column and for a report written before), the candidate set unchanged",
         # PURE: every data directory, database and archive under tmp_path; two alembic processes make the module's
         # databases and two more are the product's upgrade of a copy, all on tmp_path files, with a production data
         # directory of the test configured (which must stay absent). No lane DB, no server, no network.
@@ -3391,7 +3530,7 @@ Note: No backend server required.
         "backup-apply",
         services_backup_apply,
         name="Instance Backup Restore",
-        desc="The restore of a checked copy (lot B3): paths (.restore/restore.json, apply.lock, previous/, failed/, SWAPPED_FOLDERS, stage_data_dir); the errors and their codes, frozen models; boots (server_pid and the creation time, a reused pid another boot); read_restore and protected_stage (an ordinary start creates nothing; links, files, unreadable states never followed); confirm_restore (refusals in order: .restore not a folder, copy missing, blockers, expired at expires_at, head moved, already active; pending written atomically 0600, leftovers removed); cancel_restore; apply_pending_restore: the four folders in every live/staged layout with their modes, the journal before the first rename, the same boot, another live one, a dead or reused one (first_start_failed), killed after any rename of the swap or of the undo, a rename failing (swap_failed; RestoreApplyError, finished at the next start), waiting (another data directory, a backup running), stage_missing, a live link or file, two workers of one server making one swap; finish_pending_restore (committed, every account at max(R, A + 1, B + 1), leftovers removed, idempotent; rolled back cleaned; anything else untouched); the sessions in-process (the clock ahead or behind, a restore on a restore, then a password change + 1); the startup steps in place and off the loop; restart (SIGTERM to the server through send_signal); B2 then B3 with real archives at the head and at an older revision; after the security review (§10): the boot read once per process, fail closed with restore_in_use, the serving lock (shared from data-directories, exclusive while the folders move, server_running), the strict state; P7 (§11): no restore applied while LIBREFOLIO_BLOCKED (instance_blocked, after other_data_directory and before server_running and backup_running; an unreadable value counts as blocked), the undo and the commit unchanged; B5c (n): the outcome ticket dropped by a confirmation and by a cancel, kept by their refusals, the swap, the commit and a rollback, read again until it expires (N53), prepare_restart issuing it under the restore's lock and writing nothing without a pending restore; B-32 (o): a state the file system cannot read (its opening failing EACCES or EIO, its mode 000, a .restore/ without search) makes read_restore, cancel_restore, prepare_restart and confirm_restore raise restore_state_unreadable (its reason the strerror, no path; the state, the copy and the ticket byte for byte, no ticket, the state never written over), while the startup steps and protected_stage keep None with an error logged; a state that is a folder reads as none",
+        desc="The restore of a checked copy (lot B3): paths (.restore/restore.json, apply.lock, previous/, failed/, SWAPPED_FOLDERS, stage_data_dir); the errors and their codes, frozen models; boots (server_pid and the creation time, a reused pid another boot); read_restore and protected_stage (an ordinary start creates nothing; links, files, unreadable states never followed); confirm_restore (refusals in order: .restore not a folder, copy missing, blockers, expired at expires_at, head moved, already active; pending written atomically 0600, leftovers removed); cancel_restore; apply_pending_restore: the four folders in every live/staged layout with their modes, the journal before the first rename, the same boot, another live one, a dead or reused one (first_start_failed), killed after any rename of the swap or of the undo, a rename failing (swap_failed; RestoreApplyError, finished at the next start), waiting (another data directory, a backup running), stage_missing, a live link or file, two workers of one server making one swap; finish_pending_restore (committed, every account at max(R, A + 1, B + 1), leftovers removed, idempotent; rolled back cleaned; anything else untouched); the sessions in-process (the clock ahead or behind, a restore on a restore, then a password change + 1); the startup steps in place and off the loop; restart (SIGTERM to the server through send_signal); B2 then B3 with real archives at the head and at an older revision; after the security review (§10): the boot read once per process, fail closed with restore_in_use, the serving lock (shared from data-directories, exclusive while the folders move, server_running), the strict state; P7 (§11): no restore applied while LIBREFOLIO_BLOCKED (instance_blocked, after other_data_directory and before server_running and backup_running; an unreadable value counts as blocked), the undo and the commit unchanged; B5c (n): the outcome ticket dropped by a confirmation and by a cancel, kept by their refusals, the swap, the commit and a rollback, read again until it expires (N53), prepare_restart issuing it under the restore's lock and writing nothing without a pending restore; B-32 (o): a state the file system cannot read (its opening failing EACCES or EIO, its mode 000, a .restore/ without search) makes read_restore, cancel_restore, prepare_restart and confirm_restore raise restore_state_unreadable (its reason the strerror, no path; the state, the copy and the ticket byte for byte, no ticket, the state never written over), while the startup steps and protected_stage keep None with an error logged; a state that is a folder reads as none; B5-1d: the swap records token_watermark (the largest account_tokens id of the swapped database, 0 without table or tokens, None when unreadable) and the commit revokes only the live tokens with id <= watermark (a link the same start issues after the swap, such as admin-bootstrap's /setup link on a restore without accounts, survives whatever its created_at says; no watermark revokes every live token); B5-1g (u): the commit clears is_instance_owner of every account and sets it only on the chosen account when it was assigned (no owner named, an address another account holds, an address no longer set, an account the database lacks: nobody flagged), a database without the column commits as before; the commit's read-write connection runs trusted_schema=OFF first; B5-1h (u): so does the read-only connection of _largest_session_version on the previous/ database (before its SELECT; the value pinned: the largest session_version, 0 for a missing file or a folder); a pending administrator in the copy makes the confirmation owner_conflict, whatever the choice; B5-1j (v): apply.pick_owner(candidates, owner_email) -> OwnerPick(user_id, username, how) (frozen): the account holding the owner's address (A-Z fold only, any role) is holds_address, else the ONE marked active administrator is marked, else none (nobody marked, two or more marked, a marked disabled or ordinary account; never the first by id); a managed cli/panel confirmation with LIBREFOLIO_ADMIN_EMAIL set records the pick in owner_user_id, records owner_outcome none (and a warning without name or address) when nobody can be picked, is restore_stage_outdated for a report checked with another address and owner_conflict (advice: make a new backup) for owner conflicts, still owner_choice_not_applicable when a caller names one, and changes nothing self-hosted or without the address; the commit closes the picked account whatever the channel (unusable bcrypt hash, the owner's address, active administrator, the only flag, every session version the restore's, owner pending for the guard and the startup step) and with nobody picked clears every flag and touches no password",
         # PURE: every data directory, database and archive under tmp_path, with a production data directory of the test
         # configured (which must stay absent); two alembic processes make the module's databases, two spawn children
         # play two workers on a tmp_path instance; send_signal and os.kill replaced: no signal. No lane DB, no server,
@@ -3426,6 +3565,26 @@ Note: No backend server required.
         desc="The sealed nightly backup (lot L3, contract §3 and §9): every case of fixtures/backup_l3/vectors.json through read_sealed, open_password, check_password, extract_envelope and the envelope's decryption with its expected outcome; write_sealed rebuilding the good .tar byte for byte (0600, no .part, no overwrite); build_manifest's bytes; new_password; seal_password binary age and open_password (sealed_no_identity, sealed_password_invalid); read_sealed refusals (PAX, GNU, directory, link, members, small members over 4096, not LFBK v1, truncated; manifest UTF-8 JSON object, duplicate, unknown or missing keys, types, format, version, recipients, size and hash, password_member); read_identities and identity_file_text; is_sealed; the cloud derivation rows; interop with the age binary when installed (skipped visibly otherwise); envelope.unlock_header",
         # PURE: committed vectors read only, files under tmp_path; the optional age binary run on tmp_path files. No DB,
         # no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-owner",
+        services_backup_owner,
+        name="Restore Owner",
+        desc="The owner's account after a restore in the managed profile (lot B5-1): owner_choice_required() reads the profile; assign_restored_owner() calls A's instance_owner.assign_owner_and_send_reset(session, user_id) once, with nothing else (looked up through owner._assign_owner(), faked here with A's signature) for a committed restore confirmed via admin with an owner chosen and no outcome yet, on an AsyncSession of the data directory's database; records sent, link_only or error:<CODE> and never a link (the state has no owner_reset_path: a stray reset_path on A's result is read by nothing, and a stale key in an old state file is dropped); an unexpected failure or A not merged (ImportError) leaves the owner pending, nothing raised, and the next start calls A again and records what it answers; anything else left alone byte for byte; record_owner_outcome(data_dir, stage_id, outcome); reset_owner_assignment clears the outcome only; no email, username or link in the log; B5-1g: a database that is locked for a moment (OperationalError, wrapped or bare) is waited for, A called again up to _ATTEMPTS times (3 or more) with the pause _RETRY_PAUSE_SECONDS, the outcome recorded when a try gets through; a lock that never frees ends after exactly _ATTEMPTS calls with nothing recorded (the next start tries again); any other failure and A's own refusal never retried; the session handed to A waits at least 5000 ms for a lock; B5-1j (g): the filters on confirmed_via are gone: assign_restored_owner, owner_pending, owner_assignment_problem and reset_owner_assignment hold for a restore confirmed via cli or panel as for the app's, and leave alone a restore where nobody was picked (owner_outcome none, no owner)",
+        # PURE: every data directory under tmp_path, a migrated copy of the staging tests' database (alembic in a process
+        # of its own), this process in test mode on that folder; A's function a fake. No lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-owner-real",
+        services_backup_owner_real,
+        name="Restore Owner, real call",
+        desc="The owner's account after a restore with A's real instance_owner.assign_owner_and_send_reset (lot B5-1e), nothing played but the mail (instance_owner.send_email an outbox, the SMTP transport a tripwire): a real backup at the migration head confirmed from the app in the managed profile, applied and committed, then owner.assign_restored_owner. The chosen account gets the owner's address, administrator, active, is_instance_owner (no other account marked), its password opens nothing; ONE live password-reset link (a planted one dated in the future is gone), one email to the owner, outcome sent; the token is in no restore.json, read_restore, backup pending (with and without --json) or log line; email failing or SMTP off gives link_only with the link in A's instance-log line only; another account holding the address gives error:EMAIL_TAKEN, owner_assignment_problem EMAIL_TAKEN, the database unchanged, and after the administrator frees it backup pending --recover owner (nobody serving) assigns the owner; a crash between the call and the record makes the next start call A again (old link dead, one live link, a second email, outcome recorded); A receives the chosen id only, on a fresh session (no since, no now)",
+        # PURE: the data directory under tmp_path, the restore real, a migrated copy of the staging tests' database (alembic in
+        # a process of its own); only the mail is fake. No lane DB, no server, no network.
         isolation="pure",
     )
     add_test(

@@ -77,10 +77,37 @@
     "restoreInterrupted": {
       "title": "Il ripristino si è fermato a metà",
       "message": "LibreFolio non sa quali dati contiene, quindi non ne mostra nessuno finché il tuo amministratore non sceglie come procedere.",
-      "adminHint": "Amministratore: ferma LibreFolio, poi esegui ./dev.py backup pending per vedere cosa è successo e --recover per rimettere i dati di prima.",
+      "adminHint": "Amministratore: ferma LibreFolio, poi esegui ./dev.py backup pending per vedere cosa è successo e --recover previous per rimettere i dati di prima.",
       "docs": "Come recuperare",
       "autoReload": "La pagina si ricarica da sola quando LibreFolio torna a servire i dati.",
-      "support": "Scrivi all'assistenza"
+      "support": "Scrivi all'assistenza",
+      "ownerTitle": "L'account del titolare non è pronto",
+      "ownerMessage": "I dati sono stati ripristinati, ma il titolare non ha ancora il suo account: LibreFolio non ne mostra nessuno finché il tuo amministratore non lo imposta.",
+      "ownerAdminHint": "Amministratore: ferma LibreFolio, esegui ./dev.py backup pending --recover owner per impostare di nuovo l'account del titolare, poi riavvia LibreFolio."
+    },
+    "userLimit": {
+      "title": "Più utenti di quelli del tuo piano",
+      "description": "Questa istanza ha {active} utenti attivi ma il piano ne consente {max}. Scegli chi mantiene l'accesso: gli altri vengono disattivati, non cancellati, quindi nessun dato va perso, e potrai riattivarli se si libera un posto.",
+      "counter": "{chosen} scelti su {max}",
+      "administrator": "Amministratore",
+      "protectedOwner": "Titolare dell'istanza: resta sempre",
+      "protectedYou": "Tu: stai scegliendo",
+      "brokersAlone": "Unico titolare di {count} broker: gli altri ne perdono l'accesso",
+      "noAdministrator": "Mantieni almeno un amministratore.",
+      "invitesCancelled": "{count} invito/i in sospeso verranno annullati per fare posto.",
+      "confirm": "Disattiva gli altri e continua",
+      "backupTitle": "Scarica prima un backup completo",
+      "waitingTitle": "L'amministratore deve ancora scegliere chi mantiene l'accesso",
+      "waitingDescription": "Questa istanza ha più utenti attivi di quelli consentiti dal piano. Finché un amministratore non sceglie chi mantiene l'accesso, nessun altro può usarla. Riprova più tardi.",
+      "checkAgain": "Controlla di nuovo",
+      "error": {
+        "load": "Non è stato possibile caricare l'elenco. Riprova.",
+        "generic": "Non è stato possibile salvare la scelta. Riprova.",
+        "UNKNOWN_USER": "Uno degli account scelti non è più attivo. Ricarica la pagina.",
+        "TOO_MANY_KEPT": "Hai scelto troppi account per il piano.",
+        "PROTECTED_MISSING": "Il titolare dell'istanza, o tu, deve restare.",
+        "NO_ADMIN_KEPT": "Almeno un amministratore deve mantenere l'accesso."
+      }
     }
   }
 }

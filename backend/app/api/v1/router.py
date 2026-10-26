@@ -29,6 +29,7 @@ from backend.app.api.v1 import (
     users,
 )
 from backend.app.api.v1.instance_block import refuse_when_awaiting_restore, refuse_when_blocked, refuse_when_restore_interrupted
+from backend.app.api.v1.user_limit import refuse_when_over_limit
 from backend.app.api.v1.utilities import router as utilities_router
 from backend.app.logging_config import get_logger
 from backend.app.services.platform.hosting_panel.access import HOSTING_PANEL_TAG
@@ -37,8 +38,10 @@ logger = get_logger(__name__)
 
 # On a blocked instance, every route below answers 423 but those of instance_block.ALLOWED_WHEN_BLOCKED; while the instance
 # awaits its restore (H-62), but those of instance_block.ALLOWED_WHEN_AWAITING_RESTORE; while its restore state cannot be
-# read (B-33), but those of instance_block.ALLOWED_WHEN_RESTORE_INTERRUPTED. The block is read first
-router = APIRouter(dependencies=[Depends(refuse_when_blocked), Depends(refuse_when_awaiting_restore), Depends(refuse_when_restore_interrupted)])
+# read (B-33), but those of instance_block.ALLOWED_WHEN_RESTORE_INTERRUPTED; while the active accounts outnumber
+# LIBREFOLIO_MAX_USERS (A5-7), but those of user_limit.ALLOWED_WHEN_OVER_LIMIT (and, for an administrator, its ADMIN list).
+# The block is read first, this guard last
+router = APIRouter(dependencies=[Depends(refuse_when_blocked), Depends(refuse_when_awaiting_restore), Depends(refuse_when_restore_interrupted), Depends(refuse_when_over_limit)])
 
 # Include sub-routers
 router.include_router(auth.router)  # Auth first (no prefix, uses /auth)

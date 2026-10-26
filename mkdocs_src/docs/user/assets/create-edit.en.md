@@ -53,7 +53,7 @@ provider, its price history starts downloading right away.
 **premium** sources first (those your instance vouches for, such as licensed data), then
 **community** ones, each group by priority. None of the providers that come with LibreFolio is
 premium, and all have the same priority: the results appear as the providers answer, unless your
-administrator [changes the order](../../admin/configuration.md#provider-order).
+administrator [changes the order](../../admin/configuration_accounts.md#provider-order).
 
 When the search included a premium source, the list has two parts:
 

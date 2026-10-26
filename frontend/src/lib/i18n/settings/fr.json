@@ -308,7 +308,7 @@
         "LAST_ADMIN": "Le dernier administrateur actif ne peut être ni désactivé ni rétrogradé.",
         "USER_LIMIT_REACHED": "L'instance est pleine : libérez d'abord une place (désactivez ou supprimez un compte, ou révoquez une invitation).",
         "REGISTRATION_DISABLED": "Les inscriptions sont fermées : aucune invitation ne peut être créée.",
-        "ACCOUNT_PROTECTED": "Ce compte est protégé : personne ne peut le désactiver, le rétrograder ou le supprimer.",
+        "ACCOUNT_PROTECTED": "Ce compte est protégé : personne ne peut, d'ici, le désactiver, le rétrograder, le supprimer, réinitialiser son mot de passe ni fermer ses sessions. Si quelque chose doit changer, demandez à l'hébergeur de cette instance.",
         "SELF_DELETION": "Supprimez votre propre compte depuis l'onglet Profil.",
         "DEMOTE_FIRST": "Un administrateur doit être rétrogradé avant d'être supprimé.",
         "NOT_FOUND": "Ce compte n'existe plus : la liste est rechargée.",
@@ -419,6 +419,11 @@
       },
       "blockedScript": "Cet onglet du navigateur a bloqué un script que LibreFolio n'a pas envoyé ({sources}) : un proxy, un CDN ou une extension du navigateur l'ajoute. Désactivez cette injection pour ce site.",
       "guide": "Guide"
+    },
+    "protectedEmail": {
+      "title": "Vous ne pouvez pas changer l'e-mail ici",
+      "message": "C'est l'adresse e-mail du titulaire de l'abonnement : elle ne peut pas être changée depuis LibreFolio. Demandez à l'hébergeur de cette instance de la changer.",
+      "support": "Contacter l'assistance"
     }
   }
 }

@@ -185,6 +185,17 @@ class RestoreState(BaseModel):
     waiting: WaitReason | None = None
     #: The session version every account got at the commit: the restore time in milliseconds (decision 40).
     session_version: int | None = None
+    #: B5-1: the account of the backup the owner chose (a restore confirmed from the app of a managed instance), or that
+    #: B5-1j picked (confirmed on the command line or by the hosting panel); what the first start did with it (``sent``,
+    #: ``link_only`` or ``error:<CODE>``), or ``none`` recorded at the confirmation when nobody could be picked. The
+    #: owner's link is never kept: for ``link_only`` A writes it in the instance log.
+    owner_user_id: int | None = None
+    owner_outcome: str | None = None
+    #: B5-1d: the largest id of the one-time links the restored database held right after the swap, taken by this
+    #: process. The commit revokes the links up to it; a link with a greater id was issued by this start (the first
+    #: administrator's setup link, for data without an account) and is kept. ``None``: not known, every link is revoked.
+    #: Never a date of the database: whoever prepared the backup writes those.
+    token_watermark: int | None = None
 
 
 class RestoreStateError(RuntimeError):
@@ -221,6 +232,39 @@ class RestoreAlreadyPendingError(RestoreStateError):
     """Another restore waits for the next start, or is being applied."""
 
     code = "restore_already_pending"
+
+
+class RestoreOwnerChoiceRequiredError(RestoreStateError):
+    """A restore confirmed from the app of a managed instance must name the owner's account (B5-1)."""
+
+    code = "owner_choice_required"
+
+
+class RestoreOwnerEmailNotSetError(RestoreStateError):
+    """A managed instance without ``LIBREFOLIO_ADMIN_EMAIL``: no owner to give an account to (B5-1)."""
+
+    code = "owner_email_not_set"
+
+
+class RestoreOwnerChoiceInvalidError(RestoreStateError):
+    """The account named is not one the owner may choose: not an active administrator of the backup, or another one than
+    the account that already holds the owner's address (B5-1)."""
+
+    code = "owner_choice_invalid"
+
+
+class RestoreOwnerConflictError(RestoreStateError):
+    """The backup holds what would defeat the owner's assignment: two accounts on one address or one name, or the owner's
+    address as another account's name (B5-1). Its restore to a managed instance that has the owner's address is refused,
+    from the app, the command line or the hosting panel (B5-1j), with what to do."""
+
+    code = "owner_conflict"
+
+
+class RestoreOwnerChoiceNotApplicableError(RestoreStateError):
+    """An owner's account named where none is chosen: an instance that is not managed (B5-1)."""
+
+    code = "owner_choice_not_applicable"
 
 
 class RestoreNotPendingError(RestoreStateError):
@@ -265,6 +309,13 @@ class RestoreInUseError(RestoreStateError):
     serve data whose restore is not committed."""
 
     code = "restore_in_use"
+
+
+class RestoreOwnerNotFailedError(RestoreStateError):
+    """There is no failed assignment of the owner's account to try again (B5-1b): the last restore from the app has no
+    owner named, or its assignment is not in error."""
+
+    code = "owner_not_failed"
 
 
 def _now() -> datetime:
@@ -563,7 +614,183 @@ def _remove_leftovers(data_dir: Path, stage_id: str | None) -> None:
 # =============================================================================
 
 
-def confirm_restore(stage_id: str, *, confirmed_by: str, confirmed_via: ConfirmedVia = "admin", data_dir: Path | None = None, now: datetime | None = None) -> RestoreState:
+def owner_choices(candidates, owner_email: str) -> tuple[frozenset[int], int | None]:
+    """The accounts the owner may choose among a report's candidates, and the one they must choose: the account that
+    already holds their address, when the backup has it (no other account can take it); otherwise any active
+    administrator."""
+    from backend.app.services.accounts.user_service import same_email  # noqa: PLC0415
+
+    forced = next((candidate.user_id for candidate in candidates if candidate.email is not None and same_email(candidate.email, owner_email)), None)
+    if forced is not None:
+        return frozenset({forced}), forced
+    return frozenset(candidate.user_id for candidate in candidates if candidate.is_superuser and candidate.is_active), None
+
+
+@dataclass(frozen=True)
+class OwnerPick:
+    """The account a restore with nobody to ask gives the owner (B5-1j): ``how`` is ``holds_address`` (it already has the
+    owner's address), ``marked`` (the one active administrator the backup marks as its owner) or ``none``."""
+
+    user_id: int | None
+    username: str | None
+    how: Literal["holds_address", "marked", "none"]
+
+
+def pick_owner(candidates, owner_email: str) -> OwnerPick:
+    """The owner's account of a restore confirmed on the command line or by the hosting panel of a managed instance, from
+    the report's candidates, in this order: (1) the account that holds the owner's address, whatever its role (the
+    comparison ``owner_choices`` makes); (2) the one active administrator the backup marks as its owner; (3) nobody. Two
+    marked, or a marked account that is not an active administrator, is nobody: never the first by id. The mark is written
+    by whoever prepared the backup, so it only suggests which account; the restore closes that account's password whatever
+    the choice, and the owner's link goes to ``LIBREFOLIO_ADMIN_EMAIL``, never to an address of the backup."""
+    from backend.app.services.accounts.user_service import same_email  # noqa: PLC0415
+
+    holder = next((candidate for candidate in candidates if candidate.email is not None and same_email(candidate.email, owner_email)), None)
+    if holder is not None:
+        return OwnerPick(holder.user_id, holder.username, "holds_address")
+    marked = [candidate for candidate in candidates if candidate.is_instance_owner and candidate.is_superuser and candidate.is_active]
+    if len(marked) == 1:
+        return OwnerPick(marked[0].user_id, marked[0].username, "marked")
+    return OwnerPick(None, None, "none")
+
+
+def owner_plan(report) -> OwnerPick | None:
+    """What a restore with nobody to ask does about the owner, for the command line's report: ``None`` where it does
+    nothing (not a managed instance, or no ``LIBREFOLIO_ADMIN_EMAIL``)."""
+    from backend.app.services.platform.instance_backup.owner import configured_owner_email, owner_choice_required  # noqa: PLC0415 — owner imports this module
+
+    owner_email = configured_owner_email() if owner_choice_required() else None
+    return None if owner_email is None else pick_owner(report.owner_candidates, owner_email)
+
+
+#: The outcome recorded at the confirmation of a restore that found nobody for the owner: ``backup pending`` says so.
+OWNER_OUTCOME_NONE = "none"
+
+#: What to do about a backup the owner's assignment would refuse: said in the refusal.
+_OWNER_CONFLICT_ADVICE = "remove the duplicate account or free the address in the instance the backup comes from, make a new backup, and check it again"
+
+
+def _check_owner_report(report, owner_email: str) -> None:
+    """The report must have been read for this owner's address (the candidates depend on it) and hold nothing that would
+    defeat the owner's assignment; a refusal says what to do."""
+    from backend.app.services.accounts.user_service import email_fold  # noqa: PLC0415
+
+    if report.owner_email_checked is None or email_fold(report.owner_email_checked) != email_fold(owner_email):
+        raise RestoreStageOutdatedError("The owner's address changed since the check: check the archive again")
+    if report.owner_conflicts:
+        raise RestoreOwnerConflictError(f"The backup cannot give the owner their account: {', '.join(report.owner_conflicts)}. To restore it: {_OWNER_CONFLICT_ADVICE}")
+
+
+def _check_owner_choice(report, confirmed_via: str, owner_user_id: int | None) -> tuple[int | None, str | None]:
+    """The owner's account of a confirmation, and the outcome to record at once (B5-1, B5-1j).
+
+    From the app of a managed instance (``admin``): the owner's choice, mandatory and one of the report's. By the hosting
+    panel or on the command line of a managed instance with ``LIBREFOLIO_ADMIN_EMAIL`` set: nobody chooses, so the
+    account is picked from the report (``pick_owner``); ``none`` is recorded when nobody can be. Elsewhere none, and a
+    choice named is refused. Where the account is chosen or picked, the report must have been read for this owner's
+    address, and must hold no conflict."""
+    from backend.app.services.platform.instance_backup.owner import configured_owner_email, owner_choice_required  # noqa: PLC0415 — owner imports this module
+
+    by_the_app = confirmed_via == "admin"
+    if owner_user_id is not None and (not owner_choice_required() or not by_the_app):
+        raise RestoreOwnerChoiceNotApplicableError("No owner's account is chosen for this restore")
+    if not owner_choice_required():
+        return None, None
+    owner_email = configured_owner_email()
+    if owner_email is None:
+        if by_the_app:
+            raise RestoreOwnerEmailNotSetError("LIBREFOLIO_ADMIN_EMAIL is not set: no owner to give an account to")
+        return None, None  # nobody to ask and no trusted address: as before, no owner is named
+    _check_owner_report(report, owner_email)
+    if not by_the_app:
+        picked = pick_owner(report.owner_candidates, owner_email)
+        if picked.user_id is None:
+            logger.warning("No account of the backup can be taken for the owner: the restore goes on without one; name one afterwards with ./dev.py user reassign-owner <username>")
+            return None, OWNER_OUTCOME_NONE
+        return picked.user_id, None
+    if owner_user_id is None:
+        raise RestoreOwnerChoiceRequiredError("Choose the account of the backup that becomes the owner's")
+    allowed, _forced = owner_choices(report.owner_candidates, owner_email)
+    if owner_user_id not in allowed:
+        raise RestoreOwnerChoiceInvalidError("This account cannot become the owner's: choose one the report offers")
+    return owner_user_id, None
+
+
+def owner_assignment_problem(data_dir: Path | None = None) -> str | None:
+    """What still keeps the owner from their account after a restore that names one (B5-1, B5-1j), for the restore guard (H):
+    ``pending`` until the first start gave it, the code of the refusal when it could not; ``None`` when there is nothing
+    to give (no such restore, done, a state that cannot be read: ``restore_state_problem`` says that one). Never raises."""
+    try:
+        state = read_restore(data_dir or get_data_dir())
+    except Exception:  # noqa: BLE001 — a probe: an unreadable state is restore_state_problem's to report
+        return None
+    if state is None or state.status != "committed" or state.owner_user_id is None:
+        return None
+    if state.owner_outcome is None:
+        return "pending"
+    if state.owner_outcome.startswith("error:"):
+        return state.owner_outcome.removeprefix("error:")
+    return None
+
+
+def owner_pending(data_dir: Path) -> tuple[str, int] | None:
+    """The committed restore whose owner is still to be set: its stage and the chosen account; ``None`` otherwise."""
+    if not _state_present(data_dir, "restore-owner"):
+        return None
+    state = _state_at_start(data_dir)
+    if state is None or state.status != "committed" or state.owner_user_id is None or state.owner_outcome is not None:
+        return None
+    return state.stage_id, state.owner_user_id
+
+
+def record_owner_outcome(data_dir: Path, stage_id: str, outcome: str) -> RestoreState | None:
+    """Record what the start did with the owner's account, once: a later record of the same restore changes nothing."""
+    with _apply_lock(data_dir):
+        state = _read_state(data_dir)
+        if state is None or state.stage_id != stage_id or state.owner_outcome is not None:
+            return state
+        state = state.model_copy(update={"owner_outcome": outcome})
+        _write_state(data_dir, state)
+        return state
+
+
+def reset_owner_assignment(data_dir: Path | None = None) -> bool:
+    """Clear the recorded error of the owner's assignment so it is tried again (B5-1b): ``backup pending --recover owner``.
+
+    An outcome of ``error:<CODE>`` is terminal (``owner_pending`` does not retry it), and the restore guard serves no data
+    while it stands. Only that outcome is cleared; nothing else of the state changes. Whether a server
+    serves the data directory: it only retries at its start, so then nothing is called here.
+
+    ``RestoreOwnerNotFailedError`` when there is nothing to clear (nothing is written); ``RestoreInUseError`` while
+    another process is setting the owner now. Lock order: the owner's lock, then the apply lock.
+    """
+    from backend.app.services.platform.instance_backup.owner import held_owner_lock  # noqa: PLC0415 — owner imports this module
+
+    data_dir = data_dir or get_data_dir()
+    if _restore_folder(data_dir) is not True:
+        raise RestoreOwnerNotFailedError("There is no restore here: nothing to try again")
+    with held_owner_lock(data_dir) as held:
+        if not held:
+            raise RestoreInUseError("The owner's account is being set by another process: run the command again in a moment")
+        with _apply_lock(data_dir), _exclusive_serving_lock(data_dir) as served:
+            state = _read_state(data_dir)
+            if state is None or state.status != "committed" or state.owner_user_id is None or state.owner_outcome is None or not state.owner_outcome.startswith("error:"):
+                raise RestoreOwnerNotFailedError("The owner's account has no failed assignment: nothing to try again")
+            code = state.owner_outcome.removeprefix("error:")
+            _write_state(data_dir, state.model_copy(update={"owner_outcome": None}))
+    logger.warning("The failed assignment of the owner's account was cleared: it is tried again", stage_id=state.stage_id, user_id=state.owner_user_id, code=code)
+    return served
+
+
+def confirm_restore(
+    stage_id: str,
+    *,
+    confirmed_by: str,
+    confirmed_via: ConfirmedVia = "admin",
+    owner_user_id: int | None = None,
+    data_dir: Path | None = None,
+    now: datetime | None = None,
+) -> RestoreState:
     """Confirm the restore of a checked copy: it waits for the next start of the server, which applies it.
 
     ``BackupPathError`` when ``.restore`` is a link or a file; then ``RestoreStageMissingError``,
@@ -590,6 +817,7 @@ def confirm_restore(stage_id: str, *, confirmed_by: str, confirmed_via: Confirme
     head = alembic_head_revision()
     if head is not None and head != report.head_revision:
         raise RestoreStageOutdatedError("LibreFolio was updated since the check: check the archive again")
+    owner_user_id, owner_outcome = _check_owner_choice(report, confirmed_via, owner_user_id)
     ensure_private_dir(restore_dir(data_dir), data_dir)
     with _apply_lock(data_dir):
         current = _read_state(data_dir)
@@ -606,6 +834,8 @@ def confirm_restore(stage_id: str, *, confirmed_by: str, confirmed_via: Confirme
             backup_created_at=report.backup.created_at,
             backup_app_version=report.backup.app_version,
             action=report.action,
+            owner_user_id=owner_user_id,
+            owner_outcome=owner_outcome,
         )
         _write_state(data_dir, state)
         # A new restore: no ticket of an older one reads it.
@@ -791,7 +1021,7 @@ def _swap(data_dir: Path, state: RestoreState, boot: Boot, now: datetime) -> Res
             return state
         try:
             _move_into_place(data_dir, copy, swap)
-            applied = journal.model_copy(update={"status": "applied", "applied_at": now})
+            applied = journal.model_copy(update={"status": "applied", "applied_at": now, "token_watermark": _largest_token_id(database_path(data_dir))})
             _write_state(data_dir, applied)
         except (OSError, BackupPathError) as exc:
             logger.error("The restore could not move the folders into place: the data of before is put back", error=str(exc))
@@ -901,7 +1131,7 @@ def finish_pending_restore(data_dir: Path | None = None, *, boot: Boot | None = 
             raise RestoreInUseError("The restore found here was applied by another start of LibreFolio")
         if state.status == "applied" and state.boot == boot:
             now = now or _now()
-            value, revoked = _close_the_way_in(data_dir, now)
+            value, revoked = _close_the_way_in(data_dir, now, state.owner_user_id, stage_id=state.stage_id, token_watermark=state.token_watermark)
             state = state.model_copy(update={"status": "committed", "finished_at": now, "session_version": value})
             _write_state(data_dir, state)
             logger.warning("Restore committed: every session ended, the backup's one-time links revoked", stage_id=state.stage_id, session_version=value, links_revoked=revoked)
@@ -910,7 +1140,7 @@ def finish_pending_restore(data_dir: Path | None = None, *, boot: Boot | None = 
         return state
 
 
-def _close_the_way_in(data_dir: Path, now: datetime) -> tuple[int, int]:
+def _close_the_way_in(data_dir: Path, now: datetime, owner_user_id: int | None = None, *, stage_id: str | None = None, token_watermark: int | None = None) -> tuple[int, int]:
     """Close in the restored database every way in that was open before the restore, in one transaction; the session
     version given to every account, and how many one-time links were revoked.
 
@@ -918,21 +1148,99 @@ def _close_the_way_in(data_dir: Path, now: datetime) -> tuple[int, int]:
       database holds when the clock is behind it: every session token issued before, by either database, is refused
       (decision 40). A time, not a counter: a password change afterwards still adds one.
     - Every one-time link still live in the backup (not consumed, not revoked: invitation, password reset, email
-      verification, admin setup) is revoked at the restore time, as ``token_service.revoke_tokens`` revokes one.
+      verification, admin setup) is revoked at the restore time, as ``token_service.revoke_tokens`` revokes one. Those
+      are the links up to ``token_watermark``, the largest id the database held at the swap (B5-1d): a link with a
+      greater id was issued by this start, before the commit, and stays (the setup link of the first administrator of
+      data without an account). Without a watermark every live link is revoked.
+    - The account the owner chose (a restore confirmed from the app of a managed instance, B5-1) is closed:
+      ``_close_owner_account``.
     """
+    unusable = _unusable_hash() if owner_user_id is not None else None
+    owner_email = None
+    if owner_user_id is not None:
+        from backend.app.services.platform.instance_backup.owner import configured_owner_email  # noqa: PLC0415 — owner imports this module
+
+        owner_email = configured_owner_email()
     restore_ms = int(now.timestamp() * 1000)
     before = _largest_session_version(previous_dir(data_dir) / DATABASE_ENTRY)
     # As SQLAlchemy stores a datetime in SQLite: UTC, without offset.
     revoked_at = now.astimezone(UTC).replace(tzinfo=None).isoformat(sep=" ", timespec="microseconds")
     database = database_path(data_dir)
     with closing(sqlite3.connect(f"{database.resolve().as_uri()}?mode=rw", uri=True, timeout=30)) as conn:
+        conn.execute("PRAGMA trusted_schema = OFF")
         conn.execute("PRAGMA busy_timeout = 30000")
         restored = int(conn.execute("SELECT COALESCE(MAX(session_version), 0) FROM users").fetchone()[0])
         value = max(restore_ms, restored + 1, before + 1)
         with conn:
             conn.execute("UPDATE users SET session_version = ?", (value,))
-            revoked = conn.execute("UPDATE account_tokens SET revoked_at = ? WHERE consumed_at IS NULL AND revoked_at IS NULL", (revoked_at,)).rowcount
+            if token_watermark is None:
+                revoked = conn.execute("UPDATE account_tokens SET revoked_at = ? WHERE consumed_at IS NULL AND revoked_at IS NULL", (revoked_at,)).rowcount
+            else:
+                # An id that is not an integer is never one this start issued: revoked with the rest.
+                revoked = conn.execute(
+                    "UPDATE account_tokens SET revoked_at = ? WHERE consumed_at IS NULL AND revoked_at IS NULL AND NOT (typeof(id) = 'integer' AND id > ?)",
+                    (revoked_at, token_watermark),
+                ).rowcount
+            _clear_owner_flag(conn)
+            if owner_user_id is not None:
+                _close_owner_account(conn, owner_user_id, unusable, owner_email, stage_id)
     return value, revoked
+
+
+def _unusable_hash() -> str:
+    """The hash that no password produces, workstream A's (``auth_service.unusable_password_hash``): one home for it."""
+    from backend.app.services.accounts import auth_service  # noqa: PLC0415 — accounts import the platform services
+
+    return auth_service.unusable_password_hash()
+
+
+def _clear_owner_flag(conn: sqlite3.Connection) -> None:
+    """Nobody is the instance's owner at the restore: the flag ``users.is_instance_owner`` (workstream A's migration) is
+    written by whoever prepared the backup, so it is cleared on every account. The owner is then the account this restore
+    assigns (``_close_owner_account``) or, without one, the one the first start derives from ``LIBREFOLIO_ADMIN_EMAIL``
+    (A's owner sync): otherwise an owner-change link could go to the real owner's address for an account the backup's
+    author flagged."""
+    if "is_instance_owner" in {row[1] for row in conn.execute("PRAGMA table_info(users)")}:
+        conn.execute("UPDATE users SET is_instance_owner = 0 WHERE is_instance_owner != 0")
+
+
+def _close_owner_account(conn: sqlite3.Connection, user_id: int, unusable: str, owner_email: str | None, stage_id: str | None) -> None:
+    """The account the owner chose, in the commit's transaction (B5-1): from the first request on the restored data,
+    whoever prepared the backup cannot sign in as it. Its password becomes unusable; when the owner's address is set and
+    no other account holds it, the account takes it and becomes an active administrator (and the instance's owner, where
+    the column exists). The first start then sends the owner the link (``owner.assign_restored_owner``). Never violates
+    the unique index on the address: checked first, in the same transaction. No address in a log line."""
+    if conn.execute("UPDATE users SET hashed_password = ? WHERE id = ?", (unusable, user_id)).rowcount != 1:
+        logger.warning("The account the owner chose is not in the restored data: nothing to close", stage_id=stage_id, user_id=user_id)
+        return
+    assigned = False
+    if owner_email is not None:
+        if conn.execute("SELECT 1 FROM users WHERE id != ? AND lower(email) = lower(?) LIMIT 1", (user_id, owner_email)).fetchone():
+            logger.warning("Another account of the restored data holds the owner's address: only the chosen account's password is closed", stage_id=stage_id, user_id=user_id)
+        else:
+            conn.execute("UPDATE users SET email = ?, is_superuser = 1, is_active = 1 WHERE id = ?", (owner_email, user_id))
+            # The column of workstream A's migration: one owner per instance, the configured one (cleared on all before).
+            if "is_instance_owner" in {row[1] for row in conn.execute("PRAGMA table_info(users)")}:
+                conn.execute("UPDATE users SET is_instance_owner = 1 WHERE id = ?", (user_id,))
+            assigned = True
+    logger.warning("The account the owner chose is closed: its password unusable until the owner's link", stage_id=stage_id, user_id=user_id, assigned=assigned)
+
+
+def _largest_token_id(database: Path) -> int | None:
+    """The largest id of the one-time links of a database, read-only: 0 when it has none or no such table; ``None`` when it
+    cannot be read or an id is not an integer (the commit then revokes every link)."""
+    try:
+        if not stat.S_ISREG(database.lstat().st_mode):
+            return None
+        with closing(sqlite3.connect(f"{database.resolve().as_uri()}?mode=ro", uri=True)) as conn:
+            conn.execute("PRAGMA trusted_schema = OFF")
+            if conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'account_tokens'").fetchone() is None:
+                return 0
+            if conn.execute("SELECT 1 FROM account_tokens WHERE typeof(id) != 'integer' LIMIT 1").fetchone() is not None:
+                return None
+            return int(conn.execute("SELECT COALESCE(MAX(id), 0) FROM account_tokens").fetchone()[0])
+    except (OSError, sqlite3.Error, TypeError, ValueError):
+        return None
 
 
 def _largest_session_version(database: Path) -> int:
@@ -941,6 +1249,7 @@ def _largest_session_version(database: Path) -> int:
         if not stat.S_ISREG(database.lstat().st_mode):
             return 0
         with closing(sqlite3.connect(f"{database.resolve().as_uri()}?mode=ro", uri=True)) as conn:
+            conn.execute("PRAGMA trusted_schema = OFF")
             return int(conn.execute("SELECT COALESCE(MAX(session_version), 0) FROM users").fetchone()[0])
     except (OSError, sqlite3.Error, TypeError, ValueError):
         return 0

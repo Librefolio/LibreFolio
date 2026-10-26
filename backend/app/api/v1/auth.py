@@ -12,6 +12,7 @@ import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.api import account_protection
 from backend.app.config import get_settings
 from backend.app.db.models import AccountTokenPurpose, User
 from backend.app.db.session import get_session_generator
@@ -448,7 +449,9 @@ async def update_profile(
     the account over. It is checked before anything else, so whoever lacks it cannot probe which addresses are taken.
     The change ends every other session of the account; this one receives a new session cookie and carries on. When
     email works, the address the account had before gets a notice after the answer (workstream E), which shows nothing
-    of the new one (N62).
+    of the new one (N62). The protected account (the paying administrator of a managed instance) cannot change its
+    email: 409 ``ACCOUNT_PROTECTED`` before the password is asked or anything is validated, and nothing of the request
+    is applied; its username and other fields stay free.
     """
     # Nothing to update
     if request.username is None and request.email is None:
@@ -456,6 +459,9 @@ async def update_profile(
 
     # The same address in another case is no change (decision P18): no password, no session ended.
     email_changes = request.email is not None and not user_service.same_email(request.email, current_user.email)
+    # A protected account's address is the host's to change (A5-1): before the password, the throttle and the service
+    if email_changes and (refusal := account_protection.protection_refusal(current_user, account_protection.EMAIL_CHANGE_MESSAGE)):
+        raise refusal
     # Read before the change: the account below is the same object, and the notice goes to this address.
     old_email = current_user.email
     if email_changes:
@@ -550,10 +556,15 @@ async def delete_own_account(
     Cannot be undone.
 
     Constraints:
+    - Cannot delete the protected account (the paying administrator of a managed instance): 409 ``ACCOUNT_PROTECTED``,
+      before any other answer
     - Cannot delete if you are the last active administrator (an inactive one cannot log in): 400 ``LAST_ADMIN``,
       decided under SQLite's write lock (A-52); an account deleted meanwhile answers 404 (A-54)
     - Session is invalidated after deletion
     """
+    # A protected account is not deleted from here (A5-1): before the lock and before the last-administrator rule
+    if refusal := account_protection.protection_refusal(current_user, account_protection.OWN_DELETION_MESSAGE):
+        raise refusal
     # Decided under SQLite's write lock, from the account as it is then (A-52): of the last two active administrators
     # deleting their own accounts at once, the second sees the first gone
     if not await user_service.refreshed_under_lock(session, current_user):

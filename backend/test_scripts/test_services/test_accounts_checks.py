@@ -43,6 +43,7 @@ the audit say what the audit did instead.
 from __future__ import annotations
 
 import importlib
+import inspect
 import json
 import os
 import subprocess
@@ -51,6 +52,7 @@ import textwrap
 from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
+from typing import Any
 
 import pytest
 
@@ -250,6 +252,51 @@ def _evaluate(check: Callable[[], ConfigCheck]) -> ConfigCheck:
         pytest.fail(f"{check.__name__}() must never raise; with {LOGIN_LIMIT_VARIABLE}={os.environ.get(LOGIN_LIMIT_VARIABLE)!r} it raised {exc!r}", pytrace=False)
 
 
+# =============================================================================
+# H5-4: the owner's email change check, ``accounts.owner_email_change``
+# =============================================================================
+
+OWNER_CHECK_ID = "accounts.owner_email_change"
+OWNER_KEY_PREFIX = "auth.checks.ownerEmailChange."
+INSTANCE_OWNER_MODULE = "backend.app.services.accounts.instance_owner"
+#: The three states ``instance_owner.startup_change_state()`` gives, and what the check makes of each: severity and key.
+OWNER_STATES = [
+    pytest.param(None, "ok", OWNER_KEY_PREFIX + "ok", id="none-ok"),
+    pytest.param("pending", "info", OWNER_KEY_PREFIX + "pending", id="pending-info"),
+    pytest.param("blocked", "warning", OWNER_KEY_PREFIX + "blocked", id="blocked-warning"),
+]
+#: Canaries the check must never show: an address and a user name, in the variable that names the owner.
+OWNER_ADDRESS_CANARY = "h54-canary-owner@canary.example"
+OWNER_NAME_CANARY = "h54-canary-owner-username"
+
+
+def _owner_check() -> Callable[[], ConfigCheck]:
+    """``checks.check_owner_email_change``, or a red of lot H5-4 naming it."""
+    module = _module_or_red(CHECKS_MODULE)
+    check = getattr(module, "check_owner_email_change", None)
+    if check is None:
+        pytest.fail(f"red until H5-4: {CHECKS_MODULE} has no check_owner_email_change", pytrace=False)
+    return check
+
+
+def _stand_in_for_state(monkeypatch: pytest.MonkeyPatch, state: Any) -> None:
+    """``instance_owner.startup_change_state`` answers ``state`` — or raises it, when it is an exception — until the test ends.
+    The check must read it through the module attribute at each call, or this patch never reaches it."""
+    module = importlib.import_module(INSTANCE_OWNER_MODULE)
+
+    def stand_in() -> Any:
+        if isinstance(state, BaseException):
+            raise state
+        return state
+
+    monkeypatch.setattr(module, "startup_change_state", stand_in)
+
+
+def _owner_records(records: list[tuple[str, str, dict]]) -> list[tuple[str, str, dict]]:
+    """The records of the audit about the owner's email change."""
+    return [record for record in records if record[2].get("check") == OWNER_CHECK_ID]
+
+
 def _login_limit_records(records: list[tuple[str, str, dict]]) -> list[tuple[str, str, dict]]:
     """The records of the audit about the login limit."""
     return [record for record in records if record[2].get("check") == CHECK_ID]
@@ -348,14 +395,15 @@ def test_the_variable_is_read_at_each_call(monkeypatch: pytest.MonkeyPatch) -> N
 
 # red until A8a
 def test_accounts_config_checks_is_the_login_limit_check_alone() -> None:
-    """LC-001 — C4: ``ACCOUNTS_CONFIG_CHECKS`` is a tuple holding ``check_login_limit`` and nothing else, as E's ``EMAIL_CONFIG_CHECKS`` holds its checks."""
+    """LC-001 — C4, H5-4: ``ACCOUNTS_CONFIG_CHECKS`` is a tuple holding ``check_login_limit`` then ``check_owner_email_change`` (H5-4) and nothing else, as E's ``EMAIL_CONFIG_CHECKS`` holds its checks."""
     print_section("LC-001: ACCOUNTS_CONFIG_CHECKS")
     checks = _checks_module()
+    owner_check = _owner_check()
 
     listed = checks.ACCOUNTS_CONFIG_CHECKS
 
-    assert isinstance(listed, tuple) and listed == (checks.check_login_limit,), f"ACCOUNTS_CONFIG_CHECKS must be (check_login_limit,): {listed!r}"
-    print_success("(check_login_limit,)")
+    assert isinstance(listed, tuple) and listed == (checks.check_login_limit, owner_check), f"ACCOUNTS_CONFIG_CHECKS must be (check_login_limit, check_owner_email_change): {listed!r}"
+    print_success("(check_login_limit, check_owner_email_change)")
 
 
 # red until A8a
@@ -471,7 +519,7 @@ FRESH_ORDERS = [
 # red until A8a
 @pytest.mark.parametrize("order", FRESH_ORDERS)
 def test_each_new_module_can_be_imported_first_in_a_fresh_interpreter(tmp_path: Path, order: tuple[str, ...]) -> None:
-    """LC-007 — C4, in the shape of E's EMK-012: a fresh interpreter — without ``LIBREFOLIO_LOGIN_LIMIT``, test mode, its data directory in ``tmp_path`` — imports ``order`` in that order and exits 0; it reports ``ACCOUNTS_CONFIG_CHECKS`` as ``check_login_limit`` alone, that very object once in ``CONFIG_CHECKS``, and runs it: ``accounts.login_limit``. ``checks`` meets ``config_audit`` half-initialised in neither order.
+    """LC-007 — C4, in the shape of E's EMK-012: a fresh interpreter — without ``LIBREFOLIO_LOGIN_LIMIT``, test mode, its data directory in ``tmp_path`` — imports ``order`` in that order and exits 0; it reports ``ACCOUNTS_CONFIG_CHECKS`` as ``check_login_limit`` then ``check_owner_email_change`` (H5-4), each of those very objects once in ``CONFIG_CHECKS``, and runs the login limit's: ``accounts.login_limit``. ``checks`` meets ``config_audit`` half-initialised in neither order.
 
     First, in this process, the modules of the order exist (red until A8a, with a message rather than a traceback from
     the child). Barrier: no watched module was loaded before the first import, so the order is the one the case names.
@@ -488,7 +536,7 @@ def test_each_new_module_can_be_imported_first_in_a_fresh_interpreter(tmp_path: 
     assert len(reports) == 1, f"the fresh interpreter must report once: {completed.stdout[-4000:]}"
     report = json.loads(reports[0])
     assert report["preloaded"] == [], f"barrier: a fresh interpreter loads no watched module before the first import: {report['preloaded']}"
-    assert report == {"preloaded": [], "listed": ["check_login_limit"], "in_config_checks": [1], "ran": [CHECK_ID]}, f"{' then '.join(order)}: {report}"
+    assert report == {"preloaded": [], "listed": ["check_login_limit", "check_owner_email_change"], "in_config_checks": [1, 1], "ran": [CHECK_ID]}, f"{' then '.join(order)} (H5-4: the owner's check is listed after the login limit's): {report}"
     print_success(f"{' then '.join(order)}: {report['ran']}")
 
 
@@ -570,3 +618,170 @@ def test_guard_the_startup_audit_says_nothing_about_the_limit_while_it_is_on(pla
     _assert_the_audit_ran(logged)
     assert _login_limit_records(logged) == [], f"the limit on is the default: nothing to log about it: {logged}"
     print_success("nothing logged about the limit")
+
+
+# =============================================================================
+# H5-4. check_owner_email_change() — the owner's address change, from memory
+# =============================================================================
+#
+# Contract (lot H5-4, A's request A5-1b): ``checks.CHECK_OWNER_EMAIL_CHANGE = "accounts.owner_email_change"`` and
+# ``check_owner_email_change() -> ConfigCheck``, listed in ``ACCOUNTS_CONFIG_CHECKS`` after ``check_login_limit``. It reads
+# ``instance_owner.startup_change_state()`` at each call (memory only, sync, no database): None is ``ok`` /
+# ``auth.checks.ownerEmailChange.ok``; ``"pending"`` is ``info`` / ``...pending``; ``"blocked"`` is ``warning`` /
+# ``...blocked``. No detail; a fixed English summary at most, with no address and no name. It never raises: a state
+# function that raises gives ``ok``. The startup audit logs the pending and blocked states only.
+
+
+# red until H5-4
+def test_the_owner_check_has_its_id_constant() -> None:
+    """OE-001 — H5-4: ``checks.CHECK_OWNER_EMAIL_CHANGE`` is ``"accounts.owner_email_change"``, as ``CHECK_LOGIN_LIMIT`` names the login limit's."""
+    print_section("OE-001: CHECK_OWNER_EMAIL_CHANGE")
+    module = _module_or_red(CHECKS_MODULE)
+
+    value = getattr(module, "CHECK_OWNER_EMAIL_CHANGE", None)
+
+    assert value == OWNER_CHECK_ID, f"red until H5-4: {CHECKS_MODULE}.CHECK_OWNER_EMAIL_CHANGE must be {OWNER_CHECK_ID!r}: {value!r}"
+    print_success(value)
+
+
+# red until H5-4
+@pytest.mark.parametrize(("state", "severity", "key"), OWNER_STATES)
+def test_the_owner_check_follows_the_startup_state(monkeypatch: pytest.MonkeyPatch, state: str | None, severity: str, key: str) -> None:
+    """OE-002 — H5-4: None is exactly ``ConfigCheck("accounts.owner_email_change", "ok", "auth.checks.ownerEmailChange.ok")`` (no detail, no summary); ``pending`` is ``info`` with ``...pending``; ``blocked`` is ``warning`` with ``...blocked``; no detail for any of them. A summary, when there is one, is a fixed English text."""
+    print_section(f"OE-002: check_owner_email_change with the state {state!r}")
+    check = _owner_check()
+    _stand_in_for_state(monkeypatch, state)
+
+    result = _evaluate(check)
+
+    assert (result.check_id, result.severity, result.i18n_key) == (OWNER_CHECK_ID, severity, key), f"state {state!r}: expected {OWNER_CHECK_ID} / {severity} / {key}, got {result}"
+    assert result.detail == {}, f"the message has no parameter: {result}"
+    if state is None:
+        assert result == ConfigCheck(OWNER_CHECK_ID, "ok", OWNER_KEY_PREFIX + "ok"), f"ok is the bare check: {result}"
+    else:
+        assert isinstance(result.summary, str) and result.summary, f"a state worth logging has an English summary for the log: {result}"
+    print_success(f"{result.severity} {result.i18n_key}")
+
+
+# red until H5-4
+@pytest.mark.parametrize("state", ["pending", "blocked"])
+def test_the_owner_check_never_shows_an_address_or_a_name(monkeypatch: pytest.MonkeyPatch, state: str) -> None:
+    """OE-003 — H5-4: no address and no user name in the result. The variable that names the owner holds an address and the environment a name, both canaries; neither is in any field of the result, and the summary holds no ``@`` at all. Barrier: the result is the state's, not ``ok`` (so the check really ran its branch)."""
+    print_section(f"OE-003: no address in the {state} check")
+    check = _owner_check()
+    monkeypatch.setenv("LIBREFOLIO_ADMIN_EMAIL", OWNER_ADDRESS_CANARY)
+    monkeypatch.setenv("LIBREFOLIO_ADMIN_USERNAME", OWNER_NAME_CANARY)
+    _stand_in_for_state(monkeypatch, state)
+
+    result = _evaluate(check)
+
+    assert result.severity != "ok" and result.i18n_key.endswith(state), f"barrier: the check answered the state {state!r}: {result}"
+    shown = repr(result)
+    assert OWNER_ADDRESS_CANARY not in shown and OWNER_NAME_CANARY not in shown, f"the result shows the owner's address or name: {result}"
+    assert "@" not in shown, f"no address of any kind in the result: {result}"
+    print_success("no address, no name")
+
+
+# red until H5-4
+def test_the_owner_check_reads_the_state_at_each_call(monkeypatch: pytest.MonkeyPatch) -> None:
+    """OE-004 — H5-4: ``startup_change_state()`` is read at each call, through the module: a state that changes between two calls (the owner confirmed, a restart found a conflict) changes the result at the next call, none is cached."""
+    print_section("OE-004: read at each call")
+    check = _owner_check()
+    module = importlib.import_module(INSTANCE_OWNER_MODULE)
+    states = iter([None, "pending", "blocked", "pending", None])
+    monkeypatch.setattr(module, "startup_change_state", lambda: next(states))
+
+    severities = [_evaluate(check).severity for _ in range(5)]
+
+    assert severities == ["ok", "info", "warning", "info", "ok"], f"each call reads the state anew: {severities}"
+    print_success(str(severities))
+
+
+# red until H5-4
+@pytest.mark.parametrize("error", [RuntimeError("memory gone"), ValueError("not a state"), OSError("nope")], ids=["runtime", "value", "os"])
+def test_the_owner_check_never_raises_and_is_ok_when_the_state_cannot_be_read(monkeypatch: pytest.MonkeyPatch, error: Exception) -> None:
+    """OE-005 — H5-4: a configuration check never raises: a state function that raises gives severity ``ok`` (nothing is known to wait), the check's id and no detail. A bare ``_evaluate`` would fail the test on an exception."""
+    print_section(f"OE-005: the state function raises {error!r}")
+    check = _owner_check()
+    _stand_in_for_state(monkeypatch, error)
+
+    result = _evaluate(check)
+
+    assert result.check_id == OWNER_CHECK_ID and result.severity == "ok", f"a state that cannot be read is ok, never an exception: {result}"
+    assert result.detail == {}, f"no detail: {result}"
+    print_success("ok, no exception")
+
+
+# red until H5-4
+def test_the_owner_check_is_synchronous_and_reads_no_database(monkeypatch: pytest.MonkeyPatch) -> None:
+    """OE-006 — H5-4: ``check_owner_email_change`` is a plain function (the checks are called synchronously by ``run_config_checks()``), and it needs no database: with ``owner_change_status`` (the database reader) made to fail, the result is still the memory state's."""
+    print_section("OE-006: synchronous, memory only")
+    check = _owner_check()
+    module = importlib.import_module(INSTANCE_OWNER_MODULE)
+
+    async def database_reader(*_args: Any, **_kwargs: Any) -> Any:
+        raise AssertionError("the check must not read the database: owner_change_status was called")
+
+    monkeypatch.setattr(module, "owner_change_status", database_reader)
+    _stand_in_for_state(monkeypatch, "blocked")
+
+    assert not inspect.iscoroutinefunction(check), "a configuration check is synchronous"
+    result = _evaluate(check)
+
+    assert isinstance(result, ConfigCheck) and result.severity == "warning", f"the memory state decides: {result}"
+    print_success("sync, no database")
+
+
+# red until H5-4
+@pytest.mark.parametrize(("state", "severity", "key"), OWNER_STATES)
+def test_run_config_checks_carries_the_owner_check_once_right_after_the_login_limit(platform: Path, monkeypatch: pytest.MonkeyPatch, state: str | None, severity: str, key: str) -> None:
+    """OE-007 — H5-4: whatever the state, ``run_config_checks()`` returns one ``accounts.owner_email_change`` result, equal to the check alone and right after ``accounts.login_limit`` in the list; ``config_audit.CONFIG_CHECKS`` holds the very ``check_owner_email_change`` once, right after ``check_login_limit``; with the state patched, its severity and key are the state's."""
+    print_section(f"OE-007: run_config_checks with the state {state!r}")
+    check = _owner_check()
+    _stand_in_for_state(monkeypatch, state)
+
+    results = config_audit.run_config_checks()
+
+    ids = [result.check_id for result in results]
+    assert ids.count(OWNER_CHECK_ID) == 1, f"red until H5-4: run_config_checks() must return one {OWNER_CHECK_ID} result: {ids}"
+    assert ids.index(OWNER_CHECK_ID) == ids.index(CHECK_ID) + 1, f"{OWNER_CHECK_ID} comes right after {CHECK_ID}: {ids}"
+    assert config_audit.CONFIG_CHECKS.count(check) == 1, f"CONFIG_CHECKS must hold check_owner_email_change once: {[listed.__name__ for listed in config_audit.CONFIG_CHECKS]}"
+    names = [listed.__name__ for listed in config_audit.CONFIG_CHECKS]
+    assert names.index("check_owner_email_change") == names.index("check_login_limit") + 1, f"CONFIG_CHECKS lists the owner's check right after the login limit's: {names}"
+    ours = results[ids.index(OWNER_CHECK_ID)]
+    assert ours == _evaluate(check) and (ours.severity, ours.i18n_key) == (severity, key), f"run_config_checks() carries what the check returns on its own: {ours}"
+    print_success(f"{ours.check_id}={ours.severity}")
+
+
+# red until H5-4
+@pytest.mark.parametrize(("state", "severity"), [pytest.param("pending", "info", id="pending-info"), pytest.param("blocked", "warning", id="blocked-warning")])
+def test_the_startup_audit_logs_a_pending_or_blocked_change(platform: Path, logged: list, monkeypatch: pytest.MonkeyPatch, state: str, severity: str) -> None:
+    """OE-008 — H5-4, in the shape of LC-010: a change that waits (``pending``, info) or is stuck (``blocked``, warning): the startup audit logs one record about ``accounts.owner_email_change`` at the check's own severity, with its summary, id and detail, and no address."""
+    print_section(f"OE-008: the startup log with the state {state!r}")
+    check = _owner_check()
+    _stand_in_for_state(monkeypatch, state)
+
+    config_audit.log_configuration_audit()
+
+    _assert_the_audit_ran(logged)
+    records = _owner_records(logged)
+    assert len(records) == 1 and records[0][0] == severity, f"red until H5-4: with the state {state!r} the startup audit must log one {severity} about {OWNER_CHECK_ID}; it logged {records}"
+    expected = _evaluate(check)
+    assert records == [_as_logged(expected)], f"the record must be the check's own result, {_as_logged(expected)}: {records}"
+    assert "@" not in repr(records), f"no address in the record: {records}"
+    print_success(f"{severity}: {expected.summary}")
+
+
+# guard-shaped, red until H5-4 only for the missing check
+def test_the_startup_audit_says_nothing_while_no_change_waits(platform: Path, logged: list, monkeypatch: pytest.MonkeyPatch) -> None:
+    """OE-009 — H5-4, in the shape of LC-011: no change waiting (state None), the startup audit logs nothing about ``accounts.owner_email_change`` — an ok check is not logged. Barrier: the check exists and is ok on its own, and the audit's record of the unset JWT secret reached the recorder."""
+    print_section("OE-009: nothing logged while no change waits")
+    check = _owner_check()
+    _stand_in_for_state(monkeypatch, None)
+    assert _evaluate(check).severity == "ok", "barrier: the check is ok with no change waiting"
+
+    config_audit.log_configuration_audit()
+
+    _assert_the_audit_ran(logged)
+    assert _owner_records(logged) == [], f"nothing waits: nothing to log about it: {logged}"
+    print_success("nothing logged")
