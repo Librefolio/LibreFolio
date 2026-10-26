@@ -79,6 +79,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlmodel import SQLModel
 
+from backend.app.api.v1.brokers import _set_error_detail
 from backend.app.db.models import Asset, Broker, Transaction, TransactionType
 from backend.app.schemas import brim as brim_schemas
 from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMAbsorbed, BRIMCheckpoint, BRIMFieldTodo, BRIMNotice, BRIMParseOutput, BRIMTruthCash, BRIMTruthPosition, BRIMVerification
@@ -1850,6 +1851,50 @@ class TestWB74AnUnreadableRowAtTheEndOfADay:
 
         verification = _verified(response, WB74_DAY)
         assert (verification.ok, _cash_rows(verification)) == (True, _agreeing_cash_rows(state)), f"W-B74: the unreadable WITHDRAWAL id={withdrawal_id} is a pending delete, so the gap-fix must count nothing and agree with the bank: {_gap_fix_today(response)}"
+
+
+# =============================================================================
+# E-21 / W-B80 — THE 409 ledger_unreadable CARRIES A REASON AND PARAMS THE WIZARD TRANSLATES
+# =============================================================================
+
+
+class TestLedgerUnreadableCarriesReasonAndParams:
+    """E-21 — ``BRIMLedgerUnreadable`` carries ``reason`` and ``params``; the API detail (``_set_error_detail`` of
+    ``api/v1/brokers.py``) is ``{"code": "ledger_unreadable", "message": <English, unchanged>, "reason": R, "params": P}``.
+    For W-B74's refusal (a value that is not a number) R is ``"values"`` and P is ``{"count": <int>}``. RED until the cure,
+    but for the guards; the currency refusal (E-19a) is in ``test_gap_fix_currency_guard.py``."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("plants", "count"),
+        [
+            pytest.param((("withdrawal", "amount"),), 1, id="one-row"),
+            pytest.param((("withdrawal", "amount"), ("sell_a", "quantity")), 2, id="two-rows"),
+        ],
+    )
+    async def test_values_refusal_carries_reason_values_and_the_count(self, db_session: AsyncSession, plants: Tuple[Tuple[str, str], ...], count: int) -> None:
+        """RED: the refusal raised by ``compute_gap_fix`` has ``reason == "values"`` and ``params == {"count": count}``, and
+        ``_set_error_detail`` builds the four-key detail, the English message exactly as before."""
+        ledger = await _seed_ledger(db_session)
+        for name, column in plants:
+            await _make_unreadable(db_session, ledger[name], column)
+        bank_cash = [_truth("EUR", "590"), _truth("USD", "20")]
+
+        with pytest.raises(brim_report_sets.BRIMLedgerUnreadable) as refused:
+            await _run(db_session, checkpoints=[_checkpoint(WB74_DAY, cash=bank_cash, positions=[_position(ASSET_A, "8"), _position(ASSET_B, "3")])])
+
+        error = refused.value
+        english = f"LibreFolio's balances of this broker cannot be compared with the bank: {count} of its transactions hold a value that is not a number. Ask the administrator to repair them."
+        assert error.message == english, "the English message must not change"
+        assert (getattr(error, "reason", None), getattr(error, "params", None)) == ("values", {"count": count}), "E-21: BRIMLedgerUnreadable must carry reason='values' and params={'count': <int>}"
+        assert isinstance(error.params["count"], int)
+        assert _set_error_detail(error) == {"code": LEDGER_UNREADABLE_CODE, "message": english, "reason": "values", "params": {"count": count}}
+
+    def test_other_set_errors_keep_their_detail_shape(self) -> None:
+        """GUARD (green today): an error of the set that is not a ledger refusal answers ``{"code", "message"}`` only: no
+        ``reason`` and no ``params`` keys appear for it (the wizard reads them for ``ledger_unreadable`` alone)."""
+        assert _set_error_detail(brim_report_sets.BRIMSetPluginNotFound("Unknown import plugin: x")) == {"code": "plugin_not_found", "message": "Unknown import plugin: x"}
+        assert _set_error_detail(brim_report_sets.BRIMSetIncomplete("incomplete", ["activity"])) == {"code": "set_incomplete", "message": "incomplete", "missing_roles": ["activity"]}
 
 
 # =============================================================================

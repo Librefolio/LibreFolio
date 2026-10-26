@@ -568,7 +568,9 @@ class TestParseEndpoint:
             )
 
             assert response.status_code == 400
-            assert "plugin" in response.json()["detail"].lower()
+            detail = response.json()["detail"]
+            assert isinstance(detail, str), f"a plugin that does not exist is not a parse failure: its detail stays a plain string (C-70b): {detail!r}"
+            assert "plugin" in detail.lower()
 
 
 class TestDuplicateCheckEndpoint:
@@ -2130,26 +2132,76 @@ class TestReportSetExclusions:
 # Since phase G the generic CSV refuses a CSV whose header names no ``date`` or no ``type``
 # column, so a parse forced on such a file stops at the guard of ``parse_file``. The developer's
 # decision, verbatim: «Correggi dentro G con il metodo opzionale (Consigliato)» — the plugin says
-# why (``cannot_parse_reason``) and the guard appends it: still a 400, the file still goes to
-# ``failed`` with the same message, which now names the missing column. Since workstream W, lot
+# why (``cannot_parse_detail``) and the guard appends it: still a 400, the file still goes to
+# ``failed`` with the same English message, which names the missing column. Since workstream W, lot
 # K2a (backlog L6), the message names the plugin by its ``provider_name`` and the file by the name
 # it was uploaded with, never by the plugin code nor by the stored ``{file_id}{ext}``: asserted
-# whole. The rules of the message are tested at service level, in test_services/test_brim_parse_race.py.
-# The test deletes the file and the broker it created.
+# whole. Since lot W5-5 (backlog C-70b) the ``detail`` of that 400 is an OBJECT, not a sentence:
+# ``{"code": "parse_failed", "message": <that English sentence>, "plugin_code", "plugin_name",
+# "reason": {"code", "message", "context"}}``, so the import wizard can translate it; the English
+# sentence stays as the ``message`` of the object and as the file's stored ``error_message``
+# (diagnostic). The rules of the message are tested at service level, in
+# test_services/test_brim_parse_race.py. The tests delete the file and the broker they created.
 
 GENERIC_CSV_CODE = "broker_generic_csv"
 # A header with a ``type`` column and no date column under any alias the generic CSV knows (``HEADER_MAPPINGS``).
 CSV_WITHOUT_DATE = b"type,amount,currency,description\nBUY,-1000.00,EUR,Buy some shares\nDEPOSIT,500.00,EUR,Top-up\n"
+# Directa's ``can_parse`` wants its labels anywhere in the first 20 rows and the ``Conto :`` marker; its ``parse`` wants the three
+# labels on ONE row. Spread over four rows they pass the first and fail the second: a real plugin that raises ``BRIMParseError``
+# ("Directa header row not found ...", with the code ``header_row_not_found`` since E-21) from a file of three lines. The expected
+# sentence and context are written out by hand.
+DIRECTA_CODE = "broker_directa"
+DIRECTA_NAME = "Directa SIM"
+DIRECTA_LABELS_ON_SEPARATE_ROWS = b"Conto : 12345\nData operazione\nTipo operazione\nIsin;Importo euro\n"
+DIRECTA_HEADER_ROW_MISSING = "Directa header row not found (expected 'Data operazione'/'Tipo operazione'/'Isin')"
+DIRECTA_HEADER_ROW_CONTEXT = {"expected": "Data operazione, Tipo operazione, Isin"}
+
+
+def _plain_workbook_bytes() -> bytes:
+    """A small valid ``.xlsx`` (a header and one row): the generic CSV refuses it by its extension alone."""
+    from openpyxl import Workbook  # noqa: PLC0415 — test-only local import
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet["A1"], sheet["B1"] = "date", "type"
+    sheet["A2"], sheet["B2"] = "2025-01-01", "BUY"
+    output = io.BytesIO()
+    workbook.save(output)
+    return output.getvalue()
+
+
+def _parse_failed_keys() -> set:
+    """The keys of the ``detail`` object of a failed parse (lot W5-5): the contract the import wizard translates from."""
+    return {"code", "message", "plugin_code", "plugin_name", "reason"}
+
+
+async def _forced_parse(client: httpx.AsyncClient, broker_id: int, content: bytes, filename: str, plugin_code: str, file_ids: list) -> Tuple[str, httpx.Response]:
+    """Upload ``content`` as ``filename`` on the broker and force ``plugin_code`` on it: ``(file_id, the parse response)``."""
+    upload = await _upload_csv(client, broker_id, content, filename)
+    assert upload.status_code == 200, upload.text
+    file_id = upload.json()["file_id"]
+    file_ids.append(file_id)
+    response = await client.post(f"{API_BASE}/brokers/import/files/{file_id}/parse", json={"plugin_code": plugin_code, "broker_id": broker_id}, timeout=TIMEOUT)
+    return file_id, response
+
+
+async def _assert_failed_with(client: httpx.AsyncClient, file_id: str, message: str) -> None:
+    """The refused file is ``failed`` and keeps ``message`` (English, diagnostic) as its stored ``error_message``."""
+    info = await client.get(f"{API_BASE}/brokers/import/files/{file_id}", timeout=TIMEOUT)
+    assert info.status_code == 200, info.text
+    assert (info.json()["status"], info.json()["error_message"]) == ("failed", message), f"the failed file keeps the English text as its diagnostic: {info.json()}"
 
 
 class TestParseRefusalReason:
-    """G.5 — a parse forced with a plugin that refuses the file answers 400 with the plugin's reason, and the file goes to ``failed``."""
+    """G.5 / C-70b — a parse forced with a plugin that refuses the file answers 400 with an object the wizard translates, and the file goes to ``failed``."""
 
     @pytest.mark.asyncio
     async def test_forcing_the_generic_csv_on_a_csv_without_date_names_the_missing_column(self, test_server):
-        """RS-G05: ``plugin_code="broker_generic_csv"`` on an uploaded CSV with ``type`` and no date column: 400, ``detail`` is
-        "Plugin 'Generic CSV' cannot parse file '<the name it was uploaded with>': required column 'date' not found in the CSV header",
-        and the file is ``failed`` with that message. The plugin by its name and the file by its uploaded name since lot K2a (L6)."""
+        """RS-G05: ``plugin_code="broker_generic_csv"`` on an uploaded CSV with ``type`` and no date column: 400, ``detail`` is the
+        object of a failed parse — ``message`` is "Plugin 'Generic CSV' cannot parse file '<the name it was uploaded with>': required
+        column 'date' not found in the CSV header", ``reason`` is the plugin's refusal (code ``missing_columns``, context ``columns``
+        and ``count``) — and the file is ``failed`` with that same English message. The plugin by its name and the file by its uploaded
+        name since lot K2a (L6); the detail an object since lot W5-5 (C-70b)."""
         print_section("RS-G05: the forced generic CSV names the missing column")
         async with httpx.AsyncClient() as client:
             await create_test_user(client)
@@ -2167,13 +2219,80 @@ class TestParseRefusalReason:
                 response = await client.post(f"{API_BASE}/brokers/import/files/{file_id}/parse", json={"plugin_code": GENERIC_CSV_CODE, "broker_id": broker_id}, timeout=TIMEOUT)
 
                 assert response.status_code == 400, response.text
-                detail = _detail_text(response)
-                info = await client.get(f"{API_BASE}/brokers/import/files/{file_id}", timeout=TIMEOUT)
-                assert info.status_code == 200, info.text
-                assert (info.json()["status"], info.json()["error_message"]) == ("failed", detail), "the refused file goes to failed, with the message the user reads"
-                assert detail.endswith("': required column 'date' not found in the CSV header"), f"the refusal does not say which column is missing: {detail!r}"
-                assert detail == f"Plugin 'Generic CSV' cannot parse file '{filename}': required column 'date' not found in the CSV header", f"the refusal does not name the plugin and the file as the user knows them (K2a, L6): {detail!r}"
-                print_success("✓ the forced generic CSV names the missing column, the plugin and the file as the user knows them, and the file is failed")
+                detail = response.json()["detail"]
+                assert isinstance(detail, dict), f"the detail of a refused parse is an object the wizard can translate, not an English sentence (C-70b): {detail!r}"
+                assert set(detail) == _parse_failed_keys(), f"the keys of the failed-parse detail: {detail!r}"
+                english = f"Plugin 'Generic CSV' cannot parse file '{filename}': required column 'date' not found in the CSV header"
+                assert detail["code"] == "parse_failed", detail
+                assert detail["message"] == english, f"the English text stays in the object, naming the plugin and the file as the user knows them (K2a, L6): {detail['message']!r}"
+                assert (detail["plugin_code"], detail["plugin_name"]) == (GENERIC_CSV_CODE, "Generic CSV"), detail
+                assert detail["reason"] == {"code": "missing_columns", "message": "required column 'date' not found in the CSV header", "context": {"columns": "date", "count": 1}}, f"the plugin's coded refusal, as cannot_parse_detail gives it: {detail['reason']!r}"
+                await _assert_failed_with(client, file_id, english)
+                print_success("✓ the forced generic CSV answers the parse_failed object with the coded refusal, and the file is failed with the English text")
+            finally:
+                await _delete_files(client, file_ids)
+                await _delete_created(client, broker_ids=[broker_id])
+
+    @pytest.mark.asyncio
+    async def test_forcing_the_generic_csv_on_a_workbook_gives_the_csv_only_code(self, test_server):
+        """RS-C70-02: the generic CSV forced on an uploaded ``.xlsx``: 400, the same object, ``reason.code`` is ``csv_only`` with the
+        plugin's code in its context (the wizard translates ``importWizard.parseRefusal.csv_only`` with it)."""
+        print_section("RS-C70-02: the forced generic CSV on a workbook")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+            file_ids = []
+            try:
+                filename = f"book_{uuid.uuid4().hex[:8]}.xlsx"
+                upload = await client.post(f"{API_BASE}/brokers/import/upload", files={"file": (filename, io.BytesIO(_plain_workbook_bytes()), XLSX_MEDIA_TYPE)}, data={"broker_id": broker_id}, timeout=TIMEOUT)
+                assert upload.status_code == 200, upload.text
+                file_id = upload.json()["file_id"]
+                file_ids.append(file_id)
+
+                response = await client.post(f"{API_BASE}/brokers/import/files/{file_id}/parse", json={"plugin_code": GENERIC_CSV_CODE, "broker_id": broker_id}, timeout=TIMEOUT)
+
+                assert response.status_code == 400, response.text
+                detail = response.json()["detail"]
+                assert isinstance(detail, dict), f"the detail of a refused parse is an object (C-70b): {detail!r}"
+                assert (detail["code"], detail["plugin_code"], detail["plugin_name"]) == ("parse_failed", GENERIC_CSV_CODE, "Generic CSV"), detail
+                assert detail["reason"]["code"] == "csv_only", detail["reason"]
+                assert detail["reason"]["context"] == {"plugin_code": GENERIC_CSV_CODE}, detail["reason"]
+                assert detail["message"] == f"Plugin 'Generic CSV' cannot parse file '{filename}': {detail['reason']['message']}", f"the English text is the frame plus the plugin's sentence: {detail['message']!r}"
+                await _assert_failed_with(client, file_id, detail["message"])
+            finally:
+                await _delete_files(client, file_ids)
+                await _delete_created(client, broker_ids=[broker_id])
+
+    @pytest.mark.asyncio
+    async def test_a_plugin_that_raises_a_coded_parse_error_gives_its_code_and_context(self, test_server):
+        """RS-C70-03: Directa forced on a three-line file that passes its ``can_parse`` and fails its ``parse`` with a ``BRIMParseError``
+        that carries a code (E-21): 400, ``detail.message`` is "Parse error: <the plugin's sentence>", ``plugin_name`` is Directa's
+        ``provider_name``, ``reason`` is ``{code: "header_row_not_found", message: <the plugin's sentence>, context: {expected: ...}}``,
+        and the stored ``error_message`` is the plugin's sentence (the diagnostic the failed file has always kept).
+
+        The counterpart, a plugin that raises ``BRIMParseError(message)`` with no details (a third-party or legacy one) and gets
+        ``{code: null, message, context: {}}``, cannot be reached here: every real plugin codes its errors, and the backend under test
+        is a separate process this test cannot patch. It is tested at service level, in-process, by
+        ``test_services/test_brim_parse_failure_detail.py::test_a_parse_error_without_a_code_gives_a_reason_with_no_code_and_no_context``."""
+        print_section("RS-C70-03: a coded parse error of a real plugin")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_id = await create_test_broker(client)
+            file_ids = []
+            try:
+                filename = f"directa_{uuid.uuid4().hex[:8]}.csv"
+                file_id, response = await _forced_parse(client, broker_id, DIRECTA_LABELS_ON_SEPARATE_ROWS, filename, DIRECTA_CODE, file_ids)
+
+                assert response.status_code == 400, f"premise: the file reaches the plugin's parse and fails there: {response.status_code} {response.text}"
+                detail = response.json()["detail"]
+                assert isinstance(detail, dict), f"the detail of a failed parse is an object the wizard can translate, not an English sentence (C-70b): {detail!r}"
+                assert set(detail) == _parse_failed_keys(), detail
+                assert detail["code"] == "parse_failed", detail
+                assert detail["message"] == f"Parse error: {DIRECTA_HEADER_ROW_MISSING}", detail
+                assert (detail["plugin_code"], detail["plugin_name"]) == (DIRECTA_CODE, DIRECTA_NAME), detail
+                assert detail["reason"] == {"code": "header_row_not_found", "message": DIRECTA_HEADER_ROW_MISSING, "context": DIRECTA_HEADER_ROW_CONTEXT}, f"the plugin's code, its sentence and its context, as the wizard translates them: {detail['reason']!r}"
+                await _assert_failed_with(client, file_id, DIRECTA_HEADER_ROW_MISSING)
+                print_success("✓ a coded BRIMParseError answers the parse_failed object with the plugin's code and context, and the file keeps the plugin's sentence")
             finally:
                 await _delete_files(client, file_ids)
                 await _delete_created(client, broker_ids=[broker_id])
@@ -2526,7 +2645,8 @@ class TestDamagedWorkbookPreview:
     @pytest.mark.parametrize(("filename", "build"), DAMAGED_WORKBOOKS)
     async def test_the_preview_of_a_damaged_workbook_answers_400(self, test_server, filename, build):
         """RS-F201: a damaged ``.xlsx`` uploaded on the test's broker — bytes that are not even a zip, or a workbook whose
-        first sheet's XML does not parse: its preview answers 400 with a non-empty ``detail`` (500 before F2)."""
+        first sheet's XML does not parse: its preview answers 400 (500 before F2) with ``detail`` ``{"code": "preview_unreadable",
+        "message": <English text>}`` (an object since lot W5-5, C-70b)."""
         print_section(f"RS-F201: the preview of a damaged workbook, {filename}, answers 400")
         content = build()
         async with httpx.AsyncClient() as client:
@@ -2544,8 +2664,11 @@ class TestDamagedWorkbookPreview:
 
                 assert response.status_code == 400, f"the preview of the damaged {filename} answers {response.status_code} {response.text}: a damaged workbook is the user's file, not a fault of the server (F2)"
                 detail = response.json().get("detail")
-                assert isinstance(detail, str) and detail.strip(), f"the 400 says why, in a detail: {response.text}"
-                print_success(f"✓ the preview of the damaged {filename} answers 400")
+                assert isinstance(detail, dict), f"the 400 says why in a detail object the wizard translates, not in an English sentence (C-70b): {response.text}"
+                assert set(detail) == {"code", "message"}, f"the keys of a preview failure: {response.text}"
+                assert detail["code"] == "preview_unreadable", f"a damaged workbook is unreadable, not unsupported: {response.text}"
+                assert isinstance(detail["message"], str) and detail["message"].strip(), f"the English text stays as the diagnostic message: {response.text}"
+                print_success(f"✓ the preview of the damaged {filename} answers 400 with the preview_unreadable object")
             finally:
                 await _delete_files(client, file_ids)
                 await _delete_created(client, broker_ids=[broker_id])

@@ -1,7 +1,7 @@
 {
   "brimPlugins": {
     "broker_swissquote": {
-      "description": "Importe les exports CSV de Swissquote : achats et ventes, dividendes, mouvements de liquidités, frais, impôts et intérêts. Les opérations de change sont ignorées.",
+      "description": "Importe les exports CSV de Swissquote : achats et ventes, dividendes, mouvements de liquidités, frais, impôts, intérêts et opérations de change.",
       "name": "Swissquote"
     }
   }

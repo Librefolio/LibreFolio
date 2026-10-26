@@ -8,7 +8,7 @@
 <script lang="ts">
     import {_ as t} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
-    import {getEventTypeOptions, EVENT_TYPES_TX_COMPATIBLE} from '$lib/features/transactions/events/eventTypes';
+    import {getEventTypeOptions, eventTypesForTx, defaultEventTypeForTx} from './eventTypes';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {decimalArrowStep, normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
@@ -40,18 +40,15 @@
 
     let {open, assetId, assetName, assetCurrency, defaultDate, suggestedAmount = '', defaultEventType = 'DIVIDEND', zIndex = 60, oncreated, onclose}: Props = $props();
 
-    // Map transaction type to event type
-    const TX_TO_EVENT_TYPE: Record<string, string> = {
-        DIVIDEND: 'DIVIDEND',
-        INTEREST: 'INTEREST',
-    };
-
+    // The event type a transaction type starts with: a split for an adjustment, the event of the same name for an interest.
     function resolveDefaultEventType(txType: string): string {
-        return TX_TO_EVENT_TYPE[txType] ?? 'DIVIDEND';
+        return defaultEventTypeForTx(txType);
     }
 
     // Form state
     let eventType = $state('DIVIDEND');
+    /** A SPLIT's value is its ratio (new shares per old share): a plain number, no currency, never padded to two decimals. */
+    let isRatio = $derived(eventType === 'SPLIT');
     let eventDate = $state('');
     let eventAmount = $state('');
     let eventNotes = $state('');
@@ -107,6 +104,7 @@
     // Format amount on blur: two decimals at least, the typed ones kept — never rounded nor cut (C-97b), so an event
     // edited here keeps a per-share amount with more (decision 20, «Edit this»), and one past six is said, not changed.
     function formatAmount() {
+        if (isRatio) return;
         const plain = plainAmount(eventAmount);
         if (plain !== null) eventAmount = withTwoDecimals(plain);
     }
@@ -118,7 +116,7 @@
             eventDate = defaultDate;
             // The suggestion whole, two decimals at least (C-97b): 0.2345 stays 0.2345.
             const suggested = plainAmount(suggestedAmount || '');
-            const formatted = suggested !== null && /[1-9]/.test(suggested) ? withTwoDecimals(suggested) : '';
+            const formatted = suggested !== null && /[1-9]/.test(suggested) ? (eventType === 'SPLIT' ? suggested : withTwoDecimals(suggested)) : '';
             eventAmount = formatted;
             initialAmount = formatted;
             eventNotes = '';
@@ -131,7 +129,7 @@
     });
 
     const typeOptions = $derived(
-        getEventTypeOptions($t, EVENT_TYPES_TX_COMPATIBLE).map((o) => ({
+        getEventTypeOptions($t, eventTypesForTx(defaultEventType)).map((o) => ({
             value: o.value,
             label: o.label,
             icon: o.emoji,
@@ -300,7 +298,7 @@
                 <!-- Amount -->
                 <div class="space-y-1.5">
                     <label for="event-amount" class="block text-xs font-medium text-lf-muted">
-                        {$t('transactions.fields.amount')}
+                        {isRatio ? $t('transactions.bulk.possibleSplit.ratioLabel') : $t('transactions.fields.amount')}
                     </label>
                     <div class="flex items-center gap-2">
                         <input
@@ -318,15 +316,20 @@
                                 userTouched = true;
                             }}
                             onblur={formatAmount}
-                            placeholder="0.00"
+                            placeholder={isRatio ? '2' : '0.00'}
                             data-testid="event-create-amount"
                         />
-                        <span class="text-sm text-lf-muted whitespace-nowrap">
-                            {currencyInfo.symbol}
-                            {currencyInfo.flag_emoji}
-                            {assetCurrency}
-                        </span>
+                        {#if !isRatio}
+                            <span class="text-sm text-lf-muted whitespace-nowrap">
+                                {currencyInfo.symbol}
+                                {currencyInfo.flag_emoji}
+                                {assetCurrency}
+                            </span>
+                        {/if}
                     </div>
+                    {#if isRatio}
+                        <p class="text-xs text-lf-muted" data-testid="event-create-ratio-hint">{$t('transactions.bulk.possibleSplit.ratioHint')}</p>
+                    {/if}
                     {#if amountOverBudget}
                         <p class="text-xs text-lf-danger" data-testid="event-create-amount-digits-error" data-max={EVENT_VALUE_DECIMALS}>
                             {$t('common.decimalPlacesExceeded', {values: {max: EVENT_VALUE_DECIMALS}})}

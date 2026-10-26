@@ -376,7 +376,7 @@ def _read_custody(path: Path, file_index: int, file_count: int) -> List[_Custody
     rows = _xlsx_rows(path)
     found = _find_layout(rows, _custody_layout)
     if found is None:
-        raise BRIMParseError("Not a Danske Bank custody export: the transaction columns are missing")
+        raise BRIMParseError("Not a Danske Bank custody export: the transaction columns are missing", details={"code": "danske_custody_columns_missing"})
     header_index, columns = found
     result = []
     for index in range(header_index + 1, len(rows)):
@@ -412,7 +412,7 @@ def _read_cash(path: Path, file_index: int, file_count: int) -> List[_CashRow]:
     rows = _csv_rows(path)
     found = _find_layout(rows, _cash_layout)
     if found is None:
-        raise BRIMParseError("Not a Danske Bank cash statement: the account columns are missing")
+        raise BRIMParseError("Not a Danske Bank cash statement: the account columns are missing", details={"code": "danske_cash_columns_missing"})
     header_index, columns = found
     result = []
     for index in range(header_index + 1, len(rows)):
@@ -1319,7 +1319,14 @@ def _read_combined(path: Path) -> List[Line]:
         header = [cell.strip().lstrip("\ufeff") for cell in next(reader, [])]
         missing = [name for name in COMBINED_HEADERS if name not in header]
         if missing:
-            raise BRIMParseError("Not a Danske Bank combined file: columns are missing", details={"missing": missing})
+            raise BRIMParseError(
+                "Not a Danske Bank combined file: columns are missing",
+                details={
+                    "missing": missing,
+                    "code": "danske_combined_columns_missing",
+                    "context": {"missing": ", ".join(str(c) for c in missing)},
+                },
+            )
         positions = {name: header.index(name) for name in COMBINED_HEADERS}
         lines: List[Line] = []
         for cells in reader:
@@ -1373,7 +1380,15 @@ class _CombinedParser:
     def add(self, line: int, row: Row) -> None:
         handler = self.handlers.get(row["lf_row_kind"])
         if handler is None:
-            raise BRIMParseError(f"Line {line} of the combined file has an unknown kind", details={"line": line, "kind": row["lf_row_kind"]})
+            raise BRIMParseError(
+                f"Line {line} of the combined file has an unknown kind",
+                details={
+                    "line": line,
+                    "kind": row["lf_row_kind"],
+                    "code": "danske_combined_line_unknown_kind",
+                    "context": {"line": line, "kind": row["lf_row_kind"]},
+                },
+            )
         if row["lf_checkpoint"] and row["lf_row_kind"] not in _TRUTH_KINDS:
             self._absorb(line, row)
         handler(line, row)
@@ -1402,7 +1417,10 @@ class _CombinedParser:
     @staticmethod
     def _required(line: int, *values: Any) -> None:
         if any(value is None for value in values):
-            raise BRIMParseError(f"Line {line} of the combined file is incomplete", details={"line": line})
+            raise BRIMParseError(
+                f"Line {line} of the combined file is incomplete",
+                details={"line": line, "code": "danske_combined_line_incomplete", "context": {"line": line}},
+            )
 
     # ----------------------------------------------------------------- rows
 
@@ -1471,7 +1489,10 @@ class _CombinedParser:
         klass, _ = _cash_label_class(label, amount)
         tx_type = _STANDALONE_TYPES.get(klass)
         if tx_type is None:
-            raise BRIMParseError(f"Line {line} of the combined file is not a standalone cash row", details={"line": line})
+            raise BRIMParseError(
+                f"Line {line} of the combined file is not a standalone cash row",
+                details={"line": line, "code": "danske_combined_line_not_cash", "context": {"line": line}},
+            )
         self._create(line, label, type=tx_type, date=day, cash=Currency(code=CURRENCY, amount=amount), description=label[:500], tags=["import", HISTORY_TAG])
         if klass == "deposit":
             self.deposits.append((line, row))
@@ -1756,7 +1777,7 @@ class DanskeBankBrokerProvider(BRIMProvider):
     def combine(self, members: Dict[str, List[Path]]) -> BRIMCombinedTable:
         analysis = _Analysis(members)
         if not analysis.timeline:
-            raise BRIMParseError("The custody exports have no dated rows: there is nothing to combine")
+            raise BRIMParseError("The custody exports have no dated rows: there is nothing to combine", details={"code": "danske_no_dated_rows"})
         return _TableBuilder(analysis).build()
 
     def parse(self, file_path: Path, broker_id: int) -> BRIMParseOutput:
@@ -1767,7 +1788,7 @@ class DanskeBankBrokerProvider(BRIMProvider):
                 missing_roles=[role.code for role in self.report_roles if role.code != kind],
             )
         if kind != "combined":
-            raise BRIMParseError("Not a Danske Bank combined file")
+            raise BRIMParseError("Not a Danske Bank combined file", details={"code": "danske_not_combined_file"})
         parser = _CombinedParser(self, broker_id)
         for line, row in _read_combined(file_path):
             parser.add(line, row)

@@ -31,12 +31,13 @@ LibreFolio reads the **Account Activity** sheet of eToro's account statement, sa
 | Deposit | **Deposit** |
 | Withdraw Request | **Withdrawal** |
 | Withdraw Fee, Withdrawal Conversion Fee, Conversion Fee | **Fee**, when the amount is not zero |
+| Overnight fee (CFD financing) | **Fee**, when the amount is not zero: a cost of money, with no asset |
+| Overnight refund (CFD financing given back) | **Interest**: money given back (positive amount), with no asset and the description *Overnight refund* |
+| SDRT (UK stamp duty) | **Tax**, on the instrument of the row |
 
 The instrument comes from **Details** (for example `NKE/USD`) and the quantity from **Units**.
 
-**Not imported yet**: **Overnight fee** and **Overnight refund** (CFD financing) and **SDRT** (UK stamp
-duty). They are listed in an amber warning, with a link to open an issue on GitHub: add them by hand if
-you track them. Any other type is skipped with a warning.
+Any other type is skipped with a warning.
 
 ## ⚠️ Common Pitfalls
 
@@ -51,8 +52,19 @@ you track them. Any other type is skipped with a warning.
 - **Withdrawal conversion fees.** A non-zero fee becomes a separate **Fee**, next to the full
   **Withdraw Request**. Compare both with your statement: if the fee was already taken out of the
   withdrawn money, untick it in [Review](how-to.md#review).
-- **CFDs** become ordinary buys and sells of the instrument, like real shares, without their
-  overnight fees: check those positions and their costs.
+- **CFDs** become ordinary buys and sells of the instrument, like real shares. Their **overnight
+  fees** are imported as separate **Fee** transactions, with no asset: check those positions and
+  their costs against your statement.
+- **Overnight fees and refunds.** Fees are imported as **Fee** and refunds as **Interest**: the
+  overnight cost you really paid, net of refunds, is the fees minus the refunds. A refund shows up
+  as income, so a report of your income includes it.
+
+## 🚧 Known limitations {: #known-limitations }
+
+- **Amounts in your account currency.** See the warning above: check the currency of instruments not
+  quoted in USD before saving.
+- **Something is off?** Please [open an issue](https://github.com/Librefolio/LibreFolio/issues) with
+  an anonymised example file.
 
 ## 🔗 Developer Reference
 

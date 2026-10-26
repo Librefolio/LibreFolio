@@ -154,7 +154,7 @@ class TradeRepublicBrokerProvider(BRIMProvider):
                 row_num = 1
 
                 if reader.fieldnames != EXPECTED_HEADER:
-                    raise BRIMParseError("Unexpected Trade Republic CSV header")
+                    raise BRIMParseError("Unexpected Trade Republic CSV header", details={"code": "header_mismatch"})
 
                 for row in reader:
                     row_num += 1
@@ -232,11 +232,11 @@ class TradeRepublicBrokerProvider(BRIMProvider):
                     )
 
         except FileNotFoundError:
-            raise BRIMParseError(f"File not found: {file_path}") from None
+            raise BRIMParseError(f"File not found: {file_path}", details={"code": "file_not_found", "context": {"file": file_path.name}}) from None
         except BRIMParseError:
             raise
         except Exception as e:
-            raise BRIMParseError(f"Error parsing file: {e}") from e
+            raise BRIMParseError(f"Error parsing file: {e}", details={"code": "file_unreadable", "context": {"error": str(e)}}) from e
 
         if not transactions:
             warnings.append("No valid transactions found in file")

@@ -12,6 +12,9 @@
     import {resolveBrimTodoMessage} from '$lib/features/transactions/resolveBrimNotice';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import TransactionResultBanner from './TransactionResultBanner.svelte';
+    import PossibleSplitRow from './PossibleSplitRow.svelte';
+    import type {PossibleSplitEntry} from './bulkTodos';
+    import type {PreFloorEntry} from '$lib/features/transactions/preFloorDate';
     import {getTransactionTypeIconUrl, getTypeRule} from '$lib/features/transactions/transactionTypeStore';
     import {resolveIssueMessage, type ResolverContext} from '$lib/features/transactions/resolveValidationMessage';
     import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
@@ -63,6 +66,11 @@
         jumpToIssue: (issue: ValidationIssue) => void;
         jumpToTodoRow: (rowId: string) => void;
         triggerPromoteFromSuggestion: (sug: SuggestEntry) => void;
+        possibleSplitEntries: PossibleSplitEntry[];
+        /** Rows dated before 1900 (D-P4): one line each; the save asks once for all of them. */
+        preFloorEntries?: PreFloorEntry[];
+        onSplitCreate: (entry: PossibleSplitEntry) => void;
+        onSplitLink: (tempId: string, eventId: number) => void;
     }
 
     let {
@@ -102,6 +110,10 @@
         jumpToIssue,
         jumpToTodoRow,
         triggerPromoteFromSuggestion,
+        possibleSplitEntries,
+        preFloorEntries = [],
+        onSplitCreate,
+        onSplitLink,
     }: Props = $props();
 </script>
 
@@ -227,6 +239,33 @@
                 </ul>
             {/if}
         </div>
+    {/if}
+    {#if possibleSplitEntries.length > 0}
+        <InfoBanner variant="warning">
+            <div data-testid="tx-bulk-possible-split">
+                <p class="font-medium">{$t('transactions.bulk.possibleSplit.title', {values: {n: possibleSplitEntries.length}})}</p>
+                <p>{$t('transactions.bulk.possibleSplit.explain')}</p>
+                {#each possibleSplitEntries as entry (entry.tempId)}
+                    <PossibleSplitRow {entry} onCreate={onSplitCreate} onLink={(eventId) => onSplitLink(entry.tempId, eventId)} onGoto={jumpToTodoRow} />
+                {/each}
+            </div>
+        </InfoBanner>
+    {/if}
+    {#if preFloorEntries.length > 0}
+        <InfoBanner variant="warning">
+            <div data-testid="tx-bulk-pre-floor" data-count={preFloorEntries.length}>
+                <p class="font-medium">{$t('transactions.bulk.preFloorDate.message', {values: {n: preFloorEntries.length}})}</p>
+                <ul class="mt-1 max-h-32 space-y-0.5 overflow-y-auto">
+                    {#each preFloorEntries as entry (entry.tempId)}
+                        <li>
+                            <button type="button" class="block w-full text-left hover:underline" onclick={() => jumpToTodoRow(entry.rowId)} title={$t('importWizard.todoGoto')} data-testid="tx-bulk-pre-floor-row" data-row-id={entry.rowId} data-date={entry.date}>
+                                {$t('transactions.bulk.preFloorDate.row', {values: {row: entry.rowNumber, date: entry.date}})}
+                            </button>
+                        </li>
+                    {/each}
+                </ul>
+            </div>
+        </InfoBanner>
     {/if}
     {#if todoWarningRowCount > 0}
         <InfoBanner variant="warning">

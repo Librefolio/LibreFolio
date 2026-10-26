@@ -99,7 +99,11 @@
       "entryModeAmount": "Importo totale",
       "entryModeUnitPrice": "Prezzo unitario",
       "unitPriceCalculated": "calcolato",
-      "unitPriceHint": "L'importo si calcola dal prezzo unitario e dalla quantità; puoi comunque modificarlo."
+      "unitPriceHint": "L'importo si calcola dal prezzo unitario e dalla quantità; puoi comunque modificarlo.",
+      "preFloorDate": {
+        "message": "La data {date} è anteriore al 1° gennaio 1900. Controlla che l'anno sia giusto: spesso è un errore di battitura.",
+        "confirm": "Sì, la data è giusta"
+      }
     },
     "bulk": {
       "resetRow": "Reimposta riga",
@@ -133,7 +137,27 @@
       "issueRowsHidden": "Le righe coinvolte sono nascoste dai filtri della tabella.",
       "unseenSuggestionsTitle": "Suggerimenti non ancora visti",
       "unseenSuggestionsMessage": "{n, plural, one {# suggerimento di unione non è ancora stato visto} other {# suggerimenti di unione non sono ancora stati visti}}. Unire le due metà di un trasferimento evita che contino come un deposito e un prelievo separati. Salvare comunque?",
-      "unseenSuggestionsReview": "Mostra i suggerimenti"
+      "unseenSuggestionsReview": "Mostra i suggerimenti",
+      "possibleSplit": {
+        "title": "{n, plural, one {# riga potrebbe essere uno split} other {# righe potrebbero essere split}}",
+        "explain": "Queste azioni sono entrate a costo zero. Se è uno split, collega un evento SPLIT: il costo si distribuisce su tutte le tue azioni. Se non lo è, il costo medio della posizione si abbassa.",
+        "create": "Crea l'evento SPLIT e collega",
+        "link": "Collega a un evento esistente",
+        "goto": "Vai alla riga",
+        "assetNeeded": "Scegli prima l'asset di questa riga.",
+        "quantityAdded": "+{quantity} azioni",
+        "ratioLabel": "Rapporto dello split (azioni nuove per azione vecchia)",
+        "ratioHint": "Scrivi 3 per uno split 3 per 1, 0.25 per uno split inverso 1 a 4. Le azioni che possiedi si moltiplicano per questo numero.",
+        "ratio": "Rapporto {ratio} (dalle {held} azioni che tenevi)",
+        "rounding": "Il broker ha arrotondato la quantità: con rapporto {ratio} questa riga differisce di {delta} azioni da quelle che tenevi per il rapporto. Lotti e Dashboard possono mostrare un piccolo scarto."
+      },
+      "preFloorDate": {
+        "message": "{n} righe hanno una data anteriore al 1° gennaio 1900. Controlla l'anno: spesso è un errore di battitura.",
+        "row": "Riga {row}: {date}",
+        "confirmTitle": "Salvare date anteriori al 1900?",
+        "confirmMessage": "{n} righe hanno una data anteriore al 1° gennaio 1900. Salvarle così?",
+        "confirmProceed": "Sì, le date sono giuste"
+      }
     },
     "commit": {
       "serverError": "Salvataggio impossibile — errore del server"
@@ -253,7 +277,7 @@
       "decimalPlacesExceeded": "Al massimo {max} decimali",
       "significantDigitsExceeded": "Al massimo {max} cifre significative",
       "integerDigitsExceeded": "Al massimo {max} cifre prima della virgola",
-      "dateOutOfRange": "Tra {min} e {max}",
+      "dateOutOfRange": "Non oltre il {max}",
       "autoCostUnreadable": "Costo automatico non disponibile: {count, plural, one {# transazione usata} other {# transazioni usate}} per il costo medio di questo asset {count, plural, one {contiene} other {contengono}} un valore che non è un numero. Inserisci il costo a mano.",
       "autoCostEmptyPool": "Costo automatico non disponibile: in quella data non c'erano unità di questo asset di cui fare la media. Scegli Manuale e scrivi quanto ti sono costate; se le hai ricevute in regalo, scrivi 0.",
       "autoCostUnknownPool": "Costo automatico non disponibile: le unità di questo asset detenute in quella data non hanno un costo noto di cui fare la media. Scegli Manuale e scrivi quanto ti sono costate.",
@@ -261,7 +285,8 @@
       "costBasisNotAllowed": "❌ {type} qui non prende un costo base: toglilo. Lo portano solo le unità che entrano con una Rettifica o un Trasferimento Asset.",
       "costBasisModeIncompatible": "❌ {type} qui non prende un costo base, quindi nessuna modalità Auto o Manuale: toglila.",
       "costBasisNegative": "Il costo di carico non può essere negativo: scrivi 0 o più.",
-      "pairAdjustmentNotAllowed": "Due Rettifiche non si possono collegare: per spostare titoli fra broker usa un Trasferimento Asset."
+      "pairAdjustmentNotAllowed": "Due Rettifiche non si possono collegare: per spostare titoli fra broker usa un Trasferimento Asset.",
+      "pairArrivalBeforeDeparture": "L'arrivo ({arrivalDate}) è datato prima della partenza ({departureDate}). È stato salvato come inserito: controlla le due date."
     },
     "pydantic": {
       "greaterThan": "Il valore deve essere maggiore di {gt}",

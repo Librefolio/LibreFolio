@@ -1967,12 +1967,13 @@ async def brim_rows(private_engine: AsyncEngine, users: dict[str, int]) -> dict[
 
 @pytest.mark.asyncio
 async def test_a_brim_plugin_without_fields_is_returned_untouched_without_the_database(monkeypatch: pytest.MonkeyPatch):
-    """8: every real BRIM plugin: the same instance back, nothing bound, an empty fingerprint, no session opened."""
+    """8: every real BRIM plugin that declares no field (all but ``broker_generic_csv``): the same instance back, nothing bound,
+    an empty fingerprint, no session opened."""
     monkeypatch.setattr(runtime, "get_async_engine", _no_database)
     monkeypatch.setattr(runtime, "build_bound_settings", _nothing_to_resolve)
     BRIMProviderRegistry.auto_discover()
-    codes = BRIMProviderRegistry.list_plugin_codes()
-    assert codes, "barrier: the BRIM registry holds plugins"
+    codes = [code for code in BRIMProviderRegistry.list_plugin_codes() if not BRIMProviderRegistry.get_plugin(code).settings_fields]
+    assert codes, "barrier: the BRIM registry holds plugins without fields"
 
     for code in codes:
         plugin = BRIMProviderRegistry.get_provider_instance(code)
@@ -2045,8 +2046,8 @@ async def test_bound_settings_for_a_brim_plugin_without_fields_reads_nothing(mon
     missing."""
     monkeypatch.setattr(runtime, "get_async_engine", _no_database)
     BRIMProviderRegistry.auto_discover()
-    assert BRIMProviderRegistry.get_plugin("broker_generic_csv") is not None, "barrier: a real BRIM plugin"
+    assert BRIMProviderRegistry.get_plugin("broker_schwab") is not None, "barrier: a real BRIM plugin"
 
-    bound = await runtime.bound_settings_for(BRIMProviderRegistry, "broker_generic_csv", user_id=1)
+    bound = await runtime.bound_settings_for(BRIMProviderRegistry, "broker_schwab", user_id=1)
 
     assert bound is None or (bound.plain_values(), bound.secret_values(), bound.missing, bound.fingerprint) == ({}, frozenset(), (), "")

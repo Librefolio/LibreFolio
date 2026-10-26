@@ -1,0 +1,3 @@
+Date,Ticker,Type,Quantity,Price per share,Total Amount,Currency,FX Rate
+2024-03-01T10:00:00.000Z,__TICKER__,BUY - MARKET,1.5,$100.00,$150.00,USD,1.0800
+2024-06-03T07:00:00.000Z,__TICKER__,STOCK SPLIT,3,,$0,USD,1.0800

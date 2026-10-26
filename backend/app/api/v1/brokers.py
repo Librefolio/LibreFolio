@@ -86,18 +86,20 @@ from backend.app.schemas.brokers import (
 from backend.app.schemas.uploads import FilePreviewResponse
 from backend.app.services.accounts.global_settings_service import get_max_upload_mb
 from backend.app.services.brim import brim_gap_fix, brim_provider, brim_report_sets
+from backend.app.services.brim.brim_file_settings import apply_settings_staleness
 from backend.app.services.brim.brim_parse_pool import parse_file_offloaded
-from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider, BRIMSetRequiredError, detect_tx_duplicates, search_asset_candidates, search_asset_candidates_bulk
-from backend.app.services.brim.brim_report_sets import BRIMSetError, BRIMSetIncomplete
+from backend.app.services.brim.brim_provider import BRIMCannotParseError, BRIMParseError, BRIMProvider, BRIMSetRequiredError, detect_tx_duplicates, search_asset_candidates, search_asset_candidates_bulk
+from backend.app.services.brim.brim_report_sets import BRIMLedgerUnreadable, BRIMSetError, BRIMSetIncomplete
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brokers.broker_service import BROKER_NAME_RECOVERY, BrokerService
 from backend.app.services.files.file_preview import (
     FilePreviewLinks,
-    UnsupportedPreviewError,
     build_image_preview_url,
     build_preview_response,
+    preview_failure_detail,
 )
 from backend.app.services.files.static_uploads import BLOCKED_EXTENSIONS
+from backend.app.services.plugin_settings.runtime import bound_settings_for
 
 logger = get_logger(__name__)
 
@@ -715,6 +717,7 @@ async def list_files(
 
     # Off the event loop: listing reads every sidecar and may detect old files' plugins again (item 8).
     files = await asyncio.to_thread(brim_provider.list_files, status=status, broker_ids=accessible_broker_ids)
+    await apply_settings_staleness(files, current_user.id)
     if broker_ids:
         # A broker's list holds that broker's files only; list_files also keeps the ones with no broker (W-B32).
         files = [file for file in files if file.target_broker_id is not None]
@@ -739,7 +742,9 @@ async def get_file(
     Any role on the file's broker; a file with no broker (uploaded by an older version) only its uploader. The
     administrator reaches every file; anyone else gets 403. An id that is not a UUID is a 404 (decision 36).
     """
-    return await _get_brim_file_with_access(file_id, current_user, session)
+    file_info = await _get_brim_file_with_access(file_id, current_user, session)
+    await apply_settings_staleness([file_info], current_user.id)
+    return file_info
 
 
 @brim_router.get("/files/{file_id}/preview", response_model=FilePreviewResponse)
@@ -773,10 +778,8 @@ async def get_brim_file_preview(
             links,
             sheet_name=sheet_name,
         )
-    except UnsupportedPreviewError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
+    except ValueError as e:  # UnsupportedPreviewError and UnreadablePreviewError are ValueErrors: coded by preview_failure_detail
+        raise HTTPException(status_code=400, detail=preview_failure_detail(e)) from e
     except Exception as e:
         logger.exception("Failed to build BRIM file preview", file_id=file_id, error=str(e))
         raise HTTPException(status_code=500, detail="Failed to build file preview") from e
@@ -980,7 +983,10 @@ async def parse_file(
 
     try:
         # 1. Parse file using plugin (plugin only reads file format)
-        parse_output = await parse_file_offloaded(file_id, plugin_code, request.broker_id, user_id=current_user.id)
+        # The values are resolved once, for the user who imports: they reach the parse, and their fingerprint is stored with the
+        # result, so that a later change of a setting makes the file stale (CP12).
+        bound = await bound_settings_for(BRIMProviderRegistry, plugin_code, user_id=current_user.id)
+        parse_output = await parse_file_offloaded(file_id, plugin_code, request.broker_id, user_id=current_user.id, bound=bound)
         transactions = parse_output.transactions
         warnings = parse_output.warnings
         validation_issues = parse_output.validation_issues
@@ -1057,6 +1063,7 @@ async def parse_file(
             file_id,
             response.model_dump(mode="json"),
             plugin_code=plugin_code,
+            settings_fingerprint=bound.fingerprint if bound is not None else None,
         )
 
         logger.info(
@@ -1082,12 +1089,28 @@ async def parse_file(
     except ValueError as e:
         # Parse failed - move to failed folder
         await asyncio.to_thread(brim_provider.move_to_failed, file_id, str(e))
+        if isinstance(e, BRIMCannotParseError):
+            refusal = e.refusal or {}
+            reason = {"code": refusal.get("code"), "message": refusal.get("message"), "context": refusal.get("context") or {}}
+            raise HTTPException(status_code=400, detail=_parse_failed_detail(str(e), e.plugin_code or plugin_code, e.plugin_name, reason)) from e
         raise HTTPException(status_code=400, detail=str(e)) from e
 
     except BRIMParseError as e:
         # Parse failed - move to failed folder
         await asyncio.to_thread(brim_provider.move_to_failed, file_id, e.message)
-        raise HTTPException(status_code=400, detail=f"Parse error: {e.message}") from e
+        reason = {"code": e.details.get("code"), "message": e.message, "context": e.details.get("context") or {}}
+        raise HTTPException(status_code=400, detail=_parse_failed_detail(f"Parse error: {e.message}", plugin_code, _plugin_name(plugin_code), reason)) from e
+
+
+def _plugin_name(plugin_code: str) -> str:
+    """The plugin's ``provider_name``, its code when it is not registered."""
+    plugin = BRIMProviderRegistry.get_provider_instance(plugin_code)
+    return (getattr(plugin, "provider_name", None) if plugin is not None else None) or plugin_code
+
+
+def _parse_failed_detail(message: str, plugin_code: str, plugin_name: str, reason: dict) -> dict:
+    """The 400 of a failed parse (C-70b): a code the wizard translates, the plugin and its reason; ``message`` is the English text."""
+    return {"code": "parse_failed", "message": message, "plugin_code": plugin_code, "plugin_name": plugin_name, "reason": reason}
 
 
 # =============================================================================
@@ -1108,6 +1131,10 @@ def _set_error_detail(error: BRIMSetError) -> dict:
     detail = {"code": error.code, "message": error.message}
     if isinstance(error, BRIMSetIncomplete):
         detail["missing_roles"] = error.missing_roles
+    if isinstance(error, BRIMLedgerUnreadable):
+        # E-21: the wizard shows ``importWizard.reportSet.gapFix.ledgerUnreadable.<reason>`` with ``params``; ``message`` stays English.
+        detail["reason"] = error.reason
+        detail["params"] = error.params
     return detail
 
 

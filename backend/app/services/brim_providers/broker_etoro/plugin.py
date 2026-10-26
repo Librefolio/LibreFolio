@@ -68,17 +68,11 @@ TYPE_MAPPINGS: Dict[str, TransactionType] = {
     "interest payment": TransactionType.INTEREST,
     "withdraw request": TransactionType.WITHDRAWAL,
     "deposit": TransactionType.DEPOSIT,
+    "sdrt": TransactionType.TAX,  # UK stamp duty reserve tax, on the asset of the row (Details: SYMBOL/CURRENCY)
+    "overnight refund": TransactionType.INTEREST,  # money given back for an overnight fee: income with no asset (developer decision D1, 24/10/2026)
 }
 
-FEE_TYPES = ("withdraw fee", "withdrawal conversion fee", "conversion fee")
-
-# Types left out that carry a cost or a tax: the plugin does not import them yet, so a notice with the link to open an issue lists
-# them (W-B87, D-W85-4).
-NOT_IMPORTED_TYPES = [
-    "overnight fee",
-    "overnight refund",
-    "sdrt",  # UK stamp duty
-]
+FEE_TYPES = ("withdraw fee", "withdrawal conversion fee", "conversion fee", "overnight fee")
 
 
 def _parse_etoro_date(value: str) -> Optional[date_type]:
@@ -235,11 +229,6 @@ class EtoroBrokerProvider(BRIMProvider):
                     if not tx_type_raw:
                         continue
 
-                    # Costs and taxes the plugin does not import yet: listed, before the normal type mapping.
-                    if any(skip in tx_type_raw for skip in NOT_IMPORTED_TYPES):
-                        skips.unknown(row_num, row, f"not imported yet: {tx_type_raw}")
-                        continue
-
                     amount = _parse_etoro_number(row.get(COL_AMOUNT, ""))
                     if any(fee_type in tx_type_raw for fee_type in FEE_TYPES):
                         if amount is None or amount == 0:
@@ -274,7 +263,7 @@ class EtoroBrokerProvider(BRIMProvider):
                         TransactionType.DIVIDEND,
                     ]
 
-                    if asset_required:
+                    if asset_required or (tx_type == TransactionType.TAX and ticker):
                         if not ticker:
                             warnings.append(f"Row {row_num}: {tx_type.value} requires asset, skipping")
                             continue
@@ -303,8 +292,10 @@ class EtoroBrokerProvider(BRIMProvider):
                         quantity = -quantity
                     if tx_type == TransactionType.BUY and amount and amount > 0:
                         amount = -amount
-                    if tx_type == TransactionType.FEE and amount and amount > 0:
+                    if tx_type in (TransactionType.FEE, TransactionType.TAX) and amount and amount > 0:
                         amount = -amount
+                    if "overnight refund" in tx_type_raw and amount and amount < 0:
+                        amount = -amount  # money given back: the type decides the sign, as for the fees
 
                     # Create transaction
                     self._create_transaction(
@@ -323,9 +314,9 @@ class EtoroBrokerProvider(BRIMProvider):
                     )
 
         except FileNotFoundError:
-            raise BRIMParseError(f"File not found: {file_path}") from None
+            raise BRIMParseError(f"File not found: {file_path}", details={"code": "file_not_found", "context": {"file": file_path.name}}) from None
         except Exception as e:
-            raise BRIMParseError(f"Error parsing file: {e}") from e
+            raise BRIMParseError(f"Error parsing file: {e}", details={"code": "file_unreadable", "context": {"error": str(e)}}) from e
 
         if not transactions:
             warnings.append("No valid transactions found in file")
@@ -360,8 +351,10 @@ class EtoroBrokerProvider(BRIMProvider):
 
     @property
     def plugin_version(self) -> str:
+        # 1.4.0 — overnight refunds become INTEREST (money given back, no asset): nothing is listed in the eToro notice any more (W-B87, D1).
+        # 1.3.0 — overnight fees become FEE and SDRT becomes TAX; only the overnight refunds are still listed (W-B87).
         # 1.2.0 — overnight fees, their refunds and SDRT are listed in a notice with the link to open an issue (W-B87).
-        return "1.2.0"
+        return "1.4.0"
 
     @property
     def test_file_pattern(self) -> Optional[str]:

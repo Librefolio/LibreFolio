@@ -204,7 +204,9 @@
       "fineco_not_yet_settled": "{count, plural, one {# ligne n’est pas encore réglée (sa date de valeur est après aujourd’hui) et n’a pas été importée : elle arrivera avec le prochain export.} other {# lignes ne sont pas encore réglées (leur date de valeur est après aujourd’hui) et n’ont pas été importées : elles arriveront avec le prochain export.}}",
       "fineco_incomplete_rows": "Cet import pourrait être faux : {count, plural, one {# ligne n’a pas} other {# lignes n’ont pas}} un nombre nécessaire (quantité ou montant). Vérifiez les lignes ci-dessous ; si le fichier est correct, c’est probablement une erreur de l’import, et vous pouvez nous aider à la corriger :",
       "rows_not_recognized": "{count, plural, one {# ligne a été exclue ou importée en partie seulement} other {# lignes ont été exclues ou importées en partie seulement}} : l’import ne reconnaît pas, ou n’importe pas encore, ce qu’elles décrivent. Vérifiez les lignes ci-dessous ; si cela compte pour vos parts ou votre trésorerie, signalez le cas pour que nous le traitions :",
-      "rows_unreadable": "{count, plural, one {# ligne a été exclue} other {# lignes ont été exclues}} car une valeur nécessaire est illisible. Vérifiez les lignes ci-dessous ; si le fichier est correct, signalez le cas pour que nous le traitions :"
+      "rows_unreadable": "{count, plural, one {# ligne a été exclue} other {# lignes ont été exclues}} car une valeur nécessaire est illisible. Vérifiez les lignes ci-dessous ; si le fichier est correct, signalez le cas pour que nous le traitions :",
+      "possible_split": "Split possible de {ticker} : {added_quantity} actions nouvelles à coût nul. Liez un événement SPLIT ou créez-en un.",
+      "date_before_1900": "La date {date} est antérieure au 1er janvier 1900 : vérifiez l'année."
     },
     "evidenceRowsTitle": "Lignes du fichier",
     "evidenceRowCount": "{n} lignes",
@@ -436,7 +438,11 @@
         "column": {
           "point": "Point"
         },
-        "noProposals": "Ce point ne demande aucune correction."
+        "noProposals": "Ce point ne demande aucune correction.",
+        "ledgerUnreadable": {
+          "currency_codes": "Les soldes de LibreFolio pour ce courtier ne peuvent pas être comparés à la banque : ses transactions contiennent des codes de devise qui ne sont pas des codes ISO 4217 : {codes}{more, plural, =0 {} other { et # autres}}. Corrigez-les d'abord.",
+          "values": "Les soldes de LibreFolio pour ce courtier ne peuvent pas être comparés à la banque : {count, plural, one {# de ses transactions contient une valeur qui n'est pas un nombre} other {# de ses transactions contiennent une valeur qui n'est pas un nombre}}. Demandez à l'administrateur de les réparer."
+        }
       },
       "badge": {
         "column": "Lot de rapports",
@@ -513,7 +519,22 @@
       "missing_columns": "{count, plural, one {Colonne obligatoire {columns} introuvable dans l'en-tête du CSV.} other {Colonnes obligatoires {columns} introuvables dans l'en-tête du CSV.}}",
       "no_movement_rows": "Le fichier ne contient aucune ligne de mouvement.",
       "degiro_csv_only": "Seul l'export CSV est lu : téléchargez le Relevé de compte au format CSV.",
-      "degiro_not_account_statement": "Ce n'est pas un Relevé de compte DEGIRO : il faut 12 colonnes, avec l'ISIN en cinquième position, des colonnes de montant sans nom en neuvième et onzième position, et des dates au format JJ-MM-AAAA."
+      "degiro_not_account_statement": "Ce n'est pas un Relevé de compte DEGIRO : il faut 12 colonnes, avec l'ISIN en cinquième position, des colonnes de montant sans nom en neuvième et onzième position, et des dates au format JJ-MM-AAAA.",
+      "file_not_found": "Le fichier est introuvable.",
+      "header_mismatch": "La ligne d'en-tête n'est pas celle de cet export.",
+      "header_row_not_found": "La ligne d'en-tête du tableau est introuvable dans le fichier.",
+      "no_valid_transactions": "Le fichier ne contient aucune transaction valide.",
+      "file_empty": "Le fichier est vide.",
+      "intesa_layout_unknown": "La mise en page ne correspond à aucun des deux exports Intesa Sanpaolo (mouvements ou patrimoine).",
+      "scalable_not_export": "Ce n'est pas un export de Scalable Capital.",
+      "danske_custody_columns_missing": "Ce n'est pas un export de dépôt de Danske Bank : les colonnes des transactions sont absentes.",
+      "danske_cash_columns_missing": "Ce n'est pas un relevé de compte de Danske Bank : les colonnes du compte sont absentes.",
+      "danske_combined_columns_missing": "Ce n'est pas un fichier combiné de Danske Bank : les colonnes {missing} sont absentes.",
+      "danske_not_combined_file": "Ce n'est pas un fichier combiné de Danske Bank.",
+      "danske_combined_line_unknown_kind": "La ligne {line} du fichier combiné a un type inconnu ({kind}).",
+      "danske_combined_line_incomplete": "La ligne {line} du fichier combiné est incomplète.",
+      "danske_combined_line_not_cash": "La ligne {line} du fichier combiné n'est pas une ligne de trésorerie autonome.",
+      "danske_no_dated_rows": "Les exports de dépôt n'ont aucune ligne datée : il n'y a rien à combiner."
     },
     "brimEvidence": {
       "scalable_unreadable_rows": "Sur ces lignes, une date, un montant, une devise, les parts ou le titre manque ou est illisible.",
@@ -532,6 +553,14 @@
       "rows_unreadable": "La dernière colonne indique ce qui n’a pas pu être lu dans chaque ligne."
     },
     "notesCount": "{n, plural, one {# note} many {# notes} other {# notes}}",
-    "noNotices": "Ni avertissement ni note"
+    "noNotices": "Ni avertissement ni note",
+    "parseFailed": "Le plugin {plugin_name} n'a pas pu lire le fichier : {reason}",
+    "parseFailedNoReason": "Le fichier n'a pas pu être lu et le plugin n'a donné aucune raison.",
+    "previewFailed": {
+      "preview_unsupported": "Ce type de fichier n'a pas d'aperçu.",
+      "preview_unreadable": "Le fichier semble endommagé ou ne correspond pas à son extension : l'aperçu est impossible."
+    },
+    "reviewPossibleSplitNote": "{n, plural, one {# ligne ressemble à un split : les actions nouvelles entrent à coût nul.} other {# lignes ressemblent à des splits : les actions nouvelles entrent à coût nul.}} Dans l'éditeur, vous pouvez lier ou créer l'événement SPLIT.",
+    "reviewPreFloorNote": "{n} lignes sélectionnées ont une date antérieure au 1er janvier 1900. Vérifiez l'année : c'est souvent une faute de frappe. Une confirmation vous sera demandée à l'enregistrement."
   }
 }

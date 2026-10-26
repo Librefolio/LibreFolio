@@ -237,16 +237,19 @@ class DirectaBrokerProvider(BRIMProvider):
         try:
             rows = io.read_rows(file_path)
         except FileNotFoundError:
-            raise BRIMParseError(f"File not found: {file_path}") from None
+            raise BRIMParseError(f"File not found: {file_path}", details={"code": "file_not_found", "context": {"file": file_path.name}}) from None
         except Exception as e:
-            raise BRIMParseError(f"Error reading file: {e}") from e
+            raise BRIMParseError(f"Error reading file: {e}", details={"code": "file_unreadable", "context": {"error": str(e)}}) from e
 
         # Both variants share the same layout; locate the labelled header row
         # dynamically (robust to metadata line-count changes) — the data columns
         # then sit at the fixed COL_* offsets below in CSV and XLSX alike.
         header_idx = io.find_header_row(rows, ["Data operazione", "Tipo operazione", "Isin"])
         if header_idx is None:
-            raise BRIMParseError("Directa header row not found (expected 'Data operazione'/'Tipo operazione'/'Isin')")
+            raise BRIMParseError(
+                "Directa header row not found (expected 'Data operazione'/'Tipo operazione'/'Isin')",
+                details={"code": "header_row_not_found", "context": {"expected": "Data operazione, Tipo operazione, Isin"}},
+            )
 
         # W-B86: the rows left out for a reason the plugin cannot call safe become two shared notices, with the link to open an issue.
         skips = io.RowSkips(rows[header_idx])

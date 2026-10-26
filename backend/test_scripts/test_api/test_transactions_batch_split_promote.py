@@ -1275,6 +1275,59 @@ class TestBatchPromote:
             assert {tx["id"] for tx in rows_a.json()} == {seed_id}, f"A refused ADJUSTMENT pair changed broker {broker_a}: {rows_a.json()}"
             print_success(f"ADJUSTMENT pair -2 / +2 (/{endpoint}) → pairAdjustmentNotAllowed, nothing written ✓")
 
+    @pytest.mark.parametrize("endpoint", ["commit", "validate"])
+    async def test_transfer_pair_arrival_before_departure_warns_but_is_saved(self, endpoint):
+        """TRANSFER departing on the 5th (-2 on A) and arriving on the 3rd (+2 on B) → not blocked, one pairArrivalBeforeDeparture warning.
+
+        Lot W5-3 (23/10/2026): an arrival dated before its departure is saved exactly as sent and the batch carries a
+        NON-BLOCKING warning in `warnings` (create 0, ref_id null, params with both ISO dates); `issues` stays empty.
+        /validate says the same and writes nothing. The same pair in a normal order has `warnings: []`, the key always present.
+        """
+        print_section(f"B2.13c — TRANSFER pair arriving before it departs (/{endpoint}) → pairArrivalBeforeDeparture warning")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            broker_a = await create_broker(client, "PairOrderA")
+            broker_b = await create_broker(client, "PairOrderB")
+            asset_id = await get_or_create_asset(client)
+            # Broker A's own seed: it holds the 10 units that let it give 2 away
+            await create_standalone_tx(client, broker_a, "ADJUSTMENT", asset_id=asset_id, quantity="10", tx_date="2026-03-01")
+
+            def pair(departure_day: str, arrival_day: str) -> dict:
+                link_uuid = str(uuid.uuid4())
+                description = f"pair order {uuid.uuid4().hex[:8]}"
+                return {
+                    "creates": [
+                        {"broker_id": broker_a, "asset_id": asset_id, "type": "TRANSFER", "date": departure_day, "quantity": "-2", "description": description, "link_uuid": link_uuid},
+                        {"broker_id": broker_b, "asset_id": asset_id, "type": "TRANSFER", "date": arrival_day, "quantity": "2", "description": description, "link_uuid": link_uuid, "cost_basis_override": {"code": "EUR", "amount": "10"}},
+                    ]
+                }
+
+            resp = await client.post(f"{API_BASE}/transactions/{endpoint}", json=pair("2026-03-05", "2026-03-03"), timeout=TIMEOUT)
+            assert resp.status_code == 200, resp.text
+            data = resp.json()
+            what = f"TRANSFER -2 on broker {broker_a} (5 March) / +2 on broker {broker_b} (3 March), /{endpoint}"
+            assert data["issues"] == [], f"{what}: an inverted pair must never be blocked, got issues {data['issues']}"
+            assert data["committed"] is (endpoint == "commit"), f"{what}: committed={data['committed']}"
+            assert "warnings" in data, f"{what}: the response has no `warnings` key: {sorted(data)}"
+            views = [(w["operation"], w["index"], w.get("ref_id"), w["code"]) for w in data["warnings"]]
+            assert views == [("create", 0, None, "pairArrivalBeforeDeparture")], f"{what}: expected exactly one pairArrivalBeforeDeparture warning on create 0, got {data['warnings']}"
+            params = data["warnings"][0]["params"] or {}
+            assert (params.get("departureDate"), params.get("arrivalDate")) == ("2026-03-05", "2026-03-03"), f"{what}: params must carry both ISO dates: {params}"
+
+            rows_b = await client.get(f"{API_BASE}/transactions", params={"broker_id": broker_b}, timeout=TIMEOUT)
+            assert rows_b.status_code == 200, rows_b.text
+            if endpoint == "commit":
+                (arrival,) = rows_b.json()
+                assert arrival["date"] == "2026-03-03", f"{what}: the arrival must be saved on the date sent, got {arrival['date']}"
+                assert arrival["related_transaction_id"] is not None, f"{what}: the pair must be saved linked: {arrival}"
+            else:
+                assert [tx["id"] for tx in rows_b.json()] == [], f"{what}: /validate wrote rows on broker {broker_b}: {rows_b.json()}"
+
+            normal = await client.post(f"{API_BASE}/transactions/validate", json=pair("2026-03-03", "2026-03-05"), timeout=TIMEOUT)
+            assert normal.status_code == 200, normal.text
+            assert normal.json().get("warnings") == [], f"a normal-order pair must carry `warnings: []`, got {normal.json().get('warnings')!r} (issues {normal.json()['issues']})"
+            print_success(f"TRANSFER arriving before departure (/{endpoint}) → warning, saved as sent ✓")
+
     async def test_transfer_pair_create_different_assets_is_rejected(self):
         """TRANSFER pair create asset X -3 on A / asset Y +3 on B under one link_uuid → pairAssetMismatch, not committed."""
         print_section("B2.14 — TRANSFER pair create across two assets → pairAssetMismatch")

@@ -12,6 +12,7 @@
  */
 
 import {uiLocale} from '$lib/stores/app/uiLocale';
+import {utcMs} from '$lib/utils/dateOnly';
 
 /** One export a report-set plugin reads (from `GET /brokers/import/plugins`). */
 export interface SetRoleInfo {
@@ -268,7 +269,7 @@ export function parseIsoPeriod(value: string | null | undefined): {years: number
 
 function dayNumber(isoDate: string): number {
     const [year, month, day] = isoDate.slice(0, 10).split('-').map(Number);
-    return Math.round(Date.UTC(year, month - 1, day) / DAY_MS);
+    return Math.round(utcMs(year, month - 1, day) / DAY_MS);
 }
 
 function isoOfDay(day: number): string {
@@ -286,7 +287,9 @@ export function formatIsoDay(iso: string | null | undefined): string {
     const day = String(iso).slice(0, 10);
     const [year, month, date] = day.split('-').map(Number);
     if (!year || !month || !date) return day;
-    return new Date(Date.UTC(year, month - 1, date)).toLocaleDateString(uiLocale(), {timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit'});
+    // A year below 1000 stays in the file's own text: `Intl` writes year 24 as «24», which reads as 2024 and hides the typo.
+    if (year < 1000) return day;
+    return new Date(utcMs(year, month - 1, date)).toLocaleDateString(uiLocale(), {timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit'});
 }
 
 interface TimelinePreview {

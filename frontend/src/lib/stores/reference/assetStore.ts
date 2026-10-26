@@ -44,6 +44,8 @@ export interface AssetInfo {
     display_name: string;
     currency: string;
     asset_type?: string | null;
+    /** How many units the raw market quote refers to (100 for a bond quoted per 100 nominal). A missing one is 1. */
+    quote_base_quantity?: number | null;
     icon_url?: string | null;
     provider_code?: string | null;
     active: boolean;
@@ -88,6 +90,7 @@ function normalize(raw: Record<string, unknown>): AssetInfo {
     copyDirect('display_name', '');
     copyDirect('currency', '');
     copyFlat('asset_type');
+    copyFlat('quote_base_quantity');
     copyFlat('icon_url');
     copyFlat('provider_code');
     copyDirect('active');

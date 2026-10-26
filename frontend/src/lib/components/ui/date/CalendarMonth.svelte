@@ -7,7 +7,7 @@
   Used by: DateRangePicker (×2), SingleDatePicker (×1).
 -->
 <script lang="ts">
-    import {todayIso} from '$lib/utils/dateOnly';
+    import {todayIso, utcMs} from '$lib/utils/dateOnly';
     import {CalendarCheck, ChevronLeft, ChevronRight} from 'lucide-svelte';
     import {_} from '$lib/i18n';
     import {SimpleSelect} from '$lib/components/ui/select';
@@ -55,7 +55,7 @@
     // =========================================================================
 
     function formatISO(y: number, m: number, d: number): string {
-        return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        return `${String(y).padStart(4, '0')}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     }
 
     function isFuture(iso: string): boolean {
@@ -67,11 +67,12 @@
     let monthSelectOptions = $derived(monthLabels.map((label, i) => ({value: String(i), label})));
 
     function getMonthGrid(y: number, m: number): Array<Array<{day: number; iso: string; inMonth: boolean}>> {
-        const firstDay = new Date(y, m, 1);
-        let startDow = firstDay.getDay() - 1;
+        // UTC with `utcMs`: the plain Date constructor reads a year below 100 as 19xx, and local time has no part in a calendar day (W5-11).
+        const firstDay = new Date(utcMs(y, m, 1));
+        let startDow = firstDay.getUTCDay() - 1;
         if (startDow < 0) startDow = 6;
-        const daysInMonth = new Date(y, m + 1, 0).getDate();
-        const prevMonthDays = new Date(y, m, 0).getDate();
+        const daysInMonth = new Date(utcMs(y, m + 1, 0)).getUTCDate();
+        const prevMonthDays = new Date(utcMs(y, m, 0)).getUTCDate();
         const cells: Array<{day: number; iso: string; inMonth: boolean}> = [];
         for (let i = startDow - 1; i >= 0; i--) {
             const d = prevMonthDays - i;
@@ -131,6 +132,8 @@
     }
 
     function isDisabled(iso: string): boolean {
+        // The first day a stored date may have is 0001-01-01: the leading cells of January in the year 1 belong to the year 0.
+        if (iso < '0001-01-01') return true;
         return disabledDates?.has(iso) ?? false;
     }
 
@@ -218,10 +221,9 @@
             <SimpleSelect class="inline-block w-auto" compact dropdownPosition="auto" onchange={(v) => onSetMonth(parseInt(v))} options={monthSelectOptions} showChevron={false} value={String(month)} />
             <input
                 type="number"
-                use:numericArrows
+                use:numericArrows={{min: 1}}
                 data-testid="calendar-year-input"
                 value={year}
-                min="1900"
                 max="2200"
                 onchange={(e) => onSetYear(parseInt(e.currentTarget.value) || new Date().getFullYear())}
                 class="w-14 px-1 py-0.5 text-xs font-semibold text-center bg-transparent border-none outline-none
