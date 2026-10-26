@@ -281,10 +281,13 @@ so a date before 1900, 0001-01-01 included, is stored like any other. The helper
 `backend/app/utils/date_range_limits.py`, with `DateOutOfRangeError` and
 `date_out_of_range_detail()`, the builder of the 422 `detail`. The floor's reason was J's
 SEC8-1b: a price stored at 0001-01-01 made a backward fill or a risk replay walk about 740,000
-days per asset. The walks' own floors now carry that protection. `EARLIEST_RANGE_START`
-(1900-01-01) is the first day of every replay (R13-SEC8) and of every full history: since Z-30
-a full history reaches back no further, where an older row at most seeds the fill, and never
-cuts a point-derived warm-up that starts earlier ([bulk request limits](#bulk-request-limits)).
+days per asset. The walks' own limits now carry that protection. The per-day price fill of a
+full history loads from `FULL_HISTORY_LOAD_START` (1900-01-01, `price_query.py`), the start of
+every provider's history: since Z-30 it reaches back no further, where an older row at most
+seeds the fill, and never cuts a point-derived warm-up that starts earlier
+([bulk request limits](#bulk-request-limits)). The portfolio walks (the engine, the lots and the
+positions) have no such start: they read their stored dates as steps (D-P4, 26/10/2026; the
+constant `EARLIEST_RANGE_START`, once the first day of every replay (R13-SEC8), is gone).
 A risk range starts no earlier than `range_span_floor()`, 100 years before its end
 (`bounded_range()` in `backend/app/services/risk/scope.py`, R13-SEC8-1b).
 {: #stored-date-bounds }
@@ -511,7 +514,7 @@ the builders of their 422 `detail`, `bulk_too_many_items_detail()` and
   and the route answers 422 `{"code": "bulk_too_many_days", "message", "max_item_days", "item_days"}`.
 
 The count follows the fill, not the requested range. A full-history signal (`RISK_DRAWDOWN`) loads
-from the earlier of `EARLIEST_RANGE_START` (1900-01-01) and the start of the item's point-derived
+from the earlier of `FULL_HISTORY_LOAD_START` (1900-01-01) and the start of the item's point-derived
 warm-up (Z-30): the full history can lengthen that warm-up, never shorten it, and adds nothing
 before a range that starts before 1900. The fill emits from the first stored price, or from the
 load start when a row dated before it (writes have no floor since N83) seeds the fill. So a full history over a
@@ -596,7 +599,7 @@ flowchart LR
   of one `FAPriceQueryItem` and returns it.
 - **Signals.** The load window is unchanged: the visible start minus the signal warm-up, and the
   signals read the points `observe()` returns. Only a full-history
-  item (`RISK_DRAWDOWN`) loads back to 1900-01-01, and it stays dense because the prepared series
+  item (`RISK_DRAWDOWN`) loads back to `FULL_HISTORY_LOAD_START` (1900-01-01), and it stays dense because the prepared series
   (`market_series.py`, not changed here) reads it.
 
 Measured on a 10-year USD asset asked in EUR (3,650 points, a rate on every weekday): 2,608 conversions
@@ -821,9 +824,11 @@ until the FX half of Y-40.
 change itself is the house's `fixed_period_changes()`
 ([Financial Math Layer](../financial_math.md#fixed-period-changes)).
 
-- **Request**: a list of `{asset_id, as_of, target_currency?, range_start?}`. `as_of` and `range_start` are on or
-  after `EARLIEST_RANGE_START` (1 January 1900; up to 0005-12-30 the 5Y day fell before year 1, a 500), and
-  `range_start` is on or before `as_of`: 422 otherwise, from the schema. The route then checks the request with
+- **Request**: a list of `{asset_id, as_of, target_currency?, range_start?}`. `as_of` and `range_start` are any day
+  of the calendar, with no first day (D-P4, 26/10/2026; the schema once refused a day before 1 January 1900), and
+  `range_start` is on or before `as_of`: 422 otherwise, from the schema. A period whose reference day falls before
+  0001-01-01 has no reference: its change is null, shown «—» (`day_before()`, `fixed_period_dates()` in
+  `financial_math/returns.py`), so a table anchored in the year 3 still has its 1D. The route then checks the request with
   `period_changes_request_refusal()` (`backend/app/schemas/common.py`), before any read (MF-P2b, finding R13-SEC8,
   aligned with Z-25):
     - more than `MAX_BULK_ITEMS` (1,000) items get the 422 `{"code": "bulk_too_many_items", "message", "max_items",
@@ -870,7 +875,7 @@ range ends today the asset detail page shows the live quote, which may not be st
 that quote comes from `POST /assets/prices/current` with the same `range_start`
 ([Current Quotes and Today's OHLC](#current-quotes-range-change)). The Assets list sends it:
 `fetchAssetPeriodChanges(ids, asOf, rangeStart)` (`frontend/src/lib/utils/periodChanges.ts`) gives each item the first
-day of the range on screen, raised to 1 January 1900 by `rangeStartFor()` (`frontend/src/lib/utils/rangeChange.ts`),
+day of the range on screen, as it is (`rangeStartFor()`, `frontend/src/lib/utils/rangeChange.ts`; no longer raised to 1 January 1900),
 none for a day the backend would refuse (after `as_of`, or not a calendar day), and reads `range_change` with
 `assetRangeDelta()` for the cards' Δ. The browser no longer computes it: `computeDerivedPriceState()` returns no Δ. The
 page keeps the cards' Δ with a `PeriodChangesLedger` of its own, which marks each request with the whole range rather
@@ -1008,11 +1013,11 @@ it. `live_range_changes()` (`services/assets/period_changes.py`) values it after
 - **A failure** while valuing the changes never costs the quotes: it is logged, and every `range_change` is left with
   every field null (unavailable, never a guess).
 
-A `range_start` outside 1 January 1900 … tomorrow (`latest_range_end()`) is refused by the parameter itself
+A `range_start` after tomorrow (`latest_range_end()`) is refused by the parameter itself (`_range_start_in_bounds()`; there is no first day since D-P4)
 (the standard 422, `loc` `["query", "range_start"]`), before any provider call (R13-SEC9-4); one after the price's day
 gives an empty `range_change`. The asset detail page sends it with its live poll (`AssetDetailLive`,
 `frontend/src/lib/components/assets/detail/assetDetailLive.svelte.ts`): while the range ends today, each request asks
-`range_start`, the range's first day raised to 1 January 1900 by `rangeStartFor()`, and `target_currency`, the display
+`range_start`, the range's first day as it is (`rangeStartFor()`), and `target_currency`, the display
 currency, only when the summary converts the live price (the display currency is not the asset's and the FX pair is
 configured). The answer's `range_change` becomes `rangeDelta`, the Δ the summary shows beside the live price: none
 beside a price left native because its conversion failed (the change is in the display currency), and none from the

@@ -13,12 +13,12 @@ day to the next — so no state is carried there. The rows before 1900 are repla
 own order: quantities, cash, cost pools and the K/R/W pools at ``date_from`` are what they were.
 
 MF-PAV-L1: the rate calendars no longer start at the floor ``EARLIEST_RANGE_START = date(1900, 1, 1)`` (``utils/datetime_utils.py``,
-which stays for other readers). They hold only the days a reading can change on (``_reading_calendar``), so a row stored
+removed by D-P4 L5). They hold only the days a reading can change on (``_reading_calendar``), so a row stored
 centuries back costs the days of its rate changes, never a calendar of every day since: each starts at the replay start
 (``_replay_from``, the first movement's day), or at the cash transit's own start, and never earlier than one day before it.
 
-- ``TestTheFloor`` — the constant (kept: other readers use it until a later lot). Every other test that names 1900 reads
-  the literal ``date(1900, 1, 1)``; this one ties that literal to the product's constant.
+- ``TestTheFloor`` — the constant is gone (D-P4 L5): a guard that ``datetime_utils`` has none. Every other test that names 1900 reads
+  the literal ``date(1900, 1, 1)``; this one guards that the product's constant is not back.
 - ``TestNoQuietDayBeforeDateFrom`` — red on HEAD: the ``replace`` calls made for days before ``date_from`` (a counting
   wrapper records each one's ``date=``) number 49 301 (date_from D2) / 49 302 (D3); after the cure, none. Since P4
   (MF5-1) the engine builds no quiet day at all (segments, ``StateSegment.state_on`` for a reader): the test counts
@@ -82,7 +82,7 @@ A, B = 10, 20
 X = 100
 Y = 200
 
-#: The floor, EARLIEST_RANGE_START (TestTheFloor ties the two): the engine no longer reads it.
+#: 1900-01-01, the date of the old floor ``EARLIEST_RANGE_START`` (gone, D-P4 L5; TestTheFloor guards it): a literal here.
 FLOOR = date(1900, 1, 1)
 DAY_ONE = date(1, 1, 1)
 
@@ -288,11 +288,12 @@ def _build(ledger: dict, date_from: date, **overrides) -> PortfolioCalculationRe
 
 
 class TestTheFloor:
-    def test_the_floor_is_1900_01_01(self):
-        """``EARLIEST_RANGE_START`` (kept by L1, read at run time) is the literal the other tests use."""
+    def test_datetime_utils_has_no_earliest_range_start(self):
+        """D-P4 L5: ``EARLIEST_RANGE_START`` is gone from ``datetime_utils``: no portfolio walk has a floor, so the 1900
+        every other test here names is a literal of the test and the module offers no constant to read it from."""
         from backend.app.utils import datetime_utils  # noqa: PLC0415 — read at run time
 
-        assert datetime_utils.EARLIEST_RANGE_START == FLOOR
+        assert not hasattr(datetime_utils, "EARLIEST_RANGE_START")
 
 
 # =============================================================================

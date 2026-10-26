@@ -243,11 +243,11 @@ The conversions go to the FX service in two calls:
   currency (`_unit_windows()`) give the same rates as a request a day, kept as the days a stored rate
   changes. `NativeCash.unit_rates` is a view on them (`financial_math/fx_rates.AskedDayRates`): a key
   answers on an asked day only, as the day-by-day map did, and `_rate_at()` and the calendar of the days a
-  rate changes read the steps, never every day. The days start on `EARLIEST_RANGE_START`
-  (1 January 1900, `utils/datetime_utils.py`) when the first movement is earlier: a
-  movement stored centuries back would otherwise ask one rate per day since
-  (R13-SEC8). Before the floor only the movements' own days are asked, so a balance
-  counted there still has a rate on or before every later day.
+  rate changes read the steps, never every day. The days start on the currency's first
+  movement, even when it is centuries back (`_unit_windows()`): the rates are read as steps,
+  so the cost follows the stored rate rows, not the calendar days. Before D-P4 (lot MF-PAV-L1)
+  the days started no earlier than 1 January 1900, a floor against a movement stored
+  centuries back asking one rate per day (R13-SEC8); it is gone.
 
 When every non-zero amount is already in T, no call is made and `session` is not
 used: cash held only in the report currency never needs a rate.
