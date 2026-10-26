@@ -525,6 +525,15 @@ def utils_backup_cli_users_limit(verbose: bool = False, test_names: list = None)
     return run_command(cmd, "Backup CLI users limit tests", verbose=verbose)
 
 
+def utils_backup_cli_owner_kept(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the command line next to a restore from the hosting panel that kept the owner's password and sessions (lot B5-1l)."""
+    print_section("Utils: Backup CLI owner kept")
+    print_info("Testing: scripts/backup_cli.py (_print_owner_outcome, cmd_pending, pending --json, pending --recover owner, cmd_restore --yes, _print_stage_report)")
+    print_info("Tests: pending prints the one line «kept its password and its open sessions» for owner_outcome kept (no id, no address), pending --json unchanged, --recover owner not offered, restore --yes of the same copy never keeps")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_utilities/test_backup_cli_owner_kept.py", test_names)
+    return run_command(cmd, "Backup CLI owner kept tests", verbose=verbose)
+
+
 def utils_backup_cli_secure(verbose: bool = False, test_names: list = None) -> bool:
     """Test the secure backup from the command line: create with a password, inspect and restore an envelope, decrypt."""
     print_section("Utils: Backup CLI secure backup")
@@ -1066,6 +1075,17 @@ Tests for utility modules and helper functions:
         # a database at the head made once by alembic in its own process, a pty or a pipe for stdin; restart.send_signal
         # and os.kill as restart sees them record and must stay unused: no lane DB, no server, no network, no writes
         # outside tmp_path.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-cli-owner-kept",
+        utils_backup_cli_owner_kept,
+        name="Backup CLI Owner Kept",
+        desc="Lot B5-1l, scripts/backup_cli.py next to a restore from the hosting panel on a managed instance that kept the owner's password and sessions: pending of a committed restore with owner_outcome kept prints ONE line, word for word «🔑 The owner's account kept its password and its open sessions (restore from the hosting panel)» (no account id, no address, no ❌, no link, no --recover); pending --json is unchanged (the six keys, committed, reason null, no choices, the line of a restore with no owner, nothing of the owner) and --recover owner is not offered (exit 4 choice_not_valid, nothing changed); backup restore --yes of the same copy (the marked administrator holds the owner's address) still closes the password as B5-1j (the owner line twice, the state records the picked account and no outcome, via cli) and neither the report nor the output ever says kept or prints an address",
+        tests="pending kept line → pending --json unchanged → --recover owner exit 4 → restore --yes of the same copy: closed, never kept",
+        # Data directories under tmp_path seen through monkeypatched LIBREFOLIO_* variables, a database at the head made once
+        # by alembic in its own process; no lane DB, no server, no network, no writes outside tmp_path.
         isolation="pure",
     )
     add_test(
