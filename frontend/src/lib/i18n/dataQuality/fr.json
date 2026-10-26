@@ -39,7 +39,6 @@
     "valuedAtCost": "{count} actif(s) valorisé(s) au coût — aucun prix disponible depuis plus de 2 semaines (au {as_of_date})",
     "transferShareMismatch": "{count} transfert(s) entre des courtiers où votre part diffère — la différence compte comme un gain ou une perte",
     "invalidSplitRatio": "{count} actif(s) avec une division au rapport invalide — ignorée tant que vous ne la corrigez pas dans les événements de l'actif",
-    "transactionsBeforeFloor": "{count} transaction(s) datée(s) d'avant 1900 (la plus ancienne le {earliest}) — l'historique commence le 1er janvier 1900 : corrigez leurs dates",
     "nonIsoCurrencySuggestion": "Montants en « {value} », qui n'est pas un code de devise ISO (il désigne {suggestion}) — leurs conversions peuvent manquer, et leurs lignes ne peuvent pas être enregistrées de nouveau tant que le code n'est pas corrigé",
     "nonIsoCurrencyCandidates": "Montants en « {value} », qui n'est pas un code de devise ISO (il peut désigner {candidates}) — leurs conversions peuvent manquer, et leurs lignes ne peuvent pas être enregistrées de nouveau tant que le code n'est pas corrigé",
     "nonIsoCurrencyUnknown": "Montants en « {value} », qui n'est pas un code de devise ISO — leurs conversions peuvent manquer, et leurs lignes ne peuvent pas être enregistrées de nouveau tant que le code n'est pas corrigé",
