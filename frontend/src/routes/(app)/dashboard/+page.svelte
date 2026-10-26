@@ -40,6 +40,8 @@
         type PortfolioReport,
         type PortfolioSummary,
         type PortfolioHistoryPoint,
+        type PortfolioRange,
+        type PortfolioMwrrLinePoint,
         type AllocationHistoryDimensions,
         type PositionsContribution,
         type PortfolioBrokerPnlHistory,
@@ -100,6 +102,9 @@
 
     let summary = $state<PortfolioSummary | null>(null);
     let history = $state<PortfolioHistoryPoint[]>([]);
+    /** The days the report's step series cover, and the history's MWRR as true points (D-P4). */
+    let historyRange = $state<PortfolioRange | null>(null);
+    let mwrrLine = $state<PortfolioMwrrLinePoint[]>([]);
     let brokerPnlHistory = $state<PortfolioBrokerPnlHistory[]>([]);
     let pnlCandles = $state<PortfolioPnlCandleSeries | null>(null);
     let pnlCandlesLoading = $state(false);
@@ -540,6 +545,8 @@
         // Cast from the Zodios union types to the concrete types the dashboard expects
         summary = (report?.summary as PortfolioSummary | null | undefined) ?? null;
         history = (report?.history as PortfolioHistoryPoint[] | null | undefined) ?? [];
+        historyRange = (report?.range as PortfolioRange | null | undefined) ?? null;
+        mwrrLine = (report?.mwrr_line as PortfolioMwrrLinePoint[] | null | undefined) ?? [];
         brokerPnlHistory = (report?.broker_pnl_history as PortfolioBrokerPnlHistory[] | null | undefined) ?? [];
         // Always reassigned (defaulting to null since loadAll() never requests candles):
         // this is also what invalidates a stale candle series from a prior broker/date-range
@@ -1093,7 +1100,7 @@
             <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
                 <!-- Growth Chart — 3/5 -->
                 <div class="lg:col-span-3">
-                    <GrowthChart {history} {brokerPnlHistory} {pnlCandles} onRequestPnlCandles={() => void pageBusy.join('dashboard-pnl-candles', loadPnlCandles)} {incomeHistory} {costHistory} {depositHistory} {acquisitionFunding} loading={historyLoading} baseCurrency={appliedCurrency} />
+                    <GrowthChart {history} range={historyRange} {mwrrLine} {brokerPnlHistory} {pnlCandles} onRequestPnlCandles={() => void pageBusy.join('dashboard-pnl-candles', loadPnlCandles)} {incomeHistory} {costHistory} {depositHistory} {acquisitionFunding} loading={historyLoading} baseCurrency={appliedCurrency} />
                 </div>
 
                 <!-- Allocation Panel — 2/5 -->

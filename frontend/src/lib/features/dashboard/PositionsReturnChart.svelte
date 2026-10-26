@@ -197,6 +197,8 @@
                 type: 'line',
                 data: line.points.map((point) => namedPoint(point.date, point.value)),
                 smooth: false,
+                // The portfolio's line is the Dashboard's history: its steps hold to the next date.
+                ...(line.stepped ? {step: 'end' as const} : {}),
                 connectNulls: false,
                 showSymbol: isolated.some(Boolean),
                 symbol: (_value: unknown, params: {dataIndex: number}) => (isolated[params.dataIndex] ? 'circle' : 'none'),

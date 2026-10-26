@@ -31,8 +31,8 @@ export interface StepSpan {
 /** A point of a line of true values, such as the history's MWRR (`mwrr_line`): no steps, the points as they arrive. */
 export interface LinePoint {
     date: string;
-    annualized: string | null;
-    cumulative: string | null;
+    annualized?: string | null;
+    cumulative?: string | null;
 }
 
 /** One pair a chart draws: the day, and the value (`null` is «not known», and breaks the line). */
@@ -68,6 +68,11 @@ function firstEndingOnOrAfter(points: readonly StepSpan[], day: string): number 
         else low = middle + 1;
     }
     return low;
+}
+
+/** The index of the last item whose `date` is on or before `day`; the first item when the day is before them all. For a chart's rows (one per date), whatever the steps behind them. */
+export function indexHoldingDay(items: ReadonlyArray<{date: string}>, day: string): number {
+    return Math.max(lastStartingOnOrBefore(items, day), 0);
 }
 
 /** The point holding `day` (`date ≤ day ≤ through`), or null before the series, after it and in a hole. */

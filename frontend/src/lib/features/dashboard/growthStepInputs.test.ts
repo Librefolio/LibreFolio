@@ -10,11 +10,50 @@
  *   3. A date typed in the year 1 costs the steps, not the 740 000 days.
  */
 import {describe, expect, it} from 'vitest';
-import {alignFlowToDates, buildLadderData, buildResolutionData, mapCandlesByDate, mapBrokerPnlSeries, mapEurStackedData, mapPctValues, type AggregatedMetric, type AggregatedResolutionData, type AggregationInputs} from './growthChartData';
+import {alignFlowToDates, amountOf, buildLadderData, buildResolutionData, type AggregatedMetric, type AggregatedResolutionData, type AggregationInputs, type BrokerPnlSeries, type DailyCandle, type EurStackedData, type PctValues} from './growthChartData';
 import {bucketEndDays, buildAggregationInputs, MAX_EXTRA_WITNESS_DAYS, rungWitnessDays, witnessDays, type StepSources} from './growthStepInputs';
 import type {LadderRung} from './growthLadderBuckets';
 import type {LinePoint} from '$lib/utils/stepSeries';
 import {dailyFromSteps} from '$lib/utils/__tests__/stepSeriesTestKit';
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// THE OLD MAPPERS, frozen. They read a history with one point per calendar day, as `GrowthChart` did before the report gave
+// steps (`growthChartData.ts` held them until Y5-3). They are the expected side of the parity cases: the old pipeline on the
+// expanded days. Do not change them to agree with the adapter.
+// ---------------------------------------------------------------------------------------------------------------------------
+type DayHistoryPoint = Record<string, any>;
+
+function oldEurStackedData(history: DayHistoryPoint[]): EurStackedData {
+    return {
+        bookAssetLike: history.map((pt) => amountOf(pt.book_asset_like)),
+        cashContributed: history.map((pt) => amountOf(pt.cash_from_contributed_capital)),
+        cashGenerated: history.map((pt) => amountOf(pt.cash_from_generated_returns)),
+        nav: history.map((pt) => (pt.nav_value != null ? Number(pt.nav_value.amount) : null)),
+        capitalBaseline: history.map((pt) => amountOf(pt.capital_baseline)),
+        totalPnl: history.map((pt) => amountOf(pt.total_pnl)),
+    };
+}
+
+function oldPctValues(history: DayHistoryPoint[]): PctValues {
+    return {
+        mwrrCum: history.map((pt) => (pt.mwrr_cumulative != null ? Number(pt.mwrr_cumulative) * 100 : null)),
+        twrr: history.map((pt) => (pt.twrr != null ? Number(pt.twrr) * 100 : null)),
+        roi: history.map((pt) => (pt.roi != null ? Number(pt.roi) * 100 : null)),
+    };
+}
+
+function oldBrokerPnlSeries(brokers: Array<{broker_id: number; broker_name: string; points: DayHistoryPoint[]}>, dates: string[]): BrokerPnlSeries[] {
+    return brokers.length >= 2
+        ? brokers.map((broker) => {
+              const byDate = new Map(broker.points.map((p) => [p.date, amountOf(p.total_pnl)]));
+              return {brokerId: broker.broker_id, brokerName: broker.broker_name, values: dates.map((d) => byDate.get(d) ?? null)};
+          })
+        : [];
+}
+
+function oldCandlesByDate(points: DayHistoryPoint[]): Map<string, DailyCandle> {
+    return new Map(points.map((p) => [p.date, {open: Number(p.open.amount), high: Number(p.high.amount), low: Number(p.low.amount), close: Number(p.close.amount)}]));
+}
 
 const money = (amount: number) => ({code: 'EUR', amount: amount.toFixed(2)});
 const RANGE = {start: '2026-01-01', end: '2026-04-30'};
@@ -108,10 +147,10 @@ function dailyInputs(): AggregationInputs {
     const brokerHistory = BROKERS.map((broker) => ({...broker, points: dailyFromSteps(broker.points)}));
     return {
         dates,
-        eurStackedData: mapEurStackedData(history as never),
-        pctValuesRaw: mapPctValues(history as never),
-        pnlBrokerSeriesRaw: mapBrokerPnlSeries(brokerHistory as never, dates),
-        pnlCandleByDate: mapCandlesByDate({hypothetical: false, points: dailyFromSteps(CANDLES.points)} as never),
+        eurStackedData: oldEurStackedData(history),
+        pctValuesRaw: oldPctValues(history),
+        pnlBrokerSeriesRaw: oldBrokerPnlSeries(brokerHistory, dates),
+        pnlCandleByDate: oldCandlesByDate(dailyFromSteps(CANDLES.points)),
         dividendValues: alignFlowToDates(dates, INCOME.points, (p) => Number(p.dividend.amount)),
         interestValues: alignFlowToDates(dates, INCOME.points, (p) => Number(p.interest.amount)),
         costValues: alignFlowToDates(dates, COSTS.points, (p) => Number(p.cost.amount)),
@@ -167,6 +206,13 @@ describe('witnessDays', () => {
         expect(days).toContain('2026-01-04');
         expect(days.filter((day) => day === '2026-01-10')).toHaveLength(1);
         expect(days).toEqual([...days].sort());
+    });
+
+    it('keeps the days of the range only: a series or an event dated outside it adds no date', () => {
+        const days = witnessDays(sources({range: {start: '2026-02-01', end: '2026-03-01'}}));
+        expect(days[0]).toBe('2026-02-01');
+        expect(days[days.length - 1]).toBe('2026-03-01');
+        expect(days.every((day) => day >= '2026-02-01' && day <= '2026-03-01')).toBe(true);
     });
 
     it('takes the range from the history when the report gives none', () => {

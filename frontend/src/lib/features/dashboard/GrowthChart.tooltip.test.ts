@@ -109,8 +109,12 @@ const DAY = 20;
 
 const eur = (amount: number) => ({code: 'EUR', amount: amount.toFixed(2)});
 
+/** The history's MWRR: a true value on every day (`index · 0.12 %`), as the daily history carried it. */
+const MWRR_LINE = DATES.map((date, index) => ({date, annualized: null, cumulative: (index * 0.0012).toFixed(6)}));
+
 const HISTORY: PortfolioHistoryPoint[] = DATES.map((date, index) => ({
     date,
+    through: date,
     cash_value: eur(1_000 + index),
     market_value: eur(10_000 + index * 100),
     nav_value: eur(11_000 + index * 100),
@@ -120,7 +124,6 @@ const HISTORY: PortfolioHistoryPoint[] = DATES.map((date, index) => ({
     cash_from_generated_returns: eur(200 + index),
     total_pnl: eur(500 + index * 100),
     twrr: (index * 0.001).toFixed(6),
-    mwrr_cumulative: (index * 0.0012).toFixed(6),
     roi: (index * 0.0009).toFixed(6),
 }));
 
@@ -128,7 +131,7 @@ function brokerPnlHistory(names: readonly string[]): PortfolioBrokerPnlHistory[]
     return names.map((broker_name, brokerIndex) => ({
         broker_id: 900 + brokerIndex,
         broker_name,
-        points: DATES.map((date, index) => ({date, total_pnl: eur(250 + brokerIndex * 100 + index * 5)})),
+        points: DATES.map((date, index) => ({date, through: date, total_pnl: eur(250 + brokerIndex * 100 + index * 5)})),
     }));
 }
 
@@ -137,6 +140,7 @@ const PNL_CANDLES: PortfolioPnlCandleSeries = {
     hypothetical: true,
     points: DATES.map((date, index) => ({
         date,
+        through: date,
         open: eur(500 + index * 100),
         high: eur(560 + index * 100),
         low: eur(480 + index * 100),
@@ -191,7 +195,7 @@ const handlerAttributes = (fragment: DocumentFragment): string[] =>
 
 /** Mount the chart and take it into a mode with the clicks a user makes. */
 async function openMode(mode: 'pct' | 'line' | 'candles', props: Record<string, unknown>): Promise<void> {
-    const {getByTestId} = render(GrowthChart, {props: {history: HISTORY, ...props}});
+    const {getByTestId} = render(GrowthChart, {props: {history: HISTORY, mwrrLine: MWRR_LINE, ...props}});
     await waitFor(() => expect(chartInstances).toHaveLength(1), {timeout: 5_000});
     if (mode === 'pct') {
         await fireEvent.click(getByTestId('growth-toggle-pct'));

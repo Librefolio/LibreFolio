@@ -53,6 +53,8 @@ export interface PositionLine {
     closedOn: string | null;
     complete: boolean;
     kind: 'position' | 'portfolio';
+    /** The line is made of steps (the Dashboard's history): each point holds to the next date, drawn with `step: 'end'`. */
+    stepped?: boolean;
 }
 
 /** The backend's cap on the positions of one request. */
@@ -63,7 +65,9 @@ export const PORTFOLIO_LINE_ID = 'portfolio';
 
 /** The structural part of a Dashboard history point the portfolio line reads. */
 export interface HistoryPointLike {
+    /** The history is steps: the point holds from `date` to `through`, both included. */
     date: string;
+    through: string;
     total_pnl: {code: string; amount: string};
     twrr?: string | null;
 }
@@ -107,7 +111,8 @@ export function positionLines(response: PositionsSeriesResponse | null | undefin
 
 /**
  * The portfolio's line, from the Dashboard's history: its return in «base 100» (`twrr` is a fraction), or its P&L
- * since the first day of the window. Null when the history is empty.
+ * since the first day of the window. One point per step of the history and a closing point on the last day of the last step, so the line
+ * reaches the end of the window; drawn as steps. Null when the history is empty.
  */
 export function portfolioLine(history: ReadonlyArray<HistoryPointLike>, view: PositionsChartView, label: string): PositionLine | null {
     if (history.length === 0) return null;
@@ -120,7 +125,10 @@ export function portfolioLine(history: ReadonlyArray<HistoryPointLike>, view: Po
         const pnl = safeDecimal(point.total_pnl?.amount);
         return {date: point.date, value: pnl === null || origin === null ? null : pnl - origin};
     });
-    return {id: PORTFOLIO_LINE_ID, label, points, closedOn: null, complete: true, kind: 'portfolio'};
+    const last = history[history.length - 1];
+    const closing = points[points.length - 1];
+    if (last.through > last.date) points.push({date: last.through, value: closing.value});
+    return {id: PORTFOLIO_LINE_ID, label, points, closedOn: null, complete: true, kind: 'portfolio', stepped: true};
 }
 
 /** The keys to ask for the ticked rows: one per distinct position, in the order given, no more than `max`. */
@@ -139,10 +147,10 @@ export function selectionKeys(rows: ReadonlyArray<{assetId: number; brokerId: nu
 
 /**
  * The colour rank of every asset (0 = the first colour): the assets held today, the heaviest first (ties: the lower id),
- * then the ones that left the portfolio, the one closed most recently first (its last day with a positive amount decides;
+ * then the ones that left the portfolio, the one closed most recently first (its last day with a positive amount decides, a step's being its `through`;
  * ties: the lower id). The Liquidity slice (no id) has no rank. The pie, the history and the lines read the same ranks.
  */
-export function rankAssetsByWeight(today: ReadonlyArray<{id: number | null; amount: number}>, history: ReadonlyArray<{date: string; components: ReadonlyArray<{id: number | null; amount: number}>}>): Map<number, number> {
+export function rankAssetsByWeight(today: ReadonlyArray<{id: number | null; amount: number}>, history: ReadonlyArray<{date: string; through?: string; components: ReadonlyArray<{id: number | null; amount: number}>}>): Map<number, number> {
     const held = new Map<number, number>();
     for (const slice of today) {
         if (slice.id !== null && slice.id !== undefined && slice.amount > 0) held.set(slice.id, slice.amount);
@@ -151,8 +159,10 @@ export function rankAssetsByWeight(today: ReadonlyArray<{id: number | null; amou
     for (const point of history) {
         for (const component of point.components) {
             if (component.id === null || component.id === undefined || !(component.amount > 0)) continue;
+            // A step holds the asset to its last day, so that is the last day the asset was held.
+            const lastDay = point.through ?? point.date;
             const previous = lastHeld.get(component.id);
-            if (previous === undefined || point.date > previous) lastHeld.set(component.id, point.date);
+            if (previous === undefined || lastDay > previous) lastHeld.set(component.id, lastDay);
         }
     }
     const ranks = new Map<number, number>();

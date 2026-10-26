@@ -126,9 +126,9 @@ function summaryOf(...holdings: Array<ReturnType<typeof holding>>) {
 const SUMMARY = () => summaryOf(holding(11, 1), holding(22, 1), holding(33, 2));
 
 const HISTORY: HistoryPointLike[] = [
-    {date: '2026-01-02', total_pnl: {code: 'EUR', amount: '500'}, twrr: '0'},
-    {date: '2026-01-03', total_pnl: {code: 'EUR', amount: '650'}, twrr: '0.02'},
-    {date: '2026-01-04', total_pnl: {code: 'EUR', amount: '400'}, twrr: '-0.015'},
+    {date: '2026-01-02', through: '2026-01-02', total_pnl: {code: 'EUR', amount: '500'}, twrr: '0'},
+    {date: '2026-01-03', through: '2026-01-03', total_pnl: {code: 'EUR', amount: '650'}, twrr: '0.02'},
+    {date: '2026-01-04', through: '2026-01-04', total_pnl: {code: 'EUR', amount: '400'}, twrr: '-0.015'},
 ];
 
 function seriesFor(assetId: number, brokerId: number | null, pnls: Array<[string, string]>): PositionSeries {

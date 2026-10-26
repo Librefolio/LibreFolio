@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {alignAt, bucketValue, coveredRange, dayOfAxisValue, EXPAND_DAYS_CAP, expandDays, nearestPoint, pointsBetween, toLineSeries, toStepSeries, valueAt, type LinePoint, type StepSpan} from '../stepSeries';
+import {alignAt, bucketValue, coveredRange, dayOfAxisValue, EXPAND_DAYS_CAP, expandDays, indexHoldingDay, nearestPoint, pointsBetween, toLineSeries, toStepSeries, valueAt, type LinePoint, type StepSpan} from '../stepSeries';
 import {dailyFromSteps, stepsFromDaily} from './stepSeriesTestKit';
 
 type Step = StepSpan & {nav: number | null};
@@ -274,6 +274,24 @@ describe('alignAt', () => {
         const started = performance.now();
         expect(alignAt(typo, ['0001-01-01', '1500-06-01', '2026-10-25'], nav)).toEqual([5, 5, 5]);
         expect(performance.now() - started).toBeLessThan(200);
+    });
+});
+
+describe('indexHoldingDay', () => {
+    const rows = [{date: '2026-01-01'}, {date: '2026-01-11'}, {date: '2026-01-21'}];
+
+    it('is the last date on or before the day', () => {
+        expect(indexHoldingDay(rows, '2026-01-01')).toBe(0);
+        expect(indexHoldingDay(rows, '2026-01-10')).toBe(0);
+        expect(indexHoldingDay(rows, '2026-01-11')).toBe(1);
+        expect(indexHoldingDay(rows, '2026-01-19')).toBe(1);
+        expect(indexHoldingDay(rows, '2026-01-21')).toBe(2);
+        expect(indexHoldingDay(rows, '2030-01-01')).toBe(2);
+    });
+
+    it('is the first row before the first date, and 0 for no rows', () => {
+        expect(indexHoldingDay(rows, '2025-12-30')).toBe(0);
+        expect(indexHoldingDay([], '2026-01-01')).toBe(0);
     });
 });
 

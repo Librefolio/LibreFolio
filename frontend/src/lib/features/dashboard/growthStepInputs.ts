@@ -69,8 +69,9 @@ function addStarts(days: Set<string>, points: ReadonlyArray<StepSpan>, rangeEnd:
 }
 
 /**
- * The dates of the inputs, ascending and without repeats: the ends of the range, the first day of every step of every series,
- * the day after a series ends or has a hole, the days of the MWRR line, the dates of the events, and `extra`.
+ * The dates of the inputs, ascending and without repeats, inside the range: its ends, the first day of every step of every
+ * series, the last day and the day after a series that ends or has a hole, the days of the MWRR line, the dates of the events,
+ * and `extra`.
  */
 export function witnessDays(sources: StepSources, extra: readonly string[] = []): string[] {
     const range = rangeOf(sources);
@@ -86,7 +87,8 @@ export function witnessDays(sources: StepSources, extra: readonly string[] = [])
     for (const events of [sources.incomeHistory, sources.costHistory, sources.depositHistory, sources.acquisitionFunding]) {
         for (const point of events?.points ?? []) days.add(point.date);
     }
-    return [...days].sort();
+    // The days of the range only: a series that reaches outside it (a stale prop, an event dated beyond the window) adds none.
+    return [...days].filter((day) => !range || (day >= range.start && day <= range.end)).sort();
 }
 
 /** The history's three returns in percent (a fraction × 100), the MWRR read from its line on the days the line has. */

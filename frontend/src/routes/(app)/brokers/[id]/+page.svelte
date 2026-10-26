@@ -45,6 +45,8 @@
         type PortfolioReport,
         type AllocationHistoryDimensions,
         type PortfolioHistoryPoint,
+        type PortfolioRange,
+        type PortfolioMwrrLinePoint,
         type PortfolioSummary,
         type PositionsContribution,
         type PortfolioIncomeHistorySeries,
@@ -88,6 +90,9 @@
 
     let portfolioSummary: PortfolioSummary | null = null;
     let portfolioHistory: PortfolioHistoryPoint[] = [];
+    /** The days the report's step series cover, and the history's MWRR as true points (D-P4). */
+    let reportRange: PortfolioRange | null = null;
+    let mwrrLine: PortfolioMwrrLinePoint[] = [];
     let incomeHistory: PortfolioIncomeHistorySeries | undefined = undefined;
     let costHistory: PortfolioCostHistorySeries | undefined = undefined;
     let depositHistory: PortfolioDepositHistorySeries | undefined = undefined;
@@ -354,6 +359,8 @@
     function applyOverview(report: PortfolioReport | null) {
         portfolioSummary = (report?.summary as PortfolioSummary | null | undefined) ?? null;
         portfolioHistory = (report?.history as PortfolioHistoryPoint[] | null | undefined) ?? [];
+        reportRange = (report?.range as PortfolioRange | null | undefined) ?? null;
+        mwrrLine = (report?.mwrr_line as PortfolioMwrrLinePoint[] | null | undefined) ?? [];
         // Eager per plan §4.1's sparse-payload caller policy ("Dashboard/Broker overview true").
         incomeHistory = (report?.income_history as PortfolioIncomeHistorySeries | null | undefined) ?? undefined;
         costHistory = (report?.cost_history as PortfolioCostHistorySeries | null | undefined) ?? undefined;
@@ -717,6 +724,8 @@
                     <div class="lg:col-span-3">
                         <GrowthChart
                             history={portfolioHistory}
+                            range={reportRange}
+                            {mwrrLine}
                             {pnlCandles}
                             onRequestPnlCandles={() => void pageBusy.join('broker-pnl-candles', loadPnlCandles)}
                             {incomeHistory}

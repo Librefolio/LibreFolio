@@ -869,8 +869,9 @@ test.describe('GrowthChart P&L mode — dashboard', () => {
         await expect(host).toHaveAttribute('data-chart-ready', 'true', {timeout: 15_000});
         await expect.poll(() => chartRenders(host), {timeout: 15_000}).toBeGreaterThan(rendersBefore);
 
-        const servedDays: number = overviews().at(-1)?.json?.history?.length ?? 0;
-        expect(servedDays, 'the 1Y overview serves a daily history').toBeGreaterThan(0);
+        const servedDays: number = servedDaysOf(overviews().at(-1)?.json).length;
+        const servedSteps: number = overviews().at(-1)?.json?.history?.length ?? 0;
+        expect(servedDays, 'the 1Y overview covers a range of days').toBeGreaterThan(0);
 
         // The two bounds the claim lives between: the line stays daily while it
         // has at most 1.3 buckets per pixel (a vertex survives sub-pixel density),
@@ -884,10 +885,12 @@ test.describe('GrowthChart P&L mode — dashboard', () => {
         expect(canvasWidth, 'the chart reports its canvas width').toBeGreaterThan(0);
         expect(servedDays * LADDER_MIN_BODY_PX, 'the seed no longer gives the 1Y window enough days for the 1D body floor').toBeGreaterThan(canvasWidth);
 
-        // The line: one point per served day, read off the chart (the positive
-        // statement), then no ladder and no badge (the badge renders only when the
+        // The line: the steps themselves, read off the chart (the positive statement): a point for each step the report served, none for
+        // the days between them, and never more than one per served day; then no ladder and no badge (the badge renders only when the
         // resolution is not daily, so its absence is the UI saying "daily").
-        await expect.poll(() => lineBuckets(host), {timeout: 15_000, message: 'the P&L line draws the 1Y window one point per served day'}).toBe(servedDays);
+        await expect.poll(() => lineBuckets(host), {timeout: 15_000, message: 'the P&L line draws the 1Y window as the served steps'}).toBeGreaterThanOrEqual(servedSteps);
+        const lineSteps = await lineBuckets(host);
+        expect(lineSteps, 'the line has no more points than the served days').toBeLessThanOrEqual(servedDays);
         await expect(ladder, 'the line has no candle-width ladder').toHaveCount(0);
         await expect(badge, 'the line at 1Y is daily, so no resolution badge').toHaveCount(0);
 
@@ -910,7 +913,8 @@ test.describe('GrowthChart P&L mode — dashboard', () => {
         // And back — proving the grammar drove it, not a one-way drift that would
         // have made the middle assertions true for the wrong reason.
         await selectSubmode(chart, 'line');
-        await expect.poll(() => lineBuckets(host), {timeout: 15_000, message: 'back on the line, one point per served day again'}).toBe(servedDays);
+        await expect.poll(() => lineBuckets(host), {timeout: 15_000, message: 'back on the line, the served steps again (the candle report adds its own dates, a few)'}).toBeGreaterThanOrEqual(lineSteps);
+        expect(await lineBuckets(host), 'still no more points than the served days').toBeLessThanOrEqual(servedDays);
         await expect(ladder).toHaveCount(0);
         await expect(badge).toHaveCount(0);
     });
@@ -1513,6 +1517,19 @@ function round2(value: number): number {
     return Math.round(value * 100) / 100;
 }
 
+/**
+ * Every day the report covers, both ends of its `range` included. A series of the report is one point per stretch without news (D-P4),
+ * so «the days the dashboard served» is the range, not the points: the ladder closes each bucket on the last day of its period that
+ * this range holds.
+ */
+function servedDaysOf(report: {range?: {start: string; end: string} | null} | null | undefined): string[] {
+    const range = report?.range;
+    if (!range) return [];
+    const days: string[] = [];
+    for (let ms = Date.parse(`${range.start}T00:00:00Z`); ms <= Date.parse(`${range.end}T00:00:00Z`); ms += 86_400_000) days.push(new Date(ms).toISOString().slice(0, 10));
+    return days;
+}
+
 /** Every break in a contiguous daily ISO history: [] when each step is exactly one UTC day. */
 function dailyGaps(dates: string[]): string[] {
     const DAY_MS = 86_400_000;
@@ -1921,9 +1938,9 @@ async function openLadder(page: Page, opts: {viewport: {width: number; height: n
     }
     await expect(rung).toHaveAttribute('aria-pressed', 'true');
 
-    const served: string[] = (overviews().at(-1)?.json?.history ?? []).map((point: {date: string}) => point.date);
+    const served: string[] = servedDaysOf(overviews().at(-1)?.json);
     expect(served.length, `precondition: the ${presetLabel} overview served a history`).toBeGreaterThan(0);
-    expect(dailyGaps(served), 'precondition: the served history is contiguous daily ISO dates, one UTC day per step').toEqual([]);
+    expect(dailyGaps(served), 'precondition: the served range is contiguous daily ISO dates, one UTC day per step').toEqual([]);
     return {chart, host, served};
 }
 

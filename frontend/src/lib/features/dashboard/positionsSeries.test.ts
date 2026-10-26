@@ -58,7 +58,7 @@ function response(list: PositionSeries[]): PositionsSeriesResponse {
 }
 
 function historyPoint(date: string, amount: string, twrr?: string | null): HistoryPointLike {
-    return {date, total_pnl: {code: 'EUR', amount}, ...(twrr === undefined ? {} : {twrr})};
+    return {date, through: date, total_pnl: {code: 'EUR', amount}, ...(twrr === undefined ? {} : {twrr})};
 }
 
 /** The values of a line, in order — null where the line breaks. */
@@ -260,6 +260,29 @@ describe('positionsSeries — portfolioLine', () => {
         expect(portfolioLine(history, 'percentage', 'P')!.points.map((p) => p.date)).toEqual(['2026-01-02', '2026-01-03', '2026-01-04']);
     });
 
+    it('is a step line: each point holds to the next date', () => {
+        expect(portfolioLine(history, 'absolute', 'P')!.stepped).toBe(true);
+    });
+
+    it('closes the line on the last day of the last step, so it reaches the end of the window', () => {
+        const steps: HistoryPointLike[] = [
+            {date: '2026-01-02', through: '2026-01-10', total_pnl: {code: 'EUR', amount: '500'}, twrr: '0'},
+            {date: '2026-01-11', through: '2026-01-31', total_pnl: {code: 'EUR', amount: '650'}, twrr: '0.02'},
+        ];
+        const line = portfolioLine(steps, 'absolute', 'P')!;
+        expect(line.points.map((point) => point.date)).toEqual(['2026-01-02', '2026-01-11', '2026-01-31']);
+        expect(valuesOf(line)).toEqual([0, 150, 150]);
+        expect(portfolioLine(steps, 'percentage', 'P')!.points.map((point) => point.value)).toEqual([100, 102, 102]);
+    });
+
+    it('a window of a history that starts in the year 1 is a handful of points', () => {
+        const typo: HistoryPointLike[] = [
+            {date: '0001-01-01', through: '2025-12-31', total_pnl: {code: 'EUR', amount: '0'}, twrr: '0'},
+            {date: '2026-01-01', through: '2026-03-01', total_pnl: {code: 'EUR', amount: '5'}, twrr: '0.01'},
+        ];
+        expect(portfolioLine(typo, 'absolute', 'P')!.points).toHaveLength(3);
+    });
+
     it('an empty history is no line at all (null), in both views', () => {
         expect(portfolioLine([], 'absolute', 'P')).toBeNull();
         expect(portfolioLine([], 'percentage', 'P')).toBeNull();
@@ -354,6 +377,27 @@ describe('positionsSeries — selectionKeys', () => {
 // =============================================================================
 
 describe('positionsSeries — rankAssetsByWeight', () => {
+    it('closed assets: the last day an asset was held is the `through` of its last step, not the day the step starts', () => {
+        // Asset 1 left on 10 January, asset 2 on 19 February. Asset 2's last step STARTS before asset 1's (5 January vs 11 January
+        // is the other way round: asset 1's starts on the 1st, asset 2's on the 11th), but ends later, so asset 2 closed last.
+        const rank = rankAssetsByWeight(
+            [],
+            [
+                {
+                    date: '2026-01-01',
+                    through: '2026-01-10',
+                    components: [
+                        {id: 1, amount: 10},
+                        {id: 2, amount: 10},
+                    ],
+                },
+                {date: '2026-01-11', through: '2026-02-19', components: [{id: 2, amount: 10}]},
+            ],
+        );
+        expect(rank.get(2)).toBe(0);
+        expect(rank.get(1)).toBe(1);
+    });
+
     const noHistory: Array<{date: string; components: Array<{id: number | null; amount: number}>}> = [];
 
     it('assets held today: rank 0 is the heaviest, descending by amount', () => {
