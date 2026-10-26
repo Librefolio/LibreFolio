@@ -22,12 +22,15 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Response, status
 from fastapi.responses import FileResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.v1.backup import job_views
 from backend.app.config.backup import RECIPIENTS_VARIABLE, BackupConfigError, backup_recipients, backup_requires_recipients
+from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
 from backend.app.schemas.backup import InstanceBackupJob
 from backend.app.services.platform.hosting_panel.access import PanelCaller, PanelScope, panel_access
+from backend.app.services.platform.instance_key_check import instance_key_state
 
 logger = get_logger(__name__)
 
@@ -41,18 +44,38 @@ _AUTH_RESPONSES = {
     429: {"description": "Too many refused panel credentials from this address (code `panel_too_many_attempts`, with `Retry-After`)"},
     503: {"description": "The token of this instance cannot be used: its file is unreadable or it is too short (code `backup_panel_unavailable`)"},
 }
-# The start's 409 says both refusals: another backup runs (the shared one), or the instance awaits a restore (L3).
-_START_AWAITING_RESTORE = {409: {"description": job_views.START_RESPONSES[409]["description"] + "; or the instance awaits a restore from its hosting panel (`LIBREFOLIO_AWAIT_RESTORE`): a backup of its empty data never starts (code `backup_awaiting_restore`)"}}
+# The start's 409 says its refusals: another backup runs (the shared one), the instance awaits a restore (L3), or its instance key is not
+# the one its data was written with (D6, H5-7).
+_START_AWAITING_RESTORE = {
+    409: {
+        "description": job_views.START_RESPONSES[409]["description"]
+        + "; or the instance awaits a restore from its hosting panel (`LIBREFOLIO_AWAIT_RESTORE`): a backup of its empty data never starts (code `backup_awaiting_restore`)"
+        + "; or the instance key is not the one this instance's data was written with, so a backup would push the good copies out of the archive (code `backup_instance_key_mismatch`)"
+    }
+}
 _START_UNAVAILABLE = {503: {"description": "The panel's credential cannot be used, or the backup cannot be sealed: `LIBREFOLIO_BACKUP_RECIPIENTS` cannot be used, or is not set on a managed instance (code `backup_panel_unavailable`): no backup starts"}}
 
 
 PanelToken = Annotated[PanelCaller, Depends(panel_access(PanelScope.BACKUP))]
 
 
+async def _refuse_on_instance_key_mismatch(session: AsyncSession = Depends(get_session_generator)) -> None:
+    """409 ``backup_instance_key_mismatch`` when the instance key is not the one the data was written with (D6, H5-7).
+
+    Declared after ``PanelToken`` on the start, so a caller without the credential learns nothing; not on an instance
+    that awaits a restore, whose own 409 comes first. Recomputed at every request: the right key put back is accepted
+    at the next one.
+    """
+    if _awaiting_restore():
+        return
+    if await instance_key_state(session) == "mismatch":
+        raise job_views.backup_error(status.HTTP_409_CONFLICT, "backup_instance_key_mismatch", "The instance key is not the one this instance's data was written with: no backup starts")
+
+
 @panel_router.post("/panel/jobs", status_code=status.HTTP_202_ACCEPTED, response_model=InstanceBackupJob, responses={**_AUTH_RESPONSES, **job_views.START_RESPONSES, **_START_UNAVAILABLE, **_START_AWAITING_RESTORE})
-def start_panel_backup(_token: PanelToken) -> InstanceBackupJob:
+def start_panel_backup(_token: PanelToken, _key: Annotated[None, Depends(_refuse_on_instance_key_mismatch)]) -> InstanceBackupJob:
     """Start a backup of the whole instance for the hosting panel, and return the job to poll. Never with the instance key;
-    sealed for ``LIBREFOLIO_BACKUP_RECIPIENTS`` when it is set (L3). Never on an instance that awaits a restore."""
+    sealed for ``LIBREFOLIO_BACKUP_RECIPIENTS`` when it is set (L3). Never on an instance that awaits a restore, nor with an instance key that is not the one its data was written with."""
     if _awaiting_restore():
         raise job_views.backup_error(status.HTTP_409_CONFLICT, "backup_awaiting_restore", "The instance awaits a restore: a backup of its empty data never starts")
     recipients = _recipients()

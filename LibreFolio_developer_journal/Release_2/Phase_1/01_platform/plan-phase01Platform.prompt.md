@@ -10746,3 +10746,46 @@ DOC-2 (ricerca per lingua), DOC-1 (riordino della guida admin, con le guide Tail
    > **⚠️ Fuori pista**: nessuno. Resta un ritardo fino a 2 s tra la scrittura dell'esito e la prima richiesta servita su un worker che aspettava
    > (la limitazione serve a non leggere il file a ogni richiesta); non lo tocco senza decisione. Il punto 1 di A (errore passeggero di B che lascia `pending`
    > fino al riavvio) è di B.
+8. ✅ **H5-3b · le liste di chiavi di `/system/instance` dopo `restore_interrupted_reason`** (24/10). Il cancello del treno 11 trovò 27 rossi API:
+   H5-3 aveva aggiunto il campo alla configurazione pubblica senza aggiornare i test a chiavi esatte.
+   > **Note implementazione**: `restore_interrupted_reason` aggiunto agli insiemi dichiarati di `test_system_api.py` (`INSTANCE_KEYS`),
+   > `test_instance_config_legal_api.py` (`INSTANCE_KEYS`) e `test_registration_api.py` (`keys`, con il messaggio), e ai loro commenti (via il
+   > «red until B-33» ormai falso). Nessun cambiamento di prodotto. Cercate altre liste esatte nei test backend e nel frontend: nessuna (le
+   > fixture Vitest di `instanceConfig` non elencano le chiavi). Selettori su corsia 6197: `api instance-legal` 19, `api registration` 102,
+   > `api system` 122, `services restore-owner-guard` 46, `api restore-owner-guard` 33.
+   > **⚠️ Fuori pista**: nessuno. Lezione: un campo nuovo di una risposta pubblica va cercato per nome in tutti i `*_KEYS` e `set(body) ==` dei test.
+9. ✅ **H5-6 · `/system/ready` dice se il DB è indietro o avanti, e la sua revisione** (25/10). Dalla richiesta P-3 del coordinatore cloud, confermata dal
+   developer con una differenza: oltre ai codici, in risposta c'è anche la revisione del DB («non si sa mai che serve in futuro»). P-2 (un tag `X.Y.Z` non si ripubblica mai) è ora una regola scritta.
+   > **Note implementazione**: `ReadinessMigrationsState` è `ok | behind | ahead | unknown` (`mismatch` sparisce: si divide in due): `behind` = la revisione
+   > del DB è una che gli script conoscono ma non la testa (migrazione non applicata o fallita); `ahead` = non la conoscono (DB più nuovo dell'immagine, o di un altro
+   > LibreFolio, anche un DB a una revisione ritirata come la vecchia 006). Nuovo campo `ReadinessResponse.database_revision: str | None` (l'unica riga di `alembic_version`, `null`
+   > se non si legge); la testa degli script non esce mai. `readiness.py`: la lettura cacheata è ora `_read_alembic_scripts()` (testa + revisioni note, una sola
+   > `ScriptDirectory.from_config` per processo), `alembic_head_revision()` resta com'era. Doc: `docker_advanced` (le traduzioni non nominano `mismatch`),
+   > `service_exposure_funnel`, `curl-testing`, `security.md` (tabella dei codici, riga su `database_revision`), `api/index.md`; `release-pipeline.md`: avviso «A published tag is never
+   > republished» (P-2). Test (test-author): `services platform-readiness` 18 (`behind`/`ahead` anche su un albero di script a parte, `database_revision` in ogni caso), `api system` 125
+   > (corpo vivo con la revisione, parametri `behind`/`ahead`, OpenAPI con i quattro codici). `api sync` fatto (i file generati sono ignorati da git).
+   > Verifiche: `api instance-legal` 19, `api registration` 102, Vitest 1446 (`features/backup`, `features/instance`), `front check` 0/0, build strict, `check-links` 97, `docs-admin-references` 47, ruff/black.
+   > **⚠️ Fuori pista**: le liste di chiavi esatte di `/system/instance` non cambiano (il campo è di `/system/ready`): le ho solo rieseguite. La risposta pubblica
+   > ora dice a chiunque a che revisione sta il DB: l'`app_version` è già pubblico e la revisione ne dipende, quindi il guadagno per chi attacca è piccolo (scritto in `security.md`).
+   > `contratto-istanza.md` del cloud va aggiornato da loro (`mismatch` → `behind`/`ahead`, campo nuovo).
+10. ✅ **H5-7 · D6: `instance_key: ok|mismatch` in `panel/status`, i backup del pannello e `wake-sync` fermi con la chiave sbagliata** (26/10). Decisione del
+    developer: il campo con un valore di controllo; con la chiave sbagliata si fermano solo i backup del pannello e `wake-sync`, l'istanza resta aperta; il cambio voluto con
+    una variabile valida per un solo avvio.
+    > **Note implementazione**: nuovo `services/platform/instance_key_check.py`. Il riferimento (R2) è `secrets/instance.key.check`, 64 hex = HMAC di una frase fissa con la
+    > sottochiave `instance.key-check.v1`; la guardia della prima scrittura è R1 (segreti salvati: `mismatch` solo se ce n'è almeno uno e **tutti** sono sotto un'altra chiave; con
+    > `mismatch` per R1 non si scrive nulla, scriverlo sposerebbe la chiave sbagliata). `instance_key_state(session)` si ricalcola a **ogni** richiesta (nessuna memoria: la chiave
+    > giusta rimessa è `ok` alla richiesta dopo, e i backup riprendono da soli la prima notte); non solleva mai; senza chiave o con chiave inutilizzabile → `ok` (non genera la
+    > chiave); file illeggibile o non di 64 hex → `ok` più un solo avviso per processo (mai il contenuto). Scrittura: file temporaneo + `link` (vince il primo worker) o `replace`
+    > (accept), file `0600` in cartella `0700`. `LIBREFOLIO_INSTANCE_KEY_ACCEPT=1` (`config.platform.instance_key_accept()`, stessi valori di `awaiting_restore()`, valore non valido
+    > ferma l'avvio in `log_configuration_audit`) riscrive il valore a ogni avvio in cui è impostata, con un avviso nel log. Passo di avvio `instance-key-check` dopo
+    > `plugin-secrets-check` (non bloccante, senza `skip_when`). Cablaggio: `PanelStatusResponse.instance_key` (obbligatorio, dopo `owner_email_change`: otto chiavi, `users_over_limit` verrà con
+    > A5-7); `POST /backup/panel/jobs` → `409 backup_instance_key_mismatch` con una dipendenza dopo `PanelToken` (non quando l'istanza aspetta un ripristino), nessun job; `_wake_run`
+    > → `status: instance_key_mismatch` dopo `awaiting_restore` e `restore_interrupted`; `/security/checks` ha il controllo `platform.instance_key_check`. Frontend: `securityFindings.ts`,
+    > `checkGuides.json` (→ `admin/configuration_secrets/#instance-key-check`), chiave `instance.checks.instanceKey.mismatch` in 4 lingue. Doc: `configuration_secrets` (sezione e
+    > variabile), `hosting_panel_backups` (la guida per l'host: le tre strade d'uscita e la ripresa automatica), `hosting_panel_api`, `wake_sync`, `security.md`, `api/index.md`, `.env.example`.
+    > Test (test-author, rossi prima): `services instance-key-check` 91, `api instance-key-check` 30 (compresi i due del ritorno: chiave A → B (409) → A di nuovo (`ok`, 202, nulla
+    > di memorizzato) e il percorso accept), più le liste a otto chiavi in `api panel-status`, `await-restore-mode`, `restore-interrupted`, i controlli di sicurezza e le guide. `api sync` fatto.
+    > **⚠️ Fuori pista**: l'id del contratto `platform.instance_key` era già del controllo del file della chiave (`config_audit.check_instance_key`): il nuovo è `platform.instance_key_check`
+    > (la chiave del messaggio `ok` è condivisa). Un dizionario di sette chiavi in `test_panel_status_api.py` (riga 1068) era sfuggito al test-author: aggiornato a mano.
+    > Il limite vero, scritto nella doc: un'istanza 1.2 che passa alla 1.3 con la chiave già sbagliata e senza segreti salvati non si può scoprire. `contratto-istanza.md` del cloud va
+    > aggiornato da loro (`instance_key`, `instance_key_mismatch`, `backup_instance_key_mismatch`).

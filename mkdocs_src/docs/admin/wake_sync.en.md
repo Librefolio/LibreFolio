@@ -192,6 +192,7 @@ The report's `status`:
 | `blocked` | The hosting provider blocked the instance, and no job ran: see [A Blocked Instance](#wake-sync-blocked) |
 | `awaiting_restore` | The hosting panel is restoring the instance, and no job ran: see [The Awaiting Restore Mode](hosting_panel_backups.md#await-restore) |
 | `restore_interrupted` | The state of a restore cannot be read, so the instance serves no data, and no job ran: see [When the State of a Restore Cannot Be Read](hosting_panel_backups.md#restore-interrupted) |
+| `instance_key_mismatch` | The instance key is not the one its data was written with, and no job ran. The instance still serves: see [The Key Check](configuration_secrets.md#instance-key-check) |
 
 !!! tip "🧑‍💻 Writing the caller"
 

@@ -122,6 +122,22 @@ def awaiting_restore() -> bool:
     raise ValueError("LIBREFOLIO_AWAIT_RESTORE must be one of 1/0, true/false, yes/no, on/off, or unset")
 
 
+def instance_key_accept() -> bool:
+    """``LIBREFOLIO_INSTANCE_KEY_ACCEPT``: accept the instance key in force as the new reference, for the start that reads it (lot H5-7).
+
+    A deliberate change of key (a rotation, a lost key replaced) makes the key check say ``mismatch`` until the
+    check value is rewritten; this variable rewrites it at start and the log says so at every start while it is set,
+    so it is removed afterwards. Read at each call, with the values of ``awaiting_restore()``: any other value raises
+    ``ValueError``, and the startup checks stop the server on it.
+    """
+    value = os.environ.get("LIBREFOLIO_INSTANCE_KEY_ACCEPT", "").strip().lower()
+    if not value or value in _BLOCKED_FALSE:
+        return False
+    if value in _BLOCKED_TRUE:
+        return True
+    raise ValueError("LIBREFOLIO_INSTANCE_KEY_ACCEPT must be one of 1/0, true/false, yes/no, on/off, or unset")
+
+
 #: The name workstream B's backup routes read (``getattr(platform, "await_restore", None)``): the same function.
 await_restore = awaiting_restore
 
