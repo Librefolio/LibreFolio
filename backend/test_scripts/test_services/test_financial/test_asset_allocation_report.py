@@ -10,6 +10,9 @@ Consistency checks (the brief's): on every day of the history, the asset amounts
 as the ``type`` dimension's amounts; a position closed in the period appears in the history only on the days it was held,
 and every one of them; the current allocation is the last day's.
 
+The history is in steps (D-P4 cure B): a point holds from its ``date`` to its ``through``, and a day's allocation is
+``value_at(points, day)``. The per-day checks above read every day of the report's ``range`` that way (D0..END).
+
 The book (a private SQLite file, the app schema; one user owning 100 % of one broker; EUR, no FX rate): a deposit, X (a
 stock) and Y (an ETF) bought on D1, X quoted on D2, X sold out on D3 (closed: held D1..D3-1), Y quoted on D4. The report
 runs over D0..END.
@@ -44,6 +47,7 @@ from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, Pr
 from backend.app.schemas.common import OpenDateRangeModel
 from backend.app.schemas.portfolio import PortfolioReportQuery
 from backend.app.services import portfolio_service as portfolio_service_module
+from backend.app.services.financial_math.series_steps import value_at
 from backend.app.services.portfolio_service import PortfolioService
 
 EUR = "EUR"
@@ -127,6 +131,18 @@ def _total(items) -> Decimal:
     return sum((item.amount for item in items), Decimal("0"))
 
 
+def _report_days(report) -> list[date]:
+    """Every day of the report's ``range`` (the book's days D0..END): the days a step is read for."""
+    assert (report.range.start, report.range.end) == (D0, END), f"the range is {report.range.start}..{report.range.end}, expected {D0}..{END}"
+    return [D0 + timedelta(days=offset) for offset in range((END - D0).days + 1)]
+
+
+def _step_on(points, day: date):
+    step = value_at(points, day)
+    assert step is not None, f"no step holding {day}"
+    return step
+
+
 class TestTheReportsAssetDimension:
     @pytest.mark.asyncio
     async def test_the_summary_carries_the_current_asset_allocation(self, tmp_path):
@@ -146,17 +162,19 @@ class TestTheReportsAssetDimension:
             report = await _report(book)
         assets, types = report.allocation_history.asset, report.allocation_history.type
         assert assets, "precondition: an asset history"
-        assert [point.date for point in assets] == [point.date for point in types]
-        for asset_point, type_point in zip(assets, types, strict=True):
-            assert _total(asset_point.components) == _total(type_point.components), f"{asset_point.date}: assets + Liquidity {_total(asset_point.components)}, type {_total(type_point.components)}"
+        assert assets[0].date == types[0].date == D0, "both dimensions open on the range's first day"
+        assert assets[-1].through == types[-1].through == END, "both dimensions reach the range's last day"
+        for day in _report_days(report):
+            asset_point, type_point = _step_on(assets, day), _step_on(types, day)
+            assert _total(asset_point.components) == _total(type_point.components), f"{day}: assets + Liquidity {_total(asset_point.components)}, type {_total(type_point.components)}"
             names = {component.id: component.name for component in asset_point.components}
-            assert names.get(None) == "Liquidity", f"{asset_point.date}: Liquidity is always present"
+            assert names.get(None) == "Liquidity", f"{day}: Liquidity is always present"
             assert set(names) <= {None, book.x_id, book.y_id}
             for asset_id, name in ((book.x_id, book.x_name), (book.y_id, book.y_name)):
                 if asset_id in names:
                     assert names[asset_id] == name, "the name is Asset.display_name"
             amounts = [component.amount for component in asset_point.components]
-            assert amounts == sorted(amounts, reverse=True), f"{asset_point.date}: not by amount descending"
+            assert amounts == sorted(amounts, reverse=True), f"{day}: not by amount descending"
         for type_point in types:
             assert all(component.id is None for component in type_point.components)
 
@@ -165,17 +183,19 @@ class TestTheReportsAssetDimension:
         async with _private_book(tmp_path) as book:
             report = await _report(book)
         assets = report.allocation_history.asset
-        with_x = [point.date for point in assets if any(component.id == book.x_id for component in point.components)]
-        with_y = [point.date for point in assets if any(component.id == book.y_id for component in point.components)]
+        days = _report_days(report)
+        # Every day is read from the step holding it: X is in the days it was held, Y in every day from its purchase on.
+        with_x = [day for day in days if any(component.id == book.x_id for component in _step_on(assets, day).components)]
+        with_y = [day for day in days if any(component.id == book.y_id for component in _step_on(assets, day).components)]
         held_x = [D1 + timedelta(days=offset) for offset in range((D3 - D1).days)]
         assert with_x == held_x, f"X appears on {with_x[:1]}..{with_x[-1:]}, held {held_x[0]}..{held_x[-1]}"
-        assert with_y == [point.date for point in assets if point.date >= D1]
+        assert with_y == [day for day in days if day >= D1]
 
     @pytest.mark.asyncio
     async def test_the_current_allocation_is_the_last_days(self, tmp_path):
         async with _private_book(tmp_path) as book:
             report = await _report(book)
-        last = report.allocation_history.asset[-1]
-        assert last.date == END
+        last = _step_on(report.allocation_history.asset, END)
+        assert last.through == END and report.allocation_history.asset[-1] is last, "the last step is the one holding the last day"
         current = [(item.name, item.id, item.value, item.amount) for item in report.summary.allocation_by_asset]
         assert current == [(component.name, component.id, component.value, component.amount) for component in last.components]

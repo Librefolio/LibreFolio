@@ -3777,7 +3777,9 @@ async def validate_portfolio_math_async() -> int:  # noqa: C901 — flat anomaly
 
         svc = PortfolioService(session)
         summary = await svc.get_summary(user_id=admin.id)
-        history = await svc.get_history(user_id=admin.id, date_from=None, date_to=None)
+        # The history in steps (D-P4): TWRR in the steps, the MWRR on the line of true points
+        history_steps = await svc.get_history_steps(user_id=admin.id, date_from=None, date_to=None)
+        history = history_steps.history
 
         if summary.twrr_percent is not None and abs(summary.twrr_percent) > MAX_RETURN:
             anomalies.append(f"    summary: TWRR = {summary.twrr_percent} (> {MAX_RETURN}× = 1 000 %)")
@@ -3787,8 +3789,9 @@ async def validate_portfolio_math_async() -> int:  # noqa: C901 — flat anomaly
         for point in history:
             if point.twrr is not None and abs(point.twrr) > MAX_RETURN:
                 anomalies.append(f"    {point.date}: TWRR = {point.twrr} (> {MAX_RETURN}× = 1 000 %)")
-            if point.mwrr_annualized is not None and abs(point.mwrr_annualized) > MAX_RETURN:
-                anomalies.append(f"    {point.date}: MWRR = {point.mwrr_annualized} (> {MAX_RETURN}× = 1 000 %)")
+        for line_point in history_steps.mwrr_line:
+            if line_point.annualized is not None and abs(line_point.annualized) > MAX_RETURN:
+                anomalies.append(f"    {line_point.date}: MWRR = {line_point.annualized} (> {MAX_RETURN}× = 1 000 %)")
 
     await async_eng.dispose()
 

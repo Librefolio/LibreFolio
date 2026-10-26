@@ -43,7 +43,7 @@ with 125 at the report date, 3125 ISK are exactly 25 EUR.
 
 import sys
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from uuid import uuid4
 
@@ -333,7 +333,13 @@ def _amount(value: Currency | None) -> Decimal | None:
 
 
 def _missing_dates(summary: PortfolioSummary, pair: str) -> set[date]:
+    """The movement dates of a missing pair (D-P4: ``dates`` holds the movements only)."""
     return {day for item in summary.missing_fx_pairs if item.pair == pair for day in item.dates}
+
+
+def _missing_valuation_days(summary: PortfolioSummary, pair: str) -> set[date]:
+    """The days a missing pair blocks a valuation (D-P4: ``ranges``, merged spans of consecutive days), expanded here."""
+    return {span.start + timedelta(days=offset) for item in summary.missing_fx_pairs if item.pair == pair for span in item.ranges for offset in range((span.end - span.start).days + 1)}
 
 
 def _mentions(summary: PortfolioSummary, currency: str) -> list[str]:
@@ -616,20 +622,26 @@ class TestCostDiagnostics:
 
         summary = await _summary(session, book, date_from=PERIOD_FX_FROM, date_to=PERIOD_FX_TO)
 
-        kgs_dates = _missing_dates(summary, "KGS/EUR")
+        # D-P4: ``dates`` holds the movement dates (the engine's, plus the summary's own conversion of the current price at
+        # the valuation date), the period's valuation days come as ``ranges`` (merged spans).
+        kgs_movements = _missing_dates(summary, "KGS/EUR")
+        kgs_valuations = _missing_valuation_days(summary, "KGS/EUR")
+        kgs_any = kgs_movements | kgs_valuations
         observed = {
             "open_cost_basis": _amount(summary.open_cost_basis),
-            "purchase day (asset leg of the cost, any period)": PERIOD_FX_BUY in kgs_dates,
-            "first day of the period (valuation, date_from included)": PERIOD_FX_FROM in kgs_dates,
-            "last day of the period (valuation)": PERIOD_FX_TO in kgs_dates,
-            "valuation day before the period": PERIOD_FX_OUTSIDE in kgs_dates,
-            "day before the period": date(2021, 5, 31) in kgs_dates,
+            "purchase day (asset leg of the cost, any period), a movement date": PERIOD_FX_BUY in kgs_movements,
+            "first day of the period (valuation, date_from included), a valuation day": PERIOD_FX_FROM in kgs_valuations,
+            "last day of the period (valuation), a valuation day": PERIOD_FX_TO in kgs_valuations,
+            "first day of the period is a valuation day only, not a movement date": PERIOD_FX_FROM not in kgs_movements,
+            "valuation day before the period": PERIOD_FX_OUTSIDE in kgs_any,
+            "day before the period": date(2021, 5, 31) in kgs_any,
         }
         assert observed == {
             "open_cost_basis": Decimal("100"),  # paid in the report currency: known exactly without any KGS rate
-            "purchase day (asset leg of the cost, any period)": True,
-            "first day of the period (valuation, date_from included)": True,
-            "last day of the period (valuation)": True,
+            "purchase day (asset leg of the cost, any period), a movement date": True,
+            "first day of the period (valuation, date_from included), a valuation day": True,
+            "last day of the period (valuation), a valuation day": True,
+            "first day of the period is a valuation day only, not a movement date": True,
             "valuation day before the period": False,
             "day before the period": False,
         }

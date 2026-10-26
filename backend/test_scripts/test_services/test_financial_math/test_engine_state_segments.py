@@ -24,8 +24,12 @@ What is tested (pure: no database, no server, no network; the builder is fed by 
    (1900-01-01, ``EARLIEST_RANGE_START``): 46 021 days, fewer than 100 segments, and ``build()`` builds no quiet day
    (``StateSegment.state_on`` never called; ``DailyPortfolioState`` constructed at most twice per segment, HEAD: 46 021).
 4. ``TestReadersOnSegments`` — on the century book, each reader gives on the ``DailyStates`` exactly what it gives on its
-   dense ``list(...)``, and builds at most the days it returns (a window's days + 2), or a number bounded by the segments
-   (data quality, missing FX pairs), or one or two days (period boundaries, allocation now).
+   dense ``list(...)``, and builds at most a number bounded by the segments (data quality, missing FX pairs), or one or two
+   days (period boundaries, allocation now). Since D-P4 («cure B») the step views (history, broker P&L, allocation) build no
+   quiet day at all — they read each segment's own state — and give steps equal to the dense list's, expanded to days the
+   dense states' values; ``build_performance_inputs`` is sparse on the engine's states, and the TWRR, ROI and MWRR it gives on
+   every snapshot day equal the dense inputs' on that day. The stale-price turn is the refined one (only the last observation
+   before a gap longer than the threshold), and a missing pair's valuation days are in ``ranges``, its ``dates`` the movements.
 5. ``TestEarlyReturns`` — ``PortfolioCalculationEngine.calculate`` without an access or without a transaction returns an
    empty ``DailyStates`` (the session is an ``AsyncMock``: no database).
 
@@ -48,6 +52,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from pydantic import BaseModel
 
 from backend.app.db.models import BrokerUserAccess, TransactionType, UserRole
 from backend.app.services.financial_math.portfolio import period
@@ -58,6 +63,12 @@ from backend.app.services.financial_math.portfolio.derived_views import DerivedV
 from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
 from backend.app.services.financial_math.portfolio.models import DailyPortfolioState, DailyStates, PortfolioCalculationResult, StateSegment
 from backend.app.services.financial_math.price_marks import build_asset_price_series
+from backend.app.services.financial_math.returns import (
+    calculate_simple_roi_series,
+    calculate_twrr_series,
+    period_mwrr_series,
+    rebase_to_period,
+)
 from backend.app.services.portfolio_service import _engine_missing_fx_pairs
 from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
 from backend.test_scripts.test_services._engine_native_cash import engine_native_cash
@@ -184,6 +195,49 @@ def _field_values(state: DailyPortfolioState, *, skip: set[str] = frozenset()) -
     return {f.name: getattr(state, f.name) for f in dataclasses.fields(DailyPortfolioState) if f.name not in skip}
 
 
+def _exact(value):
+    """``value`` made of plain comparables with every Decimal as its digits and exponent (``Decimal("1.10")`` is not
+    ``Decimal("1.1")``), through pydantic models, dicts, lists and tuples."""
+    if isinstance(value, Decimal):
+        return ("Decimal", value.as_tuple())
+    if isinstance(value, BaseModel):
+        return _exact(value.model_dump())
+    if isinstance(value, dict):
+        return {key: _exact(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_exact(item) for item in value]
+    return value
+
+
+def _by_day(steps: list[dict]) -> dict[date, dict]:
+    """A series of steps (D-P4: each holds from ``date`` to ``through``, both included) as one entry per day, asserting its
+    invariant: ``date <= through``, in order, no overlap; and two touching steps never hold the same values (maximal)."""
+    days: dict[date, dict] = {}
+    previous: dict | None = None
+    for step in steps:
+        assert step["date"] <= step["through"], f"step {step['date']}..{step['through']} ends before it starts"
+        values = {key: value for key, value in step.items() if key not in ("date", "through")}
+        if previous is not None:
+            assert previous["through"] < step["date"], f"steps overlap or are out of order at {step['date']}"
+            if previous["through"] + timedelta(days=1) == step["date"]:
+                assert _exact({k: v for k, v in previous.items() if k not in ("date", "through")}) != _exact(values), f"the steps ending {previous['through']} and starting {step['date']} hold the same values"
+        for day in _days(step["date"], step["through"]):
+            days[day] = values
+        previous = step
+    return days
+
+
+def _period_returns(snapshots: list, flows: list, date_from: date | None) -> tuple[dict, dict, dict]:
+    """TWRR, simple ROI and MWRR of the period rebased on ``date_from``, each by snapshot day, Decimals with their exponent
+    (the MWRR None where the card of that period has none)."""
+    period = rebase_to_period(snapshots, flows, date_from)
+    navs, cash_flows = list(period.nav_snapshots), list(period.cash_flows)
+    twrr = {point.date: _exact(point.twrr) for point in calculate_twrr_series(navs, cash_flows)}
+    roi = {point.date: _exact(point.roi) for point in calculate_simple_roi_series(navs, cash_flows)}
+    mwrr = {point.date: _exact(point.mwrr) for point in period_mwrr_series(navs, cash_flows)}
+    return twrr, roi, mwrr
+
+
 @pytest.fixture
 def materializations(monkeypatch) -> list[date]:
     """Every day ``StateSegment.state_on`` is asked for, in order."""
@@ -232,9 +286,11 @@ def _eur_book() -> dict:
 
 
 #: The EUR book's computed days: date_from (the replay's first day) 01-01; movements 01-03, 01-06, 01-20; quotes 01-08,
-#: 01-13; stale turns (an observation + STALE_PRICE_THRESHOLD_DAYS 7 + 1) 01-14 (BUY 01-06), 01-16 (01-08), 01-21 (01-13);
+#: 01-13; stale turns (D-P4): a price turns stale on an observation + STALE_PRICE_THRESHOLD_DAYS 7 + 1 only for the last
+#: observation before a gap longer than the threshold — X is observed on 01-06 (BUY), 01-08 and 01-13, each followed by a
+#: newer one within 8 days but the last, so only 01-21 (01-13 + 8); no 01-14 (BUY + 8) nor 01-16 (01-08 + 8);
 #: period_start 01-25.
-EUR_COMPUTED_DAYS = [date(2025, 1, d) for d in (1, 3, 6, 8, 13, 14, 16, 20, 21, 25)]
+EUR_COMPUTED_DAYS = [date(2025, 1, d) for d in (1, 3, 6, 8, 13, 20, 21, 25)]
 
 # The transit book: February 2025, one EUR deposit before date_from.
 TRANSIT_FROM, TRANSIT_TO = date(2025, 2, 1), date(2025, 2, 28)
@@ -265,8 +321,11 @@ def _transit_book() -> dict:
 
 #: The transit book's computed days from date_from: 02-01 (date_from); movements 02-02, 02-03, 02-05, 02-09, 02-10, 02-14;
 #: in-transit boundaries 02-05/02-08/02-09 (cash) and 02-10/02-13/02-14 (securities); USD rate changes 02-07, 02-20;
-#: quotes 02-11, 02-25; stale turns 02-11 (BUY 02-03), 02-18 (02-10), 02-19 (02-11), 02-22 (02-14).
-TRANSIT_COMPUTED_DAYS = [date(2025, 2, d) for d in (1, 2, 3, 5, 7, 8, 9, 10, 11, 13, 14, 18, 19, 20, 22, 25)]
+#: quotes 02-11, 02-25; stale turns (D-P4): Y's observations (``AssetPriceSeries.observation_dates``: its quotes and its
+#: BUY) are 02-03, 02-11 and 02-25 — a transfer is none —, and a price turns stale on an observation + 8 only for the last
+#: one before a gap longer than the threshold: 02-11 + 8 = 02-19 (the next observation is 14 days on); not 02-03 + 8 = 02-11,
+#: which a newer observation precedes. The USD rate is stored every day: no stale rate.
+TRANSIT_COMPUTED_DAYS = [date(2025, 2, d) for d in (1, 2, 3, 5, 7, 8, 9, 10, 11, 13, 14, 19, 20, 25)]
 
 # The funding book: candles and acquisition funding on.
 FUNDING_FROM, FUNDING_TO = date(2025, 1, 1), date(2025, 1, 20)
@@ -514,29 +573,60 @@ class TestPeriodReaders:
 
 
 class TestDerivedViewsReaders:
+    """D-P4: the step views read each segment's own state (never a quiet day built), give steps — one per run of identical
+    values, clipped to the window — and, expanded to days, the daily series of the dense list of states. The performance
+    inputs are sparse on the engine's states: the returns they give on a snapshot's day are the dense inputs' on that day."""
+
     def test_build_history_of_a_window(self, century, century_dense, materializations):
+        """A one-month window: the steps are the dense list's steps (same days, same values with their exponent), expanded to
+        days they cover the window once, and on every day the NAV and the P&L are the dense state's."""
         got = DerivedViewsBuilder(century.daily_states, "EUR").build_history(WINDOW_FROM, AS_OF)
-        assert len(materializations) <= WINDOW_DAYS + 2, f"{len(materializations)} days built for a {WINDOW_DAYS}-day window"
-        assert len(got) == WINDOW_DAYS
-        assert got == DerivedViewsBuilder(century_dense, "EUR").build_history(WINDOW_FROM, AS_OF)
+        assert len(materializations) == 0, f"{len(materializations)} quiet days built: the steps read the segments' own states"
+        by_day = _by_day(got)
+        assert list(by_day) == _days(WINDOW_FROM, AS_OF)
+        assert len(got) < WINDOW_DAYS, "the quiet days are inside steps"
+        assert _exact(got) == _exact(DerivedViewsBuilder(century_dense, "EUR").build_history(WINDOW_FROM, AS_OF))
+        for state in century_dense[-WINDOW_DAYS:]:
+            assert by_day[state.date]["nav_value"].amount.as_tuple() == state.nav_value.as_tuple(), state.date
+            assert by_day[state.date]["total_pnl"].amount.as_tuple() == state.total_pnl.as_tuple(), state.date
 
     def test_build_history_of_a_window_inside_the_long_segment(self, century, century_dense, materializations):
+        """Inside the 1900-2025 segment the window is one step, its days the window's, as the dense list gives it."""
         window_from, window_to = date(1950, 1, 1), date(1950, 1, 31)
         got = DerivedViewsBuilder(century.daily_states, "EUR").build_history(window_from, window_to)
-        assert len(materializations) <= 31 + 2
-        assert got == DerivedViewsBuilder(century_dense, "EUR").build_history(window_from, window_to)
+        assert len(materializations) == 0
+        assert [(step["date"], step["through"]) for step in got] == [(window_from, window_to)]
+        assert _exact(got) == _exact(DerivedViewsBuilder(century_dense, "EUR").build_history(window_from, window_to))
+
+    def test_build_history_with_extra_days_splits_the_step_there(self, century, century_dense, materializations):
+        """``extra_days`` are change days the service adds (its TWRR/ROI days): a day inside a quiet run starts a step only
+        where the values it reads from the segment differ — with no ``metrics``, never: the step stays whole."""
+        quiet_day = date(2025, 12, 15)
+        views = DerivedViewsBuilder(century.daily_states, "EUR")
+        assert views.change_days(WINDOW_FROM, AS_OF, [quiet_day]) == sorted({WINDOW_FROM, quiet_day, *(seg.start for seg in century.daily_states.segments if WINDOW_FROM < seg.start <= AS_OF)})
+        assert [(step["date"], step["through"]) for step in views.build_history(WINDOW_FROM, AS_OF, extra_days=[quiet_day])] == [(step["date"], step["through"]) for step in views.build_history(WINDOW_FROM, AS_OF)]
+        pinned = views.build_history(WINDOW_FROM, AS_OF, metrics=lambda day: {"marker": day >= quiet_day}, extra_days=[quiet_day])
+        assert [(step["date"], step["through"]) for step in pinned if step["date"] <= quiet_day <= step["through"]] == [(quiet_day, AS_OF)], "a metric that changes on the extra day starts a step there"
+        assert len(materializations) == 0
 
     def test_build_broker_pnl_history_of_a_window(self, century, century_dense, materializations):
         got = DerivedViewsBuilder(century.daily_states, "EUR").build_broker_pnl_history(WINDOW_FROM, AS_OF)
-        assert len(materializations) <= WINDOW_DAYS + 2
-        assert got == DerivedViewsBuilder(century_dense, "EUR").build_broker_pnl_history(WINDOW_FROM, AS_OF)
+        assert len(materializations) == 0, f"{len(materializations)} quiet days built"
+        dense = DerivedViewsBuilder(century_dense, "EUR").build_broker_pnl_history(WINDOW_FROM, AS_OF)
+        assert got and _exact(got) == _exact(dense)
+        for broker_id, steps in got.items():
+            by_day = _by_day(steps)
+            assert list(by_day) == _days(WINDOW_FROM, AS_OF), f"broker {broker_id}: a step every day of the window it is in the state"
+            for state in century_dense[-WINDOW_DAYS:]:
+                assert by_day[state.date]["total_pnl"].amount.as_tuple() == state.broker_contributions[broker_id].pnl_contribution.as_tuple(), (broker_id, state.date)
 
     @pytest.mark.parametrize("dimension", ["type", "sector", "geography"])
     def test_build_allocation_history_from_a_date(self, century, century_dense, materializations, dimension):
         got = DerivedViewsBuilder(century.daily_states, "EUR").build_allocation_history(dimension, WINDOW_FROM)
-        assert len(materializations) <= WINDOW_DAYS + 2, f"{len(materializations)} days built from {WINDOW_FROM}"
-        assert [point["date"] for point in got] == _days(WINDOW_FROM, AS_OF)
-        assert got == DerivedViewsBuilder(century_dense, "EUR").build_allocation_history(dimension, WINDOW_FROM)
+        assert len(materializations) == 0, f"{len(materializations)} quiet days built from {WINDOW_FROM}"
+        by_day = _by_day(got)
+        assert list(by_day) == _days(WINDOW_FROM, AS_OF), "steps expanded to days: every day from the window's start to the end"
+        assert _exact(got) == _exact(DerivedViewsBuilder(century_dense, "EUR").build_allocation_history(dimension, WINDOW_FROM))
 
     @pytest.mark.parametrize(
         "date_from",
@@ -546,10 +636,56 @@ class TestDerivedViewsReaders:
         ],
     )
     def test_build_performance_inputs_of_a_window(self, century, century_dense, materializations, date_from):
+        """The engine's inputs are sparse (D-P4): the opening day, every segment start after it and the last day; the flows
+        are the dense ones'. On every snapshot day TWRR, ROI and MWRR (after ``rebase_to_period``) are, Decimal for Decimal
+        with its exponent, the dense inputs' value on that day: a quiet stretch's factor is exactly 1."""
         window_days = (AS_OF - date_from).days + 1
-        got = DerivedViewsBuilder(century.daily_states, "EUR").build_performance_inputs(date_from)
-        assert len(materializations) <= window_days + 2, f"{len(materializations)} days built for a {window_days}-day window"
-        assert got == DerivedViewsBuilder(century_dense, "EUR").build_performance_inputs(date_from)
+        sparse_snapshots, sparse_flows = DerivedViewsBuilder(century.daily_states, "EUR").build_performance_inputs(date_from)
+        assert len(materializations) == 0, f"{len(materializations)} quiet days built"
+        dense_snapshots, dense_flows = DerivedViewsBuilder(century_dense, "EUR").build_performance_inputs(date_from)
+
+        assert [(flow.date, _exact(flow.amount)) for flow in sparse_flows] == [(flow.date, _exact(flow.amount)) for flow in dense_flows], "the flows are identical"
+        starts_after_opening = [seg.start for seg in century.daily_states.segments if dense_snapshots[0].date < seg.start]
+        assert [snapshot.date for snapshot in sparse_snapshots] == sorted({dense_snapshots[0].date, *starts_after_opening, AS_OF}), "the opening day, every segment start after it, the last day"
+        assert len(sparse_snapshots) < window_days, "sparse: not one snapshot a day"
+        dense_by_day = {snapshot.date: snapshot for snapshot in dense_snapshots}
+        assert all(_exact(snapshot.nav) == _exact(dense_by_day[snapshot.date].nav) for snapshot in sparse_snapshots), "a snapshot's NAV is the dense day's"
+
+        sparse_returns = _period_returns(sparse_snapshots, sparse_flows, date_from)
+        dense_returns = _period_returns(dense_snapshots, dense_flows, date_from)
+        for name, sparse_values, dense_values in zip(("twrr", "roi", "mwrr"), sparse_returns, dense_returns, strict=True):
+            assert sparse_values and set(sparse_values) <= set(dense_values), name
+            assert {day: dense_values[day] for day in sparse_values} == sparse_values, f"{name} on a snapshot day is the dense series' value"
+
+    def test_build_performance_inputs_on_the_days_asked(self, century, century_dense, materializations):
+        """``days`` adds snapshots after the opening (D-P4): the service asks every change day of its window plus the
+        quiet days it wants a point on. On each of them, quiet days included, TWRR, ROI and MWRR are the dense series'
+        value of that day; a day outside the window or before the opening is ignored."""
+        date_from = date(2025, 3, 1)
+        quiet_days = [date(2025, 5, 15), date(2025, 8, 20), date(2025, 12, 15)]
+        views = DerivedViewsBuilder(century.daily_states, "EUR")
+        days = [*views.change_days(date_from, AS_OF), *quiet_days, date(2025, 2, 1), date(2026, 3, 1)]
+        sparse_snapshots, sparse_flows = views.build_performance_inputs(date_from, days=days)
+        assert len(materializations) == 0
+        dense_snapshots, dense_flows = DerivedViewsBuilder(century_dense, "EUR").build_performance_inputs(date_from)
+        expected_days = sorted({date_from, *views.change_days(date_from, AS_OF), *quiet_days})
+        assert [snapshot.date for snapshot in sparse_snapshots] == expected_days, "the opening, the days asked inside the window, nothing else"
+        assert [(flow.date, _exact(flow.amount)) for flow in sparse_flows] == [(flow.date, _exact(flow.amount)) for flow in dense_flows]
+        for name, sparse_values, dense_values in zip(("twrr", "roi", "mwrr"), _period_returns(sparse_snapshots, sparse_flows, date_from), _period_returns(dense_snapshots, dense_flows, date_from), strict=True):
+            assert set(quiet_days) <= set(sparse_values), name
+            assert {day: dense_values[day] for day in sparse_values} == sparse_values, f"{name} on a snapshot day, a quiet one included, is the dense series' value"
+
+    def test_the_mwrr_of_a_quiet_day_needs_no_snapshot_between(self, century, century_dense):
+        """The MWRR solves every point alone, so snapshots on a few quiet days only (the MWRR line's days, D-P4) give the
+        dense series' MWRR on each of them: the flows are the same and the NAV of a day is its segment's."""
+        date_from = date(2025, 3, 1)
+        quiet_days = [date(2025, 5, 15), date(2025, 8, 20), date(2025, 12, 15)]
+        snapshots, flows = DerivedViewsBuilder(century.daily_states, "EUR").build_performance_inputs(date_from, days=quiet_days)
+        dense_snapshots, dense_flows = DerivedViewsBuilder(century_dense, "EUR").build_performance_inputs(date_from)
+        assert [snapshot.date for snapshot in snapshots] == [date_from, *quiet_days]
+        sparse_mwrr, dense_mwrr = _period_returns(snapshots, flows, date_from)[2], _period_returns(dense_snapshots, dense_flows, date_from)[2]
+        assert set(sparse_mwrr) == set(quiet_days)
+        assert {day: dense_mwrr[day] for day in quiet_days} == sparse_mwrr
 
     def test_build_performance_inputs_since_march_holds_the_usd_deposit(self, century):
         """Precondition: the March window's flows are not empty (the 600 USD deposit of 03-10)."""
@@ -602,9 +738,13 @@ class TestSegmentBoundedReaders:
         assert got == _engine_missing_fx_pairs(dense_result, period_from, period_to)
 
     def test_the_missing_pair_spans_many_days(self, century):
-        """Precondition: USD/EUR is missing on more than 200 days (each listed), from a handful of segments."""
-        pairs = {info.pair: info.dates for info in _engine_missing_fx_pairs(century, None, None)}
-        assert len(pairs.get("USD/EUR", [])) > 200
+        """Precondition (D-P4): USD/EUR is missing on more than 200 valuation days, which are in ``ranges`` (merged
+        ``DateSpan`` list: a handful for a handful of segments), while ``dates`` lists the movements only — here none: the
+        USD deposit and BUY of 03-10 and 03-11 have their rate."""
+        info = {info.pair: info for info in _engine_missing_fx_pairs(century, None, None)}["USD/EUR"]
+        assert sum((span.end - span.start).days + 1 for span in info.ranges) > 200
+        assert len(info.ranges) < 10, "a few merged ranges, not a span a day"
+        assert info.dates == [], "dates are the movements' only"
 
 
 # =============================================================================

@@ -65,6 +65,7 @@ CONTAINER_FIELDS = {
     "broker_contributions",
     "unrealized_by_currency",
     "by_asset",
+    "stale_fx_pairs",  # D-P4: pair -> the date of its last stored rate, a dict a quiet day copies
 }
 
 D1 = date(2025, 1, 1)
@@ -119,6 +120,7 @@ def _state(day: date, seed: int) -> DailyPortfolioState:
         acquisition_funding=AcquisitionFundingContribution(from_new_capital=amount(26), from_reinvested=amount(27)),
         unrealized_by_currency={"USD": UnrealizedSplit(asset=amount(28), fx=amount(29), unsplit=amount(30))},
         by_asset={600 + seed: amount(31), 650 + seed: amount(32)},
+        stale_fx_pairs={"USD/EUR": day - timedelta(days=9)},
     )
 
 
@@ -231,6 +233,7 @@ class TestStateSegment:
         quiet.transaction_implied_last_quote_dates[4343] = None
         quiet.broker_contributions.clear()
         quiet.unrealized_by_currency["CHF"] = UnrealizedSplit()
+        quiet.stale_fx_pairs["GBP/EUR"] = D1
 
         assert _field_values(stored) == before
         again = seg.state_on(date(2025, 1, 4))
