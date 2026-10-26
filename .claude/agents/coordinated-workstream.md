@@ -231,8 +231,9 @@ Typical shared surfaces:
 
 **One release, one Alembic migration** (developer decision, 19/10/2026). A schema change goes into
 the release's single migration file (for example `005_release_1_3_0_schema.py`): edit that file, as
-its assigned writer, and never create a new revision. If you are not the assigned writer, ask the
-coordinator before touching the schema.
+its assigned writer, and never create a new revision. Workstreams in parallel may each edit it on their
+own branch: keep your change in its own block, name it in the checkpoint, and the coordinator merges it
+into the file when the branches meet (developer, 24/10/2026).
 
 ## Tests and specialist ownership
 

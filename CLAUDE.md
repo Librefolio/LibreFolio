@@ -28,7 +28,7 @@ LibreFolio/
 
 ## Key Architectural Decisions
 
-1. **All calculations in Backend** — the frontend is pure presentation
+1. **Complex calculations in Backend** — the frontend is presentation; small sums or multiplications (a form convenience, a chart adapter) may live in the frontend, in one shared helper (developer decision, 25/10/2026)
 2. **FIFO at Runtime** — cost matching computed on-demand, not persisted
 3. **Provider Registry Pattern** — auto-discovery for FX, Asset and BRIM providers with `params_schema` for dynamic forms
 4. **Multi-Provider with Fallback** — FX rates from ECB→FED→BOE→SNB + MANUAL sentinel
@@ -48,9 +48,9 @@ LibreFolio/
 - **Multilingual UI** — only the graphical interface in EN/IT/FR/ES
 - **Edit > Rewrite** — prefer targeted edits to avoid regressions
 - **Diagrams for the developer** — when a Markdown document explains a flow, a state machine or who-calls-what, draw it as a Mermaid code block: the developer's editor (MarkText) renders it
-- **Incremental Alembic migrations (released)** — ship schema changes as new migrations to protect existing installs; edit `001_initial.py` only for brand-new never-shipped tables; `db create-clean` only for fresh/test DBs
+- **One Alembic migration per release** (developer decision, 19/10/2026, confirmed 24/10/2026) — between one release and the next there is exactly one migration file, `00N_release_<x_y_z>_schema.py` (1.3: `005_release_1_3_0_schema.py`). A schema change edits that file, never a new revision. Workstreams working in parallel each edit it on their own branch; when the branches are merged, their changes are merged into that one file (never `alembic merge`, never a second head). A file inside a released tag is frozen; `db create-clean` only for fresh/test DBs. Details: `backend-db.instructions.md` «Alembic Migrations»
 - **After modifying API** — run `./dev.py api sync` to regenerate TypeScript client
-- **After modifying DB models** — add an incremental Alembic migration (`./dev.py db migrate "…"`); use `db create-clean` only for fresh/test DBs
+- **After modifying DB models** — edit the release's migration file (rule above) and test the upgrade from the previous release's head; use `db create-clean` only for fresh/test DBs
 - **Git: local yes, remote only the developer** (developer decision, 14/10/2026).
   - **Allowed locally**, when the task needs it: commit, merge, fast-forward,
     cherry-pick, branch create and rename.
