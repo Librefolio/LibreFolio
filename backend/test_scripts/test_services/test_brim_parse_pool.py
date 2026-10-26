@@ -83,6 +83,7 @@ from structlog.testing import capture_logs
 from backend.app.schemas.brim import BRIMParseOutput
 from backend.app.services.brim import brim_parse_pool, brim_provider
 from backend.app.services.brim.brim_provider import BRIMParseError, delete_file, get_file_path, save_uploaded_file
+from backend.app.services.plugin_settings import runtime as settings_runtime
 from backend.test_scripts.test_services._brim_pool_probe import BRIM_MODULE, PLUGIN_MODULE, PRELOAD_MODULE
 
 SAMPLE = Path(__file__).resolve().parents[2] / "app" / "services" / "brim_providers" / "sample_reports" / "schwab-export.csv"
@@ -272,6 +273,26 @@ async def test_falls_back_to_a_thread_when_the_pool_cannot_start(uploaded_sample
     monkeypatch.setattr(brim_parse_pool, "_pool_disabled", True)
     output = await brim_parse_pool.parse_file_offloaded(uploaded_sample, "broker_schwab", 1)
     assert len(output.transactions) > 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("pool", [pytest.param(True, id="process-pool"), pytest.param(False, id="thread-fallback")])
+async def test_naming_the_user_changes_nothing_for_a_plugin_without_settings(pool: bool, uploaded_sample, reset_pool, monkeypatch):
+    """W-BS: ``parse_file_offloaded(..., user_id=…)`` is the settings hook; a plugin that declares no field (schwab, like
+    every real one) is parsed exactly as before — the same output, through the pool and through the thread — and the
+    database of the settings is never reached (the engine of the settings runtime raises when it is)."""
+
+    def no_database():
+        raise AssertionError("the settings database was reached: schwab declares no field")
+
+    monkeypatch.setattr(settings_runtime, "get_async_engine", no_database)
+    monkeypatch.setattr(brim_parse_pool, "_pool_disabled", not pool)
+    inline = brim_provider.parse_file(uploaded_sample, "broker_schwab", 1)
+
+    offloaded = await brim_parse_pool.parse_file_offloaded(uploaded_sample, "broker_schwab", 1, user_id=1)
+
+    assert offloaded.model_dump(mode="json") == inline.model_dump(mode="json") and len(offloaded.transactions) > 0
+    assert (brim_parse_pool._pool is not None) is pool, "the pool carried the parse, or the thread did, as asked"
 
 
 def test_worker_count_is_bounded():

@@ -71,6 +71,7 @@ PROVIDER_ERROR_TEST_PATHS = (
     "backend/test_scripts/test_services/test_justetf_errors.py",
     "backend/test_scripts/test_services/test_snb_errors.py",
     "backend/test_scripts/test_services/test_yahoo_finance_errors.py",
+    "backend/test_scripts/test_services/test_yahoo_finance_fund_metadata.py",
 )
 
 RISK_SERVICE_TEST_PATHS = (
@@ -523,6 +524,16 @@ def services_transaction_cost_basis_rule(verbose: bool = False, test_names: list
     return run_command(cmd, "Transaction cost basis rule tests", verbose=verbose)
 
 
+def services_linked_adjustment_pair(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that a batch refuses to link two ADJUSTMENTs (pairAdjustmentNotAllowed), and what it still lets through."""
+    print_section("Services: Linked Adjustment Pair")
+    print_info("Testing: backend/app/services/transactions/validation.py (_validate_linked_pair) + batch_creates.py (the link_uuid groups)")
+    print_info("Tests: two ADJUSTMENTs under one link_uuid refused on the first create, commit and validate; a TRANSFER pair, the Bulk promote, unlinked ADJUSTMENTs and stored pairs untouched; the message in 4 languages")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_linked_adjustment_pair.py", test_names)
+    return run_command(cmd, "Linked adjustment pair tests", verbose=verbose)
+
+
 def services_transaction_decimal_places(verbose: bool = False, test_names: list = None) -> bool:
     """Test how many decimal places a transaction keeps, where a batch refuses more, and the balances summed exactly (C-97a)."""
     print_section("Services: Transaction Decimal Places")
@@ -938,6 +949,16 @@ def services_brim_parse_race(verbose: bool = False, test_names: list = None) -> 
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_parse_race.py", test_names)
     return run_command(cmd, "BRIM parse race tests", verbose=verbose)
+
+
+def services_brim_parse_settings(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the BRIM parse hook of the plugin settings: the parent resolves, the child binds, a secret never leaves."""
+    print_section("Services: BRIM Parse Settings")
+    print_info("Testing: backend/app/services/brim/brim_parse_pool.py (parse_file_offloaded, user_id), brim_provider.parse_file (settings), plugin_settings/runtime.py (bound_settings_for)")
+    print_info("Tests: no field = parsed exactly as before, fields = BoundSettings handed to the child, errors and logs masked, the endpoint passes the user, pickle round-trip")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_parse_settings.py", test_names)
+    return run_command(cmd, "BRIM parse settings tests", verbose=verbose)
 
 
 def services_settings(verbose: bool = False, test_names: list = None) -> bool:
@@ -1511,6 +1532,14 @@ def services_hosting_panel_vectors(verbose: bool = False, test_names: list = Non
     return run_command(cmd, "Hosting panel ticket vector tests", verbose=verbose)
 
 
+def services_pdf_fonts(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the PDF viewer's CJK fonts served by the instance (H-55): the hash list, the cache, a wrong hash thrown away, the route."""
+    print_section("Services: PDF Fonts")
+    print_info("Testing: backend/app/services/files/pdf_fonts.py, backend/app/api/v1/pdf_fonts.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_pdf_fonts.py", test_names)
+    return run_command(cmd, "PDF font tests", verbose=verbose)
+
+
 def services_client_address(verbose: bool = False, test_names: list = None) -> bool:
     """Test the client address behind a trusted proxy: LIBREFOLIO_CLIENT_IP_HEADER, client_address and client_rate_key (P17); no function only for the tests (N58)."""
     print_section("Services: Client Address")
@@ -1573,6 +1602,22 @@ def services_platform_readiness(verbose: bool = False, test_names: list = None) 
     print_info("Testing: backend/app/services/platform/readiness.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_platform_readiness.py", test_names)
     return run_command(cmd, "Instance readiness tests", verbose=verbose)
+
+
+def services_await_restore_mode(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the «awaiting restore» mode's switch and startup (H-62, §6): awaiting_restore(), the startup check, Step.skip_when, the six skipped steps."""
+    print_section("Services: Awaiting Restore Mode")
+    print_info("Testing: config/platform.awaiting_restore(), config_audit on LIBREFOLIO_AWAIT_RESTORE, lifecycle.Step.skip_when, app_lifespan.STARTUP_STEPS")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_await_restore_mode.py", test_names)
+    return run_command(cmd, "Awaiting restore mode tests", verbose=verbose)
+
+
+def services_restore_guard(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the probe of an unreadable restore state and the startup it stops serving data (B-33, H)."""
+    print_section("Services: Restore Guard")
+    print_info("Testing: services/platform/restore_guard.py (probe_restore_state, restore_interrupted), app_lifespan.STARTUP_STEPS restore-state and the eight skipped steps")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_restore_guard.py", test_names)
+    return run_command(cmd, "Restore guard tests", verbose=verbose)
 
 
 def services_app_lifecycle(verbose: bool = False, test_names: list = None) -> bool:
@@ -1669,6 +1714,14 @@ def services_backup_envelope(verbose: bool = False, test_names: list = None) -> 
     print_info("Testing: backend/app/services/platform/instance_backup/envelope.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_envelope.py", test_names)
     return run_command(cmd, "Secure backup envelope tests", verbose=verbose)
+
+
+def services_backup_sealed(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the sealed nightly backup (.tar of manifest, password.age, backup.lfbk; lot L3) against the common vectors."""
+    print_section("Services: Sealed Backup")
+    print_info("Testing: backend/app/services/platform/instance_backup/sealed.py, envelope.py (unlock_header), fixtures/backup_l3/")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_sealed.py", test_names)
+    return run_command(cmd, "Sealed backup tests", verbose=verbose)
 
 
 def services_backup_secure_rules(verbose: bool = False, test_names: list = None) -> bool:
@@ -2166,6 +2219,13 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "linked-adjustment-pair",
+        services_linked_adjustment_pair,
+        name="Linked Adjustment Pair",
+        desc="Two ADJUSTMENTs under one link_uuid are refused on the first create (pairAdjustmentNotAllowed, commit and validate); a TRANSFER pair, the Bulk promote, unlinked ADJUSTMENTs and a stored pair are not touched; the message exists in EN/IT/FR/ES",
+    )
+    add_test(
+        cat,
         "transaction-decimal-places",
         services_transaction_decimal_places,
         name="Transaction Decimal Places",
@@ -2276,7 +2336,7 @@ Note: No backend server required.
         "email-config",
         services_email_config,
         name="E-mail Configuration",
-        desc="LIBREFOLIO_SMTP_* accessors read at call time: blank is unset, three TLS modes with their default ports, port and hourly limit in ASCII digits, one mailbox for From and Reply-To (no CR/LF, no second address), the password through env_secret, EmailConfigError naming the variable and never the password",
+        desc="LIBREFOLIO_SMTP_* accessors read at call time: blank is unset, three TLS modes with their default ports, port, hourly limit and sign-up emails per address (LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS, 20) in ASCII digits, one mailbox for From and Reply-To (no CR/LF, no second address), the password through env_secret, EmailConfigError naming the variable and never the password",
         # PURE: no lane DB, no server; every LIBREFOLIO_SMTP_* is removed then set with monkeypatch, password files in tmp_path.
         isolation="pure",
     )
@@ -2334,7 +2394,7 @@ Note: No backend server required.
         "email-verification-hooks",
         services_email_verification_hooks,
         name="E-mail Verification Hooks",
-        desc="user_usage counts an inactive account with a live verification link once (not expired, revoked or consumed; an active account once); register_user holds the account and the limit counts it, or rolls everything back on EMAIL_VERIFICATION_UNAVAILABLE (the invitation live); update_user_status revokes the verification links on a change of is_active, and on a deactivation of an account already inactive that waits (a regular inactive account unchanged), set_user_active either way (deactivating ends the wait); registration_email_allowed: 10 an hour per client address; holds_place/place_holders: inactive with a live link, now deciding; _refuse_what_cannot_turn_on: only require_email_verification off → on without an email with a link",
+        desc="user_usage counts an inactive account with a live verification link once (not expired, revoked or consumed; an active account once); register_user holds the account and the limit counts it, or rolls everything back on EMAIL_VERIFICATION_UNAVAILABLE (the invitation live); update_user_status revokes the verification links on a change of is_active, and on a deactivation of an account already inactive that waits (a regular inactive account unchanged), set_user_active either way (deactivating ends the wait); registration_email_verdict: 20 an hour per client address by default, or LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS read at every call (a bad value: the default), the instance's budget spent also holds, the wait is the longest of the counters that hold; holds_place/place_holders: inactive with a live link, now deciding; _refuse_what_cannot_turn_on: only require_email_verification off → on without an email with a link",
         # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
         # server, no SMTP conversation; the email variables removed then set with monkeypatch; the loopback only resolves.
         isolation="pure",
@@ -2518,6 +2578,14 @@ Note: No backend server required.
         desc="Process-pool off-loading, pickle round-trip, thread fallback; W-B53: workers born from a forkserver preloaded with the BRIM module, its plugins and the discovery (brim_parse_preload, whose import never raises), started early by prewarm() (never raises, the pool stays lazy), importing the pool stays light",
     )
     add_test(cat, "brim-parse-race", services_brim_parse_race, name="BRIM Parse Race", desc="Parse survives the uploaded→parsed rename; genuine read errors still fail; re-detection; the broker metadata lock (refuses a symlink, created 0o600)")
+    add_test(
+        cat,
+        "brim-parse-settings",
+        services_brim_parse_settings,
+        name="BRIM Parse Settings",
+        desc="Plugin settings on the BRIM parse: no field = called as before, fields = BoundSettings resolved in the parent and bound in the child, secrets masked in errors and logs, the endpoint passes the user",
+        isolation="pure",
+    )
     add_test(cat, "settings", services_settings, name="Settings Service", desc="User settings CRUD, get_effective_base_currency")
     add_test(cat, "current-price-bootstrap", services_current_price_bootstrap, name="Current Price Bootstrap", desc="OHLC widening helper (F.2/F.3)")
     add_test(cat, "scheduled-investment-param-change", services_scheduled_investment_param_change, name="Scheduled Investment Param Change", desc="Symmetric wipe on provider_params change")
@@ -2983,6 +3051,15 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "pdf-fonts",
+        services_pdf_fonts,
+        name="PDF Fonts",
+        desc="H-55: the CJK fonts of the PDF viewer served by the instance: the list of 26 files with their sha256 (pdf_font_hashes.json), only exact names of it; fetched once from the fixed source, checked before writing, renamed atomically into DATA_DIR/cache/pdf-fonts, one fetch per file under concurrency, a wrong size fetched again; a wrong hash thrown away and logged (502 pdf_font_mismatch), the source unreachable (503 pdf_font_unavailable); the route needs a session, answers font/otf private immutable, runs off the event loop, and stays out of the OpenAPI schema",
+        # PURE: a data directory of its own under tmp_path, the network replaced by a fake fetch, fresh apps in process.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "client-address",
         services_client_address,
         name="Client Address",
@@ -3005,6 +3082,24 @@ Note: No backend server required.
     add_test(cat, "plugin-settings-guards", services_plugin_settings_guards, name="Plugin Settings Guards", desc="Shipped system-field variables in .env.example, derived names unique, no alias read by the app itself, services/ai_export/ never imports the plugin settings", isolation="pure")
     add_test(cat, "platform-readiness", services_platform_readiness, name="Instance Readiness", desc="Database and migration checks: ready, mismatch, unknown, unreachable; head read once, failure not kept; codes only in the response", isolation="pure")
     add_test(cat, "app-lifecycle", services_app_lifecycle, name="App Lifecycle", desc="Step runner (order, awaits, deadline cuts, a failure never skips the shutdown, step in progress); app steps in relative order, late-bound; middleware outermost first; SPA catch-all last", isolation="pure")
+    add_test(
+        cat,
+        "await-restore-mode",
+        services_await_restore_mode,
+        name="Awaiting Restore Mode",
+        desc="H-62 (L3 §6): LIBREFOLIO_AWAIT_RESTORE read at each call with the values of LIBREFOLIO_BLOCKED, a typo stops the start; Step.skip_when skips a step at its turn; exactly admin-bootstrap, scheduler, provider-prewarm, market-holidays, brim-parse-pool, stored-currencies skipped in the mode",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "restore-guard",
+        services_restore_guard,
+        name="Restore Guard",
+        desc="B-33 (H, 22/10): probe_restore_state asks apply.restore_state_problem (the given or the instance's data directory), keeps the answer, logs one error line with the reason and never the state's content; restore_interrupted() False in a process that never probed; restore-state right after pending-restore, never stops the start; while interrupted post-migration-fixes, lone-transfer-legs and the six steps of the mode call nothing, the kept steps carry no skip",
+        # PURE: B's hook replaced by monkeypatch (or a state file under tmp_path), the steps run alone with their calls
+        # recorded, one child interpreter that only imports the module. No DB, no server, no network.
+        isolation="pure",
+    )
     add_test(
         cat,
         "static-cache-policy",
@@ -3109,6 +3204,16 @@ Note: No backend server required.
         name="Secure Backup Envelope",
         desc="The .lfbk envelope (lot B4, decisions 38 and P12): its constants; round trips at the chunk edges; the 52-byte header at its offsets; known answers built with cryptography's Scrypt and AESGCM; bounds refused before any derivation (envelope_unsupported), too short or not ours (envelope_damaged); wrong_password, also for changed key parameters; every tampering of the chunks (a byte, a tag, truncations, an appended, swapped, dropped or repeated chunk) envelope_damaged with nothing left; NFC, not NFKC; no overwrite, 0600, .part only while writing, progress; the key never in its repr; constant memory",
         # PURE: files under tmp_path only. No DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-sealed",
+        services_backup_sealed,
+        name="Sealed Backup",
+        desc="The sealed nightly backup (lot L3, contract §3 and §9): every case of fixtures/backup_l3/vectors.json through read_sealed, open_password, check_password, extract_envelope and the envelope's decryption with its expected outcome; write_sealed rebuilding the good .tar byte for byte (0600, no .part, no overwrite); build_manifest's bytes; new_password; seal_password binary age and open_password (sealed_no_identity, sealed_password_invalid); read_sealed refusals (PAX, GNU, directory, link, members, small members over 4096, not LFBK v1, truncated; manifest UTF-8 JSON object, duplicate, unknown or missing keys, types, format, version, recipients, size and hash, password_member); read_identities and identity_file_text; is_sealed; the cloud derivation rows; interop with the age binary when installed (skipped visibly otherwise); envelope.unlock_header",
+        # PURE: committed vectors read only, files under tmp_path; the optional age binary run on tmp_path files. No DB,
+        # no server, no network.
         isolation="pure",
     )
     add_test(

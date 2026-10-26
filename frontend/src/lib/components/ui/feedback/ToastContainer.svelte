@@ -2,6 +2,11 @@
   ToastContainer — renders active toast notifications at top-center.
   Place once in the app layout. Toasts auto-dismiss with visual countdown bar.
 
+  Screen readers (H-18): each toast's icon and message sit in one live element, an error in
+  role="alert" (assertive: it interrupts), every other variant in role="status" (polite: read when
+  the reader is idle); the dismiss button stays outside it, so its label is not read as part of the
+  message; its name is the catalogues' common.close. The stack is always in the DOM, even empty, so the toasts arrive in a parent that exists.
+
   Usage (from any component):
     import { toasts } from '$lib/stores/app/toastStore.svelte';
     toasts.success('Done!');
@@ -9,6 +14,7 @@
 -->
 <script lang="ts">
     import {fly} from 'svelte/transition';
+    import {_ as t} from '$lib/i18n';
     import {toasts, type ToastVariant} from '$lib/stores/app/toastStore.svelte';
     import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
     import {AlertCircle, AlertTriangle, CheckCircle, Info, X} from 'lucide-svelte';
@@ -73,39 +79,37 @@
     }
 </script>
 
-{#if toasts.items.length > 0}
-    <div class="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] flex flex-col gap-2 max-w-sm pointer-events-none">
-        {#each toasts.items as toast (toast.id)}
-            {@const Icon = variantIcons[toast.variant]}
-            {@const styles = variantStyles[toast.variant]}
-            <div
-                class="pointer-events-auto relative rounded-lg shadow-lg overflow-hidden touch-pan-y select-none border {styles.container}"
-                data-testid="toast-{toast.variant}"
-                onpointercancel={(e) => onPointerUp(e, toast.id)}
-                onpointerdown={(e) => onPointerDown(e, toast.id)}
-                onpointermove={(e) => onPointerMove(e, toast.id)}
-                onpointerup={(e) => onPointerUp(e, toast.id)}
-                style={dragStyle(toast.id)}
-                transition:fly={{y: -30, duration: 250}}
-            >
-                <div class="flex flex-col items-center gap-1 px-4 py-3 text-sm leading-snug text-center">
-                    <div class="flex items-start gap-1.5">
-                        <Icon size={15} class="shrink-0 mt-0.5 {styles.icon}" />
-                        <span class="flex-1 whitespace-pre-line text-left">{@html sanitizeHtml(toast.message)}</span>
-                    </div>
-                    <button class="shrink-0 p-0.5 rounded transition-colors absolute top-1.5 right-1.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lf-focus {styles.dismiss}" onclick={() => toasts.dismiss(toast.id)} aria-label="Dismiss" data-testid="toast-dismiss">
-                        <X size={12} />
-                    </button>
+<div class="fixed top-4 left-1/2 -translate-x-1/2 z-[9999] flex flex-col gap-2 max-w-sm pointer-events-none" data-testid="toast-region">
+    {#each toasts.items as toast (toast.id)}
+        {@const Icon = variantIcons[toast.variant]}
+        {@const styles = variantStyles[toast.variant]}
+        <div
+            class="pointer-events-auto relative rounded-lg shadow-lg overflow-hidden touch-pan-y select-none border {styles.container}"
+            data-testid="toast-{toast.variant}"
+            onpointercancel={(e) => onPointerUp(e, toast.id)}
+            onpointerdown={(e) => onPointerDown(e, toast.id)}
+            onpointermove={(e) => onPointerMove(e, toast.id)}
+            onpointerup={(e) => onPointerUp(e, toast.id)}
+            style={dragStyle(toast.id)}
+            transition:fly={{y: -30, duration: 250}}
+        >
+            <div class="flex flex-col items-center gap-1 px-4 py-3 text-sm leading-snug text-center">
+                <div class="flex items-start gap-1.5" role={toast.variant === 'error' ? 'alert' : 'status'} aria-live={toast.variant === 'error' ? 'assertive' : 'polite'} aria-atomic="true">
+                    <Icon size={15} class="shrink-0 mt-0.5 {styles.icon}" aria-hidden="true" />
+                    <span class="flex-1 whitespace-pre-line text-left">{@html sanitizeHtml(toast.message)}</span>
                 </div>
-                {#if toast.duration > 0}
-                    <div class="h-0.5 w-full {styles.track}">
-                        <div class="h-full toast-countdown-bar {styles.bar}" style="animation-duration: {toast.duration}ms"></div>
-                    </div>
-                {/if}
+                <button class="shrink-0 p-0.5 rounded transition-colors absolute top-1.5 right-1.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-lf-focus {styles.dismiss}" onclick={() => toasts.dismiss(toast.id)} aria-label={$t('common.close')} data-testid="toast-dismiss">
+                    <X size={12} />
+                </button>
             </div>
-        {/each}
-    </div>
-{/if}
+            {#if toast.duration > 0}
+                <div class="h-0.5 w-full {styles.track}">
+                    <div class="h-full toast-countdown-bar {styles.bar}" style="animation-duration: {toast.duration}ms"></div>
+                </div>
+            {/if}
+        </div>
+    {/each}
+</div>
 
 <style>
     .toast-countdown-bar {

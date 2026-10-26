@@ -122,9 +122,13 @@ class AuthRegisterResponse(BaseModel):
         description=(
             "The state of the sending of the verification email, not an address. Only when verification_required: 'sending' when the email leaves after "
             "this answer (it can still fail later, unseen here: the recipient mailbox's limit, the instance's hourly budget, the SMTP server); 'held' when "
-            "no email goes now (too many registrations from this client address in the last hour): the owner signs in to ask for the link again. null "
-            "without verification."
+            "no email goes now (this client address reached its hourly limit of activation and reset emails, or the instance reached its hourly email budget): "
+            "the owner signs in to ask for the link again, from verification_retry_after_seconds on. null without verification."
         ),
+    )
+    verification_retry_after_seconds: Optional[int] = Field(
+        default=None,
+        description=("Only when verification_email is 'held': in how many seconds the counters that held it (the client address's and the instance's) will admit a new email, as a whole number of seconds rounded up, at least 1. null otherwise: when the email is sending, and without verification."),
     )
 
 

@@ -145,8 +145,17 @@ def collect_files(data_dir: Path) -> tuple[list[SourceFile], list[str]]:
 def required_space(data_dir: Path, files: list[SourceFile]) -> int:
     """What a build needs free where it writes: the database twice (its copy, then inside the archive), the files, a margin."""
     database = database_path(data_dir)
-    database_bytes = sum(path.stat().st_size for path in (database, database.with_name(database.name + "-wal")) if path.exists())
+    database_bytes = sum(_size_or_none(path) for path in (database, database.with_name(database.name + "-wal")))
     return 2 * database_bytes + sum(file.size for file in files) + _SPACE_MARGIN
+
+
+def _size_or_none(path: Path) -> int:
+    """The size of ``path``, 0 when it is not there. Measured at once, never after a separate lookup: SQLite removes the
+    ``-wal`` when its last connection closes, at any moment (L3-2: a backup failed between the two)."""
+    try:
+        return path.stat().st_size
+    except FileNotFoundError:
+        return 0
 
 
 def build_archive(data_dir: Path, work_dir: Path, target: Path, *, origin: BackupOrigin, progress: Progress | None = None, instance_key: str | None = None) -> BuiltArchive:

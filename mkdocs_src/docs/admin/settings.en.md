@@ -110,6 +110,9 @@ The **Registration** setting decides who can create an account:
   **By invitation** or **Closed**.
 - ✉️ An invitation link works once, for 7 days, and can make the new account an administrator. With
   **Open**, nobody needs one, but a link still gives its role.
+- 👥 The same setting is in the [Users](users.md#registration) tab, next to **Invite**: you choose
+  the mode there and it is saved at once, asking first only for **Open**. If
+  `LIBREFOLIO_REGISTRATION` sets the mode, both places show it and neither can change it.
 - 💻 Whatever the mode, the [command line](cli_tools.md) can still create accounts with
   `user create`.
 - 📏 With a user limit, nobody can sign up without an invitation once the instance is full: see
@@ -308,6 +311,10 @@ findings keep the order of this table.
 | Plugin secrets | ❌ Instance-wide plugin secrets cannot be read with the instance key | **Open the plugin settings**, to **Settings › Plugins** |
 | Open registration, checked by your browser | ⚠️ **Registration** is **Open**, and you reached LibreFolio at an address outside your local network, as for [the warning above the pages](#open-registration-warning) | **Change who can sign up**, to **Global Settings**. None when `LIBREFOLIO_REGISTRATION` sets the mode: the finding names that variable instead |
 | A blocked script, checked by your browser | ⚠️ A script that LibreFolio did not send, added by a proxy, a CDN or a browser extension, was blocked in this browser tab: the finding names its sources. It goes when you close the tab. Not fixed on the server, but in the proxy, the CDN or the extension: [A Script You Did Not Send](configuration.md#csp-blocked-script) | — |
+
+Every row has a 📖 **Guide** button, passed checks included, that opens the page of this guide which
+explains that check, in a new tab and in your language when it is translated. A check that has no
+page of its own has no button.
 
 The findings without a link are fixed on the server, in its configuration, and need a restart: what
 to do for each one is in the table of «Startup Checks» in [Configuration](configuration.md), where

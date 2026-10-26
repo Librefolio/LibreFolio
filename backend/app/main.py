@@ -14,6 +14,7 @@ warnings.filterwarnings("ignore", message=".*already taken in index.*")
 
 from fastapi import FastAPI
 
+from backend.app.api.api_docs import install_api_docs
 from backend.app.api.response_validation import install_response_validation_handler
 from backend.app.api.server_errors import install_server_error_handler
 from backend.app.api.v1.router import router as api_v1_router
@@ -21,6 +22,7 @@ from backend.app.api.validation_errors import install_validation_error_handler
 from backend.app.config import (
     API_V1_PREFIX,
     PROJECT_NAME,
+    api_docs_enabled,
     get_settings,
     get_version,
     is_test_mode,
@@ -46,13 +48,15 @@ settings = get_settings()
 configure_logging(settings.LOG_LEVEL)
 
 
-# Create FastAPI app
+# Create FastAPI app. The API's documentation only where it is switched on (H-55 R5: LIBREFOLIO_API_DOCS or test mode):
+# FastAPI's own pages never (they load moving versions from a CDN), ours from api/api_docs.py. app.openapi() works
+# either way (dev.py api schema).
 app = FastAPI(
     title=PROJECT_NAME,
     version=get_version(),
-    openapi_url=f"{API_V1_PREFIX}/openapi.json",
-    docs_url=f"{API_V1_PREFIX}/docs",
-    redoc_url=f"{API_V1_PREFIX}/redoc",
+    openapi_url=f"{API_V1_PREFIX}/openapi.json" if api_docs_enabled() else None,
+    docs_url=None,
+    redoc_url=None,
     lifespan=lifespan,
 )
 
@@ -70,6 +74,9 @@ install_server_error_handler(app)
 
 # Mount API v1 router
 app.include_router(api_v1_router, prefix=API_V1_PREFIX)
+
+# The API's documentation pages, where it is switched on (H-55 R5)
+install_api_docs(app, enabled=api_docs_enabled())
 
 # The documentation and the web app, after every API route: the SPA catch-all stays last
 install_static_site(app)

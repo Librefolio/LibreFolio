@@ -99,6 +99,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Chart Settings: the preview opens in the saved view**, with a Rolling Return preview and its window: automatic until you choose one, the largest preset that fits the period shown, as on the cards and on the asset detail page.
 - **Lots: every marker on the Lot Life chart explains itself.** Hover, tap or focus a marker (▲ purchase, ▼ sale, ◆ transfer, + / × adjustment, │ split) on the Lot Life & Custody chart to see what happened, when, how many units (hidden in privacy mode) and at which broker: From and To for a transfer between your brokers. When several events fall on the same day, the tooltip lists them all.
 - **The Security tab warns when this browser blocked a script LibreFolio did not send** (see the Content-Security-Policy under Breaking changes).
+- **Compare an asset with an exchange rate, and back.** A comparison chosen in a card's or a chart's signals now draws on the Assets and FX list cards and on both detail pages, also when the page is opened fresh.
+- **Yahoo Finance fund details.** For an ETF or a mutual fund, the sector distribution, the fund description when the summary is missing, and «TER: x%» with the issuer at the end of the description.
+- **Start Value and End Value explained.** The positions table's two headers have a tooltip, and the positions guide's sentence on them is now in Italian, French and Spanish too.
+- Administrators choose who can sign up (Open, By invitation, Closed) from the **Users** tab too, and every row of the **Security** checks has a **Guide** button opening its documentation page.
+- **Japanese, Chinese and Korean statements preview under the strict content policy.** The CJK fonts are served by LibreFolio, downloaded once from a pinned version and checked against fixed hashes; the browser never loads them from outside.
+- **Sealed nightly backups.** With `LIBREFOLIO_BACKUP_RECIPIENTS` (one or two `age1…` public keys), a backup is a `.tar` holding the encrypted archive, its random password encrypted with age for those keys, and a plain manifest: the instance itself cannot open it again. `./dev.py backup keygen` makes a key pair; the guide shows how to open a sealed backup by hand with `age`.
+- **Hosting providers can restore a nightly backup onto a new machine.** With `LIBREFOLIO_AWAIT_RESTORE` a new instance waits for its data instead of offering a fresh setup; the panel uploads the backup with a signed ticket of scope `backup:restore`, checks it, confirms and restarts; the customer sees a waiting page on the login background, in four languages.
+- **An interrupted restore no longer serves data it cannot vouch for.** When the state of a restore cannot be read, the instance shows a page that asks for the administrator (with a link to the instance's support when one is set), keeps every checked copy, and `./dev.py backup pending --recover` lets the administrator choose between the data of before and a new restore.
+- Backup jobs report the archive's SHA-256; a restore report says that the accounts and credentials come from the backup, and warns when the confirming administrator is not in it. The guide explains nightly copies with restic or Backrest.
+- **Activation and password-reset emails share one limit per network**, `LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS` (20 an hour), beside the instance's hourly budget; wrong passwords never spend it. When an email is held, the page says how many minutes to wait, in a yellow box.
+- In the Users list, an info icon next to «Waiting for verification» explains what it means.
 
 ### 🔄 Changed
 
@@ -178,6 +189,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **An Adjustment that takes units out no longer has a value.** The units only leave the quantity: their cost counts as a realized loss, the same on the Dashboard and in the lots, with no capital flow (so the day's return shows the loss). To record a sale, use a Sell. The value field appears only for units coming in.
 - When a broker is deleted, or a transfer pair is split, the giving leg becomes an Adjustment without a value: it no longer needs an exchange rate to be converted.
 - API: `POST /api/v1/fx/currencies/convert` can sample a conversion for compact charts (`max_points`, `sample_like`, `sample_bounds`), with its technical signals reduced on the same dates, as `POST /assets/prices/query` already does.
+- Detail pages: going back to a period already seen shows the comparison series at once, without asking the server again; Refresh and Sync still reload them.
+- **Linking two Adjustments as a pair is refused**, with a message in your language pointing to an Asset Transfer. Saved data is not changed.
+- The Fineco importer reports the rows it skips (unreadable, or an operation it does not know), like the other plugins out of beta.
+- Notifications are announced by screen readers (errors at once, the others politely), and their close button is named in your language.
 
 #### 🎨 A new colour palette
 
@@ -407,6 +422,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Transactions: a cost basis can no longer be negative.** A cost basis typed by hand below 0, on a new transaction, an edit, a merge, or a broker import when you save it, is now refused with a message («The cost basis can't be negative: enter 0 or more.») instead of being saved and skewing the average cost and the lots' gains. 0 stays allowed: a gift, the new shares of a split.
 - **Dialogs: Escape pressed right after a dialog opens now closes it.** It could be missed while the dialog was still loading.
 - **The phone's menu button is named in your language.** Screen readers read «Toggle menu» in English in every language; the name now follows the interface language, followed as before by the connection level and the security warnings.
+- The lot history shows a transfer that leaves and arrives on the same day as two rows, the departure then the arrival, each naming both brokers, as for transfers over several days.
+- The quantities in the Performance table no longer count a transaction dated after the end of the report.
 
 #### 🔒 Security
 
@@ -482,6 +499,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `POST /api/v1/auth/register`, `/auth/change-password` and `/auth/password-reset` refuse a password that misses a rule with 400 `PASSWORD_TOO_WEAK` and the `rules` it misses, checked before anything else; until now the API asked only for 8 characters, with a 422.
 - **Email addresses are unique regardless of capitals.** An address another account already uses with other capitals (A–Z) is refused like an exact duplicate: `400 Email already registered`, or `ACCOUNT_EXISTS` at registration. If two existing accounts share an address apart from capitals, the upgrade stops at that step and names them by id and username, with no account changed: give all but one of them another address with `./dev.py user set-email <username> <address>`, then start again. Restoring an older backup that holds two such accounts fails its check the same way (`upgrade_failed`): separate them on the instance that made the backup, then back it up again. No account is ever merged. Letters outside A–Z still compare as written.
 - **The Content-Security-Policy is enforced in every profile.** A script that LibreFolio did not send — added by a proxy, a CDN or a browser extension — is blocked on the web app's pages, and the Security tab says so. The policy follows a frontend rebuilt while the server runs. See Configuration › The Content-Security-Policy.
+- **The interactive API docs are off by default.** `/api/v1/docs`, `/api/v1/redoc` and `/api/v1/openapi.json` answer 404 on every instance, Docker included, unless `LIBREFOLIO_API_DOCS` is set (`./dev.py server --debug` sets it). When on, they load pinned Swagger UI and ReDoc with integrity checks.
 
 ---
 

@@ -63,6 +63,15 @@ Modules under test: ``services/plugin_settings/resolver.py`` and ``runtime.py``,
    (patched with ``monkeypatch``) putting a secret in the URL gives ``provider_url`` ``None``, the rest of the probe
    answering.
 
+8. **The BRIM family** (W-BS): ``configure_instance(plugin, "brim", user_id=…)`` is the same delivery as for the price
+   sources: a BRIM plugin that declares no field (every real one) comes back as it is, with no database read and nothing
+   bound; the lab plugin (``_brim_settings_lab``) gets the instance's values and, for a user, that user's own — not
+   another's, not those of the same keys under another family — secrets of both scopes decrypted for ``settings.secret()``,
+   a fingerprint of its own, ``carries_user_secrets`` only with the user's own token; asked for nobody it gets the defaults
+   of the personal fields. ``bound_settings_for(registry, plugin_code, user_id=…)`` hands the parse pool's parent the same
+   ``BoundSettings`` ``configure_instance`` binds, and reads nothing for a plugin that declares no field. The masking of a
+   failing parse is pinned by ``test_brim_parse_settings.py``.
+
 **X-R43** (workstream X): an integer past the double range no longer breaks a resolution: a variable holding one for an
 integer field is ``invalid_env`` («too large», logged without the value), a stored row holding one, for an integer or a
 number field, ``invalid_stored``. «Red today» is the state before the cure; a guard passes before and after.
@@ -104,6 +113,7 @@ from backend.app.services.assets.base import AssetSourceError
 from backend.app.services.assets.provider_management import ProviderManagementOperations
 from backend.app.services.assets.registry import AssetProviderRegistry
 from backend.app.services.assets.search import AssetSearchService
+from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.fx import runtime as fx_runtime
 from backend.app.services.fx.base import FXNotConfiguredError, FXServiceError
 from backend.app.services.fx.registry import FXProviderRegistry
@@ -114,6 +124,7 @@ from backend.app.services.plugin_settings.crypto import encrypt_secret, fingerpr
 from backend.app.services.plugin_settings.fields import PluginSettingField, SettingOption, SettingScope, SettingType, env_name, env_variables
 from backend.app.services.plugin_settings.resolver import FieldState, StoredValue, build_bound_settings, missing_field_keys, resolve_plugin_fields, settings_fingerprint
 from backend.app.utils.runtime.secret_masking import MASK, active_secrets, exception_renders_secret, mask_text, masked_description
+from backend.test_scripts.test_services import _brim_settings_lab as brim_lab
 from backend.test_scripts.test_utils import print_section, print_success
 
 KEY_A = "LibreFolio-plugin-settings-test-key-A-0123456789"
@@ -1916,3 +1927,126 @@ async def test_the_probe_withholds_a_provider_url_that_shows_a_secret(shown: str
     answer = response.model_dump_json()
     assert not [form for secret in bound_secrets.values() for form in (secret, quote(secret, safe=""), quote_plus(secret)) if form in answer], "no form of a secret in the probe's answer"
     print_success(f"provider_url {response.provider_url!r}")
+
+
+# =============================================================================
+# 8. THE BRIM FAMILY (W-BS): configure_instance and bound_settings_for
+# =============================================================================
+
+BRIM_CODE = brim_lab.CODE
+
+
+class _UserOnlyBrim(brim_lab.SettingsBrimPlugin):
+    """The lab BRIM plugin with its personal select only: a call made for nobody has nothing to read."""
+
+    settings_fields = (brim_lab.SETTINGS_FIELDS[0],)
+
+
+@pytest_asyncio.fixture
+async def brim_rows(private_engine: AsyncEngine, users: dict[str, int]) -> dict[str, str]:
+    """The lab BRIM plugin's rows (the instance's, alice's, bob's) and decoys: the same keys under the price sources and
+    the FX family, another BRIM plugin's, bob's token of another plugin."""
+    alice, bob = users["alice"], users["bob"]
+    secrets = {"api_key": _marker(), "alice_token": _marker(), "decoy": _marker()}
+    await _store(
+        private_engine,
+        _system(BRIM_CODE, "region", value="us", family="brim"),
+        _system(BRIM_CODE, "api_key", secret=secrets["api_key"], family="brim"),
+        _user(alice, BRIM_CODE, "statement_language", value="it", family="brim"),
+        _user(alice, BRIM_CODE, "personal_token", secret=secrets["alice_token"], family="brim"),
+        _user(bob, BRIM_CODE, "statement_language", value="en", family="brim"),
+        _system(BRIM_CODE, "region", value="jp", family="asset"),
+        _system(BRIM_CODE, "region", value="jp", family="fx"),
+        _user(alice, BRIM_CODE, "statement_language", value="en", family="asset"),
+        _system("other_brim", "region", value="jp", family="brim"),
+        _system("other_brim", "api_key", secret=secrets["decoy"], family="brim"),
+        _user(bob, "other_brim", "personal_token", secret=secrets["decoy"], family="brim"),
+    )
+    return secrets
+
+
+@pytest.mark.asyncio
+async def test_a_brim_plugin_without_fields_is_returned_untouched_without_the_database(monkeypatch: pytest.MonkeyPatch):
+    """8: every real BRIM plugin: the same instance back, nothing bound, an empty fingerprint, no session opened."""
+    monkeypatch.setattr(runtime, "get_async_engine", _no_database)
+    monkeypatch.setattr(runtime, "build_bound_settings", _nothing_to_resolve)
+    BRIMProviderRegistry.auto_discover()
+    codes = BRIMProviderRegistry.list_plugin_codes()
+    assert codes, "barrier: the BRIM registry holds plugins"
+
+    for code in codes:
+        plugin = BRIMProviderRegistry.get_provider_instance(code)
+
+        configured = await runtime.configure_instance(plugin, "brim", user_id=1)
+
+        assert configured is plugin and plugin._lf_bound_settings is None, code
+        assert (plugin.settings.fingerprint, plugin.settings.secret_values(), plugin.settings.missing) == ("", frozenset(), ()), code
+
+
+@pytest.mark.asyncio
+async def test_a_brim_plugin_gets_the_instances_values_and_the_users_own(users: dict[str, int], brim_rows: dict[str, str], through_private_engine: list[int]):
+    """8: alice gets her language and her token, bob his language and no token, a call for nobody the defaults of the
+    personal fields; the instance's region and secret reach all three, and nothing of another family or plugin does."""
+    print_section("8: configure_instance for a BRIM plugin, by user")
+    alice = await runtime.configure_instance(brim_lab.SettingsBrimPlugin(), "brim", user_id=users["alice"])
+    bob = await runtime.configure_instance(brim_lab.SettingsBrimPlugin(), "brim", user_id=users["bob"])
+    nobody = await runtime.configure_instance(brim_lab.SettingsBrimPlugin(), "brim")
+
+    for instance in (alice, bob, nobody):
+        assert (instance.settings.get("region"), instance.settings.secret("api_key")) == ("us", brim_rows["api_key"])
+        assert instance.settings.missing == ()
+    assert (alice.settings.get("statement_language"), alice.settings.secret("personal_token")) == ("it", brim_rows["alice_token"])
+    assert (bob.settings.get("statement_language"), bob.settings.secret("personal_token")) == ("en", None)
+    assert (nobody.settings.get("statement_language"), nobody.settings.secret("personal_token")) == ("all", None)
+    assert alice.settings.secret_values() == frozenset({brim_rows["api_key"], brim_rows["alice_token"]})
+    assert bob.settings.secret_values() == nobody.settings.secret_values() == frozenset({brim_rows["api_key"]})
+    assert (alice.settings.carries_user_secrets, bob.settings.carries_user_secrets, nobody.settings.carries_user_secrets) == (True, False, False)
+    assert len({alice.settings.fingerprint, bob.settings.fingerprint, nobody.settings.fingerprint}) == 3 and "" not in {alice.settings.fingerprint, bob.settings.fingerprint}
+    assert brim_rows["decoy"] not in repr([alice.settings.secret_values(), bob.settings.secret_values(), nobody.settings.secret_values()]), "another plugin's secret must not reach this one"
+    assert len(through_private_engine) == 3, "one short session per configured instance"
+    print_success("each user gets their own values; the instance's reach everyone")
+
+
+@pytest.mark.asyncio
+async def test_a_brim_plugin_with_personal_fields_only_reads_nothing_without_a_user(monkeypatch: pytest.MonkeyPatch):
+    """8: a call for nobody (the scheduled ones) of a plugin whose fields are all personal: the defaults, no session."""
+    monkeypatch.setattr(runtime, "get_async_engine", _no_database)
+
+    configured = await runtime.configure_instance(_UserOnlyBrim(), "brim")
+
+    assert configured.settings.get("statement_language") == "all" and configured.settings.fingerprint != ""
+
+
+@pytest.mark.asyncio
+async def test_bound_settings_for_hands_the_settings_configure_instance_binds(users: dict[str, int], brim_rows: dict[str, str], through_private_engine: list[int], monkeypatch: pytest.MonkeyPatch):
+    """8: what the parse pool's parent hands its child is what ``configure_instance`` binds on an instance: the same values,
+    secrets, missing fields and fingerprint, for a user and for nobody."""
+    monkeypatch.setenv("LIBREFOLIO_TEST_MODE", "1")
+    with brim_lab.registered_settings_brim():
+        for user_id in (users["alice"], users["bob"], None):
+            bound = await runtime.bound_settings_for(BRIMProviderRegistry, BRIM_CODE, user_id=user_id)
+            instance = await runtime.configure_instance(brim_lab.SettingsBrimPlugin(), "brim", user_id=user_id)
+
+            assert isinstance(bound, BoundSettings), user_id
+            assert (bound.plain_values(), bound.secret_values(), bound.missing, bound.fingerprint) == (
+                instance.settings.plain_values(),
+                instance.settings.secret_values(),
+                instance.settings.missing,
+                instance.settings.fingerprint,
+            ), user_id
+            assert bound.secret("api_key") == brim_rows["api_key"], user_id
+        alices = await runtime.bound_settings_for(BRIMProviderRegistry, BRIM_CODE, user_id=users["alice"])
+        assert (alices.get("statement_language"), alices.secret("personal_token")) == ("it", brim_rows["alice_token"])
+
+
+@pytest.mark.asyncio
+async def test_bound_settings_for_a_brim_plugin_without_fields_reads_nothing(monkeypatch: pytest.MonkeyPatch):
+    """8: no field, no database read; what comes back is nothing, or the unbound view: no value, no secret, nothing
+    missing."""
+    monkeypatch.setattr(runtime, "get_async_engine", _no_database)
+    BRIMProviderRegistry.auto_discover()
+    assert BRIMProviderRegistry.get_plugin("broker_generic_csv") is not None, "barrier: a real BRIM plugin"
+
+    bound = await runtime.bound_settings_for(BRIMProviderRegistry, "broker_generic_csv", user_id=1)
+
+    assert bound is None or (bound.plain_values(), bound.secret_values(), bound.missing, bound.fingerprint) == ({}, frozenset(), (), "")

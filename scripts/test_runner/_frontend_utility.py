@@ -53,6 +53,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/charts/__tests__/signalLabel.test.ts",
             "src/lib/charts/__tests__/chartPageSignals.test.ts",
             "src/lib/charts/__tests__/chartSignalRendering.test.ts",
+            "src/lib/charts/__tests__/comparisonSeries.test.ts",
             "src/lib/services/fxCreationSync.test.ts",
             "src/lib/utils/sync/__tests__/syncToastHelpers.test.ts",
             "src/lib/utils/sync/__tests__/syncRange.test.ts",
@@ -135,6 +136,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/utils/files/imageCrop.test.ts",
             "src/lib/utils/files/pdfPreviewState.test.ts",
             "src/lib/utils/files/pdfViewerAssets.test.ts",
+            "src/lib/utils/files/pdfFontHashes.test.ts",
             "src/lib/utils/currency/fxConversionHelper.test.ts",
             "src/lib/utils/currency/currencyFormat.test.ts",
             "src/lib/utils/currency/currencyGraph.test.ts",
@@ -150,6 +152,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/themeRoles.gate.test.ts",
             "src/themeTokens.gate.test.ts",
             "src/instanceProfile.gate.test.ts",
+            "src/routes/rootLayoutAwaitingRestore.gate.test.ts",
             "src/signalRendering.gate.test.ts",
             "src/lib/api/dashboardReportFixture.test.ts",
             "src/lib/theme/colorAlpha.test.ts",
@@ -208,6 +211,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/settings/security/securityChecksApi.test.ts",
             "src/lib/features/settings/security/securityFindings.test.ts",
             "src/lib/features/settings/security/securityChecks.test.ts",
+            "src/lib/features/settings/registrationMode.test.ts",
             "src/lib/features/plugin-settings/pluginSettingsForm.test.ts",
             "src/lib/features/plugin-settings/pluginSettingsApi.test.ts",
             "src/lib/features/settings/users/linkShare.test.ts",
@@ -228,6 +232,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/auth/localHost.test.ts",
             "src/lib/features/auth/openRegistrationNotice.test.ts",
             "src/lib/features/instance/instanceBlock.test.ts",
+            "src/lib/features/instance/instanceBlockState.test.ts",
             "src/lib/api/zodios-client.test.ts",
             "src/lib/api/apiErrorConsole.test.ts",
             "src/lib/api/requestIdMessage.test.ts",
@@ -492,6 +497,9 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/ui/display/BrokerBadge.test.ts",
             "src/lib/features/instance/components/InstanceNotices.test.ts",
             "src/lib/features/instance/components/InstanceBlockedPage.test.ts",
+            "src/lib/features/instance/components/InstanceAwaitingRestorePage.test.ts",
+            "src/lib/features/instance/components/AwaitingRestoreGate.test.ts",
+            "src/lib/features/instance/components/InstanceRestoreInterruptedPage.test.ts",
             "src/lib/features/live-updates/LiveUpdatesStatus.test.ts",
             "src/lib/features/backup/BackupDownloadCard.test.ts",
             "src/lib/features/backup/RestoreCard.test.ts",
@@ -590,6 +598,16 @@ def front_admin_users(verbose: bool = False, ui: bool = False, headed: bool = Fa
     if not _ensure_test_users():
         return False
     return _run_playwright("settings/admin-users.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_registration_mode(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run «Who can sign up» from Settings → Users against the real backend (lot N69c): the instance's registration mode is really changed and put back."""
+    print_section("Frontend Registration Mode Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("settings/registration-mode.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_security_tab(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -782,6 +800,18 @@ def front_page_policy(verbose: bool = False, ui: bool = False, headed: bool = Fa
     if not _ensure_test_users():
         return False
     return _run_playwright("layout/page-policy.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_api_docs(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the API documentation pages of H-55 R5: Swagger UI and ReDoc render from the pinned jsDelivr files under the documentation policy, and a changed bundle is refused by its integrity hash."""
+    print_section("Frontend API Docs Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("layout/api-docs.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 #: The cloud smoke (H-43): existing specs over the main pages and the surfaces the managed profile's policies touch (the
@@ -1045,6 +1075,16 @@ def populate_registry(registry: dict) -> None:
     )
     add_test(
         cat,
+        "registration-mode",
+        front_registration_mode,
+        name="Registration Mode Tests",
+        desc="Who can sign up, from Settings → Users (lot N69c), against the real backend and no stub: e2e_test_admin chooses disabled (saved at the choice, no confirmation, one bulk PATCH, settings.global.saved, users-invite-button data-disabled-reason registration-disabled), reads it back from the server (GET /settings/global), from Global settings (data-value) and from the public GET /system/instance; chooses open (users-confirm first, nothing written, cancelled: data-shown back, server unchanged), confirms, and the server, Global settings and the public configuration say open; the mode the lane had is read first and written back through the API in a finally, red or green, then read again; red at once when LIBREFOLIO_REGISTRATION pins the mode",
+        prereq="Test users created (e2e_test_admin an administrator); registration_mode not pinned by LIBREFOLIO_REGISTRATION on the lane",
+        tests="settings/registration-mode.spec.ts",
+        exclusive_because="rewrites global_settings.registration_mode, one row shared by every user and every spec: a concurrent spec that registers or invites anonymously (the lane registers openly) would meet the disabled or invite this test leaves in force while it runs",
+    )
+    add_test(
+        cat,
         "security-tab",
         front_security_tab,
         name="Security Tab E2E",
@@ -1212,6 +1252,15 @@ def populate_registry(registry: dict) -> None:
         desc="The page policy of H-42, enforced by every lane since H-55 v2 (security_headers.py): each main document read as the browser got it, exactly one Content-Security-Policy field with object-src 'none', base-uri 'self', form-action 'self', and frame-ancestors 'self' if and only if X-Frame-Options is SAMEORIGIN, with service workers blocked; positive controls on the sign-in page (a <base>, a form aimed at another origin and an <object> each raising an enforced violation, nothing else); the documentation with its search, the PDF viewer and the Dashboard with no enforced violation",
         prereq="Docs site built (dev.py mkdocs build), populated DB + test users (TEST_USER with no onboarding due)",
         tests="layout/page-policy.spec.ts",
+    )
+    add_test(
+        cat,
+        "api-docs",
+        front_api_docs,
+        name="API Docs",
+        desc="H-55 R5: /api/v1/docs (Swagger UI) and /api/v1/redoc as the lane serves them (test mode turns them on): 200 text/html with one Content-Security-Policy field (script-src 'self' https://cdn.jsdelivr.net, worker-src 'self' blob:, connect-src 'self', the trio, frame-ancestors iff frame protection); the only requests leaving the lane are GETs to the pinned jsDelivr files, each 200, none to Google Fonts or validator.swagger.io; the library draws the API from /api/v1/openapi.json with no enforced CSP violation; a changed Swagger bundle is refused by its SRI hash",
+        prereq="Internet access to cdn.jsdelivr.net (the render tests fail naming it); populated DB + test users",
+        tests="layout/api-docs.spec.ts",
     )
     add_test(
         cat,

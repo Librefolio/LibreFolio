@@ -49,11 +49,12 @@ OTHER_REVISION = "0123456789ab"
 #: Stands for the head revision in the parameters below, which are built before the head is read.
 HEAD = "<head>"
 
-READY = {"status": "ready", "checks": {"database": "ok", "migrations": "ok"}}
+# H-62 (contract L3 §6): ``ReadinessResponse.mode``, normal outside the «awaiting restore» mode; red until H-62
+READY = {"status": "ready", "checks": {"database": "ok", "migrations": "ok"}, "mode": "normal"}
 
 
 def _not_ready(database: str, migrations: str) -> dict:
-    return {"status": "not_ready", "checks": {"database": database, "migrations": migrations}}
+    return {"status": "not_ready", "checks": {"database": database, "migrations": migrations}, "mode": "normal"}
 
 
 # =============================================================================

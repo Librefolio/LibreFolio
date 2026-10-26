@@ -35,6 +35,14 @@ Modules under test: ``services/plugin_settings/fields.py`` and ``contract.py``, 
    ``plain_values``; the ``repr`` names the secret fields and never shows their values; an unbound instance sees the
    declared defaults and no secret. The test doubles declare what the other suites rely on.
 
+6. **The BRIM family** (W-BS): ``FAMILY_RULES["brim"]`` is the price sources' (personal and instance-wide fields, secrets of
+   both scopes); ``BRIMProviderRegistry.settings_family()`` is ``brim`` and ``BRIMProvider`` inherits the mixin, so every
+   real BRIM plugin declares nothing and sees the unbound defaults; a BRIM plugin declaring valid fields registers and claims
+   ``LIBREFOLIO_PLUGIN_BRIM_<CODE>_<FIELD>`` (and its alias), one whose variable another plugin claimed is refused, a bad
+   declaration is refused with its reason; a ``test_only`` one is served in test mode only; the family's title key
+   ``pluginSettings.families.brim`` exists in the four catalogues. No real plugin declares a field: the tests use
+   ``_brim_settings_lab.SettingsBrimPlugin``, registered for the length of a test and taken out again.
+
 **X-R43** (workstream X): an integer above ``MAX_SAFE_INTEGER`` (2**53 - 1) in absolute value is «too large» for a number
 field, judged before its bounds, never an ``OverflowError``; a bound or a default past it is a declaration error. «Red
 today» is the state before the cure; a guard passes before and after.
@@ -54,6 +62,8 @@ import pytest
 
 from backend.app.services.asset_source_providers.mockprov.plugin import SETTINGS_ECHO_QUERY, MockProvider
 from backend.app.services.assets.registry import AssetProviderRegistry
+from backend.app.services.brim.brim_provider import BRIMProvider
+from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.fx.registry import FXProviderRegistry
 from backend.app.services.fx_providers.mockfx.plugin import MockFXFailProvider, MockFXProvider
 from backend.app.services.plugin_settings import fields as fields_module
@@ -81,7 +91,9 @@ from backend.app.services.plugin_settings.fields import (
     validate_value,
 )
 from backend.app.services.provider_registry import AbstractPluginRegistry, AbstractProviderRegistry, register_provider
+from backend.test_scripts.test_services import _brim_settings_lab as brim_lab
 from backend.test_scripts.test_utils import print_section, print_success
+from scripts.i18n_catalog import load_catalog
 
 SYSTEM, USER = SettingScope.SYSTEM, SettingScope.USER
 STRING, NUMBER, INTEGER, BOOLEAN, SELECT = SettingType.STRING, SettingType.NUMBER, SettingType.INTEGER, SettingType.BOOLEAN, SettingType.SELECT
@@ -154,8 +166,10 @@ def test_every_type_declares_cleanly_for_the_asset_family():
 
 
 def test_the_family_rules_are_the_documented_ones():
-    """1: assets take user fields and secrets; FX takes secrets but no user field; no other family is open yet."""
-    assert FAMILY_RULES == {"asset": FamilyRules(user_scope=True, secrets=True), "fx": FamilyRules(user_scope=False, secrets=True)}
+    """1: assets and BRIM take user fields and secrets; FX takes secrets but no user field; no other family is open yet.
+
+    Red today (W-BS): ``brim`` has no rules, so a BRIM plugin cannot declare a setting."""
+    assert FAMILY_RULES == {"asset": FamilyRules(user_scope=True, secrets=True), "fx": FamilyRules(user_scope=False, secrets=True), "brim": FamilyRules(user_scope=True, secrets=True)}
 
 
 def test_an_fx_plugin_declares_system_fields_and_secrets_but_no_user_field():
@@ -192,7 +206,7 @@ def test_a_personal_field_cannot_be_required(declared: PluginSettingField):
     print_success(f"{declared.key}: refused when personal and required; optional, or the instance's, accepted")
 
 
-@pytest.mark.parametrize("family", ["brim", "tools", "signal", "", "ASSET"])
+@pytest.mark.parametrize("family", ["tools", "signal", "risk", "", "ASSET", "BRIM"])
 def test_a_family_without_rules_cannot_declare_settings(family):
     """1: only the families of ``FAMILY_RULES`` may declare settings."""
     with pytest.raises(SettingsDeclarationError, match="cannot declare settings"):
@@ -512,7 +526,7 @@ class _FXLabRegistry(AbstractProviderRegistry):
 
 
 class _NoSettingsLabRegistry(AbstractProviderRegistry):
-    """A registry whose plugins cannot declare settings yet (BRIM, signals, risk until CP12)."""
+    """A registry whose plugins cannot declare settings (signals, risk, tools)."""
 
     @classmethod
     def _get_provider_folder(cls) -> str:
@@ -1152,3 +1166,178 @@ def test_the_fx_doubles_are_test_only_and_mockfx_declares_two_system_fields():
     assert MockFXFailProvider.settings_fields == ()
     assert not any(declared.required for declared in MockFXProvider.settings_fields), "MOCKFX must stay callable without settings: the FX suites call it"
     validate_declaration(MockFXProvider.settings_fields, family="fx")
+
+
+# =============================================================================
+# 6. THE BRIM FAMILY (W-BS): the price sources' rules; no real plugin declares a field yet
+# =============================================================================
+
+BRIM_CODE = brim_lab.CODE
+BRIM_DERIVED = {env_name("brim", BRIM_CODE, key) for key in ("region", "api_key")}
+
+
+def _brim_registered_in_test_mode(monkeypatch: pytest.MonkeyPatch):
+    """The lab BRIM plugin registered in the real registry, which serves a ``test_only`` plugin in test mode only."""
+    monkeypatch.setenv("LIBREFOLIO_TEST_MODE", "1")
+    return brim_lab.registered_settings_brim()
+
+
+def test_a_brim_plugin_declares_every_kind_of_field():
+    """6: a personal select, a personal secret, an instance select with a default, an instance secret with an alias — and
+    none at all — pass for ``brim``; the lab plugin's own declaration is valid."""
+    print_section("6: a valid BRIM declaration")
+    validate_declaration(brim_lab.SETTINGS_FIELDS, family="brim")
+    validate_declaration((), family="brim")
+    validate_declaration((_field("limit", INTEGER, USER, default=10, minimum=1, maximum=50), _secret("token", USER), _secret("api_key", env="LIBREFOLIO_LAB_BRIM_API_KEY")), family="brim")
+    print_success("BRIM takes user fields, system fields and secrets of both scopes")
+
+
+def test_brim_applies_the_rules_of_the_price_sources():
+    """6: the same refusals as for ``asset``: a required personal field, a secret with a default, a secret under 8
+    characters, a user field with an alias."""
+    assert FAMILY_RULES.get("brim") == FAMILY_RULES["asset"], "BRIM has the price sources' rules"
+    with pytest.raises(SettingsDeclarationError, match="a personal field cannot be required"):
+        validate_declaration((_field("nickname", STRING, USER, required=True),), family="brim")
+    with pytest.raises(SettingsDeclarationError, match="a secret has no default"):
+        validate_declaration((_secret("token", default="s3cret-default"),), family="brim")
+    with pytest.raises(SettingsDeclarationError, match="a secret accepts at least 8 characters"):
+        validate_declaration((_secret("token", min_length=4),), family="brim")
+    with pytest.raises(SettingsDeclarationError, match="only a secret system field has an env alias"):
+        validate_declaration((_field("region", STRING, USER, default="eu", env="LIBREFOLIO_LAB_BRIM_REGION"),), family="brim")
+
+
+def test_the_brim_registry_names_its_settings_family():
+    assert BRIMProviderRegistry.settings_family() == "brim"
+
+
+def test_the_brim_base_inherits_the_settings_mixin_with_no_field_and_not_test_only():
+    """6: ``BRIMProvider`` is a plugin base like the other two: the mixin, no field, never ``test_only``."""
+    assert issubclass(BRIMProvider, PluginSettingsMixin)
+    assert BRIMProvider.settings_fields == () and BRIMProvider.test_only is False
+
+
+def test_every_real_brim_plugin_declares_nothing_and_sees_the_unbound_defaults():
+    """6: no real BRIM plugin declares a field (so none is ever in the catalogue); each one's ``settings`` is the
+    unbound view: no value, no secret, nothing missing, an empty fingerprint."""
+    BRIMProviderRegistry.auto_discover()
+    codes = BRIMProviderRegistry.list_plugin_codes()
+    assert codes, "barrier: the BRIM registry holds plugins"
+
+    declaring = {code: BRIMProviderRegistry.get_plugin(code).settings_fields for code in codes if BRIMProviderRegistry.get_plugin(code).settings_fields}
+    assert declaring == {}, f"a real BRIM plugin declares settings: no concrete field is declared in this lot: {sorted(declaring)}"
+    for code in codes:
+        unbound = BRIMProviderRegistry.get_provider_instance(code).settings
+        assert (unbound.plain_values(), unbound.secret_values(), unbound.missing, unbound.fingerprint) == ({}, frozenset(), (), ""), code
+
+
+def test_a_brim_plugin_sees_its_defaults_and_no_secret_until_the_core_binds_values():
+    """6: ``settings`` is the unbound view (declared defaults, no secret) until ``bind_settings``; the binding belongs to
+    one instance, and a secret reads only through ``secret()``."""
+    plugin, other = brim_lab.SettingsBrimPlugin(), brim_lab.SettingsBrimPlugin()
+    secret = _marker("SECRET")
+    bound = BoundSettings(brim_lab.SETTINGS_FIELDS, {"region": "us", "statement_language": "it"}, {"api_key": secret, "personal_token": secret + "-2"})
+
+    assert (plugin.settings.get("region"), plugin.settings.get("statement_language")) == ("eu", "all")
+    assert plugin.settings.secret("api_key") is None and plugin.settings.secret("personal_token") is None
+    plugin.bind_settings(bound)
+
+    assert plugin.settings is bound and (bound.get("region"), bound.secret("api_key")) == ("us", secret)
+    assert other.settings.get("region") == "eu" and other.settings.secret("api_key") is None, "binding one instance must not reach another"
+    with pytest.raises(KeyError, match="settings.secret"):
+        plugin.settings.get("api_key")
+
+
+def test_a_brim_plugin_with_valid_fields_registers_and_claims_its_variables(monkeypatch: pytest.MonkeyPatch):
+    """6: ``register`` accepts the declaration and claims each system field's derived name
+    ``LIBREFOLIO_PLUGIN_BRIM_<CODE>_<FIELD>`` and the alias, none for a personal field; out again, the claims are released."""
+    print_section("6: a BRIM plugin registers")
+    assert BRIMProviderRegistry.get_plugin(BRIM_CODE) is None, "barrier: not registered before"
+
+    with _brim_registered_in_test_mode(monkeypatch) as plugin_class:
+        assert BRIMProviderRegistry.get_plugin(BRIM_CODE) is plugin_class
+        assert BRIM_CODE in BRIMProviderRegistry.list_plugin_codes()
+        assert _owned_by("brim", BRIM_CODE) == {*BRIM_DERIVED, brim_lab.API_KEY_ALIAS}, "a user field has no variable to claim"
+        assert BRIM_DERIVED == {"LIBREFOLIO_PLUGIN_BRIM_TEST_BRIM_SETTINGS_REGION", "LIBREFOLIO_PLUGIN_BRIM_TEST_BRIM_SETTINGS_API_KEY"}
+
+    assert BRIMProviderRegistry.get_plugin(BRIM_CODE) is None and not _owned_by("brim", BRIM_CODE)
+    print_success("registered, claimed, and taken out cleanly")
+
+
+def test_a_test_only_brim_plugin_is_served_in_test_mode_only(monkeypatch: pytest.MonkeyPatch):
+    """6: ``is_test_mode()`` is read at each call: outside it no lookup finds the plugin and no list names it."""
+    with _brim_registered_in_test_mode(monkeypatch) as plugin_class:
+        assert BRIMProviderRegistry.get_plugin(BRIM_CODE) is plugin_class, "barrier: served in test mode"
+
+        monkeypatch.delenv("LIBREFOLIO_TEST_MODE")
+
+        assert BRIMProviderRegistry.get_plugin(BRIM_CODE) is None and BRIMProviderRegistry.get_provider_instance(BRIM_CODE) is None
+        assert BRIM_CODE not in BRIMProviderRegistry.list_plugin_codes()
+        assert BRIM_CODE not in [provider["code"] for provider in BRIMProviderRegistry.list_providers()]
+
+
+def test_the_brim_registry_refuses_a_bad_declaration_with_its_reason_and_stores_nothing(monkeypatch: pytest.MonkeyPatch):
+    """6: a secret with a default is refused with the rule's own words, naming the class; not stored, nothing claimed."""
+    bad = type("BadBrimSettings", (brim_lab.SettingsBrimPlugin,), {"settings_fields": (_secret("token", default="s3cret-default"),)})
+    monkeypatch.setenv("LIBREFOLIO_TEST_MODE", "1")
+    try:
+        with pytest.raises(SettingsDeclarationError, match="a secret has no default") as refused:
+            with brim_lab.registered_settings_brim(bad):
+                pass
+
+        assert bad.__qualname__ in str(refused.value), f"the error must name the plugin class: {refused.value}"
+        assert BRIMProviderRegistry.get_plugin(BRIM_CODE) is None and not _owned_by("brim", BRIM_CODE)
+    finally:
+        BRIMProviderRegistry._get_storage().pop(BRIM_CODE, None)
+        release_env_variables("brim", BRIM_CODE)
+
+
+@pytest.mark.parametrize("squatter", ["derived-name", "alias"])
+def test_a_brim_plugin_whose_variable_another_plugin_claimed_is_refused(squatter: str, monkeypatch: pytest.MonkeyPatch):
+    """6: the derived name of ``test_brim_settings``/``region`` is also the one of ``test_brim``/``settings_region``; the
+    alias is any plugin's, in any family. Either refuses the BRIM plugin, naming the variable; the claim that was there
+    stands and the plugin is not stored."""
+    print_section(f"6: a BRIM plugin against a claimed {squatter}")
+    if squatter == "derived-name":
+        owner, claimed = ("brim", "test_brim"), "LIBREFOLIO_PLUGIN_BRIM_TEST_BRIM_SETTINGS_REGION"
+        claim_env_variables(*owner, (_field("settings_region", default="x"),))
+    else:
+        owner, claimed = ("asset", "lab_alias_owner"), brim_lab.API_KEY_ALIAS
+        claim_env_variables(*owner, (_secret("token", env=claimed),))
+    monkeypatch.setenv("LIBREFOLIO_TEST_MODE", "1")
+    try:
+        assert claimed_env_variables()[claimed] == owner, "setup: the squatter holds the variable"
+
+        with pytest.raises(SettingsDeclarationError, match=claimed):
+            with brim_lab.registered_settings_brim():
+                pass
+
+        assert BRIMProviderRegistry.get_plugin(BRIM_CODE) is None, "a refused plugin is not stored"
+        assert claimed_env_variables()[claimed] == owner, "the first claim stands"
+        assert not _owned_by("brim", BRIM_CODE), "a refused claim claims nothing"
+    finally:
+        BRIMProviderRegistry._get_storage().pop(BRIM_CODE, None)
+        release_env_variables("brim", BRIM_CODE)
+        release_env_variables(*owner)
+
+
+def test_the_derived_variable_of_a_brim_field_is_the_family_name_then_the_code_then_the_key():
+    """6, guard: ``env_name`` is generic: ``LIBREFOLIO_PLUGIN_BRIM_<CODE>_<FIELD>``, every other character ``_``."""
+    assert env_name("brim", "test_brim_settings", "api_key") == "LIBREFOLIO_PLUGIN_BRIM_TEST_BRIM_SETTINGS_API_KEY"
+    assert env_name("brim", "broker-x.csv", "token") == "LIBREFOLIO_PLUGIN_BRIM_BROKER_X_CSV_TOKEN"
+    assert env_variables("brim", BRIM_CODE, brim_lab.SETTINGS_FIELDS[3]) == (env_name("brim", BRIM_CODE, "api_key"), brim_lab.API_KEY_ALIAS)
+    assert env_variables("brim", BRIM_CODE, brim_lab.SETTINGS_FIELDS[0]) == (), "a personal field has no variable"
+
+
+def _title(catalogue: dict, family: str) -> object:
+    families = catalogue.get("pluginSettings", {}).get("families", {})
+    return families.get(family)
+
+
+@pytest.mark.parametrize("language", ["en", "it", "fr", "es"])
+@pytest.mark.parametrize("family", ["asset", "fx", "brim"])
+def test_every_settings_family_has_its_title_in_every_language(family: str, language: str):
+    """6: the Plugins tab titles each family group with ``pluginSettings.families.<family>``, read from the catalogue the
+    sources really hold (no English fallback). ``asset`` and ``fx`` are the controls; ``brim`` is red until its key is added."""
+    title = _title(load_catalog(language, fallback=False), family)
+
+    assert isinstance(title, str) and title.strip(), f"pluginSettings.families.{family} has no text in {language}"

@@ -184,8 +184,10 @@ curl http://localhost:6041/api/v1/system/health
 
 ## 📖 API Documentation
 
-For complete API documentation, visit:
+For complete API documentation, start the server with `./dev.py server --debug` and visit:
 
 - **Swagger UI**: http://localhost:6040/api/v1/docs
 - **ReDoc**: http://localhost:6040/api/v1/redoc
 - **OpenAPI JSON**: http://localhost:6040/api/v1/openapi.json
+
+These three exist only in debug mode (`LIBREFOLIO_API_DOCS`) and in test mode (port 6041); on any other instance they answer `404`. `./dev.py api schema` exports the schema without a running server.

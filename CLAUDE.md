@@ -28,7 +28,7 @@ LibreFolio/
 
 ## Key Architectural Decisions
 
-1. **All calculations in Backend** — the frontend is pure presentation
+1. **Complex calculations in Backend** — the frontend is presentation; small sums or multiplications (a form convenience, a chart adapter) may live in the frontend, in one shared helper (developer decision, 25/10/2026)
 2. **FIFO at Runtime** — cost matching computed on-demand, not persisted
 3. **Provider Registry Pattern** — auto-discovery for FX, Asset and BRIM providers with `params_schema` for dynamic forms
 4. **Multi-Provider with Fallback** — FX rates from ECB→FED→BOE→SNB + MANUAL sentinel
@@ -47,9 +47,10 @@ LibreFolio/
 - **Code in English** — comments, docstrings, variables, README
 - **Multilingual UI** — only the graphical interface in EN/IT/FR/ES
 - **Edit > Rewrite** — prefer targeted edits to avoid regressions
-- **Incremental Alembic migrations (released)** — ship schema changes as new migrations to protect existing installs; edit `001_initial.py` only for brand-new never-shipped tables; `db create-clean` only for fresh/test DBs
+- **Diagrams for the developer** — when a Markdown document explains a flow, a state machine or who-calls-what, draw it as a Mermaid code block: the developer's editor (MarkText) renders it
+- **One Alembic migration per release** (developer decision, 19/10/2026, confirmed 24/10/2026) — between one release and the next there is exactly one migration file, `00N_release_<x_y_z>_schema.py` (1.3: `005_release_1_3_0_schema.py`). A schema change edits that file, never a new revision. Workstreams working in parallel each edit it on their own branch; when the branches are merged, their changes are merged into that one file (never `alembic merge`, never a second head). A file inside a released tag is frozen; `db create-clean` only for fresh/test DBs. Details: `backend-db.instructions.md` «Alembic Migrations»
 - **After modifying API** — run `./dev.py api sync` to regenerate TypeScript client
-- **After modifying DB models** — add an incremental Alembic migration (`./dev.py db migrate "…"`); use `db create-clean` only for fresh/test DBs
+- **After modifying DB models** — edit the release's migration file (rule above) and test the upgrade from the previous release's head; use `db create-clean` only for fresh/test DBs
 - **Git: local yes, remote only the developer** (developer decision, 14/10/2026).
   - **Allowed locally**, when the task needs it: commit, merge, fast-forward,
     cherry-pick, branch create and rename.
@@ -86,7 +87,7 @@ LibreFolio/
     <command> > /tmp/libreFolio_<descr>.log 2>&1; head -n 40 /tmp/libreFolio_<descr>.log
     <command> 2>&1 | tee /tmp/libreFolio_<descr>.log | { head -n 40; cat >/dev/null; }
     ```
-- ⚠️ **Never `npx` for frontend tools.** Without a local `node_modules/.bin`, npx (npm 11) queries the registry: plain `npx` installs a missing package into the user cache without asking (no TTY), and even `npx --no-install` silently runs a cached copy when it is the latest published version — in both cases not the version pinned by the lock. Call the locked binary explicitly, `frontend/node_modules/.bin/<tool>`, or an `npm run <script>` from `package.json`: a missing binary then fails with "No such file". `dev.py front build` and `dev.py api client`/`api sync` check `frontend/node_modules/.bin` first and stop with exit 1, naming the missing tools and `npm ci`; some runner actions still call `npx` directly (Vitest, J-8). So in a **fresh worktree** run the approved `npm ci` before the first `dev.py test` run that starts the shared backend, even a backend-only one (`server --test` builds the frontend when the build is missing), and before any `dev.py test front-*`, `front build` or `front check`. No manual build is needed after it: the runner and `dev.py mkdocs gallery` run `dev.py server --test --build-only` in the foreground before they start the test server, so a missing or stale debug build and site are built, visibly, outside the startup timeout (300 s, `LIBREFOLIO_TEST_STARTUP_TIMEOUT`), which measures the server start only.
+- ⚠️ **Never `npx` for frontend tools.** Without a local `node_modules/.bin`, npx (npm 11) queries the registry: plain `npx` installs a missing package into the user cache without asking (no TTY), and even `npx --no-install` silently runs a cached copy when it is the latest published version — in both cases not the version pinned by the lock. Call the locked binary explicitly, `frontend/node_modules/.bin/<tool>`, or an `npm run <script>` from `package.json`: a missing binary then fails with "No such file". `dev.py front build` and `dev.py api client`/`api sync` check `frontend/node_modules/.bin` first and stop with exit 1, naming the missing tools and `npm ci`; `dev.py test` stops before anything starts when `frontend/node_modules/.bin` lacks Vitest or Playwright (J-8). So in a **fresh worktree** run the approved `npm ci` before the first `dev.py test` run that starts the shared backend, even a backend-only one (`server --test` builds the frontend when the build is missing), and before any `dev.py test front-*`, `front build` or `front check`. No manual build is needed after it: the runner and `dev.py mkdocs gallery` run `dev.py server --test --build-only` in the foreground before they start the test server, so a missing or stale debug build and site are built, visibly, outside the startup timeout (300 s, `LIBREFOLIO_TEST_STARTUP_TIMEOUT`), which measures the server start only.
 - **Rationale**: avoid re-running expensive commands (tests, builds, db operations) just to see output that was truncated earlier.
 
 ## Async I/O Rule (Event Loop Safety)

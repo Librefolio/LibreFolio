@@ -329,5 +329,5 @@
 </section>
 
 {#if controller.state === 'restarting' && controller.outcome !== null}
-    <RestartOverlay outcome={controller.outcome} slow={controller.slow} notStopping={controller.notStopping} status={controller.outcomeStatus} onBack={() => controller.load()} />
+    <RestartOverlay outcome={controller.outcome} slow={controller.slow} notStopping={controller.notStopping} status={controller.outcomeStatus} unreadableReason={controller.unreadableReason} onBack={() => controller.load()} />
 {/if}

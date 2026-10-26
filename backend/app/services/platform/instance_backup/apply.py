@@ -55,12 +55,13 @@ import stat
 import threading
 from collections.abc import Iterator
 from contextlib import closing
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import psutil
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 try:
     import fcntl
@@ -77,6 +78,7 @@ from backend.app.services.platform.instance_backup.paths import (
     DATABASE_ENTRY,
     SWAPPED_FOLDERS,
     BackupPathError,
+    NotRegularFileError,
     apply_lock_path,
     check_state_path,
     checks_dir,
@@ -145,10 +147,22 @@ class SwapEntry(BaseModel):
         return value
 
 
+#: Through what a restore was confirmed (L3): ``confirmed_by`` alone cannot tell, an administrator may be named ``cli``.
+ConfirmedVia = Literal["admin", "cli", "panel"]
+
+
 class RestoreState(BaseModel):
     """The state of the restore of a data directory, kept in ``.restore/restore.json``."""
 
     model_config = ConfigDict(frozen=True, extra="ignore")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _confirmed_via_of_before(cls, data: Any) -> Any:
+        # A state written before L3 has no confirmed_via: the command line wrote ``cli``, the API a username.
+        if isinstance(data, dict) and "confirmed_via" not in data:
+            return {**data, "confirmed_via": "cli" if data.get("confirmed_by") == "cli" else "admin"}
+        return data
 
     format: Literal[1] = 1
     status: RestorePhase
@@ -156,8 +170,9 @@ class RestoreState(BaseModel):
     #: The data directory's real path when the restore was confirmed: a copy of the data directory does not apply it.
     data_dir: str
     confirmed_at: datetime
-    #: The username of the administrator who confirmed it, or ``cli``.
+    #: The username of the administrator who confirmed it, or ``cli``, or what a hosting panel names itself.
     confirmed_by: str
+    confirmed_via: ConfirmedVia
     backup_created_at: datetime
     backup_app_version: str
     action: Literal["same", "upgrade"]
@@ -214,16 +229,29 @@ class RestoreNotPendingError(RestoreStateError):
     code = "restore_not_pending"
 
 
+#: Why a state file that is there cannot be used (B-33): the file system refuses it (B-32), it is no file (a link, a
+#: folder, a FIFO: never followed nor opened), or it holds no state this LibreFolio reads.
+UnreadableReason = Literal["io", "not_a_file", "invalid"]
+
+
 class RestoreStateUnreadableError(RestoreStateError):
-    """The state file of the restore is there, but the file system does not let it be read: its owner or permissions, a
-    disk error (B-32). Whether a restore waits, or is being applied, is not known. ``reason`` is what the file system
-    said, never a path."""
+    """The state file of the restore is there, but cannot be used (B-32, B-33): whether a restore waits, or is being
+    applied, is not known, so nothing may write over it nor take its copy. ``reason``: ``io``, ``not_a_file`` or
+    ``invalid``; ``detail``: what the file system said, never a path."""
 
     code = "restore_state_unreadable"
 
-    def __init__(self, reason: str) -> None:
-        super().__init__(f"The state of the restore cannot be read: {reason}")
-        self.reason = reason
+    def __init__(self, reason: UnreadableReason, detail: str = "") -> None:
+        said = {"io": detail or "the file system refuses it", "not_a_file": "it is not a file", "invalid": "it holds no state this LibreFolio reads"}[reason]
+        super().__init__(f"The state of the restore cannot be read: {said}")
+        self.reason: UnreadableReason = reason
+        self.detail = detail
+
+
+class RestoreNothingToRecoverError(RestoreStateError):
+    """``recover_unreadable_restore`` found a state it can read, or none: there is nothing to recover (B-33)."""
+
+    code = "restore_nothing_to_recover"
 
 
 class RestoreApplyError(RestoreStateError):
@@ -319,25 +347,29 @@ def _apply_lock(data_dir: Path) -> Iterator[None]:
 
 
 def _read_state(data_dir: Path) -> RestoreState | None:
-    """The state file, read without following a link. ``None`` when there is none, when it is not a file (a link, a
-    folder: never followed) or not a state this LibreFolio can read (§10), both logged. ``RestoreStateUnreadableError``
-    when the file system does not let it be read (logged): whether a restore waits is then not known (B-32)."""
+    """The state file, read without following a link; ``None`` only when there is none. ``RestoreStateUnreadableError``
+    (logged) when it is there but cannot be used: the file system refuses it (``io``, B-32), it is no file (``not_a_file``:
+    a link, a folder, a FIFO, never followed nor opened) or no state this LibreFolio reads (``invalid``). Whether a restore
+    waits is then not known (B-33: before, the last two read as «none»)."""
     path = restore_state_path(data_dir)
     try:
         if not stat.S_ISREG(os.lstat(path).st_mode):
-            logger.error("The state of the restore is not a file: it is ignored")
-            return None
+            logger.error("The state of the restore is not a file: whether a restore waits is not known")
+            raise RestoreStateUnreadableError("not_a_file")
         raw = read_regular_file(path)
     except FileNotFoundError:
         return None
+    except NotRegularFileError:
+        logger.error("The state of the restore is not a file: whether a restore waits is not known")
+        raise RestoreStateUnreadableError("not_a_file") from None
     except OSError as exc:
         logger.error("The state of the restore cannot be read", error=f"{type(exc).__name__}: {exc.strerror or exc}")
-        raise RestoreStateUnreadableError(exc.strerror or type(exc).__name__) from None
+        raise RestoreStateUnreadableError("io", exc.strerror or type(exc).__name__) from None
     try:
         return RestoreState.model_validate_json(raw)
     except ValidationError:
-        logger.error("The state of the restore is not one this LibreFolio can read: it is ignored")
-        return None
+        logger.error("The state of the restore is not one this LibreFolio can read: whether a restore waits is not known")
+        raise RestoreStateUnreadableError("invalid") from None
 
 
 def _state_at_start(data_dir: Path) -> RestoreState | None:
@@ -410,14 +442,94 @@ def read_restore(data_dir: Path | None = None) -> RestoreState | None:
     return _read_state(data_dir)
 
 
+#: Every checked copy is protected: the state of the restore cannot be read, so which copy a restore needs is not
+#: known (B-33). No stage id equals it.
+EVERY_STAGE = "*"
+
+
 def protected_stage(data_dir: Path) -> str | None:
-    """The stage of a restore not finished yet: its copy must be neither pruned nor dropped. ``None`` as well when the
-    state cannot be read (logged by the reader), as before B-32."""
+    """The stage of a restore not finished yet: its copy must be neither pruned nor dropped. ``EVERY_STAGE`` when the
+    state cannot be read (logged by the reader): no copy is touched until the administrator recovers (B-33)."""
     try:
         state = read_restore(data_dir)
     except RestoreStateUnreadableError:
-        return None
+        return EVERY_STAGE
     return state.stage_id if state is not None and state.status in ACTIVE else None
+
+
+def restore_state_problem(data_dir: Path | None = None) -> RestoreStateUnreadableError | None:
+    """Why the state of the restore cannot be read, or ``None`` when it can or when there is none; never raises. The
+    hook of the start (H-62): an instance whose restore state is unreadable serves no data until the administrator runs
+    ``dev.py backup pending --recover`` (B-33)."""
+    try:
+        read_restore(data_dir)
+    except RestoreStateUnreadableError as exc:
+        return exc
+    except Exception as exc:  # noqa: BLE001 — a probe: the start asks it, and an unexpected error says «cannot read»
+        logger.error("The state of the restore could not be probed", error=type(exc).__name__)
+        return RestoreStateUnreadableError("io", type(exc).__name__)
+    return None
+
+
+@dataclass(frozen=True)
+class RecoveredRestore:
+    """What ``recover_unreadable_restore`` did: the folders of before put back, the live ones set aside in
+    ``.restore/failed/``, and the name the unreadable state is kept under."""
+
+    moved_back: tuple[str, ...]
+    set_aside: tuple[str, ...]
+    state_kept_as: str
+
+
+def recover_unreadable_restore(data_dir: Path | None = None, *, now: datetime | None = None) -> RecoveredRestore:
+    """Put the data of before back when the state of the restore cannot be read (B-33): the administrator's way out.
+
+    The journal of the swap is in the unreadable state, so what moved is read from the files: each swapped folder found
+    in ``.restore/previous/`` is the live one of before; the live folder in its place, if any, is the restored one and
+    goes to ``.restore/failed/``. A folder absent from ``previous/`` never moved. The state file is then kept aside as
+    ``restore.json.unreadable-<UTC time>``, never read again, and no state is written: no restore waits. A restore
+    fully committed left no ``previous/`` (decision 41): its data stays.
+
+    ``RestoreNothingToRecoverError`` when the state can be read or there is none; ``RestoreInUseError`` while a server
+    serves the data directory; ``RestoreApplyError`` when a move fails (the data directory may be half restored, and
+    the error says so); nothing moves in the first two cases.
+    """
+    data_dir = data_dir or get_data_dir()
+    now = now or _now()
+    if _restore_folder(data_dir) is not True or restore_state_problem(data_dir) is None:
+        raise RestoreNothingToRecoverError("The state of the restore can be read, or there is none: nothing to recover")
+    with _apply_lock(data_dir), _exclusive_serving_lock(data_dir) as served:
+        if served:
+            raise RestoreInUseError("A server serves the data directory: stop it first")
+        problem = restore_state_problem(data_dir)
+        if problem is None:
+            raise RestoreNothingToRecoverError("The state of the restore can be read, or there is none: nothing to recover")
+        previous = previous_dir(data_dir)
+        failed = failed_dir(data_dir)
+        moved_back: list[str] = []
+        set_aside: list[str] = []
+        try:
+            for name in SWAPPED_FOLDERS:
+                if not is_plain_dir(previous) or not os.path.lexists(previous / name):
+                    continue
+                live = data_dir / name
+                if os.path.lexists(live):
+                    _set_aside(live, failed / name, data_dir)
+                    set_aside.append(name)
+                _move(previous / name, live)
+                moved_back.append(name)
+            _fsync_dir(data_dir)
+        except (OSError, BackupPathError) as exc:
+            logger.critical("The data of before could not be put back: the data directory may be half restored", error=str(exc), moved_back=moved_back)
+            raise RestoreApplyError("The data of before could not be put back: the data directory may be half restored") from exc
+        with contextlib.suppress(OSError):
+            if is_plain_dir(previous) and not any(previous.iterdir()):
+                previous.rmdir()
+        kept = f"{restore_state_path(data_dir).name}.unreadable-{now.astimezone(UTC):%Y%m%dT%H%M%SZ}"
+        os.rename(restore_state_path(data_dir), restore_state_path(data_dir).with_name(kept))
+        _fsync_dir(restore_dir(data_dir))
+    logger.warning("An unreadable restore was recovered: the data of before is back", reason=problem.reason, moved_back=moved_back, set_aside=set_aside)
+    return RecoveredRestore(moved_back=tuple(moved_back), set_aside=tuple(set_aside), state_kept_as=kept)
 
 
 def _copy_usable(data_dir: Path, stage_id: str) -> bool:
@@ -451,7 +563,7 @@ def _remove_leftovers(data_dir: Path, stage_id: str | None) -> None:
 # =============================================================================
 
 
-def confirm_restore(stage_id: str, *, confirmed_by: str, data_dir: Path | None = None, now: datetime | None = None) -> RestoreState:
+def confirm_restore(stage_id: str, *, confirmed_by: str, confirmed_via: ConfirmedVia = "admin", data_dir: Path | None = None, now: datetime | None = None) -> RestoreState:
     """Confirm the restore of a checked copy: it waits for the next start of the server, which applies it.
 
     ``BackupPathError`` when ``.restore`` is a link or a file; then ``RestoreStageMissingError``,
@@ -490,6 +602,7 @@ def confirm_restore(stage_id: str, *, confirmed_by: str, data_dir: Path | None =
             data_dir=str(data_dir.resolve()),
             confirmed_at=now,
             confirmed_by=confirmed_by,
+            confirmed_via=confirmed_via,
             backup_created_at=report.backup.created_at,
             backup_app_version=report.backup.app_version,
             action=report.action,
@@ -497,7 +610,7 @@ def confirm_restore(stage_id: str, *, confirmed_by: str, data_dir: Path | None =
         _write_state(data_dir, state)
         # A new restore: no ticket of an older one reads it.
         drop_ticket(data_dir=data_dir)
-    logger.warning("Restore confirmed: the next start of the server applies it", stage_id=stage_id, confirmed_by=confirmed_by, action=report.action)
+    logger.warning("Restore confirmed: the next start of the server applies it", stage_id=stage_id, confirmed_by=confirmed_by, confirmed_via=confirmed_via, action=report.action)
     return state
 
 

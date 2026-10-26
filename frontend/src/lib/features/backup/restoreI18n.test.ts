@@ -17,7 +17,10 @@
  *     catalogues: the warnings of the check, the blocker, the rollback reasons, the phases of the check, the statuses of
  *     the ledger totals, the check's `RestoreErrorCode` list and the codes of the requests;
  *   - the success texts §0.6 removed (`last.committed`, `restart.restored*`, `restart.signIn`) are named by no module and
- *     held by no catalogue.
+ *     held by no catalogue;
+ *   - L3 CP1: `ERROR_KEYS.sealed_backup_needs_key` and `backup.restore.report.ownAccountMissing` are messages of the four
+ *     catalogues, the modal names the second, and the generated client accepts a report carrying the two warnings of
+ *     the accounts.
  *
  * How the keys are found: a quoted dotted name whose first segment is a namespace of the catalogue is a key, or a prefix
  * when it ends with a dot; the head of a template literal before `${` is a prefix. The names of the events
@@ -36,6 +39,7 @@ import en from '$lib/i18n/en.json';
 import itCatalogue from '$lib/i18n/it.json';
 import fr from '$lib/i18n/fr.json';
 import es from '$lib/i18n/es.json';
+import {schemas} from '$lib/api/generated';
 import {ERROR_KEYS} from './restoreText';
 
 const CATALOGUES: Record<string, unknown> = {en, it: itCatalogue, fr, es};
@@ -459,5 +463,103 @@ describe('B-15 — a proxy refused the archive', () => {
 
         expectMessage('backup.restore.errors.proxy_too_large');
         expect(placeholdersOf(messageOf(en, 'backup.restore.errors.proxy_too_large') as string)).toEqual([]);
+    });
+});
+
+// =====================================================================================================================
+// L3 CP1 — a sealed nightly backup uploaded as it is; the warnings of the accounts (written red first)
+// =====================================================================================================================
+
+/*
+ * A sealed nightly `.tar` uploaded in the admin UI is refused with `sealed_backup_needs_key` (extract `backup.lfbk`,
+ * open `password.age` with age, then restore the `.lfbk` with that password): restoreText.ts words it by
+ * `backup.restore.errors.sealed_backup_needs_key`, a message of the four catalogues.
+ *
+ * The report's warnings gain `credentials_from_backup` (in every report) and `confirming_account_not_in_backup` (the
+ * administrator confirming is not among the backup's): the modal shows the second as its own alert, worded by
+ * `backup.restore.report.ownAccountMissing`. The scan of RestoreReportModal.svelte above then requires that key in the
+ * four catalogues; the positive control here proves the scan reads it. The generated client must accept a report
+ * carrying both codes, or zod refuses the whole check's answer (red until `./dev.py api sync`).
+ *
+ * Red today: neither the entry of `ERROR_KEYS`, nor the two keys, nor the modal's use of the key, nor the codes in the
+ * generated client exist.
+ */
+
+/** A report of a check as the backend sends it (`RestoreStageReport`), carrying these warnings. */
+function stageReport(warnings: string[]): Record<string, unknown> {
+    return {
+        backup_created_at: '2026-10-15T10:15:00Z',
+        backup_app_version: 'v0.0.0-l3',
+        backup_origin: 'ui',
+        backup_revision: 'head_l3',
+        app_version: 'v0.0.0-l3',
+        head_revision: 'head_l3',
+        action: 'same',
+        migrations: [],
+        post_migration_fixes: [],
+        tables: {users: {before: 3, after: 3}},
+        foreign_key_violations_before: 0,
+        foreign_key_violations_after: 0,
+        files: 0,
+        files_size: 0,
+        database_size: 8192,
+        instance_key_included: false,
+        encrypted: false,
+        secrets_rekeyed: 0,
+        secrets_unreadable: {system: 0, user: 0},
+        administrators: ['ada_admin'],
+        warnings,
+        blockers: [],
+        control_totals: 'absent',
+        control_totals_differences: [],
+        control_totals_differences_count: 0,
+        restorable: true,
+        expires_at: '2026-10-16T10:15:00Z',
+    };
+}
+
+describe('L3 — a sealed nightly backup; the warnings of the accounts', () => {
+    it('ERROR_KEYS.sealed_backup_needs_key is backup.restore.errors.sealed_backup_needs_key, a message of the four catalogues', () => {
+        expect(ERROR_KEYS.sealed_backup_needs_key, 'restoreText.ts words the code').toBe('backup.restore.errors.sealed_backup_needs_key');
+
+        expectMessage('backup.restore.errors.sealed_backup_needs_key');
+    });
+
+    it('backup.restore.report.ownAccountMissing is a message of the four catalogues, with the same placeholders in each', () => {
+        expectMessage('backup.restore.report.ownAccountMissing');
+    });
+
+    it('positive control: the scan finds backup.restore.report.ownAccountMissing in RestoreReportModal.svelte', () => {
+        expect(namedKeys(source('RestoreReportModal.svelte')).keys).toContain('backup.restore.report.ownAccountMissing');
+    });
+
+    it('the generated client parses a report carrying credentials_from_backup and confirming_account_not_in_backup', () => {
+        const today = schemas.RestoreStageReport.safeParse(stageReport(['rows_changed']));
+        expect(today.success, `positive control: a report with today's warnings parses: ${today.success ? '' : today.error.message}`).toBe(true);
+
+        const carrying = schemas.RestoreStageReport.safeParse(stageReport(['rows_changed', 'confirming_account_not_in_backup', 'credentials_from_backup']));
+        expect(carrying.success, `the generated client refuses the warnings of the accounts: run ./dev.py api sync — ${carrying.success ? '' : carrying.error.message}`).toBe(true);
+    });
+});
+
+// =====================================================================================================================
+// The status 500 — a state of the restore the server cannot read, on the restart page (SEC-3/4/5 wave, written red first)
+// =====================================================================================================================
+
+/*
+ * RestartOverlay.svelte words the outcome `state_unreadable` by `backup.restore.restart.stateUnreadable`, naming the
+ * placeholder `{reason}` (the reason the server gave: `io`, `not_a_file`, `invalid`): a message of the four catalogues,
+ * naming exactly `reason` in each. Once the overlay names it, the scan of the restore modules above requires it too; the
+ * positive control proves the scan reads it there. Red today: neither the key nor its use exists.
+ */
+describe('the status 500 — the restart page says the state of the restore cannot be read', () => {
+    it('backup.restore.restart.stateUnreadable is a message of the four catalogues, naming the placeholder {reason} and only it', () => {
+        expectMessage('backup.restore.restart.stateUnreadable');
+
+        expect(placeholdersOf(messageOf(en, 'backup.restore.restart.stateUnreadable') as string)).toEqual(['reason']);
+    });
+
+    it('positive control: the scan finds backup.restore.restart.stateUnreadable in RestartOverlay.svelte', () => {
+        expect(namedKeys(source('RestartOverlay.svelte')).keys).toContain('backup.restore.restart.stateUnreadable');
     });
 });

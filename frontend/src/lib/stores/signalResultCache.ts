@@ -19,6 +19,7 @@
  * @module stores/signalResultCache
  */
 
+import type {ComparisonAssetsLoadResult} from '$lib/charts/loadComparisonData';
 import type {BackendSignalResult} from '$lib/charts/signals/backendTypes';
 import {registerClientSessionReset} from '$lib/stores/app/clientSession';
 
@@ -99,8 +100,25 @@ export const assetChartAnswers = new SignalResultCache<AssetChartAnswer>();
 /** The FX detail page's backend signal results, validated. */
 export const fxSignalAnswers = new SignalResultCache<BackendSignalResult[]>();
 
+/**
+ * The series of the assets a detail page's price-view comparisons draw (N64b), as `loadComparisonAssetsData` answered them,
+ * filed under the request (`comparisonAnswerKey`) and the generations of the peers' price stores. Both detail pages use it.
+ */
+export const comparisonSeriesAnswers = new SignalResultCache<ComparisonAssetsLoadResult>();
+
+/**
+ * Forget what the asset detail page kept: its chart answers and its comparison series. A sync or a refresh may have
+ * changed what they were computed from, in a way no store generation shows (the comparison series are asked of the
+ * backend, not read from a store), so each of them asks again.
+ */
+export function clearAssetPageAnswers(): void {
+    assetChartAnswers.clear();
+    comparisonSeriesAnswers.clear();
+}
+
 // An answer is the signed-in account's data: another account starts empty.
 registerClientSessionReset('signalResultCache', () => {
     assetChartAnswers.clear();
     fxSignalAnswers.clear();
+    comparisonSeriesAnswers.clear();
 });

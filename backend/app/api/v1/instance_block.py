@@ -39,12 +39,26 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.api.v1 import auth, panel
 from backend.app.api.v1.backup import instance as backup_instance
 from backend.app.api.v1.backup import panel as backup_panel
+from backend.app.api.v1.backup import panel_restore as backup_panel_restore
 from backend.app.api.v1.backup import restore as backup_restore
 from backend.app.api.v1.system import block, health, info, instance, ready, wake
-from backend.app.config.platform import instance_blocked
+from backend.app.config.platform import awaiting_restore, instance_blocked
 from backend.app.db.session import get_session_generator
+from backend.app.services.platform.hosting_panel.access import PanelScope, panel_caller
+from backend.app.services.platform.restore_guard import restore_interrupted
 
 INSTANCE_BLOCKED_CODE = "instance_blocked"
+
+#: The seven routes of the panel's restore (H-62): their ticket comes first, then their own 423 and 409.
+_PANEL_RESTORE_ROUTES = (
+    backup_panel_restore.upload_panel_restore_archive,
+    backup_panel_restore.start_panel_restore_check,
+    backup_panel_restore.get_panel_restore_check,
+    backup_panel_restore.confirm_panel_restore_check,
+    backup_panel_restore.restart_panel_restore,
+    backup_panel_restore.get_panel_restore_status,
+    backup_panel_restore.cancel_panel_pending_restore,
+)
 
 ALLOWED_WHEN_BLOCKED = frozenset(
     {
@@ -85,6 +99,9 @@ ALLOWED_WHEN_BLOCKED = frozenset(
         wake.wake_sync,
         # The hosting panel's status of the instance, with its own token: whether the customer has activated it (H-61, R1)
         panel.get_panel_status,
+        # The panel's restore, with its ticket instead of a session (H-62): past the ticket each route answers 423
+        # instance_blocked itself, so a caller without a ticket learns nothing of the block
+        *_PANEL_RESTORE_ROUTES,
     }
 )
 
@@ -98,3 +115,72 @@ async def refuse_when_blocked(request: Request, session: Annotated[AsyncSession,
         return
     await auth.get_current_user(request, session)
     raise HTTPException(status_code=status.HTTP_423_LOCKED, detail={"code": INSTANCE_BLOCKED_CODE, "message": "This instance is blocked by its hosting provider"})
+
+
+# =============================================================================
+# The «awaiting restore» mode (lot H-62, contract L3 §6)
+# =============================================================================
+
+INSTANCE_AWAITING_RESTORE_CODE = "instance_awaiting_restore"
+
+#: What answers while the hosting panel restores the instance: the probes, the version, the public configuration (with
+#: its ``mode``), the scheduled wake-up (it runs nothing and says ``awaiting_restore``), and the panel's routes — its
+#: status, its backup jobs (a backup there answers 409 ``backup_awaiting_restore``) and its restore. A test pins the list.
+ALLOWED_WHEN_AWAITING_RESTORE = frozenset(
+    {
+        health.health_check,
+        health.test_lane_health,
+        ready.get_readiness,
+        info.get_system_info,
+        instance.get_instance_config,
+        wake.wake_sync,
+        panel.get_panel_status,
+        backup_panel.start_panel_backup,
+        backup_panel.get_panel_backup_job,
+        backup_panel.download_panel_backup,
+        backup_panel.delete_panel_backup_job,
+        *_PANEL_RESTORE_ROUTES,
+    }
+)
+
+
+async def refuse_when_awaiting_restore(request: Request) -> None:
+    """Router dependency of ``/api/v1``, right after ``refuse_when_blocked``: while the instance awaits its restore
+    (``LIBREFOLIO_AWAIT_RESTORE``), every endpoint not in ``ALLOWED_WHEN_AWAITING_RESTORE`` answers 423
+    ``instance_awaiting_restore`` — to anyone, signed in or not (decision Q5): the volume is empty, or holds the data the
+    panel is restoring, and nobody may register, set up a first administrator or sign in before the panel ends the mode.
+    """
+    if awaiting_restore() and request.scope.get("endpoint") not in ALLOWED_WHEN_AWAITING_RESTORE:
+        raise HTTPException(status_code=status.HTTP_423_LOCKED, detail={"code": INSTANCE_AWAITING_RESTORE_CODE, "message": "This instance is waiting for its hosting provider to restore its data"})
+
+
+# =============================================================================
+# A restore stopped half way (lot B-33, the start's part)
+# =============================================================================
+
+INSTANCE_RESTORE_INTERRUPTED_CODE = "instance_restore_interrupted"
+BACKUP_RESTORE_INTERRUPTED_CODE = "backup_restore_interrupted"
+
+#: What answers while the state of the restore cannot be read: the same as while the instance awaits its restore —
+#: the probes, the public configuration (with ``restore_interrupted``), the scheduled wake-up (it runs nothing), and the
+#: hosting panel's routes. A test pins it equal to ``ALLOWED_WHEN_AWAITING_RESTORE``.
+ALLOWED_WHEN_RESTORE_INTERRUPTED = ALLOWED_WHEN_AWAITING_RESTORE
+
+
+async def refuse_when_restore_interrupted(request: Request) -> None:
+    """Router dependency of ``/api/v1``, third, after the block and the awaiting-restore mode: while this process found
+    the state of the restore unreadable at its start (``services/platform/restore_guard.py``), every endpoint not in
+    ``ALLOWED_WHEN_RESTORE_INTERRUPTED`` answers 423 ``instance_restore_interrupted`` — to anyone: LibreFolio cannot tell
+    which data it holds, and serves none until the administrator chooses with ``./dev.py backup pending --recover``.
+
+    The hosting panel's backup start answers 409 ``backup_restore_interrupted`` instead (D7): a backup of data in doubt
+    would pass the coordinator's checks and push a good copy out of the seven it keeps. The panel's credential is
+    checked first, by hand, so a caller without one gets the same answer as outside the state."""
+    if not restore_interrupted():
+        return
+    endpoint = request.scope.get("endpoint")
+    if endpoint is backup_panel.start_panel_backup:
+        await panel_caller(request, PanelScope.BACKUP)
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"code": BACKUP_RESTORE_INTERRUPTED_CODE, "message": "A restore of this instance stopped half way: no backup starts until its administrator recovers it"})
+    if endpoint not in ALLOWED_WHEN_RESTORE_INTERRUPTED:
+        raise HTTPException(status_code=status.HTTP_423_LOCKED, detail={"code": INSTANCE_RESTORE_INTERRUPTED_CODE, "message": "A restore of this instance stopped half way: it serves no data until its administrator recovers it"})

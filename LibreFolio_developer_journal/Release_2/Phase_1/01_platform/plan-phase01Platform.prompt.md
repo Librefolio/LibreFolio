@@ -10361,3 +10361,208 @@ mescolare le righe del runner dei due lotti:
     > passo 5 verde), e non conta fra i falliti.
     > **Prove** (corsia 6181, in `flock`, log `ondata3/h-gate8-*.log`): `csp-collector` 23 verdi (1 saltato) due volte;
     > `front-utility all` (30 min 36 s) rosso solo su `files.spec.ts:826`, atteso finché il developer non decide Q-CDN.
+
+#### H-55, il visore PDF senza CDN, R4 e R5 — analisi (ondata 4, 22/10, base `c042f2481`, sola lettura)
+
+> Decisioni del developer (22/10), via coordinatore: R5 (a), le docs dell'API servite da noi e spente nel managed; font
+> CJK (c), il nostro server li scarica una volta da jsDelivr, controlla l'hash atteso (lista generata dalla copia in
+> `node_modules`, versione fissata), li tiene in cache sul volume e li serve: `connect-src` resta `'self'`; il ripiego del
+> motore si toglie; R4 nello stesso lotto.
+
+**Stato vero**:
+- `pdfViewerAssets(base)` (`frontend/src/lib/utils/files/pdfViewerAssets.ts`): se la sonda HEAD del motore locale fallisce
+  torna `{}`, e il visore usa i suoi default (`https://cdn.jsdelivr.net/npm/@embedpdf/pdfium@2.14.3/dist/pdfium.wasm` e i
+  font dal CDN); sotto la politica è bloccato e l'anteprima gira all'infinito. `localFontFallback` manda i 4 set CJK al CDN
+  (`CDN_FONTS_VERSION = '1.0.0'`); latino, arabo ed ebraico sono già nostri.
+- `FilePreviewModal.svelte`: un errore di `EmbedPDF.init` (o un'eccezione prima) mette `pdfError` e mostra il visore del
+  browser in un `iframe` (`file-preview-pdf-fallback`, testo `uploads.previewFallbackPdf`, già in 4 lingue).
+- I pacchetti CJK: `fonts-jp` 7 pesi, `fonts-kr` 7, `fonts-sc` 5, `fonts-tc` 7 (26 file, ~141 MB in tutto; Regular + Bold
+  ~47 MB). Il visore chiede un file solo quando un PDF lo richiede, e sceglie il peso più vicino.
+- I worker: uno solo caricato da URL, `priceProcessing.worker-*.js` (`/_app/immutable/workers/`, modulo, importa chunk di
+  `/_app`); il motore del visore gira in un worker da `blob`, che eredita già la politica della pagina; i calcoli del
+  rischio sono nel backend.
+- Le docs dell'API: `main.py:53-55` (`docs_url`, `redoc_url`, `openapi_url`) con le pagine di FastAPI, che caricano
+  `swagger-ui-dist@5` e `redoc@2` da jsDelivr. Nei `node_modules` non c'è né `swagger-ui-dist` né `redoc`.
+
+**Proposta**:
+1. **Font CJK dal nostro server** (backend, nuovo `services/files/pdf_fonts.py` + `api/v1/pdf_fonts.py`, registrato da
+   `router.py`): `GET /api/v1/files/pdf-fonts/{package}/{file}` per i soli 26 file della lista (nient'altro: nessun
+   nome libero verso jsDelivr). Alla prima richiesta di un file: scaricato da
+   `https://cdn.jsdelivr.net/npm/@embedpdf/{package}@{versione}/fonts/{file}` (host e versione fissi nel codice), fuori
+   dal loop degli eventi, un download alla volta per file (lock), dimensione massima, hash `sha256` confrontato con la
+   lista **prima** di scriverlo; scritto in `DATA_DIR/cache/pdf-fonts/` con un nome temporaneo e un rename atomico; poi
+   servito come `font/otf`, `Cache-Control: public, max-age=31536000, immutable`. Hash diverso: scartato, warning, 502;
+   CDN irraggiungibile: 503 (il PDF si vede senza quei glifi). La lista: `backend/app/services/files/pdf_font_hashes.json`
+   (pacchetto, versione, file, sha256, dimensione), generata da uno script (`frontend/scripts/pdf-font-hashes.mjs`) dalla
+   copia in `node_modules`; un Vitest la tiene uguale ai pacchetti installati, come oggi `CDN_FONTS_VERSION`.
+   Frontend: `localFontFallback` punta i 4 set CJK a `/api/v1/files/pdf-fonts/…`.
+2. **Il ripiego del motore tolto**: `pdfViewerAssets` lancia un errore se la copia locale non risponde (mai `{}`); il
+   visore riceve sempre `wasmUrl` e `fontFallback` nostri.
+3. **R4**: ogni risposta JavaScript sotto `/_app/` riceve una politica da worker:
+   `script-src 'self'; connect-src 'self' <sorgenti della pagina>; worker-src 'self' blob:; object-src 'none';
+   base-uri 'self'`. Un browser la applica solo a uno script caricato come worker (sugli altri script è ignorata): oggi
+   cambia solo per `priceProcessing.worker`, che importa solo da `/_app` e non chiama la rete. Niente su un 304.
+4. **R5**: le pagine di Swagger e ReDoc fatte da noi, con le librerie servite dall'immagine (versione fissata, hash
+   controllato da un test) e lo script d'avvio in un file nostro, non inline: così anche lì `script-src 'self'`. Nel
+   profilo managed `docs_url` e `redoc_url` spenti (404).
+
+**I rossi**:
+- `test_pdf_fonts.py` (nuovo, puro, scaricamento finto): la lista (26 file, nomi sicuri); un file servito e messo in
+  cache, poi servito dalla cache senza scaricare; hash sbagliato → scartato, niente in cache, warning, 502; rete giù →
+  503; nome fuori lista o con `..` → 404; due richieste insieme → un solo download; dimensione oltre il massimo →
+  scartato; risposta `font/otf` con `immutable` e `nosniff`; scaricamento fuori dal loop; serve una sessione (se la
+  domanda Q-B ha risposta (a)).
+- `test_managed_headers.py`: la politica dei worker sui `.js` sotto `/_app/` (anche quelli non worker), nessuna politica
+  sul 304, nessuna sui `.js` fuori da `/_app`; R5: le pagine delle docs con librerie locali e `script-src 'self'`, 404
+  nel managed.
+- Vitest: `pdfViewerAssets` (CJK verso `/api/v1/files/pdf-fonts/`, errore senza motore locale, nessuna URL di
+  `cdn.jsdelivr.net` nella configurazione del visore); la lista degli hash uguale ai pacchetti installati.
+- E2E: `files.spec.ts:826` al contrario (motore locale irraggiungibile → nessuna richiesta al CDN, l'anteprima ripiega
+  come da Q-A); `files-pdf-offline` con i font chiesti solo alla nostra origine. Corsa completa nello slot (R4).
+
+**File**: nuovi `services/files/pdf_fonts.py`, `services/files/pdf_font_hashes.json`, `api/v1/pdf_fonts.py`,
+`frontend/scripts/pdf-font-hashes.mjs`, i test; modificati `router.py`, `security_headers.py`, `main.py` (R5),
+`config/__init__.py` (`cache` nei `managed_paths`), `pdfViewerAssets.ts`, `FilePreviewModal.svelte` (se serve per Q-A),
+`files.spec.ts`, `files-pdf-offline.spec.ts`, il runner (righe additive), la doc (`configuration.en.md#csp`,
+`security.md`).
+
+**Passi (ondata 4, parte 1)**:
+1. ✅ **La lista degli hash** (22/10): `frontend/scripts/pdf-font-hashes.mjs` scrive
+   `backend/app/services/files/pdf_font_hashes.json` dalla copia in `node_modules` (versione 1.0.0, 26 file, 138 MB);
+   `--check` esce 1 se il file non corrisponde. Guardia: Vitest `pdfFontHashes.test.ts` (in `core-unit`).
+2. ✅ **I font CJK dal nostro server** (22/10). Rossi `test_pdf_fonts.py` (33, modulo mancante) → verdi 33.
+   > **Note implementazione**: `services/files/pdf_fonts.py` (lista letta come il JSON, solo i nomi esatti, scaricamento
+   > da host e versione fissi senza redirect e con il tetto della dimensione attesa, `sha256` prima di scrivere, rename
+   > atomico in `DATA_DIR/cache/pdf-fonts/`, un lucchetto per file); `api/v1/pdf_fonts.py` (sessione richiesta, 404, 503
+   > `pdf_font_unavailable`, 502 `pdf_font_mismatch`, `font/otf` `private, max-age=31536000, immutable`, fuori dallo schema
+   > OpenAPI per non allungare il client generato), registrato da `router.py`; `cache` nei `managed_paths`.
+   > **⚠️ Fuori pista**: PFT-015 leggeva `app.routes` piatto (`_IncludedRouter`), riparato con `iter_route_contexts`;
+   > `source_url` accetta anche una voce in forma di `dict`, come la lista.
+3. ✅ **Il ripiego del motore tolto** (22/10). Rossi Vitest `pdfViewerAssets.test.ts` (4) → verdi (66 con
+   `pdfFontHashes` e `FilePreviewModal`). `pdfViewerAssets` lancia un errore senza motore locale; i CJK puntano a
+   `/api/v1/files/pdf-fonts/`; `FilePreviewModal` mostra il visore del browser (Q-A (a), in attesa di conferma). E2E
+   `files.spec.ts:826` rovesciato e `files-pdf-offline` (nessuna richiesta a jsDelivr) riscritti, da provare nello slot.
+4. ✅ **R4** (22/10). Rossi `test_managed_headers.py` (118) → verdi 720; 13 test vecchi aggiornati alla politica dei
+   worker (test-author). `worker_policy()` su ogni JavaScript sotto `/_app/`, mai su un 304.
+   > **⚠️ Fuori pista**: tolte `PDF_VIEWER_CDN_ORIGIN` ed `EXTRA_CONNECT_SOURCES`: con la decisione (c) il CDN non entra
+   > mai in `connect-src`, e una manopola vuota inviterebbe ad allargare la maglia.
+5. ⏳ **R5**, preparato e fermo (in attesa di Q-C e Q-D). Disegno: `docs_url` e `redoc_url` a `None` in `main.py`; un
+   modulo nostro (`api/api_docs.py`) con le due pagine, senza script inline (l'avvio in un file nostro), senza Google
+   Fonts, con le librerie servite dalla build (copiate da `node_modules` se Q-C (a)); nessuna rotta nel managed (404),
+   e `openapi.json` spento lì se Q-D sì; sulle due pagine `script-src 'self'` (e `worker-src 'self' blob:` per ReDoc).
+6. ✅ **La corsa completa nello slot** (22/10, 13:39 → 15:21, 1 h 42 min, HEAD `9736ea90e`, corsia 6181; log
+   `ondata4/h-w4-step5.log`): `all-frontend` **9 categorie su 9 verdi**, con la politica dei worker (R4), il visore senza
+   CDN (`files.spec.ts:826` rovesciato verde, `files-pdf-offline` verde) e la politica applicata. Nessun rosso.
+7. ✅ **R5, le docs dell'API** (22/10, decisioni del developer: Q-A (a); Q-C cambiata in corsa, niente pacchetti npm: le
+   librerie da jsDelivr a versione esatta con l'SRI; Q-D più larga: spente su ogni istanza senza il flag di debug).
+   > **Note implementazione**: `LIBREFOLIO_API_DOCS` (spenta di default in ogni profilo, Docker compreso; il managed
+   > tiene il default) e `config.api_docs_enabled()` (la variabile, oppure il test mode, perché sei test API leggono
+   > `/api/v1/openapi.json` dal server della corsia); `main.py`: `docs_url`/`redoc_url` sempre `None`, `openapi_url` solo
+   > se acceso; `api/api_docs.py`: le due pagine nostre, senza script inline né Google Fonts, le tre librerie
+   > (`swagger-ui-dist@5.33.1` js e css, `redoc@2.5.4`) con `integrity` sha384 e `crossorigin`, calcolati due volte dai
+   > file pubblicati, e gli script d'avvio serviti dall'istanza; `security_headers.api_docs_policy()` per le due pagine
+   > (`script-src 'self' https://cdn.jsdelivr.net`, `worker-src 'self' blob:`, `connect-src 'self'` + trio); `dev.py
+   > server --debug` mette `LIBREFOLIO_API_DOCS=1`, e il banner stampa i due link solo con `--debug` o in test mode.
+   > **Rossi → verdi**: `api api-docs` 56 rossi (2 guardie verdi) → 58; `managed-headers` 147 → 867; `instance-block` 2 →
+   > 64; banner 11 → 46. `api sync` fuori dal test mode e senza flag: esce 0, lo schema ha 157 percorsi.
+   > **⚠️ Fuori pista**: ho passato `dev.py` e `_backend_api.py` a ruff `--fix` e black, che li hanno riformattati
+   > interi (anche righe di altri lotti); li ho ricostruiti dalla versione committata con le mie sole aggiunte (+6 −2 e +16).
+   > **⚠️ Fuori pista**: un caso di R5 in `managed-headers` metteva la pagina «barriera» e la risposta finta sullo stesso
+   > percorso (rispondeva sempre la prima): riparato, la barriera usa l'altra pagina.
+   > **E2E** (test-author): `frontend/e2e/layout/api-docs.spec.ts`, registrata come `front-utility api-docs`: Swagger e
+   > ReDoc si disegnano dai tre file fissati, sotto la loro politica, senza violazioni; un bundle cambiato è rifiutato
+   > dall'SRI. Prettier pulito; **non ancora eseguita** (chiede internet verso jsDelivr e uno slot E2E).
+   > **Docs** (docs-writer, solo inglese): `admin/configuration`, `admin/cli_tools`, `developer/architecture/security`
+   > (nuova sezione `#api-docs-libraries`), `developer/architecture/overview`, `developer/api/{index,overview,curl-testing}`.
+   > `mkdocs build` strict esce 0, `check-links` 97 link validi. Debito di traduzione: `configuration`, `cli_tools`.
+8. ✅ **H-18, i toast letti dai lettori di schermo** (22/10, lotto piccolo approvato dal developer, dopo R5).
+   > **Note implementazione**: in `ToastContainer.svelte` icona e messaggio di ogni toast stanno in un elemento live:
+   > l'errore in `role="alert"` (`aria-live="assertive"`, interrompe), le altre varianti, avviso compreso, in
+   > `role="status"` (`aria-live="polite"`); `aria-atomic="true"`, icona `aria-hidden`. Il pulsante ✕ resta fuori
+   > dall'elemento live, così la sua etichetta non viene letta col messaggio. Il contenitore (`toast-region`,
+   > `pointer-events-none`) resta nel DOM anche vuoto: i toast arrivano in un genitore che esiste già. Nessun colore toccato.
+   > **Rossi → verdi** (test-author): 12 nuovi casi in `ToastContainer.test.ts` rossi (nessun elemento live, nessuna
+   > regione) → 25/25 verdi; con i gate `htmlSink` e `themeRoles` 112/112; `front check` 0 errori, 0 avvisi.
+   > **⚠️ Fuori pista** (non fatto, da segnalare): l'`aria-label="Dismiss"` del ✕ è scritto in inglese, senza i18n.
+9. ✅ **H-18b, il ✕ dei toast tradotto** (22/10, sì del coordinatore). Il nome del pulsante viene dalla chiave comune
+   esistente `common.close` («Close», «Chiudi», «Fermer», «Cerrar»), già usata per lo stesso scopo altrove: nessuna chiave nuova.
+   > **Rossi → verdi** (test-author): 4 casi in `ToastContainer.test.ts`, con la lingua marcatore, rossi su
+   > `aria-label="Dismiss"` → verdi; il file 31/31, con i gate `themeRoles` e `htmlSink` 118/118; i vicini (layout,
+   > `InstanceBlockedPage`) 56/56.
+   > **⚠️ Fuori pista**: i 25 test vecchi del file montavano il componente senza una lingua di svelte-i18n (prima il nome
+   > era un letterale): il `beforeEach` del file ora parte in inglese, come l'app.
+10. ✅ **E2E `front-utility api-docs` nello slot** (22/10, corsia 6181). Primo giro 2/3: ReDoc e il bundle alterato verdi,
+    Swagger rosso. Causa (vista dal vivo nel browser): Swagger UI 5.33 disegna le operazioni in una lista virtualizzata,
+    solo quelle vicine alla finestra; `/api/v1/system/health` non era mai montata. La pagina era sana (157 percorsi,
+    28 tag, nessun errore). Il test-author ha cambiato il controllo: almeno 3 operazioni disegnate, ognuna un percorso del
+    documento che la pagina stessa ha scaricato. Secondo giro **3/3 verdi** (log `ondata4/h-r5-e2e-api-docs-2.log`).
+11. ✅ **H-62, la rotta di ripristino del pannello e il modo «ripristino in corso»** (22/10, base `c0b6a8d06`; contratto
+    `BACKUP-contratto-L3.md` §5-§7, CONCORDATO; analisi `H-62-analisi-turno1.md`; risposte Q5 423 per chiunque, Q6 pagina
+    semplice sullo sfondo della login, Q7 500, Q8 i codici; Q1-Q4 a B).
+    > **Note implementazione**: `config.platform.awaiting_restore()` (`LIBREFOLIO_AWAIT_RESTORE`, valori del blocco,
+    > `await_restore` alias per B); controllo d'avvio; `lifecycle.Step.skip_when` sui sei passi del §6. Scope
+    > `backup:restore` solo biglietto (`access.py`). `api/v1/backup/panel_restore.py`: le 7 rotte, biglietto → 423 → 409,
+    > solo `.lfbk` (il resto si cancella), ripetibilità di confirm e restart, log della conferma con `kid`; schemi chiusi
+    > in `schemas/hosting_panel.py` (`PanelRestoreStageReport` 20 campi, `administrators_count`; `PanelRestoreStatus` con
+    > `confirmed_via`). `refuse_when_awaiting_restore` seconda dipendenza del router, `ALLOWED_WHEN_AWAITING_RESTORE`;
+    > `mode` in ready, instance e panel/status (+ `restore`, 500 se illeggibile); wake-sync `awaiting_restore`. Frontend:
+    > `InstanceAwaitingRestorePage` (sfondo `AnimatedBackground` della login, `role="status"`, si ricarica da sola),
+    > `AwaitingRestoreGate` nel layout radice, il client API ricarica la configurazione sul 423 del modo; 4 chiavi in 4 lingue.
+    > **Rossi → verdi**: backend 169 nuovi (163 rossi) → verdi tranne i 4 «Needs B» (Q1, Q2, Q3, Q4); frontend 36 nuovi →
+    > verdi; 9 file aggiornati 503/503; `services all` verde, `api all` verde tranne i 4 «Needs B».
+    > **⚠️ Fuori pista**: le 7 rotte nel client generato rendono «troppo profondo» un `vi.spyOn(zodiosApi, …)` di
+    > `ForgotPasswordCard.email.test.ts`: cast al modello già usato da altri 4 test (test-author). Il layout radice è
+    > legacy: `children` del gate opzionale.
+    > **Dopo il merge di B** (commit `4eb8e0b59`, merge `dc5f488d4`, 22/10): ✅ `start_check(origin="panel")` e
+    > `_panel_check` (gli stage non del pannello sono 404 per lui, anche alla conferma); `running_check` → 202 con lo stesso
+    > stage; `confirm_check(confirmed_by=<kid>, confirmed_via="panel")`. Gli schemi del pannello riusano i tipi dei campi
+    > di B (B aveva aggiunto due codici di avviso: lo schema chiuso li avrebbe rifiutati con un 500). I 4 «Needs B» verdi;
+    > `backup-panel`, `backup-restore`, `backup-staging`, `backup-apply` verdi; docs con il 409 `backup_awaiting_restore`.
+    > **⚠️ Fuori pista**: rese pubbliche le funzioni di `restore.py` e poi rimesse private su richiesta del coordinatore
+    > (B tocca quel file in B-33); il `getattr` di B in `panel.py` resta, perché i test di B sostituiscono `await_restore`
+    > sul modulo.
+12. ✅ **H-62, le cure della revisione di sicurezza** (22/10, `SEC-review-backup-H62.md`, nessun HIGH né MEDIUM; punti
+    3, 5, 6, 9 a H).
+    > **Note implementazione**: (3) l'upload guarda i primi byte: senza `LFBK` risponde 400 `restore_envelope_required`
+    > prima di scrivere e senza leggere il resto; il caricamento buono di prima resta (il writer non arriva a `finish`).
+    > (5) su `StagingBusyError` un secondo `running_check`: chi perde la corsa risponde con lo stage del vincitore.
+    > (6) il secondo SIGTERM è innocuo (uvicorn 0.52.4: `should_exit` idempotente, nel master `should_exit.set()`; il
+    > watchdog si arma una volta), ma resta una finestra dopo il ripristino dei gestori: flag di processo
+    > `_restart_requested`, un riavvio ripetuto risponde 202 senza segnale. (9) il 503 dell'upload documenta
+    > `backup_upload_unavailable`; `api sync`.
+    > **Rossi → verdi** (test-author): 9 rossi (PR-060 ×4, PR-062 ×2, PR-070, PR-073, HPR-008) → `panel-restore` 123/123,
+    > `hosting-panel-routes` 39/39; `front check` 0 errori.
+    > **⚠️ Fuori pista**: PR-022 (413 su corpo in streaming) mandava byte zero: ora risponde prima il magic, il test manda
+    > `LFBK` + riempitivo. Uso anche `_WRITE_CHUNK` di `restore.py` (privata, come le altre).
+13. ✅ **B-33, la parte d'avvio** (22/10, base `06515e795` con il merge di B; decisione del developer: lo stato del
+    ripristino illeggibile non serve i dati e mostra una pagina «ripristino interrotto, serve l'amministratore»).
+    > **Note implementazione**: `services/platform/restore_guard.py` (`probe_restore_state`, `restore_interrupted`) sul
+    > gancio di B `apply.restore_state_problem`; passo d'avvio `restore-state` subito dopo `pending-restore`; con lo stato
+    > illeggibile saltano `post-migration-fixes`, `lone-transfer-legs` e i sei passi del modo (`_serving_no_data`);
+    > restano database, impostazioni, i passi del ripristino, `serving-lock` (così `--recover` rifiuta a server acceso) e
+    > `idle-monitor`. Terza dipendenza del router `refuse_when_restore_interrupted`: 423 `instance_restore_interrupted`
+    > per chiunque, stesso elenco di rotte ammesse del modo. `/system/instance` + `restore_interrupted`; wake-sync
+    > `restore_interrupted`. Frontend: `InstanceRestoreInterruptedPage` (sfondo della login, `role="alert"`, link a
+    > `admin/cli_tools/#backup-pending-unreadable` nella lingua dell'interfaccia, si ricarica da sola), il gate la mostra
+    > prima della pagina d'attesa; il client ricarica la configurazione sul 423; 5 chiavi in 4 lingue.
+    > Fuori (D6/D7, in attesa del developer): rifiuto dei job del pannello, `instance_key`, `restore.state = unreadable`
+    > in `panel/status` (resta 500 `restore_state_unreadable`, Q7).
+    > **Rossi → verdi** (test-author): backend 78 rossi → verdi (`restore-guard` 25, `restore-interrupted` 24,
+    > `await-restore-mode` 38 + 27, i pin della configurazione pubblica); frontend 34 → verdi (56 + 138); `front check` 0.
+    > **⚠️ Fuori pista**: il merge di B ha cambiato la firma di `RestoreStateUnreadableError` (`reason` prima): un test
+    > di H-62 la costruiva alla vecchia maniera (KeyError → 500), riparato dal test-author.
+14. ✅ **Ultimo lotto dell'ondata 4: adattamento a B (SEC-3/4/5) e D7** (23/10, base `d624b5458`; D7 confermata dal
+    developer, contratto L3 §10 opzione A; D6 rimandata a H-3).
+    > **Note implementazione**: `panel_restore.py`: ogni 500 `restore_state_unreadable` passa l'eccezione (`reason` nel
+    > detail); l'upload si chiude con `finish(replace_others=False)`, poi il controllo del tipo sul file finito (rifiutato
+    > → tolto con `upload_path(...).unlink`, perché `abort()` dopo un `finish` riuscito non fa più niente), poi
+    > `remove_replaced_uploads(keep=id)`; il controllo dei primi byte resta la prima difesa. D7: `GET /panel/status` con
+    > lo stato illeggibile → 200 `restore.state = "unreadable"` con la `reason` (al posto del 500 di Q7); nello stato
+    > «ripristino interrotto» l'avvio di un backup del pannello → 409 `backup_restore_interrupted`, dalla terza
+    > dipendenza del router, dopo il controllo della credenziale fatto a mano (`access.panel_caller`), così `backup/panel.py`
+    > di B resta com'è; la pagina «ripristino interrotto» mostra «Scrivi all'assistenza» con `LIBREFOLIO_SUPPORT_URL`
+    > (`supportChannel`, senza GitHub).
+    > **Rossi → verdi** (test-author): backend 27 rossi → verdi (`panel-restore` 136, `await-restore-mode` 36,
+    > `restore-interrupted` 34, `panel-status` 20, `hosting-panel-routes` 40); frontend 5 → verdi (130).
+   > **⚠️ Fuori pista**: `"scarfSettings"` messo e poi tolto da `package.json`, dopo il cambio di Q-C: il file coincide col
+   > commit.

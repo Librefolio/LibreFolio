@@ -8499,3 +8499,48 @@ no). Il database del developer lo controlla il coordinatore con uno script ester
   > comportamento letterale.
 - ✅ 6. Doc (docs-writer, 35 pagine inglesi: utente, teoria finanziaria, sviluppatore), build stretto 0 avvisi, check-links 97. Debito di
   traduzione reale su 20 pagine tradotte. I commenti del backend che citavano ancora J-24 aggiornati da me.
+
+### Ondata 4 · W: Q-N78-1k, helper legacy, regola dei plugin in beta con Fineco, W-BS — analisi del primo turno (2026-10-22, base `c042f2481`)
+
+Sola lettura; il documento è `salvataggi-worktrees-20261021/ondata4/W-analisi-turno1.md`.
+- ⏳ 1. **Q-N78-1k**: la coppia di ADJUSTMENT collegati si può creare solo da API o è un dato vecchio (nessun punto del Form, del Bulk o dei plugin la crea; il Form
+  promuove due rettifiche *non* collegate a TRANSFER). Regola proposta: l'uscita di una coppia cede al PMC (lotti: costo FIFO di ogni pezzo, `hands_over_at_own_cost`);
+  un solo modulo nuovo, `financial_math/linked_adjustments.py`, letto da Dashboard, lotti FIFO, performance dei lotti e bordo dell'ambito. Esempio 10 a 50 / 80:
+  oggi il totale perde 500 e il TWRR segna −62,5 %; con P il totale fa 0, ma con il solo A il TWRR del giorno è **−37,5 %**; con M (come una gamba di TRANSFER) 0 %. Domande
+  Q-N78-1k-1 (P o M) e Q-N78-1k-2.
+- ⏳ 2. **Helper legacy**: due copie (`data-quality-legacy.spec.ts:231`, `yield-on-cost-real.spec.ts:180`) → `frontend/e2e/fixtures/legacy-cost-rows.ts`.
+- ⏳ 3. **Regola dei plugin in beta + Fineco su `RowSkips`**: quattro stringhe di Fineco (`:319`, `:329`, `:340`, `:347`) → `rows_unreadable` / `rows_not_recognized`; plugin 1.5.0;
+  Fineco fuori da `ROW_SKIPS_PENDING`. Domanda Q-Fineco-1.
+- ⏳ 4. **W-BS**: un solo punto di produzione istanzia il plugin per un parse (`api/v1/brokers.py:983`) e il figlio lo ricrea; `BoundSettings` si serializza, quindi il gancio sta nel
+  padre. Il plugin di prova nel modulo di test, non in `brim_providers/`. Domande Q-BS-1…3.
+- ✅ 2. **Helper legacy** (22/10, via del coordinatore): `frontend/e2e/fixtures/legacy-cost-rows.ts` (`writeLegacyRows`, `LegacyRows`, `LegacyRequest`, quantità come
+  argomenti); `data-quality-legacy.spec.ts` e `yield-on-cost-real.spec.ts` lo importano, le due copie tolte (−118 righe, +4). Nessun comportamento cambia. Prime corse:
+  `data-quality-legacy` 1 passato, `yield-on-cost-real` 2 passati (`ondata4/W-legacy-*.log`).
+- ✅ 3. **Regola dei plugin in beta e Fineco su `RowSkips`** (22/10, via del coordinatore; Q-Fineco-1: la descrizione vuota è «illeggibile»).
+  Rossi (test-author, sonnet): `test_brim_row_skips.py` 12 rossi / 216 verdi, `test_brim_providers.py` 2 rossi (il guard della data illeggibile e la versione 1.5.0), log
+  `ondata4/W-fineco-*.log`. Cura: `broker_fineco/plugin.py`: righe corte, data illeggibile, descrizione vuota → `rows_unreadable`; operazione ignota → `rows_not_recognized`;
+  versione **1.5.0**; Fineco da `ROW_SKIPS_PENDING` a `ROW_SKIPS_BY_PLUGIN`. Dopo: `test_brim_row_skips` 228, `test_brim_providers` 779 + 1 saltato, `test_brim_report_sets` 274.
+  La regola nella skill `brim-plugin` e in `brim_plugin_guide.md` («leaving the beta means adopting `RowSkips`»), la sezione Fineco e la tabella «Rows left out» di
+  `architecture.md`, una frase nella pagina utente; `mkdocs build` stretto 0 avvisi, `check-links` 97.
+- ✅ 1. **Q-N78-1k chiusa senza codice** (22/10, decisione del developer): le coppie di ADJUSTMENT collegati non si producono più da prima della 1.0.0; vale la regola N78-1,
+  nessun modulo nuovo, nessuna bonifica. Parere di MF: `ondata4/MF-parere-N78-1k-turno1.md`. **Verifica chiesta dal coordinatore**: una sonda di servizio su dati di test (poi cancellata)
+  conferma che due creazioni ADJUSTMENT (−2 e +2 con un costo) con lo stesso `link_uuid` e la stessa descrizione **si salvano collegate**: `_validate_linked_pair` (`validation.py:39`)
+  non ha regole per l'ADJUSTMENT. Se rifiutarle è una validazione, la decide il developer. Backlog W-B93 aggiornato.
+- ✅ 4. **W-BS · le impostazioni dei plugin BRIM, predisposte** (22/10, via del coordinatore; Q-BS-1…3 come consigliato). Nessun plugin reale dichiara un campo.
+  Rossi (test-author, sonnet): `_brim_settings_lab.py` (il plugin di prova `test_only`, solo in `test_scripts`, registrato per la durata del test), `test_brim_parse_settings.py` (nuovo,
+  azione `brim-parse-settings`), estesi contratto, servizio, runtime, pool, API e i tre Vitest della scheda; prima della cura 16/4+5/5/4+9/2 rossi (log `ondata4/W-bs-*.log`).
+  Cura: `BRIMProvider(PluginSettingsMixin, ABC)`, `BRIMProviderRegistry.settings_family() = "brim"`, `FAMILY_RULES["brim"] = FamilyRules(user_scope=True, secrets=True)`,
+  `PluginSettingFamily.BRIM`, `FAMILY_REGISTRIES` e `FAMILY_ICON_ATTRIBUTES` (`icon_url`); `runtime.bound_settings_for(plugin_code, family, user_id)` (None per un plugin senza campi:
+  niente DB); il padre del parse (`parse_file_offloaded(..., *, user_id=None)`) risolve i valori e li passa come quarto argomento di `parse_file`, che li lega e tiene i segreti «in volo»
+  nel figlio; il padre maschera l'eccezione; `api/v1/brokers.py` passa `current_user.id`. Frontend: `SettingsFamily`, `FAMILIES`, `FAMILY_ORDER`, `FAMILY_ICONS` (`Briefcase`),
+  `FAMILY_TITLE_KEYS`, la chiave `pluginSettings.families.brim` in 4 lingue. Verdi dopo la cura: contratto 254, servizio 113, runtime 132, crypto 30, gancio 15, pool 21, race 45, guardie 25.
+  > **Note implementazione**: il nome della variabile d'ambiente è quello già di `fields.env_name` (`LIBREFOLIO_PLUGIN_BRIM_<CODE>_<FIELD>`), non quello del brief. Il cancello
+  > `test_plugin_i18n_ownership_gate.py` cicla solo asset e fx: quando un plugin BRIM reale dichiarerà un campo, la sua chiave `pluginSettings.brim.<code>` non sarà coperta (da fare con CP12).
+  > Non collegati (con il primo campo vero, CP12): rilevamento, set di report, gap-fix.
+- ✅ 7. **L'API rifiuta la coppia di rettifiche collegate** (22/10, decisione del developer dopo la verifica del punto 1; lotto piccolo, checkpoint a parte). Rossi (test-author, sonnet):
+  `test_services/test_linked_adjustment_pair.py` (nuovo, 21 test: 13 rossi, 8 guardie; azione `linked-adjustment-pair`) e un test API accanto a B2.13; prima della cura 13 rossi e 2 rossi API.
+  Cura: in `_validate_linked_pair` due ADJUSTMENT con lo stesso `link_uuid` → `("two Adjustments cannot be linked: use an Asset Transfer…", "pairAdjustmentNotAllowed", {"type": "ADJUSTMENT"})`,
+  sul primo create; la regola di tipo viene prima di quelle sul broker e sulla descrizione; chiave `transactions.errors.pairAdjustmentNotAllowed` in 4 lingue. Guardie verdi: coppia TRANSFER,
+  promote del Bulk (una creazione con `link_uuid` più `promotes`), rettifiche non collegate, coppia già salvata (nessun giudizio sui dati salvati).
+  > **⚠️ Fuori pista**: `pairDescriptionMismatch` e `pairTagsMismatch` non hanno nessun messaggio in `transactions.errors.*` (4 lingue): il cancello dei codici scorre solo `TXValidationCode`. Preesistente, non toccato.
+  > Un'altra: la registrazione dell'azione sta in `scripts/test_runner/_backend_services.py`, che il lavoro di W-BS (non ancora committato) ha già toccato: due hunk additivi distinti.

@@ -426,6 +426,7 @@ What each plugin sends there (`plugin_version` is the one that introduced it; ch
 | DEGIRO | 2.1.0 | — (own codes: its six `degiro_*` notices carry `report_issue`) | — | information lines (no amount), internal rows (cash sweep, reservations) |
 | Crédit Agricole | 1.5.0 | — (own codes: `ca_securities_unknown_causale`, `ca_unknown_causale`, `ca_account_invalid_amount` carry `report_issue`) | — | — |
 | Scalable (both accounts) | 1.1.0 | a `status` not known | an empty `status` | `pending`, `cancelled`, `canceled`, `expired`, `rejected` |
+| Fineco | 1.5.0 | a `Descrizione` the plugin does not map (also a `compravendita` with another `Segno`) | too few cells, no readable date, an empty `Descrizione` | — |
 | Directa | 1.1.0 | a type not known | too few columns, an unreadable date, a missing type | — |
 | Revolut (Invest layout) | 1.2.0 | `Stock split` | — | `Transfer` |
 | Trading 212 | 1.1.0 | `stock split`, `stock distribution`, `currency conversion` | — | `transfer` |
@@ -435,7 +436,7 @@ What each plugin sends there (`plugin_version` is the one that introduced it; ch
 | Interactive Brokers | 1.1.0 | an unknown direction, a trade without an ISIN (a currency trade) | an unreadable date | — |
 
 Danske Bank has its own cure for the same rule (`excluded_status`, [Finnish notices](danske_bank.md#finnish-notices)).
-The other plugins have not been migrated yet and may still write one plain string per skipped row. The contract test
+The plugins still in beta (and Intesa, the Generic CSV) have not been migrated yet and may still write one plain string per skipped row. The contract test
 `./dev.py test external brim-row-skips` classifies every registered plugin in one set or the other.
 
 ### 🗂️ Plugin layout and translations {: #plugin-layout }
@@ -468,6 +469,60 @@ plugin's notices and refusals (`importWizard.brimNotice.<code>`, `importWizard.b
 
 How to write the folder and its keys: [BRIM Plugin Guide → Auto-Discovery](../../architecture/patterns/brim_plugin_guide.md#auto-discovery)
 and [Register the name and description](../../architecture/patterns/brim_plugin_guide.md#plugin-name-i18n).
+
+### 🎛️ Settings (prepared, not used yet) {: #brim-settings }
+
+The import plugins belong to the `brim` family of the [plugin settings](../../architecture/patterns/plugin_settings.md),
+with the same rules as the price sources: personal (`user`) and instance-wide (`system`) fields, and
+secrets of both scopes, encrypted with the instance key. **This is a preparation: no real plugin
+declares a field**, so nothing changes for users today. When one does, its card appears by itself
+in **Settings › Plugins**, under **Broker imports**, and a secret never comes back in clear.
+
+What is in place:
+
+- `BRIMProvider` inherits `PluginSettingsMixin` (`settings_fields = ()` by default),
+  `BRIMProviderRegistry.settings_family()` answers `"brim"`, and the family has its row in
+  `FAMILY_RULES` and in `FAMILY_REGISTRIES` (`backend/app/services/plugin_settings/`), with
+  `icon_url` as the attribute that carries the plugin's icon. A declaration is checked, and its
+  environment variables claimed, when the plugin registers.
+- The Plugins tab knows the group (`SettingsFamily` includes `brim`, icon `Briefcase`, title key
+  `pluginSettings.families.brim`).
+
+**How a parse gets its values.** The parse runs in a [worker process](#concurrency-off-loading) that
+re-creates the plugin from its code, so the plugin cannot be configured where it is created. The
+parent does it:
+
+1. `parse_file_offloaded(file_id, plugin_code, broker_id, *, user_id=None)`
+   (`backend/app/services/brim/brim_parse_pool.py`) calls
+   `bound_settings_for(BRIMProviderRegistry, plugin_code, user_id=…)` (`plugin_settings/runtime.py`). The route
+   `POST /api/v1/brokers/import/files/{file_id}/parse` passes the signed-in user, so the values are
+   the instance's and the personal ones of whoever imports.
+2. A plugin that declares **no** field gets `None` and no database read: it is called exactly as
+   before, with three arguments.
+3. Otherwise the picklable `BoundSettings` travels as a fourth argument of
+   `brim_provider.parse_file(file_id, plugin_code, broker_id, settings)`. The worker binds it on the
+   plugin instance before the parse, and holds the secrets *in flight* for its length: masked in
+   every log line and in the exception it raises. The parent masks the exception too, and hides its
+   texts whole when a personal secret is bound ([Secrets](../../architecture/patterns/plugin_settings.md#secrets)).
+
+A plugin reads its values as `self.settings.get("key")` and `self.settings.secret("key")` **inside
+`parse()`**, never in `__init__`: the values are bound after the instance exists. How to declare a
+field (`PluginSettingField`, scopes, defaults, translations, environment variables) is in
+[Plugin Settings → Declaring Fields](../../architecture/patterns/plugin_settings.md#declaring-fields).
+
+**Not connected yet** (to do with the first real field): the places that create a plugin without
+the values, `BRIMProviderRegistry.auto_detect_plugin()`, `get_compatible_plugins()` and
+`list_plugin_info()` (plugin detection), the report sets (`brim_report_sets.py`) and the gap fix
+(`brim_gap_fix.py`), each of which calls `get_provider_instance()`. A plugin that needs a value in
+`can_parse()`, `combine()` or the gap fix would find it unset today. The
+[i18n ownership gate](../../architecture/patterns/registry_pattern.md#plugin-i18n-gate) reads the
+settings texts of asset and FX plugins only, so the keys of a BRIM field are not checked by it yet.
+
+**The test plugin.** The family is exercised by a plugin that lives in a test module,
+`backend/test_scripts/test_services/_brim_settings_lab.py`, never under `brim_providers/`: the
+suites that loop over every real plugin must not meet it. It declares one field of each kind
+(personal select, personal secret, instance select, instance secret), is `test_only`, and is put
+in the registry only for the length of one test.
 
 ---
 
@@ -575,7 +630,8 @@ eToro itself downloads the statement as XLS.
   9 `Cambio` (ignored) · 10 `Controvalore`. A header longer than 11 cells is the layout with commissions:
   columns 11 to 14 are summed (absolute values) into one `FEE` in EUR (`FEE_CURRENCY`, tag `fee`)
   when the sum is positive (the real export has a single one, `Commissioni amministrato`, in
-  column 11). A data row shorter than 11 cells is skipped with a warning.
+  column 11). A data row shorter than 11 cells is left out and listed in the shared notice
+  `rows_unreadable` ([Rows left out](#brim-row-skips)).
 - **The commission is inside the `Controvalore`** (W-B92, plugin 1.4.0; the real export of
   GitHub discussion #49). In a `Compravendita titoli` row the `Controvalore` of a purchase already
   includes the commission and that of a sale has it already taken off. So, with a positive
@@ -590,14 +646,16 @@ eToro itself downloads the statement as XLS.
   and the `FEE` in EUR; whether the `Controvalore` is in the `Divisa` or in euro is not settled.
 - **Type**, by lower-cased substring of `Descrizione`: `compravendita` with `Segno` `A` or `V` →
   `BUY` or `SELL` (another `Segno` → warning), `dividendo` → `DIVIDEND`, `cedol` → `INTEREST`,
-  `rimborso` → `SELL`, `aumento capitale` → cashless `ADJUSTMENT`; anything else → warning.
+  `rimborso` → `SELL`, `aumento capitale` → cashless `ADJUSTMENT`; a `Descrizione` that maps to
+  nothing is left out and listed in the shared notice `rows_not_recognized`, as is a
+  `compravendita` with another `Segno`.
 - **Date: the operation date** (B-52, the plugin guide's rule *The operation date, and only
   settled rows* under
   [Import philosophy](../../architecture/patterns/brim_plugin_guide.md#import-philosophy-currency-rules)):
   every transaction of a row is dated with `Operazione`, or with `Data valuta` when `Operazione`
   is empty or unreadable (`DD/MM/YYYY`). The commission `FEE` and the maturity `INTEREST` take
-  the same date as the row's main transaction. A row with neither date readable is skipped with a
-  warning. **Currency**: `Divisa`, EUR when empty. **Numbers**: a value containing `,` is Italian
+  the same date as the row's main transaction. A row with neither date readable is left out and
+  listed in the shared notice `rows_unreadable`. **Currency**: `Divisa`, EUR when empty. **Numbers**: a value containing `,` is Italian
   (`.` thousands), otherwise a dot decimal.
 - **Only settled rows** (N74): `Data valuta` only decides whether the row has settled. A row
   whose `Data valuta` — or its `Operazione`, when `Data valuta` is empty or unreadable — comes
@@ -631,13 +689,23 @@ eToro itself downloads the statement as XLS.
   the par principal and an `INTEREST` for the surplus (tag `maturity_premium`).
 - **Assets** are keyed by `Isin`; a row without one gets an asset of its own (`UNKNOWN_ROW_<n>`).
   Every transaction, `FEE` included, carries the row's asset.
-- **Language**: the plain warnings are English strings (coerced to `warning` notices with code
-  `legacy`), although the guide wants the export's language, as the module docstring admits.
-  The two notices above are in Italian, and the wizard shows them in the user's language from
-  their codes (`importWizard.brimNotice.<code>`, `importWizard.brimEvidence.<code>`). The
+- **Rows it cannot import** (W-B86, plugin 1.5.0): `RowSkips` (`_brim_io.py`) collects them. A
+  row with too few cells, with no readable date (neither `Operazione` nor `Data valuta`) or with
+  an empty `Descrizione` goes to `rows_unreadable`; a row whose `Descrizione` the plugin does not
+  map goes to `rows_not_recognized`. Each notice is a `warning` with `context.report_issue`, so the
+  wizard shows the link *open an issue on GitHub*; the evidence is the file's header, a last
+  column *Reason* and the rows' line numbers. Leaving the beta means adopting `RowSkips`
+  ([BRIM Plugin Guide → Rows left out](../../architecture/patterns/brim_plugin_guide.md#row-skips)).
+  The rows left out for their date (not settled yet) keep their info note.
+- **Language**: the one plain warning left, *No valid transactions found in file*, is an English
+  string (coerced to a `warning` notice with code `legacy`), although the guide wants the export's
+  language, as the module docstring admits. Every other message is a notice: the wizard words them
+  in the user's language from their codes (`importWizard.brimNotice.<code>`,
+  `importWizard.brimEvidence.<code>`), and the two info notes above are in Italian. The
   descriptions of the generated legs (`Commissioni: …`,
   `Rimborso a scadenza — premio/rivalutazione oltre la pari: …`) are Italian too.
-- **`plugin_version`** 1.4.0: the commission is inside the `Controvalore` (W-B92). 1.3.0 brought the operation date (B-52). 1.2.0 brought the two notices above,
+- **`plugin_version`** 1.5.0: the rows it cannot import go to the two shared notices (W-B86).
+  1.4.0 put the commission inside the `Controvalore` (W-B92). 1.3.0 brought the operation date (B-52). 1.2.0 brought the two notices above,
   1.1.0 the split above par. A file parsed by an older version shows as stale
   (`parse_is_stale`) until it is parsed again.
 - **Files imported before 1.3.0.** Their transactions are dated with `Data valuta`. The

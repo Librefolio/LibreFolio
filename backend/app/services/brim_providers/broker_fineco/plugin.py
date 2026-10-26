@@ -4,11 +4,15 @@ Fineco Broker Report Import Plugin.
 This plugin parses CSV exports from FinecoBank (Italian bank/broker),
 specifically the "Movimenti Dossier Titoli" (securities dossier movements) report.
 
-**Warning language.** Only the Italian FinecoBank export is supported today, yet its
-user-facing warnings are written in English, while the BRIM guide wants them in the
-language of the export (Italian here). FinecoBank also operates in the UK; if a UK (or
-other) export layout — different columns and language — is added later, its warnings
-should follow that layout's language.
+**Rows it cannot import (W-B86, 1.5.0).** A row too short, with no readable date or with an empty ``Descrizione`` is left out
+and listed in the shared notice ``rows_unreadable``; a row whose ``Descrizione`` it does not map, in ``rows_not_recognized``
+(``_brim_io.RowSkips``): each carries ``context.report_issue``, so the wizard shows the link to open an issue. Fineco left the
+beta in 1.3 (W-B92), and leaving the beta means adopting ``RowSkips``.
+
+**Language.** The notices are worded by the wizard from their codes, in the user's language. The remaining plain warning (no
+valid transaction in the file) is an English string, while the BRIM guide wants it in the language of the export (Italian here).
+FinecoBank also operates in the UK; if a UK (or other) export layout — different columns and language — is added later, its
+warnings should follow that layout's language.
 
 **The operation date (B-52).** Every transaction is dated with ``Operazione``, the day of the operation (``Data valuta``
 when it is empty): the developer's principle, 19/10/2026. ``Data valuta`` only decides whether the row has settled.
@@ -216,7 +220,8 @@ class FinecoBrokerProvider(BRIMProvider):
         # 1.2.0 — only settled rows (N74); a note for rows with a required number missing (W-B83).
         # 1.3.0 — dated with the operation date, Operazione; the value date only decides whether a row has settled (B-52).
         # 1.4.0 — a trade's Controvalore already holds its commission, so the BUY/SELL are net of it (W-B92).
-        return "1.4.0"
+        # 1.5.0 — the rows it cannot read or recognise are listed in the two shared notices, with the link to open an issue (W-B86).
+        return "1.5.0"
 
     @property
     def detection_priority(self) -> int:
@@ -313,6 +318,8 @@ class FinecoBrokerProvider(BRIMProvider):
                 raise BRIMParseError("Could not locate the 'Operazione' header row")
 
             header = [cell.strip() for cell in rows[header_idx]]
+            # W-B86: a row the plugin cannot read or does not recognise is left out with the shared notices and the link to open an issue.
+            skips = io.RowSkips(rows[header_idx])
             has_commissions = len(rows[header_idx]) > COL_CONTROVALORE + 1
 
             for offset, row in enumerate(rows[header_idx + 1 :]):
@@ -323,7 +330,7 @@ class FinecoBrokerProvider(BRIMProvider):
                     continue
 
                 if len(row) < MIN_COLUMNS:
-                    warnings.append(f"Row {row_num}: insufficient columns, skipping")
+                    skips.unreadable(row_num, row, "too few columns")
                     continue
 
                 # B-52: the operation date records the row (Operazione; Data valuta when it is missing), the value date
@@ -333,7 +340,7 @@ class FinecoBrokerProvider(BRIMProvider):
                 tx_date = trade_day or value_day
                 settle_day = value_day or trade_day
                 if not tx_date or not settle_day:
-                    warnings.append(f"Row {row_num}: invalid date, skipping")
+                    skips.unreadable(row_num, row, "date not readable")
                     continue
 
                 # N74: only settled rows. A value date after the server's today is a movement not settled yet: the whole row
@@ -344,14 +351,14 @@ class FinecoBrokerProvider(BRIMProvider):
 
                 descrizione = row[COL_DESC].strip()
                 if not descrizione:
-                    warnings.append(f"Row {row_num}: empty description, skipping")
+                    skips.unreadable(row_num, row, "empty description")
                     continue
 
                 segno = row[COL_SEGNO].strip().upper()
 
                 tx_type = self._map_transaction_type(descrizione, segno)
                 if tx_type is None:
-                    warnings.append(f"Row {row_num}: unknown operation '{descrizione}', skipping")
+                    skips.unknown(row_num, row, f"unknown operation: '{descrizione}'")
                     continue
 
                 # W-B83: a column the transaction is built from that gives no number. The row is imported as before (an
@@ -474,7 +481,7 @@ class FinecoBrokerProvider(BRIMProvider):
 
         return BRIMParseOutput(
             transactions=transactions,
-            warnings=[*warnings, *self._notes(header, not_settled, incomplete)],
+            warnings=[*warnings, *skips.notices(), *self._notes(header, not_settled, incomplete)],
             validation_issues=validation_issues,
             extracted_assets=extracted_assets_typed,
         )

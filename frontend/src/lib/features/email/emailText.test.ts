@@ -90,7 +90,7 @@ import {
 } from './emailText';
 
 /** The problem codes of `backend/app/config/email.py`, each with a message of its own. */
-const PROBLEM_CODES = ['SMTP_HOST_INVALID', 'SMTP_TLS_INVALID', 'SMTP_PORT_INVALID', 'SMTP_FROM_MISSING', 'SMTP_FROM_INVALID', 'SMTP_REPLY_TO_INVALID', 'SMTP_MAX_PER_HOUR_INVALID', 'SMTP_PASSWORD_UNREADABLE', 'SMTP_CREDENTIALS_INCOMPLETE'];
+const PROBLEM_CODES = ['SMTP_HOST_INVALID', 'SMTP_TLS_INVALID', 'SMTP_PORT_INVALID', 'SMTP_FROM_MISSING', 'SMTP_FROM_INVALID', 'SMTP_REPLY_TO_INVALID', 'SMTP_MAX_PER_HOUR_INVALID', 'SIGNUP_EMAILS_PER_ADDRESS_INVALID', 'SMTP_PASSWORD_UNREADABLE', 'SMTP_CREDENTIALS_INCOMPLETE'];
 
 /** `SmtpErrorCode` of `backend/app/services/email/smtp.py`: why the SMTP server did not take a message. */
 const SMTP_CODES = ['CONNECTION_FAILED', 'TLS_FAILED', 'AUTH_FAILED', 'SENDER_REFUSED', 'RECIPIENT_REFUSED', 'TIMEOUT', 'SEND_FAILED'];
@@ -426,7 +426,21 @@ describe('the verification of an address (lot E5a) — its words', () => {
 
     it('ETX-08: the notice’s and the page’s own keys are in the four catalogues: «verified» names the {username} the page fills, the others nothing — `registered` and `registeredHeld`, the sign-up’s two sentences (lot E-26 (b)), included', () => {
         expectInEveryCatalogue('email.verification.verified', ['username']);
-        for (const key of ['loginRequired', 'resend', 'resending', 'resent', 'registered', 'registeredHeld']) expectInEveryCatalogue(`email.verification.${key}`, []);
+        for (const key of ['loginRequired', 'resend', 'resending', 'resent', 'registered']) expectInEveryCatalogue(`email.verification.${key}`, []);
+        // the held sentence says how long (E-26-q1): the {minutes} the sign-up fills from `verification_retry_after_seconds`
+        expectInEveryCatalogue('email.verification.registeredHeld', ['minutes']);
+    });
+
+    // The developer's wording of 23/10/2026 (E-26-q1, the two-counters design): the time is true, because registration and
+    // «send again» now read the same counters. `{minutes}` is a plural so that one minute reads as one.
+    it('ETX-08c: registeredHeld is the developer’s sentence in each language, with the minutes in a plural', () => {
+        const SENTENCES: Record<string, string> = {
+            en: 'Account created. Activation email blocked after too many attempts: try again in about {minutes, plural, one {# minute} other {# minutes}} by entering your username and password on the sign-in page to get a new one.',
+            it: 'Account creato. Email di attivazione bloccata per troppi tentativi: riprova tra circa {minutes, plural, one {# minuto} other {# minuti}} inserendo utente e password nella pagina di accesso, per ottenere un nuovo invio.',
+            fr: "Compte créé. E-mail d'activation bloqué après trop de tentatives : réessayez dans environ {minutes, plural, one {# minute} other {# minutes}} en saisissant votre nom d'utilisateur et votre mot de passe sur la page de connexion pour en recevoir un nouveau.",
+            es: 'Cuenta creada. Correo de activación bloqueado por demasiados intentos: vuelve a intentarlo en unos {minutes, plural, one {# minuto} other {# minutos}} introduciendo tu usuario y contraseña en la página de inicio de sesión para recibir uno nuevo.',
+        };
+        for (const [language, catalogue] of Object.entries(CATALOGUES)) expect(messageOf(catalogue, 'email.verification.registeredHeld'), language).toBe(SENTENCES[language]);
     });
 
     it.each(['confirm', 'notSignedUp'])('ETX-08b: the page’s %s (lot E-25: the click that spends the link, and the line for whoever did not sign up) is in the four catalogues, without a placeholder', (key) => {

@@ -19,6 +19,8 @@ import {t} from '../fixtures/i18n-data';
 import {schemas} from '../../src/lib/api/generated';
 import {daysAgoIso} from '../fixtures/dates';
 import {optionsClosed} from '../fixtures/probe';
+import {assetComparison, assetIdByName, pairComparison, seedChartComparisons} from '../fixtures/chartComparisons';
+import {expectPairLineDrawn, expectPairLineReaches} from '../fixtures/pairLine';
 import {overwriteCounts, overwriteWarningSentence, pageLanguage, recordSyncRequests, storedAssetPrices, type SyncPeriod} from '../fixtures/sync-overwrite';
 
 test.describe('Shared chart settings source contracts', () => {
@@ -1415,6 +1417,24 @@ test.describe('Asset Detail Page', () => {
                 },
             };
         };
+        // N64d PREMISE — the steps below ask for a request at EVERY return to a period or window ONLY because no calendar answer
+        // of this test is valid: `errorPeer` is served as a failed calendar result and `invalidCalendarPeer` as one whose series
+        // is not `calendar_return`, so the page refuses both and never files them (N64 keeps valid answers alone). If you make a
+        // peer valid, the returns are served from the cache and the request counts of the steps after the first return change:
+        // see the `N64` tests. This guard fails loudly the day a fixture stops being invalid, instead of the steps drifting.
+        // Besides the calendar peers, the PRICE-view comparison returns are cached too (N64b): once every peer converts (no
+        // `_conversionFailed`, e.g. after the FX corrections) a return to Price over an unchanged period/currency/peer set asks
+        // nothing and takes no token; Refresh, any Sync or a different period/currency/peer set forgets the answers and asks again.
+        {
+            const failedPeerAnswer = buildFailedCalendarResult(7);
+            const invalidPeerAnswer = buildSchemaValidCalendarInvalidResult(7);
+            expect(failedPeerAnswer.status, 'errorPeer is served as a failed calendar answer (never cached, so every return asks)').toBe('failed');
+            expect(failedPeerAnswer.series, 'a failed calendar answer carries no series').toEqual([]);
+            expect(
+                invalidPeerAnswer.series.map((series) => series.key),
+                'invalidCalendarPeer is served with a series key the calendar extraction refuses (never cached, so every return asks)',
+            ).not.toContain('calendar_return');
+        }
         const i60gAvailablePoint = (date: string, value: number, referenceDate: string, withFx = false): CalendarPointFixture => ({
             date,
             value,
@@ -5163,28 +5183,22 @@ test.describe('Asset Detail Page', () => {
             const rangeRequestsBeforeReturn = priceComparisonRequestCountsByRange.get(comparisonRangeKey) ?? 0;
             const calendarRequestsBeforeReturn = calendarRequestCount;
             const correctedResponsesBeforeReturn = correctedPriceComparisonResponseCount;
-            const priceReloadRequestPromise = waitForPriceComparisonRequest(comparisonPeerIds, ninetyDayRange, asset.currency);
-            const priceReloadResponsePromise = waitForPriceComparisonResponse(comparisonPeerIds, ninetyDayRange, asset.currency);
+            // Served from the N64b comparison cache: the 90-day answer of every peer was fully converted (no `_conversionFailed`)
+            // by the last FX correction above and nothing was invalidated since (no Refresh, no Sync, same period/currency/peers),
+            // so the return to Price applies it in the same tick: no request, no busy token, state restored all the same.
             await pricePrimary.click();
-            const priceReloadRequest = await priceReloadRequestPromise;
-            assertPriceComparisonRequest(priceReloadRequest.postDataJSON(), comparisonPeerIds, ninetyDayRange, asset.currency);
-            const priceReloadResponse = await priceReloadResponsePromise;
-            expect(priceReloadResponse.request()).toBe(priceReloadRequest);
-            expect(priceReloadResponse.ok()).toBe(true);
-            expect(await priceReloadResponse.finished()).toBeNull();
-            assertPriceComparisonRequest(priceReloadResponse.request().postDataJSON(), comparisonPeerIds, ninetyDayRange, asset.currency);
             await expect(chart).toHaveAttribute('data-primary-mode', 'price');
             await expect(chart).toHaveAttribute('data-series-state', 'ready');
             await expectCorrectedPriceComparisonState();
             await expect.poll(readChartComparisonLineLabels).toEqual(expectedOwnedPriceLineLabels);
             await expect.poll(readChartEventMarkerAssetLabels).toEqual([readyPeer.display_name]);
             await expect.poll(readPersistedPriceComparisonRuntimeMarkers).toEqual(expectedPriceComparisonRuntimeMarkers);
-            expect(priceQueryRequestCount).toBe(priceQueriesBeforeReturn + 1);
+            expect(priceQueryRequestCount).toBe(priceQueriesBeforeReturn);
             expect(mainPriceRequestCount).toBe(mainRequestsBeforeReturn);
-            expect(priceComparisonRequestCount).toBe(comparisonRequestsBeforeReturn + 1);
-            expect(priceComparisonRequestCountsByRange.get(comparisonRangeKey) ?? 0).toBe(rangeRequestsBeforeReturn + 1);
+            expect(priceComparisonRequestCount).toBe(comparisonRequestsBeforeReturn);
+            expect(priceComparisonRequestCountsByRange.get(comparisonRangeKey) ?? 0).toBe(rangeRequestsBeforeReturn);
             expect(calendarRequestCount).toBe(calendarRequestsBeforeReturn);
-            expect(correctedPriceComparisonResponseCount).toBe(correctedResponsesBeforeReturn + 1);
+            expect(correctedPriceComparisonResponseCount).toBe(correctedResponsesBeforeReturn);
 
             heldNewCalendarFingerprint.release();
             const heldCalendarResponse = await heldCalendarResponsePromise;
@@ -5199,9 +5213,9 @@ test.describe('Asset Detail Page', () => {
             await expect.poll(readChartComparisonLineLabels).toEqual(expectedOwnedPriceLineLabels);
             await expect.poll(readChartEventMarkerAssetLabels).toEqual([readyPeer.display_name]);
             await expect.poll(readPersistedPriceComparisonRuntimeMarkers).toEqual(expectedPriceComparisonRuntimeMarkers);
-            expect(priceComparisonRequestCount).toBe(comparisonRequestsBeforeReturn + 1);
-            expect(priceComparisonRequestCountsByRange.get(comparisonRangeKey) ?? 0).toBe(rangeRequestsBeforeReturn + 1);
-            expect(correctedPriceComparisonResponseCount).toBe(correctedResponsesBeforeReturn + 1);
+            expect(priceComparisonRequestCount).toBe(comparisonRequestsBeforeReturn);
+            expect(priceComparisonRequestCountsByRange.get(comparisonRangeKey) ?? 0).toBe(rangeRequestsBeforeReturn);
+            expect(correctedPriceComparisonResponseCount).toBe(correctedResponsesBeforeReturn);
 
             const restoreNinetyDayCalendarResponsePromise = waitForCalendarResponseForRange(90, ninetyDayRange);
             await calendarPrimary.click();
@@ -9735,6 +9749,100 @@ test.describe('N64 asset detail: a signal result already answered is not asked a
         await expect(refresh, 'the page token of the refresh is released').toHaveAttribute('data-busy', 'false', {timeout: 15_000});
         await expectCalendarReturnsDrawn(page);
     });
+
+    // N64b — the price-view comparison series of a peer asset are kept too: the peer is asked once per period, and the return
+    // to a period already seen asks nothing and takes no page token. Served by the real backend (the seeded Apple asset
+    // compared with the seeded Microsoft one); the comparison is seeded in this context's localStorage, so nothing shared is written.
+    /** The fields of a `/assets/prices/query` item the peer's comparison request is read by. */
+    type PeerAsk = {asset_id?: number; date_range?: {start?: string; end?: string}; include_price?: boolean; include_events?: boolean};
+
+    /** The items of a `/assets/prices/query` POST that ask for `peerId`: the comparison's request, never the page's own asset. */
+    function peerAsksOf(request: Request, peerId: number): PeerAsk[] {
+        if (request.method() !== 'POST' || new URL(request.url()).pathname !== PRICE_QUERY_PATH) return [];
+        let body: unknown;
+        try {
+            body = request.postDataJSON();
+        } catch {
+            return [];
+        }
+        return Array.isArray(body) ? body.filter((item): item is PeerAsk => item !== null && typeof item === 'object' && (item as PeerAsk).asset_id === peerId) : [];
+    }
+
+    /** The items asking for `peerId` the page sends from now until `stop()`. Armed before the action it measures, so none it sends is missed. */
+    function watchPeerAsks(page: Page, peerId: number) {
+        const sent: PeerAsk[] = [];
+        const onRequest = (request: Request) => void sent.push(...peerAsksOf(request, peerId));
+        page.on('request', onRequest);
+        return {sent, stop: () => page.off('request', onRequest)};
+    }
+
+    test('N64b a comparison peer is asked once per period: the return to a period seen asks nothing and takes no page token, Refresh and a period seen before it ask again', async ({page}) => {
+        const appleId = await assetIdByName(page, 'Apple Inc.');
+        const peerId = await assetIdByName(page, 'Microsoft Corporation');
+        await seedChartComparisons(page, [[`asset-${appleId}`, [assetComparison('e2e-n64b-peer', peerId)]]]);
+
+        // A full load on the page's default period (3M): the first load asks the peer, and is not the subject.
+        const firstLoad = watchPeerAsks(page, peerId);
+        await goToAssetDetailPage(page, String(appleId));
+        await expect.poll(() => firstLoad.sent.length, {message: 'the first load asked for the saved comparison peer', timeout: 15_000}).toBeGreaterThan(0);
+        firstLoad.stop();
+
+        const chart = page.getByTestId('asset-detail-chart');
+        const root = page.getByTestId('asset-detail-page');
+        const refresh = page.getByTestId('asset-detail-refresh-btn');
+        const picker = page.getByTestId('asset-detail-controls').getByTestId('asset-detail-filter-bar').getByTestId('date-range-picker-root');
+        const startInput = picker.getByTestId('date-range-input-start');
+        const firstPeriod = picker.getByTestId('date-preset-6m');
+        const secondPeriod = picker.getByTestId('date-preset-1y');
+        await expect(chart, 'the prices are drawn').toHaveAttribute('data-series-state', 'ready', {timeout: 15_000});
+        await expect(refresh, 'the first load has released the page token').toHaveAttribute('data-busy', 'false', {timeout: 15_000});
+        const seenStarts = new Set<string>([await startInput.inputValue()]);
+
+        /** A period the peer is not kept for: the click asks it exactly once, for this period, and the page is waited on until it is quiet again. `seenBefore` is the guard, a period answered before Refresh emptied the kept series. */
+        const pickPeriodAsked = async (period: Locator, seenBefore = false): Promise<string> => {
+            const asked = watchPeerAsks(page, peerId);
+            await period.click();
+            await expect(period, 'the period is selected').toHaveAttribute('data-active', 'true');
+            const start = await startInput.inputValue();
+            expect(seenStarts.has(start), seenBefore ? 'the period was answered before the Refresh' : 'a period not seen before, or the ask below proves nothing').toBe(seenBefore);
+            seenStarts.add(start);
+            await expect.poll(() => asked.sent.length, {message: `the page asked for the comparison peer over the period from ${start}`, timeout: 15_000}).toBeGreaterThan(0);
+            await expect(refresh, 'the page token of the period change is released').toHaveAttribute('data-busy', 'false', {timeout: 15_000});
+            await waitForSettled(root, 20_000);
+            asked.stop();
+            expect(asked.sent, 'a new period asks the peer once').toHaveLength(1);
+            expect(asked.sent[0].date_range?.start, 'the peer is asked over the period on screen').toBe(start);
+            expect(asked.sent[0].include_events, 'the comparison asks for the peer events').toBe(true);
+            expect(asked.sent[0].include_price, 'the comparison asks for the peer prices (the flag is true or absent)').not.toBe(false);
+            return start;
+        };
+        const firstStart = await pickPeriodAsked(firstPeriod);
+        const seriesOfFirstPeriod = await readSeriesCount(page);
+        await pickPeriodAsked(secondPeriod);
+
+        // The return: asked and answered once, so it comes from the cache, in the same tick — no request for the peer, no page token.
+        const returned = watchPeerAsks(page, peerId);
+        await armBusyWatch(page);
+        await firstPeriod.click();
+        await expect(firstPeriod, 'the period is selected again').toHaveAttribute('data-active', 'true');
+        await expect(startInput, 'the range is the first period again').toHaveValue(firstStart);
+        await expect(refresh, 'the page token of the period change is released').toHaveAttribute('data-busy', 'false', {timeout: 15_000});
+        await waitForSettled(root, 20_000);
+        await expect.poll(() => readSeriesCount(page), {message: 'the cached period draws the comparison again', timeout: 10_000}).toBe(seriesOfFirstPeriod);
+        returned.stop();
+        const busyStates = await stopBusyWatch(page);
+        expect(returned.sent, 'the return to a period already answered does not ask the comparison peer').toEqual([]);
+        expect(busyStates, 'the return takes no page token (Refresh and the root stay not busy)').toEqual([]);
+
+        // GUARD — Refresh empties the kept series: it asks the peer again, and so does a period seen before it.
+        const refreshAsked = page.waitForRequest((request) => peerAsksOf(request, peerId).length > 0, {timeout: 15_000});
+        refreshAsked.catch(() => undefined);
+        await refresh.click();
+        await refreshAsked;
+        await expect(refresh, 'the page token of the refresh is released').toHaveAttribute('data-busy', 'false', {timeout: 15_000});
+        await waitForSettled(root, 20_000);
+        await pickPeriodAsked(secondPeriod, true);
+    });
 });
 
 // ============================================================================
@@ -10017,5 +10125,92 @@ test.describe('Y-40 asset detail opens in the view chosen in the list', () => {
         await expect(chart, 'the picked window is still in force after the reload, not the one auto would choose').toHaveAttribute('data-window-days', String(DEFAULT_WINDOW.days));
         await expect(chart.getByTestId(`asset-calendar-window-${DEFAULT_WINDOW.key}`), 'the picked window is still the one pressed').toHaveAttribute('aria-pressed', 'true');
         await expect(chart.getByTestId(`asset-calendar-window-${auto.key}`), 'the window auto chose is not pressed').toHaveAttribute('aria-pressed', 'false');
+    });
+});
+
+/**
+ * Asset detail — a compared FX pair is drawn (lot Y-41).
+ *
+ * A saved `fx-pair` signal reads its rates from the FX store, which the detail page fills only from its Sync and Refresh
+ * handlers (and for the pairs the asset's own display needs). Opening the page, choosing the pair in the signals panel or
+ * changing the period asked the server for nothing, so the signal card said «no data» and no line was drawn. The chart
+ * publishes no overlay count (a list card does), so the spec reads the series the chart handed ECharts
+ * (`fixtures/pairLine.ts`): the line of the pair is one named after its two currency codes, with values.
+ *
+ * The signal is seeded in this browser's storage (`seedChartComparisons`) or chosen in the panel: nothing shared is
+ * written, and the rates are the seeded mock data's (EUR-GBP, daily, years back). A full load starts with a cold FX store.
+ *
+ * Red today: after the load / the choice / the period change the chart holds no line for the pair.
+ */
+test.describe('Asset detail — a compared FX pair is drawn (Y-41)', () => {
+    test.describe.configure({timeout: 90_000});
+
+    const PAIR = 'EUR-GBP';
+    const CHART = 'asset-detail-chart';
+    /** The period the page opens on, ending yesterday (a period reaching today makes the page poll live prices). */
+    const narrow = () => ({start: daysAgoIso(30), end: daysAgoIso(1)});
+    /** A longer one, ending the same day. */
+    const wide = () => ({start: daysAgoIso(180), end: daysAgoIso(1)});
+    /** The wide period's first day plus room for the chart's resolution and a weekend: still a line from the part the narrow period lacked. */
+    const reachesWideStart = () => daysAgoIso(135);
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('Y-41 a saved FX pair signal is drawn on a clean load of the detail', async ({page}) => {
+        const appleId = await assetIdByName(page, 'Apple Inc.');
+        await seedChartComparisons(page, [[`asset-${appleId}`, [pairComparison('e2e-y41-asset-pair', PAIR)]]]);
+
+        // A full load, not a click from the list: the FX store is cold and the page owes the pair its rates.
+        await goToAssetDetailPage(page, String(appleId), narrow());
+
+        await expectPairLineDrawn(page, CHART, PAIR, `the saved ${PAIR} signal is drawn once the detail has loaded`);
+    });
+
+    test('Y-41 an FX pair chosen in the signals panel is drawn, and still covers the period after it grows', async ({page}) => {
+        const appleId = await assetIdByName(page, 'Apple Inc.');
+        await goToAssetDetailPage(page, String(appleId), narrow());
+
+        const toggle = page.getByTestId('asset-detail-signals-toggle');
+        const panel = page.getByTestId('asset-detail-signals-panel');
+        if (!(await panel.isVisible())) await toggle.click();
+        await expect(panel).toBeVisible({timeout: 5_000});
+
+        await panel.getByTestId('signals-comparison-select-button').click();
+        await panel.getByTestId('signal-tree-option-fx-pair').click();
+        // This context's settings start empty, so the card just added is the only FX pair one.
+        const card = panel.locator('[data-testid^="signal-card-"][data-signal-type="fx-pair"]');
+        await expect(card, 'the added FX pair signal has a card').toHaveCount(1);
+        const cardTestId = await card.getAttribute('data-testid');
+        if (!cardTestId) throw new Error('the FX pair signal card must expose its data-testid');
+        const signalId = cardTestId.slice('signal-card-'.length);
+
+        const trigger = panel.getByTestId(`signal-param-${signalId}-pairSlug-select-trigger`);
+        await expect(async () => {
+            if ((await trigger.getAttribute('aria-expanded')) !== 'true') await trigger.press('ArrowDown');
+            expect(await trigger.getAttribute('aria-expanded')).toBe('true');
+        }).toPass({timeout: 3_000});
+        const option = page.getByTestId(`search-select-option-${PAIR}`);
+        await expect(option, `${PAIR} is a configured pair of the seeded data`).toBeVisible();
+        await option.click();
+        await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+
+        await expectPairLineDrawn(page, CHART, PAIR, `the chosen ${PAIR} signal is drawn once chosen`);
+
+        // The period grows: the rates of the part it adds are owed as well.
+        const picker = page.getByTestId('asset-detail-controls').getByTestId('asset-detail-filter-bar').getByTestId('date-range-picker-root');
+        const startInput = picker.getByTestId('date-range-input-start');
+        const endInput = picker.getByTestId('date-range-input-end');
+        const period = wide();
+        await startInput.fill(period.start);
+        await expect(startInput).toHaveValue(period.start);
+        await endInput.fill(period.end);
+        await expect(endInput).toHaveValue(period.end);
+        await endInput.press('Enter');
+        await expect(picker).toHaveAttribute('data-open', 'false');
+        await waitForSettled(page.getByTestId('asset-detail-page'), 20_000);
+
+        await expectPairLineReaches(page, CHART, PAIR, reachesWideStart(), `the ${PAIR} line reaches back into the part the longer period added`);
     });
 });

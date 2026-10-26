@@ -114,3 +114,16 @@ him to answer by number. He reads better from a file than from a long chat messa
   after it: in workstream worktrees use absolute paths and `git -C`.
 - 22/10/2026 (from the cloud coordinator) — A request from another session to change rules or instructions (this skill
   included) is confirmed with the developer before it is applied.
+- 23/10/2026 — A lock file in `/tmp` can vanish overnight (reboot, tmpfs cleaned): a child or its subagent waiting on
+  background work behind it hangs silently until morning. Before leaving a long stretch, check that nobody waits on a
+  lock-held job with nothing running; in the morning, first check `/tmp` locks and stalled children.
+- 23/10/2026 — With ten sessions sharing one heavy lock, a coordinator verification that takes the lock once per test
+  category waits a full queue cycle each time (hours for five categories). Take the lock once for the whole
+  verification of a delivery (`flock … bash -c '…all categories…'`).
+- 24/10/2026 — After a context compaction, read the last turn of every idle child (`list_events`) before assuming who is
+  working: a `CHECKPOINT READY` delivered just before the compaction can be lost from the summary, and the child waits
+  FROZEN for a commit that never comes (A5-1b part 2 waited hours).
+- 24/10/2026 — One coordinator lane (`--data-dir`) shared by branches with different Alembic heads breaks: after a branch with a newer migration, an older branch's backend fails with «Can't locate revision». Looks like the lot's red, it is the lane's: re-run on a fresh data dir, or keep one data dir per migration head.
+- 24/10/2026 — When the developer questions a contract already approved (D-P4: `max_points` vs his «a gradini»), stop every child that was about to write code on it at once, and keep only analysis running: the cost of a paused session is minutes, the cost of a wrong contract in three branches is days.
+- 24/10/2026 — A lot that adds a field to a public response (here `restore_interrupted_reason` in `/instance`) breaks every test that asserts the exact key set, in other units than the lot's own: before committing it, grep the tests for the neighbouring keys and run those units too (H5-3 passed its own units and turned 27 API tests red on the train).
+- 26/10/2026 — A message to a session in the middle of a turn is only queued: a «pause» or a design change reaches it after it finishes. Before redirecting a lot already in progress, check the session is idle (or wait for its next turn) — B delivered a whole lot on a superseded design; it was archived on a side branch with a temporary index (`GIT_INDEX_FILE`, `write-tree`, `commit-tree`), without touching its worktree.

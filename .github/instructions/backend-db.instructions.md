@@ -67,7 +67,9 @@ zero silently** — hence the dedicated coverage test.
   (`truncate_priceHistory`), and one no column can keep is skipped (`storable_value`, `storable_price`, W-B58).
   Never sum these columns in SQL: `SUM` adds the stored doubles — sum in Python with
   `financial_math` (`position_quantities`, `native_balances`)
-- **Timestamps**: UTC via `utcnow()` helper
+- **Timestamps**: UTC via `utcnow()` helper, stored without an offset: every `datetime` field declares
+  `sa_type=DateTime` (SQLModel >= 0.0.48 would map it to its `UTCDateTime`, which refuses naive values); a value read
+  back is naive UTC (`ensure_utc()`). See the developer docs, Database Schema «Timestamps»
 - **Daily-point policy**: one record per day for prices and FX rates
 - **Foreign keys**: enforced with `PRAGMA foreign_keys=ON`
 - **Currency validation**: via `Currency.validate_code()` from schemas
@@ -128,7 +130,9 @@ git cat-file -e <tag>:backend/alembic/versions/<file>   # is it inside a release
 
 Anything inside a released tag stays in the chain. Anything not released may be consolidated.
 
-**One migration per release.** Before a release, the cycle's unreleased migrations are folded into one
+**One migration per release** (confirmed 24/10/2026). During the cycle a schema change edits the release's file
+directly; branches developed in parallel each edit it and are merged into it at integration, never into a second
+revision. Before a release, any unreleased migrations of the cycle are folded into one
 `00N_release_<version>_schema`: 004 for 1.2, and `005_release_1_3_0_schema` for 1.3 (decision of 19/10/2026).
 The folded file must give the same schema as the chain it replaces: freeze that schema before deleting
 the chain, and test the new file against it (`test_migration_005_release_1_3.py`). A database stamped with a

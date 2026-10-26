@@ -47,7 +47,7 @@ directory»). That guard is wanted: **never copy the marker, and never get aroun
 error by starting without `--test`**.
 
 ```bash
-PROD=/Users/ea_enel/Documents/00_My/LibreFolio/backend/data/prod
+PROD=<main checkout>/backend/data/prod   # Linux: /home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio/backend/data/prod
 GOLD=/tmp/librefolio-r2-realdata
 ! lsof -nP -iTCP:6040 -sTCP:LISTEN >/dev/null      # production must be stopped
 [ ! -s "$PROD/sqlite/app.db-wal" ]                 # no pending WAL frames (an empty WAL is fine)
@@ -154,7 +154,46 @@ PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python \
   --source-db "$COPY/sqlite/app.db" --user alfy --port <WORK_PORT> …
 ```
 
-## 4. Hygiene
+## 4. The gallery dashboard snapshot (`frontend/e2e/dashboard-report.json`)
+
+The gallery and the Vitest guard `src/lib/api/dashboardReportFixture.test.ts` serve one **real** report, normalized to
+a 50 000 net worth. When the report's schema changes (new fields, a new shape, D-P4's steps), the snapshot is captured
+again, whole: never patched by hand, never replaced by the test mocks (other brokers, other history: the gallery's
+pictures would change). Done on 26/10/2026 for D-P4, with the developer's OK.
+
+1. **Reference copy** from production (§1), then a **working copy** (§2), e.g. `/tmp/librefolio-r2-y-realdata`.
+2. **Schema.** A copy stamped `005_release_1_3_0_schema` from before 24/10/2026 lacks the owner columns folded into
+   005 (Alembic sees the head and runs nothing): repair the **working copy** once with
+   `LibreFolio_developer_journal/Release_2/Phase_1/01_platform/repair_005_owner_columns.py <copy>/sqlite/app.db`
+   (`--check` first), then delete the `.before-owner-fix-*` file it leaves next to the database.
+3. **A password on the copy only.** Generate one into a `0600` file in the session folder and set it on the copy, never
+   on production:
+
+    ```bash
+    LIBREFOLIO_TEST_DATA_DIR="$COPY" pipenv run python dev.py user --test-db reset <username> "$(cat <pw-file>)"
+    ```
+
+4. **Server from the worktree whose schema the snapshot must match** (the branch with the new report), on the copy:
+   `dev.py server --test --port <WORK_PORT> --host 127.0.0.1 --data-dir "$COPY" --no-reload --no-scheduler`, and wait
+   for `GET /api/v1/system/ready` = 200.
+5. **Capture** every section in one request, last year ending today, EUR, two brokers or more:
+
+    ```bash
+    python3 .claude/skills/real-data-copy/capture_dashboard_report.py http://127.0.0.1:<WORK_PORT> <username> \
+      <pw-file> <session-folder>/dashboard_raw.json --brokers 2,1
+    ```
+
+   It is the console procedure of `scripts/normalize_dashboard_fixture.py` (sign in, one `POST /portfolio/report`
+   with every `include_*`), as a script; the console way still works on a browser signed in to that server.
+6. **Normalize** a copy of the raw file: `dev.py mkdocs normalize-dashboard-fixture <file> --dry-run`, then without
+   `--dry-run`. Check that no ratio, date or count moved (compare raw and normalized field by field: only money may
+   change; on 26/10 `mwrr_line` and `range` stayed identical). Its own checks print families and counts, never figures.
+7. **Install and validate**: copy the normalized file to `frontend/e2e/dashboard-report.json` of that worktree, then
+   `front-utility core-unit` (the fixture guard) and the gallery.
+8. **Clean up**: stop the server and prove the port is free; delete the raw file, the password file and the working
+   copy (§5).
+
+## 5. Hygiene
 
 - Every copy is `go-rwx` from creation.
 - **Delete your working copy at the end of the review** that needed it: `lsof +D` first

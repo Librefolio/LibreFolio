@@ -171,8 +171,9 @@ type WaitingReason = NonNullable<RestoreStatus['waiting']> | 'instance_blocked';
 
 type RestoreFlowState = 'loading' | 'idle' | 'uploading' | 'checking' | 'report' | 'confirming' | 'pending' | 'in_progress' | 'cancelling' | 'restarting' | 'failed';
 type RestoreFailure = 'status' | 'upload' | 'check' | 'confirm' | 'cancel' | 'restart';
-type RestartOutcome = 'waiting' | 'restored' | 'rolled_back' | 'still_pending';
-type RestoreOutcomeAnswer = {kind: 'signed_out'} | {kind: 'status'; status: RestoreStatus} | {kind: 'blocked'} | {kind: 'down'};
+/** `state_unreadable` and `unreadable` (SEC-3/4/5 wave, «the status 500»): the server cannot read the state of the restore. */
+type RestartOutcome = 'waiting' | 'restored' | 'rolled_back' | 'still_pending' | 'state_unreadable';
+type RestoreOutcomeAnswer = {kind: 'signed_out'} | {kind: 'status'; status: RestoreStatus} | {kind: 'blocked'} | {kind: 'unreadable'; reason: string | null} | {kind: 'down'};
 type UploadOptions = {onProgress?: (loaded: number, total: number) => void; signal?: AbortSignal};
 /** The answer of an accepted restart (B5c): the status, and the one-time ticket that reads its outcome. Not generated yet. */
 type RestoreRestartAccepted = RestoreStatus & {outcome_ticket: string};
@@ -2312,6 +2313,122 @@ describe('B-16 — a server that never stops: notStopping', () => {
 
         expect(api.probeServer).not.toHaveBeenCalled();
         expect(notStoppingOf(controller)).toBe(false);
+    });
+});
+
+// =====================================================================================================================
+// The status 500 — a state of the restore the server cannot read, met while the restart is followed (written red first)
+// =====================================================================================================================
+
+/*
+ * SEC-3/4/5 wave, «the status 500»: `restoreOutcome()` reads `{kind: 'unreadable', reason}` when the status route answers
+ * `500 restore_state_unreadable`. Waiting will not make that state readable (the administrator must run
+ * `./dev.py backup pending` on the server), so the probing stops at once: `outcome` `state_unreadable`, the new public
+ * field `unreadableReason` (`string | null`, the reason as read), `slow` and `notStopping` false, nothing announced, no
+ * sign-in, and no probe nor read after it — whether the server was seen down first, or never stopped.
+ *
+ * Red today: `#settle` knows no `unreadable`; it reads `read.status.state` of an answer without a status, the probe
+ * throws, and the outcome stays `waiting`.
+ */
+
+const STATE_REASONS = ['io', 'not_a_file', 'invalid'] as const;
+
+/** `unreadableReason` (the status 500), or a failure that names it while the controller publishes none. */
+function unreadableReasonOf(controller: RestoreFlowController): string | null {
+    expect('unreadableReason' in controller, 'restoreFlow.svelte.ts: the controller publishes no unreadableReason (the status 500)').toBe(true);
+    return (controller as unknown as {unreadableReason: string | null}).unreadableReason;
+}
+
+/** Nothing probed nor read once the outcome is known, and no timer left behind. */
+async function expectPollingStopped(context: Context): Promise<void> {
+    const probes = context.api.probeServer.mock.calls.length;
+    const reads = context.api.restoreOutcome.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(20 * POLL_MS);
+    expect(context.api.probeServer.mock.calls.length, 'the server was probed after the outcome').toBe(probes);
+    expect(context.api.restoreOutcome.mock.calls.length, 'the outcome was read again after it was known').toBe(reads);
+    expect(vi.getTimerCount(), 'a timer outlived the outcome').toBe(0);
+}
+
+describe('the status 500 — a state of the restore the server cannot read, while the restart is followed', () => {
+    it.each(STATE_REASONS)('seen down, then up, the status unreadable (%s): state_unreadable with its reason, slow and notStopping false, nothing announced, no sign-in, nothing probed nor read after', async (reason) => {
+        const context = await restartAccepted('down');
+        const {controller, api, server, events, toSignIn} = context;
+        api.restoreOutcome.mockResolvedValueOnce({kind: 'unreadable', reason});
+
+        await serverRestarts(server);
+
+        expect(api.restoreOutcome).toHaveBeenCalledTimes(1);
+        expect(controller.outcome, 'an unreadable state ends the wait: no start will make it readable').toBe('state_unreadable');
+        expect(unreadableReasonOf(controller)).toBe(reason);
+        expect(controller.slow).toBe(false);
+        expect(notStoppingOf(controller)).toBe(false);
+        expect(toSignIn, 'a restore whose state cannot be read stays on the same screen').not.toHaveBeenCalled();
+        expect(events(), 'the unreadable state announces nothing new').toEqual([]);
+
+        await expectPollingStopped(context);
+    });
+
+    it('seen down, then up, the status unreadable without a reason: state_unreadable, unreadableReason null, polling stopped', async () => {
+        const context = await restartAccepted('down');
+        const {controller, api, server} = context;
+        api.restoreOutcome.mockResolvedValueOnce({kind: 'unreadable', reason: null});
+
+        await serverRestarts(server);
+
+        expect(controller.outcome).toBe('state_unreadable');
+        expect(unreadableReasonOf(controller)).toBeNull();
+        await expectPollingStopped(context);
+    });
+
+    it('down past slowAfterMs, then up, the status unreadable: slow cleared, state_unreadable, polling stopped', async () => {
+        const context = await restartAccepted('down');
+        const {controller, api, server} = context;
+        await vi.advanceTimersByTimeAsync(SLOW_MS + 2 * POLL_MS);
+        expect(controller.slow, 'precondition: the server has been away for a while').toBe(true);
+        expect(api.restoreOutcome, 'precondition: nothing read while down').not.toHaveBeenCalled();
+
+        api.restoreOutcome.mockResolvedValueOnce({kind: 'unreadable', reason: 'invalid'});
+        server.state = 'up';
+        await vi.advanceTimersByTimeAsync(2 * POLL_MS);
+
+        expect(controller.outcome).toBe('state_unreadable');
+        expect(unreadableReasonOf(controller)).toBe('invalid');
+        expect(controller.slow, 'an outcome known: nothing left to say of the wait').toBe(false);
+        await expectPollingStopped(context);
+    });
+
+    it('up all along, the status unreadable at the fast read: state_unreadable at once — not taken for a restart that has not happened yet —, polling stopped', async () => {
+        const context = await restartAccepted('up');
+        const {controller, api, events, toSignIn} = context;
+        api.restoreOutcome.mockResolvedValueOnce({kind: 'unreadable', reason: 'not_a_file'});
+
+        await vi.advanceTimersByTimeAsync(FAST_MS - 1);
+        expect(api.restoreOutcome, 'read before fastRestartMs').not.toHaveBeenCalled();
+        expect(controller.outcome).toBe('waiting');
+
+        await vi.advanceTimersByTimeAsync(2 * POLL_MS + 1);
+
+        expect(api.restoreOutcome).toHaveBeenCalledTimes(1);
+        expect(controller.outcome).toBe('state_unreadable');
+        expect(unreadableReasonOf(controller)).toBe('not_a_file');
+        expect(notStoppingOf(controller)).toBe(false);
+        expect(toSignIn).not.toHaveBeenCalled();
+        expect(events()).toEqual([]);
+        await expectPollingStopped(context);
+    });
+
+    it('a server that never stopped (notStopping), then the status unreadable: notStopping cleared, state_unreadable, polling stopped', async () => {
+        const context = await notStoppingShown();
+        const {controller, api} = context;
+        api.restoreOutcome.mockResolvedValue({kind: 'unreadable', reason: 'io'});
+
+        await vi.advanceTimersByTimeAsync(2 * POLL_MS);
+
+        expect(controller.outcome).toBe('state_unreadable');
+        expect(unreadableReasonOf(controller)).toBe('io');
+        expect(notStoppingOf(controller), 'an outcome known: nothing left to say of the stop').toBe(false);
+        expect(controller.slow).toBe(false);
+        await expectPollingStopped(context);
     });
 });
 

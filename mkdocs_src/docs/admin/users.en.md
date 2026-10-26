@@ -43,6 +43,15 @@ accounts do not. The limit is set on the server with `LIBREFOLIO_MAX_USERS`: see
   Up»). If the server closes it with `LIBREFOLIO_REGISTRATION`, the tab names the variable: only the
   server's configuration can open it again.
 
+### 🚪 Who Can Sign Up {: #registration }
+
+**Who can sign up**, next to **Invite**, is the **Registration** global setting, here as well as in
+[Global Settings](settings.md) («Who Can Sign Up»): **Open**, **By invitation** or **Closed**. A choice is
+saved at once, with no **Save** button, and the tab reads the setting again. Only **Open** asks you to
+confirm first, because it lets in anyone who reaches the login page; cancel, and the mode stays as it was.
+If the server sets the mode with `LIBREFOLIO_REGISTRATION`, the selector is off and the tab names the
+variable.
+
 ---
 
 ## 👤 Accounts {: #accounts }

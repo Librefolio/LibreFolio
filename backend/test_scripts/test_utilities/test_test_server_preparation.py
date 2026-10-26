@@ -70,7 +70,9 @@ import pytest
 
 import dev
 import scripts.cli_base as cli_base
+from scripts.test_runner import _cli as test_runner_cli
 from scripts.test_runner import _common as test_runner_common
+from scripts.test_runner import _frontend_common as test_runner_frontend_common
 from scripts.test_runner import _server as test_runner_server
 
 # ── Shared fixtures, fakes and probes ──────────────────────────────────────
@@ -388,6 +390,130 @@ class TestFrontendToolsCheck:
         assert dev.cmd_api_client(SimpleNamespace(tools_only=tools_only)) == 0
 
         assert calls == [((["npm", "run", script],), {"cwd": dev.PROJECT_ROOT / "frontend"})]
+
+
+#: What the runner's frontend actions call through ``npx`` (Vitest) or ``npm run test:e2e`` / ``npx playwright test`` (Playwright).
+RUNNER_TOOLS = ("vitest", "playwright")
+
+
+class RunPassesProbe:
+    """``_run_passes`` with every seam after its tool check replaced by a recording: what it reached, in order."""
+
+    def __init__(self, monkeypatch) -> None:
+        self.reached: list[str] = []
+        probe = self
+
+        class SharedBackend:
+            def __enter__(self_inner):
+                probe.reached.append("shared backend")
+
+            def __exit__(self_inner, *_exc):
+                return False
+
+        monkeypatch.setattr(test_runner_cli, "_run_exclusive_setups", lambda _args: probe.reached.append("exclusive setups") or True)
+        monkeypatch.setattr(test_runner_cli, "shared_backend_for", lambda _category, _args: SharedBackend())
+        monkeypatch.setattr(test_runner_cli, "_apply_parallel", lambda _args, _verbose: probe.reached.append("pre-passes") or (True, True))
+        monkeypatch.setattr(test_runner_cli, "dispatch_to_category", lambda category, _names, _verbose, _args: probe.reached.append(f"dispatch {category}") or 0)
+
+    def run(self, category: str, **flags) -> tuple:
+        return test_runner_cli._run_passes(SimpleNamespace(category=category, **flags), None, False)
+
+
+class TestTheRunnerChecksTheFrontendToolsFirst:
+    """J-8: a run that calls Vitest or Playwright stops, before anything starts, when ``frontend/node_modules/.bin`` lacks them.
+
+    The runner's frontend actions call ``npx vitest`` and ``npx playwright test`` directly, and without ``node_modules`` ``npx`` does
+    not fail: it fetches whatever the registry serves, not the version the lock pins (C-94 stopped the build path only).
+    ``_run_passes`` is the one entry every ``./dev.py test`` run goes through, so the check stands there, once, before the
+    exclusive setups, the shared backend and the dispatch. A backend-only category does not need the tools and is not asked.
+    Read on 22/10/2026 (base ``407d019b1``): 23 ``"npx"`` calls in 10 runner files, none behind a check.
+    """
+
+    FRONTEND_RUNS = ("front-user", "front-utility", "front-portfolio", "all-frontend", "all")
+
+    def test_the_runner_tools_are_the_ones_its_actions_call(self):
+        assert test_runner_frontend_common.FRONTEND_TEST_BINARIES == RUNNER_TOOLS
+
+    def test_require_frontend_tools_is_silent_when_the_tools_are_there(self, monkeypatch, tmp_path, capsys):
+        frontend_node_bin(monkeypatch, tmp_path, *RUNNER_TOOLS)
+        errors = record_errors(monkeypatch, dev)
+
+        assert test_runner_frontend_common.require_frontend_tools() is True
+
+        assert (errors, tuple(capsys.readouterr())) == ([], ("", ""))
+
+    @pytest.mark.parametrize(("installed_tools", "installed", "missing"), [pytest.param((), False, RUNNER_TOOLS, id="fresh-worktree"), pytest.param(("vitest",), True, ("playwright",), id="partial")])
+    def test_require_frontend_tools_names_what_is_missing_and_npm_ci(self, monkeypatch, tmp_path, capsys, installed_tools, installed, missing):
+        frontend_node_bin(monkeypatch, tmp_path, *installed_tools, installed=installed)
+        errors = record_errors(monkeypatch, dev)
+
+        assert test_runner_frontend_common.require_frontend_tools() is False
+
+        assert_reports_missing_tools(errors, capsys.readouterr().out, missing)
+
+    @pytest.mark.parametrize("category", FRONTEND_RUNS)
+    def test_a_frontend_run_stops_before_anything_starts_when_a_tool_is_missing(self, monkeypatch, tmp_path, capsys, category):
+        frontend_node_bin(monkeypatch, tmp_path, installed=False)
+        errors = record_errors(monkeypatch, dev)
+        probe = RunPassesProbe(monkeypatch)
+
+        result = probe.run(category, list_tests=False)
+
+        assert (result, probe.reached) == ((1, False, False), []), "nothing may start: no setup, no backend, no pass, no action"
+        assert_reports_missing_tools(errors, capsys.readouterr().out, RUNNER_TOOLS)
+
+    @pytest.mark.parametrize("category", FRONTEND_RUNS)
+    def test_a_frontend_run_goes_on_when_the_tools_are_there(self, monkeypatch, tmp_path, category):
+        # The positive control: the same run with the tools installed reaches its action.
+        frontend_node_bin(monkeypatch, tmp_path, *RUNNER_TOOLS)
+        probe = RunPassesProbe(monkeypatch)
+
+        result = probe.run(category, list_tests=False)
+
+        assert result == (0, True, True)
+        assert probe.reached == ["exclusive setups", "shared backend", "pre-passes", f"dispatch {category}"]
+
+    @pytest.mark.parametrize("category", ["services", "api", "db", "utils"])
+    def test_a_backend_run_is_not_asked_for_the_frontend_tools(self, monkeypatch, tmp_path, category):
+        # Guard, green before and after: the tools are absent and the run goes on, its server builds what it serves.
+        frontend_node_bin(monkeypatch, tmp_path, installed=False)
+        forbid(monkeypatch, dev, "require_frontend_dependencies", "a backend category asked for the frontend tools")
+        probe = RunPassesProbe(monkeypatch)
+
+        result = probe.run(category, list_tests=False)
+
+        assert result == (0, True, True)
+        assert probe.reached[-1] == f"dispatch {category}"
+
+    def test_listing_the_tests_of_a_frontend_category_needs_no_tools(self, monkeypatch, tmp_path):
+        # Guard, green before and after: --list reads the files, runs nothing.
+        frontend_node_bin(monkeypatch, tmp_path, installed=False)
+        forbid(monkeypatch, dev, "require_frontend_dependencies", "--list asked for the frontend tools")
+        probe = RunPassesProbe(monkeypatch)
+
+        assert probe.run("front-user", list_tests=True) == (0, True, True)
+        assert probe.reached == ["dispatch front-user"]
+
+
+class TestTheDeadCodeCheckNeedsKnip:
+    """J-8: ``./dev.py lint --dead-code`` runs knip through ``npx``: without it installed, it stops and says so (a finding fails the lint)."""
+
+    def test_a_missing_knip_stops_the_check_before_the_catalogue_and_npx(self, monkeypatch, tmp_path, capsys):
+        frontend_node_bin(monkeypatch, tmp_path, installed=False)
+        errors = record_errors(monkeypatch, dev)
+        forbid(monkeypatch, dev.i18n_catalog, "build", "the dead-code check built the catalogue without knip installed")
+        forbid(monkeypatch, dev, "run_command", "the dead-code check ran npx without knip installed")
+
+        assert dev._run_knip_on_generated_catalogue(tmp_path, []) is True
+
+        assert_reports_missing_tools(errors, capsys.readouterr().out, ("knip",))
+
+    def test_an_installed_knip_runs_as_before(self, monkeypatch, tmp_path):
+        frontend_node_bin(monkeypatch, tmp_path, "knip")
+        monkeypatch.setattr(dev.i18n_catalog, "build", lambda **_kwargs: 0)
+        monkeypatch.setattr(dev, "_run_knip", lambda frontend_dir, exclude: ("ran", frontend_dir, tuple(exclude)))
+
+        assert dev._run_knip_on_generated_catalogue(tmp_path, ["x"]) == ("ran", tmp_path, ("x",))
 
 
 # ── Contract 3 — SharedTestServer.start(): port check, build step, then the spawn and its deadline ──

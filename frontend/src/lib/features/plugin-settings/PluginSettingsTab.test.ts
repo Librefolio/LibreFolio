@@ -9,6 +9,8 @@
  *   - the entries are grouped by family, one `plugin-settings-family` (`data-family`) per family: the price sources
  *     (`asset`) before the exchange-rate sources (`fx`) whatever the order of the answer, each family in the answer's
  *     order, a family without entries left out; one form `plugin-settings-form-{code}` per entry, inside its family;
+ *   - the import sources (`brim`, W-BS) are a family like the other two, shown after them: one group with its own title
+ *     (`FAMILY_TITLE_KEYS.brim`), icon and forms when the answer holds a brim plugin, no group, title or icon when it does not;
  *   - each family's title (`h3`) starts with the family's icon, `plugin-settings-family-icon` (`aria-hidden`): one per
  *     family shown, each its own, none for a family left out. Which icon is which is pinned by
  *     `pluginSettingsForm.test.ts` (`FAMILY_ICONS`);
@@ -91,6 +93,7 @@ const JUSTETF = plugin('asset', 'justetf');
 const BORSA = plugin('asset', 'borsa_italiana', {configured: true});
 const ECB = plugin('fx', 'ecb', {configured: true});
 const MOCKFX = plugin('fx', 'mockfx');
+const IMPORTER = plugin('brim', 'broker_x', {configured: true});
 
 // --- Helpers ---------------------------------------------------------------------------------------------------------
 
@@ -304,5 +307,63 @@ describe('PluginSettingsTab — the family icons', () => {
             screen.getAllByTestId('plugin-settings-family-icon').map((icon) => icon.closest('[data-testid="plugin-settings-family"]')?.getAttribute('data-family')),
             'every icon on the tab, by the family whose title it starts',
         ).toEqual([shown]);
+    });
+});
+
+// =====================================================================================================================
+describe('PluginSettingsTab — the import sources (brim)', () => {
+    it('PST-10: a brim plugin gets a group of its own, after the other two, with its form, its title and its icon', async () => {
+        fake.fetchAll.mockResolvedValueOnce([IMPORTER, ECB, JUSTETF]);
+
+        render(PluginSettingsTab);
+
+        await loaded();
+        expect(groups(), 'the price sources, the exchange-rate sources, then the import sources').toEqual([
+            {family: 'asset', plugins: ['justetf']},
+            {family: 'fx', plugins: ['ecb']},
+            {family: 'brim', plugins: ['broker_x']},
+        ]);
+        const section = familySection('brim');
+        const title = within(section).getByRole('heading', {level: 3});
+        const [icon] = within(section).getAllByTestId('plugin-settings-family-icon');
+        expect(within(section).getAllByTestId('plugin-settings-family-icon'), 'brim: one icon').toHaveLength(1);
+        expect(title, 'the icon is in the title').toContainElement(icon);
+        expect(icon).toHaveAttribute('aria-hidden', 'true');
+        expect(textAround(title, icon), 'the icon first, then the title of the family').toEqual({before: '', after: FAMILY_TITLE_KEYS.brim});
+        expect(FAMILY_TITLE_KEYS.brim).toBe('pluginSettings.families.brim');
+    });
+
+    it('PST-11: the import sources draw an icon of their own', async () => {
+        fake.fetchAll.mockResolvedValueOnce([JUSTETF, ECB, IMPORTER]);
+
+        render(PluginSettingsTab);
+
+        await loaded();
+        const drawing = (family: SettingsFamily) => within(familySection(family)).getByTestId('plugin-settings-family-icon').innerHTML;
+        expect(drawing('brim'), 'premise: the icon draws something').not.toBe('');
+        expect(drawing('brim')).not.toBe(drawing('asset'));
+        expect(drawing('brim')).not.toBe(drawing('fx'));
+    });
+
+    it('PST-12: with no brim plugin in the answer there is no brim group, title or icon (the catalogue holds none until a plugin declares a setting)', async () => {
+        fake.fetchAll.mockResolvedValueOnce([ECB, JUSTETF, MOCKFX, BORSA]);
+
+        render(PluginSettingsTab);
+
+        await loaded();
+        expect(groups().map((group) => group.family)).toEqual(['asset', 'fx']);
+        expect(screen.queryAllByTestId('plugin-settings-family').filter((section) => section.getAttribute('data-family') === 'brim')).toEqual([]);
+        expect(screen.queryByText('pluginSettings.families.brim')).toBeNull();
+        expect(screen.getAllByTestId('plugin-settings-family-icon'), 'one icon for each of the two families shown').toHaveLength(2);
+    });
+
+    it('PST-13: an answer with brim plugins only shows the brim group alone', async () => {
+        fake.fetchAll.mockResolvedValueOnce([IMPORTER, plugin('brim', 'broker_y')]);
+
+        render(PluginSettingsTab);
+
+        await loaded();
+        expect(groups()).toEqual([{family: 'brim', plugins: ['broker_x', 'broker_y']}]);
+        expect(screen.queryByTestId('plugin-settings-empty'), 'a brim plugin is an entry like another: the tab is not empty').toBeNull();
     });
 });

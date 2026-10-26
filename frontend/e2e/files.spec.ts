@@ -49,15 +49,10 @@ async function deleteStaticFile(page: Page, fileId: string): Promise<void> {
 /**
  * Hosts the PDF preview must not depend on (developer's decision, release 2 batch 7). By default the viewer (EmbedPDF)
  * fetches its engine — pdfium's WASM —, its stamps and its fallback fonts from jsDelivr, and its UI font from Google
- * Fonts (fonts.googleapis.com serves the stylesheet, fonts.gstatic.com the files). The app serves them itself; a CDN is
- * a fallback at most, never the path a working preview takes.
+ * Fonts (fonts.googleapis.com serves the stylesheet, fonts.gstatic.com the files). The app serves them itself — the CJK
+ * fonts through its own `/api/v1/files/pdf-fonts/` route since H-55 wave 4 — and a CDN is never asked, not even as a fallback.
  */
 const THIRD_PARTY_HOSTS = new Set(['cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com']);
-
-/** The viewer's engine as the installed package ships it, and the CDN URL the viewer falls back on for that same version. */
-const PDFIUM_PACKAGE = path.resolve(__dirname, '../node_modules/@embedpdf/pdfium');
-const LOCAL_PDF_ENGINE_FILE = path.join(PDFIUM_PACKAGE, 'dist/pdfium.wasm');
-const CDN_PDF_ENGINE = `https://cdn.jsdelivr.net/npm/@embedpdf/pdfium@${(JSON.parse(readFileSync(path.join(PDFIUM_PACKAGE, 'package.json'), 'utf-8')) as {version: string}).version}/dist/pdfium.wasm`;
 
 /** Our copy of the engine: a build asset, `/_app/immutable/assets/pdfium.<hash>.wasm`, on the app's own origin. */
 function isLocalPdfEngine(url: URL): boolean {
@@ -823,55 +818,49 @@ test.describe('Files Page', () => {
             expect(engine, "the viewer's engine (a .wasm file) was never requested: this test no longer sees its worker's requests").not.toEqual([]);
         });
 
-        test('pdf preview falls back to the CDN when the local engine is unreachable', async ({page}) => {
+        test('pdf preview shows the browser viewer, and asks no CDN, when the local engine is unreachable', async ({page}) => {
             const fileId = await uploadStaticFile(page, `preview-fallback-${uniqueSuffix()}.pdf`, TEST_PDF, 'application/pdf');
             ownedStaticFiles.push(fileId);
-            // Our engine unreachable: its probe (a HEAD) and any fetch of it are aborted, so the viewer keeps its CDN defaults.
+            // Our engine unreachable: its probe (a HEAD) and any fetch of it are aborted. The viewer must not look elsewhere
+            // for an engine (H-55 wave 4: its CDN fallback is gone): the preview shows the browser's own PDF viewer instead.
             const localEngine: string[] = [];
             await page.route(isLocalPdfEngine, async (route) => {
                 localEngine.push(`${route.request().method()} ${route.request().url()}`);
                 await route.abort();
             });
-            // Nothing goes out to the internet: the CDN's engine is answered with the very same file from the installed package
-            // (cross-origin, so with CORS, as jsDelivr answers), anything else asked of those hosts is aborted and recorded.
-            const fromCdn: string[] = [];
-            const aborted: string[] = [];
+            // Nothing goes out to the internet if the viewer does ask: whatever is asked of those hosts is aborted. The
+            // verdict is not these routes' — it is the list of requests recorded below.
             await page.route(
                 (url) => THIRD_PARTY_HOSTS.has(url.hostname),
-                async (route) => {
-                    const url = route.request().url();
-                    if (url === CDN_PDF_ENGINE) {
-                        fromCdn.push(url);
-                        await route.fulfill({path: LOCAL_PDF_ENGINE_FILE, contentType: 'application/wasm', headers: {'access-control-allow-origin': '*'}});
-                        return;
-                    }
-                    aborted.push(url);
-                    await route.abort();
-                },
+                (route) => route.abort(),
             );
-            // Every request to those hosts the browser makes, the engine's worker included, routed or not.
-            const thirdParty: string[] = [];
+            // Every request of the browser context, the engine's worker included, routed or not, from before the preview opens.
+            const requests: string[] = [];
             const record = (request: Request) => {
-                if (THIRD_PARTY_HOSTS.has(new URL(request.url()).hostname)) thirdParty.push(request.url());
+                requests.push(request.url());
             };
             page.context().on('request', record);
             try {
-                await openPdfPreview(page, fileId);
+                await openStaticGridView(page);
+                const previewButton = page.getByTestId(`file-grid-preview-${fileId}`);
+                await expect(previewButton).toBeVisible({timeout: 8_000});
+                await previewButton.click();
+                await waitForPreviewReady(page);
+                // The fallback is the state the modal publishes when our engine did not answer: the browser's own viewer in an iframe.
+                await expect(page.getByTestId('file-preview-pdf-fallback'), 'the preview did not show the browser viewer when our engine was unreachable').toBeVisible({timeout: 20_000});
+                await expect(page.getByTestId('file-preview-pdf'), 'the EmbedPDF stage is still mounted next to the fallback').toHaveCount(0);
             } finally {
                 page.context().off('request', record);
+                // Reported even when the fallback never showed: a viewer that went to the CDN instead is this test's subject.
+                const cdn = requests.filter((url) => new URL(url).hostname === 'cdn.jsdelivr.net');
+                expect.soft(cdn, `the PDF preview asked cdn.jsdelivr.net while our engine was unreachable:\n${cdn.join('\n')}`).toEqual([]);
             }
 
+            // Positive control: our engine was probed and refused, so the test really took the unreachable-engine path.
             expect(
                 localEngine.some((request) => request.startsWith('HEAD ')),
                 `our engine was never probed — this test aborted nothing: ${JSON.stringify(localEngine)}`,
             ).toBe(true);
-            expect(fromCdn, `the viewer did not fall back on the CDN engine (${CDN_PDF_ENGINE}); it asked: ${JSON.stringify(aborted)}`).not.toEqual([]);
-            expect(aborted, 'falling back, the viewer asked the third-party hosts for more than its engine').toEqual([]);
-            // Nothing went out: every request the browser made to those hosts was one of the routes above to answer.
-            expect(
-                thirdParty.filter((url) => !fromCdn.includes(url)),
-                'a request to a third-party host was not answered by this test: it went out to the internet',
-            ).toEqual([]);
         });
 
         test('pdf preview offers no editing mode', async ({page}) => {

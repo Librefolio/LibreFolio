@@ -115,6 +115,9 @@ their name (BTP, BOT, CCT…). Bonds repaid at or below par, and other redemptio
   it is: a missing amount counts as 0, and an operation that needs a quantity cannot be
   imported without one. A blue note lists these rows and asks you to check them. If the file looks
   right to you, use the link in the note to open an issue on GitHub, and we will look into it.
+- **Rows LibreFolio cannot read or does not know.** A row with too few columns, no readable date
+  or an empty description, or one whose operation LibreFolio does not map, is left out of the
+  import. An amber warning lists these rows and has a link to open an issue on GitHub.
 
 ## 🚧 Known limitations
 

@@ -78,7 +78,8 @@ type RestoreStatus = z.infer<typeof schemas.RestoreStatus>;
 type RollbackReason = NonNullable<RestoreStatus['reason']>;
 /** The waiting reasons of §0.5: the generated client does not know `instance_blocked` yet (P7). */
 type WaitingReason = NonNullable<RestoreStatus['waiting']> | 'instance_blocked';
-type RestartOutcome = 'waiting' | 'restored' | 'rolled_back' | 'still_pending';
+/** `state_unreadable` (SEC-3/4/5 wave, «the status 500»): the server cannot read the state of the restore. */
+type RestartOutcome = 'waiting' | 'restored' | 'rolled_back' | 'still_pending' | 'state_unreadable';
 
 const OVERLAY_MODULES = import.meta.glob<{default: Component<Record<string, unknown>>}>('./RestartOverlay.svelte');
 
@@ -248,7 +249,7 @@ describe('RestartOverlay — a failure shows on the same screen, with the reason
  */
 
 /** The overlay with these props; `onBack` is a spy. */
-function mountWith(props: {outcome: RestartOutcome; slow?: boolean; notStopping?: boolean; status?: RestoreStatus | null}) {
+function mountWith(props: {outcome: RestartOutcome; slow?: boolean; notStopping?: boolean; status?: RestoreStatus | null; unreadableReason?: string | null}) {
     const onBack = vi.fn();
     const view = render(overlayComponent(), {props: {slow: false, status: null, onBack, ...props}});
     return {...view, onBack};
@@ -319,5 +320,70 @@ describe('B-16 — RestartOverlay: a server that never stops', () => {
         expect(screen.getByTestId('restart-detail')).toBeInTheDocument();
         expect(screen.getAllByTestId('restart-back'), 'one way back').toHaveLength(1);
         expect(screen.queryByTestId('restart-not-stopped'), 'the hint belongs to the waiting branch').toBeNull();
+    });
+});
+
+// =====================================================================================================================
+// The status 500 — a state of the restore the server cannot read (SEC-3/4/5 wave, written red first)
+// =====================================================================================================================
+
+/*
+ * The contract: `state_unreadable` is an ended, failed wait, as `rolled_back` and `still_pending` — the failed title,
+ * `restart-detail`, and `restart-back` calling `onBack()` once. Its text is `backup.restore.restart.stateUnreadable` with
+ * `{reason}`; the root publishes `data-outcome="state_unreadable"` and `data-reason` the reason (empty without one).
+ *
+ * The prop, the choice of this file where the interface names none: `unreadableReason` (`string | null`), named after
+ * the controller's field it is given — the reason is not a rollback reason, so it does not travel in `status`.
+ *
+ * Red today: the overlay knows no `state_unreadable` — it shows the spinner of a wait, no detail, no way back.
+ */
+
+const STATE_REASONS = ['io', 'not_a_file', 'invalid'] as const;
+
+describe('the status 500 — RestartOverlay: a state of the restore the server cannot read', () => {
+    it.each(STATE_REASONS)('state_unreadable (%s): data-outcome, data-reason, the failed title, restart-detail worded by backup.restore.restart.stateUnreadable with the reason, restart-back, no spinner text, no sign-in', (reason) => {
+        mountWith({outcome: 'state_unreadable', unreadableReason: reason});
+
+        expect(overlay()).toHaveAttribute('data-outcome', 'state_unreadable');
+        expect(overlay()).toHaveAttribute('data-reason', reason);
+        expect(i18n.asked, 'an ended, failed wait: the title of rolled_back and still_pending').toContain('backup.restore.restart.failedTitle');
+        expect(i18n.asked, 'the wait is over: not the text of waiting').not.toContain('backup.restore.restart.waiting');
+        expect(i18n.asked).toContain('backup.restore.restart.stateUnreadable');
+        expect(screen.getByTestId('restart-detail')).toHaveTextContent(new RegExp(`^\\s*backup\\.restore\\.restart\\.stateUnreadable \\{"reason":"${reason}"\\}\\s*$`));
+        expect(screen.getByTestId('restart-back')).toBeInTheDocument();
+        expect(screen.queryByTestId('restart-sign-in')).toBeNull();
+        expect(screen.queryByTestId('restart-slow')).toBeNull();
+    });
+
+    it('state_unreadable without a reason: data-reason empty, still worded by backup.restore.restart.stateUnreadable, restart-back', () => {
+        mountWith({outcome: 'state_unreadable', unreadableReason: null});
+
+        expect(overlay()).toHaveAttribute('data-outcome', 'state_unreadable');
+        expect(overlay()).toHaveAttribute('data-reason', '');
+        expect(i18n.asked).toContain('backup.restore.restart.stateUnreadable');
+        expect(screen.getByTestId('restart-detail')).toBeInTheDocument();
+        expect(screen.getByTestId('restart-back')).toBeInTheDocument();
+    });
+
+    it('state_unreadable: restart-back calls onBack() once', async () => {
+        const {onBack} = mountWith({outcome: 'state_unreadable', unreadableReason: 'io'});
+
+        await fireEvent.click(screen.getByTestId('restart-back'));
+
+        expect(onBack).toHaveBeenCalledTimes(1);
+    });
+
+    it('state_unreadable, slow and notStopping left on by the wait: one restart-back, neither hint of the wait', () => {
+        mountWith({outcome: 'state_unreadable', unreadableReason: 'io', slow: true, notStopping: true});
+
+        expect(screen.getAllByTestId('restart-back'), 'one way back').toHaveLength(1);
+        expect(screen.queryByTestId('restart-slow')).toBeNull();
+        expect(screen.queryByTestId('restart-not-stopped')).toBeNull();
+    });
+
+    it('positive control: rolled_back never asks backup.restore.restart.stateUnreadable', () => {
+        mountWith({outcome: 'rolled_back', status: rolledBack('swap_failed')});
+
+        expect(i18n.asked).not.toContain('backup.restore.restart.stateUnreadable');
     });
 });

@@ -9,11 +9,17 @@ LibreFolio provides a comprehensive RESTful API built with **FastAPI**.
 
 ## 🖥️ Interactive Documentation
 
-When the LibreFolio server is running, you can access the auto-generated interactive documentation. These pages allow you to explore the API endpoints, see the expected
+When the server runs in debug mode (`./dev.py server --debug`), you can access the interactive documentation generated from the code. These pages allow you to explore the API endpoints, see the expected
 request/response schemas, and even execute requests directly from your browser.
 
 - 🚀 [**Swagger UI**](http://localhost:6040/api/v1/docs){:target="_blank"} : Best for exploring and testing endpoints.
 - 💻 [**ReDoc**](http://localhost:6040/api/v1/redoc){:target="_blank"}: Best for reading the documentation in a structured format.
+
+!!! warning "Off on every other instance"
+
+    `/api/v1/docs`, `/api/v1/redoc` and `/api/v1/openapi.json` exist only where the documentation is switched on: with `./dev.py server --debug`, which sets `LIBREFOLIO_API_DOCS=1`, with that variable set by hand, or in test mode (the test lanes). Anywhere else, Docker and managed instances included, they answer `404`: an instance in use publishes no map of its API. The links above therefore work on a debug server only.
+
+    The schema does not need the pages: `./dev.py api schema` (and `./dev.py api sync`, which adds the TypeScript client) builds it in process from the application, so it works whatever the instance serves ([API & Frontend Communication](overview.md)). The pages are LibreFolio's own (`backend/app/api/api_docs.py`), with their libraries pinned and checked: see [The Content-Security-Policy and Frame Protection](../architecture/security.md#managed-headers).
 
 ## 🔀 Dynamic Route Generation
 
@@ -32,7 +38,7 @@ The API is structured into routers, each handling a specific domain (all mounted
 - `/transactions`: Transaction management.
 - `/brokers`: Broker management and sharing — includes `/import` (BRIM broker report import).
 - `/backup`: Backup & export.
-- `/panel`: The hosting panel's status route, `GET /panel/status` (`get_panel_status`), with the `LIBREFOLIO_PANEL_STATUS_TOKEN` token instead of a session: where the setup of the [initial administrator](../architecture/access_control.md#initial-admin) stands, as [`admin_setup_status()`](../architecture/access_control.md#setup-status) reads it. Its answer, `PanelStatusResponse`, holds exactly two keys: `admin_setup`, one of `none`, `pending`, `done` and `expired`, and `setup_expires_at`, when the setup link stops working, in UTC, only while `pending` (`null` otherwise). Responses `200`, `401`, `404` (no token set: the route is off), `429` and `503`; it answers on a blocked instance too. Its OpenAPI tag is «Hosting panel», the only tag of the six routes a hosting panel calls: this one, the four `/backup/panel/jobs…` routes and `POST /system/wake-sync`. See [The Hosting Panel's Access](../architecture/security.md#panel-access) and, for administrators, [The Setup Status](../../admin/hosting_providers.md#panel-status).
+- `/panel`: The hosting panel's status route, `GET /panel/status` (`get_panel_status`), with the `LIBREFOLIO_PANEL_STATUS_TOKEN` token instead of a session: where the setup of the [initial administrator](../architecture/access_control.md#initial-admin) stands, as [`admin_setup_status()`](../architecture/access_control.md#setup-status) reads it. Its answer, `PanelStatusResponse`, holds exactly four keys: `admin_setup`, one of `none`, `pending`, `done` and `expired`; `setup_expires_at`, when the setup link stops working, in UTC, only while `pending` (`null` otherwise); `mode`, `normal` or `awaiting_restore`; and `restore`, `PanelRestoreSummary` (`state`, `reason`, `waiting`, `backup_created_at`, `stage_id`), `null` when no restore was ever recorded (lot H-62); when the state of the restore cannot be read, `state` is `unreadable` with `reason` `io`, `not_a_file` or `invalid`, still in a `200` (decision D7). Responses `200`, `401`, `404` (no token set: the route is off), `429` and `503`; it answers on a blocked instance too. Its OpenAPI tag is «Hosting panel», the only tag of the thirteen routes a hosting panel calls: this one, the four `/backup/panel/jobs…` routes, the seven `/backup/panel/restore…` routes (scope `backup:restore`, a signed ticket only: see [Awaiting Restore](../architecture/security.md#await-restore)) and `POST /system/wake-sync`. See [The Hosting Panel's Access](../architecture/security.md#panel-access) and, for administrators, [The Setup Status](../../admin/hosting_providers.md#panel-status).
 - `/portfolio`: Portfolio analysis and metrics.
 - `/fx`: Foreign exchange operations — includes `/fx/providers` and `/fx/currencies`.
 - `/signals`: Domain-agnostic signal preview (`POST /signals/preview`).
@@ -42,6 +48,10 @@ The API is structured into routers, each handling a specific domain (all mounted
 - `/utilities`: Reference data (ISO currencies, etc.).
 
 On an instance blocked by its hosting provider (`LIBREFOLIO_BLOCKED`), every route but a short list answers `423 Locked` with `detail.code` `instance_blocked` to a signed-in user, and `401` to a caller without a valid session, the public routes outside the list included: see [Instance Block](../architecture/security.md#instance-block).
+
+While the hosting panel restores an instance (`LIBREFOLIO_AWAIT_RESTORE`), every route but the probes, `/system/instance`, the scheduled wake-up and the panel's routes answers `423 Locked` with `detail.code` `instance_awaiting_restore`, to anyone, signed in or not: see [Awaiting Restore](../architecture/security.md#await-restore).
+
+When the process found the state of the restore (`.restore/restore.json`) unreadable at its start, the same routes answer, but the panel's backup start, which answers `409` `backup_restore_interrupted` once the panel's credential is checked, and every other one answers `423 Locked` with `detail.code` `instance_restore_interrupted`, to anyone, until the administrator runs `./dev.py backup pending --recover` and restarts LibreFolio; `GET /system/instance` then says `restore_interrupted: true`: see [A Restore Stopped Half Way](../architecture/security.md#restore-interrupted).
 
 ## 📋 Pydantic Schemas
 

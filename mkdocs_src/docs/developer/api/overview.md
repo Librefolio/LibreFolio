@@ -22,7 +22,7 @@ graph LR
 The synchronization process is automated via `dev.py`:
 
 1. **Backend Definition**: API endpoints and Pydantic models are defined in Python (`backend/app/api/`).
-2. **Schema Export**: `./dev.py api schema` starts a temporary backend process to export the `openapi.json` file.
+2. **Schema Export**: `./dev.py api schema` imports the application in a temporary process (`scripts/list_api_endpoints.py`) and writes `app.openapi()` to the `openapi.json` file. It starts no server and does not depend on `LIBREFOLIO_API_DOCS`: the `/api/v1/openapi.json` route, like the Swagger UI and ReDoc pages, exists only on debug and test instances.
 3. **Client Generation**: `./dev.py api client` uses `openapi-zod-client` to read the JSON schema and generate a TypeScript client (`frontend/src/lib/api/generated.ts`).
 
 !!! tip "One-step sync"
@@ -184,6 +184,7 @@ With `--compressed` it asks for gzip and decompresses transparently:
 
 ```bash
 # Print the response headers of the compressed variant (Content-Encoding, Vary)
+# (/api/v1/openapi.json exists on a debug server only: ./dev.py server --debug)
 curl -s --compressed -D - -o /dev/null http://localhost:6040/api/v1/openapi.json
 ```
 

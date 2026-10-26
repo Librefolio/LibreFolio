@@ -3,12 +3,15 @@
   (`GET /security/checks`) and the browser's own, most severe first, with a link where a setting of the app fixes
   them; the passed checks folded below. Colours are roles only, after the state convention of `STATUS_TONES`, written
   here: a tint per severity (`bg-lf-X-soft text-lf-X-on-soft border-lf-X-line`), a neutral chip for the count of the
-  passed ones.
+  passed ones. Each row whose check has a page in the administrator's guide (`checkGuides.ts`, workstream H) carries a
+  «Guide» button to it (N69d); a check the map lacks has none.
 -->
 <script lang="ts">
     import {onMount} from 'svelte';
     import {AlertCircle, AlertTriangle, CheckCircle2, Info, RefreshCw} from 'lucide-svelte';
     import {_} from '$lib/i18n';
+    import DocsLink from '$lib/components/ui/DocsLink.svelte';
+    import {checkGuidePath} from '$lib/features/instance/checkGuides';
     import {securityChecks, type SecurityChecksStore} from './securityChecks.svelte';
     import type {FindingSeverity} from './securityFindings';
 
@@ -47,6 +50,15 @@
         void checks.ensureLoaded();
     });
 </script>
+
+{#snippet guide(checkId: string)}
+    {@const path = checkGuidePath(checkId)}
+    {#if path}
+        <span class="shrink-0 [&_button]:text-inherit">
+            <DocsLink icon="book" label={$_('settings.securityTab.guide')} labelDisplay="visible" {path} size={14} testId="security-guide" />
+        </span>
+    {/if}
+{/snippet}
 
 <div class="space-y-6 text-lf-primary" data-testid="security-tab" data-status={checks.status} data-busy={loading} aria-busy={loading}>
     <div class="flex flex-wrap items-start justify-between gap-3">
@@ -97,6 +109,7 @@
                                 <a href={finding.action.href} class="ml-1 font-medium underline" data-testid="security-finding-action">{$_(finding.action.labelKey)}</a>
                             {/if}
                         </p>
+                        {@render guide(finding.id)}
                     </li>
                 {/each}
             </ul>
@@ -117,7 +130,8 @@
                     {#each findings.passed as finding (finding.id)}
                         <li class="flex items-start gap-2" data-testid="security-passed-check" data-check-id={finding.id}>
                             <CheckCircle2 class="mt-0.5 h-4 w-4 shrink-0 text-lf-success" aria-hidden="true" />
-                            <span>{$_(finding.messageKey, {values: finding.params})}</span>
+                            <span class="flex-1">{$_(finding.messageKey, {values: finding.params})}</span>
+                            {@render guide(finding.id)}
                         </li>
                     {/each}
                 </ul>

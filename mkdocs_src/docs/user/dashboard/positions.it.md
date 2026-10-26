@@ -91,6 +91,7 @@ Quali posizioni hanno guadagnato o perso denaro nel periodo, e come? **Periodo**
 - **Le posizioni chiuse** sono in corsivo, oppure portano un badge **Chiuso** nel grafico; per elencarne un solo tipo, mostra **Stato** e filtralo.
 - **Nella Mappa**, i guadagni si impilano a destra dello zero e le perdite a sinistra, con il risultato netto che chiude la riga; ciascuna percentuale si confronta con il valore iniziale della posizione.
 - **Il P&L periodo di una posizione** può differire dal suo guadagno complessivo: conta solo il periodo.
+- **Valore Iniziale** e **Valore Finale** si calcolano come il **Valore** nel **Portafoglio** — stessi prezzi, un asset senza prezzo a quanto ti è costato, il tasso di cambio di ogni giorno — così le righe più gli **Altri effetti del periodo** tornano alla [scheda P&L periodo](kpi-cards.md#card-1-period-pl). Un **`—`** in **Variazione non realizzata** significa che un valore non si è potuto calcolare, per esempio per un tasso di cambio o un costo di acquisto mancante: non è uno zero.
 
 ??? tip "🙈 Nascondi importi — cosa mostra ancora il grafico"
 

@@ -8964,3 +8964,99 @@ Ognuno con i rossi prima e uno slot. Uno slot API (`users-admin`) per N69-4 e N6
     della corsia: **184 passed** (`A-final-api-users-admin.log`).
   - Porta 6185 libera alla fine (`lsof` rc 1); `git diff --check` pulito; HEAD ancora `4a053da4c`.
 - Checkpoint mandato (A-62 ed E-7 separati); FROZEN.
+
+## N69c + N69d — ondata 4 (22/10/2026, base `c042f2481`; sessione A su Sonnet, corsia 6185)
+
+Via del coordinatore: E2E di N69c con **stub** (scelta di disegno del test). `UserRow`: E7-Q4 (hover + pannello) ed E7-Q5
+(fr «En attente de vérification», es «Pendiente de verificación», suggerimento it di A) accettate dal developer.
+
+### UserRow — E7-Q4 / E7-Q5 ✅ (22/10) · nessuna modifica
+- Il badge ha già il suggerimento al passaggio del mouse (`title`) e nel pannello (`users-pending-verification-hint`), cioè «hover +
+  pannello»; i cataloghi `settings/*.json` hanno già le quattro parole del badge e il suggerimento nelle 4 lingue, quelli accettati.
+> **Note implementazione**: niente da cambiare in codice né in cataloghi. Le parole sono in `settings/*.json` (cataloghi di A),
+> non in quelli di E: E dà solo il via.
+
+### N69c — «Chi può iscriversi» anche in Utenti ✅ (22/10)
+- **Rossi** (prima del codice): `registrationMode.test.ts` (nuovo, RMODE-01…07: modulo mancante), `UsersTab.test.ts` UTAB-63…73
+  (11 rossi, `ondata4/a-n69c-red1.log`).
+- **Cura**:
+  - `features/settings/registrationMode.ts` (nuovo): `REGISTRATION_KEY`, `REGISTRATION_VARIABLE`, `REGISTRATION_MODES`,
+    `registrationModeOptions(translate)`, `saveRegistrationMode(mode)` (PATCH `/settings/global/bulk` + rilettura forzata
+    della configurazione), `refreshRegistrationConfig()`, `lockedByEnv(error)` (409 `SETTING_LOCKED_BY_ENV`).
+  - `UsersTab.svelte`: nella prima sezione, accanto a «Invita», un `SimpleSelect` (`users-registration-mode`) dentro
+    `users-registration` (`data-mode`, `data-shown`, `data-locked`, `data-saving`). Si salva alla scelta; «aperta» passa dal
+    `ConfirmModal` della scheda (`registration-open`, non danger): annulla = nessuna richiesta e il select torna al modo in
+    vigore. Bloccata dalla variabile: select spento e riga `users-registration-locked`. Rifiuto: toast di errore (evento
+    `accounts.registration.failed`), select di nuovo sul modo in vigore; con 409 rilegge la configurazione.
+    Successo: evento `settings.global.saved`, nessun toast (il select mostra già il nuovo valore).
+  - `GlobalSettingsTab.svelte`: usa il modulo per opzioni, variabile, 409 e rilettura; in più `data-value` sul riquadro di
+    `registration_mode` (additivo, lo legge l'E2E).
+  - i18n (`settings`, ×4): `settings.usersTab.registration.{label,confirm.title,confirm.message,confirm.confirm,saveFailed}`.
+- **E2E** (prima versione, sostituita il 22/10 sera, vedi «N69c — E2E vero ed esclusivo»): `admin-users.spec.ts` AUSR-E-11, con stub delle tre richieste (PATCH, `GET /system/instance`, `GET /settings/global`):
+  scelta → PATCH col corpo atteso → configurazione riletta → «Invita» spento; «aperta» chiede, annulla non manda nulla, conferma
+  manda; «Impostazioni globali» legge lo stesso modo.
+- Doc: `admin/users.en.md` (`#registration`), `admin/settings.en.md`; timbro Aphra su `settings.en.md`.
+> **Note implementazione**: `scripts/test_runner/_frontend_utility.py`, una riga additiva (`registrationMode.test.ts` in core-unit).
+
+### N69d — «Guida» sui controlli di Sicurezza ✅ (22/10)
+- **Rossi**: `SecurityTab.test.ts` SGUIDE-01…08 (8 rossi, `ondata4/a-n69d-red1.log`); la mappa è `checkGuides.ts`/`checkGuides.json` di H
+  (sola lettura, 20 voci: 18 del server + `accounts.openRegistration` e `platform.blockedScript` del browser).
+- **Cura**: `SecurityTab.svelte`, uno snippet `guide(checkId)`: se `checkGuidePath(id)` esiste, un `DocsLink` (libro, etichetta
+  visibile, nuova scheda, `testId="security-guide"`) su ogni `security-finding` e su ogni `security-passed-check`; senza voce
+  nessun pulsante. Il link interno del ritrovamento (`security-finding-action`) resta. i18n: `settings.securityTab.guide` (×4).
+- **E2E**: `security-tab.spec.ts` ASEC-E-04 (il ritrovamento `accounts.login_limit` ha «Guida»; il clic apre una nuova scheda su
+  `/mkdocs/[lingua/]admin/configuration/#login-limit`).
+- Doc: `admin/settings.en.md` (paragrafo prima di «The findings without a link»).
+> **Note implementazione**: il test SGUIDE-06 prende gli id dalla mappa stessa: un controllo nuovo di H con voce nella mappa
+> senza pulsante è un rosso, e uno senza voce non ne ha.
+
+### N69c + N69d — Prove finali ✅ (22/10, 15:07–15:31; E2E in `flock`)
+- Vitest (`settings`, `instance`, ratchet colori): **1409 passed**, 36 file. `registrationMode.test.ts` 9, `UsersTab.test.ts` 73, `SecurityTab.test.ts` (cartella `security`) 94.
+- `front check` dopo `api sync`: **0 errori, 0 avvisi** (`ondata4/a-frontcheck.log`). `i18n check`: 5136 chiavi, strict. `check-orphans` pulito.
+- Corsia 6185 (`/tmp/librefolio-r13-a`, `db populate --force --clean`): E2E `admin-users` **11 passed** (AUSR-E-11 compreso), `security-tab` **4 passed** (ASEC-E-04 compreso), `api users-admin` **184 passed** (`ondata4/a-heavy-e2e.log`). Porta libera alla fine; `git diff --check` pulito; HEAD `c042f2481`.
+
+### N69c — E2E vero ed esclusivo (sostituzione) ✅ (22/10, sera; base `b1044c9ab`)
+Correzione del developer: niente stub. L'AUSR-E-11 con `page.route` è tolto da `admin-users.spec.ts` (resta a 10 test) e sostituito da
+`settings/registration-mode.spec.ts` (RMOD-E-01), scritto con `test-author`.
+- Test reale: e2e_test_admin sceglie «chiusa» dalla scheda Utenti (nessuna conferma, un PATCH, `settings.global.saved`), legge il modo dal
+  server, da Impostazioni globali (`data-value`) e da `GET /system/instance` anonimo; «aperta» chiede, annulla non scrive, conferma scrive.
+- Ripristino: la fixture `registration` legge il modo dal server prima di toccare, lo riscrive via API in un `finally` (verde o rosso) e lo
+  rilegge; rosso subito se `LIBREFOLIO_REGISTRATION` lo blocca.
+- Runner: azione `registration-mode` di `front-utility`, con `exclusive_because` (`global_settings.registration_mode`, una riga condivisa):
+  l'inventario la classifica `write-global`. Una riga di catalogo in `_frontend_utility.py`.
+> **⚠️ Fuori pista**: il test-author ha scoperto che il runner non rispetta `exclusive_because` per Playwright con `--workers > 1`
+> (`front-utility all` lancia le spec in una sola invocazione). Ha scritto una correzione di `_consolidate.py` (+36 righe), **non provata con
+> `--workers 4` e fuori dal perimetro**: l'ho tolta dall'albero e salvata come patch per il coordinatore
+> (`side-session-notes/…/A-consolidate-exclusive-playwright.patch`). A un worker (il default) tutto è già in serie.
+- Prove (corsia 6185, in `flock`): `registration-mode` due volte **1 passed** (24,0 s e 22,3 s, `ondata4/a-rmod-run1.log`, `a-rmod-run2.log`), con
+  «restored: open» in entrambe; `admin-users` **10 passed** (`a-rmod-admin2.log`); fallimento simulato dopo il cambio a `disabled`: rosso, ma
+  il DB della lane legge `registration_mode|open` (`a-rmod-fail.log`, `a-rmod-fail-dbread.log`); `test_test_runner_cli.py` 785 passed;
+  `check-orphans` pulito.
+
+## Lotto «E chiuso» — email di attivazione, contatori, riquadro giallo, tooltip di UserRow (23/10/2026; base `8d5c23002`; sessione A su Sonnet)
+La sessione di E non c'è più: in questo lotto i suoi file (`i18n/email/*`, `services/email/*`, `config/email.py`, `api/v1/auth.py` per la registrazione) sono di A. Decisioni del developer del 23/10, riferite dal coordinatore.
+
+### E-26-q1 — contatori e tempo vero ✅ (23/10)
+- **Fatto trovato prima di cambiare**: il «nuovo invio» (`resend_verification`) non guardava `REGISTRATION_EMAILS_BY_ADDRESS` ma `RESEND_BY_ADDRESS` (10 ogni 15 min): il tempo del limitatore di registrazione sarebbe stato falso. Segnalato al coordinatore; scelta (a) e poi, il giorno stesso, il disegno a due contatori (`ondata4/EMAIL-attivazione-contatori.md`, §4).
+- **Disegno finale**: un solo contatore per IP, `delivery.ADDRESS_BUDGET` (`LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS`, 20 all'ora), condiviso da registrazione, nuovo invio e «password dimenticata»; più `INSTANCE_BUDGET`. Spariscono `REGISTRATION_EMAILS_BY_ADDRESS`, `RESEND_BY_ADDRESS`, `FORGOT_BY_ADDRESS`. Restano password sbagliate, 3/h per casella, 1 ogni 5 min e 3/h per account, `FORGOT_BY_IDENTIFIER`, `FORGOT_BY_MAILBOX`.
+- **Tempo**: la registrazione risponde `held` con `verification_retry_after_seconds` (arrotondato per eccesso, ≥ 1) = il più lungo dei contatori che l'hanno fermata; il rifiuto del nuovo invio e del «password dimenticata» portano il loro `retry_after` con la stessa regola. Il contatore IP si conta (hit) solo se IP e istanza ammettono entrambi (peek poi hit).
+- **Variabile**: `LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS` (default 20), letta a ogni richiesta, validata con le altre variabili email (un valore non valido spegne l'email e il check `email.smtp` lo nomina: il server parte, come per `LIBREFOLIO_SMTP_*`). Codice problema nuovo `SIGNUP_EMAILS_PER_ADDRESS_INVALID` in `emailText.ts` e nei cataloghi.
+- Backend e guida admin (`admin/email.en.md`, sezione «Limits on Activation and Password-Reset Emails», `#activation-limits`) fatti con il test-author; rossi/verdi nel rapporto del checkpoint.
+- Frontend: `RegisterCard` dà a `email.verification.registeredHeld` `{minutes}` (`minutesUntil`, ≥ 1); il testo ha il plurale ICU (una sola scostatura dal testo del coordinatore: «1 minuto», non «1 minuti»).
+> **Note implementazione**: effetto da sapere: con il contatore unico, dopo un `held` il nuovo invio dello stesso IP è rifiutato fino al tempo detto (voluto: è il tempo vero).
+> **⚠️ Fuori pista (correzione del developer, 23/10, dopo il primo checkpoint)**: nella prima versione il nuovo invio colpiva il contatore IP
+> prima della password, e venti password sbagliate dalla stessa rete avrebbero spento per un'ora anche le email di tutto un ufficio.
+> Regola finale: il contatore IP si **guarda** presto (`peek`, risposta subito col tempo) e si **conta** (`hit`) solo quando un'email parte
+> davvero: nel nuovo invio dopo password giusta, stato dell'account, limite per account e per casella e budget d'istanza, subito prima del
+> `commit` che precede l'invio (`_issue_and_send(count_address=…)`; un SMTP che rifiuta resta contato: è un'email tentata); in «password
+> dimenticata» in `forgotten_password_work(address=…)`, dopo la risposta, solo per un account esistente. Le password sbagliate hanno il loro
+> limite. La risposta di «password dimenticata» non dipende dal nuovo `hit` (EMA-053). Residuo: gli identificatori inesistenti non
+> consumano più il contatore IP (restano frenati per identificatore e non costano email). Rossi: 12 (`a-var-red-correction.log`).
+
+### E-26-q2 (b) — riquadro giallo ✅ (23/10)
+- `LoginCard`: prop `successTone` (`success`|`warning`), `data-tone` su `login-success`; il caso trattenuto usa i ruoli `warning` (`bg-lf-warning-soft border-lf-warning-line text-lf-warning-on-soft`). `RegisterCard` manda `tone: 'warning'` solo per `held`; `routes/+page.svelte` lo tiene; `routes/invite/+page.svelte` lo passa a `setAuthFlash(message, 'warning')`; `authFlash.ts`: `takeAuthFlashTone()`.
+
+### E-25-q1 (a) ✅ · E7-Q4 ✅ · E7-Q5 ✅
+- E-25-q1 (a): nessun lavoro.
+- E7-Q4: `UserRow` — icona `Info` (lucide) accanto al badge «In attesa di verifica» (`users-pending-verification-info`) che apre `Tooltip` con `pendingVerificationHint` a hover, focus, clic e tocco; tolto il pannello e il `title`. L'icona sta dopo il pulsante della riga, non dentro: un pulsante non ne contiene un altro. Test `UserRow.verification.test.ts` riscritto (UVR-04, 06…11, 07b, 07c).
+- E7-Q5: i testi del badge e del suggerimento erano già nei cataloghi; confermati. I «da confermare» di questo piano (riga 8945) e del piano 08 sono chiusi.

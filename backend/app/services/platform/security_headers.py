@@ -26,6 +26,10 @@ response:
   ``LIBREFOLIO_PUBLIC_URL`` and, self-hosted, ``https://api.github.com`` (the update check, run in the administrator's
   browser). A script the app did not send (a proxy's, a CDN's, an extension's) is blocked; the page reports it in the
   console and in the Security tab (``app.html``, ``lib/features/security/cspNotice.ts``);
+- the API's **documentation pages** (debug instances only) get ``api_docs_policy()``: scripts of the instance and of the
+  pinned jsDelivr files they load with Subresource Integrity (R5);
+- a **script of the build** (JavaScript under ``/_app/``) gets ``worker_policy()``: a browser applies it only to a worker
+  started from that script (R4): the build's own modules, ``connect-src`` like the pages, nothing from elsewhere;
 - with ``LIBREFOLIO_FRAME_PROTECTION`` (on in the managed profile), every response also gets ``frame-ancestors 'self'``
   and ``X-Frame-Options: SAMEORIGIN``: only the app's own pages may frame it. Off, framing stays free: embedding the app
   (a Home Assistant panel) is a legitimate self-hosted use.
@@ -60,6 +64,7 @@ from pathlib import Path
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from backend.app.api.api_docs import DOCS_PATH, LIBRARY_ORIGIN, REDOC_PATH
 from backend.app.config import get_settings
 from backend.app.config.accounts import public_url
 from backend.app.logging_config import get_logger
@@ -94,12 +99,6 @@ WEB_APP_WORKER_SRC = "worker-src 'self' blob:"
 #: Where the self-hosted administrator's browser asks for the latest release (the update check).
 GITHUB_API_ORIGIN = "https://api.github.com"
 SELF_HOSTED_PROFILE = "selfhosted"
-#: The PDF viewer's CDN: its CJK fonts (Japanese, Korean, Chinese) always, its engine when the app's own copy does not
-#: answer (``frontend/src/lib/utils/files/pdfViewerAssets.ts``). Blocked today: whether to allow it is a pending decision
-#: of the developer (H-55 v2). Allowing it is one edit: ``EXTRA_CONNECT_SOURCES = (PDF_VIEWER_CDN_ORIGIN,)``.
-PDF_VIEWER_CDN_ORIGIN = "https://cdn.jsdelivr.net"
-#: The origins every page of the web app may connect to in every profile, beyond its own and the public address.
-EXTRA_CONNECT_SOURCES: tuple[str, ...] = ()
 
 #: The media types of a document (H-45); a type ending with ``DOCUMENT_MEDIA_TYPE_SUFFIX`` is one too
 #: (``application/atom+xml``, ``application/rss+xml``). A PDF is not.
@@ -147,6 +146,36 @@ def web_app_policy(script_hashes: Iterable[str], connect_sources: Iterable[str],
     return _with_sources(directives, {"script-src": tuple(script_hashes), "connect-src": tuple(connect_sources)})
 
 
+#: The API's documentation pages (H-55 R5, ``api/api_docs.py``: debug instances only), whose policy is ``api_docs_policy()``.
+API_DOCS_PAGES = frozenset({DOCS_PATH, REDOC_PATH})
+
+
+def api_docs_policy(frame_protection: bool) -> str:
+    """The enforced policy of the API's documentation pages: the document's directives, and scripts only of the instance
+    and of the pinned files of jsDelivr the pages load with their integrity hashes (``api_docs.LIBRARIES``); ReDoc's
+    search worker from a blob; the OpenAPI document from the instance."""
+    directives = ((FRAME_ANCESTORS,) if frame_protection else ()) + DOCUMENT_DIRECTIVES + (f"script-src 'self' {LIBRARY_ORIGIN}", WEB_APP_WORKER_SRC, "connect-src 'self'")
+    return "; ".join(directives)
+
+
+#: The media types of a script: under ``/_app/`` one gets ``worker_policy()`` (R4).
+SCRIPT_MEDIA_TYPES = frozenset({"text/javascript", "application/javascript"})
+#: Where the build's scripts are served (the StaticFiles mount of the web app).
+APP_ASSETS_PREFIX = "/_app/"
+
+
+def worker_policy(connect_sources: Iterable[str], frame_protection: bool) -> str:
+    """The enforced policy of a script of the web app's build, for when a browser runs it as a worker (R4).
+
+    A browser applies a script response's policy only to a worker it starts from that script (``priceProcessing.worker``
+    today); on any other script it is ignored. The worker may load the build's own modules and nothing else, connect
+    where the pages connect, and start workers of its own from the build or a blob. The PDF engine's worker starts from a
+    blob and keeps the page's policy.
+    """
+    directives = ((FRAME_ANCESTORS,) if frame_protection else ()) + ("script-src 'self'", "connect-src 'self'", WEB_APP_WORKER_SRC, "object-src 'none'", "base-uri 'self'")
+    return _with_sources(directives, {"connect-src": tuple(connect_sources)})
+
+
 def connect_sources(profile: str) -> tuple[str, ...]:
     """The sources a page of the web app may connect to beyond its own origin: the origin of ``LIBREFOLIO_PUBLIC_URL``
     (the address users reach the instance at, when the page was opened at another one: the design approved on 19/10;
@@ -165,7 +194,6 @@ def connect_sources(profile: str) -> tuple[str, ...]:
         sources.append(origin)
     if profile == SELF_HOSTED_PROFILE:
         sources.append(GITHUB_API_ORIGIN)
-    sources.extend(EXTRA_CONNECT_SOURCES)
     return tuple(sources)
 
 
@@ -258,6 +286,11 @@ def _is_document(headers: list[tuple[bytes, bytes]]) -> bool:
     return media_type in DOCUMENT_MEDIA_TYPES or media_type.endswith(DOCUMENT_MEDIA_TYPE_SUFFIX)
 
 
+def _is_app_script(path: str, headers: list[tuple[bytes, bytes]]) -> bool:
+    """A script of the web app's build: a JavaScript response under ``/_app/``."""
+    return path.startswith(APP_ASSETS_PREFIX) and _media_type(headers) in SCRIPT_MEDIA_TYPES
+
+
 def _is_web_app_page(path: str, headers: list[tuple[bytes, bytes]]) -> bool:
     """An HTML response of the web app (``text/html`` exactly): not the documentation (``/mkdocs``), not the API (``/api/``)."""
     if path == "/mkdocs" or path.startswith("/mkdocs/") or path == "/api" or path.startswith("/api/"):
@@ -279,6 +312,8 @@ class SecurityHeadersMiddleware:
         # A 304 carries no policy (H-45): the browser keeps the one of the response it cached
         self.not_modified_headers = ALWAYS_HEADERS + frame
         self.connect_sources = connect_sources(settings.LIBREFOLIO_PROFILE)
+        self.api_docs_headers = ALWAYS_HEADERS + frame + ((_CSP_FIELD, api_docs_policy(self.frame_protection).encode()),)
+        self.script_headers = ALWAYS_HEADERS + frame + ((_CSP_FIELD, worker_policy(self.connect_sources, self.frame_protection).encode()),)
         self.csp_report_only = settings.LIBREFOLIO_CSP_REPORT_ONLY
         self.script_hashes = _BuildScriptHashes()
         self._page_policies: tuple[tuple[str, ...], tuple[tuple[bytes, bytes], ...]] | None = None
@@ -309,6 +344,10 @@ class SecurityHeadersMiddleware:
             return self.not_modified_headers
         if _is_web_app_page(path, headers):
             return ALWAYS_HEADERS + ((_X_FRAME_OPTIONS,) if self.frame_protection else ()) + self._web_app_policies(await self._script_hashes())
+        if _is_app_script(path, headers):
+            return self.script_headers
+        if path in API_DOCS_PAGES and _media_type(headers) == "text/html":
+            return self.api_docs_headers
         return self.document_headers if _is_document(headers) else self.headers
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:

@@ -54,6 +54,8 @@ import {zodiosApi} from '$lib/api';
 import {instanceConfig, type InstanceConfig} from '$lib/features/instance/instanceConfig.svelte';
 
 const INSTANCE_ALIAS = 'get_instance_config_api_v1_system_instance_get';
+/** The generated client seen through that one alias: spying through the full client type sends TS into an excessively deep instantiation. */
+const instanceEndpoint = zodiosApi as unknown as Record<typeof INSTANCE_ALIAS, () => Promise<InstanceConfig>>;
 const BASE: InstanceConfig = {profile: 'selfhosted', accounts: {registration_mode: 'open', registration_locked: false}};
 const WITH_LINKS: InstanceConfig = {...BASE, email: {available: true, links: true}};
 const WITHOUT_LINKS: Array<{label: string; config: InstanceConfig}> = [
@@ -105,7 +107,7 @@ beforeAll(() => {
 
 beforeEach(() => {
     fake.notify.mockReset();
-    instanceRequest = vi.spyOn(zodiosApi, INSTANCE_ALIAS).mockRejectedValue(new Error('no network in this test'));
+    instanceRequest = vi.spyOn(instanceEndpoint, INSTANCE_ALIAS).mockRejectedValue(new Error('no network in this test'));
 });
 
 afterEach(() => {
