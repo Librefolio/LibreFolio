@@ -313,6 +313,8 @@ describe('securityFindings — the link to where a problem is fixed', () => {
         ['email.links, an info', LINKS_MISSING, OPEN_EMAIL],
         ['platform.plugin_secrets, an error', SECRETS_UNREADABLE, OPEN_PLUGINS],
         ['platform.plugin_secrets, should it ever be a warning', check('platform.plugin_secrets', 'warning', 'instance.checks.pluginSecrets.unreadable', {count: 1}), OPEN_PLUGINS],
+        // H5-7 (D6): the instance key is not the one the data were saved with; the id is not `platform.instance_key`, the key file's own check (ID COLLISION, see test_instance_key_check.py)
+        ['platform.instance_key_check, an error', check('platform.instance_key_check', 'error', 'instance.checks.instanceKey.mismatch'), OPEN_PLUGINS],
     ];
 
     // red until A8b

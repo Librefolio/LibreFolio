@@ -19,7 +19,8 @@
     "email.smtp": "admin/email/#variables",
     "email.smtp_encryption": "admin/email/#encryption-modes",
     "email.links": "admin/email/#links-check",
-    "platform.plugin_secrets": "admin/configuration_secrets/#plugin-secrets"
+    "platform.plugin_secrets": "admin/configuration_secrets/#plugin-secrets",
+    "platform.instance_key_check": "admin/configuration_secrets/#instance-key-check"
   },
   "browser": {
     "accounts.openRegistration": "admin/settings/#open-registration-warning",
