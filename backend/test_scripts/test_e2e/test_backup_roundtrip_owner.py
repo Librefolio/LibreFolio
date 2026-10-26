@@ -21,8 +21,17 @@ and sends the owner a link to choose a new one. With no SMTP the link goes to th
    backup holds. The assignment is refused (``error:EMAIL_TAKEN``), the instance serves no data (423 on a user route,
    ``restore_interrupted_reason`` ``owner_assignment``), until the cause is removed and ``backup pending --recover owner``
    clears the error: the next start gives the owner the account and its link.
-4. A restore with NO owner chosen (the command line, on the same managed instance) clears the backup's ``is_instance_owner``
-   flag, written by whoever prepared it: nobody is the owner after it, and no account is closed.
+4. B5-1j, a restore from the COMMAND LINE (the same managed instance, the real CLI, no owner named by anybody) picks the owner
+   itself. "Anna": the backup's only active administrator, flagged by its author as the instance's owner, holds
+   ``old@example.com``; the instance's owner is ``new@example.com``. The CLI names her by username and prints no address; the
+   restore is confirmed; the server restarts; Anna holds the owner's address, is the only flagged account, an active
+   administrator; her old password and a session of before are refused; a password-reset link exists ONLY in the child's log
+   (``link_only``: no SMTP), spends once, and is never in the state, the data directory's files, the API or the CLI's output.
+5. B5-1j, nobody can be picked: two flagged administrators (the unique index of a crafted copy dropped), or a flag on an
+   ordinary account only. The restore is confirmed all the same, the state records no owner and the outcome ``none``, the
+   CLI says there is no owner and gives ``./dev.py user reassign-owner <username>``, the instance serves, nobody is flagged,
+   no account is closed, no link is written, and the lines about the owner in the CLI's output and in the logs name no
+   account and no address.
 
 The instances are real servers: ``uvicorn backend.app.main:app`` in a child process in test mode on a data directory of the
 test, listening on a Unix socket in a short folder under ``/tmp`` (as ``test_backup_roundtrip_l3.py`` does), never on a
@@ -700,47 +709,182 @@ def test_an_owner_assignment_that_is_refused_serves_no_data_until_it_is_recovere
 
 
 # =============================================================================
-# 4. No owner chosen
+# 4. The command line picks the owner (Anna), 5. nobody can be picked
 # =============================================================================
 
+#: B5-1j: the addresses of the Anna scenario (``example.com``: nothing real); the owner's is ``LIBREFOLIO_ADMIN_EMAIL``.
+ANNA_OLD_EMAIL = "old@example.com"
+ANNA_NEW_EMAIL = "new@example.com"
+REASSIGN_HINT = "./dev.py user reassign-owner <username>"
+SECOND_FLAGGED = OTHER_USER
 
-def test_a_restore_with_no_owner_chosen_clears_the_flag_the_backup_s_author_wrote(source_backup, tmp_path, socket_dir):
-    """A restore confirmed on the command line, on the same managed instance, names no owner: the first start clears the
-    ``is_instance_owner`` flag of the backup (the author put it on an ordinary account), nobody is the owner, and no account
-    is closed (the administrator's password is the backup's). No owner's link is written."""
-    print_section("B5-1f 4 No owner chosen")
+
+def backup_variant(source: SourceBackup, base: Path, name: str, *statements: str) -> Path:
+    """The archive of a copy of the source's data directory whose database ``statements`` changed: a backup as another
+    author might have prepared it. The copy is stopped, as the source is."""
+    root = base / name
+    shutil.copytree(source.root, root, symlinks=True)
+    shutil.rmtree(root / "backups", ignore_errors=True)
+    database = root / DATABASE_ENTRY
+    with closing(sqlite3.connect(database)) as conn:
+        for statement in statements:
+            conn.execute(statement)
+        conn.commit()
+    with pytest.MonkeyPatch.context() as patch:
+        configured = cases.configure(patch, base / f"{name}-configured-data-dir")
+        try:
+            job, folder = jobs.run_backup(origin="cli", data_dir=root)
+        finally:
+            get_git_version.cache_clear()
+    assert not configured.exists(), f"the backup wrote in the configured data directory: {cases.listing(configured)}"
+    assert (job.status, job.error_code) == ("done", None) and job.file_name, f"precondition: the variant is archived: {job}"
+    return folder / job.file_name
+
+
+def cli_restore(target: Server, root: Path, variables: Mapping[str, str], archive: Path) -> subprocess.CompletedProcess[str]:
+    """``dev.py backup restore ARCHIVE --yes`` on the stopped instance at ``root``, as the operator runs it."""
+    env = b3.child_env(root)
+    env.update(LIBREFOLIO_TEST_LANE_ID=target.lane_id, **variables)
+    return subprocess.run(
+        [sys.executable, str(b3.SCRIPT), "--test-db", "restore", str(archive), "--yes"],
+        cwd=root.parent,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=b3.CHILD_TIMEOUT_S,
+        check=False,
+    )
+
+
+def owner_lines_of(text: str) -> list[str]:
+    return [line for line in text.splitlines() if "owner" in line.lower()]
+
+
+def test_a_command_line_restore_picks_the_flagged_administrator_and_gives_the_owner_the_account_and_a_link_only_in_the_log(source_backup, tmp_path, socket_dir):
+    """B5-1j §8 (Anna): the backup's only active administrator is flagged as the owner and holds ``old@example.com``; the
+    instance's owner is ``new@example.com``. The real CLI restore (``--yes``) names her by username and prints no address; the
+    state records her id; after the restart she holds the owner's address, is an active administrator and the only flagged
+    account; her old password and a session of before the restore are refused; one password-reset link exists, in the child's
+    log only (``link_only``), spends once, and the owner signs in with the password chosen. Red before B5-1j: nobody was
+    picked, the flag was cleared and no link was written."""
+    print_section("B5-1j 4 Anna: the command line picks the owner")
+    root = tmp_path / "target"
+    root.mkdir()
+    variables = managed_variables(source_backup, owner_email=ANNA_NEW_EMAIL)
+    archive = backup_variant(
+        source_backup,
+        tmp_path,
+        "anna",
+        "UPDATE users SET is_instance_owner = 0",
+        f"UPDATE users SET email = '{ANNA_OLD_EMAIL}', is_instance_owner = 1 WHERE username = '{SOURCE_ADMIN}'",
+    )
+    with server("anna", root, socket_dir, tmp_path) as target:
+        target.start(variables)
+        old_cookie = first_session(target)
+        target.stop()
+        confirmed = cli_restore(target, root, variables, archive)
+        assert confirmed.returncode == 0, f"restore --yes on the managed instance: {redacted(b3.shown(confirmed))}"
+        said = confirmed.stdout + confirmed.stderr
+        assert [line for line in owner_lines_of(said) if SOURCE_ADMIN in line], f"[new] B5-1j: the CLI names the account by username: {redacted(said)}"
+        assert REASSIGN_HINT not in said, "an account was picked: no reassign hint"
+        assert not [address for address in (ANNA_NEW_EMAIL, ANNA_OLD_EMAIL) if address in said.lower()], f"the CLI prints no address: {redacted(said)}"
+        pending = b3.restore_state(root)
+        assert pending is not None and (pending["status"], pending["confirmed_via"], pending.get("owner_user_id"), pending.get("owner_outcome")) == ("pending", "cli", source_backup.admin_id, None), f"[new] B5-1j: waiting, from the command line, Anna picked: {pending}"
+
+        target.start(variables)
+        state = b3.restore_state(root)
+        assert state is not None and (state["status"], state["owner_user_id"], state["owner_outcome"]) == ("committed", source_backup.admin_id, "link_only"), f"committed, the link only in the log: {state}"
+        assert not {"reset_path", "link", "token", "reset_link"} & walk_json_keys(state), f"the state keeps no link: {sorted(walk_json_keys(state))}"
+        users = users_of(root)
+        anna = users[SOURCE_ADMIN]
+        assert (anna["id"], (anna["email"] or "").lower(), anna["is_superuser"], anna["is_active"], anna["is_instance_owner"]) == (source_backup.admin_id, ANNA_NEW_EMAIL, True, True, True), f"Anna holds the owner's address, an active administrator and the owner: {anna}"
+        assert [name for name, row in users.items() if row["is_instance_owner"]] == [SOURCE_ADMIN], "the only owner is Anna"
+        assert signed_in(target, SOURCE_ADMIN, SOURCE_ADMIN_PASSWORD).status_code in (400, 401, 403), "her old password is refused"
+        assert target.call("GET", ME, cookie=old_cookie).status_code == 401, "a session of before the restore is refused"
+        assert signed_in(target, OTHER_USER, OTHER_USER_PASSWORD).status_code == 200, "another account of the backup signs in with its password"
+
+        token = target.wait_for_token(RESET_LINK_LINE)
+        assert len(target.lines_with(RESET_LINK_LINE)) == 1, "one link written for the owner"
+        assert holders_of(root, token, in_logs=True), "barrier: the child's log holds the link"
+        assert holders_of(root, token) == [], f"no file of the data directory but the logs holds the link: {holders_of(root, token)}"
+        assert token not in said and token not in target.call("GET", INSTANCE).text, "the link is in neither the CLI's output nor the public configuration"
+        reset = target.call("POST", PASSWORD_RESET, json={"token": token, "new_password": OWNER_NEW_PASSWORD})
+        again = target.call("POST", PASSWORD_RESET, json={"token": token, "new_password": OWNER_NEW_PASSWORD + "x"})
+        assert reset.status_code == 200 and (again.status_code, code_of(again)) == (400, "TOKEN_INVALID"), f"the link spends once: {shown(reset)} / {shown(again)}"
+        signed = signed_in(target, SOURCE_ADMIN, OWNER_NEW_PASSWORD)
+        assert signed.status_code == 200 and signed.json()["user"]["email"].lower() == ANNA_NEW_EMAIL, f"Anna signs in with the password she chose: {shown(signed)}"
+        target.stop()
+    assert not b3.production_of(root).exists(), "a child wrote in its production data directory"
+    print_success("Anna picked, closed, the owner's address, link only in the log, spent once")
+
+
+def assert_nobody_was_picked(root: Path, target: Server, variables: Mapping[str, str], archive: Path, flagged: list[str]) -> None:
+    """The restore of ``archive`` from the command line on the stopped ``target`` picks nobody: the CLI says so and gives the
+    command, the state records the outcome ``none``, the first start commits it and serves, nobody is flagged, no account is
+    closed, no link is written, and nothing about the owner in the CLI's output or in the logs names an account or an address."""
+    confirmed = cli_restore(target, root, variables, archive)
+    assert confirmed.returncode == 0, f"restore --yes on the managed instance: {redacted(b3.shown(confirmed))}"
+    said = confirmed.stdout + confirmed.stderr
+    hint = [line for line in owner_lines_of(said) if REASSIGN_HINT in line and "no owner" in line.lower()]
+    assert hint, f"[new] B5-1j: the CLI says there is no owner and gives the command: {redacted(said)}"
+    pending = b3.restore_state(root)
+    assert pending is not None and (pending["status"], pending["confirmed_via"], pending.get("owner_user_id"), pending.get("owner_outcome")) == ("pending", "cli", None, "none"), f"[new] B5-1j: waiting, nobody picked, the outcome none: {pending}"
+
+    target.start(variables)
+    state = b3.restore_state(root)
+    assert state is not None and (state["status"], state.get("owner_user_id"), state.get("owner_outcome")) == ("committed", None, "none"), f"committed, no owner, the outcome none: {state}"
+    users = users_of(root)
+    assert [name for name, row in users.items() if row["is_instance_owner"]] == [], f"nobody is the owner: the author's flags are gone: {users}"
+    assert not [name for name, row in users.items() if (row["email"] or "").lower() == OWNER_EMAIL], "no account took the owner's address"
+    assert target.lines_with(RESET_LINK_LINE) == [], "no owner's link written"
+    assert signed_in(target, SOURCE_ADMIN, SOURCE_ADMIN_PASSWORD).status_code == 200, "no account was closed: the backup's password works"
+    assert signed_in(target, OTHER_USER, OTHER_USER_PASSWORD).status_code == 200, "the instance serves"
+    # The lines about the owner (the CLI's output, the logs of the instance and of the command) name nobody.
+    texts = [said, *(path.read_text(encoding="utf-8", errors="replace") for path in sorted((root / "logs").glob("*")) if path.is_file()), *(path.read_text(encoding="utf-8", errors="replace") for path in target.logs())]
+    about_the_owner = [line.lower() for text in texts for line in owner_lines_of(text) if SETUP_LINK_LINE not in line]
+    named = sorted({word for line in about_the_owner for word in (*flagged, OWNER_EMAIL, OTHER_USER_EMAIL, SOURCE_ADMIN, FLAGGED_USER) if word.lower() in line})
+    assert named == [], f"no line about the owner names an account or an address: {named}"
+
+
+def test_a_command_line_restore_of_a_backup_flagging_an_ordinary_account_picks_nobody_and_clears_the_flag(source_backup, tmp_path, socket_dir):
+    """B5-1j §2.3: the backup's author flagged an ORDINARY account (not an administrator): not a candidate, nobody holds the
+    owner's address, so nobody is picked. The restore goes on, the outcome is ``none``, the flag is cleared, no account is closed
+    and the instance serves. (Before B5-1j: the same, without the outcome and the command in the CLI's words.)"""
+    print_section("B5-1j 5a Nobody picked: a flag on an ordinary account")
     root = tmp_path / "target"
     root.mkdir()
     variables = managed_variables(source_backup)
     with server("cli", root, socket_dir, tmp_path) as target:
         target.start(variables)
         target.stop()
-        env = b3.child_env(root)
-        env.update(LIBREFOLIO_TEST_LANE_ID=target.lane_id, **variables)
-        confirmed = subprocess.run(
-            [sys.executable, str(b3.SCRIPT), "--test-db", "restore", str(source_backup.archive), "--yes"],
-            cwd=root.parent,
-            env=env,
-            stdin=subprocess.DEVNULL,
-            capture_output=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=b3.CHILD_TIMEOUT_S,
-            check=False,
-        )
-        assert confirmed.returncode == 0, f"restore --yes on the managed instance: {b3.shown(confirmed)}"
-        pending = b3.restore_state(root)
-        assert pending is not None and (pending["status"], pending["confirmed_via"], pending.get("owner_user_id")) == ("pending", "cli", None), f"waiting, from the command line, no owner named: {pending}"
-
-        target.start(variables)
-        state = b3.restore_state(root)
-        assert state is not None and (state["status"], state.get("owner_user_id"), state.get("owner_outcome")) == ("committed", None, None), f"committed with no owner: {state}"
-        users = users_of(root)
-        assert [name for name, row in users.items() if row["is_instance_owner"]] == [], f"nobody is the owner: the author's flag is gone: {users[FLAGGED_USER]}"
-        assert (users[SOURCE_ADMIN]["email"] or "").lower() != OWNER_EMAIL, "no account took the owner's address"
-        assert target.lines_with(RESET_LINK_LINE) == [], "no owner's link written"
-        old = signed_in(target, SOURCE_ADMIN, SOURCE_ADMIN_PASSWORD)
-        assert old.status_code == 200, f"no account was closed: the backup's password works: {shown(old)}"
+        assert_nobody_was_picked(root, target, variables, source_backup.archive, [FLAGGED_USER])
         target.stop()
     assert not b3.production_of(root).exists(), "a child wrote in its production data directory"
-    print_success("flag cleared, nobody is the owner, no account closed")
+    print_success("flag on an ordinary account: outcome none, flag cleared, no account closed")
+
+
+def test_a_command_line_restore_of_a_backup_with_two_flagged_administrators_picks_nobody(source_backup, tmp_path, socket_dir):
+    """B5-1j §2.3 (revision of A): two active administrators flagged by the backup (a crafted copy: the unique index of the
+    flag dropped): never «the first by id» — nobody is picked. Confirmed all the same, the outcome ``none``, the instance
+    serves, nobody is flagged, no account closed, the warning and the lines name no account and no address."""
+    print_section("B5-1j 5b Nobody picked: two flagged administrators")
+    root = tmp_path / "target"
+    root.mkdir()
+    variables = managed_variables(source_backup)
+    archive = backup_variant(
+        source_backup,
+        tmp_path,
+        "two-flagged",
+        "DROP INDEX ux_users_instance_owner",
+        f"UPDATE users SET is_superuser = 1, is_active = 1 WHERE username = '{SECOND_FLAGGED}'",
+        f"UPDATE users SET is_instance_owner = 1 WHERE username IN ('{SOURCE_ADMIN}', '{SECOND_FLAGGED}')",
+    )
+    with server("two", root, socket_dir, tmp_path) as target:
+        target.start(variables)
+        target.stop()
+        assert_nobody_was_picked(root, target, variables, archive, [SECOND_FLAGGED])
+        target.stop()
+    assert not b3.production_of(root).exists(), "a child wrote in its production data directory"
+    print_success("two flagged administrators: nobody picked, the instance serves")

@@ -8,12 +8,18 @@ gives that account the owner's address, makes it a protected administrator, make
 owner a link to choose a new one: workstream A's ``assign_owner_and_send_reset``. Whoever prepared the backup cannot sign
 in as the owner.
 
+A restore confirmed on the command line or by the hosting panel has nobody to ask (B5-1j): the confirmation picks the
+account itself from the checked copy (``apply.pick_owner``: the account that holds the owner's address, else the one
+active administrator the backup marks as its owner), and everything else is the same. The link goes to
+``LIBREFOLIO_ADMIN_EMAIL``, never to an address of the backup. When nobody can be picked the restore goes on without an
+owner (``owner_outcome`` ``none``) and the operator names one with ``./dev.py user reassign-owner <username>``.
+
 The step ``restore-owner`` runs right after ``restore-commit``; it never raises. What it did (``sent``, ``link_only``, or
 ``error:<CODE>``) is kept in the state of the restore (``owner_outcome``). A does the whole treatment at every call and
 repeating it is harmless (it revokes the old link and sends a new one), so a start that dies after the call and before the
 record simply calls again. For ``link_only`` A writes the link in the instance log; it is never kept here, shown in the
 report or answered by the API: every administrator reads the report, the one who prepared the backup included. A restore
-confirmed by the hosting panel or on the command line never names an owner.
+confirmed by the hosting panel or on the command line names it through ``apply.pick_owner``.
 """
 
 from __future__ import annotations
