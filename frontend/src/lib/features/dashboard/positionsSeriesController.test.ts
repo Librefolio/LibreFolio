@@ -10,7 +10,7 @@ vi.mock('$lib/api', () => ({zodiosApi: {get_positions_series_api_v1_portfolio_po
 
 const scope: PositionsSeriesScope = {brokerIds: [2, 1], start: '2026-01-01', end: '2026-06-30', currency: 'EUR', ready: true, version: 0};
 const key = (asset_id: number, broker_id: number | null = null): PositionKey => ({asset_id, broker_id});
-const answer = (currency = 'EUR'): PositionsSeriesResponse => ({currency, date_from: '2026-01-01', date_to: '2026-06-30', series: [], missing_fx_pairs: []});
+const answer = (currency = 'EUR'): PositionsSeriesResponse => ({currency, date_from: '2026-01-01', date_to: '2026-06-30', range: {start: '2026-01-01', end: '2026-06-30'}, series: [], missing_fx_pairs: []});
 
 function deferred<T>() {
     let resolve!: (value: T) => void;
