@@ -72,11 +72,11 @@ vi.stubGlobal('localStorage', {
 });
 
 import {tick} from 'svelte';
-import {render, screen, setupI18n, waitFor, within} from '$test/component';
+import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import {getUserStorageKey} from '$lib/utils/storage';
 import AllocationPanel from './AllocationPanel.svelte';
 
-type RequestHistory = (dimension: 'type' | 'sector' | 'geo', brokerIds: number[] | undefined) => Promise<void>;
+type RequestHistory = (dimension: 'type' | 'sector' | 'geo' | 'asset', brokerIds: number[] | undefined) => Promise<void>;
 
 /** Persist a selection under the panel's keys (AllocationPanel.svelte:43-44), scoped as the product scopes them. */
 function storeSelection(selection: {view: string; tab: string}): void {
@@ -206,5 +206,39 @@ describe('AllocationPanel — view and tab restored from storage (S4, R21)', () 
         expect(pressedTabs()).toEqual(['allocation-tab-type']);
         expect(onRequest).toHaveBeenCalledTimes(1);
         expect(onRequest).toHaveBeenCalledWith('type', [7, 9]);
+    });
+});
+
+describe('AllocationPanel — the «By Asset» tab (Y5-2, #48)', () => {
+    it('lists the dimension tabs in the order type, sector, geo, asset, and presses only the default one', async () => {
+        // WHY: the fourth tab comes last, after the three that existed; the default stays Type.
+        mountPanel();
+
+        await waitFor(() => expect(screen.getByTestId('allocation-tab-asset')).toBeInTheDocument());
+        const tabs = within(screen.getByTestId('allocation-panel')).getAllByTestId(/^allocation-tab-/);
+        expect(tabs.map((tab) => tab.dataset.testid)).toEqual(['allocation-tab-type', 'allocation-tab-sector', 'allocation-tab-geo', 'allocation-tab-asset']);
+        expect(pressedTabs()).toEqual(['allocation-tab-type']);
+    });
+
+    it('restores a stored asset tab: it is a value this version knows, not a fallback to Type', async () => {
+        // WHY: `readStoredTab` keeps only the tabs it lists; a tab missing from the list falls back to Type in silence.
+        // The stored History view proves storage was read, and shows the tab is the one asked for.
+        storeSelection({view: 'history', tab: 'asset'});
+
+        const onRequest = mountPanel();
+
+        await waitFor(() => expect(onRequest).toHaveBeenCalled());
+        await mountSettled(onRequest);
+        expect(pressedTabs()).toEqual(['allocation-tab-asset']);
+    });
+
+    it('presses the asset tab on a click and stores it for the next visit, under the same key as the other tabs', async () => {
+        mountPanel();
+        await waitFor(() => expect(screen.getByTestId('allocation-tab-asset')).toBeInTheDocument());
+
+        await fireEvent.click(screen.getByTestId('allocation-tab-asset'));
+
+        expect(pressedTabs()).toEqual(['allocation-tab-asset']);
+        expect(storage.get(getUserStorageKey('dashboard-allocation-tab'))).toBe('asset');
     });
 });

@@ -10,7 +10,7 @@
 -->
 <script lang="ts">
     import {_} from '$lib/i18n';
-    import {onMount} from 'svelte';
+    import {onMount, untrack} from 'svelte';
     import {goto} from '$app/navigation';
     import {ExternalLink, Layers} from 'lucide-svelte';
     import type {ColumnDef, RowAction} from '$lib/components/table/types';
@@ -84,6 +84,19 @@
         onAnalyze?: (assetId: number) => void;
         /** Asset whose lot-analysis panel is open — its row stays tinted (F9). */
         analyzedAssetId?: number | null;
+        /** Show a checkbox per row (Y5-2). Off by default: the table behaves as it always did. */
+        selectable?: boolean;
+        /** Row keys (`makePositionKey`) selected by the parent. Seeds and follows the table's selection WITHOUT calling `onSelectionChange` back; unknown keys are ignored. */
+        selectedKeys?: string[];
+        /** A user change of the selection: the selected rows in the table's current row order, `[]` when none is left. */
+        onSelectionChange?: (rows: SelectedPosition[]) => void;
+    }
+
+    /** One selected row, as `onSelectionChange` reports it. */
+    export interface SelectedPosition {
+        key: string;
+        assetId: number;
+        brokerId: number | null;
     }
 
     interface DisplayRow {
@@ -110,7 +123,7 @@
         oldestOpenLotDate: string | null;
     }
 
-    let {holdings = [], displayCurrency = 'EUR', brokers = [], onAnalyze, analyzedAssetId = null, ..._legacyProps}: Props & Record<string, unknown> = $props();
+    let {holdings = [], displayCurrency = 'EUR', brokers = [], onAnalyze, analyzedAssetId = null, selectable = false, selectedKeys = undefined, onSelectionChange, ..._legacyProps}: Props & Record<string, unknown> = $props();
     void _legacyProps;
 
     let tableRef: DataTable<DisplayRow> | undefined = $state(undefined);
@@ -443,6 +456,41 @@
         void goto(`/assets/${row.assetId}`);
     }
 
+    // Row selection (Y5-2). `appliedKeys` is what the table holds; `syncingSelection` mutes the
+    // callback while the parent's `selectedKeys` are pushed in, so a sync never echoes back.
+    // Both are plain variables on purpose: the sync effect must not re-run because of them.
+    let syncingSelection = false;
+    const seedKeys: string[] = untrack(() => (selectedKeys ?? []).filter((key) => rows.some((row) => row.key === key)));
+    let appliedKeys: string[] = seedKeys;
+
+    function sameKeySet(a: string[], b: string[]): boolean {
+        return a.length === b.length && a.every((key) => b.includes(key));
+    }
+
+    function handleTableSelectionChange(selectedIds: string[]): void {
+        const selected = new Set(selectedIds);
+        const rowByKey = new Map(rows.map((row) => [row.key, row]));
+        // Table order (the current sort), not click order; keys that are not rows are dropped.
+        const orderedKeys = (tableRef?.getSortedRowIds() ?? rows.map((row) => row.key)).filter((key) => selected.has(key) && rowByKey.has(key));
+        appliedKeys = orderedKeys;
+        if (syncingSelection) return;
+        onSelectionChange?.(orderedKeys.map((key) => ({key, assetId: rowByKey.get(key)!.assetId, brokerId: rowByKey.get(key)!.brokerId})));
+    }
+
+    $effect(() => {
+        if (!tableRef || selectedKeys === undefined) return;
+        const validKeys = selectedKeys.filter((key) => rows.some((row) => row.key === key));
+        if (sameKeySet(validKeys, appliedKeys)) return;
+        syncingSelection = true;
+        try {
+            tableRef.clearSelection();
+            for (const key of validKeys) tableRef.toggleRowSelectionById(key);
+        } finally {
+            syncingSelection = false;
+        }
+        appliedKeys = validKeys;
+    });
+
     const rowActions: RowAction<DisplayRow>[] = [
         {
             id: 'view-asset',
@@ -466,8 +514,10 @@
         {columns}
         getRowId={(row) => row.key}
         storageKey="dashboard-holdings-v5"
-        enableSelection={false}
-        selectionMode="none"
+        enableSelection={selectable}
+        selectionMode={selectable ? 'multi' : 'none'}
+        initialSelectedIds={selectable ? seedKeys : undefined}
+        onSelectionChange={selectable ? handleTableSelectionChange : undefined}
         enableActions={true}
         enablePagination={true}
         defaultPageSize={25}

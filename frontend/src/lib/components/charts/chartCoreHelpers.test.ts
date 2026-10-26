@@ -2562,7 +2562,7 @@ describe('canonical overlay axis and reference helpers', () => {
                 expect(resetState).toContain('resolutionResetPending = true;');
                 expect(source).toMatch(/if \(history !== lastHistoryRef\) \{[\s\S]*?resetResolutionState\(preservedRange\);[\s\S]*?\}/);
                 expect(renderChart).toMatch(
-                    /if \(resolutionResetPending\) \{\s*const counts = computeBucketCounts\(logicalRange\.startDate, logicalRange\.endDate\);\s*currentResolution = chooseInitialResolution\(counts, chartInstance\.getWidth\(\), resolutionGrammar\);\s*resolutionResetPending = false;\s*\}/,
+                    /if \(resolutionResetPending\) \{\s*const counts = computeBucketCounts\(logicalRange\.startDate, logicalRange\.endDate\);\s*currentResolution = drawableResolution\(chooseInitialResolution\(counts, chartInstance\.getWidth\(\), resolutionGrammar\)\);\s*resolutionResetPending = false;\s*\}/,
                 );
 
                 const historyDates = Array.from({length: 3_000}, (_, index) => new Date(Date.UTC(2020, 0, index + 1)).toISOString().slice(0, 10));
@@ -4800,25 +4800,28 @@ describe('canonical overlay axis and reference helpers', () => {
                 expect(result.points).toEqual([{name: '2026-01-28', value: ['2026-01-28', 119], bucketStart: '2026-01-01', bucketEnd: '2026-01-31', resolution: 'monthly'}]);
             });
 
-            it('wires each of the six sparse $derived alignments in GrowthChart.svelte to its own prop and Currency field, through the one alignFlowToDates', () => {
-                // Why (re-pin, FE6a): the six identical "absent date -> 0" bodies became one export,
-                // alignFlowToDates, run for real above. What stayed in the component is the wiring —
-                // which prop each dimension aligns and which Currency field it reads — pinned here.
-                const source = readFileSync(new URL('../../features/dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+            it('wires each of the six sparse alignments in growthStepInputs.ts to its own source and Currency field, through the one alignFlowToDates', () => {
+                // Why (re-pin, FE6a, then Y5-3): the six identical "absent date -> 0" bodies became one export,
+                // alignFlowToDates, run for real above. What stays in the adapter that builds the pipeline's inputs from the report's
+                // steps is the wiring — which series each dimension aligns and which Currency field it reads — pinned here.
+                const source = readFileSync(new URL('../../features/dashboard/growthStepInputs.ts', import.meta.url), 'utf8');
 
                 const alignments: Array<[string, string, string]> = [
-                    ['dividendValues', 'incomeHistory', 'p.dividend.amount'],
-                    ['interestValues', 'incomeHistory', 'p.interest.amount'],
-                    ['costValues', 'costHistory', 'p.cost.amount'],
-                    ['depositValues', 'depositHistory', 'p.deposit.amount'],
-                    ['acqFromNewCapitalValues', 'acquisitionFunding', 'p.from_new_capital.amount'],
-                    ['acqFromReinvestedValues', 'acquisitionFunding', 'p.from_reinvested.amount'],
+                    ['dividendValues', 'incomeHistory', 'point.dividend.amount'],
+                    ['interestValues', 'incomeHistory', 'point.interest.amount'],
+                    ['costValues', 'costHistory', 'point.cost.amount'],
+                    ['depositValues', 'depositHistory', 'point.deposit.amount'],
+                    ['acqFromNewCapitalValues', 'acquisitionFunding', 'point.from_new_capital.amount'],
+                    ['acqFromReinvestedValues', 'acquisitionFunding', 'point.from_reinvested.amount'],
                 ];
-                for (const [name, prop, field] of alignments) {
-                    expect(source).toContain(`const ${name} = $derived(alignFlowToDates(dates, ${prop}?.points ?? [], (p) => Number(${field})));`);
+                for (const [name, series, field] of alignments) {
+                    expect(source).toContain(`${name}: alignFlowToDates(dates, sources.${series}?.points ?? [], (point) => Number(${field})),`);
                 }
-                // ...and no seventh, hand-written copy of the body is left in the component.
+                // ...and no seventh, hand-written copy of the body is left in the adapter or in the component, which takes its inputs from the adapter.
                 expect(source).not.toContain('byDate.get(d) ?? 0');
+                const component = readFileSync(new URL('../../features/dashboard/GrowthChart.svelte', import.meta.url), 'utf8');
+                expect(component).not.toContain('byDate.get(d) ?? 0');
+                expect(component).toContain('buildAggregationInputs(stepSources)');
             });
         });
 

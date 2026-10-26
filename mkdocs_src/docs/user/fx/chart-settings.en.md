@@ -54,7 +54,9 @@ On **Rolling Return** the preview draws the rolling return of the rate or of the
 rolling returns of its comparisons. For one chart it uses the card's real data and, on an FX chart,
 the FX pairs compared on it; for all charts it draws a demo curve. Two more controls choose the window: **1W**, **1M**, **3M**, **1Y** or a custom
 amount. Until you choose one, the window is automatic: the largest preset that fits the period
-shown in the list. The other indicators stay saved but are hidden in this view.
+shown in the list. The Signals list shows only the comparisons this view draws, with another FX pair on
+an FX chart and with another asset on an asset chart; technical indicators and benchmarks stay saved
+but are hidden until you switch the preview back to **Abs** or **%**.
 
 ---
 
@@ -96,6 +98,10 @@ Add overlays from three dropdowns, the same as in the detail page's [Signals pan
   the compared assets once for all cards, and asks nothing when no card compares an asset. In the
   window opened for **all charts** a comparison with an asset is not drawn, because the demo curve
   has no real asset to compare with (as in the [Assets list](../assets/index.md)).
+  An asset is picked in the same panel as the risk comparison's: a search box, **Type** and
+  **Currency** filters, each row showing the asset's icon, name, type and currency, and the benchmarks
+  listed first; one click chooses and closes. The chart's own asset is greyed out, and one that
+  another comparison already uses carries a warning mark but can still be chosen.
 - 📐 **Synthetic Benchmarks** — reference curves built from parameters alone, not market data:
   [Linear](../../financial-theory/technical-analysis/synthetic-benchmarks/linear.md),
   [Compound](../../financial-theory/technical-analysis/synthetic-benchmarks/compound.md) and

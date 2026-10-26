@@ -194,6 +194,15 @@ export class TimeSeriesStore<T extends TimeSeriesPoint> {
         this.currentGeneration = nextGeneration();
     }
 
+    /**
+     * Whether a price catch-up marked the store (`markStale()`) and nothing forgot its points since (`invalidateAll()`). A
+     * page whose range is missing from a stale store that still holds points for it shows them at once and asks in background
+     * (Y5-1). Read-only: a fetch covering the range clears the gaps, not this.
+     */
+    get isStale(): boolean {
+        return this.stale;
+    }
+
     /** The parts of [start, end] that no fetch since the last markStale() covers, in date order. */
     private unfetchedIntervals(start: string, end: string): DateGap[] {
         const endDate = parseDate(end);

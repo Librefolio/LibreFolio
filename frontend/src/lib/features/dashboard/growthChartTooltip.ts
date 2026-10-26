@@ -6,6 +6,8 @@
  * currency — is read at that moment, as when the formatter's body lived in the component; the theme is the one the
  * option was built with.
  */
+import {utcMs} from '$lib/utils/dateOnly';
+import {indexHoldingDay} from '$lib/utils/stepSeries';
 import {escapeHtml} from '$lib/utils/core/escapeHtml';
 import {formatDay} from '$lib/utils/core/formatAxisDate';
 import {formatPercent} from '$lib/utils/core/formatPercent';
@@ -15,7 +17,7 @@ import {themed} from '$lib/theme/themePair';
 import {CHART_GAIN_LOSS, GROWTH_SERIES} from '$lib/theme/chartTheme';
 import {buildTooltipDivider, buildTooltipHeader, buildTooltipRow, type TooltipTheme} from '$lib/components/charts/echartsTooltipHelpers';
 import {bucketSpanUpTo} from '$lib/components/charts/priceChartHelpers';
-import type {AggregatedResolutionData, BucketInfo} from './growthChartData';
+import type {AggregatedResolutionData, BucketInfo, PctSeriesKey} from './growthChartData';
 import {brokerColor, type EurLabels, type GrowthMode, type PnlLabels, type PnlSubmode} from './growthChartSeries';
 
 /** The translator: `$_` of svelte-i18n. */
@@ -38,6 +40,16 @@ export interface GrowthTooltipView {
     /** The theme the option was built with. */
     isDark: boolean;
     theme: TooltipTheme;
+    /**
+     * The day the pointer is on, while the entry is the steps themselves (the daily resolution, not the ladder). ECharts hands
+     * a time axis the drawn point NEAREST to the pointer, so in the right half of a step it would list the next step's
+     * values: the tooltip finds the step holding this day instead. Absent: the hovered index is read as it always was.
+     */
+    pointedDay?: string | null;
+    /** The % series in drawing order, so a stepped tooltip lists them from the entry, not from what ECharts hands over. */
+    pctRows?: ReadonlyArray<{key: PctSeriesKey; name: string; colorKey: keyof typeof COLORS}>;
+    /** The true MWRR point nearest to a day, with its own date (`nearestPoint` over the report's `mwrr_line`). */
+    mwrrAt?: (day: string) => {date: string; value: number} | null;
 }
 
 // Color palettes
@@ -50,7 +62,7 @@ export function formatTooltipMonth(date: string): string {
         month: 'long',
         year: 'numeric',
         timeZone: 'UTC',
-    }).format(new Date(Date.UTC(year, month - 1, day)));
+    }).format(new Date(utcMs(year, month - 1, day)));
 }
 
 /**
@@ -143,10 +155,13 @@ export function buildGrowthTooltip(params: any, view: GrowthTooltipView): string
     };
 
     const items = Array.isArray(params) ? params : [params];
-    const idx = items[0]?.dataIndex ?? 0;
+    // The steps themselves: the step holding the pointed day, written under the day itself.
+    const pointedDay = activeChartData && !view.ladderActive && activeChartData.resolution === 'daily' ? (view.pointedDay ?? null) : null;
+    const idx = pointedDay !== null && activeChartData ? indexHoldingDay(activeChartData.buckets, pointedDay) : (items[0]?.dataIndex ?? 0);
     const bucket = activeChartData?.buckets[idx];
     if (!bucket) return '';
-    let html = buildTooltipBucketHeader(bucket, {bg: tooltipBg, border: tooltipBorder, textColor, mutedColor}, view);
+    const shownBucket = pointedDay !== null ? {...bucket, date: pointedDay, bucketStart: pointedDay, bucketEnd: pointedDay} : bucket;
+    let html = buildTooltipBucketHeader(shownBucket, {bg: tooltipBg, border: tooltipBorder, textColor, mutedColor}, view);
 
     if (viewMode === 'eur') {
         const assetCostVal = activeChartData?.eur.bookAssetLike.values[idx];
@@ -247,6 +262,26 @@ export function buildGrowthTooltip(params: any, view: GrowthTooltipView): string
 
     // See buildGrowthUpdateSeries's matching guard.
     if (viewMode === 'pnl') return html;
+
+    if (pointedDay !== null && activeChartData && view.pctRows) {
+        // TWRR and ROI are steps: the one holding the day. The MWRR is a line of true points: the nearest, with its date
+        // when that is not the day itself.
+        for (const row of view.pctRows) {
+            const color = COLORS[row.colorKey][isDark ? 'dark' : 'light'];
+            let label = escapeHtml(row.name);
+            let value: number | null | undefined;
+            if (row.key === 'mwrrCum') {
+                const nearest: {date: string; value: number} | null = view.mwrrAt?.(pointedDay) ?? null;
+                value = nearest?.value;
+                if (nearest && nearest.date !== pointedDay) label += ` <span style="font-size:10px;color:${mutedColor}">${escapeHtml(t('chart.tooltip.valueAt', {values: {date: formatDay(nearest.date)}}))}</span>`;
+            } else {
+                value = activeChartData.pct[row.key].values[idx];
+            }
+            if (value == null) continue;
+            html += buildTooltipRow(label, formatPercent(Number(value), {signed: false}), color);
+        }
+        return html;
+    }
 
     html += items
         .filter((p: any) => p.value != null)

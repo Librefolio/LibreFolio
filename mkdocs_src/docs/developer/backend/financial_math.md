@@ -610,7 +610,10 @@ flowchart LR
    the lots table footer over the selection, else the filtered rows (`unifiedLotsTableHelpers.ts`),
    the comparison chart's aggregate of the selected lots (`lotComparisonChartHelpers.ts`) and the
    WAC chart's percentage view (`lotWacPriceChartHelpers.ts`), all in
-   `frontend/src/lib/features/brokers/lots/` — and each exception must be declared where it lives.
+   `frontend/src/lib/features/brokers/lots/`; and the return chart of the positions the user ticks
+   (Y5-2, `frontend/src/lib/features/dashboard/positionsSeries.ts`), which shows the backend's fraction in
+   «base 100» and moves the Dashboard's history to the left edge of the user's window — a unit
+   and a shift of numbers the backend computed, not a new calculation — and each exception must be declared where it lives.
    The measuring tool takes the backend's annualization floor: `MIN_ANNUALIZATION_DAYS` in
    `MeasureSignal.ts` is held to `_MIN_ANNUALIZATION_DAYS` of `returns.py` by a parity test in
    `measureSignal.test.ts`, so changing one without the other fails that test. Its `changePct` (null on a zero

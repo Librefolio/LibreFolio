@@ -183,7 +183,7 @@ vi.mock('$lib/api', () => ({
     ),
 }));
 
-import {flushSync, tick} from 'svelte';
+import {flushSync, tick, type ComponentProps} from 'svelte';
 import {get} from 'svelte/store';
 import {locale, waitLocale} from 'svelte-i18n';
 import {render, setupI18n, waitFor} from '$test/component';
@@ -191,7 +191,7 @@ import {_} from '$lib/i18n';
 import {currentLanguage} from '$lib/stores/app/language';
 import {uiLocale} from '$lib/stores/app/uiLocale';
 import {debug} from '$lib/debug';
-import {categoryColor, COUNTRY_SEQUENCE, sequenceColor} from '$lib/theme/chartCategories';
+import {categoryColor, CATEGORY_SEQUENCE, COUNTRY_SEQUENCE, sequenceColor} from '$lib/theme/chartCategories';
 import {familyShade, shadePoles} from '$lib/theme/chartShades';
 import {chartRoles, setRoleReader} from '$lib/theme/roleColors';
 import {notifyChartColorsChange} from '$lib/theme/themeMode';
@@ -618,8 +618,8 @@ interface AllocationComponent {
 }
 
 /** The chart's `data` prop for `days`. The amounts are synthetic: the chart draws the weights. */
-function historyOf(days: readonly Day[]): Array<{date: string; components: AllocationComponent[]}> {
-    return days.map(({date, weights}) => ({date, components: weights.map(([name, percent]) => ({name, value: String(percent), amount: String(percent * 1000)}))}));
+function historyOf(days: readonly Day[]): Array<{date: string; through: string; components: AllocationComponent[]}> {
+    return days.map(({date, weights}) => ({date, through: date, components: weights.map(([name, percent]) => ({name, value: String(percent), amount: String(percent * 1000)}))}));
 }
 
 /** Mounts the chart on `days`, as the allocation panel does, in `theme`, and waits for its first full option. */
@@ -1884,5 +1884,70 @@ describe('AllocationHistoryChart — the tooltip header writes its dates in the 
 
         expect(lines).toEqual([keyText('chart.tooltip.weekRange', {start: dayIn(CLOSED_WEEK.start, FRENCH), end: dayIn(CLOSED_WEEK.end, FRENCH)}), keyText('chart.tooltip.valueAt', {date: dayIn(CLOSED_WEEK.end, FRENCH)})]);
         expect(lines.join('\n')).not.toMatch(ISO_DAY);
+    });
+});
+
+// =============================================================================
+// The asset dimension (Y5-2, #48) — one series per asset, coloured by the asset's weight rank
+// =============================================================================
+
+/**
+ * The «By Asset» tab of the allocation panel draws the history of `allocation_history.asset`: each component is an asset
+ * (`id`, `name`) or the cash (`Liquidity`, no id). A series is named by the component's name and coloured like the pie:
+ * the rank of its asset id in `colorRanks` picks the colour from the designer's sequence (`sequenceColor` over
+ * `CATEGORY_SEQUENCE`), the cash keeps the colour of the Liquidity type. An asset that was sold is positive only on the
+ * days it was held; it stays a series of its own, at zero on the other days (the chart aggregates by name, as for every
+ * dimension). The tooltip is not under test here.
+ */
+describe('AllocationHistoryChart — the asset dimension: a series per asset, in the colour of its rank (Y5-2)', () => {
+    interface AssetComponent extends AllocationComponent {
+        id?: number | null;
+    }
+    const part = (name: string, percent: number, id: number | null): AssetComponent => ({name, value: String(percent), amount: String(percent * 1000), id});
+
+    /** Alpha is held throughout, Gamma was sold after the second day, Beta was bought on the third; the cash has no id. */
+    const ASSET_DAYS = [
+        {date: '2025-01-01', through: '2025-01-01', components: [part('Alpha', 50, 11), part('Gamma', 30, 13), part(CASH_BUCKET, 20, null)]},
+        {date: '2025-01-02', through: '2025-01-02', components: [part('Alpha', 55, 11), part('Gamma', 25, 13), part(CASH_BUCKET, 20, null)]},
+        {date: '2025-01-03', through: '2025-01-03', components: [part('Alpha', 60, 11), part('Beta', 20, 12), part(CASH_BUCKET, 20, null)]},
+    ];
+    /** Ranks that follow neither the weights nor the order the assets appear in, and reach the second round of the sequence. */
+    const ASSET_RANKS = new Map<number, number>([
+        [13, 0],
+        [12, 6],
+        [11, 9],
+    ]);
+
+    async function mountAssetChart(dark: boolean) {
+        document.documentElement.classList.toggle('dark', dark);
+        const props = {data: ASSET_DAYS, dimension: 'asset', colorRanks: ASSET_RANKS, height: '400px'} as unknown as ComponentProps<ChartComponent>;
+        render(AllocationHistoryChart, {props});
+        await waitFor(() => expect(lastFullOption(), 'the chart never handed ECharts a full option').toBeDefined(), {timeout: 5_000});
+        expect(chartInstances, 'the chart did not create exactly one ECharts instance').toHaveLength(1);
+    }
+
+    const valuesOf = (series: DrawnSeries): Array<number | null> => (series.data ?? []).map(pointValue);
+
+    it.each(THEMES)('$theme theme: one series per component name, an asset in the colour of its rank, the cash in the Liquidity colour', async ({dark}) => {
+        await mountAssetChart(dark);
+        const series = drawnSeries();
+        const poles = polesFor(dark);
+        const rankColour = (rank: number) => sequenceColor(CATEGORY_SEQUENCE, rank, dark, poles);
+
+        expect(series.map(({name}) => name).sort()).toEqual(['Alpha', 'Beta', 'Gamma', CASH_BUCKET]);
+        const colourOf = new Map(series.map(({name, itemStyle}) => [name, itemStyle?.color]));
+        expect({Gamma: colourOf.get('Gamma'), Beta: colourOf.get('Beta'), Alpha: colourOf.get('Alpha')}).toEqual({Gamma: rankColour(0), Beta: rankColour(6), Alpha: rankColour(9)});
+        expect(colourOf.get(CASH_BUCKET)).toBe(categoryColor('type', 'Liquidity', dark));
+        // Control: rank 9 is the first shade of the second round, never the colour of rank 1 nor of rank 0.
+        expect(new Set([0, 6, 9].map(rankColour)).size).toBe(3);
+    });
+
+    it('a sold asset is a series of its own with zeros on the days after, an asset bought later has zeros before', async () => {
+        await mountAssetChart(false);
+        const byName = new Map(drawnSeries().map((series) => [series.name, series]));
+
+        expect(valuesOf(byName.get('Gamma')!)).toEqual([30, 25, 0]);
+        expect(valuesOf(byName.get('Beta')!)).toEqual([0, 0, 20]);
+        expect(valuesOf(byName.get('Alpha')!)).toEqual([50, 55, 60]);
     });
 });

@@ -1,6 +1,6 @@
 /**
  * «Updating prices…» end to end, the open page that catches up after it without saying it is busy, and the price pages
- * that ask their prices again after it (release 1.3, workstream Z, lots Z5, Z-13, Z-18 and Z-14).
+ * that ask their prices again after it (release 1.3, workstream Z, lots Z5, Z-13, Z-18, Z-14 and Z-14b/Z-15).
  *
  * Z5. While the server catches up on prices, every `/api/` answer carries `X-LibreFolio-Price-Refresh: starting|running`.
  * The axios interceptor hands the headers to `priceRefresh.observe()`; from the first one the tracker asks
@@ -127,9 +127,14 @@
  * Before the code of Z-14: (g) and (h) red at the return after the catch-up — the page takes the range it had loaded from
  * its caches again (in (g) an item with `include_price: false`, or since N64 no prices query at all; in (h) no convert at
  * all) — with their premises and controls green.
+ *
+ * Z-14b + Z-15 (lot Y5-1). The views already on screen — the risk panel, the lots panel, the price pages, the lists —
+ * reload by themselves after a catch-up that updated something, in silence (no navigation, no spinner, no `data-busy`,
+ * the old figures staying): (i)–(m), and (g') and (h') for the pages that come back in-app. Their docblocks, below, say
+ * what each protects; they were written before the code of Y5-1 and are red until it lands.
  */
 
-import type {APIResponse} from '@playwright/test';
+import type {APIResponse, Route} from '@playwright/test';
 import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 import {waitForSettled} from '../fixtures/app-events';
 import {login, navigateTo} from '../fixtures/auth-helpers';
@@ -143,8 +148,11 @@ const REPORT_PATH = `${API}/portfolio/report`;
 const STATUS_PATH = `${API}/system/price-refresh`;
 const HEADER = 'x-librefolio-price-refresh';
 const NOTICE_SELECTOR = '[data-testid="instance-notice"][data-notice-id="liveUpdates.priceRefresh"]';
-/** The elements whose `data-busy` the record follows (Z-18, Y11): the Dashboard's root and the Refresh button of each page. */
-const BUSY_TEST_IDS = ['dashboard-page', 'sync-button', 'broker-refresh'] as const;
+/**
+ * The elements whose `data-busy` the record follows (Z-18, Y11, Z-15): the root of each page the cases watch and the Refresh
+ * button of each, and the root of the Dashboard's risk panel (its `data-busy` is its first load).
+ */
+const BUSY_TEST_IDS = ['dashboard-page', 'sync-button', 'broker-refresh', 'risk-levels-panel', 'asset-detail-page', 'asset-detail-refresh-btn', 'fx-detail-page', 'fx-detail-refresh-btn', 'assets-page', 'assets-refresh-button', 'fx-page', 'fx-refresh-all-button'] as const;
 type BusyTestId = (typeof BUSY_TEST_IDS)[number];
 /** The tracker's cadence (PRICE_REFRESH_POLL_MS). */
 const POLL_MS = 3_000;
@@ -157,6 +165,14 @@ const BROKER_WITH_HOLDINGS = 'Interactive Brokers';
 /** Z-14: the query each chart sends for its range — the asset detail's prices, the FX detail's rates. */
 const PRICES_QUERY_PATH = `${API}/assets/prices/query`;
 const CONVERT_PATH = `${API}/fx/currencies/convert`;
+/** Z-15: the questions of the risk panels and of the lots panel, recorded as the charts' queries are. */
+const RISK_QUERY_PATH = `${API}/risk/query`;
+const LOTS_PATH = `${API}/portfolio/lots/analysis`;
+/**
+ * Z-15: the elements whose REMOVAL the record follows — the figures a reload in background must leave on screen until the
+ * new ones land. A skeleton in their place, or an unmount, is the page saying it is loading again.
+ */
+const KEPT_TEST_IDS = ['asset-detail-chart', 'fx-detail-chart', 'risk-l1-cards', 'unified-lots-table'] as const;
 /** The asset detail's live poll, answered in the browser in (g): the endpoint writes today's candle. */
 const LIVE_PRICES_ROUTE = '**/api/v1/assets/prices/current*';
 /** The mock's asset with a provider (populate_mock_data.py: populate_assets, populate_asset_provider_assignments), found by name and provider, never by position. */
@@ -247,7 +263,7 @@ interface BusyEntry {
     value: string | null;
 }
 
-/** A price or rate query a chart sent (Z-14): its body at `send()`, then what came back. */
+/** A price or rate query a chart sent (Z-14), or a risk or lots question (Z-15): its body at `send()`, then what came back. */
 interface QueryEntry {
     seq: number;
     path: string;
@@ -255,7 +271,7 @@ interface QueryEntry {
     /** The seq at which its answer was back (load, error or abort); null while it is in flight. */
     settled: number | null;
     status: number | null;
-    /** `prices/query`: the prices per asset of the answer; `convert`: how many results. Null in flight, or unreadable. */
+    /** `prices/query`: the prices per asset of the answer; `convert`: how many results. Null in flight, unreadable, or a risk or lots question (their answers are not summarised). */
     answer: {items?: Array<{asset_id: unknown; prices: number}>; results?: number} | null;
 }
 
@@ -270,12 +286,16 @@ interface PageRecord {
     busy: BusyEntry[];
     /** Each click, with the test id of the nearest marked element (the target's own, or an ancestor's). */
     clicks: Array<{seq: number; testId: string | null}>;
+    /** Z-15: each element whose test id ends in `-loading` or `-refreshing` put on screen — the skeletons and the spinning icons. */
+    appeared: Array<{seq: number; testId: string}>;
+    /** Z-15: each element of KEPT_TEST_IDS taken off the screen. */
+    removed: Array<{seq: number; testId: string}>;
 }
 
 /** Arms the record for every document this page opens from now on: call it before the page under test loads. */
 async function recordPage(page: Page): Promise<void> {
     await page.addInitScript(
-        ({reportPath, statusPath, queryPaths, noticeSelector, busyTestIds}: {reportPath: string; statusPath: string; queryPaths: {prices: string; convert: string}; noticeSelector: string; busyTestIds: string[]}) => {
+        ({reportPath, statusPath, queryPaths, noticeSelector, busyTestIds, keptTestIds}: {reportPath: string; statusPath: string; queryPaths: {prices: string; convert: string; risk: string; lots: string}; noticeSelector: string; busyTestIds: string[]; keptTestIds: string[]}) => {
             const record = {
                 seq: 0,
                 reports: [] as Array<{seq: number; body: unknown}>,
@@ -285,6 +305,8 @@ async function recordPage(page: Page): Promise<void> {
                 noticeShown: [] as number[],
                 busy: [] as Array<{seq: number; testId: string; kind: 'mount' | 'change'; value: string | null}>,
                 clicks: [] as Array<{seq: number; testId: string | null}>,
+                appeared: [] as Array<{seq: number; testId: string}>,
+                removed: [] as Array<{seq: number; testId: string}>,
             };
             Object.defineProperty(window, '__lfSpecPriceRefresh', {value: record});
             const pathOf = (url: string): string => {
@@ -303,8 +325,10 @@ async function recordPage(page: Page): Promise<void> {
             };
 
             // The price and rate queries of the charts (Z-14): the body when it leaves, then what its answer held.
-            const isQueryPath = (path: string): boolean => path === queryPaths.prices || path === queryPaths.convert;
+            const isQueryPath = (path: string): boolean => path === queryPaths.prices || path === queryPaths.convert || path === queryPaths.risk || path === queryPaths.lots;
             const summary = (path: string, text: string): unknown => {
+                // The risk and lots answers are not summarised: the cases read their questions, not their figures.
+                if (path !== queryPaths.prices && path !== queryPaths.convert) return null;
                 let data: {items?: unknown; results?: unknown} | null;
                 try {
                     data = JSON.parse(text) as {items?: unknown; results?: unknown} | null;
@@ -418,6 +442,8 @@ async function recordPage(page: Page): Promise<void> {
             // value by value: the value after a record is the old value of the element's next record in the batch or,
             // after its last one, the value it has now. A flag raised and dropped within one tick is still a `true` here.
             const watched = new Set(busyTestIds);
+            const kept = new Set(keptTestIds);
+            const keptSelector = keptTestIds.map((testId) => `[data-testid="${testId}"]`).join(', ');
             const watchedSelector = busyTestIds.map((testId) => `[data-testid="${testId}"]`).join(', ');
             const watchedTestId = (node: Node): string | null => {
                 const testId = node instanceof Element ? node.getAttribute('data-testid') : null;
@@ -450,6 +476,19 @@ async function recordPage(page: Page): Promise<void> {
                             const testId = watchedTestId(element);
                             if (testId !== null) note(element, testId, 'mount');
                         }
+                        // The skeletons and spinning icons (Z-15): a reload in background must put none on screen.
+                        for (const element of [node, ...Array.from(node.querySelectorAll('[data-testid]'))]) {
+                            const testId = element.getAttribute('data-testid');
+                            if (testId !== null && (testId.endsWith('-loading') || testId.endsWith('-refreshing'))) record.appeared.push({seq: ++record.seq, testId});
+                        }
+                    }
+                    // The figures a reload in background must leave on screen (Z-15).
+                    for (const node of Array.from(mutation.removedNodes)) {
+                        if (!(node instanceof Element)) continue;
+                        for (const element of [node, ...Array.from(node.querySelectorAll(keptSelector))]) {
+                            const testId = element.getAttribute('data-testid');
+                            if (testId !== null && kept.has(testId)) record.removed.push({seq: ++record.seq, testId});
+                        }
                     }
                 }
                 for (const element of Array.from(waiting.keys())) settle(element, element.getAttribute('data-busy'));
@@ -466,7 +505,7 @@ async function recordPage(page: Page): Promise<void> {
                 true,
             );
         },
-        {reportPath: REPORT_PATH, statusPath: STATUS_PATH, queryPaths: {prices: PRICES_QUERY_PATH, convert: CONVERT_PATH}, noticeSelector: NOTICE_SELECTOR, busyTestIds: [...BUSY_TEST_IDS]},
+        {reportPath: REPORT_PATH, statusPath: STATUS_PATH, queryPaths: {prices: PRICES_QUERY_PATH, convert: CONVERT_PATH, risk: RISK_QUERY_PATH, lots: LOTS_PATH}, noticeSelector: NOTICE_SELECTOR, busyTestIds: [...BUSY_TEST_IDS], keptTestIds: [...KEPT_TEST_IDS]},
     );
 }
 
@@ -920,6 +959,438 @@ async function catchUpEndsOnDashboard(page: Page, catchUp: CatchUp): Promise<voi
     await dashboardSettled(page);
 }
 
+// Z-14b + Z-15: the views already on screen reload by themselves after a catch-up, in silence.
+
+/** The catch-up the next document will see: a job running, the header on every answer. Set before the page loads. */
+function armRunning(catchUp: CatchUp): void {
+    catchUp.header = 'running';
+    catchUp.status = running();
+}
+
+/** The queries of `path` sent after `since`. */
+function queriesSince(record: PageRecord, path: string, since: number): QueryEntry[] {
+    return record.queries.filter((query) => query.seq > since && query.path === path);
+}
+
+/** Waits until every query the page has sent is back: nothing of the case is left in flight. */
+async function queriesBack(page: Page): Promise<void> {
+    await expect.poll(async () => (await pageRecord(page)).queries.every((query) => query.settled !== null), {message: 'a price, rate, risk or lots question the page sent never came back', timeout: PAGE_TIMEOUT}).toBe(true);
+}
+
+/** The questions (risk, lots) of a path sent up to `until`, as keys: the questions the page had asked when the catch-up ended. */
+function questionsUntil(record: PageRecord, path: string, until: number): Set<string> {
+    return new Set(record.queries.filter((query) => query.seq <= until && query.path === path && query.body !== null && typeof query.body === 'object' && !Array.isArray(query.body)).map((query) => canonical(query.body as object)));
+}
+
+/** The items of a `prices/query` entry, whoever they ask about. */
+function priceItems(entry: QueryEntry): PriceQueryItem[] {
+    if (!Array.isArray(entry.body)) return [];
+    return (entry.body as Array<PriceQueryItem | null>).filter((item): item is PriceQueryItem => item !== null && typeof item === 'object');
+}
+
+/** The Dashboard at rest, and nothing the page asked still in flight. */
+async function dashboardAtRest(page: Page): Promise<void> {
+    await dashboardSettled(page);
+    await queriesBack(page);
+}
+
+/** What a view must not do while it reloads in background (Z-15). */
+interface Silence {
+    /** The flags of BUSY_TEST_IDS the view must never raise, and must not be put on screen again for. */
+    busy: readonly BusyTestId[];
+    /** The skeletons (`*-loading` test ids) that must not appear; any `*-refreshing` icon is excluded as well. */
+    skeletons?: readonly string[];
+    /** The figures of KEPT_TEST_IDS that must stay on screen. */
+    kept?: readonly (typeof KEPT_TEST_IDS)[number][];
+}
+
+/**
+ * The silence of a reload in background, read on the whole record from `mark` — the moment the page read the idle answer —
+ * to now. The premise comes first and is hard: each flag was seen on screen and idle at the mark (a flag already up needs
+ * no change to stay up, and its silence would prove nothing). The rest is soft, so that a red lists everything the page
+ * said: a flag raised, an element put on screen again (a navigation, a remount), a skeleton or a spinning icon shown, a
+ * figure taken off the screen.
+ */
+function expectSilent(record: PageRecord, mark: number, silence: Silence): void {
+    for (const testId of silence.busy) {
+        expect(busyAt(record, testId, mark), `premise: when the catch-up ended the record had not seen ${testId} put on screen, or saw it busy — a flag already up needs no change to stay up, and its silence would prove nothing`).toBe('false');
+    }
+    for (const testId of silence.busy) {
+        expect.soft(busyRaised(record, testId, mark), `${testId} said busy while the view reloaded after a price catch-up: the reload is the page's own, not a load the user asked for, and a screen reader would announce «busy» for it (Z-15)`).toEqual([]);
+        expect
+            .soft(
+                record.busy.filter((entry) => entry.testId === testId && entry.kind === 'mount' && entry.seq > mark),
+                `${testId} was put on screen again after the catch-up: the view was remounted or navigated, not reloaded in place (Z-15)`,
+            )
+            .toEqual([]);
+    }
+    const skeletons = silence.skeletons ?? [];
+    expect
+        .soft(
+            record.appeared.filter((shown) => shown.seq > mark && (shown.testId.endsWith('-refreshing') || skeletons.includes(shown.testId))).map((shown) => shown.testId),
+            'a skeleton or a spinning icon was shown for the reload in background: the old figures must stay, in silence (Z-15)',
+        )
+        .toEqual([]);
+    expect
+        .soft(
+            record.removed.filter((gone) => gone.seq > mark && (silence.kept ?? []).includes(gone.testId as (typeof KEPT_TEST_IDS)[number])).map((gone) => gone.testId),
+            'the figures on screen were taken away for the reload in background: they must stay until the new ones land (Z-15)',
+        )
+        .toEqual([]);
+}
+
+/** A view the cases of Z-15 reload after a catch-up: how to open it, what a reload of it asks, what it must not say. */
+interface ReloadView {
+    /** What the view is, for the messages. */
+    what: string;
+    /** Opens the view with a full load and returns once it is at rest: its first load in, every question back, its flags idle. */
+    open: () => Promise<void>;
+    /** The view at rest again, after a reload. */
+    settled: () => Promise<void>;
+    /** What a reload of this view asks, among the questions sent after `since`. */
+    asked: (record: PageRecord, since: number) => QueryEntry[];
+    /** Further checks on the reload that was asked, once it has landed. */
+    check?: (context: {page: Page; record: PageRecord; mark: number; asked: QueryEntry[]}) => Promise<void> | void;
+    silence: Silence;
+}
+
+/**
+ * The two halves of every case of Z-15, each on its own document and its own catch-up:
+ *   - the control: the catch-up runs and ends having updated nothing (`last_refreshed` false) — the view asks nothing;
+ *   - the case: the catch-up ends having updated something — the view asks again by itself, within a few polls, without
+ *     navigation, and through the reload it never says busy, shows no skeleton or spinning icon and keeps its figures.
+ * The absence of the control is read at the page's reading of the idle answer, one task after it (the reaction of a view
+ * is a microtask) and then once the view is at rest again; the case after it is what keeps it from being vacuous.
+ */
+async function viewReloadsInSilence(page: Page, catchUp: CatchUp, view: ReloadView): Promise<void> {
+    await test.step(`control: ${view.what}, a catch-up that updated nothing asks nothing`, async () => {
+        armRunning(catchUp);
+        await view.open();
+        const {mark} = await endRunningCatchUp(page, catchUp, 0, false);
+        await view.settled();
+        expect(
+            view.asked(await pageRecord(page), mark).map((entry) => entry.path),
+            `a catch-up that updated nothing made ${view.what} ask again`,
+        ).toEqual([]);
+    });
+
+    await test.step(`${view.what}: a catch-up that updated something is over, the view asks again by itself, in silence`, async () => {
+        armRunning(catchUp);
+        await view.open();
+        const url = page.url();
+        const origin = await documentOrigin(page);
+        const {mark} = await endRunningCatchUp(page, catchUp, 0, true);
+
+        await expect
+            .poll(async () => view.asked(await pageRecord(page), mark).length, {
+                message: `the catch-up updated the prices and ${view.what} did not ask for what it shows again: the open view keeps the figures of before until the user navigates (Z-15)`,
+                timeout: POLL_BUDGET_MS,
+            })
+            .toBeGreaterThan(0);
+        await queriesBack(page);
+        await view.settled();
+
+        const record = await pageRecord(page);
+        const asked = view.asked(record, mark);
+        expect(page.url(), 'the reload came with a navigation').toBe(url);
+        expect(await documentOrigin(page), 'the reload was a document load').toBe(origin);
+        await view.check?.({page, record, mark, asked});
+        expectSilent(record, mark, view.silence);
+    });
+}
+
+/**
+ * The control of a silence on a page whose Refresh the case does not watch for the reload: press the button, and the record
+ * must see it say busy and let go. A record that missed it would be blind, and the silence of the case worthless there.
+ */
+async function buttonSaysBusy(page: Page, testId: BusyTestId): Promise<void> {
+    const button = page.getByTestId(testId);
+    const before = (await pageRecord(page)).seq;
+    await expect(button, 'the Refresh button cannot be pressed: a load of the page is still pending').toBeEnabled({timeout: PAGE_TIMEOUT});
+    await button.click();
+    let clicked = -1;
+    await expect
+        .poll(
+            async () => {
+                clicked = (await pageRecord(page)).clicks.find((click) => click.seq > before && click.testId === testId)?.seq ?? -1;
+                return clicked;
+            },
+            {message: 'the click on the Refresh button never reached the page', timeout: POLL_BUDGET_MS},
+        )
+        .toBeGreaterThan(before);
+    await expect
+        .poll(async () => busyRaised(await pageRecord(page), testId, clicked).length, {
+            message: `the control: the user asked for a Refresh and the record never saw ${testId} say busy — the record is blind to it, or the page no longer says busy for a load the user asked for; either way its silence proves nothing`,
+            timeout: PAGE_TIMEOUT,
+        })
+        .toBeGreaterThan(0);
+    await expect(button, 'the control: the Refresh never let go of its button').toHaveAttribute('data-busy', 'false', {timeout: PAGE_TIMEOUT});
+}
+
+/** Requests the case holds in flight, and owns until it lets them through. */
+interface QueryGate {
+    /** How many are held still. */
+    pending: () => number;
+    /** Lets every held request through, on to the page's other routes (the catch-up stub) as if it had never been held. */
+    release: () => Promise<void>;
+    /** `release()`, then the route goes: for `finally`. Safe to call twice. */
+    dispose: () => Promise<void>;
+}
+
+/**
+ * Holds, from now until `release()`, the `POST path` requests whose body `picks` chooses; every other request goes through.
+ * Registered after the catch-up stub, so it sees a request first and a released one goes on to the stub (`fallback()`).
+ */
+async function holdQuery(page: Page, path: string, picks: (body: unknown) => boolean): Promise<QueryGate> {
+    const waiting: Route[] = [];
+    let open = false;
+    let routed = true;
+    const matches = (url: URL): boolean => url.pathname === path;
+    const handler = async (route: Route): Promise<void> => {
+        let body: unknown = null;
+        try {
+            body = route.request().postDataJSON();
+        } catch {
+            body = null;
+        }
+        if (open || route.request().method() !== 'POST' || !picks(body)) {
+            await route.fallback();
+            return;
+        }
+        waiting.push(route);
+    };
+    await page.route(matches, handler);
+    const release = async (): Promise<void> => {
+        open = true;
+        await Promise.all(waiting.splice(0).map((route) => route.fallback().catch(() => undefined)));
+    };
+    return {
+        pending: () => waiting.length,
+        release,
+        dispose: async () => {
+            await release();
+            if (!routed) return;
+            routed = false;
+            await page.unroute(matches, handler).catch(() => undefined);
+        },
+    };
+}
+
+/**
+ * The part of (g') and (h') after the return: the request for the prices or rates is HELD in flight, and the page's root
+ * must read `data-busy="false"` while it is — proof that the stale points are on screen and that the request in background
+ * does not keep the page busy. Released, the request lands; from the first `false` on the root never goes back to `true`.
+ * The root is allowed to say busy before that first `false`: the page decides its cache at the return (`loading`).
+ */
+async function staleThenSilent(page: Page, gate: QueryGate, root: Locator, rootId: 'asset-detail-page' | 'fx-detail-page', chart: Locator, landed: () => Promise<unknown>, mark: number): Promise<void> {
+    await expect.poll(() => gate.pending(), {message: 'back on the page after the catch-up, it never sent the request for its prices or rates (Z-14), or the gate did not hold it', timeout: PAGE_TIMEOUT}).toBeGreaterThan(0);
+    await expect(root, 'with the request held in flight the root still says busy: the stale points are not on screen yet, or the request in background keeps the page busy (Z-15, D3)').toHaveAttribute('data-busy', 'false', {timeout: PAGE_TIMEOUT});
+    await expect(chart, 'the stale points are not on screen while the request is held').toBeVisible();
+    expect(gate.pending(), 'the request was not in flight when the root read false').toBeGreaterThan(0);
+    const record = await pageRecord(page);
+    const firstFalse = record.busy.find((entry) => entry.testId === rootId && entry.seq > mark && entry.value === 'false')?.seq;
+    expect(firstFalse, `premise: the record never saw ${rootId} read false after the return — it is blind to its flag`).toBeDefined();
+
+    await gate.release();
+    await landed();
+    await waitForSettled(root, PAGE_TIMEOUT);
+    const after = await pageRecord(page);
+    expect(busyRaised(after, rootId, firstFalse!), `${rootId} went back to busy after the stale points were on screen: the request in background must not raise the flag again (Z-15, D3)`).toEqual([]);
+}
+
+// The views.
+
+/** The Dashboard's risk tab, loaded: the panel's catalogue in, its first load over, its first level's cards on screen. */
+function dashboardRiskView(page: Page): ReloadView {
+    return {
+        what: "the Dashboard's risk panel",
+        open: async () => {
+            await navigateTo(page, '/dashboard?tab=rischio');
+            await expect(dashboard(page)).toBeVisible({timeout: PAGE_TIMEOUT});
+            const panel = page.getByTestId('risk-levels-panel');
+            await expect(panel).toHaveAttribute('data-catalog', 'ready', {timeout: PAGE_TIMEOUT});
+            await expect(panel).toHaveAttribute('data-busy', 'false', {timeout: PAGE_TIMEOUT});
+            await expect(panel.getByTestId('risk-l1-cards'), 'precondition: the risk panel shows no figures: nothing is cached for a catch-up to turn stale').toBeVisible({timeout: PAGE_TIMEOUT});
+            await dashboardAtRest(page);
+            expect(queriesSince(await pageRecord(page), RISK_QUERY_PATH, 0).length, 'precondition: the risk panel asked no question in this document').toBeGreaterThan(0);
+        },
+        settled: () => dashboardAtRest(page),
+        asked: (record, since) => queriesSince(record, RISK_QUERY_PATH, since),
+        check: ({record, mark, asked}) => {
+            const known = questionsUntil(record, RISK_QUERY_PATH, mark);
+            expect(known.size, 'premise: the panel had asked no question before the catch-up ended').toBeGreaterThan(0);
+            const fresh = asked.map((entry) => canonical(entry.body as object)).filter((question) => !known.has(question));
+            expect(fresh, 'the reload asked a question the panel had not asked before: it must ask the same ones, with no navigation (Z-15)').toEqual([]);
+        },
+        silence: {busy: ['dashboard-page', 'sync-button', 'risk-levels-panel'], skeletons: ['risk-l1-loading', 'risk-l2-loading', 'risk-l3-loading'], kept: ['risk-l1-cards']},
+    };
+}
+
+/** The lots analysis panel of the Dashboard, open on `assetId` through the URL as a link to it opens it, loaded with its lots on screen. */
+function dashboardLotsView(page: Page, assetId: number): ReloadView {
+    const ofAsset = (record: PageRecord, since: number): QueryEntry[] => queriesSince(record, LOTS_PATH, since).filter((entry) => (entry.body as {asset_id?: unknown} | null)?.asset_id === assetId);
+    return {
+        what: `the lots analysis panel of asset ${assetId}`,
+        open: async () => {
+            await navigateTo(page, `/dashboard?tab=posizioni&asset=${assetId}`);
+            await expect(dashboard(page)).toBeVisible({timeout: PAGE_TIMEOUT});
+            const panel = page.getByTestId('lots-analysis-panel');
+            await expect(panel).toBeVisible({timeout: PAGE_TIMEOUT});
+            await expect(panel.getByTestId('lots-analysis-panel-loading')).toHaveCount(0, {timeout: PAGE_TIMEOUT});
+            await expect(panel.getByTestId('unified-lots-table'), 'precondition: the lots panel shows no lots: nothing is cached for a catch-up to turn stale').toBeVisible({timeout: PAGE_TIMEOUT});
+            await dashboardAtRest(page);
+            expect(ofAsset(await pageRecord(page), 0).length, `precondition: the lots panel asked no analysis of asset ${assetId} in this document`).toBeGreaterThan(0);
+        },
+        settled: () => dashboardAtRest(page),
+        asked: ofAsset,
+        check: ({record, mark, asked}) => {
+            const known = questionsUntil(record, LOTS_PATH, mark);
+            const fresh = asked.map((entry) => canonical(entry.body as object)).filter((question) => !known.has(question));
+            expect(fresh, 'the reload asked a lots question the panel had not asked before: it must ask the same ones, with no navigation (Z-15)').toEqual([]);
+        },
+        silence: {busy: ['dashboard-page', 'sync-button'], skeletons: ['lots-analysis-panel-loading'], kept: ['unified-lots-table']},
+    };
+}
+
+/** The asset detail with a range ending today, loaded: its prices in the cache, its chart drawn, its live poll answered by the stub. */
+function assetDetailView(page: Page, assetId: number, range: DateRange): ReloadView {
+    const ofAsset = (record: PageRecord, since: number): QueryEntry[] => queriesSince(record, PRICES_QUERY_PATH, since).filter((entry) => assetItems(entry, assetId).length > 0);
+    return {
+        what: `the detail page of asset ${assetId}`,
+        open: async () => {
+            await navigateTo(page, `/assets/${assetId}?start=${range.start}&end=${range.end}`);
+            const root = assetDetail(page);
+            await expect(root).toBeVisible({timeout: PAGE_TIMEOUT});
+            const first = await assetQueryLanded(page, assetId, 0, `the page of asset ${assetId} never asked for its prices, or the answer never came back`);
+            await waitForSettled(root, PAGE_TIMEOUT);
+            await expect(page.getByTestId('asset-detail-refresh-btn'), 'the load of the asset page never let go of its Refresh button').toHaveAttribute('data-busy', 'false', {timeout: PAGE_TIMEOUT});
+            await expect(root.getByTestId('asset-detail-chart'), `the chart of asset ${assetId} shows no series: nothing is cached for a catch-up to turn stale`).toHaveAttribute('data-series-state', 'ready', {timeout: PAGE_TIMEOUT});
+            expect(pricesOf(first.entry, assetId), `premise: the first answer carried no price of asset ${assetId}, so nothing was cached — check populate_mock_data.populate_price_history`).toBeGreaterThan(0);
+            await queriesBack(page);
+        },
+        settled: async () => {
+            await waitForSettled(assetDetail(page), PAGE_TIMEOUT);
+            await queriesBack(page);
+        },
+        asked: ofAsset,
+        check: async ({page: current, asked}) => {
+            const items = asked.flatMap((entry) => assetItems(entry, assetId));
+            expect(
+                items.map((item) => item.include_price),
+                'the reload must ask the prices again (include_price true): an item without them leaves the days the catch-up filled as they were (Z-15)',
+            ).toContain(true);
+            expect(
+                items.map((item) => item.date_range),
+                'the reload must ask the range on screen',
+            ).toContainEqual(range);
+            await expect(current.getByTestId('asset-detail-chart'), 'the chart is gone after the reload').toBeVisible();
+            await expect(assetDetail(current).getByTestId('asset-detail-chart')).toHaveAttribute('data-series-state', 'ready');
+        },
+        silence: {busy: ['asset-detail-page', 'asset-detail-refresh-btn'], kept: ['asset-detail-chart']},
+    };
+}
+
+/** The FX detail of `pair` with a range ending today, loaded: its rates in the cache. */
+function fxDetailView(page: Page, pair: Pair, range: DateRange): ReloadView {
+    return {
+        what: `the detail page of ${pair.slug}`,
+        open: async () => {
+            await navigateTo(page, `/fx/${pair.slug}?start=${range.start}&end=${range.end}`);
+            await expect(fxDetail(page)).toBeVisible({timeout: PAGE_TIMEOUT});
+            const first = await pairConvertLanded(page, pair, 0, `the page of ${pair.slug} never asked for its rates, or the answer never came back`);
+            await fxDetailSettled(page, pair);
+            expect(first.answer?.results ?? 0, `premise: the first answer carried no rate of ${pair.slug}, so nothing was cached — check populate_mock_data.populate_fx_rates`).toBeGreaterThan(0);
+            await queriesBack(page);
+        },
+        settled: async () => {
+            await fxDetailSettled(page, pair);
+            await queriesBack(page);
+        },
+        asked: (record, since) => pairConvertsSince(record, pair, since),
+        check: async ({page: current, asked}) => {
+            const ranges = asked.flatMap((entry) => pairItems(entry, pair).map((item) => item.date_range));
+            expect(daysNotCovered(ranges, range.start, range.end), 'the rates asked again after the catch-up must cover the whole range on screen: every day of it was loaded before (Z-15)').toEqual([]);
+            await expect(current.getByTestId('fx-detail-chart'), 'the chart is gone after the reload').toBeVisible();
+        },
+        silence: {busy: ['fx-detail-page', 'fx-detail-refresh-btn'], kept: ['fx-detail-chart']},
+    };
+}
+
+/** The assets list, loaded: its rows and the prices of its cards in, its flags idle. */
+function assetsListView(page: Page): ReloadView {
+    return {
+        what: 'the assets list',
+        open: async () => {
+            await navigateTo(page, '/assets');
+            const root = page.getByTestId('assets-page');
+            await expect(root).toBeVisible({timeout: PAGE_TIMEOUT});
+            await waitForSettled(root, PAGE_TIMEOUT);
+            await expect(page.getByTestId('assets-refresh-button'), 'the load of the assets list never let go of its Refresh button').toHaveAttribute('data-busy', 'false', {timeout: PAGE_TIMEOUT});
+            expect(queriesSince(await pageRecord(page), PRICES_QUERY_PATH, 0).length, 'precondition: the assets list asked no prices in this document: nothing is cached for a catch-up to turn stale').toBeGreaterThan(0);
+            await queriesBack(page);
+        },
+        settled: async () => {
+            await waitForSettled(page.getByTestId('assets-page'), PAGE_TIMEOUT);
+            await queriesBack(page);
+        },
+        asked: (record, since) => queriesSince(record, PRICES_QUERY_PATH, since),
+        check: ({asked}) => {
+            expect(
+                asked.flatMap(priceItems).map((item) => item.include_price),
+                'the reload of the list asked no prices (include_price true): the cards keep the figures of before the catch-up (Z-15)',
+            ).toContain(true);
+        },
+        silence: {busy: ['assets-page', 'assets-refresh-button']},
+    };
+}
+
+/** The FX list, loaded: its cards' rates in, its flags idle. */
+function fxListView(page: Page): ReloadView {
+    return {
+        what: 'the FX list',
+        open: async () => {
+            await navigateTo(page, '/fx');
+            const root = page.getByTestId('fx-page');
+            await expect(root).toBeVisible({timeout: PAGE_TIMEOUT});
+            await waitForSettled(root, PAGE_TIMEOUT);
+            await expect(page.getByTestId('fx-refresh-all-button'), 'the load of the FX list never let go of its Refresh button').toHaveAttribute('data-busy', 'false', {timeout: PAGE_TIMEOUT});
+            expect(queriesSince(await pageRecord(page), CONVERT_PATH, 0).length, 'precondition: the FX list asked no rates in this document: nothing is cached for a catch-up to turn stale').toBeGreaterThan(0);
+            await queriesBack(page);
+        },
+        settled: async () => {
+            await waitForSettled(page.getByTestId('fx-page'), PAGE_TIMEOUT);
+            await queriesBack(page);
+        },
+        asked: (record, since) => queriesSince(record, CONVERT_PATH, since),
+        silence: {busy: ['fx-page', 'fx-refresh-all-button']},
+    };
+}
+
+/** The brokers TEST_USER owns, as the Dashboard counts them (`getOwnedBrokers`): OWNER with a share unset or above zero. */
+async function ownedBrokerIds(page: Page): Promise<number[]> {
+    const response = await page.request.get(`${API}/brokers`);
+    expect(response.ok(), `GET ${API}/brokers → HTTP ${response.status()}`).toBe(true);
+    const items = ((await response.json()) as {items?: Array<{id: number; user_role?: string | null; user_share_percentage?: string | number | null}>}).items ?? [];
+    return items.filter((broker) => broker.user_role === 'OWNER' && (broker.user_share_percentage == null || Number(broker.user_share_percentage) > 0)).map((broker) => broker.id);
+}
+
+/**
+ * An asset the Dashboard's Performance table lists on a broker TEST_USER owns, found the way a user would see it: the view
+ * saved through the panel's toggles, then the rows (`pos-{brokerId}-{assetId}`). Both are checked, neither inferred.
+ */
+async function ownedPositionAssetId(page: Page): Promise<number> {
+    const owned = await ownedBrokerIds(page);
+    await saveDashboardPerformanceView(page);
+    const rows = page.getByTestId('contribution-table').locator('tbody tr[data-row-id^="pos-"]');
+    await expect(rows, 'the Performance table lists no position: check populate_mock_data.py').not.toHaveCount(0, {timeout: PAGE_TIMEOUT});
+    const rowIds = await rows.evaluateAll((elements) => elements.map((element) => element.getAttribute('data-row-id') ?? ''));
+    for (const rowId of rowIds) {
+        const match = /^pos-(\d+)-(\d+)$/.exec(rowId);
+        if (match && owned.includes(Number(match[1]))) return Number(match[2]);
+    }
+    throw new Error(`No Performance row on a broker ${TEST_USER.username} owns (owned: ${owned.join(', ') || 'none'}; rows: ${rowIds.join(', ')}) — check populate_mock_data.py`);
+}
+
 test.beforeEach(async ({page}, testInfo) => {
     test.skip(testInfo.project.name !== 'desktop', 'Desktop only: the tracker and the reload do not depend on the viewport');
     test.setTimeout(90_000);
@@ -1259,5 +1730,175 @@ test.describe('A price page asks its prices again after a catch-up (Z-14)', () =
         const asked = pairConvertsSince(await pageRecord(page), pair, mark).flatMap((entry) => pairItems(entry, pair).map((item) => item.date_range));
         expect(asked.length, `the server caught up on rates and the page of ${pair.slug} took the range it had loaded before from its session cache — no convert left: the days the catch-up filled show the rates of before until the page is reloaded (Z-14)`).toBeGreaterThan(0);
         expect(daysNotCovered(asked, range.start, range.end), 'the rates asked again after the catch-up must cover the whole range on screen: every day of it was loaded before').toEqual([]);
+    });
+});
+
+/**
+ * The views already on screen reload by themselves after a catch-up, in silence (Z-14b + Z-15, lot Y5-1).
+ *
+ * Until Y5-1 only the Dashboard (a) and the broker page (b) listened to the portfolio bus's `{kind: 'prices'}`. The risk
+ * panels, the lots panel and the price pages stayed on the figures of before the catch-up until the user navigated or
+ * pressed «Aggiorna». The developer's decision of 22/10: a catch-up that UPDATED something makes every view on screen ask
+ * again for what it shows, in silence — no navigation, no spinner, no `data-busy`/`aria-busy` on the page's root, no
+ * skeleton, the old figures staying until the new ones land (`features/price-refresh/onPricesCaughtUp.ts`). The user's
+ * own «Aggiorna» (`refreshVersion`, `{kind: 'refresh'}`) is not involved and keeps saying busy (d, e, f); a catch-up that
+ * updated nothing asks nothing (c).
+ *
+ * Each case runs on a view opened with a full load, twice, each time on its own document and its own catch-up (the stub's
+ * `running` from the first answer, then `idle`, see `viewReloadsInSilence`):
+ *   - the control: the catch-up updated nothing (`last_refreshed` false) — the view asks nothing;
+ *   - the case: it updated something — the view asks again within a few polls, the same questions, with no navigation;
+ *     through the reload the roots and the Refresh buttons the view owns never say busy, nothing is put on screen again,
+ *     no skeleton or spinning icon appears, and the figures stay.
+ *   (i)   the Dashboard's risk panel (`POST /risk/query`; the panel's own spinning icon, `<testId>-refreshing`, never shown);
+ *   (j)   the lots analysis panel, open on a position (`POST /portfolio/lots/analysis`);
+ *   (k)   the asset detail (`POST /assets/prices/query`, `include_price: true`, the chart still there);
+ *   (l)   the FX pair detail (`POST /fx/currencies/convert`, the chart still there);
+ *   (m)   the assets list and the FX list.
+ *
+ * The record, the stub and the busy log are the ones of the cases above: `recordPage` also follows, for these cases, the
+ * risk and lots questions (as the price and rate queries), every `*-loading` and `*-refreshing` element put on screen, and
+ * the removal of the figures a reload must leave (`KEPT_TEST_IDS`).
+ *
+ * Read-only on the lane's shared backend, like the cases above: the risk, lots, price and rate queries are computations
+ * and reads; the live price poll of the asset page and of the assets list, which writes today's candle, is answered in the
+ * browser (`stubLivePrices`). The position of (j) is found through the Dashboard's Performance view, a row of a broker
+ * the user owns, never assumed.
+ *
+ * Expected: red until Y5-1 lands, for the right reason — the control green, the case red at its first assertion on the
+ * view: no request after the catch-up (the poll "asked again" times out). When the views ask but still say busy, the
+ * assertions of `expectSilent` fail instead: the root's `data-busy` raised, or a skeleton shown.
+ */
+test.describe('The views on screen reload by themselves after a catch-up that updated something (Z-15)', () => {
+    test('(i) Dashboard, risk panel open: after a catch-up that updated something the panel asks its questions again, in silence; one that updated nothing asks nothing', async ({page}) => {
+        // Two page loads, each with the risk questions the backend computes, and two catch-ups of a few polls.
+        test.setTimeout(180_000);
+        const catchUp = await simulateCatchUp(page, {header: 'running', status: running()});
+        await viewReloadsInSilence(page, catchUp, dashboardRiskView(page));
+    });
+
+    test('(j) Dashboard, lots analysis panel open on a position: after a catch-up that updated something the panel asks its analysis again, in silence; one that updated nothing asks nothing', async ({page}) => {
+        // The visit that finds the position and saves the view, then two page loads and two catch-ups.
+        test.setTimeout(180_000);
+        const assetId = await ownedPositionAssetId(page);
+        const catchUp = await simulateCatchUp(page, {header: 'running', status: running()});
+        await viewReloadsInSilence(page, catchUp, dashboardLotsView(page, assetId));
+    });
+
+    test('(k) asset detail: after a catch-up that updated something the page asks its prices again without navigating, and neither its root nor its chart says busy; one that updated nothing asks nothing', async ({page}) => {
+        test.setTimeout(180_000);
+        const assetId = await pricedAssetId(page);
+        const range = rangeEndingToday();
+        const catchUp = await simulateCatchUp(page, {header: 'running', status: running()});
+        await stubLivePrices(page);
+        await viewReloadsInSilence(page, catchUp, assetDetailView(page, assetId, range));
+    });
+
+    test('(l) FX detail: after a catch-up that updated something the page asks its rates again without navigating, and neither its root nor its chart says busy; one that updated nothing asks nothing', async ({page}) => {
+        test.setTimeout(180_000);
+        const pair = await configuredPair(page, CONFIGURED_PAIR.base, CONFIGURED_PAIR.quote);
+        const range = rangeEndingToday();
+        const catchUp = await simulateCatchUp(page, {header: 'running', status: running()});
+        await viewReloadsInSilence(page, catchUp, fxDetailView(page, pair, range));
+    });
+
+    test('(m) assets list and FX list: after a catch-up that updated something each asks its prices or conversions again, and its root never says busy; one that updated nothing asks nothing', async ({page}) => {
+        // Two lists, each with its control and its case: four page loads and four catch-ups.
+        test.setTimeout(240_000);
+        const catchUp = await simulateCatchUp(page, {header: 'running', status: running()});
+        await stubLivePrices(page);
+        await test.step('the assets list', () => viewReloadsInSilence(page, catchUp, assetsListView(page)));
+        await test.step('the FX list', () => viewReloadsInSilence(page, catchUp, fxListView(page)));
+    });
+});
+
+/**
+ * Back in-app after a catch-up, the price pages show the stale points at once (Z-14b + Z-15, lot Y5-1).
+ *
+ * (g) and (h) pin that a page which comes back after a catch-up asks its prices or rates again (Z-14). Y5-1 adds how: not
+ * as a load the user asked for. The page may say busy for a moment at the return (`reloadPage()` sets `loading` while it
+ * decides its cache), but as soon as the stale points are on screen its root stops saying so, and the request that goes
+ * out in background does not raise the flag again (D3). (g) and (h) stay as they are; these two walk the same path once,
+ * without their control, with the request for the prices or rates HELD in flight by a gate (`holdQuery`): the root must
+ * read `data-busy="false"` while the request is still held, with the chart visible; the request is then let through and,
+ * from the first `false` in the record on, the root never reads `true` again. The Refresh button is not part of the
+ * silence: the page's own first load holds it. After them, in the same page and under the same record, the control: the
+ * user's own Refresh makes the button say busy.
+ *   (g') asset detail   (h') FX detail
+ *
+ * Red until Y5-1 for the right reason: with the request held the root keeps saying busy (`loading` until the answer lands).
+ */
+test.describe('A price page back after a catch-up draws the stale points at once and asks in background (Z-15)', () => {
+    test("(g') asset detail: back in-app after a catch-up that updated something, the stale points are on screen while the prices are asked in background, and the root stops saying busy", async ({page}) => {
+        // A load, one round trip through the Dashboard with its Refresh and a catch-up of a few polls, the user's Refresh.
+        test.setTimeout(120_000);
+        const assetId = await pricedAssetId(page);
+        const range = rangeEndingToday();
+        const catchUp = await simulateCatchUp(page, {header: null, status: idle(false)});
+        await stubLivePrices(page);
+        await navigateTo(page, `/assets/${assetId}?start=${range.start}&end=${range.end}`);
+        const root = assetDetail(page);
+        await expect(root).toBeVisible({timeout: PAGE_TIMEOUT});
+        const first = await assetQueryLanded(page, assetId, 0, `the page of asset ${assetId} never asked for its prices, or the answer never came back`);
+        await waitForSettled(root, PAGE_TIMEOUT);
+        const origin = await documentOrigin(page);
+        expect(pricesOf(first.entry, assetId), `premise: the first answer carried no price of asset ${assetId}, so nothing was cached — check populate_mock_data.populate_price_history`).toBeGreaterThan(0);
+
+        await catchUpEndsOnDashboard(page, catchUp);
+
+        // Held from here: the page asks the prices of the range with include_price true as soon as it is back.
+        const gate = await holdQuery(page, PRICES_QUERY_PATH, (body) => Array.isArray(body) && body.some((item) => item?.asset_id === assetId && item?.include_price === true));
+        try {
+            const mark = await backInApp(page, root);
+            await staleThenSilent(
+                page,
+                gate,
+                root,
+                'asset-detail-page',
+                root.getByTestId('asset-detail-chart'),
+                async () => {
+                    const after = await assetQueryLanded(page, assetId, mark, `back on asset ${assetId} after the catch-up, the request for its prices never came back once let through`);
+                    expect(after.item.include_price, 'premise (Z-14): back on the asset after the catch-up the page asks the prices again').toBe(true);
+                },
+                mark,
+            );
+        } finally {
+            await gate.dispose();
+        }
+        await expect(page.getByTestId('asset-detail-refresh-btn'), 'the load of the asset page never let go of its Refresh button').toHaveAttribute('data-busy', 'false', {timeout: PAGE_TIMEOUT});
+        expect(await documentOrigin(page), 'the return was a document load, which empties every cache: nothing can be proved through it').toBe(origin);
+        await expect(root.getByTestId('asset-detail-chart')).toHaveAttribute('data-series-state', 'ready');
+
+        await test.step('control: a Refresh the user asks for says busy on the button', () => buttonSaysBusy(page, 'asset-detail-refresh-btn'));
+    });
+
+    test("(h') FX detail: back in-app after a catch-up that updated something, the stale points are on screen while the rates are asked in background, and the root stops saying busy", async ({page}) => {
+        // A load, one round trip through the Dashboard with its Refresh and a catch-up of a few polls, the user's Refresh.
+        test.setTimeout(120_000);
+        const pair = await configuredPair(page, CONFIGURED_PAIR.base, CONFIGURED_PAIR.quote);
+        const range = rangeEndingToday();
+        const catchUp = await simulateCatchUp(page, {header: null, status: idle(false)});
+        await navigateTo(page, `/fx/${pair.slug}?start=${range.start}&end=${range.end}`);
+        const root = fxDetail(page);
+        await expect(root).toBeVisible({timeout: PAGE_TIMEOUT});
+        const first = await pairConvertLanded(page, pair, 0, `the page of ${pair.slug} never asked for its rates, or the answer never came back`);
+        await fxDetailSettled(page, pair);
+        const origin = await documentOrigin(page);
+        expect(first.answer?.results ?? 0, `premise: the first answer carried no rate of ${pair.slug}, so nothing was cached — check populate_mock_data.populate_fx_rates`).toBeGreaterThan(0);
+
+        await catchUpEndsOnDashboard(page, catchUp);
+
+        // Held from here: the page asks the rates of the pair as soon as it is back.
+        const gate = await holdQuery(page, CONVERT_PATH, (body) => pairItems({body} as QueryEntry, pair).length > 0);
+        try {
+            const mark = await backInApp(page, root);
+            await staleThenSilent(page, gate, root, 'fx-detail-page', root.getByTestId('fx-detail-chart'), () => pairConvertLanded(page, pair, mark, `back on ${pair.slug} after the catch-up, the request for its rates never came back once let through`), mark);
+        } finally {
+            await gate.dispose();
+        }
+        await fxDetailSettled(page, pair);
+        expect(await documentOrigin(page), 'the return was a document load, which empties every cache: nothing can be proved through it').toBe(origin);
+
+        await test.step('control: a Refresh the user asks for says busy on the button', () => buttonSaysBusy(page, 'fx-detail-refresh-btn'));
     });
 });

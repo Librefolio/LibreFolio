@@ -52,7 +52,7 @@ a search box on top: type to filter every family at once. The arrow keys and `En
 
 - 💱 **FX Pair** — another of your pairs, e.g. GBP/USD next to EUR/USD. In the list, 👑 marks this
   page's pair and 📌 a pair already used by another signal.
-- ↔️ **Asset Comparison** — an asset's price next to the rate.
+- ↔️ **Asset Comparison** — an asset's price next to the rate, picked in the same panel as the risk comparison's (search, **Type** and **Currency** filters, benchmarks first). One already used by another comparison carries a warning mark but can still be chosen.
 
 A comparison card has buttons to sync the compared pair or asset and to open its page. In % view
 both curves start at 0 %, so their moves compare directly.

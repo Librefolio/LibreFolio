@@ -51,7 +51,7 @@
         /** Available FX pairs for FxPairSignal dynamic options (slug format: 'EUR-GBP') */
         availablePairs?: string[];
         /** Available assets for AssetComparisonSignal dynamic options */
-        availableAssets?: Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null}>;
+        availableAssets?: Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null; currency?: string | null; is_benchmark?: boolean}>;
         /** Definitions available in the current Asset/FX domain. */
         signalDefinitions?: SignalDefinition[];
         /** Last applied backend signal rendering supplied by the current page. */
@@ -236,6 +236,11 @@
     /** The price view under the preview: the rolling return has the percentage one under it, as on the detail page. */
     let previewViewMode: 'absolute' | 'percentage' = $derived(previewView === 'absolute' ? 'absolute' : 'percentage');
     let previewIsCalendar = $derived(previewView === 'calendar-return');
+    /**
+     * The signals the rolling-return view draws: the comparisons of its domain, as the detail pages' panels offer there
+     * (Y5-F2). The other saved signals stay saved, only hidden from the list while that view is on.
+     */
+    let signalTypesShown = $derived(previewIsCalendar ? (axisDomain === 'fx' ? ['fx-pair'] : ['asset-comparison']) : undefined);
 
     function generateSyntheticData(DAYS: number = SYNTHETIC_DAYS): LineDataPoint[] {
         const baseDates: LineDataPoint[] = [];
@@ -537,7 +542,7 @@
             </div>
 
             <!-- Signals Section (extracted component) -->
-            <ChartSignalsSection {availablePairs} {availableAssets} definitions={signalDefinitions} backendError={signalBackendError} onretrybackend={onretrySignalBackend} {signalsLoading} bind:signals />
+            <ChartSignalsSection allowedSignalTypes={signalTypesShown} {availablePairs} {availableAssets} definitions={signalDefinitions} backendError={signalBackendError} onretrybackend={onretrySignalBackend} {signalsLoading} bind:signals />
         </div>
 
         <!-- Footer -->

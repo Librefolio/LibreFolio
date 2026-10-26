@@ -151,6 +151,23 @@
     "fxOnCash": "Efecto del tipo de cambio sobre el efectivo",
     "allocationNegativeCash": "Liquidez negativa: {amount}",
     "startValueTooltip": "Valor de la posición al inicio del período, calculado como la columna Valor de la Cartera; 0 si la posición aún no existía. Es la base de los porcentajes del período.",
-    "endValueTooltip": "Valor de la posición al final del período, calculado como la columna Valor de la Cartera; 0 si la posición ya estaba cerrada."
+    "endValueTooltip": "Valor de la posición al final del período, calculado como la columna Valor de la Cartera; 0 si la posición ya estaba cerrada.",
+    "transfersAtMarketValue": "Transferencias a valor de mercado",
+    "assetAllocation": "Por activo",
+    "backToPortfolio": "Cartera",
+    "positionsChart": {
+      "title": "Rendimiento de las posiciones",
+      "viewAbsolute": "Abs",
+      "viewPercentage": "%",
+      "viewAbsoluteHint": "Ganancia o pérdida en dinero, desde el inicio del periodo",
+      "viewPercentageHint": "Rendimiento, base 100 al inicio del periodo",
+      "portfolio": "Cartera (rendimiento del panel)",
+      "portfolioNote": "La línea de la cartera es el rendimiento que mide el panel, no la ganancia de las posiciones sobre el capital empleado: pueden diferir.",
+      "hint": "Marca filas de la tabla para comparar su rendimiento con el de la cartera.",
+      "failed": "No se han podido cargar las series de las posiciones.",
+      "closedOn": "Cerrada el {date}",
+      "incomplete": "Faltan algunos valores (un precio o un tipo de cambio): la línea los deja fuera.",
+      "rowSelect": "Selecciona la fila para dibujar su rendimiento"
+    }
   }
 }

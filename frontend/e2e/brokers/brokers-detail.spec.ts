@@ -2248,3 +2248,92 @@ test.describe('Broker detail — a FAILED lots analysis names the transaction to
         await expect(page, 'on the transactions page').toHaveURL(/\/transactions(?:[?#]|$)/);
     });
 });
+
+/**
+ * Broker detail, Posizioni: the return chart of the positions on real data (Y5-2, #48).
+ *
+ * The broker page shows the same `PositionsPanel` as the Dashboard, asked for this broker alone: the series
+ * request carries `broker_ids: [thisBroker]`, and the positions of the table are this broker's. The rows come
+ * from the live table of the broker the mock gives positions to; the answer is the engine's (nothing stubbed),
+ * and whether a line is drawn is computed from that answer. The test writes nothing.
+ */
+test.describe('Broker detail: the return chart of the positions (Y5-2, #48)', () => {
+    test.describe.configure({timeout: 90_000});
+    const SERIES_PATH = '/api/v1/portfolio/positions-series';
+
+    type SeriesKey = {asset_id: number; broker_id?: number | null};
+    type SeriesBody = {positions: SeriesKey[]; broker_ids?: number[]};
+    type SeriesAnswer = {series?: Array<{key: SeriesKey; points?: Array<{pnl_percent?: string | null}>}>};
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+        await navigateTo(page, '/brokers');
+        await page.waitForSelector('[data-testid="brokers-page"][data-busy="false"]', {timeout: 20_000});
+    });
+
+    test('ticking a position asks the series for this broker alone and draws its line', async ({page}) => {
+        const sent: SeriesBody[] = [];
+        const answered: Array<{body: SeriesBody; status: number; json: SeriesAnswer | null}> = [];
+        page.on('request', (request) => {
+            if (request.method() === 'POST' && new URL(request.url()).pathname === SERIES_PATH) sent.push(request.postDataJSON() as SeriesBody);
+        });
+        page.on('response', async (response) => {
+            const request = response.request();
+            if (request.method() !== 'POST' || new URL(response.url()).pathname !== SERIES_PATH) return;
+            answered.push({body: request.postDataJSON() as SeriesBody, status: response.status(), json: (await response.json().catch(() => null)) as SeriesAnswer | null});
+        });
+
+        await goToBrokerWithHoldings(page);
+        const brokerId = Number(new URL(page.url()).pathname.split('/').pop());
+        expect(Number.isInteger(brokerId), `the broker's id is in the address: ${page.url()}`).toBe(true);
+        await goToPosizioniTab(page);
+
+        const holdings = page.getByTestId('broker-holdings');
+        // Holdings × table, whatever this context remembers (both controls are setters).
+        await holdings.getByTestId('positions-toggle-holdings').click();
+        await holdings.getByTestId('positions-toggle-table').click();
+        const rows = holdings.locator('tbody tr[data-row-id]');
+        await expect(rows.first(), `${BROKER_WITH_HOLDINGS} must have at least one position — check populate_mock_data.py`).toBeVisible({timeout: 15_000});
+        const rowIds = (await rows.evaluateAll((all) => all.map((row) => row.getAttribute('data-row-id') ?? ''))).filter((id) => /^\d+-\d+$/.test(id));
+        expect(rowIds.length, 'the holdings table lists no {assetId}-{brokerId} row').toBeGreaterThan(0);
+        const rowId = rowIds[0];
+        const [assetId, rowBroker] = rowId.split('-').map(Number);
+        expect(rowBroker, 'a row of this broker’s page belongs to this broker').toBe(brokerId);
+
+        const chart = holdings.getByTestId('positions-return-chart');
+        await expect(chart, 'the return chart is on the broker’s Posizioni tab').toBeVisible({timeout: 15_000});
+        const baseline = Number(await chart.getAttribute('data-line-count'));
+        expect(sent, 'the page asked for a series before any row was ticked').toEqual([]);
+
+        const box = holdings.getByTestId(`dt-row-checkbox-${rowId}`);
+        await box.click();
+        await expect(box).toHaveAttribute('data-state', 'checked');
+
+        await expect.poll(() => answered.length, {message: 'ticking a position asked no series', timeout: 30_000}).toBeGreaterThan(0);
+        const call = answered[0];
+        expect(call.status, 'POST /portfolio/positions-series').toBe(200);
+        expect(call.body.broker_ids, 'the series is asked for this broker alone').toEqual([brokerId]);
+        expect(call.body.positions).toHaveLength(1);
+        expect(call.body.positions[0].asset_id).toBe(assetId);
+        expect(call.body.positions[0].broker_id ?? 0).toBe(brokerId);
+        const series = call.json?.series?.find((entry) => entry.key.asset_id === assetId && (entry.key.broker_id ?? 0) === brokerId);
+        expect(series, `the answer holds the series of ${rowId}`).toBeDefined();
+        expect(
+            (series!.points ?? []).some((point) => point.pnl_percent !== null && point.pnl_percent !== undefined),
+            `the series of ${rowId} has no known point: the chart cannot draw it (check the mock data)`,
+        ).toBe(true);
+
+        await expect(chart).toHaveAttribute('data-state', 'ready', {timeout: 30_000});
+        await expect(holdings.getByTestId(`positions-chart-legend-${rowId}`), 'a legend entry for the ticked position').toBeVisible();
+        await expect(chart).toHaveAttribute('data-line-count', String(baseline + 1));
+        await expect(holdings.getByTestId('positions-chart-canvas')).toHaveAttribute('data-chart-ready', 'true', {timeout: 15_000});
+
+        // Unticked: the entry and its line go, and nothing is asked again.
+        const asked = sent.length;
+        await box.click();
+        await expect(box).toHaveAttribute('data-state', 'unchecked');
+        await expect(holdings.getByTestId(`positions-chart-legend-${rowId}`)).toHaveCount(0);
+        await expect(chart).toHaveAttribute('data-line-count', String(baseline));
+        expect(sent.length, 'unticking asked the series again').toBe(asked);
+    });
+});

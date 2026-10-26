@@ -182,8 +182,9 @@
 
     let currencyItems = $derived.by((): CheckMenuItem[] => {
         void $currencyStoreVersion;
-        const counts = countBy((asset) => asset.currency);
-        const values = [...new Set(assets.map((asset) => asset.currency))].sort();
+        // A missing currency (empty, blank, undefined) is not a value to filter by: it adds no entry.
+        const counts = countBy((asset) => asset.currency?.trim() ?? '');
+        const values = [...new Set(assets.map((asset) => asset.currency?.trim() ?? ''))].filter(Boolean).sort();
         return values.map((item) => ({value: item, label: item, glyph: getCurrencyInfo(item).flag_emoji, count: counts.get(item) ?? 0}));
     });
 
@@ -479,7 +480,7 @@
                                 <span use:scrollOnOverflow class="{overflowScrollTextClass} min-w-0 flex-1">{asset.display_name}</span>
                                 {@render warningMark(asset, verdict)}
                                 <span class="shrink-0 text-[10px] text-lf-muted">{typeLabel(asset.asset_type)}</span>
-                                <span class="w-8 shrink-0 text-right font-mono text-[10px] text-lf-muted">{asset.currency}</span>
+                                <span class="w-8 shrink-0 text-right font-mono text-[10px] text-lf-muted">{asset.currency?.trim() ?? ''}</span>
                             </button>
                         {/each}
                     </div>
@@ -555,7 +556,7 @@
                                 {#if icon}
                                     <img src={icon} alt="" class="h-4 w-4 shrink-0 rounded-sm object-contain" onerror={hideBrokenIcon} />
                                 {/if}
-                                <span class="truncate text-sm text-lf-primary">{rowText(current)}</span>
+                                <span use:scrollOnOverflow class="{overflowScrollTextClass} text-sm text-lf-primary" title={rowText(current)}>{rowText(current)}</span>
                                 {#if current.active === false}
                                     <span data-testid="asset-select-selected-inactive-badge" class="shrink-0 rounded bg-lf-neutral px-1.5 py-0.5 text-[10px] font-medium text-lf-secondary">{$t('assets.edit.status.inactive')}</span>
                                 {/if}
@@ -605,13 +606,13 @@
                                     {#if icon}
                                         <img src={icon} alt="" class="h-4 w-4 shrink-0 rounded-sm object-contain" onerror={hideBrokenIcon} />
                                     {/if}
-                                    <span use:scrollOnOverflow class="{overflowScrollTextClass} min-w-0 flex-1 {asset.active === false ? 'opacity-60' : ''}">{rowText(asset)}</span>
+                                    <span use:scrollOnOverflow class="{overflowScrollTextClass} min-w-0 flex-1 {asset.active === false ? 'opacity-60' : ''}" title={rowText(asset)}>{rowText(asset)}</span>
                                     {#if asset.active === false}
                                         <span data-testid="asset-select-inactive-badge" class="shrink-0 rounded bg-lf-neutral px-1.5 py-0.5 text-[10px] font-medium text-lf-secondary">{$t('assets.edit.status.inactive')}</span>
                                     {/if}
                                     {@render warningMark(asset, verdict)}
                                     <span class="shrink-0 text-[10px] text-lf-muted">{typeLabel(asset.asset_type)}</span>
-                                    <span class="w-8 shrink-0 text-right font-mono text-[10px] text-lf-muted">{asset.currency}</span>
+                                    <span class="w-8 shrink-0 text-right font-mono text-[10px] text-lf-muted">{asset.currency?.trim() ?? ''}</span>
                                 </button>
                             {/if}
                         {/each}
@@ -640,7 +641,7 @@
                                             <img src={icon} alt="" class="mt-0.5 h-4 w-4 shrink-0 object-contain opacity-60" onerror={hideBrokenIcon} />
                                         {/if}
                                         <span class="min-w-0 flex-1">
-                                            <span use:scrollOnOverflow class="{overflowScrollTextClass} block">{rowText(asset)}</span>
+                                            <span use:scrollOnOverflow class="{overflowScrollTextClass} block" title={rowText(asset)}>{rowText(asset)}</span>
                                             <span class="block text-[11px] leading-snug text-lf-warning">{verdict?.texts.join(' · ')}</span>
                                         </span>
                                     </button>

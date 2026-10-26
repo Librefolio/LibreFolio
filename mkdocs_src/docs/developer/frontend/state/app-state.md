@@ -617,7 +617,9 @@ $effect(() => {
 - per-card and per-row refreshes, and the small background reads;
 - a background reload. On `{kind: 'prices'}` from the portfolio bus (the end of a price catch-up,
   Z-13), `reloadAfterPriceCatchUp()` calls `loadAll()` or `loadOverview()` without a token
-  (`dashboard/+page.svelte:755`, `brokers/[id]/+page.svelte:486`), and the risk controller's own sync,
+  (`dashboard/+page.svelte:755`, `brokers/[id]/+page.svelte:486`); the other views on screen (the risk
+  controller, the lots panel, the Assets and FX pages) reload the same way through `onPricesCaughtUp()`
+  (Y5-1), also without a token; and the risk controller's own sync,
   `handleSynced()` (l.612), reloads without a token too. See
   [How a page uses the cache](domain-state.md#how-a-page-uses-the-cache).
 - the reload after a sync on an asset's page: `handlePageSyncComplete()` and

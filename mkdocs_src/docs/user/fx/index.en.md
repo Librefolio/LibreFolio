@@ -15,7 +15,9 @@ Open **FX Rates** from the sidebar to see your currency pairs:
 </div>
 
 Each pair shows its flags (e.g. 🇪🇺 EUR → 🇺🇸 USD), its **latest rate**, the change over the selected
-period and a mini chart. A ✏️ **Manual** badge marks pairs without a provider. Click a pair to open
+period and a mini chart. When the chart groups the rates by week or month because the plot is too
+narrow for so many days, a **Weekly** or **Monthly** badge at its top left says so, like on the
+[detail page](detail/chart.md). A ✏️ **Manual** badge marks pairs without a provider. Click a pair to open
 its [detail page](detail/index.md).
 
 ### 🔀 Cards or table
@@ -38,7 +40,7 @@ the list to one pair; ✕ clears both.
 ### 🧰 Page and pair actions
 
 - The **period** picker at the top sets the range of every chart and change; in card view,
-  **Abs** / **%** / **Rolling Return** shows all cards as rates, as % change or as rolling return. The
+  the chart-line icon (tooltip **Show absolute**), **%** and the calendar icon (**Rolling Return**) show all cards as rates, as % change or as rolling return. The
   list opens on **Abs**; once you choose a view, it is remembered for you in this browser.
 - A card's view button cycles **%** → **Rolling Return** → **Abs** and shows the view it goes to. The
   card keeps its own choice across reloads until you change the toolbar, which resets every card.
@@ -51,7 +53,8 @@ the list to one pair; ✕ clears both.
   or with an asset. The line of an asset is its price in the asset's own currency, so compare it in
   the **%** view; the prices load once for all the cards that compare an asset.
 - **Sync All** downloads new rates ([Synchronization](sync.md)); **Reload All** reads the stored
-  ones again. **Settings** sets the look of every card ([Chart Settings](chart-settings.md)).
+  ones again. **Settings** sets the look of every card ([Chart Settings](chart-settings.md)). Hover
+  over any of the three for half a second to read what it does.
 - On a card, ⇄ flips the direction shown (USD → EUR instead of EUR → USD); the buttons at the bottom
   open its own chart settings, **Sync** or **Reload** it, or delete it.
 

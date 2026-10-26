@@ -11,6 +11,8 @@
     import type {RenderedSignal} from '$lib/charts/signals';
     import type {AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {PRICE_SERIES} from '$lib/theme/chartTheme';
+    import ResolutionBadge from './ResolutionBadge.svelte';
+    import type {ChartResolution} from './timeSeriesAggregation';
 
     interface Props {
         data: LineDataPoint[];
@@ -33,29 +35,60 @@
         axisScale?: AxisScaleSettings;
         /** Stable semantic settings for active non-primary axes. */
         secondaryAxisScales?: Record<string, AxisScaleSettings>;
+        /** The step the backend already applied to `data` (a card's `max_points`): the badge shows the coarser of it and the chart's own */
+        sampledResolution?: ChartResolution;
     }
 
-    let {data = [], height = '80px', lineColor = PRICE_SERIES.line.light, areaFill = true, viewMode = 'absolute', showMiniAxis = true, colorByBaseline, baselineValue, showGridLines, showGradient = false, overlaySignals = [], axisScale, secondaryAxisScales = {}}: Props = $props();
+    let {
+        data = [],
+        height = '80px',
+        lineColor = PRICE_SERIES.line.light,
+        areaFill = true,
+        viewMode = 'absolute',
+        showMiniAxis = true,
+        colorByBaseline,
+        baselineValue,
+        showGridLines,
+        showGradient = false,
+        overlaySignals = [],
+        axisScale,
+        secondaryAxisScales = {},
+        sampledResolution = 'daily',
+    }: Props = $props();
 
     // Default colorByBaseline to true only in percentage mode
     let effectiveColorByBaseline = $derived(colorByBaseline ?? viewMode === 'percentage');
+
+    // The aggregation level of the card, as the detail's badge says it (Y5-F3): what the backend sampled, or what the chart
+    // itself aggregates for this plot, whichever is coarser.
+    const COARSENESS: Record<ChartResolution, number> = {daily: 0, weekly: 1, monthly: 2};
+    let chartResolution = $state<ChartResolution>('daily');
+    let shownResolution = $derived<ChartResolution>(COARSENESS[sampledResolution] >= COARSENESS[chartResolution] ? sampledResolution : chartResolution);
 </script>
 
-<LineChart
-    {areaFill}
-    {baselineValue}
-    colorByBaseline={effectiveColorByBaseline}
-    compact={true}
-    {data}
-    {height}
-    {lineColor}
-    {overlaySignals}
-    {secondaryAxisScales}
-    {showGradient}
-    {showGridLines}
-    {showMiniAxis}
-    {viewMode}
-    yAxisMax={axisScale?.max}
-    yAxisMin={axisScale?.min}
-    yAxisMode={axisScale?.mode}
-/>
+<div class="relative">
+    <LineChart
+        {areaFill}
+        {baselineValue}
+        colorByBaseline={effectiveColorByBaseline}
+        compact={true}
+        {data}
+        {height}
+        {lineColor}
+        {overlaySignals}
+        {secondaryAxisScales}
+        {showGradient}
+        {showGridLines}
+        {showMiniAxis}
+        {viewMode}
+        yAxisMax={axisScale?.max}
+        yAxisMin={axisScale?.min}
+        yAxisMode={axisScale?.mode}
+        onresolution={(resolution) => {
+            if (resolution !== chartResolution) chartResolution = resolution;
+        }}
+    />
+    <div class="pointer-events-none absolute left-1 top-0 scale-90 origin-top-left">
+        <ResolutionBadge resolution={shownResolution} />
+    </div>
+</div>

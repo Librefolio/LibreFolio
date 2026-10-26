@@ -34,13 +34,16 @@
     import {currentLanguage} from '$lib/stores/app/language';
     import {debug} from '$lib/debug';
     import {axisLabelMeasure, buildResponsiveXAxisPolicy, timeAxisGridRight} from '$lib/components/charts/responsiveXAxis';
+    import {allocationCoverage, allocationRows, allocationWitnessDays, type AllocationStep} from './allocationHistorySteps';
+    import {bucketEndDays} from './growthStepInputs';
+    import {dayOfAxisValue, indexHoldingDay} from '$lib/utils/stepSeries';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {formatDay} from '$lib/utils/core/formatAxisDate';
     import {bucketSpanUpTo} from '$lib/components/charts/priceChartHelpers';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {withHexAlpha} from '$lib/theme/colorAlpha';
     import {chartNeutrals} from '$lib/theme/chartTheme';
-    import {categoryColor, COUNTRY_SEQUENCE, isUnclassifiedCountry, sequenceColor} from '$lib/theme/chartCategories';
+    import {CATEGORY_SEQUENCE, categoryColor, COUNTRY_SEQUENCE, isUnclassifiedCountry, sequenceColor} from '$lib/theme/chartCategories';
     import {shadePoles} from '$lib/theme/chartShades';
     import {chartRoles} from '$lib/theme/roleColors';
     import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
@@ -49,10 +52,15 @@
         name: string;
         value: string;
         amount: string;
+        /** The asset id, on the asset dimension; the cash slice has none. */
+        id?: number | null;
     }
 
     interface AllocationHistoryPoint {
+        /** The first day the shares hold (the history is steps, D-P4). */
         date: string;
+        /** The last day they hold, inclusive. */
+        through: string;
         components: AllocationComponent[];
     }
 
@@ -61,7 +69,9 @@
         height?: string;
         loading?: boolean;
         /** Which allocation dimension is being displayed — affects label localization. */
-        dimension?: 'type' | 'sector' | 'geo';
+        dimension?: 'type' | 'sector' | 'geo' | 'asset';
+        /** Asset dimension only: the colour rank of each asset id (computed by the caller, as for the pie). */
+        colorRanks?: ReadonlyMap<number, number>;
     }
 
     interface LogicalRange {
@@ -104,7 +114,7 @@
     // https://github.com/apache/echarts/issues/8230
     const CHART_SERIES_UPDATE_OPTS: {notMerge: boolean; replaceMerge: string[]} = {notMerge: false, replaceMerge: ['series', 'dataZoom', 'xAxis']};
 
-    let {data = [], height = '100%', loading = false, dimension = 'type'}: Props = $props();
+    let {data = [], height = '100%', loading = false, dimension = 'type', colorRanks}: Props = $props();
 
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | undefined = undefined;
@@ -119,6 +129,8 @@
     let visibilityObserved = false;
     let lastKnownVisibility: boolean | null = null;
     let currentResolution: ChartResolution = $state('daily');
+    /** The day the pointer is on, kept from ECharts' `updateAxisPointer` (the tooltip of a step line reads it). */
+    let pointedDay: string | null = null;
     let logicalRange: LogicalRange | null = $state(null);
 
     let refDataVersion = $state(0);
@@ -177,6 +189,7 @@
     $effect(() => {
         void data;
         void dimension;
+        void colorRanks;
         void refDataVersion;
         void uiLocale();
         if (chartContainer) {
@@ -300,10 +313,10 @@
 
     function getFullLogicalRangeFromData(): LogicalRange | null {
         if (data.length === 0) return null;
-        const sorted = [...data].sort((left, right) => left.date.localeCompare(right.date));
+        const sorted = sortedSteps();
         return {
             startDate: sorted[0].date,
-            endDate: sorted[sorted.length - 1].date,
+            endDate: sorted[sorted.length - 1].through,
         };
     }
 
@@ -320,6 +333,26 @@
             resolutionCheckTimer = null;
         }
     }
+
+    /** The steps in date order, sorted once per array of data. */
+    let sortedStepsCache: {source: AllocationHistoryPoint[]; steps: AllocationHistoryPoint[]} | null = null;
+    function sortedSteps(): AllocationHistoryPoint[] {
+        if (sortedStepsCache?.source !== data) sortedStepsCache = {source: data, steps: [...data].sort((left, right) => left.date.localeCompare(right.date))};
+        return sortedStepsCache.steps;
+    }
+
+    /**
+     * The resolution the chart can draw: a weekly or monthly one needs a row in every bucket, and a history with more buckets
+     * than the adapter takes (a date typed in the year 1) draws the steps themselves instead.
+     */
+    function drawableResolution(resolution: ChartResolution): ChartResolution {
+        if (resolution === 'daily') return 'daily';
+        const coverage = allocationCoverage(sortedSteps() as AllocationStep[]);
+        return coverage && bucketEndDays(coverage, resolution) !== null ? resolution : 'daily';
+    }
+
+    /** The steps are drawn as they are: the daily resolution, one row per step. */
+    const isStepped = () => currentResolution === 'daily';
 
     function finalizeDataset(resolution: ChartResolution, rows: TemporalBucketRow[], categoryNames: string[]): AggregatedAllocationDataset {
         const avgWeights: Record<string, number> = {};
@@ -354,33 +387,23 @@
     }
 
     function buildDailyDataset(): AggregatedAllocationDataset {
-        const sortedPoints = [...data].sort((left, right) => left.date.localeCompare(right.date));
-        const categoryNames = [...new Set(sortedPoints.flatMap((point) => point.components.map((component) => component.name)))];
-        const rows = sortedPoints.map((point) => {
-            const valueMap = new Map(point.components.map((component) => [component.name, Number(component.value)]));
-            const valuesByName: Record<string, number> = {};
-
-            for (const name of categoryNames) {
-                valuesByName[name] = valueMap.get(name) ?? 0;
-            }
-
-            return {
-                date: point.date,
-                bucketStart: point.date,
-                bucketEnd: point.date,
-                valuesByName,
-            };
-        });
-
-        return finalizeDataset('daily', rows, categoryNames);
+        const steps = sortedSteps();
+        const categoryNames = [...new Set(steps.flatMap((point) => point.components.map((component) => component.name)))];
+        // One row per step (and the last day of the range), read from the step that holds it: the cost is the steps, not the days.
+        return finalizeDataset('daily', allocationRows(steps as AllocationStep[], categoryNames, allocationWitnessDays(steps as AllocationStep[], [])), categoryNames);
     }
 
     function buildAggregatedDataset(resolution: Exclude<ChartResolution, 'daily'>): AggregatedAllocationDataset {
         const dailyDataset = getResolutionDataset('daily');
         const rowsByDate = new Map<string, TemporalBucketRow>();
+        // A bucket with no step starting in it still has its value: the rows get a date at the end of every bucket.
+        const steps = sortedSteps() as AllocationStep[];
+        const coverage = allocationCoverage(steps);
+        const bucketEnds = coverage ? bucketEndDays(coverage, resolution) : null;
+        const source = bucketEnds ? finalizeDataset('daily', allocationRows(steps, dailyDataset.categoryNames, allocationWitnessDays(steps, bucketEnds)), dailyDataset.categoryNames) : dailyDataset;
 
         for (const name of dailyDataset.categoryNames) {
-            const aggregatedPoints = aggregateLineSeries(dailyDataset.lineSeriesByName[name] ?? [], resolution);
+            const aggregatedPoints = aggregateLineSeries(source.lineSeriesByName[name] ?? [], resolution);
 
             for (const point of aggregatedPoints) {
                 const meta = point as LineDataPoint & {bucketStart?: string; bucketEnd?: string};
@@ -579,11 +602,29 @@
     }
 
     /**
+     * One entry per asset, named as sent. An asset takes the colour of its rank in `colorRanks` (the pie's rule: the
+     * designer's sequence, a shade of it past the last); the cash slice, which has no id, keeps the Liquidity colour,
+     * and an id without a rank the Unknown one.
+     */
+    function assetStyling(dataset: AggregatedAllocationDataset, isDark: boolean): SeriesStyle[] {
+        const idByName = new Map<string, number | null>();
+        for (const point of data) for (const component of point.components) if (!idByName.has(component.name) || idByName.get(component.name) == null) idByName.set(component.name, component.id ?? null);
+        const poles = shadePoles(isDark, chartRoles(isDark, chartContainer).color('--lf-surface-card'));
+        return dataset.sortedNames.map((name) => {
+            const id = idByName.get(name) ?? null;
+            const rank = id == null ? undefined : colorRanks?.get(id);
+            const color = id == null ? categoryColor('type', 'Liquidity', isDark, chartContainer) : rank === undefined ? categoryColor('type', 'Unknown', isDark, chartContainer) : sequenceColor(CATEGORY_SEQUENCE, rank, isDark, poles, chartContainer);
+            return {id: name, color, members: [name]};
+        });
+    }
+
+    /**
      * One entry per sector, or per country, each with its colour. A sector wears its own; a country has none: it takes
      * the country sequence (§1.4) by rank among the classified countries, a GR4 shade of it past the fourteenth (GR5),
      * while the unclassified one keeps its own colour.
      */
     function keyedStyling(dataset: AggregatedAllocationDataset, isDark: boolean): SeriesStyle[] {
+        if (dimension === 'asset') return assetStyling(dataset, isDark);
         if (dimension === 'sector') return dataset.sortedNames.map((name) => ({id: name, color: categoryColor('sector', name, isDark, chartContainer), members: [name]}));
         const poles = shadePoles(isDark, chartRoles(isDark, chartContainer).color('--lf-surface-card'));
         const rounds = COUNTRY_SEQUENCE.length * 7;
@@ -695,6 +736,8 @@
                               ),
                           ),
                 smooth: false,
+                // The steps themselves hold each share to the next row; a coarser resolution joins its buckets as it always did.
+                ...(isStepped() ? {step: 'end' as const} : {}),
                 symbol: 'none',
                 lineStyle: {color, width: 1, opacity: 0.7},
                 areaStyle: {color: withHexAlpha(color, '88')},
@@ -734,19 +777,22 @@
                 // has no `overflow-hidden` ancestor around the chart itself.
                 confine: true,
                 position: tooltipPositionSide,
-                axisPointer: {type: 'line', lineStyle: {color: neutrals.axisPointer.line}},
+                // `snap: false`: the pointer's own day, which the tooltip of a step line reads (`pointedDay`).
+                axisPointer: {type: 'line', snap: false, lineStyle: {color: neutrals.axisPointer.line}},
                 backgroundColor: tooltipBg,
                 borderColor: tooltipBorder,
                 borderWidth: 1,
                 textStyle: {color: neutrals.tooltip.box.text, fontSize: 12},
                 formatter: (params: unknown) => {
                     const items = Array.isArray(params) ? params : [params];
-                    const idx = (items[0] as {dataIndex?: number} | undefined)?.dataIndex ?? 0;
+                    // The steps themselves: the row holding the day the pointer is on, not the drawn row nearest to it.
+                    const day = isStepped() ? pointedDay : null;
+                    const idx = day !== null ? indexHoldingDay(dataset.rows, day) : ((items[0] as {dataIndex?: number} | undefined)?.dataIndex ?? 0);
                     const row = dataset.rows[idx];
                     if (!row) return '';
 
                     const theme = buildTooltipTheme(isDark, chartContainer);
-                    const header = buildAllocationTooltipHeader(row, theme.mutedColor);
+                    const header = buildAllocationTooltipHeader(day !== null ? {...row, date: day, bucketStart: day, bucketEnd: day} : row, theme.mutedColor);
                     const remainingLabel = $_('common.remaining') || 'Remaining';
                     if (dimension === 'type') return header + buildFamilyTooltipRows(styling, dataset, idx, theme, remainingLabel);
 
@@ -790,6 +836,7 @@
             dataZoom: buildDataZoomOption(dataset, logicalRange),
             xAxis: {
                 type: 'time',
+                axisPointer: {snap: false},
                 ...(xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber} : {}),
                 axisLabel: {color: textColor, fontSize: 14, rotate: 0, formatter: xAxisPolicy.formatter, ...(xAxisPolicy.axisLabel ?? {})},
                 axisLine: {lineStyle: {color: gridColor}},
@@ -818,6 +865,12 @@
             if (suppressDataZoomHandling) return;
             scheduleResolutionCheck();
         });
+        // The day the pointer is on, exact because the time axis sets `snap: false`; the tooltip of a step line reads it.
+        chartInstance.off('updateAxisPointer');
+        chartInstance.on('updateAxisPointer', (event: unknown) => {
+            const value = (event as {axesInfo?: Array<{value?: unknown}>}).axesInfo?.[0]?.value;
+            pointedDay = typeof value === 'number' && Number.isFinite(value) ? dayOfAxisValue(value) : null;
+        });
     }
 
     // NOTE: getCurrentVisibleLogicalRange() internally calls chartInstance.getOption(),
@@ -838,7 +891,7 @@
 
             logicalRange = range;
 
-            const nextResolution = cascadeResolution(currentResolution, getBucketCountsForRange(range), Math.max(chartInstance.getWidth(), 1));
+            const nextResolution = drawableResolution(cascadeResolution(currentResolution, getBucketCountsForRange(range), Math.max(chartInstance.getWidth(), 1)));
             if (nextResolution === currentResolution) return;
 
             currentResolution = nextResolution;
@@ -878,7 +931,7 @@
         if (!logicalRange) logicalRange = fullRange;
 
         if (shouldPickInitialResolution && fullRange) {
-            currentResolution = chooseInitialResolution(getBucketCountsForRange(fullRange), Math.max(chartInstance.getWidth(), 1));
+            currentResolution = drawableResolution(chooseInitialResolution(getBucketCountsForRange(fullRange), Math.max(chartInstance.getWidth(), 1)));
             shouldPickInitialResolution = false;
         }
 
