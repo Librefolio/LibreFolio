@@ -55,7 +55,7 @@ from backend.app.services.accounts.bootstrap_admin_service import pending_admin
 from backend.app.services.email.delivery import EmailError, send_email
 from backend.app.services.email.flows import account_language, require_email
 from backend.app.services.email.links import email_link, require_links
-from backend.app.services.email.messages import build_email_change_confirmation, build_password_reset
+from backend.app.services.email.messages import build_email_change_confirmation, build_password_reset_after_restore
 from backend.app.utils.datetime_utils import ensure_utc, utcnow
 
 logger = structlog.get_logger(__name__)
@@ -485,7 +485,7 @@ async def _deliver_reset_link(session: AsyncSession, user_id: int, owner_email: 
     try:
         await require_email()
         links = require_links()
-        content = build_password_reset(
+        content = build_password_reset_after_restore(
             language=await account_language(session, user_id),
             link=email_link(AccountTokenPurpose.PASSWORD_RESET, token),
             ttl=max(ensure_utc(expires_at) - ensure_utc(moment), timedelta(0)),

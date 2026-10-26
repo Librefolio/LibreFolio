@@ -696,6 +696,8 @@ async def update_profile(
         await token_service.revoke_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.PASSWORD_RESET)
         # The setup link of the waiting initial administrator went to the old address too: revoked, it waits for a new one (A-33)
         await token_service.revoke_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.ADMIN_SETUP)
+        # A pending change of address was asked for before this one: its link must not move the address again (A5-4)
+        await token_service.revoke_tokens(session, user_id=user.id, purpose=AccountTokenPurpose.EMAIL_CHANGE)
     elif email is not None:
         # The same address written in another case: the stored form follows, nothing else changes.
         user.email = email
