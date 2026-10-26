@@ -10801,3 +10801,11 @@ DOC-2 (ricerca per lingua), DOC-1 (riordino della guida admin, con le guide Tail
     > anonime), `api/index.md`, `hosting_panel_api` (JSON, riga della tabella, «nine keys»), `hosting_instances`, `hosting_panel_backups`, `sleep_wake`. `api sync` fatto.
     > **⚠️ Fuori pista**: un valore non valido di `LIBREFOLIO_MAX_USERS` non è coperto da un test sul pannello: il servizio lo tratta come «mai oltre il limite» e `users_limit` legge la stessa
     > variabile, quindi la risposta del pannello segue la regola di A; nessuna scelta mia. `contratto-istanza.md` del cloud va aggiornato da loro (`app_version`, `users_over_limit`).
+12. ✅ **H5-9 · la documentazione del ripristino dal pannello dopo B5-1j/k2/l e A5-7** (26/10). Solo documentazione e descrizioni, dopo l'unione di B nel ramo (`6e3ddfd65`).
+    > **Note implementazione**: le frasi vecchie «names no owner» / «does none of this» erano in `hosting_panel_backups.en.md` (sezione `#restore-owner-pending`) e in `hosting_instances.en.md`
+    > (`#restore-owner`), non in `hosting_providers.en.md` (lì non c'era nessuna frase da correggere). Ora dicono che il ripristino dal pannello sceglie il titolare da solo
+    > ([Without Anyone to Ask](backup_restore.md#owner-pick)), che con nessuno da scegliere va avanti senza titolare, e che nel caso dello stesso istanza con titolare già all'indirizzo il titolare tiene
+    > password e sessioni e nessun link parte ([`#owner-kept`](backup_restore.md#owner-kept)). Tabella dei rifiuti del pannello: la riga `409` ha anche `owner_email_not_set` e `owner_conflict`. Rapporto del
+    > controllo: nuovo punto «A restore is never refused for too many accounts» (avviso `users_over_limit`, poi `panel/status` `users_over_limit: true` e la scelta dell'admin al primo accesso, link a
+    > `backup_restore.md#users-limit`). `panel_restore.py`: la descrizione del `409` della conferma dice `restore_stage_outdated` anche per l'indirizzo del titolare cambiato, e aggiunge `owner_email_not_set` e `owner_conflict`. `api sync` fatto.
+    > **⚠️ Fuori pista**: la riga del `409` di `POST /backup/restore/stage/{id}/confirm` in `security.md` (app, di B) non nomina i codici del titolare (`owner_*`): non l'ho toccata, è di B.

@@ -270,7 +270,7 @@ def get_panel_restore_check(stage_id: str, _caller: RestoreCaller) -> PanelResto
         **_GATE_RESPONSES,
         404: {"description": "No check has this id, or its copy is gone (code `restore_stage_not_found`); or the restore routes are off"},
         409: {
-            "description": "The check still runs (code `restore_stage_running`), refused the archive (code `restore_not_restorable`), LibreFolio was updated since (code `restore_stage_outdated`), another restore waits (code `restore_already_pending`), or the instance is not awaiting its restore (code `restore_mode_required`)"
+            "description": "The check still runs (code `restore_stage_running`), refused the archive (code `restore_not_restorable`), LibreFolio was updated since, or the owner's address changed since the check (code `restore_stage_outdated`), another restore waits (code `restore_already_pending`), or the instance is not awaiting its restore (code `restore_mode_required`). On a managed instance: no `LIBREFOLIO_ADMIN_EMAIL` (code `owner_email_not_set`), or the backup holds two accounts on one address or one name, the owner's address as another account's name, or an administrator still waiting for its setup link while no account holds the owner's address (code `owner_conflict`)"
         },
         410: {"description": "The check expired: check the archive again (code `restore_stage_expired`)"},
         500: {"description": "The confirmation could not be written (code `restore_confirm_failed`), or the state of the restore cannot be read (code `restore_state_unreadable`): nothing confirmed"},

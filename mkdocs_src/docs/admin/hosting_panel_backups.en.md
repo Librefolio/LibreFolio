@@ -236,6 +236,12 @@ paths are under `/api/v1/backup/panel/restore`:
   warnings and blockers (`no_administrator`), the control totals as a verdict (`same`, `changed`,
   `absent`, `other_version` or `unreadable`) with the number of differences, `administrators_count`,
   `restorable` and `expires_at`. Never a username, an amount, a table or a size.
+- **A restore is never refused for too many accounts.** When the backup holds more active accounts than
+  `LIBREFOLIO_MAX_USERS` allows, the report's `warnings` holds `users_over_limit` (no names, no numbers), and the
+  confirmation goes on as for any other backup. After the restart, `GET /api/v1/panel/status` says `users_over_limit: true`
+  ([The Setup Status](hosting_panel_api.md#panel-status)), ordinary users are refused, and at their first sign-in an
+  administrator chooses who keeps access: the others are deactivated, never deleted
+  ([More Accounts Than the Plan Allows](backup_restore.md#users-limit)).
 - **Your panel sees only the checks it started.** A check started by an administrator or from the
   command line answers `404` with the code `restore_stage_not_found`, as an unknown id.
 - **The status names who confirmed only as `confirmed_via`**: `admin`, `cli` or `panel`. A
@@ -284,7 +290,7 @@ ticket learns neither whether the instance is blocked nor whether it awaits a re
 | `400` | The upload is empty, incomplete, or not an `.lfbk` file; the check has no password, a wrong one, or a damaged file (the upload stays, for another try) | `backup_upload_empty`, `backup_upload_incomplete`, `restore_envelope_required`, `password_required`, `wrong_password`, `envelope_damaged` |
 | `413` | The file is larger than the [upload limit](#restore-upload-limit) | `backup_too_large` |
 | `404` | No upload or no check has this id; or no restore is confirmed, for `DELETE …/pending` | `backup_upload_not_found`, `restore_stage_not_found`, `restore_not_pending` |
-| `409` | Another file is being checked, a secure backup this version cannot read, a check still running or that refused the file, LibreFolio updated since the check, another restore already confirmed, or a restart with no restore confirmed | `restore_busy`, `envelope_unsupported`, `restore_stage_running`, `restore_not_restorable`, `restore_stage_outdated`, `restore_already_pending`, `restore_not_pending` |
+| `409` | Another file is being checked, a secure backup this version cannot read, a check still running or that refused the file, LibreFolio updated since the check or the owner's address changed since then, another restore already confirmed, a restart with no restore confirmed, or, on a `managed` instance, no `LIBREFOLIO_ADMIN_EMAIL` or a backup with owner conflicts (two accounts on one address or one name, the owner's address as another account's name, an administrator still waiting for its setup link): [Without Anyone to Ask](backup_restore.md#owner-pick) | `restore_busy`, `envelope_unsupported`, `restore_stage_running`, `restore_not_restorable`, `restore_stage_outdated`, `restore_already_pending`, `restore_not_pending`, `owner_email_not_set`, `owner_conflict` |
 | `410` | The check expired: check the file again | `restore_stage_expired` |
 | `507` | Not enough free space in the data directory | `backup_no_space`, `no_space` |
 | `500` | The data directory's restore folder cannot be used, the state of the restore cannot be read (the answer's `detail` then adds `reason`: `io`, `not_a_file` or `invalid`), or a step could not be done; the log has the cause | `restore_folder_unusable`, `restore_state_unreadable`, `backup_upload_failed`, `stage_failed`, `restore_confirm_failed`, `restore_restart_failed`, `restore_cancel_failed` |
@@ -349,9 +355,14 @@ names the account of the backup that becomes the owner's (the person whose addre
 `LIBREFOLIO_ADMIN_EMAIL`). The first start on the restored data gives that account the owner's
 address and sends the owner a link to choose a password: a backup may come from anywhere, and whoever
 prepared it must not be able to sign in as the owner. A restore from your panel or from the command
-line names no owner, and none of this happens.
+line has nobody to ask, so the confirmation picks the owner itself from the checked copy: the account that already holds
+that address, or else the one active administrator the backup marks as its owner ([Without Anyone to Ask](backup_restore.md#owner-pick)).
+With nobody to pick, the restore goes on without an owner and the instance serves its data. And when your panel restores the
+same instance after a fault, and the backup's owner already holds the address, the owner keeps their password and open
+sessions and no link is sent ([The Owner Keeps Their Password](backup_restore.md#owner-kept)): nothing waits for the owner,
+so none of the next paragraph applies.
 
-Until the owner has their account, the instance serves **no data**, exactly as in
+When an account was picked and is not ready yet, the instance serves **no data**, exactly as in
 [the previous section](#restore-interrupted): the same skipped steps, the same `423
 instance_restore_interrupted` for every call but the probes, `GET /api/v1/system/instance`, the
 scheduled wake-up and your panel's routes, and the same `409 backup_restore_interrupted` for a backup
