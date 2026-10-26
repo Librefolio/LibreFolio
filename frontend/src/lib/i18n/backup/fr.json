@@ -151,7 +151,8 @@
         },
         "expires": "La copie vérifiée est conservée jusqu'au {date}.",
         "drop": "Abandonner cette archive",
-        "ownAccountMissing": "Votre compte ne fait pas partie des administrateurs de cette sauvegarde : après le redémarrage, vous ne pourrez plus vous connecter avec ce compte."
+        "ownAccountMissing": "Votre compte ne fait pas partie des administrateurs de cette sauvegarde : après le redémarrage, vous ne pourrez plus vous connecter avec ce compte.",
+        "usersOverLimit": "Cette sauvegarde contient {active} comptes actifs, mais cette instance en accepte {limit}. La restauration continue ; quand un administrateur se connectera, il choisira qui garde l'accès, et les autres comptes seront désactivés, pas supprimés."
       },
       "confirm": {
         "word": "restaurer",

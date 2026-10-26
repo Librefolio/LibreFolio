@@ -2279,7 +2279,7 @@ whatever its purpose and expired or not, gets `revoked_at` = the restore time, w
 without offset). A link spent or revoked on the instance after the backup was taken is live again in the backup's
 database: without this it would work a second time. The links issued after the backup are not in the restored
 database at all. The count is logged, as `links_revoked` of *Restore committed: every session ended, the backup's
-one-time links revoked*.
+one-time links revoked*. When the restore keeps the owner's password (a panel restore, B5-1l), the line reads *Restore committed: every session ended but the owner's, the backup's one-time links revoked*.
 
 An account the backup held waiting for its email verification (inactive, with an unspent verification token:
 `verification.awaiting_verification()`) loses its token with the others, the hold included, and so stops waiting. The

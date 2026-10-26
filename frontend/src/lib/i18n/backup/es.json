@@ -151,7 +151,8 @@
         },
         "expires": "La copia comprobada se conserva hasta el {date}.",
         "drop": "Descartar este archivo",
-        "ownAccountMissing": "Tu cuenta no está entre los administradores de esta copia de seguridad: después del reinicio no podrás iniciar sesión con ella."
+        "ownAccountMissing": "Tu cuenta no está entre los administradores de esta copia de seguridad: después del reinicio no podrás iniciar sesión con ella.",
+        "usersOverLimit": "Esta copia tiene {active} cuentas activas, pero esta instancia admite {limit}. La restauración continúa; cuando un administrador inicie sesión, elegirá quién conserva el acceso, y las demás cuentas se desactivarán, no se eliminarán."
       },
       "confirm": {
         "word": "restaurar",

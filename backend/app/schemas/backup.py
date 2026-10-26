@@ -246,6 +246,7 @@ class RestoreStageReport(BaseModel):
             "non_iso_currencies",
             "credentials_from_backup",
             "confirming_account_not_in_backup",
+            "users_over_limit",
         ]
     ]
     blockers: list[Literal["no_administrator"]]
@@ -255,6 +256,13 @@ class RestoreStageReport(BaseModel):
     restorable: bool
     expires_at: datetime
     owner_choice: RestoreOwnerChoice | None = None
+    # B5-1k2, information only (a restore refuses nothing for too many users): users_active: the accounts that will be
+    # active after the restore (the owner's, activated, included); users_limit: LIBREFOLIO_MAX_USERS when checked (null: no
+    # limit, or a value that is not valid); users_over_limit: how many accounts too many. The warning users_over_limit says
+    # that the administrator chooses who keeps access at the first sign-in.
+    users_active: int = Field(default=0, ge=0)
+    users_limit: int | None = None
+    users_over_limit: int = Field(default=0, ge=0)
 
 
 # B5-1: the account of the backup the owner chose; required on a managed instance, refused elsewhere.

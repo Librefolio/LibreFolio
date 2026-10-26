@@ -880,12 +880,44 @@ def api_panel_restore(verbose: bool = False, test_names: list[str] | None = None
     return run_command(cmd, "Hosting panel restore API tests", verbose=verbose)
 
 
+def api_backup_users_limit(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Test a backup with more active accounts than LIBREFOLIO_MAX_USERS through the API: the report warns, the confirmation never refuses (lot B5-1k2)."""
+    print_section("Backup API: users limit")
+    print_info("Testing: GET /backup/restore/stage/{id} (users_active, users_limit, users_over_limit, the warning), POST .../confirm (202, body unchanged), the hosting panel's view (the warning, no numbers), OpenAPI")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_users_limit_api.py", test_names)
+    return run_command(cmd, "Backup API users limit tests", verbose=verbose)
+
+
+def api_backup_users_limit_panel(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Test the hosting panel's side of a backup with more active accounts than LIBREFOLIO_MAX_USERS (lot B5-1k2)."""
+    print_section("Backup API: users limit, hosting panel")
+    print_info("Testing: the panel's stage report carries the warning users_over_limit and no number, its confirmation is accepted (panel_restore.py, H's, untouched)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_users_limit_panel_api.py", test_names)
+    return run_command(cmd, "Backup API users limit panel tests", verbose=verbose)
+
+
 def api_backup_owner_channels(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run the tests of the owner of a restore confirmed by the hosting panel or from the command line (B5-1j)."""
     print_section("Restore Owner, Panel and Command Line API")
     print_info("Testing: the panel's confirmation on a managed instance picks the account holding the owner's address (nobody found: 202, outcome none), 409 owner_conflict with advice, 409 restore_stage_outdated, self-hosted unchanged; the real restore guard for a restore of the command line or panel (423 owner_assignment while pending, served once recorded, an error keeps refusing, reset allowed)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_owner_channels_api.py", test_names)
     return run_command(cmd, "Restore owner, panel and command line API tests", verbose=verbose)
+
+
+def api_backup_owner_kept(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the tests of the hosting panel's confirmation that keeps the owner's password and sessions (B5-1l)."""
+    print_section("Restore Owner Kept, Hosting Panel API")
+    print_info("Testing: the panel's confirmation on a managed instance where the backup marks exactly one account as its instance owner (an active administrator holding LIBREFOLIO_ADMIN_EMAIL): 202 with PanelRestoreStatus unchanged and restore.json recording that account and owner_outcome kept; the panel's status view says nothing of it; a second mark or an unmarked holder is B5-1j's pick without outcome; owner_conflict is still 409 first")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_owner_kept_api.py", test_names)
+    return run_command(cmd, "Restore owner kept, hosting panel API tests", verbose=verbose)
+
+
+def api_backup_owner_kept_app(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the tests of the administrators' route next to the restore that keeps the owner (B5-1l): the app never keeps."""
+    print_section("Restore Owner Kept, Administrators' API")
+    print_info("Testing: the check through the administrators' route counts the one marked account (owner_marks); the same copy confirmed with the owner chosen is 202 with no outcome (never kept) and the status view names nothing of the owner")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_owner_kept_app_api.py", test_names)
+    return run_command(cmd, "Restore owner kept, administrators' API tests", verbose=verbose)
 
 
 def api_await_restore_mode(verbose: bool = False, test_names: list[str] | None = None) -> bool:
@@ -1481,6 +1513,29 @@ Tests for REST API endpoints (server auto-started):
     )
     add_test(
         api,
+        "backup-users-limit",
+        api_backup_users_limit,
+        name="Backup Users Limit API",
+        desc="Lot B5-1k2, a backup with more active accounts than LIBREFOLIO_MAX_USERS through the routes: the administrators' stage report (RestoreStageReport) carries users_active, users_limit, users_over_limit (exact keys) and the warning users_over_limit before credentials_from_backup, nothing about who; the confirmation is 202 with the body unchanged ({owner_user_id}), for a regular and a managed instance; the hosting panel's view (PanelRestoreStageReport, its twenty fields) carries the warning code and no number, and its confirmation is accepted; OpenAPI documents the three fields and the code in the warnings, and no new field in the confirmation's body",
+        tests="Report users_* + warning → confirm 202 → panel view (code only) and confirm → OpenAPI",
+        # PURE: an app of the test holds backup_router (get_current_user overridden) / the app of main.py for the panel, data
+        # directories under tmp_path, real archives from the staging tests' alembic database; no lane server, DB or network is
+        # reached (the api category still starts the lane's backend around it).
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "backup-users-limit-panel",
+        api_backup_users_limit_panel,
+        name="Backup Users Limit, Hosting Panel",
+        desc="Lot B5-1k2: the hosting panel (H's panel_restore.py and PanelRestoreStageReport, untouched) and a sealed backup with more active accounts than LIBREFOLIO_MAX_USERS: the panel's stage report carries the warning users_over_limit in warnings (before credentials_from_backup) and NO number or account (its twenty fields are the same, users_active, users_limit and users_over_limit are not among them), its confirmation is 202 pending via the panel, also when the limit changed after the check (not restore_stage_outdated)",
+        tests="Panel check of a backup over the limit → report: the code, no number → confirm 202",
+        # PURE: the app of main.py in this process (ASGI), the panel's fixtures of test_panel_restore_api.py, data directories
+        # under tmp_path; no lane server, DB or network is reached.
+        isolation="pure",
+    )
+    add_test(
+        api,
         "backup-owner-channels",
         api_backup_owner_channels,
         name="Restore Owner, Panel and CLI",
@@ -1489,6 +1544,30 @@ Tests for REST API endpoints (server auto-started):
         # PURE: the app of main.py in this process (ASGI) on a private database / the panel's fixtures of test_panel_restore_api.py,
         # data directories under tmp_path, real archives from the staging tests' alembic databases; no lane server, DB or network
         # is reached (the api category still starts the lane's backend around it).
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "backup-owner-kept",
+        api_backup_owner_kept,
+        name="Restore Owner Kept, Hosting Panel",
+        desc="Lot B5-1l: the hosting panel's confirmation (H's route, untouched) on a managed instance with LIBREFOLIO_ADMIN_EMAIL set, for a backup that marks exactly ONE account as its instance owner (StagingReport.owner_marks 1) that is an active administrator holding the owner's address: 202 with PanelRestoreStatus exactly as ever (eleven fields, no account, no address, no word about an owner) and restore.json recording that account and owner_outcome kept; the panel's status view afterwards names nothing of it; GUARDS: a second mark, an unmarked holder or nobody marked is B5-1j's pick (the holder as the owner, no outcome, 202); owner_conflict is still 409 first",
+        tests="Panel confirm of the copy the rule keeps → 202, kept in restore.json → status view silent; condition missing → B5-1j; owner_conflict 409",
+        # PURE: the app of main.py in this process (ASGI), the panel's fixtures of test_panel_restore_api.py and the helpers of
+        # test_backup_owner_channels_api.py, data directories under tmp_path, real archives from the staging tests' alembic
+        # databases; no lane server, DB or network is reached (the api category still starts the lane's backend around it).
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "backup-owner-kept-app",
+        api_backup_owner_kept_app,
+        name="Restore Owner Kept, Administrators",
+        desc="Lot B5-1l: the administrators' route (the app) next to the restore that keeps the owner: a real check of a backup with one marked administrator holding the owner's address counts the mark (owner_marks 1, the candidate marked); GUARD: the same copy confirmed with {owner_user_id: that account} is 202, a plain RestoreStatus (twelve fields), restore.json records the account chosen and NO outcome (never kept), and neither the confirmation nor the status view says a word of the owner, the outcome, an address or an id",
+        tests="Real check counts the mark → app confirm with the owner chosen: 202, no outcome → status view silent",
+        # PURE: an app of the test holds backup_router (get_current_user overridden), data directories under tmp_path, real
+        # archives from the staging tests' alembic database; no lane server, DB or network is reached (the api category still
+        # starts the lane's backend around it).
         isolation="pure",
     )
     add_test(

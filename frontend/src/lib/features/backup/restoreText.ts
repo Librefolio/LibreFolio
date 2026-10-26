@@ -31,10 +31,12 @@ export const WARNING_KEYS: Record<string, string> = {
     // notice of its own (RestoreReportModal).
     credentials_from_backup: 'backup.restore.report.signInAgain',
     confirming_account_not_in_backup: 'backup.restore.report.ownAccountMissing',
+    // B5-1k2: a notice of its own, with the numbers (RestoreReportModal)
+    users_over_limit: 'backup.restore.report.usersOverLimit',
 };
 
 /** The warnings the report shows apart, never as a line of its warnings box. */
-export const WARNINGS_SHOWN_APART: ReadonlySet<string> = new Set(['credentials_from_backup', 'confirming_account_not_in_backup']);
+export const WARNINGS_SHOWN_APART: ReadonlySet<string> = new Set(['credentials_from_backup', 'confirming_account_not_in_backup', 'users_over_limit']);
 
 /** How the ledger's control totals compare (lot B-13). */
 export const TOTALS_KEYS: Record<string, string> = {
