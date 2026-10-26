@@ -65,6 +65,17 @@ service-parity tests (the guard that the window changes nothing the API returns)
 HEAD's call. Section 5 and the empty windows of section 6 are red on the product without the service's empty-window
 fallback (14 tests); the irregular history of section 5 is what tells a fallback taken from the first state alone.
 
+D-P4 («cure B», series in steps), the contract these tests now state: ``build_history``, ``build_broker_pnl_history`` and
+``build_pnl_candles`` return STEPS — dicts with ``date`` and ``through`` (both included), one per run of identical values,
+clipped to the window's days with a state — and the service no longer cuts their output: the builder's window is the cut.
+So HEAD's oracle «the whole build cut with ``from <= date <= to``» is now «the whole build's steps clipped to the window
+with ``series_steps.points_between``» (``_head_cut``), and HEAD's call («the call site stripped of its window») is that
+same whole build, clipped by the test (``_head_output``). The acquisition funding is a flow series of events, unchanged
+(still cut by date). A synthetic history whose every day differs has one-day steps, which would test none of that:
+section 7 adds a history with quiet runs, whose expansion to days is checked against a one-state oracle for every window,
+and whose consecutive steps are never identical. ``get_history`` makes two ``build_performance_inputs`` calls (the TWRR
+and ROI days, then the MWRR line's days): section 3 and 4 count them.
+
 Pure: no database (the service runs on a session that finds no row), no server, no network.
 """
 
@@ -82,6 +93,7 @@ import pytest
 
 from backend.app.db.models import TransactionType
 from backend.app.schemas.common import Currency as CurrencySchema
+from backend.app.schemas.portfolio import BrokerPnlHistory, PnlCandleSeries
 from backend.app.services.financial_math.portfolio.classifier import ScopeAwareTransactionClassifier
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
 from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder
@@ -100,6 +112,7 @@ from backend.app.services.financial_math.returns import (
     period_mwrr_series,
     rebase_to_period,
 )
+from backend.app.services.financial_math.series_steps import points_between
 from backend.app.services.portfolio_service import PortfolioService
 from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
 from backend.test_scripts.test_services._engine_native_cash import engine_native_cash
@@ -307,11 +320,16 @@ def _inside(day: date, date_from: date | None, date_to: date | None, *, exclusiv
 
 
 def _head_cut(output: list[dict] | dict[int, list[dict]], date_from: date | None, date_to: date | None, *, exclusive_start: bool) -> Any:
-    """The whole build cut as the service cut it on HEAD; a broker left with no point has no entry."""
+    """The whole build cut to the window (D-P4): a level series is steps, clipped to ``[date_from, date_to]`` with
+    ``points_between`` (a step crossing a bound keeps its days inside it); the flow series is events, cut by date as
+    HEAD cut it, ``from < date <= to``. A broker left with no step has no entry."""
+    if exclusive_start:
+        return [point for point in output if _inside(point["date"], date_from, date_to, exclusive_start=True)]
+    first, last = date_from or date.min, date_to or date.max
     if isinstance(output, dict):
-        cut = {broker_id: [point for point in points if _inside(point["date"], date_from, date_to)] for broker_id, points in output.items()}
+        cut = {broker_id: points_between(points, first, last) for broker_id, points in output.items()}
         return {broker_id: points for broker_id, points in cut.items() if points}
-    return [point for point in output if _inside(point["date"], date_from, date_to, exclusive_start=exclusive_start)]
+    return points_between(output, first, last)
 
 
 def _parity(view: str, states: list[DailyPortfolioState], whole: dict[str, Any], date_from: date | None, date_to: date | None) -> tuple[Any, Any]:
@@ -443,6 +461,13 @@ CALL_SITES: dict[str, tuple[str, str]] = {
     "get_acquisition_funding_history": ("get_acquisition_funding_history", "build_acquisition_funding"),
 }
 
+# How many times each call site calls its builder method (D-P4): get_history asks the performance inputs twice — for the
+# TWRR and ROI days, then for the MWRR line's days —, every other call site once.
+CALL_COUNTS: dict[str, int] = {"get_history-performance_inputs": 2}
+
+# The builder methods whose output is steps: the service no longer cuts it, so HEAD's output is the whole build clipped.
+STEP_BUILDERS = frozenset({"build_history", "build_broker_pnl_history", "build_pnl_candles"})
+
 # The windows get_report can ask of the services: start <= end, the end inside the history (it is the engine's last day).
 SERVICE_WINDOWS: dict[str, tuple[date | None, date]] = {
     "mid-history": (_day(6), _day(11)),
@@ -458,7 +483,8 @@ SERVICE_WINDOWS: dict[str, tuple[date | None, date]] = {
 def _record_windows(monkeypatch: pytest.MonkeyPatch, method: str, *, strip: bool = False) -> list[tuple]:
     """Record the window each call of ``DerivedViewsBuilder.<method>`` receives, as a tuple of its window parameters.
 
-    The real method still answers: with the window it was given, or, with ``strip``, with none — HEAD's call.
+    The real method still answers: with the window it was given, or, with ``strip``, with none — HEAD's call: the window
+    parameters are dropped and every other argument (``metrics``, ``extra_days``, ``days``) is kept.
     """
     names = WINDOW_PARAMETERS[method]
     build = getattr(DerivedViewsBuilder, method)
@@ -467,7 +493,10 @@ def _record_windows(monkeypatch: pytest.MonkeyPatch, method: str, *, strip: bool
     def recording(self: DerivedViewsBuilder, *args: Any, **kwargs: Any) -> Any:
         given = dict(zip(names, args, strict=False)) | kwargs
         calls.append(tuple(given.get(name) for name in names))
-        return build(self) if strip else build(self, *args, **kwargs)
+        if not strip:
+            return build(self, *args, **kwargs)
+        assert len(args) <= len(names), f"{method} is called with a positional argument that is not its window: {args}"
+        return build(self, **{key: value for key, value in kwargs.items() if key not in names})
 
     monkeypatch.setattr(DerivedViewsBuilder, method, recording)
     return calls
@@ -478,6 +507,30 @@ async def _serve(service_method: str, states: list[DailyPortfolioState], date_fr
     service = PortfolioService(_EmptyDatabase())
     result = PortfolioCalculationResult(daily_states=states, target_currency=CCY)
     return await getattr(service, service_method)(user_id=1, date_from=date_from, date_to=date_to, target_currency_override=CCY, _precomputed_engine_result=result)
+
+
+def _clipped(output: Any, date_from: date | None, date_to: date | None) -> Any:
+    """A service output of steps cut to the window as HEAD's call gets it (D-P4): every step clipped with
+    ``points_between``. A series with no step left is empty; a broker with none is dropped, unless none has one, when
+    every broker stays with an empty series (HEAD listed every broker of a window holding no state)."""
+    first, last = date_from or date.min, date_to or date.max
+    if isinstance(output, PnlCandleSeries):
+        return output.model_copy(update={"points": points_between(output.points, first, last)})
+    if output and isinstance(output, list) and isinstance(output[0], BrokerPnlHistory):
+        cut = [item.model_copy(update={"points": points_between(item.points, first, last)}) for item in output]
+        kept = [item for item in cut if item.points]
+        return kept or cut
+    return points_between(output, first, last)
+
+
+async def _head_output(monkeypatch: pytest.MonkeyPatch, service_method: str, method: str, states: list[DailyPortfolioState], date_from: date | None, date_to: date | None) -> tuple[list[tuple], Any]:
+    """(the calls recorded, the service's output) with ``method`` stripped of its window — HEAD's call, which builds the
+    whole history — and, for a builder of steps, cut to the service's window as the test cuts it (D-P4: the service no
+    longer cuts, so the whole build's steps are clipped here with ``points_between``)."""
+    with monkeypatch.context() as patch:
+        calls = _record_windows(patch, method, strip=True)
+        output = await _serve(service_method, states, date_from, date_to)
+    return calls, _clipped(output, date_from, date_to) if method in STEP_BUILDERS else output
 
 
 def _dump(output: Any) -> Any:
@@ -551,8 +604,8 @@ class TestTheWindowedViewsAreTheWholeOnesCut:
         while the level series start on day 6."""
         builder = DerivedViewsBuilder(history, CCY)
         assert [point["date"] for point in builder.build_acquisition_funding(_day(6), _day(10))] == [_day(10)]
-        assert [point["date"] for point in builder.build_history(_day(6), _day(10))] == [_day(index) for index in range(6, 11)]
-        assert [point["date"] for point in builder.build_pnl_candles(_day(6), _day(10))] == [_day(7), _day(8), _day(10)]
+        assert [(point["date"], point["through"]) for point in builder.build_history(_day(6), _day(10))] == [(_day(index), _day(index)) for index in range(6, 11)]
+        assert [(point["date"], point["through"]) for point in builder.build_pnl_candles(_day(6), _day(10))] == [(_day(7), _day(7)), (_day(8), _day(8)), (_day(10), _day(10))], "days 6 and 9 have no candle: gaps, not steps"
 
     def test_an_empty_history_has_empty_views_for_any_window(self):
         builder = DerivedViewsBuilder([], CCY)
@@ -669,8 +722,9 @@ class TestOnlyTheWindowIsRead:
 
 class TestTheServiceBuildsOnlyTheWindow:
     """Each call site, on a 1 000-day history with its last month as window: the builder it calls reads that month only
-    (the performance inputs: from the opening, the window's first day, to the end). On HEAD the call site passes no
-    window and its builder reads all 1 000 days: a cost red, the same a call site that drops its window gives."""
+    (the performance inputs: from the opening, the window's first day, to the end), in every call it makes — get_history
+    asks the performance inputs twice (D-P4: the TWRR and ROI days, then the MWRR line's). On HEAD the call site passes
+    no window and its builder reads all 1 000 days: a cost red, the same a call site that drops its window gives."""
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(("service_method", "method"), list(CALL_SITES.values()), ids=list(CALL_SITES))
@@ -680,9 +734,11 @@ class TestTheServiceBuildsOnlyTheWindow:
         date_from, date_to = first + timedelta(days=days - 31), first + timedelta(days=days - 1)
         reads_by_call = _record_reads(monkeypatch, method, reads)
         await _serve(service_method, states, date_from, date_to)
-        assert len(reads_by_call) == 1, f"one call of {method}, got {len(reads_by_call)}"
+        expected_calls = CALL_COUNTS.get(next(name for name, site in CALL_SITES.items() if site == (service_method, method)), 1)
+        assert len(reads_by_call) == expected_calls, f"{expected_calls} call(s) of {method}, got {len(reads_by_call)}"
         start = date_from + timedelta(days=1) if method == "build_acquisition_funding" else date_from
-        _assert_read_exactly(reads_by_call[0], _dates_between(start, date_to))
+        for reads_of_call in reads_by_call:
+            _assert_read_exactly(reads_of_call, _dates_between(start, date_to))
 
 
 # =============================================================================
@@ -694,23 +750,48 @@ class TestTheServiceHandsItsWindowToTheBuilder:
     @pytest.mark.asyncio
     @pytest.mark.parametrize(("service_method", "method"), list(CALL_SITES.values()), ids=list(CALL_SITES))
     async def test_the_call_site_passes_the_window(self, history, monkeypatch, service_method, method):
-        """The builder is called once, with the service's window: (from, to), or (from,) for the performance inputs."""
+        """The builder is called as many times as the call site needs (once; twice for the TWRR/ROI and the MWRR line of
+        ``get_history``, D-P4), each time with the service's window: (from, to), or (from,) for the performance inputs."""
         date_from, date_to = _day(6), _day(11)
         calls = _record_windows(monkeypatch, method)
         await _serve(service_method, history, date_from, date_to)
-        assert calls == [(date_from, date_to)[: len(WINDOW_PARAMETERS[method])]]
+        site = next(name for name, value in CALL_SITES.items() if value == (service_method, method))
+        assert calls == [(date_from, date_to)[: len(WINDOW_PARAMETERS[method])]] * CALL_COUNTS.get(site, 1)
+
+    @pytest.mark.asyncio
+    async def test_the_history_asks_the_performance_inputs_for_its_steps_then_for_the_mwrr_line(self, history, monkeypatch):
+        """``get_history_steps`` (D-P4) hands ``build_performance_inputs`` the days it needs: the first call the days
+        where TWRR and ROI may change (the start of every step of the history, and the range's end), the second the days of
+        the MWRR line — every one of its points, each solved on its own day — and both the service's ``date_from``."""
+        date_from, date_to = _day(3), _day(11)
+        recorded: list[dict[str, Any]] = []
+        build = DerivedViewsBuilder.build_performance_inputs
+
+        def recording(self: DerivedViewsBuilder, *args: Any, **kwargs: Any) -> Any:
+            recorded.append({"args": args, "days": None if kwargs.get("days") is None else list(kwargs["days"])})
+            return build(self, *args, **kwargs)
+
+        monkeypatch.setattr(DerivedViewsBuilder, "build_performance_inputs", recording)
+        result = PortfolioCalculationResult(daily_states=history, target_currency=CCY)
+        steps = await PortfolioService(_EmptyDatabase()).get_history_steps(user_id=1, date_from=date_from, date_to=date_to, target_currency_override=CCY, _precomputed_engine_result=result)
+
+        assert steps.range is not None and (steps.range.start, steps.range.end) == (date_from, date_to)
+        assert [call["args"] for call in recorded] == [(date_from,), (date_from,)], "two calls, each with the period's start"
+        twrr_days, mwrr_days = recorded[0]["days"], recorded[1]["days"]
+        assert twrr_days is not None and {point.date for point in steps.history} <= set(twrr_days) and steps.range.end in twrr_days, "TWRR and ROI are asked on every step's start and on the end"
+        assert mwrr_days == [point.date for point in steps.mwrr_line], "the MWRR line's days are asked, in order, one point each"
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(("date_from", "date_to"), list(SERVICE_WINDOWS.values()), ids=list(SERVICE_WINDOWS))
     @pytest.mark.parametrize(("service_method", "method"), list(CALL_SITES.values()), ids=list(CALL_SITES))
     async def test_the_output_is_the_same_as_without_the_window(self, history, monkeypatch, service_method, method, date_from, date_to):
-        """The service's output, serialized as the API does, with the call site stripped of its window (HEAD's call)
-        and as it is."""
-        with monkeypatch.context() as patch:
-            stripped_calls = _record_windows(patch, method, strip=True)
-            stripped = _dump(await _serve(service_method, history, date_from, date_to))
-        assert len(stripped_calls) == 1, "barrier: the stripped run went through the call site"
-        assert _dump(await _serve(service_method, history, date_from, date_to)) == stripped
+        """The service's output, serialized as the API does, with the call site stripped of its window (HEAD's call: the
+        builder builds the whole history, and for a builder of steps the test then clips them to the window with
+        ``points_between``, since the service no longer cuts) and as it is."""
+        site = next(name for name, value in CALL_SITES.items() if value == (service_method, method))
+        stripped_calls, stripped = await _head_output(monkeypatch, service_method, method, history, date_from, date_to)
+        assert len(stripped_calls) == CALL_COUNTS.get(site, 1), "barrier: the stripped run went through the call site"
+        assert _dump(await _serve(service_method, history, date_from, date_to)) == _dump(stripped)
 
 
 # =============================================================================
@@ -740,12 +821,11 @@ def _irregular_history(states: Sequence[DailyPortfolioState]) -> list[DailyPortf
 
 
 async def _broker_pnl_history_against_head(monkeypatch: pytest.MonkeyPatch, states: list[DailyPortfolioState], date_from: date | None, date_to: date | None) -> tuple[Any, Any]:
-    """(get_broker_pnl_history as it is, the same with its builder call stripped of the window — HEAD's call), as JSON."""
-    with monkeypatch.context() as patch:
-        stripped_calls = _record_windows(patch, "build_broker_pnl_history", strip=True)
-        head = _dump(await _serve("get_broker_pnl_history", states, date_from, date_to))
+    """(get_broker_pnl_history as it is, the same with its builder call stripped of the window — HEAD's call — and its
+    whole-history steps clipped to the window by the test, see ``_head_output``), as JSON."""
+    stripped_calls, head = await _head_output(monkeypatch, "get_broker_pnl_history", "build_broker_pnl_history", states, date_from, date_to)
     assert len(stripped_calls) == 1, "barrier: the stripped run went through the call site"
-    return _dump(await _serve("get_broker_pnl_history", states, date_from, date_to)), head
+    return _dump(await _serve("get_broker_pnl_history", states, date_from, date_to)), _dump(head)
 
 
 def _brokers_and_points(output: list[dict]) -> list[tuple[int, str, list]]:
@@ -892,3 +972,141 @@ class TestTheEngineListsEveryBrokerEveryDay:
         output, head = await _broker_pnl_history_against_head(monkeypatch, states, date_from, date_to)
         assert {item["broker_id"] for item in head} == ENGINE_BROKERS, "barrier: HEAD's call lists every broker"
         assert output == head
+
+
+# =============================================================================
+# 7. Steps (D-P4): a history with quiet runs, gaps and brokers that come and go
+# =============================================================================
+#
+# The synthetic history of the sections above changes every day: its steps are one day long, so a clip, a merge or a gap
+# would go unseen. This one repeats the figures of an earlier day on the days of QUIET_COPIES, so the history, the candles
+# and the brokers' P&L have steps of several days; day 9 has no candle and days 10-12 repeat it, so the candles have a gap of
+# four days; broker 33 is absent on days 4-7 and broker 22 on days 0-1, so their series have a gap and a late start.
+# The oracle of a day is built from that day's state alone — the view of a one-state history —, so it does not depend on
+# the merging it checks.
+
+# day index -> the index of the day whose figures it repeats (a quiet day: no flow, no acquisition)
+QUIET_COPIES: dict[int, int] = {1: 0, 5: 4, 6: 4, 10: 9, 11: 9, 12: 9}
+# broker -> the day indexes it is absent from the state
+ABSENT_BROKER_DAYS: dict[int, range] = {33: range(4, 8), 22: range(0, 2)}
+
+
+def _quiet_history(states: Sequence[DailyPortfolioState]) -> list[DailyPortfolioState]:
+    quiet: list[DailyPortfolioState] = []
+    for index, state in enumerate(states):
+        if index in QUIET_COPIES:
+            state = dataclasses.replace(quiet[QUIET_COPIES[index]], date=_day(index), external_cash_flow=D("0"), acquisition_funding=None)
+        contributions = {broker_id: line for broker_id, line in state.broker_contributions.items() if index not in ABSENT_BROKER_DAYS.get(broker_id, ())}
+        quiet.append(dataclasses.replace(state, broker_contributions=contributions))
+    return quiet
+
+
+@pytest.fixture(scope="module")
+def quiet_history(history: list[DailyPortfolioState]) -> list[DailyPortfolioState]:
+    return _quiet_history(history)
+
+
+def _fields(point: dict) -> list[tuple]:
+    """A step's values at full precision, without its days."""
+    return [(key, _value(value)) for key, value in point.items() if key not in ("date", "through")]
+
+
+def _steps_by_day(steps: Sequence[dict], window: tuple[date, date] | None) -> dict[date, list[tuple]]:
+    """One series' steps expanded to days, asserting its invariant: each step holds ``date <= through``, the steps are in
+    order, never overlap and lie inside ``window``; and two steps that touch (``date = previous through + 1``) never hold
+    the same values — a step is maximal."""
+    by_day: dict[date, list[tuple]] = {}
+    previous: dict | None = None
+    for step in steps:
+        assert step["date"] <= step["through"], f"step {step['date']}..{step['through']} ends before it starts"
+        if window is not None:
+            assert window[0] <= step["date"] and step["through"] <= window[1], f"step {step['date']}..{step['through']} leaves the window {window}"
+        if previous is not None:
+            assert previous["through"] < step["date"], f"steps overlap or are out of order: ..{previous['through']} then {step['date']}.."
+            if previous["through"] + timedelta(days=1) == step["date"]:
+                assert _fields(previous) != _fields(step), f"steps ending {previous['through']} and starting {step['date']} hold the same values: they are one step"
+        for day in _dates_between(step["date"], step["through"]):
+            by_day[day] = _fields(step)
+        previous = step
+    return by_day
+
+
+def _one_day(view: str, state: DailyPortfolioState, day: date) -> Any:
+    """The oracle of ``day``: the view of a history that is that state alone (its date set to the day)."""
+    builder = DerivedViewsBuilder([dataclasses.replace(state, date=day)], CCY)
+    return getattr(builder, VIEWS[view][0])()
+
+
+QUIET_BOUNDS = [None, *(_day(index) for index in range(-2, DAYS + 2))]
+
+
+class TestStepsOfAHistoryWithQuietRuns:
+    def test_the_history_has_its_cases(self, quiet_history, history):
+        """Barrier: runs of several days, a candle gap of four days, brokers that come and go."""
+        builder = DerivedViewsBuilder(quiet_history, CCY)
+        steps = builder.build_history()
+        assert len(steps) == DAYS - len(QUIET_COPIES), "each repeated day joins the step of the day it repeats"
+        assert max((step["through"] - step["date"]).days for step in steps) >= 2, "a step of three days"
+        candles = builder.build_pnl_candles()
+        no_candle = {_day(index) for index in (2, 9, 10, 11, 12)}
+        assert {day for step in candles for day in _dates_between(step["date"], step["through"])} == _dates_between(FIRST, LAST) - no_candle, "no candle on day 2 and on days 9-12 (day 6 repeats day 4's)"
+        brokers = builder.build_broker_pnl_history()
+        assert list(brokers) == [11, 33, 22], "the brokers in the order they first appear: 22 is absent from the first two states"
+        assert [(step["date"], step["through"]) for step in brokers[33]] == [(_day(0), _day(1)), (_day(2), _day(2)), (_day(3), _day(3)), (_day(8), _day(8)), (_day(9), _day(12)), (_day(13), _day(13))], "broker 33: a gap on days 4-7"
+        assert brokers[22][0]["date"] == _day(2), "broker 22 starts late"
+
+    @pytest.mark.parametrize("view", ["history", "pnl_candles"])
+    @pytest.mark.parametrize("date_from", QUIET_BOUNDS, ids=str)
+    def test_a_window_is_the_days_of_the_history_one_by_one(self, quiet_history, view, date_from):
+        """For every window starting at ``date_from``, the steps expanded to days are, on every day of the window, the
+        one-state view of that day — and cover exactly the days with a state (with a candle, for the candles)."""
+        method = VIEWS[view][0]
+        for date_to in QUIET_BOUNDS:
+            steps = getattr(DerivedViewsBuilder(quiet_history, CCY), method)(date_from, date_to)
+            window = (max(date_from or _day(0), _day(0)), min(date_to or LAST, LAST))
+            by_day = _steps_by_day(steps, window if window[0] <= window[1] else None)
+            expected = {}
+            for state in quiet_history:
+                if not _inside(state.date, date_from, date_to):
+                    continue
+                one = _one_day(view, state, state.date)
+                if one:
+                    expected[state.date] = _fields(one[0])
+            assert by_day == expected, f"{view} from {date_from} to {date_to}"
+            if view == "history" and window[0] <= window[1]:
+                assert set(by_day) == _dates_between(*window), "the history has no gap"
+
+    @pytest.mark.parametrize("date_from", QUIET_BOUNDS, ids=str)
+    def test_a_window_of_the_brokers_pnl_is_each_broker_day_by_day(self, quiet_history, date_from):
+        """Per broker, over every window from ``date_from``: its steps expanded are its one-state P&L on every day of the
+        window where it is in the state, and a day it is absent from is a gap; a broker with no day there is not listed."""
+        for date_to in QUIET_BOUNDS:
+            by_broker = DerivedViewsBuilder(quiet_history, CCY).build_broker_pnl_history(date_from, date_to)
+            expected: dict[int, dict[date, list[tuple]]] = {}
+            for state in quiet_history:
+                if _inside(state.date, date_from, date_to):
+                    for broker_id, steps in _one_day("broker_pnl_history", state, state.date).items():
+                        expected.setdefault(broker_id, {})[state.date] = _fields(steps[0])
+            window = (max(date_from or _day(0), _day(0)), min(date_to or LAST, LAST))
+            got = {broker_id: _steps_by_day(steps, window if window[0] <= window[1] else None) for broker_id, steps in by_broker.items()}
+            assert got == expected, f"brokers from {date_from} to {date_to}"
+
+    @pytest.mark.parametrize("view", ["history", "pnl_candles", "broker_pnl_history"])
+    def test_a_window_is_the_whole_history_clipped(self, quiet_history, view):
+        """The windowed steps are the whole build's, clipped to the window with ``points_between``, for every window. The
+        brokers are compared by id: a broker enters the window's listing at its first step there, so on a history where
+        brokers come and go the order of the keys depends on the window."""
+        method = VIEWS[view][0]
+        whole_steps = getattr(DerivedViewsBuilder(quiet_history, CCY), method)()
+
+        def by_id(output: Any) -> Any:
+            comparable = _comparable(output)
+            return sorted(comparable, key=lambda item: item[0]) if isinstance(output, dict) else comparable
+
+        mismatches = []
+        for date_from in QUIET_BOUNDS:
+            for date_to in QUIET_BOUNDS:
+                windowed = by_id(getattr(DerivedViewsBuilder(quiet_history, CCY), method)(date_from, date_to))
+                if windowed != by_id(_head_cut(whole_steps, date_from, date_to, exclusive_start=False)):
+                    mismatches.append((date_from, date_to))
+        assert mismatches == [], f"{len(mismatches)} windows differ from the whole build clipped: {mismatches[:10]}"

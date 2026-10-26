@@ -13,7 +13,7 @@ from typing import List, Literal, Optional
 
 from pydantic import Field
 
-from backend.app.schemas.common import BackwardFillInfo, Currency, FxBackwardFillInfo, SafeDecimal, StrictModel
+from backend.app.schemas.common import BackwardFillInfo, Currency, DateSpan, FxBackwardFillInfo, SafeDecimal, StrictModel
 
 # =============================================================================
 # WAC (WEIGHTED AVERAGE COST) — FX-aware calculation results
@@ -42,6 +42,7 @@ class WACMissingPairInfo(StrictModel):
 
     pair: str = Field(..., description="FX pair code (e.g. 'USD/EUR')")
     dates: List[date_type] = Field(default_factory=list, description="Dates for which FX rate was needed but unavailable")
+    ranges: List[DateSpan] = Field(default_factory=list, description="Valuation days without a rate, as ranges (D-P4); dates keeps the movements' dates")
 
 
 class WACPreviewResultItem(StrictModel):
