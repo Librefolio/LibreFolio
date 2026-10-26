@@ -302,6 +302,9 @@ class DailyPortfolioState:
     missing_price_asset_ids: set[int] = field(default_factory=set)
     missing_fx_pairs: set[str] = field(default_factory=set)
     stale_price_asset_ids: set[int] = field(default_factory=set)
+    # D-P4: the FX pairs ("CCY/TARGET") the day reads for its held securities from a stored rate older than the stale
+    # threshold, each with the date of that stored row
+    stale_fx_pairs: dict[str, date_type] = field(default_factory=dict)
     transaction_implied_asset_ids: set[int] = field(default_factory=set)
     # V-11: for each asset of transaction_implied_asset_ids, the day of its last market quote on or before
     # this day (None when it was never quoted); the data-quality grace counts from it.
@@ -360,6 +363,7 @@ class StateSegment:
             missing_price_asset_ids=set(state.missing_price_asset_ids),
             missing_fx_pairs=set(state.missing_fx_pairs),
             stale_price_asset_ids=set(state.stale_price_asset_ids),
+            stale_fx_pairs=dict(state.stale_fx_pairs),
             transaction_implied_asset_ids=set(state.transaction_implied_asset_ids),
             transaction_implied_last_quote_dates=dict(state.transaction_implied_last_quote_dates),
             broker_contributions=dict(state.broker_contributions),

@@ -157,6 +157,10 @@ LibreFolio displays these performance metrics across the dashboard:
 ### 📊 Percent Chart (`%`)
 Plotted series use **Cumulative MWRR**, **Cumulative TWRR**, and **Simple ROI**. This allows direct, side-by-side visual comparison as all three series start at 0% and represent total progress over the selected timeframe.
 
+### 📐 The MWRR Line Is Made of True Points {: #mwrr-line }
+
+Unlike TWRR and ROI, the MWRR changes even on a day on which nothing happens: time passes, and with several flows there is no closed form that extends it from one day to the next. In the portfolio report it is therefore not stored in the [daily steps](index.md#daily-states-as-steps) of the history but in its own series, `mwrr_line`, whose points are **true values**: each is the MWRR of the period ending on its day, solved on that day, annualized and cumulative, with the same rule as the cards (see below). The line has a point at the start and at the end of every step of the history, plus one at the end of each calendar month inside the steps longer than 62 days (at most 24 per step); its first point is 0. Nothing between two points is estimated or stored: the chart joins them.
+
 ### 🧾 KPI Cards
 * **Simple ROI** (Primary metric for absolute return).
 * **Cumulative TWRR** (Strategy/allocation performance indicator).
@@ -170,7 +174,7 @@ The KPI cards and the MWRR line of the chart follow the same rule on every day o
 * the portfolio's value on that day is above zero, and
 * the period still holds **net invested capital** on that day: the value it opened with, plus the deposits, minus the withdrawals made up to that day (the capital flows described above), is above zero.
 
-Otherwise there is no rate: the card shows `—`, and the line has a gap. After net withdrawals, the gap starts on the day they take the net invested capital to zero or below, and lasts until new deposits bring it back above zero. The cards always show the line's last point, so a card without MWRR goes with a line that ends in a gap. A day also has no MWRR when no rate solves the cash-flow equation: LibreFolio never shows a rate that does not solve it.
+Otherwise there is no rate: the card shows `—`, and the line has a gap (a point without a value). After net withdrawals, the gap starts on the day they take the net invested capital to zero or below, and lasts until new deposits bring it back above zero. The cards always show the line's last point, so a card without MWRR goes with a line that ends in a gap. A day also has no MWRR when no rate solves the cash-flow equation: LibreFolio never shows a rate that does not solve it.
 
 !!! tip "Analyzing the Performance Difference"
 
