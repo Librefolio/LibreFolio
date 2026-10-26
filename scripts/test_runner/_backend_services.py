@@ -3444,7 +3444,14 @@ Note: No backend server required.
     add_test(cat, "plugin-settings-service", services_plugin_settings_service, name="Plugin Settings Service", desc="Catalogue and all-or-nothing writes on a private DB: scopes, LOCKED_BY_ENV, managed profile, item rules, log without values, key unavailable, MOCKFX writes", isolation="pure")
     add_test(cat, "secret-masking", services_secret_masking, name="Secret Masking", desc="mask_text with the URL forms, mask_exception through chains and groups, structlog processor and logging filter, the context variable across threads and tasks, the wiring in configure_logging", isolation="pure")
     add_test(cat, "plugin-settings-guards", services_plugin_settings_guards, name="Plugin Settings Guards", desc="Shipped system-field variables in .env.example, derived names unique, no alias read by the app itself, services/ai_export/ never imports the plugin settings", isolation="pure")
-    add_test(cat, "platform-readiness", services_platform_readiness, name="Instance Readiness", desc="Database and migration checks: ready, behind, ahead, unknown, unreachable; database_revision; head read once, failure not kept; no error text, path or head in the response", isolation="pure")
+    add_test(
+        cat,
+        "platform-readiness",
+        services_platform_readiness,
+        name="Instance Readiness",
+        desc="Database and migration checks: ready, behind, ahead, unknown, unreachable; database_revision; head read once, failure not kept; no error text, path or head in the response; H5-8 app_version (get_git_version(), required, last) in every answer, awaiting restore included",
+        isolation="pure",
+    )
     add_test(cat, "app-lifecycle", services_app_lifecycle, name="App Lifecycle", desc="Step runner (order, awaits, deadline cuts, a failure never skips the shutdown, step in progress); app steps in relative order, late-bound; middleware outermost first; SPA catch-all last", isolation="pure")
     add_test(
         cat,

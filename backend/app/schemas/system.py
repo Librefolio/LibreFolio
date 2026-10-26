@@ -81,14 +81,15 @@ class ReadinessChecks(StrictModel):
 class ReadinessResponse(StrictModel):
     """``GET /system/ready``: whether this instance can serve requests, with status 200 when ready and 503 otherwise.
 
-    Public by design, for health checks and orchestrators: the body carries one code per check, the mode and the
-    database's migration revision, and nothing else: never an error message or a path.
+    Public by design, for health checks and orchestrators: the body carries one code per check, the mode, the
+    database's migration revision and the running version, and nothing else: never an error message or a path.
     """
 
     status: Literal["ready", "not_ready"] = Field(description="ready when every check is ok")
     checks: ReadinessChecks
     database_revision: str | None = Field(default=None, description="The revision the database's migrations stand at (the one row of alembic_version), to tell a database behind or ahead of this version; null when it cannot be read")
     mode: InstanceMode = Field(default="normal", description="normal, or awaiting_restore while the hosting panel restores the instance (H-62): ready then means ready to receive the backup")
+    app_version: str = Field(description="The version of LibreFolio that is running: the same text GET /system/info gives without a session, so a hosting panel checks the version after an update with this probe alone (H5-8)")
 
 
 class ContainerImageStatusResponse(StrictModel):

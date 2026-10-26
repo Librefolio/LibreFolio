@@ -1612,12 +1612,13 @@ Docker health checks, Uptime Kuma, orchestrators and hosting panels. `check_read
 shape:
 
 ```json
-{"status": "ready", "checks": {"database": "ok", "migrations": "ok"}, "database_revision": "<revision>", "mode": "normal"}
+{"status": "ready", "checks": {"database": "ok", "migrations": "ok"}, "database_revision": "<revision>", "mode": "normal", "app_version": "<version>"}
 ```
 
 - **`database_revision`** is the revision the database's migrations stand at, the one row of `alembic_version`, or `null` when it cannot be read (the database is `unreachable`, the table is missing or it does not hold exactly one row). It is there to tell a database `behind` or `ahead` of this version, a hosting panel after an update: a revision id says which migration the data reached, and nothing about its content (developer decision, 25/10/2026). The head the scripts expect is never in the answer, and neither is a count or a path.
 - **`mode`** is `normal`, or `awaiting_restore` while the hosting panel restores the instance
   ([Awaiting Restore](#await-restore)): `ready` then means ready to receive the backup.
+- **`app_version`** is the version that is running, `get_git_version()`: the very text `GET /system/info` gives without a session, so the answer shows nothing that was not already public. It is there so that a hosting panel checks the version after an update with this probe alone: a probe does not count as a user's presence, and `/system/info` and `/system/instance` do (lot H5-8). It is in the `503` body too, and on an instance awaiting its restore.
 - **Codes and one revision.** The body never carries an error message or a path. The details go to the server
   log, once per change of state: `Instance not ready` (warning, with both codes and the problem) or `Instance ready`
   (info). A monitor that asks every few seconds adds no log line while the state holds.
@@ -1645,7 +1646,7 @@ dependency checks all its routes: `panel_access(scope)` in `backend/app/services
 |-------|--------|------------------------------|---------------|---------------------|
 | `backup` | The four `/backup/panel/jobs…` routes, `backend/app/api/v1/backup/panel.py` (workstream B) | `backup_download_token()`: `SecretFileError`, `BackupConfigError` | `BackupPanelToken` | `backup_panel_unauthorized` / `backup_panel_unavailable` |
 | `wake` | `POST /system/wake-sync`, `backend/app/api/v1/system/wake.py` (workstream Z) | `wake_token()`: `SecretFileError`, `SleepWakeConfigError` | `WakeToken` | `wake_unauthorized` / `wake_unavailable` |
-| `status` | `GET /panel/status`, the [setup status](../../admin/hosting_panel_api.md#panel-status), read by [`admin_setup_status()`](access_control.md#setup-status), with the instance's `mode` and its `restore` (lot H-62), the two counts `users_used` and `users_limit` (lot H5-1), `owner_email_change` (lot H5-4) and `instance_key` (lot H5-7, [The Key Check](#instance-key-check)) | `panel_status_token()` (`backend/app/config/hosting_panel.py`): `SecretFileError`, `HostingPanelConfigError` | `PanelStatusToken` | `panel_status_unauthorized` / `panel_status_unavailable` |
+| `status` | `GET /panel/status`, the [setup status](../../admin/hosting_panel_api.md#panel-status), read by [`admin_setup_status()`](access_control.md#setup-status), with the instance's `mode` and its `restore` (lot H-62), the two counts `users_used` and `users_limit` (lot H5-1), `owner_email_change` (lot H5-4), `instance_key` (lot H5-7, [The Key Check](#instance-key-check)) and `users_over_limit` (lot H5-8: a yes or no, [Over the limit](access_control.md#user-limit)) | `panel_status_token()` (`backend/app/config/hosting_panel.py`): `SecretFileError`, `HostingPanelConfigError` | `PanelStatusToken` | `panel_status_unauthorized` / `panel_status_unavailable` |
 | `backup:restore` (`PanelScope.BACKUP_RESTORE`) | The seven `/backup/panel/restore…` routes, `backend/app/api/v1/backup/panel_restore.py` (lot H-62): see [Awaiting Restore](#await-restore) | None: `read_token` always answers `None`, so no token opens it and, without the panel's public keys, it is off (`404`); a signed ticket of this scope only | `BackupRestorePanelTicket` | `backup_restore_unauthorized` / `backup_restore_unavailable` |
 
 `panel_access(scope)` returns the same function for the same scope, so FastAPI runs it once per request. It takes the
@@ -1970,7 +1971,7 @@ path, so the allow-list `ALLOWED_WHEN_BLOCKED` is a `frozenset` of endpoint func
 | `GET /system/health`, `GET /system/ready`, `GET /system/info` | `health.health_check`, `ready.get_readiness`, `info.get_system_info` | Probes and version |
 | `GET /system/test-lane-health` | `health.test_lane_health` | The test runner's probe, `404` outside test mode |
 | `POST /system/wake-sync` | `wake.wake_sync` | The [scheduled wake-up](../../admin/wake_sync.md#wake-sync), with its own token instead of a session: on a blocked instance it runs no job and answers `200` with `status: "blocked"` (decision D-W3) |
-| `GET /panel/status` | `panel.get_panel_status` | The hosting panel's [setup status](../../admin/hosting_panel_api.md#panel-status), read by [`admin_setup_status()`](access_control.md#setup-status), with its own token instead of a session (lot H-61): it answers as on any other instance. Besides the setup, the `mode` and the `restore`, it holds two counts, `users_used` and `users_limit` (lot H5-1), and `owner_email_change` (lot H5-4: `pending`, `blocked` or `null`, never an address), never a name or an address |
+| `GET /panel/status` | `panel.get_panel_status` | The hosting panel's [setup status](../../admin/hosting_panel_api.md#panel-status), read by [`admin_setup_status()`](access_control.md#setup-status), with its own token instead of a session (lot H-61): it answers as on any other instance. Besides the setup, the `mode` and the `restore`, it holds two counts, `users_used` and `users_limit` (lot H5-1), `owner_email_change` (lot H5-4: `pending`, `blocked` or `null`, never an address), `instance_key` (lot H5-7) and `users_over_limit` (lot H5-8, a yes or no), never a name or an address |
 | The seven `/backup/panel/restore…` routes | `_PANEL_RESTORE_ROUTES` of `instance_block.py` (`backup_panel_restore.*`) | The panel's restore, with its ticket instead of a session (lot H-62): past the ticket each route answers `423 instance_blocked` itself, so a caller without a valid ticket learns nothing of the block. No restore happens on a blocked instance ([Awaiting Restore](#await-restore)) |
 
 **The refusal.** On a blocked instance, an endpoint outside the list first runs `get_current_user()`
@@ -2492,7 +2493,7 @@ email verification in [Email Verification](../backend/email.md#verification); th
 - **Anonymous answers say nothing about the users but whether there is one.** The `409` `USER_LIMIT_REACHED` of
   `POST /auth/register` carries no count and no billing link; only the administrator's routes add `limit`, `used`
   and `billing_url`, and the hosting panel's `GET /panel/status`, behind its token, `users_used` and
-  `users_limit`: two counts, no billing link. About accounts, `GET /system/instance` publishes only the registration mode, whether a variable
+  `users_limit`: two counts, no billing link, and `users_over_limit`, a yes or no. About accounts, `GET /system/instance` publishes only the registration mode, whether a variable
   locks it, whether the instance has no account yet ([The First-Account Flag](#first-account-open)), and the
   [password rules](#password-rules), the same on every instance.
 - **The token rides in the fragment, never in the query string.** `token_path()` builds `/invite#token=…`,
