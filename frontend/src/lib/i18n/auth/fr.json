@@ -87,7 +87,9 @@
       "submit": "Activer le compte",
       "failed": "Le compte n'a pas pu être configuré. Réessayez.",
       "blocked": "Cette instance est bloquée par son hébergeur : le compte pourra être configuré une fois l'instance débloquée.",
-      "newLinkHint": "Demandez un nouveau lien à votre hébergeur. Sur votre propre serveur, lancez « dev.py user setup-link »."
+      "newLinkHint": "Demandez un nouveau lien à votre hébergeur. Sur votre propre serveur, lancez « dev.py user setup-link ».",
+      "expiredManagedHint": "Si vous n'en avez pas reçu un nouveau par e-mail, contactez l'assistance.",
+      "supportLink": "Contacter l'assistance"
     },
     "notices": {
       "openRegistration": "L'inscription est ouverte et cette instance est joignable depuis l'extérieur de votre réseau local : n'importe qui la trouvant peut créer un compte.",

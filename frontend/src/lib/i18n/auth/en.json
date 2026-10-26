@@ -87,7 +87,9 @@
       "submit": "Activate the account",
       "failed": "The account could not be set up. Try again.",
       "blocked": "This instance is blocked by its hosting provider: the account can be set up once it is unblocked.",
-      "newLinkHint": "Ask your hosting provider for a new link. On your own server, run «dev.py user setup-link»."
+      "newLinkHint": "Ask your hosting provider for a new link. On your own server, run «dev.py user setup-link».",
+      "expiredManagedHint": "If you did not receive a new one by email, contact support.",
+      "supportLink": "Contact support"
     },
     "notices": {
       "openRegistration": "Registration is open and this instance is reachable from outside your local network: anyone who finds it can create an account.",
