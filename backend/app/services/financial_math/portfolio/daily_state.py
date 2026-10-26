@@ -45,7 +45,6 @@ from backend.app.services.financial_math.portfolio.models import (
 from backend.app.services.financial_math.price_marks import AssetPriceSeries
 from backend.app.services.financial_math.valuation import compute_holding_value
 from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
-from backend.app.utils.datetime_utils import EARLIEST_RANGE_START
 
 logger = structlog.get_logger(__name__)
 
@@ -1008,10 +1007,9 @@ class DailyStateBuilder:
         """
         changed: set[date_type] = set()
         currencies = self._valuation_currencies()
-        # R13-SEC8: no rate is read before EARLIEST_RANGE_START (none is loaded there), so the calendars start there at
-        # the earliest. Each calendar holds only the days a reading can change on (_reading_calendar): a row stored
-        # centuries back never makes a calendar of every day since.
-        replay_from = max(self._replay_from, EARLIEST_RANGE_START)
+        # Each calendar holds only the days a reading can change on (_reading_calendar): a row stored centuries back never
+        # makes a calendar of every day since, so the calendars start at the replay's start (no date floor, MF-PAV-L1).
+        replay_from = self._replay_from
         if currencies:
             changed.update(day for day in change_days(self._read_rate, currencies, self._reading_calendar(currencies, replay_from, self.date_to)) if day >= replay_from)
         for interval in self.in_transit_intervals:

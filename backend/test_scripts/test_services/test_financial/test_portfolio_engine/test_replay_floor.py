@@ -8,29 +8,34 @@ nothing is emitted; ``_valuation_rate_change_days`` builds ``_calendar(_replay_f
 non-target currencies of prices and assets, and ``_calendar(start - 1 day, end)`` for each cash interval in transit —
 with a movement dated exactly ``0001-01-01`` that is ``date.min - 1 day``: ``OverflowError`` (a 500).
 
-The cure (``financial_math/portfolio/daily_state.py``; the floor ``EARLIEST_RANGE_START = date(1900, 1, 1)`` in
-``utils/datetime_utils.py``): the quiet days before ``date_from`` are skipped — from one dirty day to the next — so no
-state is carried there; both rate calendars start at most one day before the floor. The rows before the floor are still
-replayed exactly, on their own dates and in their own order: quantities, cash, cost pools and the K/R/W pools at
-``date_from`` are what they were.
+The cure (``financial_math/portfolio/daily_state.py``): the quiet days before ``date_from`` are skipped — from one dirty
+day to the next — so no state is carried there. The rows before 1900 are replayed exactly, on their own dates and in their
+own order: quantities, cash, cost pools and the K/R/W pools at ``date_from`` are what they were.
 
-- ``TestTheFloor`` — the constant (red on HEAD 94e170ae1: ``AttributeError``). Every other test reads the literal
-  ``date(1900, 1, 1)``; this one ties that literal to the product's constant.
+MF-PAV-L1: the rate calendars no longer start at the floor ``EARLIEST_RANGE_START = date(1900, 1, 1)`` (``utils/datetime_utils.py``,
+which stays for other readers). They hold only the days a reading can change on (``_reading_calendar``), so a row stored
+centuries back costs the days of its rate changes, never a calendar of every day since: each starts at the replay start
+(``_replay_from``, the first movement's day), or at the cash transit's own start, and never earlier than one day before it.
+
+- ``TestTheFloor`` — the constant (kept: other readers use it until a later lot). Every other test that names 1900 reads
+  the literal ``date(1900, 1, 1)``; this one ties that literal to the product's constant.
 - ``TestNoQuietDayBeforeDateFrom`` — red on HEAD: the ``replace`` calls made for days before ``date_from`` (a counting
   wrapper records each one's ``date=``) number 49 301 (date_from D2) / 49 302 (D3); after the cure, none. Since P4
   (MF5-1) the engine builds no quiet day at all (segments, ``StateSegment.state_on`` for a reader): the test counts
   ``state_on`` calls (none during ``build()``) and ``DailyPortfolioState`` constructions (one per computed day, those
   from ``date_from`` on being the segment starts); D4 and D6 lying inside a segment keeps it from passing vacuously.
-- ``TestRateCalendarsStartAtTheFloor`` — red on HEAD: a recording wrapper of ``daily_state._calendar`` (since MF5-2a:
-  of ``DailyStateBuilder._reading_calendar``, the candidate days only) sees a calendar from 1889-12-31 (the valuation calendar of the USD stock; the USD cash in transit since 1890-01-02); after the cure no
-  calendar starts before 1899-12-31. The precondition (the calendar of that currency still runs to its last day) keeps
-  it from passing vacuously.
-- ``TestAMovementOnDayOne`` — red on HEAD: ``OverflowError: date value out of range`` from ``_calendar`` for a movement
-  dated ``date(1, 1, 1)`` beside a USD stock, and beside USD cash in transit since that day. After the cure the build
-  returns, every row replayed on its own date (the conversions it misses are recorded on ``0001-01-01``).
+- ``TestRateCalendarsStartAtTheReplayStart`` — RED on HEAD 999f1899e (MF-PAV-L1): a recording wrapper of
+  ``DailyStateBuilder._reading_calendar`` (the candidate days only) sees the valuation calendar of the USD stock start on
+  1900-01-01 (days from 1899-12-31) and the one of the USD cash in transit since 1890-01-02 start on 1900-01-01; after L1
+  they start at the replay start 1890-01-01 (days from 1889-12-31, the day before the first movement) and at the transit's
+  start 1890-01-02 (days from 1890-01-01). GREEN on HEAD (guard): no calendar starts before the day before the replay
+  start. The precondition (the calendar of that currency still runs to its last day) keeps both from passing vacuously.
+- ``TestAMovementOnDayOne`` — GREEN on HEAD and after (a guard): a movement dated ``date(1, 1, 1)`` beside a USD stock, and
+  beside USD cash in transit since that day, build without ``OverflowError`` (``date.min - 1 day``), every row replayed on its
+  own date (the conversions it misses are recorded on ``0001-01-01``).
 - ``TestRowsBeforeTheFloorReplayedExactly`` — GREEN on HEAD and after (a guard of the cure): the numbers at
   ``date_from`` (quiet D2 and D3) pinned by hand, the 1890 rows included on their own dates and in their own order; and
-  a ``period_start`` before the floor (the engine's case once its range starts at the floor) still snapshotted.
+  a ``period_start`` before the floor (before 1900, and before ``date_from``: the engine's case when the caller's period starts long before its window) still snapshotted.
   Mutation checks (applied in memory on top of a candidate cure): the 1890 rows folded onto 1900-01-01, the day-end
   clamp of K skipped before ``date_from``, the skip jumping over dirty days too, or from one movement day to the next —
   each turns it red.
@@ -77,10 +82,8 @@ A, B = 10, 20
 X = 100
 Y = 200
 
-#: The floor, EARLIEST_RANGE_START (TestTheFloor ties the two).
+#: The floor, EARLIEST_RANGE_START (TestTheFloor ties the two): the engine no longer reads it.
 FLOOR = date(1900, 1, 1)
-#: The first day a rate calendar may start on: the day before the floor (its first day only reads the previous rate).
-FIRST_CALENDAR_DAY = FLOOR - timedelta(days=1)
 DAY_ONE = date(1, 1, 1)
 
 O0 = date(1890, 1, 1)
@@ -286,8 +289,8 @@ def _build(ledger: dict, date_from: date, **overrides) -> PortfolioCalculationRe
 
 class TestTheFloor:
     def test_the_floor_is_1900_01_01(self):
-        """``EARLIEST_RANGE_START`` (read at run time: HEAD has no such name) is the literal the other tests use."""
-        from backend.app.utils import datetime_utils  # noqa: PLC0415 — read at run time: the name is new
+        """``EARLIEST_RANGE_START`` (kept by L1, read at run time) is the literal the other tests use."""
+        from backend.app.utils import datetime_utils  # noqa: PLC0415 — read at run time
 
         assert datetime_utils.EARLIEST_RANGE_START == FLOOR
 
@@ -338,7 +341,7 @@ class TestNoQuietDayBeforeDateFrom:
 
 
 # =============================================================================
-# (c) THE RATE CALENDARS START AT THE FLOOR
+# (c) THE RATE CALENDARS START AT THE REPLAY START
 # =============================================================================
 
 
@@ -360,7 +363,33 @@ def _recording_calendar(monkeypatch) -> list[tuple[frozenset[str], date, date, l
     return calls
 
 
-class TestRateCalendarsStartAtTheFloor:
+class TestRateCalendarsStartAtTheReplayStart:
+    """The old book's replay starts on its first movement, 1890-01-01 (O0): ``_replay_from = min(date_from, movement days)``.
+    The USD stock's valuation calendar starts there (``first`` = O0, days from 1889-12-31); the USD cash in transit since
+    1890-01-02 gets its own, from the transit's start (``first`` = O1, days from O0)."""
+
+    @pytest.mark.parametrize(
+        ("ledger", "last_day", "first_day"),
+        [
+            pytest.param(_old_book, D6, O0, id="valuation-calendar-of-a-usd-stock"),
+            pytest.param(_old_transit_book, D0, O1, id="usd-cash-in-transit-since-1890"),
+        ],
+    )
+    def test_the_calendar_starts_at_the_replay_start_not_at_the_floor(self, monkeypatch, ledger, last_day, first_day):
+        """RED on HEAD (MF-PAV-L1): HEAD clamps ``first`` to 1900-01-01, so the calendar holds nothing before 1899-12-31 and
+        the 1890 days — the first movement's, the transit's own — are never read. After L1 the calendar of USD that runs to
+        ``last_day`` starts at ``first_day`` and its first day is the day before it."""
+        calls = _recording_calendar(monkeypatch)
+
+        _build(ledger(), D3)
+
+        asked = [(sorted(currencies), first, last, days[:1]) for currencies, first, last, days in calls]
+        usd_to_the_end = [(first, days) for currencies, first, last, days in calls if "USD" in currencies and last == last_day and days]
+        assert usd_to_the_end, f"precondition: a USD calendar runs to {last_day}, calendars asked: {asked}"
+        assert [(first, days[0]) for first, days in usd_to_the_end] == [(first_day, first_day - timedelta(days=1))] * len(
+            usd_to_the_end
+        ), f"USD calendars to {last_day} start at (first, first day read) {[(first, days[0]) for first, days in usd_to_the_end]}, expected the replay start {first_day} and the day before it"
+
     @pytest.mark.parametrize(
         ("ledger", "last_day"),
         [
@@ -368,18 +397,17 @@ class TestRateCalendarsStartAtTheFloor:
             pytest.param(_old_transit_book, D0, id="usd-cash-in-transit-since-1890"),
         ],
     )
-    def test_no_rate_calendar_starts_before_the_day_before_the_floor(self, monkeypatch, ledger, last_day):
-        """``_valuation_rate_change_days`` reads its rates on calendars that start at most one day before the floor.
-        HEAD: 1889-12-31 — the day before the first replayed day, 1890-01-01 — for the stock's currency, and the day
-        before the transit's start (1890-01-02) for the cash in transit."""
+    def test_guard_no_calendar_starts_before_the_day_before_the_replay_start(self, monkeypatch, ledger, last_day):
+        """GUARD (green on HEAD too): the replay starts on 1890-01-01, so no calendar asks a day before 1889-12-31 — a row
+        centuries back costs the days a reading can change on, never a calendar from before its own date."""
         calls = _recording_calendar(monkeypatch)
 
         _build(ledger(), D3)
 
         asked = [(sorted(currencies), first, last, days[:1]) for currencies, first, last, days in calls]
         assert any("USD" in currencies and last == last_day and days for currencies, _first, last, days in calls), f"precondition: a USD calendar runs to {last_day}, calendars asked: {asked}"
-        early = [(sorted(currencies), first, days[:1]) for currencies, first, _last, days in calls if first < FLOOR or (days and days[0] < FIRST_CALENDAR_DAY)]
-        assert early == [], f"rate calendars starting before {FIRST_CALENDAR_DAY}: {early}"
+        early = [(sorted(currencies), first, days[:1]) for currencies, first, _last, days in calls if first < O0 or (days and days[0] < O0 - timedelta(days=1))]
+        assert early == [], f"rate calendars starting before {O0 - timedelta(days=1)}: {early}"
 
 
 # =============================================================================
@@ -389,8 +417,9 @@ class TestRateCalendarsStartAtTheFloor:
 
 class TestAMovementOnDayOne:
     def test_a_movement_on_day_one_beside_a_usd_stock_is_replayed(self):
-        """HEAD: ``OverflowError`` (``date(1, 1, 1) - 1 day``) from the stock's valuation calendar. After the cure: the
-        states from D0, the day-one rows in them — cash 500, the 5 Y at their cost of 500."""
+        """GUARD (green on HEAD and after): no ``OverflowError`` (``date(1, 1, 1) - 1 day``) from the stock's valuation
+        calendar, now that it starts at the replay start, which is day one. The states from D0, the day-one rows in them — cash
+        500, the 5 Y at their cost of 500."""
         result = _build(_day_one_stock_book(), D0)
 
         assert [s.date for s in result.daily_states] == _days(D0, D3)
@@ -399,8 +428,9 @@ class TestAMovementOnDayOne:
         assert result.end_state.cumulative_qty == {(Y, A): Decimal("5")}
 
     def test_usd_cash_in_transit_since_day_one_is_replayed(self):
-        """HEAD: ``OverflowError`` from the transit's calendar (``start - 1 day``, start 0001-01-01). After the cure: the
-        states from D2; both day-one conversions are missing, recorded on their own date."""
+        """GUARD (green on HEAD and after): no ``OverflowError`` from the transit's calendar (``start - 1 day``, start
+        0001-01-01), which now starts at the transit's own start. The states from D2; both day-one conversions are missing,
+        recorded on their own date."""
         result = _build(_day_one_transit_book(), D2)
 
         assert [s.date for s in result.daily_states] == _days(D2, D3)
@@ -441,8 +471,8 @@ class TestRowsBeforeTheFloorReplayedExactly:
         assert (d2.cash_value, d2.open_cost_basis, d2.market_value, d2.nav_value) == (Decimal("775"), Decimal("1075"), Decimal("1195"), Decimal("1970"))
 
     def test_a_period_start_before_the_floor_is_still_snapshotted(self):
-        """``period_start`` 1895-01-01, a quiet day before the floor and before ``date_from`` (the engine's case once its
-        range starts at the floor: ``calculate(date_from=None, period_start=<the caller's start>)``): the snapshot is
+        """``period_start`` 1895-01-01, a quiet day before the floor and before ``date_from`` (the engine's case when the
+        caller's period starts before its window: ``calculate(date_from=…, period_start=<the caller's start>)``): the snapshot is
         taken at its end — 6 X at their cost of 600 — though no state is emitted there. A skip that jumped from one
         movement to the next would pass it by."""
         period_start = date(1895, 1, 1)
