@@ -583,16 +583,19 @@ class TestPortfolioHistoryEndpoint:
 
 @pytest.mark.asyncio
 class TestPortfolioReportEndpoint:
-    async def test_report_response_has_exactly_twelve_sections(self, test_server):
-        """The report wire shape is exactly these twelve sections.
+    async def test_report_response_has_exactly_fourteen_sections(self, test_server):
+        """The report wire shape is exactly these fourteen sections: the twelve of before, plus ``range`` and
+        ``mwrr_line`` of the series in steps (D-P4, cure B).
 
         A section removed from the report must leave the wire, not linger as a null
         key. The API serializes every unrequested section as null, so the default
         request is enough to see the complete set of top-level keys.
         """
-        print_section("Portfolio Report: exactly twelve sections")
+        print_section("Portfolio Report: exactly fourteen sections")
         expected_sections = {
             "metadata",
+            "range",
+            "mwrr_line",
             "summary",
             "history",
             "allocation_history",
@@ -1408,11 +1411,7 @@ class _WacApiSession:
         self.broker_id = broker_id
         self.accessible = accessible
         self.access_role = access_role
-        self.accessible_ids = (
-            list(accessible_ids)
-            if accessible_ids is not None
-            else ([broker_id] if accessible else [])
-        )
+        self.accessible_ids = list(accessible_ids) if accessible_ids is not None else ([broker_id] if accessible else [])
         self.assets = list(assets)
         self.statements = []
 
@@ -1445,9 +1444,7 @@ def _focused_portfolio_app(
     app.dependency_overrides[get_session_generator] = override_session
     app.dependency_overrides[get_current_user] = override_current_user
     if current_user is not None:
-        app.dependency_overrides[
-            portfolio_api._get_allocation_source_user
-        ] = override_current_user
+        app.dependency_overrides[portfolio_api._get_allocation_source_user] = override_current_user
     return app
 
 
@@ -1525,10 +1522,7 @@ async def test_allocation_source_post_returns_typed_uncached_response(
     builder.assert_awaited_once()
     assert builder.await_args.args == (session,)
     assert builder.await_args.kwargs["user_id"] == 41
-    assert (
-        builder.await_args.kwargs["request"].model_dump(mode="json")
-        == _planner_source_payload()
-    )
+    assert builder.await_args.kwargs["request"].model_dump(mode="json") == _planner_source_payload()
 
 
 @pytest.mark.asyncio
@@ -1594,9 +1588,7 @@ async def test_allocation_source_maps_focused_domain_errors(
 async def test_allocation_source_anonymous_is_401_before_service(
     monkeypatch,
 ):
-    builder = AsyncMock(
-        side_effect=AssertionError("Anonymous request reached source service")
-    )
+    builder = AsyncMock(side_effect=AssertionError("Anonymous request reached source service"))
     monkeypatch.setattr(
         portfolio_api,
         "build_portfolio_planner_source",
@@ -1625,9 +1617,7 @@ async def test_allocation_source_anonymous_is_401_before_service(
 async def test_allocation_source_superuser_has_no_implicit_broker_bypass(
     monkeypatch,
 ):
-    builder = AsyncMock(
-        side_effect=PortfolioPlannerSourceAccessError("forbidden")
-    )
+    builder = AsyncMock(side_effect=PortfolioPlannerSourceAccessError("forbidden"))
     monkeypatch.setattr(
         portfolio_api,
         "build_portfolio_planner_source",
@@ -1648,9 +1638,7 @@ async def test_allocation_source_superuser_has_no_implicit_broker_bypass(
         )
 
     assert response.status_code == 403
-    assert response.json()["detail"]["code"] == (
-        "portfolio_planner_source_broker_forbidden"
-    )
+    assert response.json()["detail"]["code"] == ("portfolio_planner_source_broker_forbidden")
     assert response.headers.get("cache-control") == "no-store"
     assert builder.await_args.kwargs["user_id"] == 91
 
@@ -1894,10 +1882,13 @@ async def test_legacy_wac_response_remains_byte_and_semantically_compatible(
 
     assert response.status_code == 200
     assert response.json() == expected
-    assert response.content == json.dumps(
-        expected,
-        separators=(",", ":"),
-    ).encode()
+    assert (
+        response.content
+        == json.dumps(
+            expected,
+            separators=(",", ":"),
+        ).encode()
+    )
     compute.assert_awaited_once_with(
         session=session,
         broker_id=broker_id,
@@ -2274,31 +2265,32 @@ class TestIssue32PurchaseCostInReportCurrency:
 
 
 # ---------------------------------------------------------------------------
-# MF-SEC8-2a — transactions dated before 1900 in the report's data quality
+# MF-PAV-L1 — transactions dated before 1900: no data-quality warning, the history starts on the first row
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-class TestTransactionsBeforeFloorDataQuality:
-    """POST /portfolio/report warns once about the scope's transactions dated before 1 January 1900 (MF-SEC8-2a).
+class TestRowsBefore1900StartTheHistory:
+    """POST /portfolio/report on a scope with transactions dated before 1 January 1900 (MF-PAV-L1; MF-SEC8-2a before it).
 
-    The engine replays such a row on its own date but emits no state before ``EARLIEST_RANGE_START`` (1900-01-01), so the
-    histories start there; ``data_quality`` says so with one WARNING ``TRANSACTIONS_BEFORE_FLOOR`` — ``count`` and
-    ``message_params`` ``{count, earliest}``, no CTA. Proven on the HTTP pass-through, both ways it is built: with the
-    summary (``get_summary``: ``summary.data_quality``, repeated as the top-level ``data_quality``) and without it
-    (``get_report`` builds the top-level ``data_quality`` itself).
+    The engine replays such a row on its own date and, since L1, starts the history on it: ``range.start`` and the first
+    ``history`` step are the earliest row's day, and ``data_quality`` holds no ``TRANSACTIONS_BEFORE_FLOOR`` warning (the
+    code is gone). Proven on the HTTP pass-through, both ways ``data_quality`` is built: with the summary (``get_summary``:
+    ``summary.data_quality``, repeated as the top-level ``data_quality``) and without it (``get_report`` builds the
+    top-level ``data_quality`` itself).
 
-    The rows before 1900 are seeded with the ORM, in the lane's test database only: since N74 (R13-SEC7-3) the API refuses
-    dates before 1900, so the warning exists for rows written before that rule.
+    The rows before 1900 are seeded with the ORM, in the lane's test database only: the API still refuses dates before
+    1900 (the write floor ``transaction_date_bounds``, until its own lot), so such rows exist only for books written
+    before that rule.
 
-    One new user, two new brokers, reported in EUR (the rows' currency: no rate is asked) on 1900 alone (the engine runs
-    from the floor to the range's end). ``floor``: a DEPOSIT on 1900-01-01 through the API, then two DEPOSITs seeded on
-    1899-12-15 and 1899-03-01 (the earliest written last). ``control``: only the API DEPOSIT on 1900-01-01 — the floor's
-    own day, not before it — and no such issue. Cleanup: the seeded rows by id with the ORM, then both brokers (force:
-    their API rows), then the user.
+    One new user, two new brokers, reported in EUR (the rows' currency: no rate is asked), whole history up to 1900-12-31.
+    ``floor``: a DEPOSIT on 1900-01-01 through the API, then two DEPOSITs seeded on 1899-12-15 and 1899-03-01 (the earliest
+    written last). ``control``: only the API DEPOSIT on 1900-01-01 — its history starts there. Cleanup: the seeded rows by
+    id with the ORM, then both brokers (force: their API rows), then the user.
 
-    Red before 871f75a38: ``IssueCode`` has no ``TRANSACTIONS_BEFORE_FLOOR``, so ``floor``'s three ``data_quality``
-    sections hold no such issue; the barriers and the control are green there too.
+    RED on HEAD 999f1899e: ``floor``'s ``range.start`` and first history step are 1900-01-01 (the engine's floor), not 1899-03-01,
+    and each of its three ``data_quality`` sections holds the ``TRANSACTIONS_BEFORE_FLOOR`` warning. GREEN on HEAD: the control
+    scope (no row before 1900: no warning, history from its first row).
     """
 
     FLOOR_DAY = "1900-01-01"
@@ -2348,50 +2340,54 @@ class TestTransactionsBeforeFloorDataQuality:
             if response.status_code != 200 or not all(row["success"] for row in response.json()["results"]):
                 cleanup_errors.append(f"brokers {broker_ids}: {response.status_code} {response.text}")
 
-    async def _data_quality(self, client: httpx.AsyncClient, broker_id: int) -> dict[str, dict | None]:
-        """The scope's ``data_quality`` sections, keyed as ``WHERE``: one report with the summary, one without."""
-        found: dict[str, dict | None] = {}
+    async def _report(self, client: httpx.AsyncClient, broker_id: int) -> dict[str, object]:
+        """The scope's whole-history report, both ways: the ``data_quality`` sections keyed as ``WHERE`` and the history's first
+        day (``range.start`` and ``history[0].date``), read on the report that has the summary."""
+        found: dict[str, object] = {}
         for include_summary in (True, False):
             response = await post_portfolio_report(
                 client,
                 {
                     "broker_ids": [broker_id],
                     "target_currency": "EUR",
-                    "date_range": {"start": self.FLOOR_DAY, "end": "1900-12-31"},
+                    "date_range": {"end": "1900-12-31"},
                     "include_summary": include_summary,
-                    "include_history": False,
+                    "include_history": True,
                     "include_allocation_history": False,
                 },
             )
             assert response.status_code == 200, response.text
             report = response.json()
-            # Presence barrier: the scope's rows were replayed, from the floor (a scope read empty has no first day).
-            assert report["metadata"]["computed_date_from"] == self.FLOOR_DAY, report["metadata"]
+            assert report["history"], "presence barrier: the scope's rows were replayed, the history has steps"
             if include_summary:
                 found["summary.data_quality"] = report["summary"]["data_quality"]
                 found["data_quality with the summary"] = report["data_quality"]
+                found["range.start"] = report["range"]["start"]
+                found["history[0].date"] = report["history"][0]["date"]
+                found["computed_date_from"] = report["metadata"]["computed_date_from"]
             else:
                 assert report["summary"] is None, "include_summary=False built a summary: the report's own data_quality path is not reached"
                 found["data_quality without the summary"] = report["data_quality"]
         return found
 
     @staticmethod
-    def _floor_issues(quality: dict | None) -> list[dict] | None:
-        """The ``TRANSACTIONS_BEFORE_FLOOR`` issues of a section, reduced to the contract's fields (None: no section)."""
+    def _floor_issues(quality: dict | None) -> list[str] | None:
+        """The ``TRANSACTIONS_BEFORE_FLOOR`` issues of a section, as their codes (None: no section)."""
         if quality is None:
             return None
-        return [{key: issue[key] for key in ("severity", "count", "message_params", "cta_action", "cta_target")} for issue in quality["issues"] if issue["code"] == "TRANSACTIONS_BEFORE_FLOOR"]
+        return [issue["code"] for issue in quality["issues"] if issue["code"] == "TRANSACTIONS_BEFORE_FLOOR"]
 
-    async def test_rows_before_1900_give_one_warning_on_the_summary_and_the_report(self, test_server):
-        """RED before 871f75a38: the floor scope gets one TRANSACTIONS_BEFORE_FLOOR (2 rows, earliest 1899-03-01) in each
-        section; the control scope, from 1900-01-01 on, none."""
-        print_section("Portfolio Report: transactions before 1900 (MF-SEC8-2a)")
-        marker = f"MF-SEC8-2a {uuid.uuid4().hex}"
+    async def test_rows_before_1900_start_the_history_and_raise_no_warning(self, test_server):
+        """RED on HEAD 999f1899e: the floor scope's history starts on 1900-01-01 and each ``data_quality`` section holds one
+        TRANSACTIONS_BEFORE_FLOOR. After L1: ``range.start``, ``history[0].date`` and ``metadata.computed_date_from`` are the
+        earliest row's day (1899-03-01), no section holds the warning; the control scope starts on 1900-01-01 and has none."""
+        print_section("Portfolio Report: transactions before 1900 (MF-PAV-L1)")
+        marker = f"MF-PAV-L1 {uuid.uuid4().hex}"
         cleanup_errors: list[str] = []
         broker_ids: list[int] = []
         seeded_ids: list[int] = []
-        floor_quality: dict[str, dict | None] = {}
-        control_quality: dict[str, dict | None] = {}
+        floor_report: dict[str, object] = {}
+        control_report: dict[str, object] = {}
         async with httpx.AsyncClient() as client:
             await create_test_user(client)
             user_id = await get_current_user_id(client)
@@ -2403,18 +2399,19 @@ class TestTransactionsBeforeFloorDataQuality:
                 await commit_batch(client, creates=[{"broker_id": broker_id, "type": "DEPOSIT", "date": self.FLOOR_DAY, "quantity": "0", "cash": {"code": "EUR", "amount": "1000"}} for broker_id in broker_ids])
                 seeded_ids = await self._seed_before_floor(floor_id, marker)
 
-                floor_quality = await self._data_quality(client, floor_id)
-                control_quality = await self._data_quality(client, control_id)
+                floor_report = await self._report(client, floor_id)
+                control_report = await self._report(client, control_id)
             finally:
                 await self._cleanup(client, seeded_ids, broker_ids, cleanup_errors)
                 await delete_current_test_user(client, user_id)
         assert cleanup_errors == [], f"cleanup left rows behind: {cleanup_errors}"
 
         earliest = min(day for day, _ in self.SEEDED).isoformat()
-        expected = {"severity": "warning", "count": len(self.SEEDED), "message_params": {"count": len(self.SEEDED), "earliest": earliest}, "cta_action": None, "cta_target": None}
-        assert {where: self._floor_issues(quality) for where, quality in floor_quality.items()} == {where: [expected] for where in self.WHERE}
-        assert {where: self._floor_issues(quality) for where, quality in control_quality.items()} == {where: [] for where in self.WHERE}
-        print_success(f"{len(self.SEEDED)} rows before 1900 (earliest {earliest}): one warning in every data_quality section; none from the floor on")
+        for name, report in (("floor", floor_report), ("control", control_report)):
+            assert {where: self._floor_issues(report[where]) for where in self.WHERE} == {where: [] for where in self.WHERE}, f"{name}: no data_quality section holds TRANSACTIONS_BEFORE_FLOOR"
+        assert {key: floor_report[key] for key in ("range.start", "history[0].date", "computed_date_from")} == dict.fromkeys(("range.start", "history[0].date", "computed_date_from"), earliest), "floor: the history starts on the earliest row, before 1900"
+        assert {key: control_report[key] for key in ("range.start", "history[0].date", "computed_date_from")} == dict.fromkeys(("range.start", "history[0].date", "computed_date_from"), self.FLOOR_DAY), "control: the history starts on its first row, 1900-01-01"
+        print_success(f"{len(self.SEEDED)} rows before 1900: history from {earliest}, no TRANSACTIONS_BEFORE_FLOOR in any data_quality section")
 
 
 # ---------------------------------------------------------------------------

@@ -95,7 +95,11 @@
       "eventCreateAmountRequired": "El importe es obligatorio",
       "eventCreateDateRequired": "La fecha es obligatoria",
       "fxDatesHint": "Las fechas 'De' y 'A' suelen coincidir: difieren cuando el bróker abona la nueva divisa otro día.",
-      "eventEditTitle": "Editar evento para {asset}"
+      "eventEditTitle": "Editar evento para {asset}",
+      "entryModeAmount": "Importe total",
+      "entryModeUnitPrice": "Precio unitario",
+      "unitPriceCalculated": "calculado",
+      "unitPriceHint": "El importe se calcula a partir del precio unitario y la cantidad; aún puedes editarlo."
     },
     "bulk": {
       "resetRow": "Restablecer fila",
@@ -201,7 +205,8 @@
       "issuesHeader": "Se han encontrado errores de validación",
       "balanceIssuesHeader": "Esta configuración genera datos inconsistentes",
       "autoOff": "Auto-validación OFF ({n} filas > {threshold}) — pulsa ⚡️Validar ahora antes del commit",
-      "contextualIssuesHeader": "Con los demás cambios pendientes, esta fila causa los siguientes problemas:"
+      "contextualIssuesHeader": "Con los demás cambios pendientes, esta fila causa los siguientes problemas:",
+      "checkSummary": "{n, plural, one {# campo por corregir} other {# campos por corregir}}"
     },
     "errors": {
       "idRequired": "El ID de transacción es obligatorio y debe ser > 0",

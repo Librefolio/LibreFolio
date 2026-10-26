@@ -15,6 +15,11 @@ which one the solve returns stays HEAD's. The cold solve, the card and the line 
 warm path keeps the cold solve's rate bit for bit) is unchanged. The developer's review of P1b's first design (signs
 without a floor, the sign test in Newton's verification too) added the two cases of ``TestWhatP1bLeavesAsItWas``.
 
+P1c (MF5-4): a grid point whose NPV is exactly 0.0 is a root only where the NPV changes sign around it
+(``_changes_sign_at``), in the scan and in ``_bracketed_xirr_at``. On a period opening at value 0 far from its flows,
+every NPV term underflows at the top of the grid and the NPV is exactly 0.0 at rates that solve nothing; HEAD returned
+the one nearest 0.1. Those points now have no rate: the 1900 case's 5-8 July (section 6) and the 1720 period (section 7).
+
 Module under test: ``backend/app/services/financial_math/returns.py`` — ``_mwrr_solve``, the solve of a series point,
 through ``period_mwrr_series`` (the line) and ``calculate_mwrr_series``; and its helpers ``_flow_sign_changes``,
 ``_changes_sign_at``, ``_bracketed_xirr_at``, ``_npv_noise_floor``, ``_opposite_signs``, ``_is_xirr_root`` and
@@ -59,8 +64,10 @@ Sections:
 6. The two weaknesses, fixed (P1b): the root of the product-underflow and ill-conditioned families, the lines that had
    no rate, the vanishing NPV, the 1900 case's false root giving way to the true one, the warm path keeping the
    interval's root or, where Newton keeps HEAD's test, running the scan. Red on P1's HEAD (325e78fc8). And what P1b
-   leaves as it was: a sign in the noise brackets nothing (the 1720 period keeps HEAD's 12.803843); Newton keeps HEAD's
+   leaves as it was: a sign in the noise brackets nothing (the 1720 period's noise interval); Newton keeps HEAD's
    test (a three-root account keeps HEAD's −0.019580). Green on HEAD, red on P1b's first design.
+7. The false exact zero, removed (P1c): the 1720 period, whose HEAD answer 12.803843 was a grid point where every NPV
+   term underflows, has no rate.
 
 «HEAD» in P1's texts (sections 2 to 5, and the cost figures) is ff9930b26, before P1; in P1b's (section 6, the units and
 cases marked P1b) it is 325e78fc8, with P1, before P1b.
@@ -227,7 +234,8 @@ OUT_OF_GRID_DAY = date(2020, 1, 18)
 # on 4-10 July was that grid point; the first P1 design, starting from the previous rate, stayed on it to the end. P1b
 # (section 6): on 4, 9 and 10 July the scan now also sees the true root (the NPVs around it are tiny, of opposite signs,
 # their product 0.0), nearer 0.1, and keeps it; on 5-8 July the true root lies above 379.19, where every term
-# underflows, and the cold solve's answer is still the grid point (kept: it is the cold solve's).
+# underflows, and P1b's cold solve answered the grid point still. P1c: that exact zero does not change sign, so 5-8 July
+# have no rate.
 FALSE_ROOT_1900 = _case(
     """
     1900-01-01 0  2025-07-01 10000.00  2025-07-02 10000.00  2025-07-03 10143.83  2025-07-04 10399.90  2025-07-05 10711.12
@@ -237,9 +245,11 @@ FALSE_ROOT_1900 = _case(
     """,
     "2025-07-01 -10000",
 )
-# The last day whose previous point's rate is still the grid point (P1 used 11 July; with P1b 10 July has its true root).
+# The day after the grid-point days (P1 used 11 July; with P1b 10 July has its true root). Until P1c its previous
+# point's rate was the grid point; with P1c 5-8 July have no rate, and the previous rate is 4 July's true root.
 FALSE_ROOT_DAY = date(2025, 7, 9)
-# The days whose rate P1b changes, from the grid point to the true root, and the days that keep the grid point.
+# The days whose rate P1b changes, from the grid point to the true root, and the days that kept the grid point (no rate
+# since P1c).
 FALSE_ROOT_FIXED_DAYS = (date(2025, 7, 4), date(2025, 7, 9), date(2025, 7, 10))
 FALSE_ROOT_KEPT_DAYS = (date(2025, 7, 5), date(2025, 7, 6), date(2025, 7, 7), date(2025, 7, 8))
 
@@ -322,7 +332,8 @@ NEAR_TOTAL_LOSS_UNVERIFIED_DAY = date(2025, 1, 17)
 # second's sign is rounding (at 60 digits it is +2.8e-320). Reading the signs alone, P1b's first design bracketed a root
 # there and answered 12.182509, which is no root; the noise floor (4.1e-319 for these flows) refuses that pair, and the
 # answer is HEAD's own: 12.803843, the grid point 10^(57/50) − 1 where the NPV is exactly 0.0 by underflow. That one is
-# HEAD's false exact zero (as in FALSE_ROOT_1900), a weakness P1b does not touch.
+# HEAD's false exact zero (as in FALSE_ROOT_1900), a weakness P1b does not touch; P1c removes it, and the period has
+# no rate (section 7).
 SUBNORMAL_NOISE = _case("1720-01-01 0  2007-06-20 10493.87", "2007-06-19 -10000")
 SUBNORMAL_NOISE_DAY = date(2007, 6, 20)
 
@@ -1382,16 +1393,22 @@ class TestWhereAWarmStartWouldAnswerSomethingElse:
         assert next(point for point in returns.calculate_mwrr_series(*OUT_OF_GRID) if point.date == OUT_OF_GRID_DAY).mwrr is None
 
     def test_an_opening_value_of_zero(self):
-        """The developer's 1900 case. On 9 July 2025 the previous rate is 379.189396, a grid point where every term
-        underflows; from it a solve stays there (the first P1 design did, on every later point); today's is 131.184839,
-        the true root. Hence the opening value checked as a float. (P1 showed it on 11 July, whose previous point, 10
-        July, had the grid point too until P1b gave it its true root, section 6.)"""
+        """The developer's 1900 case. Until P1c, on 9 July 2025 the previous rate was 379.189396, a grid point where every
+        term underflows, and a solve from it stayed there (the first P1 design did, on every later point). P1c: 5-8 July
+        have no rate, so the previous rate is 4 July's true root, 116.999874; from it the solve lands on 131.184839 by
+        other bits than today's cold solve (the contract is bit for bit). Today's is the true root, 131.184839, proved by
+        the NPV's sign change at 60 digits; the line gives it. Hence the opening value checked as a float. (P1 showed it
+        on 11 July, whose previous point, 10 July, had the grid point too until P1b gave it its true root, section 6.)"""
         flows = _point_flows(FALSE_ROOT_1900, FALSE_ROOT_DAY)
         previous = _previous_cold_rate(FALSE_ROOT_1900, FALSE_ROOT_DAY)
+        cold = returns._solve_xirr(flows, COLD_GUESS)
+        warm = returns._solve_xirr(flows, previous)
 
-        assert previous == returns._XIRR_GRID[729] - 1.0 and returns._xirr_npv(flows, previous) == 0.0
-        assert returns._solve_xirr(flows, previous) == previous
-        assert str(returns._rate_decimal(returns._solve_xirr(flows, COLD_GUESS))) == "131.184839" == _one_deposit_rate(FALSE_ROOT_1900, FALSE_ROOT_DAY)
+        assert str(returns._rate_decimal(previous)) == "116.999874" == _one_deposit_rate(FALSE_ROOT_1900, date(2025, 7, 4))
+        assert _npv_changes_sign(_point_flows(FALSE_ROOT_1900, date(2025, 7, 4)), previous)
+        assert warm is not None and warm != cold and str(returns._rate_decimal(warm)) == "131.184839"
+        assert _npv_changes_sign(flows, cold) and _exact_npv(flows, cold - 1e-6) > 0 > _exact_npv(flows, cold + 1e-6)
+        assert str(returns._rate_decimal(cold)) == "131.184839" == _one_deposit_rate(FALSE_ROOT_1900, FALSE_ROOT_DAY)
         assert next(point for point in returns.period_mwrr_series(*FALSE_ROOT_1900) if point.date == FALSE_ROOT_DAY).mwrr == Decimal("131.184839")
         # P1's day, 11 July: today's answer there is unchanged by P1b.
         eleventh = date(2025, 7, 11)
@@ -1512,7 +1529,9 @@ class TestTheTwoWeaknessesFixed:
         signs the NPV has at 60 digits) and kept the exact zero of the grid nearest 0.1, 379.189396, where every term
         underflows. P1b sees the sign change, and the true root is nearer 0.1:
         116.999874, 131.184839 and 29.268301, the closed forms. On 5-8 July the true root (460 % to 1075 %) is above
-        379.19, where every term underflows: the grid point stays, the cold solve's answer as on HEAD."""
+        379.19, where every term underflows: P1b kept the grid point there, the cold solve's answer as on HEAD. P1c: an
+        exact zero counts only where the NPV changes sign around it, and it does not at the grid point, so those days have
+        no rate (the line, like the card, shows «—»)."""
         line = {point.date: point.mwrr for point in returns.period_mwrr_series(*FALSE_ROOT_1900)}
         grid_point = returns._XIRR_GRID[729] - 1.0
 
@@ -1527,7 +1546,9 @@ class TestTheTwoWeaknessesFixed:
             assert _npv_changes_sign(flows, root) and returns._xirr_npv(flows, grid_point) == 0.0, day
             assert str(line[day]) == str(returns._rate_decimal(root)) == expected == _one_deposit_rate(FALSE_ROOT_1900, day)
         for day in FALSE_ROOT_KEPT_DAYS:
-            assert str(line[day]) == "379.189396" == str(returns._rate_decimal(grid_point)), day
+            flows = _point_flows(FALSE_ROOT_1900, day)
+            assert returns._xirr_npv(flows, grid_point) == 0.0 and not _npv_changes_sign(flows, grid_point), day
+            assert line[day] is None and returns._solve_xirr(flows, COLD_GUESS) is None, day
             assert Decimal(_one_deposit_rate(FALSE_ROOT_1900, day)) > Decimal("379.19"), day
 
     @pytest.mark.parametrize("case", [PRODUCT_UNDERFLOW, VANISHING_NPV], ids=["product-underflow", "vanishing-npv"])
@@ -1571,19 +1592,20 @@ class TestWhatP1bLeavesAsItWas:
        bracketing found (``_is_bracketed_xirr_root``): with several roots, which one the solve returns stays HEAD's."""
 
     def test_a_sign_in_the_noise_brackets_nothing(self):
-        """``SUBNORMAL_NOISE``: the card and the line are HEAD's 12.803843, the grid point 10^(57/50) − 1 where the NPV is
-        exactly 0.0 by underflow (HEAD's false exact zero, untouched by P1b), not 12.182509, the Brent stop between two
-        NPVs whose signs are noise (``TestChangesSignAt``). The true root, about 4.4e7, is beyond the grid."""
+        """``SUBNORMAL_NOISE``: in the grid interval [11.589254, 12.182567] the float NPVs are 1.6e-314 and −1.8e-320, of
+        opposite signs, but the second is below the noise floor and its sign is rounding (at 60 digits both are
+        positive): the interval brackets nothing, and the answer is never 12.182509, the Brent stop between them
+        (``TestChangesSignAt``). What the solve answers instead was HEAD's false exact zero, which P1c removes: section 7."""
         flows = _point_flows(SUBNORMAL_NOISE, SUBNORMAL_NOISE_DAY)
-        grid_point = returns._XIRR_GRID[657] - 1.0
-        (end,) = [snapshot for snapshot in SUBNORMAL_NOISE[0] if snapshot.date == SUBNORMAL_NOISE_DAY]
+        low, high = _grid_interval(12.0)
+        low_npv, high_npv = returns._xirr_npv(flows, low), returns._xirr_npv(flows, high)
 
-        assert returns._xirr_npv(flows, grid_point) == 0.0
-        assert returns._solve_xirr(flows, COLD_GUESS) == grid_point
-        assert returns._bracketed_xirr(flows, COLD_GUESS, _scale(flows)) == grid_point
-        assert returns.period_mwrr(*SUBNORMAL_NOISE, end.date, end.nav).mwrr == Decimal("12.803843")
-        assert [str(point.mwrr) for point in returns.period_mwrr_series(*SUBNORMAL_NOISE)] == ["12.803843"]
-        assert float(_one_deposit_rate(SUBNORMAL_NOISE, SUBNORMAL_NOISE_DAY)) > returns._XIRR_GRID_RATES[1]
+        assert low_npv > 0.0 > high_npv and abs(high_npv) < returns._npv_noise_floor(flows)
+        assert _exact_npv(flows, low) > 0 and _exact_npv(flows, high) > 0
+        assert not returns._opposite_signs(low_npv, high_npv, returns._npv_noise_floor(flows))
+        assert returns._bracketed_xirr_at(flows, 12.0, _scale(flows)) is None
+        assert str(returns._rate_decimal(_scan_brent(flows, low, high))) == "12.182509"
+        assert returns._solve_xirr(flows, COLD_GUESS) != _scan_brent(flows, low, high)
 
     def test_newton_keeps_head_s_test(self):
         """``NEWTON_ILL_CONDITIONED``: Newton from 0.1 stops on −0.754735, a true root that HEAD's test refuses (|NPV| =
@@ -1602,3 +1624,32 @@ class TestWhatP1bLeavesAsItWas:
         assert returns.calculate_mwrr(cash_flows, navs[0].nav, navs[1].nav, navs[0].date, navs[1].date).mwrr == Decimal("-0.019580")
         assert [str(point.mwrr) for point in returns.calculate_mwrr_series(*NEWTON_ILL_CONDITIONED)] == ["-0.019580"]
         assert returns.period_mwrr(navs, cash_flows, navs[1].date, navs[1].nav).mwrr is None
+
+
+# =============================================================================
+# 7. The false exact zero, removed (P1c)
+# =============================================================================
+
+
+class TestTheFalseExactZeroGivesWay:
+    """P1c: the scan and ``_bracketed_xirr_at`` keep a grid point whose NPV is exactly 0.0 only where the NPV changes
+    sign around it (``_changes_sign_at``). On a period that opens at value 0, far from t=0 every NPV term underflows,
+    and the NPV is exactly 0.0 at grid rates that solve nothing: HEAD (and P1b) returned the one nearest 0.1. The 1900
+    case's 5-8 July are in section 6; ``test_mwrr_false_grid_zero.py`` holds the solver's own cases."""
+
+    def test_the_1720_period_has_no_rate(self):
+        """``SUBNORMAL_NOISE``: HEAD's card and line were 12.803843 — the Dashboard's «12.80» — the grid point
+        10^(57/50) − 1 where the NPV is exactly 0.0 by underflow and does not change sign. The true root, about 4.4e7, is
+        beyond the grid, so there is no rate to give: the card and the line have none."""
+        flows = _point_flows(SUBNORMAL_NOISE, SUBNORMAL_NOISE_DAY)
+        grid_point = returns._XIRR_GRID[657] - 1.0
+        (end,) = [snapshot for snapshot in SUBNORMAL_NOISE[0] if snapshot.date == SUBNORMAL_NOISE_DAY]
+
+        assert str(returns._rate_decimal(grid_point)) == "12.803843"
+        assert returns._xirr_npv(flows, grid_point) == 0.0 and not _npv_changes_sign(flows, grid_point)
+        assert returns._solve_xirr(flows, COLD_GUESS) is None
+        assert returns._bracketed_xirr(flows, COLD_GUESS, _scale(flows)) is None
+        assert returns._bracketed_xirr_at(flows, grid_point, _scale(flows)) is None
+        assert returns.period_mwrr(*SUBNORMAL_NOISE, end.date, end.nav).mwrr is None
+        assert [str(point.mwrr) for point in returns.period_mwrr_series(*SUBNORMAL_NOISE)] == ["None"]
+        assert float(_one_deposit_rate(SUBNORMAL_NOISE, SUBNORMAL_NOISE_DAY)) > returns._XIRR_GRID_RATES[1]

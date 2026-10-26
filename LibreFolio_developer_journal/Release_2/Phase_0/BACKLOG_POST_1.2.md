@@ -10826,6 +10826,8 @@ punto di partenza, l'audit dello stesso giorno:
   0 differenze su tutto `get_report`), P4 (il motore a segmenti); poi i pavimenti. Dettagli:
   piano MF, «Piano «formule veloci»» e le voci P1, P2.
   🌊 22/10: ondata 5 (proprietario MF; P4 + pavimenti all'indietro)
+  📌 23/10: P4 pronto (checkpoint MF5-1: segmenti `DailyStates`, 202 casi di parità a 0 differenze, memoria 686 → 5 MB
+  sulla copia al 1500); restano i pavimenti (MF5-2). Dettagli: piano MF, «MF5-1 · P4 — rossi e cura».
 - ✅ **MF-P1b · Le due debolezze del MWRR già presenti** — piccolo, valori da dichiarare; MF, 19/10 (test di P1), via del
   developer il 19/10 come lotto a parte, dopo P2. (1) Il test del segno moltiplica i VAN e il prodotto va in underflow
   a zero; (2) `_is_xirr_root` scarta radici vere quando il VAN è mal condizionato (termini enormi che si annullano). P1
@@ -10841,3 +10843,29 @@ punto di partenza, l'audit dello stesso giorno:
   **Il developer sceglie A** il 20/10; codice e test pronti il 20/10 (`returns.flows_by_snapshot_date`; 22 rossi prima;
   Dashboard invariata su 4 copie), in attesa del checkpoint. Dettagli: piano MF, «MF-E2b».
   - ✅ 21/10 (riconciliazione): in `dev_release2` col treno 4 (`015094472`; commit `bf748bbc3`).
+- **MF-SPL1 · Le chiusure Yahoo rettificate per split sottostimano il valore prima di uno split** — medio, numeri,
+  preesistente (non introdotto da Z-35), **da decidere, developer**; MF, 23/10 (domanda di X su Z-35). Il motore legge
+  la quotazione «nelle unità del suo giorno» e cambia la quantità solo con la rettifica legata allo SPLIT; il `Close`
+  Yahoo è rettificato per split anche con `auto_adjust=False`: 10 AAPL al 28/08/2020 valgono 1 248 invece di 4 990, e il
+  31/08 il TWRR salta di +313 %. Grafici, segnali e rischio invece vogliono la serie rettificata. Dettagli:
+  [piano MF](../Phase_1/11_financialMath/plan-phase01FinancialMath.prompt.md), sezione «Revisione X5-2 (Z-35)».
+  📌 23/10 (developer): **C** per la 1.3: nessun codice sugli split; la voce di backlog e una nota nella doc per
+  sviluppatori (`transactions/price_resolver.md`, «Design contract», MF) e nella pagina utente di Yahoo (X).
+  **Obiettivo dopo la 1.3: A**: il plugin salva le chiusure come scambiate (× i rapporti degli split successivi, da
+  `ticker.splits`), insieme ai lettori che conoscono gli split (grafici, segnali, rischio applicano gli eventi SPLIT).
+- **MF-P1d · Il MWRR mostra 10 % nel giorno del versamento di un periodo che apre a zero** — piccolo, numeri (valore
+  falso mostrato), **da decidere**; test-author di MF, 23/10 (rossi di P1c). Con un'apertura a 0 e un punto della linea
+  nel giorno dell'unico versamento, il versamento si somma al valore finale e tutti i flussi sono 0: il VAN è 0 a ogni
+  tasso e Newton restituisce la sua partenza, 0,1 (verificato: apertura 0 il 1/1, versamento 1 000 il 1/3 → la linea
+  dice 0,100000 il 1/3). Capita anche su una storia corta, per esempio un conto svuotato e poi rifinanziato nella
+  finestra. Cura proposta: nessun tasso quando tutti i flussi sono zero. Dettagli: piano MF, «MF5-4 · P1c».
+
+## W2 · Il form delle transazioni (fase 01)
+
+Sessione nata il 23/10 (ondata 5), sul form (`TransactionFormModal.svelte`). Piano:
+[`Phase_1/04_importTransactions/plan-phase01Step2TransactionForm-W2.prompt.md`](../Phase_1/04_importTransactions/plan-phase01Step2TransactionForm-W2.prompt.md).
+
+- **W2-1 · Il selettore «Importo totale / Prezzo unitario» nella modifica multipla (Bulk)** — minimo, comodità; W2, 23/10
+  (decisione D4 del coordinatore sul #47: niente nel Bulk in questo giro, è di W, e prezzo × quantità può differire
+  dall'addebito reale). Il form di una singola BUY/SELL ha il selettore (`POST /transactions/trade-amount`); la griglia del Bulk
+  no. Se serve, il Bulk riusa lo stesso endpoint e `txTradeAmount.ts`. Dettagli: piano W2, «#47 — decisioni».

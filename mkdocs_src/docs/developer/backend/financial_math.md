@@ -69,12 +69,14 @@ backend/app/services/financial_math/
 ├── ledger_totals.py         control totals of the ledger for backups: cash per broker and currency, quantity per position
 ├── returns.py               simple ROI, TWRR, MWRR (values and daily series; the Dashboard's rule in period_mwrr*; ROI and TWRR on a given capital or exposure for the lots' shorts; a flow counts on the first snapshot on or after it, flows_by_snapshot_date), annualization, period rebasing, G/L ratio (holding or group), change ratio, timing effect, realized gain, price return (also as a float for a return series), observed annualization of a return series (DAYS_PER_YEAR, its validator, calendar days ↔ observations both ways), fixed-period changes of a price or rate (1D … 5Y, both orientations) and its change over a whole range, recovery from a drawdown
 ├── valuation.py             holding value from quantity, price and quote_base_quantity
+├── trade_amount.py          the amount of a trade from its unit price and the unit price from its amount (quote base, half-even to the column scale): the transaction form's «Total amount / Unit price»; unrounded, the trade marks of price_marks.py (`unit_price_on_quote_axis`)
 ├── fx_rates.py              the orientation of a stored FX rate: a pair read from source to destination, either way (oriented_rate, any number type); the unit rates a calculation reads by day, as steps answered on the asked days only (AskedDayRates)
 ├── interest.py              day count conventions (ACT/365, ACT/360, ACT/ACT, 30/360), simple interest and daily compounding over a span in closed form, at a cost independent of the span (compound_growth, memoized): the primitives the Scheduled Investment provider builds its accrual on
-├── price_marks.py           daily mark of an asset: MARKET, TRADE_AVG, CARRIED or MISSING
+├── price_marks.py           daily mark of an asset: MARKET, TRADE_AVG, CARRIED or MISSING; the days with an observation (observation_dates)
+├── series_steps.py          series as steps (D-P4): the point holding a day (value_at), the points of a window clipped (points_between), the steps of a list of change rows (steps_from_rows, Decimals compared with their exponent)
 ├── yield_on_cost.py         Yield on Cost of holdings, replayed from the transaction ledger
 ├── weights.py               a share of a total (none on a total ≤ 0), allocation slices, gross weights, concentration (largest weight, HHI)
-├── splits.py                stock splits in the ledger: the ADJUSTMENT rows linked to a SPLIT asset event (one query), the ids an average-cost replay rescales, the usable-ratio rule, the incoming adjustments without a cost that a SPLIT retype must not orphan
+├── splits.py                stock splits in the ledger: the ADJUSTMENT rows linked to a SPLIT asset event (one query), the ids an average-cost replay rescales, the usable-ratio rule, the incoming adjustments without a cost that a SPLIT retype must not orphan, the split a share change implies (`implied_split_ratio`)
 ├── holding_window.py        how long a position has been held at its broker: oldest open lot, a closed position's window, its exits
 ├── fifo/                    FIFO lots
 │   ├── __init__.py          docstring only
@@ -89,7 +91,7 @@ backend/app/services/financial_math/
 │   ├── derived_views.py     DerivedViewsBuilder (history, P&L, allocation…), cost positions
 │   ├── data_quality.py      FX pair slug, configured pair sets, build_data_quality_report()
 │   ├── period.py            a period's boundary states, its P&L, the identity that closes it and its residual (the AI Export reconciliation, J-14); the day's P&L change
-│   ├── contributions.py     a position's row in the Dashboard's Performance table: return on the start value, annualized returns, the internal-transfer split (P22)
+│   ├── contributions.py     a position's row in the Dashboard's Performance table: its period P&L (`position_period_pnl`), return on the start value, annualized returns, the internal-transfer split (P22)
 │   └── engine.py            PortfolioCalculationEngine: loads a scope, runs the steps, caches
 └── lots/                    lots analysis math, called by lots_analysis_service.py
     ├── __init__.py          docstring only
@@ -121,7 +123,11 @@ of Newton's answer); a root the bracketing found may instead show the NPV changi
 (`_is_bracketed_xirr_root`), which keeps the true root of an ill-conditioned NPV, whose terms are far larger than the
 flows and cancel at the root (P1b). A sign change is read from the two signs, never from their product, which
 underflows to 0.0 when both NPVs are tiny; and a sign is trusted only above the NPV's rounding noise where its terms
-underflow (`_npv_noise_floor`, `_opposite_signs`).
+underflow (`_npv_noise_floor`, `_opposite_signs`). A grid point whose NPV is exactly 0.0 counts as a root only where
+the NPV changes sign around it (`_changes_sign_at`, in the scan and in `_bracketed_xirr_at`; P1c): on a period that
+opens at 0 and whose flows all lie decades after its start (a typo dated in 1900), every term underflows to 0.0 at the
+top of the grid, and that point solved nothing; the period has no rate there («—»), while a genuine exact zero, a rate
+of exactly 0, still changes sign and counts. Flows that are all zero have no rate either (MF-P1d): the NPV is zero at every rate, and Newton would answer its own starting point (0.1, «10 %») — a period opening at 0 whose only deposit falls on its last day is one, since the deposit joins the final value (`_all_flows_zero`, in `_solve_xirr` and `_newton_xirr`).
 
 `float_price_return()` and `observed_annualization()` (`returns.py`) serve the float return series that the risk and
 signal statistics read. `market_series.py`, which prepares those series, takes both from here and keeps no return
@@ -190,11 +196,11 @@ One call of `PortfolioCalculationEngine.calculate()` (`portfolio/engine.py`):
    (`InvalidSplitEvent`, sorted by event id), which the data-quality report turns into `INVALID_SPLIT_RATIO`.
    The range of daily states it computes starts no earlier than the first
    transaction and ends no later than `latest_range_end()` (tomorrow, `utils/datetime_utils.py`): the replay walks every
-   day, and an end far in the future held the instance (R13-SEC7-1). Nor does it start before `EARLIEST_RANGE_START`
-   (1 January 1900, same module, R13-SEC8): a transaction stored before it is still replayed on its own date (see
-   [The Days the Engine Recomputes](#recomputed-days)), but no state is emitted for a day before it, and none of the
-   per-day rates of steps 4 and 5 is asked before it — a movement's own conversion is still asked at its date. A
-   range that ends before the first transaction gives an empty result;
+   day, and an end far in the future held the instance (R13-SEC7-1). It has no date floor at the start: `actual_from` is
+   `max(date_from, first_tx_date)`, so a transaction dated before 1900, year 1 included, starts the states on its own
+   day. The cost follows the engine's segments — the days something changes (see
+   [The Days the Engine Recomputes](#recomputed-days)) — not the calendar days. A range that ends before the first
+   transaction gives an empty result;
 3. returns the cached `PortfolioCalculationResult` when the `portfolio_blob` cache holds one for
    the same key — scope, currency, options, data fingerprints and the day of
    `position_states_start` — that starts on or before the requested start and ends on the
@@ -296,9 +302,8 @@ to R, a loss out of R then K). An arrival whose departure is unknown arrives in 
 departure is on the same day is applied last on that day. The replay emits one
 `DailyPortfolioState` for every day of `[date_from, date_to]`,
 so a later `date_from` gets for its days exactly the states of the full replay. It evaluates only
-the **dirty** days, which `_collect_dirty_days()` lists: any other day carries the previous state
-(`dataclasses.replace()`, its containers copied), dated that day, with no external flow and no
-acquisition funding. The rule is developer decision 28 of release 1.3, «recompute whenever a term
+the **dirty** days, which `_collect_dirty_days()` lists: any other day carries the previous state,
+dated that day, with no external flow and no acquisition funding. The rule is developer decision 28 of release 1.3, «recompute whenever a term
 of the formula changes». A replayed day is dirty when it has:
 
 - a cash movement, a transaction that moves a quantity, an external flow, or an internal flow
@@ -319,18 +324,50 @@ of the formula changes». A replayed day is dirty when it has:
 - a split;
 - or it is the first replayed day, `date_from`, or `period_start` when it falls in the replay.
 
-Before `date_from` a quiet day is not even visited: no state is emitted there, and it would only
-carry the previous one, so the loop jumps straight to the next dirty day (`bisect.bisect_right()`
-over the sorted dirty days; `date_from` is always one). The output is the one a day-by-day walk
-gives, and the part of the replay before `date_from` costs its dirty days, not its calendar days.
+A quiet day is never visited: the loop jumps straight to the next dirty day
+(`bisect.bisect_right()` over the sorted dirty days; `date_from` is always one), so the replay
+costs its dirty days, not its calendar days, before and after `date_from` (P4).
 
-A movement stored before `EARLIEST_RANGE_START` (1 January 1900, `utils/datetime_utils.py`) is
-replayed exactly, on its own date and in its own order, never moved onto 1900; `calculate()` never
-passes a `date_from` before that floor, so the replay crosses the years between such a movement
-and `date_from` from dirty day to dirty day. `calculate()` counts those rows into
-`PortfolioCalculationResult.rows_before_floor` (`RowsBeforeFloor(count, earliest)`), which the
-data-quality report turns into the warning `TRANSACTIONS_BEFORE_FLOOR` (MF-SEC8-2a; see
-[Data Quality Banner](../frontend/data-quality-banner.md)).
+**Segments (P4).** `PortfolioCalculationResult.daily_states` is a `DailyStates` (`models.py`), a
+read-only `Sequence` of one state a day held as `StateSegment`s: `start` (a computed day, with
+`state.date == start`), `end` (the last day it holds, included: the day before the next start, or
+`date_to`) and `state`. Inside a segment every field keeps its value except `date`,
+`external_cash_flow` (0) and `acquisition_funding` (None), because every day on which another field
+can change is dirty. Indexing, slicing and iteration build a quiet day when it is read
+(`StateSegment.state_on()`: `dataclasses.replace()`, its containers copied), so the output is the
+one a day-by-day walk gives, while memory grows with the computed days only. Measured on a copy of
+the test database with one deposit typed in 1500: 192 413
+states and 686 MB kept before P4, 397 segments and 5 MB after. A reader that needs the values,
+not one object a day, asks one day (`state_on()`, `state_as_of()`) or walks
+`iter_segments(date_from, date_to)` (segments clipped to the window): `period.state_as_of()`, the
+data-quality report's incomplete-NAV days, `_engine_missing_fx_pairs()`, and the derived views,
+whose windows are found by date arithmetic and read day by day from their segment's state
+(`DerivedViewsBuilder._window_days()`, the day's date taken from the walk, never from the state).
+Nobody mutates a state or its containers after the build.
+
+**Position frames (#48).** With `include_positions` (`calculate()`, part of the blob-cache key) or
+`compute_position_frames` (the builder), the result carries `position_frames`: for each held
+position, `PositionFrame`s (`broker_id`, `asset_id`, `start`, `end` included, `quantity` at the
+owner's share, `market_value`, `cost_basis`, `cost_complete`, `valuation_source`,
+`unrealized_pnl`) — the values `_build_position_state()` gives each day, merged while none of them
+changes (Decimals compared with their exponent). A frame changes only with its own position: a
+quote of another asset does not split it. A position not held on a day has no frame there, so a
+closed position simply ends. The frames are grouped in the order the replay first met each
+position, each group by start: summing from `Decimal("0")`, in that order, the market values (not
+None) of the frames covering a day gives that day's `market_value` exactly. Off by default.
+
+**The asset dimension.** Each state carries `by_asset` (asset id → the held market value summed into
+`market_value`, every broker; no cash). `DerivedViewsBuilder.build_asset_allocation_current()` and
+`build_asset_allocation_history()` turn it into allocation slices named by the caller (`id` = the
+asset id), plus the Liquidity slice of `by_type` (cash and cash in transit): the report's
+`summary.allocation_by_asset` and `allocation_history.asset`.
+
+The engine has no date floor (lot MF-PAV-L1): a movement stored in 1500, or in year 1, is replayed
+exactly, on its own date and in its own order, and the states start at the first transaction. When the
+requested `date_from` is later than a movement, the replay starts at the movement and crosses the years
+between it and `date_from` from dirty day to dirty day. The old counter `rows_before_floor`
+(`RowsBeforeFloor`) and the data-quality issue `TRANSACTIONS_BEFORE_FLOOR` no longer exist: nothing is
+moved or dropped, so there is nothing to warn about.
 
 !!! info "Why: R13-SEC8"
 
@@ -338,7 +375,9 @@ data-quality report turns into the warning `TRANSACTIONS_BEFORE_FLOOR` (MF-SEC8-
     calendar day since: a state carried on each quiet day, a rate calendar for each currency, a rate
     request for each day of each foreign currency it values (finding R13-SEC8, lot MF-SEC8-2). A row
     dated `0001-01-01` could even raise `OverflowError`: a rate calendar starts the day before the
-    replay, and `date.min` has none.
+    replay, and `date.min` has none. The floor of 1 January 1900 that lot MF-SEC8-2 put in front of the
+    replay is gone: the cost no longer depends on the calendar days (rates are read as steps, calendars
+    hold only the candidate days), and a calendar has no day before `date.min`.
 
 Both rate rules take their days from one pure function, the one home of «the day a rate changes»:
 `native_cash.change_days(read, currencies, days)` returns the days of the calendar `days`, in its
@@ -347,12 +386,13 @@ calendar's previous day; a rate on the calendar's first day counts. The caller c
 and the calendar. The native cash reads the last rate known on or before the day, on the calendar
 of its rate points. The engine reads the rate `fx_rate_map` holds for that exact day
 (`_read_rate()`), on every replayed day — or day of the transit, for cash in transit — each
-compared with the day before (`_calendar()` starts one day early); its calendars start on
-`EARLIEST_RANGE_START` at the earliest, since no rate is loaded before it. `_read_rate()` reads only the
+compared with the day before; its calendars start at the replay's start, and each holds only the
+candidate days (`_reading_calendar()`: the steps and window bounds of the rates, each with the day
+before it), never every day since. `_read_rate()` reads only the
 map, which `_preload_fx_rates()` already answers for these currencies on every day of
 `[date_from, date_to]` (a day replayed before a later `date_from` may find none there, and its
-state is not emitted), and for cash in transit on every day of its transit from
-`EARLIEST_RANGE_START` on: the rule asks the FX service for nothing more.
+state is not emitted), and for cash in transit on every day of its transit, from the interval's own
+start: the rule asks the FX service for nothing more.
 
 When you add an input that can change a day's value — a rate, a price, a mark's source, an age —
 add its days to the dirty days, or show that the day cannot change.

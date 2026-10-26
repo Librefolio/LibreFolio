@@ -12,9 +12,9 @@ The problem is described by plain data only:
 * the report currency T, and the last day the rates are needed on.
 
 All the conversions go to the FX service: every foreign movement at its own date (the flows) in one ``convert_bulk``
-call, and one unit of every foreign currency on every day from its first movement on, and from 1 January 1900 at the
-earliest, with only the movements' own days before it (the valuation), in one ``unit_rate_steps`` call — the same rates,
-kept as the days a stored rate changes (P3). An amount already in T is taken as it is, so
+call, and one unit of every foreign currency on every day from its first movement on (the valuation), in one
+``unit_rate_steps`` call — the same rates, kept as the days a stored rate changes (P3), so a movement centuries back
+costs its stored rows, not its days. An amount already in T is taken as it is, so
 cash held only in the report currency never needs a rate. A conversion that cannot be made
 never becomes a zero: the movement stays out of values and flows, and its pair is reported
 with every date it was needed on.
@@ -41,7 +41,6 @@ from typing import Any
 from backend.app.schemas.common import Currency
 from backend.app.services.financial_math.fx_rates import AskedDayRates
 from backend.app.services.fx.conversion import convert_bulk, unit_rate_steps
-from backend.app.utils.datetime_utils import EARLIEST_RANGE_START
 
 _ZERO = Decimal("0")
 _ONE = Decimal("1")
@@ -328,6 +327,38 @@ class NativeCash:
             unallocated_costs=unallocated_costs,
         )
 
+    def position_flow_steps(self, date_from: date_type | None = None, date_to: date_type | None = None) -> dict[tuple[int, int], list[tuple[date_type, Decimal, Decimal]]]:
+        """Each position's income and costs of ``(date_from, date_to]`` as running totals, on the days they change.
+
+        ``(broker_id, asset_id)`` → ``[(day, income, costs)]``, ascending, one entry per day holding an income (DIVIDEND,
+        INTEREST) or cost (FEE, TAX) movement of the position: the totals from ``date_from`` (excluded) through that day,
+        by the rules of :meth:`flows` — income signed, costs absolute, at the movement's share, a missing conversion left
+        out. One pass instead of a :meth:`flows` call a day (#48); with the movements in date order (the engine's), each
+        entry equals ``flows(date_from, day)``'s figures for the position exactly.
+        """
+        order = sorted(range(len(self.movements)), key=lambda index: self.movements[index].date)
+        totals: dict[tuple[int, int], list[Decimal]] = {}
+        steps: dict[tuple[int, int], list[tuple[date_type, Decimal, Decimal]]] = {}
+        for index in order:
+            movement, value = self.movements[index], self.converted[index]
+            kind = movement.transaction_type
+            if value is None or movement.asset_id is None or not _in_window(movement.date, date_from, date_to):
+                continue
+            if kind not in _INCOME_TYPES and kind not in _COST_TYPES:
+                continue
+            key = (movement.broker_id, movement.asset_id)
+            total = totals.setdefault(key, [_ZERO, _ZERO])
+            if kind in _INCOME_TYPES:
+                total[0] = total[0] + value * movement.share
+            else:
+                total[1] = total[1] + abs(value) * movement.share
+            entries = steps.setdefault(key, [])
+            if entries and entries[-1][0] == movement.date:
+                entries[-1] = (movement.date, total[0], total[1])
+            else:
+                entries.append((movement.date, total[0], total[1]))
+        return steps
+
     def sums_by_date(
         self,
         date_from: date_type | None,
@@ -422,8 +453,8 @@ def change_days(read: Callable[[str, date_type], Decimal | None], currencies: It
     rate than on the calendar's previous day — the one home of «the day a rate changes».
 
     The caller chooses the reading and the calendar: the native cash reads the last rate known on or before the day,
-    on the calendar of its rate points; the portfolio engine reads the rate of the exact day, on every day of its
-    frame. A rate that appears or disappears is a change, and so is a rate on the calendar's first day.
+    on the calendar of its rate points; the portfolio engine reads the rate of the exact day, on the days a rate can
+    change and the day before each (``DailyStateBuilder._reading_calendar``). A rate that appears or disappears is a change, and so is a rate on the calendar's first day.
     """
     watched = tuple(sorted(set(currencies)))
     changed: list[date_type] = []
@@ -489,31 +520,23 @@ async def compute_native_cash(
 
 
 def _unit_windows(foreign: Sequence[CashMovement], rates_until: date_type | None) -> dict[str, list[tuple[date_type, date_type]]]:
-    """By currency, the windows of days a foreign balance may need a rate on (P3: the days a request a day asked).
+    """By currency, the window of days a foreign balance may need a rate on (P3: the days a request a day asked).
 
-    Every day from the currency's first movement — but from ``EARLIEST_RANGE_START`` at the earliest (R13-SEC8: a
-    movement stored centuries back would otherwise ask one per day since). Before the floor only the movements' own
-    days are asked, so a balance counted there still has a rate on or before every later day (``_foreign_value`` never
-    meets a counted balance without one); the cost is bounded by the movements, not by the days.
+    Every day from the currency's first movement to ``rates_until`` (else its last movement), even when it is centuries
+    back: the rates are read as steps (``unit_rate_steps``), so the cost follows the stored rows, not the days (no date
+    floor, MF-PAV-L1).
     """
     first: dict[str, date_type] = {}
     last: dict[str, date_type] = {}
-    early: dict[str, set[date_type]] = {}
     for movement in foreign:
         currency = movement.currency
         if currency not in first or movement.date < first[currency]:
             first[currency] = movement.date
         if currency not in last or movement.date > last[currency]:
             last[currency] = movement.date
-        if movement.date < EARLIEST_RANGE_START:
-            early.setdefault(currency, set()).add(movement.date)
     windows: dict[str, list[tuple[date_type, date_type]]] = {}
     for currency in sorted(first):
-        asked = [(day, day) for day in sorted(early.get(currency, ()))]
-        start = max(first[currency], EARLIEST_RANGE_START)
         end = last[currency] if rates_until is None else rates_until
-        if start <= end:
-            asked.append((start, end))
-        if asked:
-            windows[currency] = asked
+        if first[currency] <= end:
+            windows[currency] = [(first[currency], end)]
     return windows

@@ -28,7 +28,7 @@ $$
 | Realized | Sum of (proceeds − historical cost of the units given up) for the SELLs in period and the outgoing ADJUSTMENTs not linked to a split, whose proceeds are zero; proceeds are converted at the transaction's date ([Portfolio Engine — §8](index.md#8-realized-gain-loss)) |
 | Income | DIVIDEND + INTEREST in period |
 | FeesTaxes | FEE + TAX in period |
-| Other | What closes the identity: the exchange result on cash held in another currency (FX on cash) plus a residual |
+| Other | What closes the identity: the exchange result on cash held in another currency (FX on cash), the gain securities accrued outside the view before crossing its boundary (transfers at market value), plus a residual |
 
 Other is computed as:
 
@@ -36,13 +36,13 @@ $$
 \mathrm{Other} = \mathrm{PnL}_{\text{period}} - \Delta\mathrm{UGL} - \mathrm{Realized} - \mathrm{Income} + \mathrm{FeesTaxes}
 $$
 
-Because the cost basis keeps its historical exchange rates (see [Book Value](book-value.md)), the effect of exchange rates on foreign assets is part of $\Delta\mathrm{UGL}$, not of Other. Cash held in another currency is different: NAV and Book both value it at each day's rate, so its exchange-rate effect cancels in the unrealized gain/loss and is not in $\Delta\mathrm{UGL}$. It is the first part of Other, the [FX on cash](#fx-on-cash) of each broker $b$, which the Period view shows per broker:
+Because the cost basis keeps its historical exchange rates (see [Book Value](book-value.md)), the effect of exchange rates on foreign assets is part of $\Delta\mathrm{UGL}$, not of Other. Cash held in another currency is different: NAV and Book both value it at each day's rate, so its exchange-rate effect cancels in the unrealized gain/loss and is not in $\Delta\mathrm{UGL}$. It is the first part of Other, the [FX on cash](#fx-on-cash) of each broker $b$, which the Period view shows per broker. The second part, the [transfers at market value](#transfers-at-market-value), is shown per broker too:
 
 $$
-\mathrm{Other} = \sum_{b \in S} \mathrm{FXonCash}_b + \mathrm{Residual}
+\mathrm{Other} = \sum_{b \in S} \mathrm{FXonCash}_b + \sum_{b \in S} \mathrm{TMV}_b + \mathrm{Residual}
 $$
 
-The residual holds what neither the four components nor the exchange result on cash can see:
+The residual holds what neither the four components, the exchange result on cash nor the transfers at market value can see:
 
 - the exchange-rate move of cash while it travels between two brokers: in transit, it belongs to no broker's balance;
 - the cost of a currency exchange, at one broker or across two: −1,000 USD worth €920 at the day's rate, exchanged into +€900, gives −€20, which is neither a fee nor a sale;
@@ -74,6 +74,31 @@ $N_{b,c}(t)$ is the balance $b$ holds in currency $c$ on $t$, scaled by the brok
     $$
 
     The deposit entered the capital at €455; the +€25 is what the dollars gained against the euro while the broker held them.
+
+### 🔀 Transfers at Market Value {: #transfers-at-market-value }
+
+In a view that selects only some brokers, a TRANSFER leg whose other side is outside the view — securities sent to a broker that is not selected, received from one, or a transfer with no counterpart — is in-kind capital at its market value on its date, while the position's cost moves with it ([Deposited Capital](deposited-capital.md)). The gain the units accrued at the other broker is therefore in neither $\Delta\mathrm{UGL}$ nor Realized, and used to end up in the residual. It is the second part of Other. For each broker $b$ of the view, over the legs $\ell$ dated in $(t_0, t_1]$:
+
+$$
+\mathrm{TMV}_b = \sum_{\ell \in (t_0, t_1]} \bigl(\mathrm{Cost}_\ell - \mathrm{Capital}_\ell\bigr)
+$$
+
+$\mathrm{Capital}_\ell$ is the market value the leg adds to the capital (positive when received, negative when sent) and $\mathrm{Cost}_\ell$ the cost it moves in the position (same sign), both in $C^*$ at the broker's share. For units with market value $\mathrm{MV}$ and cost $C$:
+
+| Leg | $\mathrm{Capital}$ | $\mathrm{Cost}$ | Contribution |
+|-----|---------|------|--------------|
+| Sent out of the view | $-\mathrm{MV}$ | $-C$ | $+(\mathrm{MV} - C)$ |
+| Received from outside the view | $+\mathrm{MV}$ | $+C$ | $-(\mathrm{MV} - C)$ |
+
+The sender's view takes the gain the units made while it held them as a result of its own; the receiver's view starts from the value they arrive with, so what they gained before is not its result and is taken out. A figure below the rounding threshold is not shown, and the residual drops by the amount shown. With both brokers selected nothing changes: the pair is internal, and the units only split the result between the two rows (see the internal transfer under Per-Asset Contribution below).
+
+??? example "Example: units bought at one broker and sent to another"
+
+    10 units bought at 50 each (cost €500) on broker A are sent to broker B when worth €800.
+
+    - **View on A only:** the units leave at €800 of capital and take €500 of cost with them: $\mathrm{TMV}_A = -500 + 800 = +300$ EUR.
+    - **View on B only:** the units arrive at €800 of capital with €500 of cost: $\mathrm{TMV}_B = 500 - 800 = -300$ EUR.
+    - **View on A and B:** no such row.
 
 ---
 
@@ -153,7 +178,7 @@ A position's start and end values are the portfolio's own valuation of it at the
 - its cost basis, for a holding whose asset has no mark at all (`ESTIMATED_AT_COST`);
 - converted at the exchange rate of the boundary day itself.
 
-The rows therefore add up to the portfolio: when every row is known, $\sum_{(a,b)} \Delta\mathrm{UGL}(a,b) = \Delta\mathrm{UGL}$, and the rows plus the other period effects — unallocated income and costs, FX on cash, the residual — close $\mathrm{PnL}_{\text{period}}$. Other holds no valuation difference. Dust aside: a row counts a residual of $10^{-5}$ units or fewer as not held, the portfolio values it ([§7](index.md#7-period-contribution)).
+The rows therefore add up to the portfolio: when every row is known, $\sum_{(a,b)} \Delta\mathrm{UGL}(a,b) = \Delta\mathrm{UGL}$, and the rows plus the other period effects — unallocated income and costs, FX on cash, transfers at market value, the residual — close $\mathrm{PnL}_{\text{period}}$. Other holds no valuation difference. Dust aside: a row counts a residual of $10^{-5}$ units or fewer as not held, the portfolio values it ([§7](index.md#7-period-contribution)).
 
 - **Internal transfer.** A security moved between two of your brokers inside the period splits its result: the sending broker's row answers for the units until they arrive, the receiving broker's from their arrival, and the total is unchanged. A transfer already in transit at $t_0$, or still in transit at $t_1$, keeps the plain boundary values ([§7](index.md#7-period-contribution)).
 - **Unknown values.** A position held at a boundary whose unrealized gain/loss is unknown there — a missing exchange rate, an incomplete cost — has an unknown $\Delta\mathrm{UGL}(a,b)$, never the known side minus zero.
