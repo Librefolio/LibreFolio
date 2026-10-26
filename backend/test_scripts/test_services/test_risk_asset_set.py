@@ -48,7 +48,7 @@ setup_test_database()
 
 from backend.app.db.models import Asset, AssetType, FxConversionRoute, FxRate, PriceHistory
 from backend.app.db.session import get_async_engine
-from backend.app.schemas.common import Currency, DateRangeModel
+from backend.app.schemas.common import Currency, DateRangeModel, DateSpan
 from backend.app.schemas.portfolio import (
     DataQualityExclusionReason,
     DataQualityIssue,
@@ -454,7 +454,7 @@ def test_the_joint_calendar_is_the_intersection_and_not_each_asset_own_history()
     assert len(complete.prices) == 26
     assert len(gapped.prices) == 25
     assert withheld not in prepared.joint_valuation_dates
-    assert prepared.data_quality.incomplete_valuation_dates == [withheld]
+    assert prepared.data_quality.incomplete_valuation_ranges == [DateSpan(start=withheld, end=withheld)]
     # One calendar, one count, for every series in the set.
     assert prepared.n_observations == 24
     assert {len(item.returns.points) for item in prepared.series} == {prepared.n_observations}

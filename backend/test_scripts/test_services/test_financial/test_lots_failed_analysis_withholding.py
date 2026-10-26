@@ -66,6 +66,7 @@ from backend.app.db.models import Asset, AssetType, Broker, FxConversionRoute, F
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.portfolio import LotAnalysisType, LotsAnalysisResponse
 from backend.app.services.lots_analysis_service import get_lots_analysis
+from backend.test_scripts.test_services._lots_steps import daily_points, gap_days
 from backend.test_scripts.test_services._scope_boundary_books import add_prices, asset_row, link, new_asset, new_broker, new_user
 
 D = Decimal
@@ -380,7 +381,7 @@ async def test_s1_s2_failed_analysis_keeps_the_market_price_line(session, book_n
     assert (result.calculation_status, _issue_codes(result)) == ("FAILED", ["FIFO_SOURCE_QUANTITY_MISSING" if book_name == "oversell" else "TRANSFER_PAIR_MISSING"])
     observed = {name: _shape(getattr(result, name)) for name in (*LOT_SECTIONS, *ORPHANS)}
     assert observed == dict.fromkeys((*LOT_SECTIONS, *ORPHANS))
-    line = [(point.date, point.market_price, point.currency, point.estimated) for point in result.market_price_history]
+    line = [(point.date, point.market_price, point.currency, point.estimated) for point in daily_points(result.market_price_history)]
     assert line == [(day, price, "EUR", False) for day, price in MARKET_LINE]
 
 
@@ -538,9 +539,9 @@ async def test_s7_failed_analysis_keeps_the_fx_gap_of_the_market_price_line(sess
 
     assert result.calculation_status == "FAILED"
     assert _codes_one_per_issue(result) == ["FIFO_SOURCE_QUANTITY_MISSING", "MISSING_FX_MARKET"]
-    assert {item.pair: list(item.dates) for item in result.data_quality.missing_fx_pairs} == {"VND/EUR": VND_MARKED_DAYS}
+    assert {item.pair: gap_days(item) for item in result.data_quality.missing_fx_pairs} == {"VND/EUR": VND_MARKED_DAYS}
     assert [list(issue.affected_fx_pairs) for issue in _issues(result, "MISSING_FX_MARKET")] == [["EUR-VND"]]
-    line = [(point.date, point.market_price, point.currency, point.estimated) for point in result.market_price_history]
+    line = [(point.date, point.market_price, point.currency, point.estimated) for point in daily_points(result.market_price_history)]
     assert line == [(day, price, "EUR", True) for day, price in EUR_TRADE_LINE]
 
 

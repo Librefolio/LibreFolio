@@ -1,12 +1,13 @@
 """Mathematical tests for canonical converted-price and return preparation."""
 
+from dataclasses import dataclass
 from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest
 
 from backend.app.db.models import PriceHistory
-from backend.app.schemas.common import DateRangeModel
+from backend.app.schemas.common import DateRangeModel, DateSpan
 from backend.app.schemas.portfolio import (
     DataQualityExclusionReason,
     DataQualityStatus,
@@ -16,6 +17,7 @@ from backend.app.schemas.prices import (
     FAPricePoint,
     FAPriceQueryResult,
 )
+from backend.app.services import market_series
 from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.market_series import prepare_asset_series_set
 from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
@@ -347,7 +349,7 @@ def test_missing_fx_date_is_excluded_without_filling_returns():
         date(2026, 1, 3),
         date(2026, 1, 5),
     ]
-    assert prepared.data_quality.incomplete_valuation_dates == [date(2026, 1, 4)]
+    assert prepared.data_quality.incomplete_valuation_ranges == [DateSpan(start=date(2026, 1, 4), end=date(2026, 1, 4))]
     assert prepared.data_quality.unresolved_fx_pairs == ["USD/EUR"]
     assert prepared.data_quality.data_quality_status == DataQualityStatus.PARTIAL
     assert prepared.calendar_coverage == pytest.approx(2 / 3)
@@ -652,7 +654,7 @@ def test_quote_dates_are_each_assets_own_quotes_even_on_a_date_the_joint_calenda
 
     # Presence barrier: the crypto has no row on the 15th, so the joint calendar drops that date...
     assert gap not in prepared.joint_return_dates
-    assert prepared.data_quality.incomplete_valuation_dates == [gap]
+    assert prepared.data_quality.incomplete_valuation_ranges == [DateSpan(start=gap, end=gap)]
     # ...yet the ETF was quoted on it, and says so.
     assert series_of(prepared, 1).quote_dates == WEEKDAYS_IN_RANGE
     assert series_of(prepared, 2).quote_dates == [day for day in DAYS_IN_RANGE if day != gap]
@@ -690,3 +692,197 @@ def test_a_foreign_listing_repeating_its_native_close_is_a_carry_although_its_co
     assert series_of(prepared, 1).quote_dates == WEEKDAYS_IN_RANGE
     # Monday's return is measured from Friday's quote.
     assert return_on(prepared, 1, date(2025, 1, 13)).previous_valuation_date == friday
+
+
+# =============================================================================
+# J5-2 (R1) — the same preparation from readings that hold only the observations
+# =============================================================================
+#
+# Today the risk asks the price query for every calendar day of ``[start - 1, end]`` and ``prepare_asset_series_set`` uses a
+# handful of those points: the baseline day, the days some asset quotes, and for each its price fields. R1 lets the query
+# answer per asset with a *reading* (Z's Q1): ``first_point_date``, ``observation_dates`` (the stored rows of the window)
+# and ``point_on(day)``, which gives the point the dense series has on that day — the last observation up to it, converted
+# at that day's rate, with the same ``backward_fill_info`` — or None where the dense series has none. The preparation then
+# builds points only on the days it needs. These cases pin that the result is the SAME ``PreparedAssetSeriesSet`` as
+# today's, field by field, in the seven situations the plan lists (05, «Ondata 5», R1).
+#
+# The readings here are derived from the dense results themselves, so the cases test the preparation against the contract,
+# not Q1: the end-to-end parity (real Q1 against the dense series) is the integration case after Z's commit.
+# Red until ``market_series.prepare_asset_series_set_from_readings`` exists (AttributeError, raised when each case runs).
+
+R1_START = date(2026, 3, 2)  # a Monday
+R1_END = date(2026, 3, 27)
+R1_RANGE = DateRangeModel(start=R1_START, end=R1_END)
+
+
+@dataclass(frozen=True)
+class DenseReading:
+    """A reading of one asset made from its dense result: what Q1 must answer, answered from today's points."""
+
+    result: FAPriceQueryResult
+
+    @property
+    def asset_id(self) -> int:
+        return self.result.asset_id
+
+    @property
+    def errors(self) -> list[str]:
+        return self.result.errors
+
+    @property
+    def first_point_date(self) -> date | None:
+        """The first day with a point in any currency, as ``ObservedPrices`` has it: while the rate is missing the point is native."""
+        return min((point.date for point in self.result.prices), default=None)
+
+    @property
+    def observation_dates(self) -> tuple[date, ...]:
+        return tuple(point.date for point in self.result.prices if point.backward_fill_info is None or point.backward_fill_info.days_back == 0)
+
+    def point_on(self, day: date) -> FAPricePoint | None:
+        return next((point for point in self.result.prices if point.date == day), None)
+
+
+def dense_asset(asset_id: int, observations: dict[date, str], *, usd: dict[date, str] | None = None, first: date = date(2026, 3, 1), source: str = "fixture") -> FAPriceQueryResult:
+    """The result the price query gives today: one point per calendar day from the first observation, the last close carried.
+
+    ``observations`` are the closes in the asset's own currency (EUR, or USD when ``usd`` gives the rates by the day they
+    start: the rate of a day is the last one on or before it). A day before the first rate has the native close unconverted."""
+    prices: list[FAPricePoint] = []
+    last_day = max(observations)
+    for day in every_calendar_day(max(first, min(observations)), max(last_day, R1_END)):
+        seen = [d for d in observations if d <= day]
+        if not seen:
+            continue
+        priced_on = max(seen)
+        close = Decimal(observations[priced_on])
+        if usd is None:
+            prices.append(native_point(day, str(close), effective_price_date=priced_on, source=source))
+            continue
+        rates = [d for d in usd if d <= day]
+        if not rates:
+            prices.append(FAPricePoint(date=day, close=close, currency="USD", source_plugin_key=source))
+            continue
+        rate_day = max(rates)
+        prices.append(converted_point(day, native_close=str(close), target_close=str(close * Decimal(usd[rate_day])), effective_price_date=priced_on, fx_rate_date=rate_day, source=source))
+    return FAPriceQueryResult(asset_id=asset_id, prices=prices)
+
+
+def r1_prepare(results: list[FAPriceQueryResult], *, market_holidays: frozenset[date] = frozenset(), requested_range: DateRangeModel = R1_RANGE):
+    """The dense preparation of today and the preparation from readings, both dumped."""
+    dense = prepare_asset_series_set(results, requested_range=requested_range, target_currency="EUR", market_holidays=market_holidays)
+    readings = market_series.prepare_asset_series_set_from_readings([DenseReading(result) for result in results], requested_range=requested_range, target_currency="EUR", market_holidays=market_holidays)
+    return dense.model_dump(mode="json"), readings.model_dump(mode="json")
+
+
+def weekdays(first: date, last: date) -> list[date]:
+    return [day for day in every_calendar_day(first, last) if day.weekday() < 5]
+
+
+def quotes(days: list[date], *, start: str = "100", step: str = "1") -> dict[date, str]:
+    return {day: str(Decimal(start) + Decimal(step) * index) for index, day in enumerate(days)}
+
+
+class TestThePreparationFromReadingsIsTheDensePreparation:
+    def test_holidays_and_weekend_rows_stored_by_a_seven_day_source(self):
+        # A stores a row every calendar day; the Saturday and Sunday rows repeat Friday's close, and 13 March is a holiday repeating Thursday's.
+        week = {}
+        for day in every_calendar_day(date(2026, 2, 27), R1_END):
+            week[day] = week.get(day - timedelta(days=1), "100") if day.weekday() >= 5 or day == date(2026, 3, 13) else str(Decimal("100") + day.toordinal() % 7)
+        results = [dense_asset(1, week)]
+
+        for holidays in (frozenset(), frozenset({date(2026, 3, 13)})):
+            dense, from_readings = r1_prepare(results, market_holidays=holidays)
+            assert from_readings == dense, f"holidays {sorted(holidays)}"
+
+    def test_a_stored_carry_after_a_day_with_no_row(self):
+        # Friday 6 March closes at 100; Saturday's stored row repeats it; there is no Sunday row; Monday 9 March, a holiday, stores 100 again.
+        # The dense series has a point for the Sunday, carried from Saturday's row, and Monday's carry reads from it: the chain a reading
+        # that holds only the stored rows must rebuild.
+        stored = {day: str(Decimal("100") + day.toordinal() % 5) for day in weekdays(date(2026, 2, 27), date(2026, 3, 6))}
+        stored |= {date(2026, 3, 7): stored[date(2026, 3, 6)], date(2026, 3, 9): stored[date(2026, 3, 6)]}
+        stored |= {day: str(Decimal("100") + day.toordinal() % 5) for day in weekdays(date(2026, 3, 10), R1_END)}
+        results = [dense_asset(1, stored), dense_asset(2, quotes(weekdays(date(2026, 2, 27), R1_END), start="40"))]
+
+        dense, from_readings = r1_prepare(results, market_holidays=frozenset({date(2026, 3, 9)}))
+
+        assert from_readings == dense
+
+    def test_a_rate_that_starts_on_a_day_nobody_quotes(self):
+        # The listing is quoted every weekday; its rate starts on Saturday 7 March, so its first converted point is a day no asset quotes.
+        eur = dense_asset(1, quotes(weekdays(date(2026, 2, 27), R1_END)))
+        usd = dense_asset(2, quotes(weekdays(date(2026, 2, 27), R1_END), start="80"), usd={date(2026, 3, 7): "0.91"})
+
+        dense, from_readings = r1_prepare([eur, usd])
+
+        assert dense["baseline_date"] == "2026-03-07", "precondition: the baseline is the rate's first day"
+        assert from_readings == dense
+
+    def test_a_price_carried_for_longer_than_the_stale_threshold(self):
+        results = [dense_asset(1, quotes(weekdays(date(2026, 2, 27), R1_END))), dense_asset(2, {date(2026, 2, 27): "50", date(2026, 3, 16): "55"})]
+
+        dense, from_readings = r1_prepare(results)
+
+        assert dense["data_quality"]["carried_forward_price_asset_ids"] == [2], "precondition: B's long gap is a stale carry"
+        assert from_readings == dense
+
+    def test_dates_one_asset_quotes_and_another_does_not(self):
+        # A every weekday, B on Wednesdays only: B is carried on A's days, at each day's rate.
+        wednesdays = [day for day in weekdays(date(2026, 2, 25), R1_END) if day.weekday() == 2]
+        results = [dense_asset(1, quotes(weekdays(date(2026, 2, 25), R1_END))), dense_asset(2, quotes(wednesdays, start="40", step="2"))]
+
+        dense, from_readings = r1_prepare(results)
+
+        assert len(dense["joint_return_dates"]) > len(wednesdays), "precondition: A's days drive the returns"
+        assert from_readings == dense
+
+    def test_gaps_late_starters_and_a_baseline_on_the_last_day(self):
+        a = quotes([day for day in weekdays(date(2026, 2, 27), R1_END) if not date(2026, 3, 9) <= day <= date(2026, 3, 13)])
+        late = quotes(weekdays(date(2026, 3, 10), R1_END), start="70")
+        starts_at_the_end = {date(2026, 3, 27): "20"}
+        for results in ([dense_asset(1, a), dense_asset(2, late)], [dense_asset(1, a), dense_asset(3, starts_at_the_end)], [dense_asset(3, starts_at_the_end)]):
+            dense, from_readings = r1_prepare(results)
+            assert from_readings == dense, [result.asset_id for result in results]
+
+    def test_an_asset_with_a_split_in_the_window(self):
+        # The close halves on 11 March and the quantity doubles: the series the price query reads is whatever it stored, adjusted or not.
+        days = weekdays(date(2026, 2, 27), R1_END)
+        halved = {day: ("100" if day < date(2026, 3, 11) else "50") for day in days}
+        results = [dense_asset(1, halved), dense_asset(2, quotes(days))]
+
+        dense, from_readings = r1_prepare(results)
+
+        assert from_readings == dense
+
+    def test_a_foreign_listing_with_steps_of_the_rate_on_days_nobody_quotes(self):
+        rates = {date(2026, 3, 2): "0.90", date(2026, 3, 9): "0.92", date(2026, 3, 16): "0.88"}
+        days = [date(2026, 3, 2), date(2026, 3, 4), date(2026, 3, 6), date(2026, 3, 11), date(2026, 3, 13), date(2026, 3, 18)]
+        eur = dense_asset(1, quotes(weekdays(date(2026, 2, 27), R1_END)))
+        usd = dense_asset(2, quotes(days, start="80"), usd=rates)
+
+        dense, from_readings = r1_prepare([eur, usd])
+
+        assert from_readings == dense
+        # A rate missing at the start, and one carried past the stale threshold.
+        late_rate = dense_asset(3, quotes(weekdays(date(2026, 2, 27), R1_END), start="30"), usd={date(2026, 3, 5): "0.91"})
+        stale_rate = dense_asset(4, quotes(weekdays(date(2026, 2, 27), R1_END), start="60"), usd={date(2026, 2, 20): "0.93"})
+        for results in ([eur, late_rate], [eur, stale_rate]):
+            dense, from_readings = r1_prepare(results)
+            assert from_readings == dense
+
+    def test_a_replay_window_far_in_the_past_with_a_proxy_series(self):
+        # The stress replay prepares a window years back; a proxy asset stands for one that did not exist then.
+        window = DateRangeModel(start=date(2020, 3, 2), end=date(2020, 3, 27))
+        first = date(2020, 2, 28)
+        days = weekdays(first, window.end)
+        results = [dense_asset(1, quotes(days), first=first), dense_asset(9, quotes(days, start="10", step="0.5"), first=first)]
+
+        dense, from_readings = r1_prepare(results, requested_range=window)
+
+        assert from_readings == dense
+
+    def test_a_window_of_one_day_and_an_empty_set(self):
+        one_day = DateRangeModel(start=date(2026, 3, 4), end=date(2026, 3, 4))
+        results = [dense_asset(1, quotes(weekdays(date(2026, 2, 27), R1_END)))]
+
+        assert r1_prepare(results, requested_range=one_day)[1] == r1_prepare(results, requested_range=one_day)[0]
+        assert r1_prepare([])[1] == r1_prepare([])[0]

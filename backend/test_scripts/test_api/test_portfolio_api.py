@@ -3,7 +3,7 @@
 import json
 import uuid
 from collections import defaultdict
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
@@ -35,6 +35,7 @@ from backend.app.services.pac_allocator.source.portfolio_allocation_source impor
 )
 from backend.test_scripts.test_db_config import get_test_db_path, verify_test_database
 from backend.test_scripts.test_server_helper import _TestingServerManager
+from backend.test_scripts.test_services._lots_steps import expand_steps
 from backend.test_scripts.test_utils import print_section, print_success
 
 settings = get_settings()
@@ -1291,9 +1292,13 @@ class TestLotsAnalysisEndpoint:
             assert resp.status_code == 200, resp.text
             data = resp.json()
 
+            # J5-5 (steps, contract MF-P4b §1.3): a row holds from `date` to `through`, and the answer carries the `range` the rows lie in.
+            # 10 Jan (ROI 0, no TWRR yet) and 11 Jan (ROI and TWRR 0.1) are different figures, so they are two steps of one day each.
+            assert data["range"] == {"start": "2026-01-10", "end": "2026-01-11"}
             assert data["performance_history"] is not None
             assert len(data["performance_history"]) == 2
-            assert set(data["performance_history"][0]) == {"date", "roi", "twrr"}
+            assert set(data["performance_history"][0]) == {"date", "through", "roi", "twrr"}
+            assert [(row["date"], row["through"]) for row in data["performance_history"]] == [("2026-01-10", "2026-01-10"), ("2026-01-11", "2026-01-11")]
             assert Decimal(data["performance_history"][0]["roi"]) == Decimal("0")
             assert data["performance_history"][0]["twrr"] is None
             assert Decimal(data["performance_history"][1]["roi"]) == Decimal("0.1")
@@ -1353,7 +1358,11 @@ class TestLotsAnalysisEndpoint:
                 data = resp.json()
 
                 assert isinstance(data["market_price_history"], list), data
-                line = [(point["date"], Decimal(point["market_price"]), point["currency"], point["estimated"]) for point in data["market_price_history"]]
+                # J5-5 (steps): the line is two steps, the BUY's mark held 10-14 Jan and the SELL's 15-20 Jan; the days a client reads
+                # from them (`expand_steps`: each step repeated from `date` to `through`) are the ones the test has always named.
+                assert data["range"] == {"start": "2026-01-10", "end": "2026-01-20"}
+                assert [(step["date"], step["through"], Decimal(step["market_price"])) for step in data["market_price_history"]] == [("2026-01-10", "2026-01-14", Decimal("100")), ("2026-01-15", "2026-01-20", Decimal("110"))]
+                line = [(point["date"], Decimal(point["market_price"]), point["currency"], point["estimated"]) for point in expand_steps(data["market_price_history"], None)]
                 expected = [(f"2026-01-{day:02d}", Decimal("100"), "EUR", True) for day in range(10, 15)] + [(f"2026-01-{day:02d}", Decimal("110"), "EUR", True) for day in range(15, 21)]
                 assert line == expected
                 assert (data["price_history"], data["lots"]) == (None, None)
@@ -1423,6 +1432,92 @@ class _WacApiSession:
         if len(self.statements) == 2:
             return _ApiRows(self.assets)
         raise AssertionError("WAC endpoint performed an unexpected read")
+
+
+# ---------------------------------------------------------------------------
+# TestPositionsSeriesEndpoint — POST /portfolio/positions-series (J5-1, #48)
+# ---------------------------------------------------------------------------
+
+
+async def post_positions_series(client: httpx.AsyncClient, body: dict) -> httpx.Response:
+    return await client.post(f"{API_BASE}/portfolio/positions-series", json=body, timeout=TIMEOUT)
+
+
+@pytest.mark.asyncio
+class TestPositionsSeriesEndpoint:
+    async def test_unauthenticated(self, test_server):
+        """POST /portfolio/positions-series without auth -> 401."""
+        print_section("Positions series: unauthenticated")
+        async with httpx.AsyncClient() as client:
+            resp = await post_positions_series(client, {"positions": [{"asset_id": 1}]})
+        assert resp.status_code == 401
+
+    async def test_the_positions_asked_for_are_required_and_capped(self, test_server):
+        print_section("Positions series: validation")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            user_id = await get_current_user_id(client)
+            try:
+                empty = await post_positions_series(client, {"positions": []})
+                too_many = await post_positions_series(client, {"positions": [{"asset_id": index} for index in range(1, 52)]})
+                unknown_field = await post_positions_series(client, {"positions": [{"asset_id": 1}], "include_everything": True})
+            finally:
+                await delete_current_test_user(client, user_id)
+        assert (empty.status_code, too_many.status_code, unknown_field.status_code) == (422, 422, 422)
+
+    async def test_the_series_of_a_position_ends_where_the_reports_contribution_row_does(self, test_server):
+        """One position bought and sold out: the series is steps (``date``..``through``) contiguous from the window's first day to the day it
+        closed, the response carries the window as ``range``, and the last step's pnl is the report's ``period_pnl`` for the same position
+        and window. It owns and deletes its user, broker, asset, three transactions and
+        one price, broker first (as the report's date-aware test does)."""
+        print_section("Positions series: end to end")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            user_id = await get_current_user_id(client)
+            broker_id: int | None = None
+            asset_id: int | None = None
+            try:
+                broker_id = await create_broker(client)
+                asset_id = await create_asset(client)
+                await commit_batch(
+                    client,
+                    creates=[
+                        {"broker_id": broker_id, "type": "DEPOSIT", "date": "2025-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "1000"}},
+                        {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2025-01-02", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
+                        {"broker_id": broker_id, "asset_id": asset_id, "type": "SELL", "date": "2025-02-15", "quantity": "-10", "cash": {"code": "EUR", "amount": "1200"}},
+                    ],
+                )
+                price_resp = await client.post(f"{API_BASE}/assets/prices", json=[{"asset_id": asset_id, "prices": [{"date": "2025-01-31", "close": "110.00", "currency": "EUR"}]}], timeout=TIMEOUT)
+                assert price_resp.status_code == 200, price_resp.text
+                window = {"start": "2025-01-31", "end": "2025-02-28"}
+                series_resp = await post_positions_series(client, {"date_range": window, "positions": [{"asset_id": asset_id, "broker_id": broker_id}]})
+                report_resp = await post_portfolio_report(client, {"include_summary": False, "include_history": False, "include_allocation_history": False, "include_positions_contribution": True, "date_range": window})
+            finally:
+                if broker_id is not None:
+                    cleanup_broker = await client.delete(f"{API_BASE}/brokers", params={"ids": [broker_id], "force": True}, timeout=TIMEOUT)
+                    assert cleanup_broker.status_code == 200, cleanup_broker.text
+                if asset_id is not None:
+                    cleanup_asset = await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+                    assert cleanup_asset.status_code == 200, cleanup_asset.text
+                await delete_current_test_user(client, user_id)
+
+        assert series_resp.status_code == 200, series_resp.text
+        body = series_resp.json()
+        assert (body["currency"], body["date_from"], body["date_to"]) == ("EUR", "2025-01-31", "2025-02-28")
+        assert body["range"] == {"start": "2025-01-31", "end": "2025-02-28"}
+        [series] = body["series"]
+        assert (series["first_date"], series["last_date"], series["closed_on"], series["held_at_start"], series["held_at_end"]) == ("2025-01-31", "2025-02-15", "2025-02-15", True, False)
+        points = series["points"]
+        # Contiguous steps from first_date to last_date (16 calendar days) with fewer steps than days; the last one is the day it closed.
+        assert (points[0]["date"], points[-1]["through"]) == ("2025-01-31", "2025-02-15")
+        for before, after in zip(points, points[1:], strict=False):
+            assert date.fromisoformat(after["date"]) == date.fromisoformat(before["through"]) + timedelta(days=1)
+        assert all(date.fromisoformat(point["date"]) <= date.fromisoformat(point["through"]) for point in points)
+        assert sum((date.fromisoformat(point["through"]) - date.fromisoformat(point["date"])).days + 1 for point in points) == 16
+        assert len(points) < 16
+        [row] = report_resp.json()["positions_contribution"]["positions"]
+        assert Decimal(points[-1]["pnl"]) == Decimal(row["period_pnl"])
+        assert (points[-1]["quantity"], points[-1]["market_value"]) == ("0", "0")
 
 
 def _focused_portfolio_app(

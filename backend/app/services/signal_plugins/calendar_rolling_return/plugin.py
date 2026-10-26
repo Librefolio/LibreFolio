@@ -111,6 +111,20 @@ def _point_provenance(
     )
 
 
+def _unavailable_span(days: Sequence[date_type], references: Sequence[date_type]) -> dict[str, str]:
+    """Where the undefined points are, as ISO days (Z5-F1): ``unavailable_start`` and ``unavailable_end``, the first and last
+    undefined point; ``resync_start`` and ``resync_end``, the period whose prices to sync again — from the earliest
+    reference an undefined point needed to the last undefined point. Empty when there is none."""
+    if not days:
+        return {}
+    return {
+        "unavailable_start": min(days).isoformat(),
+        "unavailable_end": max(days).isoformat(),
+        "resync_start": min(references).isoformat(),
+        "resync_end": max(days).isoformat(),
+    }
+
+
 @register_plugin(SignalPluginRegistry)
 class CalendarRollingReturnPlugin(SignalPlugin):
     """Compare each resolved daily price with the resolved price N calendar days earlier."""
@@ -212,6 +226,9 @@ class CalendarRollingReturnPlugin(SignalPlugin):
         points_by_date = {point.date: point for point in price_points}
         output_points: list[SignalCalendarReturnValuePoint] = []
         unavailable_counts: Counter[str] = Counter()
+        # Z5-F1: where the undefined points are, for the page to say it: their days and their references' days.
+        unavailable_days: list[date_type] = []
+        unavailable_references: list[date_type] = []
         hundred = Decimal("100")
         requested_end = context.requested_range.end or context.requested_range.start
 
@@ -241,6 +258,8 @@ class CalendarRollingReturnPlugin(SignalPlugin):
                 value = float(change * hundred) if change is not None else None
             if value is None:
                 unavailable_counts[status.value] += 1
+                unavailable_days.append(current.date)
+                unavailable_references.append(reference_target_date)
             output_points.append(
                 SignalCalendarReturnValuePoint(
                     date=current.date,
@@ -262,6 +281,7 @@ class CalendarRollingReturnPlugin(SignalPlugin):
                     "window_days": params.window_days,
                     "unavailable_points": sum(unavailable_counts.values()),
                     "reasons": dict(sorted(unavailable_counts.items())),
+                    **_unavailable_span(unavailable_days, unavailable_references),
                 },
             )
         first_available_index = next(
@@ -280,6 +300,7 @@ class CalendarRollingReturnPlugin(SignalPlugin):
                     details={
                         "unavailable_points": sum(unavailable_counts.values()),
                         "reasons": dict(sorted(unavailable_counts.items())),
+                        **_unavailable_span(unavailable_days, unavailable_references),
                     },
                 )
             ]

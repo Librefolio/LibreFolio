@@ -5,12 +5,13 @@ from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
 from types import MappingProxyType
-from typing import Iterable, Mapping, Sequence
+from typing import Mapping, Sequence
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import Asset, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType
+from backend.app.schemas.common import DateSpan
 from backend.app.schemas.portfolio import (
     DataQualityIssue,
     DataQualityReport,
@@ -32,7 +33,7 @@ from backend.app.services.financial_math.average_cost import AverageCost, CostPo
 from backend.app.services.financial_math.fifo.engine import run_fifo_lot_engine
 from backend.app.services.financial_math.fifo.models import EconomicAllocationGroup, EconomicEvent, FifoDataQualityIssue, FifoEngineResult, FifoEvent, FifoInputTransaction, FifoLot, FragmentInterval, LotClosure, ReferencePriceResolution, fails_the_replay
 from backend.app.services.financial_math.lots.average_cost_lines import ALL_BROKERS, build_broker_wac_history, build_cumulative_wac_history
-from backend.app.services.financial_math.lots.change_days import analysis_event_dates, expand_to_days, lot_change_days
+from backend.app.services.financial_math.lots.change_days import DayRange, analysis_event_dates, history_steps, lot_change_days, price_candidate_days
 from backend.app.services.financial_math.lots.conversions import FxRateResolver, collect_fx_needs, collect_performance_fx_needs, convert_closure, needs_market_series, unconvertible_ids
 from backend.app.services.financial_math.lots.economic_events import NOTHING_WITHHELD, WithheldEconomics, build_cost_economic_events, build_engine_transactions, build_income_economic_events, extract_cost_outputs, extract_income_outputs, map_economic_groups, withheld_economics
 from backend.app.services.financial_math.lots.histories import (
@@ -54,9 +55,10 @@ from backend.app.services.financial_math.lots.scope_boundary import BoundaryDire
 from backend.app.services.financial_math.lots.summary import lot_summary_figures
 from backend.app.services.financial_math.portfolio.data_quality import build_data_quality_report, load_configured_fx_pair_sets
 from backend.app.services.financial_math.price_marks import AssetPriceSeries, MarkSource, build_asset_price_series
+from backend.app.services.financial_math.series_steps import merged_spans
 from backend.app.services.financial_math.splits import load_split_links
 from backend.app.services.financial_math.valuation import normalize_quote_base_quantity
-from backend.app.utils.datetime_utils import EARLIEST_RANGE_START, latest_range_end
+from backend.app.utils.datetime_utils import latest_range_end
 
 _WARNING_ISSUE_CODES = {
     IssueCode.REFERENCE_PRICE_FALLBACK,
@@ -143,9 +145,9 @@ class LotsAnalysisService:
                 status="COMPLETE",
             )
 
-        # R13-SEC8: a row stored before EARLIEST_RANGE_START still opens or closes its lots, but no history day, price
-        # window or per-day rate starts before it.
-        computed_from = max(transactions[0].date, EARLIEST_RANGE_START)
+        # The window starts on the scope's first transaction, whatever its year (D-P4, L2): the histories are steps and
+        # the prices and rates are read on the days that change something, so a row of 1850 or of year 1 costs its changes.
+        computed_from = transactions[0].date
         split_ratios_by_tx_id = await self._load_split_ratios(transactions)
         broker_shorting = await self._load_broker_shorting(scope_broker_ids)
         prices = await self._load_prices(
@@ -256,12 +258,14 @@ class LotsAnalysisService:
             unconvertible_trade_ids=unconvertible_trade_ids,
             trade_currency_by_id={tx_id: tx.currency or asset.currency for tx_id, tx in tx_by_id.items()},
         )
-        display_from = max(date_from or computed_from, EARLIEST_RANGE_START)
-        history_dates = list(_date_range(computed_from, actual_to))
+        display_from = date_from or computed_from
+        # The days the histories cover: no row before the scope's first transaction, none past the end of the window.
+        range_start = max(display_from, computed_from)
+        calendar = DayRange(computed_from, actual_to)
         # A day with no observation on or before it — no quote, no BUY or SELL — values the open lots at cost, as the
         # Dashboard values a holding (J-17). Those days run from the first transaction to the day before the first
         # observation, or to the end when the asset has none: then the current price too is assumed at cost.
-        at_cost_until = last_day_without_observation(price_series, history_dates)
+        at_cost_until = last_day_without_observation(price_series, calendar)
 
         performance_context = PerformanceSourceContext(
             transactions=transactions,
@@ -352,28 +356,6 @@ class LotsAnalysisService:
                     message_params={"asset_id": asset_id, "date_from": computed_from.isoformat(), "date_to": at_cost_until.isoformat()},
                 )
             )
-        # The histories read every day's price, the summary only the last one: value no other day, so the
-        # report never holds the gap of a day nobody reads.
-        daily_series = any(analysis in shown_analyses for analysis in (LotAnalysisType.VALUE_HISTORY, LotAnalysisType.RETURN_HISTORY, LotAnalysisType.PRICE_HISTORY, LotAnalysisType.MARKET_PRICE_HISTORY, LotAnalysisType.PERFORMANCE_HISTORY))
-        active_price_dates = history_dates if daily_series else ([actual_to] if LotAnalysisType.LOT_SUMMARY in shown_analyses else [])
-        # Both the open-lot valuation (``market_prices`` -> NAV / value / return / performance) and the
-        # chart price lines (``estimated_market_prices``: per lot, and the lot-free market line of Y-30)
-        # read the series built above. Each native mark is
-        # converted to the target currency at *its own valuation date* (per-day FX, never frozen at the
-        # observation date); ``None`` marks a day the resolver has no observation for (genuine MISSING),
-        # or whose price cannot be converted: that day is not valued, never at the native price.
-        # Downstream only a day with no observation on or before it (``at_cost_until``) falls back to cost.
-        market_prices: dict[date_type, Decimal | None] = {}
-        estimated_market_prices: dict[date_type, tuple[Decimal, bool]] = {}
-        for current_date in active_price_dates:
-            mark = price_series.resolve(current_date)
-            if mark.is_missing:
-                market_prices[current_date] = None
-                continue
-            converted = fx_resolver.convert(mark.unit_price, mark.currency, current_date)
-            market_prices[current_date] = converted
-            if converted is not None:
-                estimated_market_prices[current_date] = (converted, mark.estimated)
         average_cost_lines: dict[int | str, AverageCost] = {}
         if LotAnalysisType.BROKER_WAC_HISTORY in shown_analyses or LotAnalysisType.CUMULATIVE_WAC_HISTORY in shown_analyses:
             average_cost_lines = await self._compute_average_cost_lines(
@@ -383,21 +365,58 @@ class LotsAnalysisService:
                 target_currency=target_currency,
             )
 
-        # L1a: the daily series are computed on the days one of their inputs changes, and every other day of the window
-        # is filled from the last of them before it (``financial_math/lots/change_days.py``): the same figures, byte for
-        # byte, without computing every lot on every day since the first transaction.
+        # D-P4: no series is read on every calendar day. The days one of its inputs can change on are known without
+        # walking the window: an observation (``AssetPriceSeries.observation_dates``), a rate step, an event, the end of
+        # the days valued at cost, each with the day after it; everything between two of them repeats the day before.
+        event_dates = analysis_event_dates(
+            transactions=[*transactions, *late_legs, *performance_context.transactions, *income_transactions, *cost_transactions],
+            engine_results=(engine_result, performance_context.engine_result),
+            prefixes=(income_prefix_by_lot, fees_prefix_by_lot, taxes_prefix_by_lot),
+            withheld=withheld,
+            average_cost_lines=average_cost_lines.values(),
+        )
+        candidate_days = price_candidate_days(
+            first=computed_from,
+            last=actual_to,
+            observation_dates=price_series.observation_dates,
+            rate_days=fx_resolver.rate_change_days(),
+            event_dates=event_dates,
+            at_cost_until=at_cost_until,
+        )
+        # The histories read the price on each of them, the summary only the last day: value no other day, so the
+        # report never holds the gap of a day nobody reads.
+        daily_series = any(analysis in shown_analyses for analysis in (LotAnalysisType.VALUE_HISTORY, LotAnalysisType.RETURN_HISTORY, LotAnalysisType.PRICE_HISTORY, LotAnalysisType.MARKET_PRICE_HISTORY, LotAnalysisType.PERFORMANCE_HISTORY))
+        active_price_dates = candidate_days if daily_series else ([actual_to] if LotAnalysisType.LOT_SUMMARY in shown_analyses else [])
+        # Both the open-lot valuation (``market_prices`` -> NAV / value / return / performance) and the
+        # chart price lines (``estimated_market_prices``: per lot, and the lot-free market line of Y-30)
+        # read the series built above. Each native mark is
+        # converted to the target currency at *its own valuation date* (per-day FX, never frozen at the
+        # observation date); ``None`` marks a day the resolver has no observation for (genuine MISSING),
+        # or whose price cannot be converted: that day is not valued, never at the native price.
+        # Downstream only a day with no observation on or before it (``at_cost_until``) falls back to cost.
+        market_prices: dict[date_type, Decimal | None] = {}
+        estimated_market_prices: dict[date_type, tuple[Decimal, bool]] = {}
+        for index, current_date in enumerate(active_price_dates):
+            mark = price_series.resolve(current_date)
+            if mark.is_missing:
+                market_prices[current_date] = None
+                continue
+            # The rate does not move before the next day read: a gap of the pair holds until then.
+            held_through = active_price_dates[index + 1] - timedelta(days=1) if index + 1 < len(active_price_dates) else current_date
+            converted = fx_resolver.convert_through(mark.unit_price, mark.currency, current_date, held_through)
+            market_prices[current_date] = converted
+            if converted is not None:
+                estimated_market_prices[current_date] = (converted, mark.estimated)
+
+        # L1a: the daily series are computed on the days one of their inputs changes, and each is given as steps
+        # (``financial_math/lots/change_days.py``): the same figures, byte for byte, without computing every lot on every
+        # day since the first transaction.
         change_days = lot_change_days(
-            days=history_dates,
+            days=candidate_days,
             market_prices=market_prices,
             estimated_market_prices=estimated_market_prices,
             at_cost_until=at_cost_until,
-            event_dates=analysis_event_dates(
-                transactions=[*transactions, *late_legs, *performance_context.transactions, *income_transactions, *cost_transactions],
-                engine_results=(engine_result, performance_context.engine_result),
-                prefixes=(income_prefix_by_lot, fees_prefix_by_lot, taxes_prefix_by_lot),
-                withheld=withheld,
-                average_cost_lines=average_cost_lines.values(),
-            ),
+            event_dates=event_dates,
         )
 
         lots = None
@@ -444,7 +463,7 @@ class LotsAnalysisService:
 
         value_history = None
         if LotAnalysisType.VALUE_HISTORY in shown_analyses:
-            value_history = expand_to_days(
+            value_history = history_steps(
                 build_value_history(
                     selected_ids=selected_ids,
                     lots_by_id=lots_by_id,
@@ -462,13 +481,13 @@ class LotsAnalysisService:
                 ),
                 key=lambda row: row.lot_id,
                 change_days=change_days,
-                window_from=display_from,
-                window_to=actual_to,
+                range_start=range_start,
+                range_end=actual_to,
             )
 
         return_history = None
         if LotAnalysisType.RETURN_HISTORY in shown_analyses:
-            return_history = expand_to_days(
+            return_history = history_steps(
                 build_return_history(
                     selected_ids=selected_ids,
                     lots_by_id=lots_by_id,
@@ -487,13 +506,13 @@ class LotsAnalysisService:
                 ),
                 key=lambda row: row.lot_id,
                 change_days=change_days,
-                window_from=display_from,
-                window_to=actual_to,
+                range_start=range_start,
+                range_end=actual_to,
             )
 
         price_history = None
         if LotAnalysisType.PRICE_HISTORY in shown_analyses:
-            price_history = expand_to_days(
+            price_history = history_steps(
                 build_price_history(
                     selected_ids=selected_ids,
                     lots_by_id=lots_by_id,
@@ -504,43 +523,43 @@ class LotsAnalysisService:
                 ),
                 key=lambda row: row.lot_id,
                 change_days=change_days,
-                window_from=display_from,
-                window_to=actual_to,
+                range_start=range_start,
+                range_end=actual_to,
             )
 
         market_price_history = None
         if LotAnalysisType.MARKET_PRICE_HISTORY in shown_analyses:
-            market_price_history = expand_to_days(
+            market_price_history = history_steps(
                 build_market_price_history(estimated_market_prices=estimated_market_prices, history_dates=change_days, target_currency=target_currency),
                 key=lambda row: None,
                 change_days=change_days,
-                window_from=display_from,
-                window_to=actual_to,
+                range_start=range_start,
+                range_end=actual_to,
             )
 
         broker_wac_history = None
         if LotAnalysisType.BROKER_WAC_HISTORY in shown_analyses:
-            broker_wac_history = expand_to_days(
+            broker_wac_history = history_steps(
                 build_broker_wac_history(scope_broker_ids, average_cost_lines, change_days),
                 key=lambda row: row.broker_id,
                 change_days=change_days,
-                window_from=display_from,
-                window_to=actual_to,
+                range_start=range_start,
+                range_end=actual_to,
             )
 
         cumulative_wac_history = None
         if LotAnalysisType.CUMULATIVE_WAC_HISTORY in shown_analyses:
-            cumulative_wac_history = expand_to_days(
+            cumulative_wac_history = history_steps(
                 build_cumulative_wac_history(average_cost_lines, change_days),
                 key=lambda row: None,
                 change_days=change_days,
-                window_from=display_from,
-                window_to=actual_to,
+                range_start=range_start,
+                range_end=actual_to,
             )
 
         performance_history = None
         if LotAnalysisType.PERFORMANCE_HISTORY in shown_analyses:
-            performance_history = expand_to_days(
+            performance_history = history_steps(
                 build_performance_history(
                     scope_broker_ids=scope_broker_ids,
                     history_dates=change_days,
@@ -553,8 +572,8 @@ class LotsAnalysisService:
                 ),
                 key=lambda row: None,
                 change_days=change_days,
-                window_from=display_from,
-                window_to=actual_to,
+                range_start=range_start,
+                range_end=actual_to,
             )
 
         income_events = None
@@ -577,6 +596,7 @@ class LotsAnalysisService:
             quote_base_quantity=quote_base_quantity,
             # A gap (a missing rate or cost basis) is isolable: DEGRADED.
             calculation_status=("DEGRADED" if engine_result.analysis_status == "COMPLETE" and (conversion_gaps or any(line.has_missing_report_fx or line.unknown_cost_movement_ids for line in average_cost_lines.values())) else engine_result.analysis_status),
+            range=DateSpan(start=range_start, end=actual_to) if range_start <= actual_to else None,
             calculation_metadata=LotsAnalysisMetadata(
                 broker_ids=scope_broker_ids,
                 selected_lot_ids=selected_ids if selected_lot_ids is not None else None,
@@ -816,16 +836,20 @@ class LotsAnalysisService:
         acquisition without a known cost becomes a ``MISSING_COST_BASIS`` issue.
         """
         dates_by_pair: dict[str, set[date_type]] = defaultdict(set)
+        spans_by_pair: dict[str, list[tuple[date_type, date_type]]] = defaultdict(list)
         for line in lines.values():
             for missing in line.missing:
                 if missing.leg == "report":
                     dates_by_pair[missing.pair].update(missing.dates)
         for gap in conversion_gaps:
             dates_by_pair[gap.pair].update(gap.dates)
+            spans_by_pair[gap.pair].extend((span.start, span.end) for span in gap.ranges)
         unknown_cost = any(line.unknown_cost_movement_ids for line in lines.values())
-        if not dates_by_pair and not unknown_cost:
+        if not dates_by_pair and not spans_by_pair and not unknown_cost:
             return
-        missing_pairs = [WACMissingPairInfo(pair=pair, dates=sorted(dates)) for pair, dates in sorted(dates_by_pair.items())]
+        # The movements' dates, and the valuation days with no rate as ranges (D-P4)
+        pairs = sorted({*dates_by_pair, *spans_by_pair})
+        missing_pairs = [WACMissingPairInfo(pair=pair, dates=sorted(dates_by_pair.get(pair, ())), ranges=[DateSpan(start=first, end=last) for first, last in merged_spans(spans_by_pair.get(pair, ()))]) for pair in pairs]
         configured_pairs, real_provider_pairs = await load_configured_fx_pair_sets(self.db) if missing_pairs else (set(), set())
         gap_report = build_data_quality_report(
             [],
@@ -1348,10 +1372,3 @@ def _parse_transfer_pair_id(fragment_id: str) -> int:
     suffix = fragment_id.split(marker, maxsplit=1)[1]
     raw_pair_id = suffix.split("/", maxsplit=1)[0]
     return int(raw_pair_id)
-
-
-def _date_range(start_date: date_type, end_date: date_type) -> Iterable[date_type]:
-    current = start_date
-    while current <= end_date:
-        yield current
-        current += timedelta(days=1)

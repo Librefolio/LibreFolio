@@ -64,7 +64,7 @@ and the series a comparison on the card needs on the same buckets, reading each 
     refused for its sampled points has read, through the ORM, at most 2 ``PriceHistory`` rows of an asset it only
     samples.
 11. What a sample costs. A request of weekly and monthly items never builds the daily fill
-    (``PriceQueryOperations._build_backward_filled_series``) and reads at most (buckets + 2) rows of an asset sampled
+    (``price_query.observe``, the daily reading) and reads at most (buckets + 2) rows of an asset sampled
     on a card. One read per asset: an asset a daily item of the request reads whole, on the same range, serves its
     sampled items from those rows, and no bucket statement names it; the assets read only sampled are read by one bucket
     statement per (range, step), all of that group in it. Rows are counted by a ``load`` listener on ``PriceHistory``,
@@ -1155,18 +1155,21 @@ async def _route_refusal(make_call: Callable[[], Awaitable[Any]]) -> HTTPExcepti
 
 
 class _DailyFillBuilt(Exception):
-    """``_build_backward_filled_series`` was called while the test forbids it."""
+    """``price_query.observe``, the daily reading of a series, was called while the test forbids it."""
 
 
 def _forbid_the_daily_fill(monkeypatch: pytest.MonkeyPatch) -> list[tuple]:
-    """Replaces ``PriceQueryOperations._build_backward_filled_series`` with one that records its call and raises."""
+    """Replaces ``price_query.observe`` (the daily reading of a series, X-Q1) with one that records its call and raises.
+
+    ``series_points`` stays allowed: a sampled item reads its few dates through it. ``test_pqs_q11b`` proves the guard
+    fires on a daily item."""
     calls: list[tuple] = []
 
-    def refuse(*args: Any, **kwargs: Any) -> list:
+    async def refuse(*args: Any, **kwargs: Any) -> Any:
         calls.append((args[1:3], kwargs))
-        raise _DailyFillBuilt(f"the daily fill was built, arguments {args[1:3]}")
+        raise _DailyFillBuilt(f"the daily fill was read, arguments {args[1:3]}")
 
-    monkeypatch.setattr(PriceQueryOperations, "_build_backward_filled_series", staticmethod(refuse))
+    monkeypatch.setattr(price_query, "observe", refuse)
     return calls
 
 
@@ -1535,7 +1538,7 @@ async def test_pqs_q11_sampled_items_never_build_the_daily_fill(world, frozen_ce
     """PQS-Q11: a request of weekly and monthly items only, all on «All» — OLD on a card (monthly, keyed ``card``) and in
     1 534 points (weekly), YOUNG on a card (weekly), RECENT asking weekly, YOUNG following OLD's card (monthly) — is
     answered with its samples, each saying its step in ``resolution``, while
-    ``PriceQueryOperations._build_backward_filled_series`` raises: no daily fill is built for them.
+    ``price_query.observe`` raises: no daily fill is read for them.
 
     Red before Z-29a: an item with ``max_points``, ``resolution`` or ``sample_like`` cannot be built, an extra field.
     """
@@ -1556,6 +1559,16 @@ async def test_pqs_q11_sampled_items_never_build_the_daily_fill(world, frozen_ce
     assert calls == []
     assert [_dates(result) for result in results] == [plan.dates for plan in expected]
     assert [result.resolution for result in results] == [plan.step for plan in expected]
+
+
+@pytest.mark.asyncio
+async def test_pqs_q11b_the_guard_fires_on_a_daily_item(world, frozen_ceiling, monkeypatch):
+    """PQS-Q11b: the guard of PQS-Q11 is not blind: a daily item (no sampling field) reads the series through
+    ``price_query.observe``, so with the guard set it raises ``_DailyFillBuilt`` and the call is recorded."""
+    calls = _forbid_the_daily_fill(monkeypatch)
+    with pytest.raises(_DailyFillBuilt):
+        await _query(world.engine, _item(world.young, ALL_START))
+    assert len(calls) == 1
 
 
 @pytest.mark.asyncio
