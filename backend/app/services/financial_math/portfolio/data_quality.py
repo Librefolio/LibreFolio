@@ -19,7 +19,7 @@ from backend.app.schemas.portfolio import (
     IssueSeverity,
     StaleFxPair,
 )
-from backend.app.services.financial_math.portfolio.models import DailyPortfolioState, DailyStates, RowsBeforeFloor, ShareMismatch
+from backend.app.services.financial_math.portfolio.models import DailyPortfolioState, DailyStates, ShareMismatch
 from backend.app.services.financial_math.series_steps import merged_spans
 from backend.app.utils.currency_units import minor_unit_factor
 
@@ -84,7 +84,6 @@ def build_data_quality_report(  # noqa: C901 — flat sequential issue-section a
     invalid_split_assets: list[tuple[int, str]] | None = None,
     non_iso_currency_assets: list[tuple[int, str, str]] | None = None,
     report_currency: str | None = None,
-    rows_before_floor: RowsBeforeFloor | None = None,
     valued_at_cost_assets_dto: list | None = None,
     classifier_warnings: list[str] | None = None,
     share_mismatches: Sequence[ShareMismatch] | None = None,
@@ -110,9 +109,6 @@ def build_data_quality_report(  # noqa: C901 — flat sequential issue-section a
     code as stored (``978``, ``EURO``, ``eur``: what an earlier version saved as written). report_currency: the currency
     the report converts to. With the sides of the missing pairs, they make one NON_ISO_CURRENCY warning per stored value
     that is not canonical, and a missing pair with such a side is in no MISSING_FX_* issue: no FX pair can fix it.
-    rows_before_floor (MF-SEC8-2a): the scope's transactions dated before 1 January 1900 (``EARLIEST_RANGE_START``), which
-    an older version or a hand edit stored: they are replayed, but the histories start on the floor; one warning names
-    their number and the earliest date, so the user corrects them.
     If None, the report still populates date-level fields.
 
     share_mismatches (J-43): the engine's linked internal pairs between brokers owned at
@@ -281,20 +277,6 @@ def build_data_quality_report(  # noqa: C901 — flat sequential issue-section a
     # no CTA until the developer decides how such a code is corrected (D1/D2)
     for value in sorted(non_iso_values):
         issues.append(_non_iso_currency_issue(value, report_currency, non_iso_assets_by_value.get(value, [])))
-
-    # TRANSACTIONS_BEFORE_FLOOR — warning (MF-SEC8-2a): rows dated before 1900, replayed, but the histories start on 1900
-    if rows_before_floor is not None and rows_before_floor.count > 0:
-        issues.append(
-            DataQualityIssue(
-                domain=IssueDomain.PORTFOLIO,
-                code=IssueCode.TRANSACTIONS_BEFORE_FLOOR,
-                severity=IssueSeverity.WARNING,
-                message_i18n_key="dataQuality.transactionsBeforeFloor",
-                message_params={"count": rows_before_floor.count, "earliest": rows_before_floor.earliest.isoformat()},
-                count=rows_before_floor.count,
-                group_key="transactions_before_floor",
-            )
-        )
 
     # MISSING_FX_MARKET / MISSING_FX_RATES — split missing route vs missing date data, among the pairs of ISO codes only
     if fixable_fx_pairs:

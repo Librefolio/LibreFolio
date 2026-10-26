@@ -12,9 +12,9 @@ The problem is described by plain data only:
 * the report currency T, and the last day the rates are needed on.
 
 All the conversions go to the FX service: every foreign movement at its own date (the flows) in one ``convert_bulk``
-call, and one unit of every foreign currency on every day from its first movement on, and from 1 January 1900 at the
-earliest, with only the movements' own days before it (the valuation), in one ``unit_rate_steps`` call — the same rates,
-kept as the days a stored rate changes (P3). An amount already in T is taken as it is, so
+call, and one unit of every foreign currency on every day from its first movement on (the valuation), in one
+``unit_rate_steps`` call — the same rates, kept as the days a stored rate changes (P3), so a movement centuries back
+costs its stored rows, not its days. An amount already in T is taken as it is, so
 cash held only in the report currency never needs a rate. A conversion that cannot be made
 never becomes a zero: the movement stays out of values and flows, and its pair is reported
 with every date it was needed on.
@@ -41,7 +41,6 @@ from typing import Any
 from backend.app.schemas.common import Currency
 from backend.app.services.financial_math.fx_rates import AskedDayRates
 from backend.app.services.fx.conversion import convert_bulk, unit_rate_steps
-from backend.app.utils.datetime_utils import EARLIEST_RANGE_START
 
 _ZERO = Decimal("0")
 _ONE = Decimal("1")
@@ -521,31 +520,23 @@ async def compute_native_cash(
 
 
 def _unit_windows(foreign: Sequence[CashMovement], rates_until: date_type | None) -> dict[str, list[tuple[date_type, date_type]]]:
-    """By currency, the windows of days a foreign balance may need a rate on (P3: the days a request a day asked).
+    """By currency, the window of days a foreign balance may need a rate on (P3: the days a request a day asked).
 
-    Every day from the currency's first movement — but from ``EARLIEST_RANGE_START`` at the earliest (R13-SEC8: a
-    movement stored centuries back would otherwise ask one per day since). Before the floor only the movements' own
-    days are asked, so a balance counted there still has a rate on or before every later day (``_foreign_value`` never
-    meets a counted balance without one); the cost is bounded by the movements, not by the days.
+    Every day from the currency's first movement to ``rates_until`` (else its last movement), even when it is centuries
+    back: the rates are read as steps (``unit_rate_steps``), so the cost follows the stored rows, not the days (no date
+    floor, MF-PAV-L1).
     """
     first: dict[str, date_type] = {}
     last: dict[str, date_type] = {}
-    early: dict[str, set[date_type]] = {}
     for movement in foreign:
         currency = movement.currency
         if currency not in first or movement.date < first[currency]:
             first[currency] = movement.date
         if currency not in last or movement.date > last[currency]:
             last[currency] = movement.date
-        if movement.date < EARLIEST_RANGE_START:
-            early.setdefault(currency, set()).add(movement.date)
     windows: dict[str, list[tuple[date_type, date_type]]] = {}
     for currency in sorted(first):
-        asked = [(day, day) for day in sorted(early.get(currency, ()))]
-        start = max(first[currency], EARLIEST_RANGE_START)
         end = last[currency] if rates_until is None else rates_until
-        if start <= end:
-            asked.append((start, end))
-        if asked:
-            windows[currency] = asked
+        if first[currency] <= end:
+            windows[currency] = [(first[currency], end)]
     return windows
