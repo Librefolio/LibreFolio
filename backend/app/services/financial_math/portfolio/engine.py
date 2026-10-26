@@ -27,11 +27,11 @@ from backend.app.services.financial_math.native_cash import cash_movement_from_t
 from backend.app.services.financial_math.portfolio.classifier import ScopeAwareTransactionClassifier
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
 from backend.app.services.financial_math.portfolio.derived_views import build_cost_positions
-from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction, DailyStates, InTransitInterval, InvalidSplitEvent, PortfolioCalculationResult, RowsBeforeFloor, SplitHistory, SplitRecord
+from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction, DailyStates, InTransitInterval, InvalidSplitEvent, PortfolioCalculationResult, SplitHistory, SplitRecord
 from backend.app.services.financial_math.price_marks import AssetPriceSeries, build_asset_price_series
 from backend.app.services.financial_math.splits import is_valid_split_ratio, load_split_links
 from backend.app.services.fx.conversion import unit_rate_steps
-from backend.app.utils.datetime_utils import EARLIEST_RANGE_START, latest_range_end
+from backend.app.utils.datetime_utils import latest_range_end
 from backend.app.utils.runtime.cache import get_ttl_cache
 
 logger = structlog.get_logger(__name__)
@@ -302,10 +302,10 @@ class PortfolioCalculationEngine:
         # R13-SEC7-1: the replay walks every day of the range, so neither end runs free. It starts no earlier than the
         # first transaction (before it there is nothing to replay, and a period starting earlier already starts empty)
         # and ends no later than latest_range_end(), tomorrow. A range that ends before the first transaction has no day.
-        # R13-SEC8: nor earlier than EARLIEST_RANGE_START (1900-01-01): a row stored before it is still replayed, on its
-        # own date, but no state is emitted, nor a per-day rate asked, for a day before it.
+        # D-P4 (MF-PAV-L1): no date floor — a row dated before 1900, even in year 1, starts the states on its own day; the
+        # cost follows the segments (the days something changes), not the calendar days.
         first_tx_date = min(tx.date for tx in all_txs)
-        actual_from = max(date_from, first_tx_date, EARLIEST_RANGE_START) if date_from else max(first_tx_date, EARLIEST_RANGE_START)
+        actual_from = max(date_from, first_tx_date) if date_from else first_tx_date
         actual_to = min(date_to or date_type.today(), latest_range_end())
         if actual_from > actual_to:
             return PortfolioCalculationResult(
@@ -568,9 +568,6 @@ class PortfolioCalculationEngine:
         # J-43: the pairs between brokers owned at different shares, for the data-quality report (the cache key holds the shares).
         result.share_mismatches = classification.share_mismatches
         result.invalid_split_events = sorted(invalid_split_events.values(), key=lambda event: event.event_id)
-        # MF-SEC8-2a: the rows replayed before the floor the histories start on, for the data-quality report.
-        before_floor = [tx.date for tx in all_txs if tx.date < EARLIEST_RANGE_START]
-        result.rows_before_floor = RowsBeforeFloor(count=len(before_floor), earliest=min(before_floor)) if before_floor else None
 
         # ── 12. Store in blob cache ──
         _portfolio_blob_cache.set(blob_key, result)
@@ -671,9 +668,8 @@ class PortfolioCalculationEngine:
         for interval in in_transit_intervals:
             dep = interval.departure_leg
             if interval.tx_type == "cash" and dep.currency:
-                start = max(interval.start_date, EARLIEST_RANGE_START)  # R13-SEC8: no rate is asked before the floor
-                if start <= interval.end_date:
-                    need(dep.currency, start, interval.end_date)
+                if interval.start_date <= interval.end_date:
+                    need(dep.currency, interval.start_date, interval.end_date)
             need(interval.cost_basis_currency, interval.arrival_leg.date)
 
         if not windows:
