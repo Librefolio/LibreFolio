@@ -883,6 +883,22 @@ def api_backup_owner_channels(verbose: bool = False, test_names: list[str] | Non
     return run_command(cmd, "Restore owner, panel and command line API tests", verbose=verbose)
 
 
+def api_backup_owner_kept(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the tests of the hosting panel's confirmation that keeps the owner's password and sessions (B5-1l)."""
+    print_section("Restore Owner Kept, Hosting Panel API")
+    print_info("Testing: the panel's confirmation on a managed instance where the backup marks exactly one account as its instance owner (an active administrator holding LIBREFOLIO_ADMIN_EMAIL): 202 with PanelRestoreStatus unchanged and restore.json recording that account and owner_outcome kept; the panel's status view says nothing of it; a second mark or an unmarked holder is B5-1j's pick without outcome; owner_conflict is still 409 first")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_owner_kept_api.py", test_names)
+    return run_command(cmd, "Restore owner kept, hosting panel API tests", verbose=verbose)
+
+
+def api_backup_owner_kept_app(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the tests of the administrators' route next to the restore that keeps the owner (B5-1l): the app never keeps."""
+    print_section("Restore Owner Kept, Administrators' API")
+    print_info("Testing: the check through the administrators' route counts the one marked account (owner_marks); the same copy confirmed with the owner chosen is 202 with no outcome (never kept) and the status view names nothing of the owner")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_owner_kept_app_api.py", test_names)
+    return run_command(cmd, "Restore owner kept, administrators' API tests", verbose=verbose)
+
+
 def api_await_restore_mode(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run the «awaiting restore» mode's API tests: refuse_when_awaiting_restore, its allowed set, ready/instance/wake/panel status (H-62, §6)."""
     print_section("Awaiting Restore Mode API")
@@ -1493,6 +1509,30 @@ Tests for REST API endpoints (server auto-started):
         # PURE: the app of main.py in this process (ASGI) on a private database / the panel's fixtures of test_panel_restore_api.py,
         # data directories under tmp_path, real archives from the staging tests' alembic databases; no lane server, DB or network
         # is reached (the api category still starts the lane's backend around it).
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "backup-owner-kept",
+        api_backup_owner_kept,
+        name="Restore Owner Kept, Hosting Panel",
+        desc="Lot B5-1l: the hosting panel's confirmation (H's route, untouched) on a managed instance with LIBREFOLIO_ADMIN_EMAIL set, for a backup that marks exactly ONE account as its instance owner (StagingReport.owner_marks 1) that is an active administrator holding the owner's address: 202 with PanelRestoreStatus exactly as ever (eleven fields, no account, no address, no word about an owner) and restore.json recording that account and owner_outcome kept; the panel's status view afterwards names nothing of it; GUARDS: a second mark, an unmarked holder or nobody marked is B5-1j's pick (the holder as the owner, no outcome, 202); owner_conflict is still 409 first",
+        tests="Panel confirm of the copy the rule keeps → 202, kept in restore.json → status view silent; condition missing → B5-1j; owner_conflict 409",
+        # PURE: the app of main.py in this process (ASGI), the panel's fixtures of test_panel_restore_api.py and the helpers of
+        # test_backup_owner_channels_api.py, data directories under tmp_path, real archives from the staging tests' alembic
+        # databases; no lane server, DB or network is reached (the api category still starts the lane's backend around it).
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "backup-owner-kept-app",
+        api_backup_owner_kept_app,
+        name="Restore Owner Kept, Administrators",
+        desc="Lot B5-1l: the administrators' route (the app) next to the restore that keeps the owner: a real check of a backup with one marked administrator holding the owner's address counts the mark (owner_marks 1, the candidate marked); GUARD: the same copy confirmed with {owner_user_id: that account} is 202, a plain RestoreStatus (twelve fields), restore.json records the account chosen and NO outcome (never kept), and neither the confirmation nor the status view says a word of the owner, the outcome, an address or an id",
+        tests="Real check counts the mark → app confirm with the owner chosen: 202, no outcome → status view silent",
+        # PURE: an app of the test holds backup_router (get_current_user overridden), data directories under tmp_path, real
+        # archives from the staging tests' alembic database; no lane server, DB or network is reached (the api category still
+        # starts the lane's backend around it).
         isolation="pure",
     )
     add_test(

@@ -982,6 +982,7 @@ def _print_restore_state(state) -> None:
 #: What the first start did with the account the owner chose (B5-1), as ``dev.py backup pending`` says it.
 _OWNER_OUTCOMES = {
     "sent": "✉️  The owner's account is set: a link to choose its password went to the owner's address",
+    "kept": "🔑 The owner's account kept its password and its open sessions (restore from the hosting panel)",
 }
 
 

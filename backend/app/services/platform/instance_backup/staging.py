@@ -233,6 +233,10 @@ class StagingReport(BaseModel):
     users_active: int = Field(default=0, ge=0)
     users_limit: int | None = None
     users_over_limit: int = Field(default=0, ge=0)
+    #: B5-1l: how many accounts of the copy are marked as the instance's owner (``users.is_instance_owner``), whatever their
+    #: role: the mark is written by whoever prepared the backup. A restore from the hosting panel keeps the owner's password
+    #: only when exactly one account is marked (``apply.keeps_owner``).
+    owner_marks: int = Field(default=0, ge=0)
     #: Defaults, so that a report written before lot B-13 still reads.
     control_totals: TotalsStatus = "absent"
     control_totals_differences: list[TotalsDifference] = []
@@ -397,6 +401,7 @@ def _stage(archive_path: Path, root: Path, stage_id: str, progress: StageProgres
     non_iso_currencies = _holds_non_iso_currencies(database, stage_id)
     report = _report(stage_id, manifest, before, after, action, migrations, head, fixes, administrators, totals, encrypted=encrypted, secrets_rekeyed=rekeyed, secrets_unreadable=unreadable, non_iso_currencies=non_iso_currencies)
     users_active, users_limit, users_over_limit = _users_check(database, owner_email_checked, owner_candidates)
+    owner_marks = _owner_marks(database)
     report = report.model_copy(
         update={
             "owner_candidates": owner_candidates,
@@ -405,6 +410,7 @@ def _stage(archive_path: Path, root: Path, stage_id: str, progress: StageProgres
             "users_active": users_active,
             "users_limit": users_limit,
             "users_over_limit": users_over_limit,
+            "owner_marks": owner_marks,
             "warnings": _with_users_warning(report.warnings, users_over_limit),
         }
     )
@@ -900,6 +906,16 @@ def _owner_check(database: Path) -> tuple[str | None, list[OwnerCandidate], list
             raise StagingError("database_damaged", "The backup's accounts are not ones LibreFolio writes: it cannot be restored")
         candidates.append(OwnerCandidate(user_id=user_id, username=str(username), email=None if email is None else str(email), is_superuser=bool(is_superuser), is_active=bool(is_active), is_instance_owner=marked == 1))
     return owner_email, candidates, sorted(set(conflicts))
+
+
+def _owner_marks(database: Path) -> int:
+    """How many accounts of the copy are marked as the instance's owner (B5-1l), active or not, of any role; 0 where the
+    column does not exist. Read-only; nothing read but a count."""
+    with closing(sqlite3.connect(f"{database.resolve().as_uri()}?mode=ro", uri=True)) as conn:
+        conn.execute("PRAGMA trusted_schema=OFF")
+        if "is_instance_owner" not in {row[1] for row in conn.execute("PRAGMA table_info(users)")}:
+            return 0
+        return int(conn.execute("SELECT COUNT(*) FROM users WHERE is_instance_owner = 1").fetchone()[0])
 
 
 def _users_check(database: Path, owner_email: str | None, candidates: list[OwnerCandidate]) -> tuple[int, int | None, int]:

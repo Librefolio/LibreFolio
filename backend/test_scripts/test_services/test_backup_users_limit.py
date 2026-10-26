@@ -226,7 +226,8 @@ def test_the_new_keys_of_report_json_are_three_numbers_and_name_nobody(instance,
     text = path.read_text(encoding="utf-8")
     written = json.loads(text)
     assert [written.get(name, "<missing>") for name in USERS_FIELDS] == [5, 3, 2], f"[new] B5-1k2: report.json: {[written.get(name, '<missing>') for name in USERS_FIELDS]}"
-    assert set(written) - FIELDS_BEFORE == set(USERS_FIELDS), f"the only new keys are the three numbers: {sorted(set(written) - FIELDS_BEFORE)}"
+    # B5-1l added ``owner_marks`` (a count) after this lot: it is not one of the keys this test is about.
+    assert set(written) - FIELDS_BEFORE - {"owner_marks"} == set(USERS_FIELDS), f"the only new keys are the three numbers: {sorted(set(written) - FIELDS_BEFORE)}"
     # The owner's candidates (B5-1, any active administrator, with the address it holds) and the owner's address the check
     # used were in the file before this lot; what B5-1k2 adds names nobody.
     rest = json.dumps({key: value for key, value in written.items() if key not in {"owner_candidates", "owner_email_checked"}})
