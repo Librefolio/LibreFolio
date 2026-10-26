@@ -1,6 +1,6 @@
 """MF-P4b (D-P4 cure B, contract §3 and §4, §8.5–§8.6) — the report's data quality as ranges, and the stale FX pair.
 
-Today ``DataQualityReport.incomplete_nav_dates`` lists every incomplete day, and ``missing_fx_pairs[].dates`` lists the
+Before D-P4 ``DataQualityReport.incomplete_nav_dates`` listed every incomplete day, and ``missing_fx_pairs[].dates`` lists the
 movements and every valuation day together. The contract:
 - ``incomplete_nav_ranges`` (and ``incomplete_book_value_ranges`` / ``incomplete_allocation_ranges`` /
   ``incomplete_valuation_ranges``): ``List[DateSpan]``, today's days with the consecutive ones merged;
@@ -256,9 +256,9 @@ class TestSchemas:
         assert getattr(DataQualityReport(), name) == []
 
     @pytest.mark.parametrize("name", DATE_FIELDS_TODAY)
-    def test_the_old_date_fields_stay(self, name):
-        """Guard: the risk side still reads them until workstream J moves it (contract, coordinator 25/10)."""
-        assert name in DataQualityReport.model_fields
+    def test_the_old_date_fields_are_gone(self, name):
+        """The risk side reads the ranges now (workstream J, J5-5): no list of days is left in the report."""
+        assert name not in DataQualityReport.model_fields
 
     def test_stale_fx_pair_model(self):
         model = getattr(portfolio_schemas, "StaleFxPair", None)

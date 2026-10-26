@@ -7,7 +7,7 @@ from decimal import Decimal
 import pytest
 
 from backend.app.db.models import PriceHistory
-from backend.app.schemas.common import DateRangeModel
+from backend.app.schemas.common import DateRangeModel, DateSpan
 from backend.app.schemas.portfolio import (
     DataQualityExclusionReason,
     DataQualityStatus,
@@ -349,7 +349,7 @@ def test_missing_fx_date_is_excluded_without_filling_returns():
         date(2026, 1, 3),
         date(2026, 1, 5),
     ]
-    assert prepared.data_quality.incomplete_valuation_dates == [date(2026, 1, 4)]
+    assert prepared.data_quality.incomplete_valuation_ranges == [DateSpan(start=date(2026, 1, 4), end=date(2026, 1, 4))]
     assert prepared.data_quality.unresolved_fx_pairs == ["USD/EUR"]
     assert prepared.data_quality.data_quality_status == DataQualityStatus.PARTIAL
     assert prepared.calendar_coverage == pytest.approx(2 / 3)
@@ -654,7 +654,7 @@ def test_quote_dates_are_each_assets_own_quotes_even_on_a_date_the_joint_calenda
 
     # Presence barrier: the crypto has no row on the 15th, so the joint calendar drops that date...
     assert gap not in prepared.joint_return_dates
-    assert prepared.data_quality.incomplete_valuation_dates == [gap]
+    assert prepared.data_quality.incomplete_valuation_ranges == [DateSpan(start=gap, end=gap)]
     # ...yet the ETF was quoted on it, and says so.
     assert series_of(prepared, 1).quote_dates == WEEKDAYS_IN_RANGE
     assert series_of(prepared, 2).quote_dates == [day for day in DAYS_IN_RANGE if day != gap]

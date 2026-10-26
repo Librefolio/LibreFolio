@@ -55,6 +55,7 @@ from backend.app.services.financial_math.lots.scope_boundary import BoundaryDire
 from backend.app.services.financial_math.lots.summary import lot_summary_figures
 from backend.app.services.financial_math.portfolio.data_quality import build_data_quality_report, load_configured_fx_pair_sets
 from backend.app.services.financial_math.price_marks import AssetPriceSeries, MarkSource, build_asset_price_series
+from backend.app.services.financial_math.series_steps import merged_spans
 from backend.app.services.financial_math.splits import load_split_links
 from backend.app.services.financial_math.valuation import normalize_quote_base_quantity
 from backend.app.utils.datetime_utils import EARLIEST_RANGE_START, latest_range_end
@@ -835,16 +836,20 @@ class LotsAnalysisService:
         acquisition without a known cost becomes a ``MISSING_COST_BASIS`` issue.
         """
         dates_by_pair: dict[str, set[date_type]] = defaultdict(set)
+        spans_by_pair: dict[str, list[tuple[date_type, date_type]]] = defaultdict(list)
         for line in lines.values():
             for missing in line.missing:
                 if missing.leg == "report":
                     dates_by_pair[missing.pair].update(missing.dates)
         for gap in conversion_gaps:
             dates_by_pair[gap.pair].update(gap.dates)
+            spans_by_pair[gap.pair].extend((span.start, span.end) for span in gap.ranges)
         unknown_cost = any(line.unknown_cost_movement_ids for line in lines.values())
-        if not dates_by_pair and not unknown_cost:
+        if not dates_by_pair and not spans_by_pair and not unknown_cost:
             return
-        missing_pairs = [WACMissingPairInfo(pair=pair, dates=sorted(dates)) for pair, dates in sorted(dates_by_pair.items())]
+        # The movements' dates, and the valuation days with no rate as ranges (D-P4)
+        pairs = sorted({*dates_by_pair, *spans_by_pair})
+        missing_pairs = [WACMissingPairInfo(pair=pair, dates=sorted(dates_by_pair.get(pair, ())), ranges=[DateSpan(start=first, end=last) for first, last in merged_spans(spans_by_pair.get(pair, ()))]) for pair in pairs]
         configured_pairs, real_provider_pairs = await load_configured_fx_pair_sets(self.db) if missing_pairs else (set(), set())
         gap_report = build_data_quality_report(
             [],
