@@ -19,7 +19,10 @@ Under test: ``backend/app/services/platform/readiness.py``, which answers ``GET 
     ``ahead``, also when the head cannot be read), ``None`` when the database is unreachable, the table is missing or
     it does not hold exactly one row. Besides it the response carries one code per check and the mode: no error text,
     no database path, no revision id other than the database's own (the head is never in it). The details go to the
-    log, once per change of state (developer decision, 25/10/2026).
+    log, once per change of state (developer decision, 25/10/2026);
+(f) ``app_version`` (H5-8, required, declared last) is ``get_git_version()``, read where the module reads it: in every
+    answer (ready, behind, ahead, unknown, unreachable) and in the mode ``awaiting_restore`` too, never an error
+    message nor a path. The cloud checks the version after an update with the probe only.
 
 Pure: every database is a throwaway SQLite file under ``tmp_path``, prepared with ``sqlite3`` and checked through an
 aiosqlite engine of the test's own, disposed at teardown. The head is read from the repository's migration scripts
@@ -48,6 +51,7 @@ from backend.app.config import PROJECT_ROOT
 from backend.app.schemas.system import ReadinessResponse
 from backend.app.services.platform import readiness
 from backend.app.services.platform.readiness import check_readiness
+from backend.app.utils.runtime.version import get_git_version
 from backend.test_scripts.test_utils import print_section, print_success
 
 ALEMBIC_INI = PROJECT_ROOT / "backend" / "alembic.ini"
@@ -60,12 +64,12 @@ PREVIOUS = "<previous>"
 
 
 def _ready(revision: str) -> dict:
-    """The answer of a database at the head ``revision``, in the mode ``normal`` (H-62)."""
-    return {"status": "ready", "checks": {"database": "ok", "migrations": "ok"}, "database_revision": revision, "mode": "normal"}
+    """The answer of a database at the head ``revision``, in the mode ``normal`` (H-62), with the app version (H5-8)."""
+    return {"status": "ready", "checks": {"database": "ok", "migrations": "ok"}, "database_revision": revision, "mode": "normal", "app_version": get_git_version()}
 
 
 def _not_ready(database: str, migrations: str, revision: str | None) -> dict:
-    return {"status": "not_ready", "checks": {"database": database, "migrations": migrations}, "database_revision": revision, "mode": "normal"}
+    return {"status": "not_ready", "checks": {"database": database, "migrations": migrations}, "database_revision": revision, "mode": "normal", "app_version": get_git_version()}
 
 
 # =============================================================================
@@ -435,3 +439,83 @@ async def test_each_change_of_state_is_logged_once(tmp_path, head, previous, log
     assert head in problems["ahead"] and OTHER_REVISION in problems["ahead"], f"the log names both revisions of an ahead, for the operator: {problems['ahead']!r}"
     for result in results:
         _assert_codes_only(result, head, previous, OTHER_REVISION)
+
+
+# =============================================================================
+# (f) THE APP VERSION (H5-8)
+# =============================================================================
+
+
+@pytest.mark.asyncio
+class TestReadinessAppVersion:
+    """``app_version`` is ``get_git_version()`` in every answer, so the cloud reads the version after an update with the probe only."""
+
+    async def test_the_version_is_required_and_declared_last(self):
+        field = ReadinessResponse.model_fields.get("app_version")
+
+        assert field is not None, f"ReadinessResponse must declare app_version: {list(ReadinessResponse.model_fields)}"
+        assert field.is_required(), f"app_version is required, with no default: {field}"
+        assert field.annotation is str, f"app_version is a string: {field.annotation!r}"
+        assert list(ReadinessResponse.model_fields)[-1] == "app_version", f"app_version is declared last, after mode: {list(ReadinessResponse.model_fields)}"
+
+    async def test_a_ready_answer_carries_the_version_of_the_app(self, tmp_path, head):
+        result = await _check(_make_database(tmp_path / "app.db", [head]))
+
+        assert result.model_dump().get("app_version") == get_git_version(), f"ready: app_version is get_git_version() {get_git_version()!r}, got {result.model_dump()}"
+
+    @pytest.mark.parametrize(
+        ("revisions", "migrations"),
+        [
+            pytest.param([OTHER_REVISION], "ahead", id="ahead"),
+            pytest.param([PREVIOUS], "behind", id="behind"),
+            pytest.param(None, "unknown", id="unknown-no-table"),
+        ],
+    )
+    async def test_a_not_ready_answer_carries_it_too(self, tmp_path, previous, revisions, migrations):
+        stored = None if revisions is None else [previous if revision == PREVIOUS else revision for revision in revisions]
+
+        result = await _check(_make_database(tmp_path / "app.db", stored))
+
+        assert result.status == "not_ready" and result.checks.migrations == migrations, f"Barrier: the database is {migrations}: {result}"
+        assert result.model_dump().get("app_version") == get_git_version(), f"{migrations}: app_version is there although not ready: {result.model_dump()}"
+
+    async def test_an_unreachable_database_still_says_the_version(self, tmp_path):
+        result = await _check(tmp_path / "no-such-folder" / "app.db")
+
+        assert result.checks.database == "unreachable", f"Barrier: the database cannot be opened: {result}"
+        assert result.model_dump().get("app_version") == get_git_version(), f"unreachable: app_version is still there, it needs no database: {result.model_dump()}"
+
+    async def test_a_session_that_does_not_answer_still_says_the_version(self, tmp_path):
+        session = _SessionThatDoesNotAnswer(OperationalError("SELECT 1", {}, Exception(f"disk I/O error reading {tmp_path}")))
+
+        result = await check_readiness(session)  # type: ignore[arg-type]
+
+        assert result.status == "not_ready", f"Barrier: the database does not answer: {result}"
+        assert result.model_dump().get("app_version") == get_git_version(), f"no answer: app_version is there: {result.model_dump()}"
+
+    async def test_an_instance_awaiting_its_restore_says_the_version(self, tmp_path, monkeypatch, head):
+        monkeypatch.setattr(readiness, "awaiting_restore", lambda: True)
+
+        result = await _check(_make_database(tmp_path / "app.db", [head]))
+
+        assert result.mode == "awaiting_restore", f"Barrier: the instance is awaiting its restore: {result}"
+        assert result.model_dump().get("app_version") == get_git_version(), f"awaiting restore: app_version is there: {result.model_dump()}"
+
+    async def test_the_value_is_read_where_the_module_reads_it(self, tmp_path, monkeypatch, head):
+        """Control: a version the test sets shows up verbatim, so the field is not a copy made once, nor a constant."""
+        monkeypatch.setattr(readiness, "get_git_version", lambda: "v9.8.7-readiness-probe")
+
+        result = await _check(_make_database(tmp_path / "app.db", [head]))
+
+        assert result.model_dump().get("app_version") == "v9.8.7-readiness-probe", f"app_version must be what the module's get_git_version returns, verbatim: {result.model_dump()}"
+
+    async def test_the_version_is_never_an_error_message_nor_a_path(self, tmp_path):
+        location = str(tmp_path / "remote" / "app.db")
+        error_text = f"disk I/O error reading {location}"
+        session = _SessionThatDoesNotAnswer(OperationalError("SELECT 1", {}, Exception(error_text)))
+
+        result = await check_readiness(session)  # type: ignore[arg-type]
+
+        version = result.model_dump().get("app_version")
+        assert version == get_git_version(), f"Barrier: app_version is the app's version: {result.model_dump()}"
+        assert "/" not in version and error_text not in version and "disk I/O" not in version, f"app_version holds an error message or a path: {version!r}"

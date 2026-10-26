@@ -20,6 +20,7 @@ from backend.app.config import PROJECT_ROOT
 from backend.app.config.platform import awaiting_restore
 from backend.app.logging_config import get_logger
 from backend.app.schemas.system import ReadinessChecks, ReadinessDatabaseState, ReadinessMigrationsState, ReadinessResponse
+from backend.app.utils.runtime.version import get_git_version
 
 logger = get_logger(__name__)
 
@@ -102,5 +103,13 @@ async def check_readiness(session: AsyncSession) -> ReadinessResponse:
     database, migrations, revision, problem = await _run_checks(session)
     checks = ReadinessChecks(database=database, migrations=migrations)
     _log_change(checks, problem)
+    # H5-8: the running version, the text /system/info already gives without a session; the first read of it may run git, so off the loop
+    app_version = await asyncio.to_thread(get_git_version)
     # H-62: an instance awaiting its restore says so; ready then means ready to receive the backup
-    return ReadinessResponse(status="ready" if problem is None else "not_ready", checks=checks, database_revision=revision, mode="awaiting_restore" if awaiting_restore() else "normal")
+    return ReadinessResponse(
+        status="ready" if problem is None else "not_ready",
+        checks=checks,
+        database_revision=revision,
+        mode="awaiting_restore" if awaiting_restore() else "normal",
+        app_version=app_version,
+    )

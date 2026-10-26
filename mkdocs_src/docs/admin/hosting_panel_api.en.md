@@ -334,7 +334,7 @@ curl -sS -H "Authorization: Bearer $LIBREFOLIO_PANEL_STATUS_TOKEN" \
 ```
 
 ```json
-{"admin_setup": "pending", "setup_expires_at": "2026-10-23T09:12:44.512312Z", "mode": "normal", "restore": null, "users_used": 3, "users_limit": 10, "owner_email_change": null, "instance_key": "ok"}
+{"admin_setup": "pending", "setup_expires_at": "2026-10-23T09:12:44.512312Z", "mode": "normal", "restore": null, "users_used": 3, "users_limit": 10, "owner_email_change": null, "instance_key": "ok", "users_over_limit": false}
 ```
 
 | `admin_setup` | What it means | `setup_expires_at` |
@@ -352,10 +352,11 @@ curl -sS -H "Authorization: Bearer $LIBREFOLIO_PANEL_STATUS_TOKEN" \
 | `users_limit` | The value of `LIBREFOLIO_MAX_USERS`, a whole number from `1`; `null` when it is not set, which means no limit |
 | `owner_email_change` | Where a [change of the owner's address](hosting_instances.md#owner-email-change) stands: `pending` (the new address was sent a confirmation link and the account keeps the old one until it is clicked), `blocked` (another account already holds the new address, so nothing changes: change the variable again to a free address) or `null` (no change is waiting, the instance is not managed, or its initial administrator has not set up yet). Never the address |
 | `instance_key` | `ok`, or `mismatch` when the instance key it has is not the one its data was written with ([The Key Check](configuration_secrets.md#instance-key-check)). With `mismatch`, your backup starts answer `409` `backup_instance_key_mismatch` and the wake-up runs no job; the instance keeps serving. Never the fingerprint |
+| `users_over_limit` | `true` while the active accounts outnumber `users_limit`, for example after your customer moved to a smaller plan: ordinary users are then refused until an administrator chooses who keeps access, and the others are deactivated, never deleted. `false` otherwise, and always `false` when `users_limit` is `null`. Invitations and accounts waiting for their email verification take places, so they count in `users_used`, but they never make this `true`. One yes or no, never who |
 
-- The answer holds these eight keys and nothing else: `admin_setup`, `setup_expires_at`, `mode`,
-  `restore`, `users_used`, `users_limit`, `owner_email_change` and `instance_key`. The two counts are numbers only,
-  never a username, an email address or an id; `owner_email_change` never carries the address either, and `instance_key` never the fingerprint. Ignore the keys you do not know: a later version may add some.
+- The answer holds these nine keys and nothing else: `admin_setup`, `setup_expires_at`, `mode`,
+  `restore`, `users_used`, `users_limit`, `owner_email_change`, `instance_key` and `users_over_limit`. The two counts are numbers only,
+  never a username, an email address or an id; `owner_email_change` never carries the address either, `instance_key` never the fingerprint, and `users_over_limit` never says who. Ignore the keys you do not know: a later version may add some.
 - 📏 Compare `users_used` with `users_limit` to know when an instance is full. At the limit, nobody
   can sign up without an invitation and administrators cannot create invitations: see
   «When the Instance Is Full» in [Environment Variables](configuration.md), and

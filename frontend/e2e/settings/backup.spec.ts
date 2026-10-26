@@ -577,7 +577,7 @@ async function routeTheRestart(page: Page, lane: RestoreLane): Promise<void> {
 
 /** The server the page probes while it restarts: refused (connection refused) until the case brings it up, then ready. */
 async function routeTheServer(page: Page, lane: RestoreLane): Promise<void> {
-    const ready = schemas.ReadinessResponse.parse({status: 'ready', checks: {database: 'ok', migrations: 'ok'}});
+    const ready = schemas.ReadinessResponse.parse({status: 'ready', checks: {database: 'ok', migrations: 'ok'}, app_version: 'v0.0.0-e2e'});
     await page.route(
         (url) => url.pathname === SERVER_READY,
         async (route) => {

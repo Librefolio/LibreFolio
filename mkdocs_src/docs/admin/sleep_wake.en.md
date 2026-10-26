@@ -51,7 +51,7 @@ LibreFolio asks for the suspension only when nobody is around **and** no work is
 except:
 
 - the health checks, `/api/v1/system/health` and `/api/v1/system/ready`, which a host or an uptime
-  monitor may call every few seconds;
+  monitor may call every few seconds. `/system/ready` also says the running version (`app_version`), so a check after an update needs no other call, and it is not a visit;
 - the [scheduled wake-up](wake_sync.md#wake-sync): it is not a visit, although it keeps the machine awake while
   its jobs run;
 - the calls of a hosting panel to its backup routes, `/api/v1/backup/panel/…`, and to its status
