@@ -26,6 +26,7 @@ import {schemas} from '$lib/api';
 import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
 import type {RiskAnalyticResult} from '$lib/features/risk/riskStore.svelte';
 import {riskMetadata, riskOutput, singleValue} from '$lib/features/risk/riskTypes';
+import {utcMs} from '$lib/utils/dateOnly';
 
 /**
  * What a section of the lab hands its panel, read through `bind:this`, for the one notice above
@@ -422,8 +423,9 @@ function addMonthsClamped(isoDay: string, months: number): number {
     const total = month - 1 + months;
     const targetYear = year + Math.floor(total / 12);
     const targetMonth = ((total % 12) + 12) % 12;
-    const lastDay = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
-    return Date.UTC(targetYear, targetMonth, Math.min(day, lastDay));
+    // `utcMs`, not `Date.UTC`: that reads a year from 0 to 99 as 1900–1999, so a date typed in the year 24 would sit a century off
+    const lastDay = new Date(utcMs(targetYear, targetMonth + 1, 0)).getUTCDate();
+    return utcMs(targetYear, targetMonth, Math.min(day, lastDay));
 }
 
 /**
