@@ -17,7 +17,8 @@
       "instanceKey": {
         "ok": "The instance key is usable.",
         "unusable": "The instance key cannot be used: {reason}",
-        "permissions": "{path} is open to other users: the folder should be 0700 and the file 0600."
+        "permissions": "{path} is open to other users: the folder should be 0700 and the file 0600.",
+        "mismatch": "The instance key is not the one this instance's data was written with: the hosting panel's backups and scheduled wake-ups are stopped. Put the right key back and restart; for a deliberate change, start once with LIBREFOLIO_INSTANCE_KEY_ACCEPT=1."
       },
       "sessionCookie": {
         "ok": "The session cookie is Secure whenever the browser uses HTTPS.",

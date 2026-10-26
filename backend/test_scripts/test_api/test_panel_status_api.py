@@ -119,7 +119,9 @@ BLOCKED_ANSWER = {"detail": {"code": "instance_blocked", "message": "This instan
 #: H5-1 adds the counts of the places taken, ``users_used`` and ``users_limit`` (and nothing that names a user): red
 #: until H5-1.
 #: H5-4 adds ``owner_email_change`` (pending, blocked or null, never an address): the seventh key, red until H5-4.
-ANSWER_KEYS = {"admin_setup", "setup_expires_at", "mode", "restore", "users_used", "users_limit", "owner_email_change"}
+#: H5-7 adds ``instance_key`` (``ok`` or ``mismatch``, required, never an impression of the check value): the eighth key,
+#: red until H5-7. Its own cases are in ``test_instance_key_check_api.py``.
+ANSWER_KEYS = {"admin_setup", "setup_expires_at", "mode", "restore", "users_used", "users_limit", "owner_email_change", "instance_key"}
 SETUP_STATES = ("none", "pending", "done", "expired")
 
 #: The OpenAPI document: the route's responses, exactly; its one tag; the scheme of its token.
@@ -146,7 +148,8 @@ STRAY_DATE = datetime(2026, 10, 17, 6, 5, 0, tzinfo=UTC)
 #: H-62: outside the «awaiting restore» mode and without a restore recorded, ``mode`` normal and ``restore`` null.
 #: H5-1: an instance without accounts and without a limit: no place taken (``users_used`` 0), ``users_limit`` null.
 #: H5-4: and no change of the owner's address waiting (``owner_email_change`` null).
-PENDING_ANSWER = {"admin_setup": "pending", "setup_expires_at": SETUP_EXPIRES_AT, "mode": "normal", "restore": None, "users_used": 0, "users_limit": None, "owner_email_change": None}
+#: H5-7: and no instance key to compare (no key, no check file, in this test's data directory): ``instance_key`` ``ok``.
+PENDING_ANSWER = {"admin_setup": "pending", "setup_expires_at": SETUP_EXPIRES_AT, "mode": "normal", "restore": None, "users_used": 0, "users_limit": None, "owner_email_change": None, "instance_key": "ok"}
 
 #: Logged through a logger of this file inside the capture first: a capture that sees nothing proves nothing.
 LOG_CANARY = "R1-04 canary: a line written inside the capture reaches it"
@@ -292,6 +295,9 @@ def _no_panel_variables(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv(MAX_USERS_VARIABLE, raising=False)
     # H5-4: nor a variable naming the owner's address: ``owner_email_change`` is null until a test stands in for the function
     monkeypatch.delenv("LIBREFOLIO_ADMIN_EMAIL", raising=False)
+    # H5-7: nor an instance key (nothing to compare in this test's empty data directory): ``instance_key`` is ``ok``
+    for variable in ("LIBREFOLIO_INSTANCE_KEY", "LIBREFOLIO_INSTANCE_KEY_FILE", "LIBREFOLIO_INSTANCE_KEY_ACCEPT"):
+        monkeypatch.delenv(variable, raising=False)
 
 
 async def _request(app: FastAPI, method: str, path: str, headers: dict[str, str] | None = None) -> httpx.Response:
@@ -540,6 +546,7 @@ async def test_the_status_answers_the_setup_state_and_the_expiry_of_a_pending_se
         "users_used": 0,
         "users_limit": None,
         "owner_email_change": None,
+        "instance_key": "ok",
     }, f"the setup {state}, its status holding {held.isoformat()}: expected admin_setup {state!r} and setup_expires_at {answered.isoformat() if answered else None} (ISO 8601 with the UTC offset, for pending only), got {response.text}"
     assert len(reader.calls) == 1, f"admin_setup_status is called once per request: {reader.calls}"
     call = reader.calls[0]
@@ -984,19 +991,19 @@ async def test_the_status_gives_the_state_of_the_owners_email_change(in_process,
 
 # red today: the answer has no owner_email_change
 @pytest.mark.asyncio
-async def test_the_owner_key_is_present_in_every_mode_and_the_answer_keeps_its_seven_keys(in_process, monkeypatch):
+async def test_the_owner_key_is_present_in_every_mode_and_the_answer_keeps_its_eight_keys(in_process, monkeypatch):
     """R1-14 (H5-4): the key is in the answer whatever the instance does: the default (nothing waits, real function on an empty
-    database: null), the awaiting-restore mode, and an unreadable restore; the answer holds exactly ``ANSWER_KEYS``, seven keys."""
-    print_section("R1-14: owner_email_change always present, seven keys")
-    assert len(ANSWER_KEYS) == 7, "Barrier: ANSWER_KEYS is the seven keys of the contract"
+    database: null), the awaiting-restore mode, and an unreadable restore; the answer holds exactly ``ANSWER_KEYS``, eight keys (H5-7)."""
+    print_section("R1-14: owner_email_change always present, eight keys")
+    assert len(ANSWER_KEYS) == 8, "Barrier: ANSWER_KEYS is the eight keys of the contract (H5-7)"
 
     response, body = await _status_body(in_process, monkeypatch)
-    assert set(body) == ANSWER_KEYS and body[OWNER_KEY] is None, f"default: exactly the seven keys, {OWNER_KEY} null (an empty database, no managed profile): {response.text}"
+    assert set(body) == ANSWER_KEYS and body[OWNER_KEY] is None, f"default: exactly the eight keys, {OWNER_KEY} null (an empty database, no managed profile): {response.text}"
 
     monkeypatch.setenv("LIBREFOLIO_AWAIT_RESTORE", "1")
     response, body = await _status_body(in_process, monkeypatch)
     assert body.get("mode") == "awaiting_restore", f"Barrier: the mode is awaiting_restore: {response.text}"
-    assert set(body) == ANSWER_KEYS and body[OWNER_KEY] is None, f"awaiting restore: exactly the seven keys: {response.text}"
+    assert set(body) == ANSWER_KEYS and body[OWNER_KEY] is None, f"awaiting restore: exactly the eight keys: {response.text}"
 
     def unreadable(_root: Any) -> Any:
         raise restore_apply.RestoreStateUnreadableError("invalid")
@@ -1005,8 +1012,8 @@ async def test_the_owner_key_is_present_in_every_mode_and_the_answer_keeps_its_s
     monkeypatch.setattr(restore_apply, "read_restore", unreadable)
     response, body = await _status_body(in_process, monkeypatch)
     assert (body.get("restore") or {}).get("state") == "unreadable", f"Barrier: the restore is unreadable: {response.text}"
-    assert set(body) == ANSWER_KEYS and body[OWNER_KEY] is None, f"unreadable restore: exactly the seven keys: {response.text}"
-    print_success("seven keys in every mode")
+    assert set(body) == ANSWER_KEYS and body[OWNER_KEY] is None, f"unreadable restore: exactly the eight keys: {response.text}"
+    print_success("eight keys in every mode")
 
 
 # red today: the answer has no owner_email_change, so the barrier on it fails
@@ -1058,7 +1065,7 @@ async def test_the_owner_change_does_not_change_the_other_answers_or_the_refusal
     print_section("R1-17: the owner change touches nothing else")
     stand_in = _stand_in_for_owner_change(monkeypatch, "blocked")
     response, body = await _status_body(in_process, monkeypatch)
-    assert body == {"admin_setup": "none", "setup_expires_at": None, "mode": "normal", "restore": None, "users_used": 0, "users_limit": None, OWNER_KEY: "blocked"}, f"the whole answer, blocked change: {response.text}"
+    assert body == {"admin_setup": "none", "setup_expires_at": None, "mode": "normal", "restore": None, "users_used": 0, "users_limit": None, OWNER_KEY: "blocked", "instance_key": "ok"}, f"the whole answer, blocked change (eight keys): {response.text}"
 
     calls = len(stand_in.sessions)
     refused = await _send(in_process.app, "GET", STATUS_PATH, None)

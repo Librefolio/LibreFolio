@@ -52,7 +52,8 @@ class PanelStatusResponse(BaseModel):
 
     No email, no username: the panel learns whether the customer has activated the instance, until when the setup link
     works, two counts (``users_used``, ``users_limit``) and whether the owner's new address waits for its confirmation
-    (``owner_email_change``), never who the users are nor an address.
+    (``owner_email_change``), and whether the instance key is the one its data was written with (``instance_key``), never who the users
+    are, an address nor the key's check value.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -69,6 +70,10 @@ class PanelStatusResponse(BaseModel):
     owner_email_change: Literal["pending", "blocked"] | None = Field(
         None,
         description="The change of the paying administrator's email address that the hosting provider started by changing LIBREFOLIO_ADMIN_EMAIL: pending, the new address was sent a confirmation link and the account keeps the old one until it is clicked; blocked, another account already holds the new address, so nothing changes (change the variable again to a free address); null, no change is waiting, or the instance is not managed, or its initial administrator has not set up yet. Never the address",
+    )
+    instance_key: Literal["ok", "mismatch"] = Field(
+        ...,
+        description="ok: the instance key is the one this instance's data was written with, or nothing can tell (no key yet, a check file that cannot be read); mismatch: it is another key, so the panel's backup jobs (409 backup_instance_key_mismatch) and wake-sync are stopped while the instance keeps serving. Recomputed at every request: the right key put back is ok at the next one. Never the key nor its check value (H5-7)",
     )
 
 

@@ -40,6 +40,7 @@ from backend.app.services.platform.database_bootstrap import ensure_database_exi
 from backend.app.services.platform.instance_backup.apply import apply_pending_restore, finish_pending_restore, hold_serving_lock
 from backend.app.services.platform.instance_backup.leftovers import sweep_backup_leftovers
 from backend.app.services.platform.instance_backup.owner import assign_restored_owner
+from backend.app.services.platform.instance_key_check import run_instance_key_check_at_start
 from backend.app.services.platform.lifecycle import Step, run_shutdown_steps, run_startup_steps
 from backend.app.services.platform.plugin_secrets_check import log_plugin_secrets_check
 from backend.app.services.platform.restore_guard import probe_owner_assignment, probe_restore_state, restore_interrupted
@@ -280,6 +281,9 @@ STARTUP_STEPS: tuple[Step, ...] = (
     Step("backup-leftovers", lambda: asyncio.to_thread(sweep_backup_leftovers)),
     # The stored plugin secrets the instance key can no longer read: an error in the log, with their count (H-15)
     Step("plugin-secrets-check", lambda: log_plugin_secrets_check()),
+    # The check value of the instance key: written on the first start, a mismatch said in the log, a deliberate change
+    # accepted by LIBREFOLIO_INSTANCE_KEY_ACCEPT (H5-7). Runs while awaiting a restore too; it never raises
+    Step("instance-key-check", lambda: run_instance_key_check_at_start()),
     # The audit of the stored currency codes, in background: one warning when some are not ISO 4217 codes (E-19a). After
     # both repairs and once the restore is settled, since it reports on the data (N57); read-only, never a stop or a wait
     Step("stored-currencies", lambda: _start_stored_currency_audit(), skip_when=_serving_no_data),

@@ -108,6 +108,7 @@ curl -sS -X DELETE -H "Authorization: Bearer $TOKEN" "$JOBS/<job_id>"
 | `409` | A delete while the job runs | `backup_job_running` |
 | `409` | A start while the instance [awaits a restore](#await-restore): a backup of its empty data never starts | `backup_awaiting_restore` |
 | `409` | A start while a [restore stopped half way](#restore-interrupted): a backup of data in doubt never starts. Your panel's credential is checked first: without a valid one the answer is the `401` or `404` above | `backup_restore_interrupted` |
+| `409` | A start while the instance key is not the one its data was written with ([When the Instance Key Does Not Match](#instance-key-mismatch): `instance_key` is `mismatch` in the [status](hosting_panel_api.md#panel-status)): a copy made with the wrong key would push a good one out of the ones you keep. The credential is checked first, as above. Following a job, downloading and deleting still answer | `backup_instance_key_mismatch` |
 | `507` | A start while the disk of the data directory, or a quota, is full: free some space, then start again | `backup_no_space` |
 | `500` | The backup cannot start: the `backups/` folder of the data directory is a link or a file, or cannot be written for another reason. The log has the cause | `backup_folder_unusable`, `backup_failed` |
 
@@ -118,6 +119,34 @@ The `code` comes in the `detail` of the answer, with a `message` in English:
 ```
 
 ---
+
+### 🔏 When the Instance Key Does Not Match {: #instance-key-mismatch }
+
+The instance keeps, next to its key, a check value of it ([The Key Check](configuration_secrets.md#instance-key-check)).
+When the key the machine has is not the one the data was written with, the panel's [status](hosting_panel_api.md#panel-status)
+answers `"instance_key": "mismatch"`, and two things of yours stop, nothing else: a backup start answers `409`
+`backup_instance_key_mismatch` (once your panel's credential is checked), and the [scheduled wake-up](wake_sync.md#wake-sync)
+answers the status `instance_key_mismatch` and runs no job. The instance **keeps serving** its users, and following a
+job, downloading and deleting still answer. The stop protects your copies: a backup made with the wrong key would push a good one out of the ones you keep.
+
+**Your backups resume by themselves.** Nothing is stored about the mismatch: the instance compares the key with the check
+value at every request. The first time your panel asks after the cause is gone, the status says `ok`, the next start is accepted
+and the next night's visit runs its jobs. There is nothing to reset, and no flag to clear.
+
+Three ways out, from the most common:
+
+1. **The wrong key was an error** (a machine started with another instance's key, an old value left in the
+   configuration): apply the right key, with `LIBREFOLIO_INSTANCE_KEY` or its `_FILE`, and restart the
+   machine once. The status says `ok` at once. If it still says `mismatch` after one restart with the key you
+   hold in custody, do not try other keys: the key you hold is not the one the data was written with, so go on with the third way.
+2. **You mean to change the key** (a rotation, decided with the customer): start the machine **once** with
+   `LIBREFOLIO_INSTANCE_KEY_ACCEPT=1` beside the new key. That start stores the check value of the new key and logs a
+   warning. Then remove the variable and restart: while it is set, every start accepts any key, and the protection does nothing.
+   The plugin secrets that the old key encrypted can no longer be read: they are entered again.
+3. **The right key is lost**: the data cannot be read back with it, so go the second way, with the key you
+   have now, and the customer enters the plugin secrets again, in Settings › Plugins. Decide it with the customer and your
+   support: LibreFolio never does it by itself. If the lost key turns up later, put it back as in the first way: the
+   secrets entered again under the new key then stop reading, and are entered once more.
 
 ## ♻️ Restoring an Instance from Your Panel {: #panel-restore }
 

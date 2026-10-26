@@ -25,6 +25,7 @@ from backend.app.services.accounts.bootstrap_admin_service import AdminSetupStat
 from backend.app.services.accounts.registration_service import user_usage
 from backend.app.services.platform.hosting_panel.access import PanelCaller, PanelScope, panel_access
 from backend.app.services.platform.instance_backup import apply as restore_apply
+from backend.app.services.platform.instance_key_check import instance_key_state
 from backend.app.utils.datetime_utils import ensure_utc, utcnow
 
 panel_router = APIRouter()
@@ -59,6 +60,7 @@ async def get_panel_status(
         users_used=usage.used,
         users_limit=usage.max_users,
         owner_email_change=await instance_owner.owner_change_status(session),
+        instance_key=await instance_key_state(session),
     )
 
 

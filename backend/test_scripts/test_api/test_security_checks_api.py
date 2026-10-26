@@ -51,7 +51,8 @@ LOGIN_LIMIT_CHECK = "accounts.login_limit"
 #: H5-4: A's check of the host-started change of the owner's email.
 OWNER_EMAIL_CHANGE_CHECK = "accounts.owner_email_change"
 #: Checks of workstream H the lane's server lists beside A's.
-PLATFORM_CHECKS = ("platform.jwt_secret", "platform.plugin_secrets")
+#: H5-7: and the instance key check's (id ``platform.instance_key`` is the key file's own check; ID COLLISION, see test_instance_key_check.py) (``ok`` on the lane: its key and its check file are the ones the lane's start made).
+PLATFORM_CHECKS = ("platform.jwt_secret", "platform.plugin_secrets", "platform.instance_key_check")
 SEVERITIES = frozenset({"ok", "info", "warning", "error"})
 
 
