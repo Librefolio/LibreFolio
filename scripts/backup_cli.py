@@ -659,7 +659,7 @@ def _print_stage_report(report, *, instance_key_given: bool = False) -> None:
         print(f"❌ {_STAGE_BLOCKERS.get(code, code)}")
 
 
-#: What to do after a restore that found nobody for the owner (B5-1j): the command arrives with workstream A's lot A5-4.
+#: What to do after a restore that found nobody for the owner (B5-1j): ``user reassign-owner`` names one.
 _NO_OWNER_LINE = "⚠️  No owner: no account of the backup can be taken for it. The restore goes on; name one afterwards with ./dev.py user reassign-owner <username>"
 
 
