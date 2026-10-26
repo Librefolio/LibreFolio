@@ -10,7 +10,12 @@
     "intro": "Hemos recibido una solicitud para restablecer la contraseña de tu cuenta en $instance.",
     "action": "Elegir una nueva contraseña",
     "expiry": "El enlace funciona una sola vez y caduca en $duration.",
-    "ignore": "Si no lo has solicitado, ignora este correo: tu contraseña sigue siendo la misma."
+    "ignore": "Si no lo has solicitado, ignora este correo: tu contraseña sigue siendo la misma.",
+    "restore_subject": "Elige una nueva contraseña para LibreFolio",
+    "restore_intro": "Tu cuenta en $instance se ha restaurado a partir de una copia de seguridad.",
+    "restore_note": "Por tu seguridad, tu contraseña se revocó tras la restauración. Usa el botón de abajo para elegir una nueva.",
+    "restore_fallback": "Si el enlace ha caducado, elige «¿Olvidaste tu contraseña?» en la página de acceso, con esta dirección de correo, para recibir uno nuevo.",
+    "restore_unexpected": "Si no lo esperabas, ponte en contacto con quien gestiona este LibreFolio."
   },
   "invite": {
     "subject": "Una invitación a LibreFolio",
