@@ -666,6 +666,25 @@ def owner_plan(report) -> OwnerPick | None:
 #: The outcome recorded at the confirmation of a restore that found nobody for the owner: ``backup pending`` says so.
 OWNER_OUTCOME_NONE = "none"
 
+#: The outcome recorded at the confirmation by the hosting panel of a managed instance whose backup has one owner, an active
+#: administrator with the owner's address (B5-1l): the commit keeps their password and sessions and nothing is sent.
+OWNER_OUTCOME_KEPT = "kept"
+
+
+def keeps_owner(candidates, owner_marks: int, owner_email: str) -> int | None:
+    """The account whose password and sessions a restore from the hosting panel keeps (B5-1l), or ``None``: exactly one
+    account of the backup is marked as the instance's owner (``owner_marks``, counted over every account), it is an
+    active administrator, and it holds the owner's address (``LIBREFOLIO_ADMIN_EMAIL``). The mark and the address are
+    written by whoever prepared the backup: the developer accepted that a copy fabricated in the provider's depository
+    would pass (an automatic restore of the same instance must be transparent). Anywhere else, B5-1j applies."""
+    from backend.app.services.accounts.user_service import same_email  # noqa: PLC0415
+
+    if owner_marks != 1:
+        return None
+    match = [candidate for candidate in candidates if candidate.is_instance_owner and candidate.is_superuser and candidate.is_active and candidate.email is not None and same_email(candidate.email, owner_email)]
+    return match[0].user_id if len(match) == 1 else None
+
+
 #: What to do about a backup the owner's assignment would refuse: said in the refusal.
 _OWNER_CONFLICT_ADVICE = "remove the duplicate account or free the address in the instance the backup comes from, make a new backup, and check it again"
 
@@ -702,6 +721,8 @@ def _check_owner_choice(report, confirmed_via: str, owner_user_id: int | None) -
             raise RestoreOwnerEmailNotSetError("LIBREFOLIO_ADMIN_EMAIL is not set: no owner to give an account to")
         return None, None  # nobody to ask and no trusted address: as before, no owner is named
     _check_owner_report(report, owner_email)
+    if confirmed_via == "panel" and (kept := keeps_owner(report.owner_candidates, report.owner_marks, owner_email)) is not None:
+        return kept, OWNER_OUTCOME_KEPT
     if not by_the_app:
         picked = pick_owner(report.owner_candidates, owner_email)
         if picked.user_id is None:
@@ -1131,16 +1152,55 @@ def finish_pending_restore(data_dir: Path | None = None, *, boot: Boot | None = 
             raise RestoreInUseError("The restore found here was applied by another start of LibreFolio")
         if state.status == "applied" and state.boot == boot:
             now = now or _now()
-            value, revoked = _close_the_way_in(data_dir, now, state.owner_user_id, stage_id=state.stage_id, token_watermark=state.token_watermark)
-            state = state.model_copy(update={"status": "committed", "finished_at": now, "session_version": value})
+            kept, to_close = _owner_at_commit(data_dir, state)
+            value, revoked = _close_the_way_in(data_dir, now, to_close, stage_id=state.stage_id, token_watermark=state.token_watermark, kept_owner_user_id=kept)
+            update = {"status": "committed", "finished_at": now, "session_version": value}
+            if state.owner_outcome == OWNER_OUTCOME_KEPT and kept is None:
+                update["owner_outcome"] = None  # the account no longer fits the rule: treated as B5-1j, the first start gives the link
+            state = state.model_copy(update=update)
             _write_state(data_dir, state)
-            logger.warning("Restore committed: every session ended, the backup's one-time links revoked", stage_id=state.stage_id, session_version=value, links_revoked=revoked)
+            if kept is None:
+                logger.warning("Restore committed: every session ended, the backup's one-time links revoked", stage_id=state.stage_id, session_version=value, links_revoked=revoked)
+            else:
+                logger.warning("Restore committed: every session ended but the owner's, the backup's one-time links revoked", stage_id=state.stage_id, session_version=value, links_revoked=revoked)
         if state.status in ("committed", "rolled_back"):
             _remove_leftovers(data_dir, state.stage_id)
         return state
 
 
-def _close_the_way_in(data_dir: Path, now: datetime, owner_user_id: int | None = None, *, stage_id: str | None = None, token_watermark: int | None = None) -> tuple[int, int]:
+def _owner_at_commit(data_dir: Path, state: RestoreState) -> tuple[int | None, int | None]:
+    """``(kept, to_close)`` for the commit: the account whose password and sessions are kept (B5-1l), and the account
+    the commit closes (B5-1, B5-1j). An outcome ``kept`` is checked again on the restored database, which is not served yet:
+    the account must still be the one marked owner, an active administrator, with the owner's address; else it is closed
+    like any chosen owner."""
+    if state.owner_outcome != OWNER_OUTCOME_KEPT or state.owner_user_id is None:
+        return None, state.owner_user_id
+    if _kept_owner_valid(database_path(data_dir), state.owner_user_id):
+        return state.owner_user_id, None
+    logger.warning("The owner kept by a panel restore no longer fits the rule at the commit: it is treated as any chosen owner", stage_id=state.stage_id, user_id=state.owner_user_id)
+    return None, state.owner_user_id
+
+
+def _kept_owner_valid(database: Path, user_id: int) -> bool:
+    """Whether the account is still, in the restored database, the one marked owner, an active administrator holding
+    ``LIBREFOLIO_ADMIN_EMAIL`` (B5-1l). Read-only; ``False`` when the address is not set or the database cannot be read."""
+    from backend.app.services.platform.instance_backup.owner import configured_owner_email  # noqa: PLC0415 — owner imports this module
+
+    owner_email = configured_owner_email()
+    if owner_email is None:
+        return False
+    try:
+        with closing(sqlite3.connect(f"{database.resolve().as_uri()}?mode=ro", uri=True)) as conn:
+            conn.execute("PRAGMA trusted_schema = OFF")
+            if "is_instance_owner" not in {row[1] for row in conn.execute("PRAGMA table_info(users)")}:
+                return False
+            marked = [row[0] for row in conn.execute("SELECT id FROM users WHERE is_instance_owner = 1")]
+            return marked == [user_id] and conn.execute("SELECT 1 FROM users WHERE id = ? AND is_active = 1 AND is_superuser = 1 AND lower(email) = lower(?)", (user_id, owner_email)).fetchone() is not None
+    except sqlite3.Error:
+        return False
+
+
+def _close_the_way_in(data_dir: Path, now: datetime, owner_user_id: int | None = None, *, stage_id: str | None = None, token_watermark: int | None = None, kept_owner_user_id: int | None = None) -> tuple[int, int]:
     """Close in the restored database every way in that was open before the restore, in one transaction; the session
     version given to every account, and how many one-time links were revoked.
 
@@ -1154,6 +1214,8 @@ def _close_the_way_in(data_dir: Path, now: datetime, owner_user_id: int | None =
       data without an account). Without a watermark every live link is revoked.
     - The account the owner chose (a restore confirmed from the app of a managed instance, B5-1) is closed:
       ``_close_owner_account``.
+    - ``kept_owner_user_id`` (B5-1l, a restore from the hosting panel whose backup has one owner holding the owner's
+      address): that account keeps its session version, its password and its owner flag; every other account is as above.
     """
     unusable = _unusable_hash() if owner_user_id is not None else None
     owner_email = None
@@ -1172,7 +1234,10 @@ def _close_the_way_in(data_dir: Path, now: datetime, owner_user_id: int | None =
         restored = int(conn.execute("SELECT COALESCE(MAX(session_version), 0) FROM users").fetchone()[0])
         value = max(restore_ms, restored + 1, before + 1)
         with conn:
-            conn.execute("UPDATE users SET session_version = ?", (value,))
+            if kept_owner_user_id is None:
+                conn.execute("UPDATE users SET session_version = ?", (value,))
+            else:
+                conn.execute("UPDATE users SET session_version = ? WHERE id != ?", (value, kept_owner_user_id))
             if token_watermark is None:
                 revoked = conn.execute("UPDATE account_tokens SET revoked_at = ? WHERE consumed_at IS NULL AND revoked_at IS NULL", (revoked_at,)).rowcount
             else:
@@ -1181,9 +1246,11 @@ def _close_the_way_in(data_dir: Path, now: datetime, owner_user_id: int | None =
                     "UPDATE account_tokens SET revoked_at = ? WHERE consumed_at IS NULL AND revoked_at IS NULL AND NOT (typeof(id) = 'integer' AND id > ?)",
                     (revoked_at, token_watermark),
                 ).rowcount
-            _clear_owner_flag(conn)
+            _clear_owner_flag(conn, keep=kept_owner_user_id)
             if owner_user_id is not None:
                 _close_owner_account(conn, owner_user_id, unusable, owner_email, stage_id)
+    if kept_owner_user_id is not None:
+        logger.warning("Panel restore: the owner's password and sessions are kept", stage_id=stage_id, user_id=kept_owner_user_id)
     return value, revoked
 
 
@@ -1194,14 +1261,14 @@ def _unusable_hash() -> str:
     return auth_service.unusable_password_hash()
 
 
-def _clear_owner_flag(conn: sqlite3.Connection) -> None:
+def _clear_owner_flag(conn: sqlite3.Connection, keep: int | None = None) -> None:
     """Nobody is the instance's owner at the restore: the flag ``users.is_instance_owner`` (workstream A's migration) is
     written by whoever prepared the backup, so it is cleared on every account. The owner is then the account this restore
     assigns (``_close_owner_account``) or, without one, the one the first start derives from ``LIBREFOLIO_ADMIN_EMAIL``
     (A's owner sync): otherwise an owner-change link could go to the real owner's address for an account the backup's
     author flagged."""
     if "is_instance_owner" in {row[1] for row in conn.execute("PRAGMA table_info(users)")}:
-        conn.execute("UPDATE users SET is_instance_owner = 0 WHERE is_instance_owner != 0")
+        conn.execute("UPDATE users SET is_instance_owner = 0 WHERE is_instance_owner != 0 AND id IS NOT ?", (keep,))
 
 
 def _close_owner_account(conn: sqlite3.Connection, user_id: int, unusable: str, owner_email: str | None, stage_id: str | None) -> None:

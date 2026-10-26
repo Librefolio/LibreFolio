@@ -369,6 +369,8 @@ pipenv run ./dev.py backup pending --recover cancel --json
 
 After `✅ The last restore was applied …`, a restore that gave the owner an account on a `managed` instance adds one line about it, whichever route confirmed it (the app, this command or the hosting panel): `✉️ The owner's account is set: …`, `⏳ The owner's account is set at the next start of the server`, or the other lines of [the owner's account](backup_restore.md#owner-account). A restore that found nobody for the owner adds `⚠️ No owner was assigned at the restore: no account of the backup could be taken for it. Name one with ./dev.py user reassign-owner <username>`: [the order in which the account is picked](#backup-restore-owner).
 
+A restore from the hosting panel that left the owner's password alone adds `🔑 The owner's account kept its password and its open sessions (restore from the hosting panel)`: no link was sent, because none was needed. This is the one exception to the closed password, with four conditions: see [The Owner Keeps Their Password](backup_restore.md#owner-kept). `backup restore` on the command line never takes it: the account it picks has its password closed, as described above. `--json` is unchanged: it carries no line about the owner.
+
 When a start found a restore waiting and did not apply it, one more line says why, and the restore keeps waiting:
 
 - `⚠️ At the last start a backup was running: the next start applies it (backup_running)`: a backup was running when the server started, a `backup create` from the command line for instance.
