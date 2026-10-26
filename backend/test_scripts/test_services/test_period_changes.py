@@ -57,6 +57,13 @@ period with a positive reference and ``range_change`` −reference / −1, nativ
 same through ``live_range_changes``. The asset is this file's and leaves with the others; its conversion reads the
 AMD/BDT rates already seeded. No FX case: a stored rate of 0 is a missing rate to ``convert_bulk`` (X-R38), so it never
 reaches the house as an anchor (the class says more). RED on HEAD f252acb4a: None where −1 is expected.
+
+``TestEarlyDays`` — X5-6 (D-P4 L4, developer decision): an ``as_of`` (or ``range_start``) may be any day of the calendar; the
+old floor of 1900-01-01 (R13-SEC8) is withdrawn. A period whose reference day (``as_of − days``) would fall before
+0001-01-01 has no reference: its change is null, never an ``OverflowError`` (a 500). The tests record the days the two
+services ASK for (the grouped price lookup, ``convert_bulk``) and require exactly the days the calendar has — ``as_of``, every
+reference that exists, ``range_start`` — on an asset id no row carries and on a pair nothing stores; the values themselves are
+``test_api/test_period_changes_api.py``'s, on prices and rates the test writes. RED on HEAD 6b02bc7f6: OverflowError.
 """
 
 from __future__ import annotations
@@ -87,6 +94,7 @@ from backend.app.services.assets import period_changes as asset_period_changes
 from backend.app.services.assets.manager import AssetSourceManager
 from backend.app.services.assets.period_changes import get_period_changes_bulk
 from backend.app.services.financial_math import returns as returns_module
+from backend.app.services.fx import period_changes as fx_period_changes
 from backend.app.services.fx.conversion import convert_bulk
 from backend.app.services.fx.period_changes import get_fx_period_changes_bulk
 from backend.app.utils.datetime_utils import today_date
@@ -1151,3 +1159,64 @@ class TestWrittenDownToZero:
         [change] = await _live_changes(SATURDAY, _live(seeded.assets["sparse"], value=Decimal("0")))
 
         assert change == (SATURDAY, Decimal("-160"), Decimal("-1")), change
+
+
+# ============================================================================
+# X5-6: NO FLOOR BUT THE CALENDAR'S START
+# ============================================================================
+
+EARLY_AS_OFS = [
+    pytest.param(date(3, 6, 15), id="0003-06-15"),
+    pytest.param(date(5, 12, 30), id="0005-12-30"),
+    pytest.param(date(6, 1, 1), id="0006-01-01"),
+    pytest.param(date(1, 1, 1), id="0001-01-01"),
+    pytest.param(date(1850, 6, 15), id="1850-06-15"),
+]
+
+
+def _calendar_days(as_of: date, *extra: date | None) -> set[date]:
+    """The days a service may ask for: ``as_of``, each reference that is a day of the calendar, and the extra days."""
+    return {as_of, *(as_of - timedelta(days=days) for days in PERIOD_DAYS.values() if (as_of - date.min).days >= days), *(day for day in extra if day is not None)}
+
+
+@pytest.mark.asyncio
+class TestEarlyDays:
+    """The services ask for the days the calendar has, answer every period, and give null where there is no reference."""
+
+    @pytest.mark.parametrize("range_start", [pytest.param(None, id="no-range"), pytest.param(date.min, id="range-from-0001-01-01")])
+    @pytest.mark.parametrize("as_of", EARLY_AS_OFS)
+    async def test_asset_changes_ask_only_days_that_exist(self, monkeypatch, as_of, range_start):
+        asked: list[date] = []
+        real = asset_period_changes._last_prices_on_or_before
+
+        async def recording(session, asset_ids, day):
+            asked.append(day)
+            return await real(session, asset_ids, day)
+
+        monkeypatch.setattr(asset_period_changes, "_last_prices_on_or_before", recording)
+
+        [result] = await _asset_changes(_item(UNKNOWN_ASSET_ID, as_of, range_start=range_start))
+
+        assert [(period.key, period.days) for period in result.periods] == [(key, days) for key, days in PAGE_PERIODS]
+        assert all(period.change_ratio is None for period in result.periods), "nothing is stored for this id: no change at all"
+        assert set(asked) == _calendar_days(as_of, range_start), sorted(set(asked) ^ _calendar_days(as_of, range_start))
+        assert all(date.min <= day <= as_of for day in asked), asked
+
+    @pytest.mark.parametrize("range_start", [pytest.param(None, id="no-range"), pytest.param(date.min, id="range-from-0001-01-01")])
+    @pytest.mark.parametrize("as_of", EARLY_AS_OFS)
+    async def test_fx_changes_ask_only_days_that_exist(self, monkeypatch, as_of, range_start):
+        asked: list[date] = []
+        real = fx_period_changes.convert_bulk
+
+        async def recording(session, conversions, *args, **kwargs):
+            asked.extend(day for _amount, _quote, day in conversions)
+            return await real(session, conversions, *args, **kwargs)
+
+        monkeypatch.setattr(fx_period_changes, "convert_bulk", recording)
+
+        [result] = await _fx_changes(_pair(*EMPTY_PAIR, as_of, range_start=range_start))
+
+        assert [(period.key, period.days) for period in result.periods] == [(key, days) for key, days in PAGE_PERIODS]
+        assert all(period.change_ratio is None and period.inverse_change_ratio is None for period in result.periods), "no rate for this pair: no change at all"
+        assert set(asked) >= _calendar_days(as_of, range_start)
+        assert all(date.min <= day <= as_of for day in asked), asked

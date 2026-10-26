@@ -690,7 +690,7 @@ async def query_fx_period_changes_bulk(
     The rate on a day is the conversion of 1 base on that day, as ``POST /currencies/convert`` gives it. Each change is a
     fraction, null without a rate on either day. Limits (``period_changes_request_refusal``): at most ``MAX_BULK_ITEMS``
     pairs (422 ``bulk_too_many_items``, as the conversions) and ``PERIOD_CHANGES_MAX_AS_OF_DAYS`` distinct ``as_of`` and
-    ``range_start`` days (422 ``period_changes_too_many_days``), each from 1900-01-01.
+    ``range_start`` days (422 ``period_changes_too_many_days``).
     """
     refusal = period_changes_request_refusal(requests)
     if refusal is not None:

@@ -26,11 +26,11 @@ from functools import lru_cache
 from typing import Annotated, Any, List, Literal, Optional, Union
 
 import pycountry
-from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, Field, ValidationInfo, field_validator, model_validator
+from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, Field, field_validator, model_validator
 from pydantic.functional_serializers import PlainSerializer
 
 from backend.app.utils.date_range_limits import MAX_BULK_ITEMS, bulk_too_many_items_detail
-from backend.app.utils.datetime_utils import EARLIEST_RANGE_START, parse_ISO_date
+from backend.app.utils.datetime_utils import parse_ISO_date
 
 # =============================================================================
 # SAFE DECIMAL — no scientific notation in JSON output
@@ -740,21 +740,6 @@ def period_changes_request_refusal(items: Sequence[Any]) -> dict | None:
                 "days": days,
             }
     return None
-
-
-def period_changes_as_of(value: date_type, info: ValidationInfo) -> date_type:
-    """A day of a fixed-period changes item (``as_of``, ``range_start``): on or after ``EARLIEST_RANGE_START`` (1900-01-01).
-
-    Nothing is valued before it, and up to 0005-12-30 the five-year reference day (1 825 days back) would fall before
-    year 1: ``date`` would overflow, a 500.
-    """
-    if value < EARLIEST_RANGE_START:
-        raise ValueError(f"{info.field_name or 'as_of'} ({value}) must be on or after {EARLIEST_RANGE_START}")
-    return value
-
-
-#: The ``as_of`` field of a fixed-period changes item (see :func:`period_changes_as_of`).
-PeriodChangesAsOf = Annotated[date_type, AfterValidator(period_changes_as_of)]
 
 
 class BaseDeleteResult(BaseModel):

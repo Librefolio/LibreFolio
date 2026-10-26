@@ -2747,7 +2747,7 @@ Note: No backend server required.
         "current-prices-bulk",
         services_current_prices_bulk,
         name="Current Prices Bulk (R13-SEC9)",
-        desc="POST /prices/current: one fetch and one write-back per distinct id, the 2-min cache re-read after the provider slot, 1 000 ids, range_start (1900…tomorrow) and target_currency bounded by their parameters, the range change once per distinct id and in the target currency, the quotes standing when it fails; POST /prices/query and /current 500s never echo their error; MF-SEC9c: the DB fallbacks read after the live quotes, one grouped read (an unreadable latest close looked up alone), never two statements in flight on the session",
+        desc="POST /prices/current: one fetch and one write-back per distinct id, the 2-min cache re-read after the provider slot, 1 000 ids, range_start (any day up to tomorrow, no floor: X5-6) and target_currency bounded by their parameters, the range change once per distinct id and in the target currency, the quotes standing when it fails; POST /prices/query and /current 500s never echo their error; MF-SEC9c: the DB fallbacks read after the live quotes, one grouped read (an unreadable latest close looked up alone), never two statements in flight on the session",
         # PURE: the service on a private in-memory SQLite (create_all), the provider a double behind core.configured_provider,
         # a private current-value cache, the route called directly or through a fresh in-process app (httpx.ASGITransport),
         # its service and live_range_changes replaced by recorders, all by monkeypatch.
