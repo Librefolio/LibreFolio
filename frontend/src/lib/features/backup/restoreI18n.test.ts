@@ -548,6 +548,31 @@ describe('L3 — a sealed nightly backup; the warnings of the accounts', () => {
 });
 
 // =====================================================================================================================
+// B5-1k2 — the notice «the backup holds more active accounts than the instance accepts» (written red first)
+// =====================================================================================================================
+
+/*
+ * `RestoreReportModal.svelte` words the notice `restore-users-over-limit` by `backup.restore.report.usersOverLimit`, naming
+ * exactly the placeholders `{active}` and `{limit}` in each language: a message of the four catalogues. The key is added to
+ * the catalogues by `./dev.py i18n`; until then this case is red.
+ */
+describe('B5-1k2 — the words of the notice of too many accounts', () => {
+    const KEY = 'backup.restore.report.usersOverLimit';
+
+    it('backup.restore.report.usersOverLimit is a message of the four catalogues, naming {active} and {limit} and nothing else', () => {
+        expectMessage(KEY);
+
+        for (const language of LANGUAGES) {
+            expect(placeholdersOf(messageOf(CATALOGUES[language], KEY) as string), `${language}: ${KEY}`).toEqual(['active', 'limit']);
+        }
+    });
+
+    it('positive control: the scan finds backup.restore.report.usersOverLimit in RestoreReportModal.svelte (a key it forgot is a sentence nobody sees)', () => {
+        expect(namedKeys(source('RestoreReportModal.svelte')).keys).toContain(KEY);
+    });
+});
+
+// =====================================================================================================================
 // The status 500 — a state of the restore the server cannot read, on the restart page (SEC-3/4/5 wave, written red first)
 // =====================================================================================================================
 
