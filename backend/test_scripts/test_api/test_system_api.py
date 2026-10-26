@@ -23,11 +23,14 @@ Covers:
 - GET /api/v1/system/ready: public, no session; ready live (the lane's migrated database, with its revision as
   database_revision, the repository's head), 503 with the same body in-process (behind and ahead carry the database's
   revision through the route), 200 and 503 in OpenAPI, the schema declaring database_revision string|null and the
-  migrations codes ok, behind, ahead, unknown (lot H5-6)
+  migrations codes ok, behind, ahead, unknown (lot H5-6); app_version (H5-8), a required string declared last, the same
+  value as the public /system/info, in the 200 and the 503 body, with no session cookie, a patched version verbatim
 """
 
 import os
+import sqlite3
 from collections.abc import AsyncIterator
+from contextlib import closing
 from typing import Optional
 from uuid import uuid4
 
@@ -39,6 +42,7 @@ from alembic.script import ScriptDirectory
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.routing import iter_route_contexts
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 import backend.app.api.v1.auth as auth_module
 import backend.app.api.v1.system as system_module
@@ -63,7 +67,7 @@ from backend.app.db.models import User
 from backend.app.db.session import get_session_generator
 from backend.app.schemas.auth import AccountsInstanceConfig
 from backend.app.schemas.system import PluginDiagnosticsResponse, ReadinessChecks, ReadinessResponse, SystemInfoPublicResponse, SystemInfoResponse
-from backend.app.services.platform import instance_links
+from backend.app.services.platform import instance_links, readiness
 from backend.app.utils.runtime.network import classify_ip, client_address
 from backend.test_scripts.test_server_helper import _TestingServerManager
 from backend.test_scripts.test_utils import print_section, print_success, unique_id
@@ -1197,8 +1201,25 @@ class TestReadinessLive:
 
         assert response.status_code == 200, f"the lane's database is migrated to the head: expected 200, got {response.status_code}: {response.text}"
         head = _repository_head()
-        # H-62 (contract L3 §6): readiness says the mode, normal on the lane; H5-6: and the revision the database stands at, the head of a migrated lane
-        assert response.json() == {"status": "ready", "checks": {"database": "ok", "migrations": "ok"}, "database_revision": head, "mode": "normal"}, f"exactly the status, the two codes, the database's revision (the head {head!r}) and the mode: {response.text}"
+        # H-62 (contract L3 §6): readiness says the mode, normal on the lane; H5-6: and the revision the database stands at, the head of a migrated lane; H5-8: and the app version
+        body = response.json()
+        assert set(body) == {"status", "checks", "database_revision", "mode", "app_version"}, f"exactly the status, the checks, the database's revision, the mode and the app version: {response.text}"
+        assert (body["status"], body["checks"], body["database_revision"], body["mode"]) == ("ready", {"database": "ok", "migrations": "ok"}, head, "normal"), f"the two codes, the database's revision (the head {head!r}) and the mode: {response.text}"
+        assert isinstance(body["app_version"], str) and body["app_version"], f"app_version is a non-empty string: {response.text}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("forged_cookie", [False, True], ids=["no-cookie", "forged-session-cookie"])
+    async def test_the_probe_says_the_version_the_public_info_says(self, test_server, forged_cookie):
+        """H5-8: the cloud checks the version after an update with the probe only; it is the string GET /system/info gives anyone."""
+        headers = {"Cookie": f"{SESSION_COOKIE_NAME}=forged-{uuid4().hex}"} if forged_cookie else {}
+        async with httpx.AsyncClient() as client:
+            ready = await client.get(READY_URL, headers=headers, timeout=TIMEOUT)
+        # A client of its own: a cookie the first answer might set must not reach the second request.
+        async with httpx.AsyncClient() as client:
+            info = await client.get(f"{API_BASE}/system/info", timeout=TIMEOUT)
+
+        assert ready.status_code == 200 and info.status_code == 200, f"Barrier: both answer 200 without a session: {ready.status_code} {info.status_code}"
+        assert ready.json().get("app_version") == info.json().get("app_version") and info.json().get("app_version"), f"the probe's app_version must be the public info's: ready {ready.text}, info {info.text}"
 
 
 def _readiness_app(session: object) -> FastAPI:
@@ -1225,7 +1246,7 @@ class TestReadinessInProcess:
     )
     async def test_the_status_code_follows_the_checks(self, monkeypatch, database, migrations, database_revision, status_code):
         status = "ready" if status_code == 200 else "not_ready"
-        answer = ReadinessResponse(status=status, checks=ReadinessChecks(database=database, migrations=migrations), database_revision=database_revision)
+        answer = ReadinessResponse(status=status, checks=ReadinessChecks(database=database, migrations=migrations), database_revision=database_revision, app_version="v1.2.3-ready-probe")
         sessions: list[object] = []
 
         async def fake_check_readiness(session):
@@ -1240,7 +1261,14 @@ class TestReadinessInProcess:
         assert sessions == [session], f"Barrier: the route must check once, on the session it resolved: {sessions}"
         assert response.status_code == status_code, f"{status} ({database}, {migrations}): expected {status_code}, got {response.status_code}: {response.text}"
         # H-62 (contract L3 §6): the mode beside it, normal outside the mode; H5-6: the database's revision carried through, null when unread
-        assert response.json() == {"status": status, "checks": {"database": database, "migrations": migrations}, "database_revision": database_revision, "mode": "normal"}, f"the body is the readiness answer, the database's revision and the mode, whatever the status code: {response.text}"
+        # H5-8: and the app version, in the 503 body as in the 200
+        assert response.json() == {
+            "status": status,
+            "checks": {"database": database, "migrations": migrations},
+            "database_revision": database_revision,
+            "mode": "normal",
+            "app_version": "v1.2.3-ready-probe",
+        }, f"the body is the readiness answer, the database's revision, the mode and the app version, whatever the status code: {response.text}"
 
     def test_openapi_documents_200_and_503_with_the_readiness_body(self):
         responses = _instance_app().openapi()["paths"]["/api/v1/system/ready"]["get"]["responses"]
@@ -1259,3 +1287,33 @@ class TestReadinessInProcess:
         assert "database_revision" not in schemas["ReadinessResponse"].get("required", []), f"database_revision has a default (null), so it is not required: {schemas['ReadinessResponse']}"
         migrations = schemas["ReadinessChecks"]["properties"]["migrations"]
         assert migrations.get("enum") == ["ok", "behind", "ahead", "unknown"], f"migrations must be exactly ok, behind, ahead, unknown (no mismatch): {migrations}"
+
+    def test_openapi_declares_the_app_version_as_a_required_string_declared_last(self):
+        """H5-8: ReadinessResponse lists app_version as a string the response always carries, after mode."""
+        schema = _instance_app().openapi()["components"]["schemas"]["ReadinessResponse"]
+
+        version = schema["properties"].get("app_version")
+        assert version is not None, f"ReadinessResponse must declare app_version: {list(schema['properties'])}"
+        assert version.get("type") == "string", f"app_version must be declared as a string, not nullable: {version}"
+        assert "app_version" in schema.get("required", []), f"app_version has no default, so it is required: {schema}"
+        assert list(schema["properties"])[-1] == "app_version", f"app_version is declared last, after mode: {list(schema['properties'])}"
+
+    @pytest.mark.asyncio
+    async def test_the_route_gives_the_version_check_readiness_read(self, monkeypatch, tmp_path):
+        """H5-8, control: the route adds nothing of its own; a patched version of the readiness module shows up verbatim in the 200 body, on a real database at the head, with no session."""
+        database = tmp_path / "app.db"
+        with closing(sqlite3.connect(database)) as connection, connection:
+            connection.execute("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL PRIMARY KEY)")
+            connection.execute("INSERT INTO alembic_version (version_num) VALUES (?)", (_repository_head(),))
+        monkeypatch.setattr(readiness, "get_git_version", lambda: "v9.8.7-route-probe")
+        monkeypatch.setattr(readiness, "awaiting_restore", lambda: False)
+        engine = create_async_engine(f"sqlite+aiosqlite:///{database}")
+        try:
+            async with AsyncSession(engine) as session:
+                async with httpx.AsyncClient(transport=httpx.ASGITransport(app=_readiness_app(session)), base_url="http://test") as client:
+                    response = await client.get("/api/v1/system/ready")
+        finally:
+            await engine.dispose()
+
+        assert response.status_code == 200, f"Barrier: a database at the head is ready: {response.status_code} {response.text}"
+        assert response.json().get("app_version") == "v9.8.7-route-probe", f"app_version must be what the readiness module's get_git_version returns, verbatim: {response.text}"
