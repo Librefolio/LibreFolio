@@ -13,9 +13,11 @@
         onretry?: () => void;
         /** The line under a link that cannot be used: who issues a new one. The setup link (F02) has no administrator yet. */
         hintKey?: string;
+        /** Where «contact support» goes, for a dead link whose remedy is the hosting provider (A5-6); none draws no link. */
+        supportHref?: string | null;
     }
 
-    let {status, onretry, hintKey = 'auth.link.askAdmin'}: Props = $props();
+    let {status, onretry, hintKey = 'auth.link.askAdmin', supportHref = null}: Props = $props();
 
     const MESSAGE_KEYS: Record<LinkPageStatus, string> = {
         checking: 'common.loading',
@@ -37,6 +39,11 @@
         <p class="text-sm text-lf-primary" data-testid="link-status-message">{$_(MESSAGE_KEYS[status])}</p>
         {#if NEEDS_NEW_LINK.has(status)}
             <p class="text-xs text-lf-secondary" data-testid="link-status-hint">{$_(hintKey)}</p>
+            {#if supportHref}
+                <a class="inline-block text-xs font-semibold text-lf-link hover:text-lf-primary underline decoration-1 underline-offset-2" data-testid="link-status-support" href={supportHref} rel="noopener noreferrer" target={supportHref.startsWith('mailto:') ? undefined : '_blank'}>
+                    {$_('auth.setup.supportLink')}
+                </a>
+            {/if}
         {/if}
 
         {#if status === 'error' && onretry}

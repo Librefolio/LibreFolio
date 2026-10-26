@@ -20,15 +20,23 @@ email-change links; it is never in the result, whose ``repr`` shows no address o
 log. A second call (a restart half way) repeats the treatment: the previous link dies, a new one is sent. At-most-once is the
 caller's (B keeps it in the restore's state, never in the database).
 
+A5-4 adds the host's remedy for an owner address confirmed by mistake: ``./dev.py user reassign-owner <username>`` (managed
+instances only) runs the same treatment from the command line, with the address of ``LIBREFOLIO_ADMIN_EMAIL``; and a change of
+an account's address in its profile (``user set-email`` too) also revokes its live ``email_change`` links, as it revokes its
+``password_reset`` and ``admin_setup`` ones.
+
 Pure: every database is a private SQLite file under ``tmp_path``; ``instance_owner.send_email`` is an outbox; ``smtp.deliver`` a
 tripwire; profile and variables with ``monkeypatch``; the log with ``structlog.testing.capture_logs``.
 """
 
 from __future__ import annotations
 
+import argparse
 import asyncio
 import dataclasses
 import importlib
+import inspect
+import json
 import os
 from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass
@@ -51,8 +59,8 @@ from backend.app.db.models import AccountToken, AccountTokenPurpose, User
 from backend.app.services.accounts import auth_service, token_service, user_service
 from backend.app.services.accounts.settings_service import initialize_global_settings
 from backend.app.services.accounts.token_service import hash_token
-from backend.app.services.email import delivery, flows, smtp
-from backend.app.services.email.messages import EmailContent
+from backend.app.services.email import delivery, flows, messages, smtp
+from backend.app.services.email.messages import EMAIL_LANGUAGES, EmailContent, EmailKind, build_password_reset
 from backend.app.utils.datetime_utils import ensure_utc
 from backend.app.utils.runtime.rate_window import SlidingWindowLimiter
 from backend.test_scripts.test_utils import print_section
@@ -604,3 +612,225 @@ async def test_create_password_reset_can_mark_the_link_with_an_address(engine: A
         marked = await user_service.create_password_reset(session, user, now=NOW, email=OWNER_EMAIL)
         await session.commit()
     assert plain.record.email is None and marked.record.email == OWNER_EMAIL
+
+
+# =============================================================================
+# A5-4: user reassign-owner, the host's remedy for a wrong owner address
+# =============================================================================
+
+USER_CLI_MODULE = "scripts.user_cli"
+WRONG_EMAIL = "wrong-owner@zq-assign.example.org"
+CHANGE = AccountTokenPurpose.EMAIL_CHANGE
+
+
+@pytest.fixture
+def user_cli(monkeypatch: pytest.MonkeyPatch, engine: AsyncEngine) -> ModuleType:
+    """``scripts/user_cli.py`` in this process, its ``get_async_engine`` answering this test's private file."""
+    module = importlib.import_module(USER_CLI_MODULE)
+    monkeypatch.setattr(module, "get_async_engine", lambda: engine)
+    return module
+
+
+async def _reassign(user_cli: ModuleType, capsys: pytest.CaptureFixture[str], username: str) -> tuple[Any, str]:
+    command = getattr(user_cli, "cmd_reassign_owner", None)
+    if command is None:
+        pytest.fail("red until A5-4: scripts/user_cli.py has no cmd_reassign_owner", pytrace=False)
+    capsys.readouterr()
+    answer = await command(username)
+    return answer, capsys.readouterr().out
+
+
+async def _wrong_owner_scene(engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch, *, ready: bool = True) -> tuple[int, int]:
+    """The worst case: the owner account holds a WRONG address (an intruder confirmed it), is marked as the owner, and the
+    intruder knows its password. Another administrator is there too. Returns (the owner's id, the other's id)."""
+    _managed(monkeypatch)
+    if ready:
+        _email_ready(monkeypatch)
+    owner_id = await _add_user(engine, "wrong_owner", WRONG_EMAIL, admin=True, flag=True)
+    other_id = await _add_user(engine, "other_admin", STRANGER_EMAIL, admin=True)
+    return owner_id, other_id
+
+
+@pytest.mark.asyncio
+async def test_reassign_owner_takes_the_account_back_and_emails_one_link(engine: AsyncEngine, owner: ModuleType, outbox: Outbox, user_cli: ModuleType, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch) -> None:
+    """A54-010: the account with the wrong address gets the address of the variable, keeps the owner mark (the others have none), its password stops working, its sessions end, its pending ``email_change`` link dies; ONE reset link goes to the right address; the command answers ✅, prints no link, no token and no address."""
+    print_section("A54-010: reassign-owner")
+    owner_id, other_id = await _wrong_owner_scene(engine, monkeypatch)
+    before = await _account(engine, owner_id)
+    pending = await _plant(engine, owner_id, purpose=CHANGE, email=WRONG_EMAIL)
+
+    answer, printed = await _reassign(user_cli, capsys, "wrong_owner")
+
+    assert answer is True and printed.lstrip().startswith("✅"), printed
+    after = await _account(engine, owner_id)
+    assert (after.email, after.is_superuser, after.is_active, after.is_instance_owner) == (OWNER_EMAIL, True, True, True)
+    assert after.session_version == before.session_version + 1
+    assert auth_service.verify_password(OLD_PASSWORD, after.hashed_password) is False, "the intruder's password no longer opens the account"
+    async with AsyncSession(engine) as session:
+        row = (await session.execute(select(AccountToken).where(AccountToken.id == pending.record.id))).scalar_one()
+    assert row.revoked_at is not None, "the wrong address's change link is dead"
+    assert [(mail.to, mail.content.kind) for mail in outbox.attempts] == [(OWNER_EMAIL, "password_reset")]
+    assert len([r for r in await _resets(engine, owner_id) if _live(r, datetime.now(UTC))]) == 1
+    link = next(line.strip() for line in outbox.attempts[0].content.text.splitlines() if line.startswith("http"))
+    secrets = (link.split("token=", 1)[1], OWNER_EMAIL, WRONG_EMAIL, OWNER_EMAIL.lower())
+    assert not any(secret in printed for secret in secrets), printed
+    assert (await _account(engine, other_id)).is_instance_owner is False
+
+
+@pytest.mark.asyncio
+async def test_reassign_owner_without_email_leaves_the_link_in_the_log_and_says_so(engine: AsyncEngine, owner: ModuleType, outbox: Outbox, user_cli: ModuleType, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch) -> None:
+    """A54-020: email off → the account is taken back all the same; the command answers True (the owner is reassigned), the link is written in the log (shown on the terminal of the command line) as for a restore and NOT printed by the command itself, and the command names ``user reset-link`` for a link printed on the terminal."""
+    owner_id, _ = await _wrong_owner_scene(engine, monkeypatch, ready=False)
+
+    with capture_logs() as events:
+        answer, printed = await _reassign(user_cli, capsys, "wrong_owner")
+
+    assert answer is True and outbox.attempts == []
+    assert (await _account(engine, owner_id)).email == OWNER_EMAIL
+    lines = _link_lines(events)
+    assert len(lines) == 1, events
+    token = lines[0]["link"].split("token=", 1)[1]
+    assert token not in printed and "reset-link" in printed and "⚠" in printed, printed
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("case", ["not_managed", "no_variable", "unknown_user", "address_taken"])
+async def test_reassign_owner_refuses_and_changes_nothing(engine: AsyncEngine, owner: ModuleType, outbox: Outbox, user_cli: ModuleType, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch, case: str) -> None:
+    """A54-030: not a managed instance, no ``LIBREFOLIO_ADMIN_EMAIL``, an unknown username, another account holding the address → ❌, False, no email, the database exactly as it was."""
+    owner_id, other_id = await _wrong_owner_scene(engine, monkeypatch)
+    username = "wrong_owner"
+    if case == "not_managed":
+        monkeypatch.setenv(PROFILE_VARIABLE, "selfhosted")
+    elif case == "no_variable":
+        monkeypatch.delenv(ADMIN_EMAIL_VARIABLE)
+    elif case == "unknown_user":
+        username = "nobody_here"
+    else:
+        await _add_user(engine, "holds_the_address", OWNER_EMAIL.lower())
+    before = await _snapshot(engine)
+
+    answer, printed = await _reassign(user_cli, capsys, username)
+
+    assert answer is False and printed.lstrip().startswith("❌"), printed
+    assert outbox.attempts == [] and await _snapshot(engine) == before
+
+
+def test_reassign_owner_is_a_command_of_both_parsers(user_cli: ModuleType) -> None:
+    """A54-040: ``reassign-owner <username>`` in ``user_cli.py`` and under ``./dev.py user``; the dispatch runs ``cmd_reassign_owner`` with the username."""
+    parser = argparse.ArgumentParser(prog="user_cli.py")
+    user_cli._add_link_commands(parser.add_subparsers(dest="command"))
+    devpy = argparse.ArgumentParser(prog="dev.py")
+    user_cli.register_subparser(devpy.add_subparsers(dest="group"))
+
+    assert vars(parser.parse_args(["reassign-owner", "someone"])) == {"command": "reassign-owner", "username": "someone"}
+    through = devpy.parse_args(["user", "reassign-owner", "someone"])
+    assert (through.group, through.command, through.username) == ("user", "reassign-owner", "someone")
+    with pytest.raises(SystemExit):
+        parser.parse_args(["reassign-owner"])
+
+
+def test_the_dispatch_runs_cmd_reassign_owner(user_cli: ModuleType, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A54-041: ``_dispatch_user_command`` answers what ``cmd_reassign_owner`` answers."""
+    seen: list[str] = []
+
+    async def recorded(username: str) -> bool:
+        seen.append(username)
+        return True
+
+    monkeypatch.setattr(user_cli, "cmd_reassign_owner", recorded, raising=False)
+    assert user_cli._dispatch_user_command(argparse.Namespace(command="reassign-owner", username="someone")) is True
+    assert seen == ["someone"]
+
+
+# =============================================================================
+# A5-4: a change of address revokes the live email_change links
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_a_new_address_revokes_the_live_email_change_links_of_the_account(engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A54-050: ``update_profile`` with a NEW address revokes the account's live ``email_change`` links (a link asked for before cannot move the address again); another account's link and a consumed one are untouched; the same address in another case revokes nothing."""
+    _managed(monkeypatch)
+    user_id = await _add_user(engine, "change_mine", BACKUP_EMAIL)
+    other_id = await _add_user(engine, "change_other", STRANGER_EMAIL)
+    mine = await _plant(engine, user_id, purpose=CHANGE, email=WRONG_EMAIL)
+    consumed = await _plant(engine, user_id, purpose=CHANGE, email=WRONG_EMAIL, state="consumed")
+    others = await _plant(engine, other_id, purpose=CHANGE, email=WRONG_EMAIL)
+
+    async def revoked(issued: Any) -> bool:
+        async with AsyncSession(engine) as session:
+            return (await session.get(AccountToken, issued.record.id)).revoked_at is not None
+
+    async with AsyncSession(engine) as session:
+        _, error = await user_service.update_profile(session, user_id, email=BACKUP_EMAIL.upper())
+    assert error is None and not await revoked(mine), "the same address in another case is no change"
+
+    async with AsyncSession(engine) as session:
+        updated, error = await user_service.update_profile(session, user_id, email="new-address@zq-assign.example.com")
+    assert error is None and updated is not None
+    assert await revoked(mine) and not await revoked(others)
+    async with AsyncSession(engine) as session:
+        assert (await session.get(AccountToken, consumed.record.id)).revoked_at is None, "a spent link stays as it was"
+
+
+# =============================================================================
+# A5-5: the email of the owner after a restore says why the password is gone
+# =============================================================================
+
+FRONTEND_AUTH = Path(__file__).resolve().parents[3] / "frontend" / "src" / "lib" / "i18n" / "auth"
+TTL = timedelta(minutes=30)
+LINK = "https://folio.zq-assign.example.com/reset-password#token=abc123"
+INSTANCE = "Zq <Folio> & Co"
+
+
+def _after_restore() -> Any:
+    builder = getattr(messages, "build_password_reset_after_restore", None)
+    if builder is None:
+        pytest.fail("red until A5-5: messages has no build_password_reset_after_restore", pytrace=False)
+    return builder
+
+
+def test_the_after_restore_builder_takes_what_the_plain_reset_takes_and_no_name() -> None:
+    """A55-010: ``build_password_reset_after_restore(*, language, link, ttl, instance)``, keyword-only, no username and no address (the owner's address is not even a parameter): the signature of ``build_password_reset``."""
+    builder = _after_restore()
+    parameters = inspect.signature(builder).parameters
+    assert set(parameters) == {"language", "link", "ttl", "instance"} == set(inspect.signature(build_password_reset).parameters)
+    assert all(parameter.kind is inspect.Parameter.KEYWORD_ONLY for parameter in parameters.values())
+
+
+@pytest.mark.parametrize("language", EMAIL_LANGUAGES)
+def test_the_after_restore_email_is_a_reset_with_the_reason_and_the_fallback(language: str) -> None:
+    """A55-020: in each language the email is a password-reset email (same kind), with the link verbatim in the text and escaped in the HTML, its own subject and MORE text than the plain reset; it names the sign-in page's «forgot password» label exactly as the interface writes it, and leaves no placeholder behind; the instance is escaped in the HTML."""
+    builder = _after_restore()
+    plain = build_password_reset(language=language, link=LINK, ttl=TTL, instance=INSTANCE)
+    content = builder(language=language, link=LINK, ttl=TTL, instance=INSTANCE)
+
+    assert content.kind is EmailKind.PASSWORD_RESET and content.language == language
+    assert LINK in content.text and LINK in content.html
+    assert content.subject != plain.subject and len(content.text) > len(plain.text)
+    label = json.loads((FRONTEND_AUTH / f"{language}.json").read_text(encoding="utf-8"))["auth"]["forgotPassword"]
+    assert label in content.text and label in content.html.replace("&#x27;", "'"), "the fallback names the label of the sign-in page"
+    assert "$" not in content.text and "$" not in content.html
+    assert "<Folio>" not in content.html and "&lt;Folio&gt;" in content.html
+    assert "{" not in content.subject
+
+
+@pytest.mark.asyncio
+async def test_the_owner_assignment_sends_the_after_restore_email(engine: AsyncEngine, owner: ModuleType, outbox: Outbox, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A55-030: the reset email ``assign_owner_and_send_reset`` sends — the app's restore, and any other caller — is built by ``build_password_reset_after_restore``, once, with the link, the validity and the instance and nothing of the account."""
+    real = _after_restore()
+    calls: list[dict[str, Any]] = []
+
+    def recorded(**keywords: Any) -> EmailContent:
+        calls.append(keywords)
+        return real(**keywords)
+
+    monkeypatch.setattr(owner, "build_password_reset_after_restore", recorded, raising=False)
+    user_id = await _scene(engine, monkeypatch)
+
+    result = await _assign(owner, engine, user_id, now=NOW)
+
+    assert result.outcome == "sent" and len(calls) == 1
+    assert set(calls[0]) == {"language", "link", "ttl", "instance"}
+    assert calls[0]["link"].startswith(f"{PUBLIC_URL}{RESET_PAGE}#token=")
+    assert outbox.attempts[0].content.text == real(**calls[0]).text

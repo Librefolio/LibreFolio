@@ -232,7 +232,7 @@
         "owner_choice_required": "Choose the account that becomes the owner's before confirming.",
         "owner_choice_invalid": "The chosen account cannot become the owner's: choose one of those offered.",
         "owner_email_not_set": "LIBREFOLIO_ADMIN_EMAIL is not set: the owner's account cannot be chosen. Ask the hosting provider.",
-        "owner_conflict": "The backup holds two accounts with one address or one name, or the owner's address as another account's name: it cannot be restored here."
+        "owner_conflict": "The backup holds two accounts with one address or one name, the owner's address as another account's name, or an administrator still waiting for its setup link: it cannot be restored here."
       },
       "password": {
         "intro": "A secure backup: type the password it was made with.",
@@ -271,7 +271,7 @@
     "ownerChoice": {
       "title": "Who is the owner of this instance?",
       "intro": "Choose which user of this backup becomes the administrator who pays for the instance.",
-      "notice": "This user will get the owner's email address ({email}) and become a protected administrator. Their password will be reset: a link to choose a new one is sent to that address.",
+      "notice": "This user will get the owner's email address ({email}) and become a protected administrator. Their password will be reset: a link to choose a new one is sent to that address. If the email cannot be sent, the link is written in the instance's log, for the hosting provider to hand to the owner.",
       "locked": "One user of this backup already has the owner's email address: it is the owner.",
       "adminBadge": "Administrator",
       "inactiveBadge": "Deactivated",

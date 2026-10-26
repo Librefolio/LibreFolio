@@ -950,8 +950,12 @@ OWNER_SNAPSHOTS = [
     pytest.param(owner_state(code=OTHER_CODE), "committed", "owner_assignment", ["owner"], id="committed-admin-owner-other-error"),
     pytest.param(owner_state(code=None), "committed", None, [], id="committed-owner-pending"),
     *(pytest.param(owner_state(outcome=value), "committed", None, [], id=f"committed-{value}") for value in ("sent", "link_only")),
-    pytest.param(owner_state(confirmed_by="cli", confirmed_via="cli"), "committed", None, [], id="committed-cli-error"),
-    pytest.param(owner_state(confirmed_by="panel", confirmed_via="panel"), "committed", None, [], id="committed-panel-error"),
+    # B5-1j: the owner picked at a confirmation from the command line or by the hosting panel is recovered like the app's.
+    pytest.param(owner_state(confirmed_by="cli", confirmed_via="cli"), "committed", "owner_assignment", ["owner"], id="committed-cli-error"),
+    pytest.param(owner_state(confirmed_by="panel", confirmed_via="panel"), "committed", "owner_assignment", ["owner"], id="committed-panel-error"),
+    pytest.param(owner_state(code=None, confirmed_by="cli", confirmed_via="cli"), "committed", None, [], id="committed-cli-owner-pending"),
+    pytest.param(owner_state(outcome="link_only", confirmed_by="cli", confirmed_via="cli"), "committed", None, [], id="committed-cli-link_only"),
+    pytest.param(owner_state(owner_user_id=None, outcome="none", confirmed_by="cli", confirmed_via="cli"), "committed", None, [], id="committed-cli-nobody-picked"),
     pytest.param(owner_state(owner_user_id=None), "committed", None, [], id="committed-no-owner-error"),
     pytest.param(owner_state("pending"), "pending", None, ["cancel"], id="pending-owner-error"),
     pytest.param(owner_state("applying"), "in_progress", None, [], id="applying-owner-error"),
@@ -961,8 +965,9 @@ OWNER_SNAPSHOTS = [
 
 @pytest.mark.parametrize(("arrange", "state", "reason", "choices"), OWNER_SNAPSHOTS)
 def test_pending_json_offers_owner_only_for_a_failed_owner_assignment(tmp_path, monkeypatch, capsys, arrange, state, reason, choices):
-    """(g) §9.2: ``reason: "owner_assignment"`` and ``choices: ["owner"]`` only for a committed restore confirmed from the
-    app with an owner named and an ``error:`` outcome; every other state is as today. A read: nothing written."""
+    """(g) §9.2, B5-1j: ``reason: "owner_assignment"`` and ``choices: ["owner"]`` only for a committed restore with an owner
+    named and an ``error:`` outcome, whoever confirmed it (the app, the command line, the panel); every other state is as
+    today. A read: nothing written."""
     print_section("(g) B5-1b pending --json: the owner's choice")
     root = instance(tmp_path, monkeypatch)
     arrange(monkeypatch, root)
@@ -1013,8 +1018,8 @@ NOT_OFFERED = [
     pytest.param(_none, 3, "nothing_to_recover", "none", id="no-state"),
     pytest.param(owner_state(code=None), 4, NOT_VALID, "committed", id="committed-owner-pending"),
     *(pytest.param(owner_state(outcome=value), 4, NOT_VALID, "committed", id=f"committed-{value}") for value in ("sent", "link_only")),
-    pytest.param(owner_state(confirmed_by="cli", confirmed_via="cli"), 4, NOT_VALID, "committed", id="committed-cli-error"),
-    pytest.param(owner_state(confirmed_by="panel", confirmed_via="panel"), 4, NOT_VALID, "committed", id="committed-panel-error"),
+    pytest.param(owner_state(code=None, confirmed_by="cli", confirmed_via="cli"), 4, NOT_VALID, "committed", id="committed-cli-owner-pending"),
+    pytest.param(owner_state(owner_user_id=None, outcome="none", confirmed_by="panel", confirmed_via="panel"), 4, NOT_VALID, "committed", id="committed-panel-nobody-picked"),
     pytest.param(owner_state(owner_user_id=None), 4, NOT_VALID, "committed", id="committed-no-owner-error"),
     pytest.param(lambda mp, root: base.write_state(root, "committed"), 4, NOT_VALID, "committed", id="committed-no-owner-at-all"),
     pytest.param(owner_state("pending"), 4, NOT_VALID, "pending", id="pending-owner-error"),
@@ -1027,7 +1032,7 @@ NOT_OFFERED = [
 @pytest.mark.parametrize("as_json", [False, True], ids=["human", "json"])
 @pytest.mark.parametrize(("arrange", "code", "error", "after"), NOT_OFFERED)
 def test_recover_owner_where_the_state_does_not_offer_it_changes_nothing(tmp_path, monkeypatch, capsys, arrange, code, error, after, as_json):
-    """(g) §9.2: anything but a failed owner assignment (no outcome yet, an outcome of A, the panel or the command line, no
+    """(g) §9.2, B5-1j: anything but a failed owner assignment (no outcome yet, an outcome of A, nobody picked, no
     owner, another phase, an unreadable state): exit 4 ``choice_not_valid``, and with no state at all exit 3
     ``nothing_to_recover``; a ❌ line; nothing on disk changes; A's function is never looked up."""
     print_section("(g) B5-1b --recover owner: not offered")
@@ -1108,6 +1113,31 @@ def test_recover_owner_clears_the_outcome_and_assigns_the_owner_at_once_when_nob
         assert "error" not in line, f"no error when done: {line}"
         never_in(ran, LINK_CANARY, str(OWNER_ID), FAILED_CODE, OWNER_EMAIL, "reset-password")
     print_success(f"{outcome.value}: exit 0")
+
+
+@pytest.mark.parametrize("as_json", [False, True], ids=["human", "json"])
+@pytest.mark.parametrize("via", ["cli", "panel"])
+def test_recover_owner_clears_the_failed_outcome_of_a_command_line_or_panel_restore_and_assigns_the_owner(tmp_path, monkeypatch, capsys, caplog, via, as_json):
+    """(g) B5-1j: the owner picked for a restore confirmed via ``cli`` or ``panel`` whose assignment failed
+    (``error:EMAIL_TAKEN``): ``--recover owner`` clears the error and, nobody serving, calls A once for the picked account and
+    records its outcome — exit 0, the lines ``_print_owner_outcome`` prints for it, no link anywhere. Red before B5-1j:
+    exit 4 ``choice_not_valid``."""
+    print_section(f"(g) B5-1j --recover owner via {via}")
+    root = instance(tmp_path, monkeypatch)
+    owner_state(confirmed_by=via, confirmed_via=via)(monkeypatch, root)
+    fake = FakeA(outcome=Outcome.LINK_ONLY)
+    wire(monkeypatch, fake)
+    snapshot = the_line(go(capsys, "pending", "--json"))
+    assert (snapshot["reason"], snapshot["choices"]) == ("owner_assignment", ["owner"]), f"[new] B5-1j: the snapshot offers owner for a restore via {via}: {snapshot}"
+    expected = outcome_lines(capsys, "link_only")
+    ran = run_owner(capsys, as_json)
+    assert ran.code == 0, f"exit 0: exit {ran.code}\n{ran.out}{ran.err}"
+    assert fake.calls == [OWNER_ID], f"A called once, for the picked account: {fake.calls}"
+    assert recorded_owner(root) == (OWNER_ID, "link_only"), f"the new outcome recorded: {recorded_owner(root)}"
+    said_lines = text_of(ran, as_json).splitlines()
+    assert [line for line in expected if line not in said_lines] == [], f"the lines of the new outcome are said: {text_of(ran, as_json)}"
+    assert LINK_CANARY not in ran.out + ran.err + caplog.text and "reset-password" not in ran.out + ran.err, "no link in any stream or log"
+    print_success(f"via {via}: recovered")
 
 
 def test_the_link_only_line_sends_to_the_instance_log_and_prints_no_link(capsys):

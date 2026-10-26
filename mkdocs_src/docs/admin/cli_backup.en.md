@@ -274,6 +274,8 @@ Once confirmed, the command exits with `0` and says:
    ./dev.py backup pending shows it; ./dev.py backup pending --cancel drops it.
 ```
 
+On an instance a hosting provider runs (the `managed` profile) with `LIBREFOLIO_ADMIN_EMAIL` set, the report of the check and the confirmation add one line about the owner's account: see [The Owner's Account on a Restore from the Command Line](#backup-restore-owner).
+
 Nothing has changed yet: the server keeps running on its data, and the checked copy waits in `.restore/stage/<id>/`, however long it takes. Restart LibreFolio when it suits you: stop the whole server, then [start it](cli_tools.md#start-the-server) again; with Docker, `docker compose restart librefolio` ([Back Up with Docker](#backup-docker)). If the server is stopped, its next start applies the restore.
 
 That start applies it before it reads any data:
@@ -295,11 +297,27 @@ Good to know:
 
 - 🔒 On an instance its hosting provider blocked (`LIBREFOLIO_BLOCKED`), the command confirms all the same, and adds `⚠️ The hosting provider blocked this instance: the restore waits until it is unblocked (instance_blocked)`: the first start after the unblock applies it.
 - 🚦 One restore at a time: while one waits or is being applied, `backup restore` stops before the check with `❌ A restore already waits for the next start: ./dev.py backup pending --cancel drops it (restore_already_pending)` and exits with `1`. It stops there too when it cannot read the state of the restore, since it cannot tell whether one waits: `❌ The state of the restore cannot be read: <reason> (restore_state_unreadable)`, exit code `1`, nothing checked. `--dry-run` still works.
-- ❌ If the confirmation itself is refused, the command prints one line that ends with a code, removes the copy and exits with `1`: `restore_stage_outdated` when LibreFolio was updated between the check and the confirmation, `restore_stage_expired` when the question waited more than 24 hours, `restore_already_pending` when another restore was confirmed meanwhile. Run the command again.
+- ❌ If the confirmation itself is refused, the command prints one line that ends with a code, removes the copy and exits with `1`: `restore_stage_outdated` when LibreFolio was updated between the check and the confirmation (or, on a hosted instance, when the owner's address changed since the check), `restore_stage_expired` when the question waited more than 24 hours, `restore_already_pending` when another restore was confirmed meanwhile, `owner_conflict` for a backup that cannot give the owner their account (below). Run the command again; after `owner_conflict` or `restore_stage_outdated`, check the archive again.
 - 📍 Run it where the server runs, in the container with Docker: the restore is recorded for the path of the data directory, and a server that finds its data directory under another path does not apply it.
 - 🔗 Keep the four folders real folders of the data directory: one that is a link, or that is mounted on its own, cannot be swapped. The start then leaves the data as it is, and records the restore as rolled back with `swap_failed`.
 - 💽 The swap needs no space of its own: the copy the check made becomes the instance's data, and the former data is removed once the first start completes.
 - 🗝️ The restore keeps this installation's instance key. When the archive carries the key of the installation that made it (a [secure archive](#backup-secure), when LibreFolio generated that key), the check has already re-encrypted its saved secrets with this installation's key. From any other archive of another installation, give that installation's key with `--instance-key-file`, and the check re-encrypts them too ([The Instance Key of Another Installation](#backup-restore-instance-key)). Otherwise they cannot be read here: the report counts them, to enter again after the restore, unless you put that installation's key back first ([Saved Secrets and the Instance Key](configuration_secrets.md#plugin-secrets)). See «The instance key is in a secure archive only» above.
+
+### 👑 The Owner's Account on a Restore from the Command Line {: #backup-restore-owner }
+
+Only on a `managed` instance with `LIBREFOLIO_ADMIN_EMAIL` set. On your own installation (`selfhosted`, the default), or on a hosted instance without that variable, nothing changes: no owner is picked, nothing is refused, and every password stays as it is. A restore confirmed here has nobody to ask which account of the backup becomes the owner's, so the confirmation picks it from the checked copy, in this order:
+
+1. The account that already holds the owner's address, whatever its role.
+2. Otherwise the **one** active administrator the backup marks as its owner. The mark is written by whoever prepared the backup: it only suggests which account, and grants nothing.
+3. Otherwise nobody: none marked, two or more marked, or a marked account that is not an active administrator. Never "the first one".
+
+- 👤 **An account picked.** The report says `👤 The owner's account will be <username>: …`, by its username, never by an address. At the restore its password is closed (unusable, sessions ended), it gets the owner's address, becomes an active administrator and the instance's owner. The first start sends the link to choose a new password to `LIBREFOLIO_ADMIN_EMAIL`, never to an address of the backup; without email, the link is written in the log of the instance, to be given only to the owner. If it expires, the owner uses **Forgot Password?**. [Follow or Cancel a Restore](#backup-pending) shows how it went.
+- 🚫 **Nobody picked.** The restore goes on without an owner, with a warning in the log. The report says `⚠️ No owner: no account of the backup can be taken for it. The restore goes on; name one afterwards with ./dev.py user reassign-owner <username>`, and `backup pending` says it again. `user reassign-owner` is not in this version of the tools yet: it arrives with a later change.
+- 🛑 **Owner conflicts.** A backup with two accounts on one address or one name, the owner's address as another account's name, or an administrator still waiting for its setup link is refused, as from the app: the check prints `❌ The backup cannot give the owner their account: …` and the confirmation ends with `owner_conflict`. Remove the duplicate account or free the address in the instance the backup comes from, make a new backup, and check it again.
+- ❌ **If the assignment fails after the swap**, for instance because the address is taken, the instance serves nothing but the recovery until `./dev.py backup pending --recover owner` ([Follow or Cancel a Restore](#backup-pending)).
+- 🧹 The mark that says which account is the instance's owner, which a backup carries from the instance it was made on, is cleared on every account at every restore, on any profile, and set only on the account that is assigned.
+
+The hosting panel restores in the same way and has the same refusals: the panel receives HTTP 409 with the code ([The Owner's Account on a Hosted Instance](backup_restore.md#owner-account)).
 
 ### 🗝️ The Instance Key of Another Installation {: #backup-restore-instance-key }
 
@@ -330,7 +348,7 @@ pipenv run ./dev.py backup pending --cancel
 # When the state of the restore cannot be read: put the data of before back (LibreFolio stopped)
 pipenv run ./dev.py backup pending --recover previous
 
-# When the owner's account could not be set after a restore from the app: clear the error and try again
+# When the owner's account could not be set after a restore on a managed instance: clear the error and try again
 pipenv run ./dev.py backup pending --recover owner
 
 # For a script: the state as one JSON line, and the same actions with fixed exit codes
@@ -347,6 +365,8 @@ pipenv run ./dev.py backup pending --recover cancel --json
 | `⏳ A restore is being applied by the server` | A start applied it and has not completed yet. If that start died, the next one puts the data back |
 | `✅ The last restore was applied on <date> UTC: backup made by LibreFolio <version> on <date> UTC` | The restore is done |
 | `⚠️ The last restore was rolled back on <date> UTC, the data is as it was before: <reason> (<code>)` | The restore was undone, for the reason below |
+
+After `✅ The last restore was applied …`, a restore that gave the owner an account on a `managed` instance adds one line about it, whichever route confirmed it (the app, this command or the hosting panel): `✉️ The owner's account is set: …`, `⏳ The owner's account is set at the next start of the server`, or the other lines of [the owner's account](backup_restore.md#owner-account). A restore that found nobody for the owner adds `⚠️ No owner was assigned at the restore: no account of the backup could be taken for it. Name one with ./dev.py user reassign-owner <username>`: [the order in which the account is picked](#backup-restore-owner).
 
 When a start found a restore waiting and did not apply it, one more line says why, and the restore keeps waiting:
 
@@ -403,7 +423,7 @@ After a `--recover`, the line describes the state **after** it and adds `recover
 | `none` | No restore was confirmed, or the last one was dropped | none |
 | `pending` | A restore waits for the next start | `cancel` |
 | `in_progress` | A start is applying it, or has applied it and has not completed yet | none |
-| `committed` | The last restore is done. With `reason` `owner_assignment`, it was confirmed from the app and the owner's account could not be set: the restore guard keeps the instance closed, and the server log has the code | `owner` with that `reason`, otherwise none |
+| `committed` | The last restore is done. With `reason` `owner_assignment`, the owner's account could not be set (a restore on a managed instance, from the app, the command line or the hosting panel): the restore guard keeps the instance closed, and the server log has the code | `owner` with that `reason`, otherwise none |
 | `rolled_back` | The last restore was undone, with its `reason` | none |
 | `unreadable` | The state of the restore cannot be read: [An Unreadable Restore State](#backup-pending-unreadable) | `previous` |
 
@@ -424,7 +444,7 @@ The line never holds a username, an email, a path or an identifier: who confirme
 | `4` | The choice is not valid in this state, such as `previous` while the state can be read, `cancel` while it cannot, `owner` when the state offers no `owner` (a second run, after it worked, too), or a word that is not a choice: nothing changes | `choice_not_valid` |
 | `5` | It failed: LibreFolio is running on this data directory (`restore_in_use`), a folder could not be moved back (`restore_apply_failed`), the restore could not be dropped (`failed`): nothing is claimed done. For `--recover owner`, `restore_in_use` also means another process is setting the owner's account right now: run it again in a moment; `owner_assignment_failed` means the account was refused again. With a data directory that is missing, `5` too, but no line is written: stdout stays empty and stderr says why | `restore_in_use`, `restore_apply_failed`, `owner_assignment_failed` or `failed` |
 
-**`--recover owner`.** When a restore confirmed from the app of a managed instance could not set the owner's account, the restore guard keeps the instance closed and the server log has the code. `backup pending` prints the error with its way out: `❌ The owner's account could not be set (<code>): the server log has the cause; ./dev.py backup pending --recover owner tries again`. `--recover owner` clears that error and tries again at once when LibreFolio is stopped; when LibreFolio runs, it only clears the error, and the account is set at its next start. Then:
+**`--recover owner`.** When a restore of a managed instance, confirmed from the app, the command line or the hosting panel, could not set the owner's account, the restore guard keeps the instance closed and the server log has the code. `backup pending` prints the error with its way out: `❌ The owner's account could not be set (<code>): the server log has the cause; ./dev.py backup pending --recover owner tries again`. `--recover owner` clears that error and tries again at once when LibreFolio is stopped; when LibreFolio runs, it only clears the error, and the account is set at its next start. Then:
 
 - ✅ Exit `0`, and one line says which case: the account is set, or the error is cleared and the account is set at the next start. When no email could be sent (`link_only`), the line says so and that the link to choose the account's password is in the log of the instance: give it only to the owner. The line never carries the link. With `--json`, that line goes to stderr, and the JSON line never holds a link, a name, an address or an identifier.
 - 🔁 Exit `5` with `owner_assignment_failed` when the account was refused again: the line has the code. Fix the cause, for instance an address already taken, then run it again.
