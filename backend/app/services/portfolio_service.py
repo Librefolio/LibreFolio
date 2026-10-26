@@ -2021,6 +2021,7 @@ class PortfolioService:
                     points=[
                         PositionSeriesPoint(
                             date=point.date,
+                            through=point.through,
                             quantity=point.quantity,
                             market_value=point.market_value,
                             cost_basis=point.cost_basis,
@@ -2035,10 +2036,12 @@ class PortfolioService:
                 )
             )
         missing_pairs = _engine_missing_fx_pairs(engine_result, date_from, effective_end) if engine_result is not None else []
+        window_start = date_from if date_from is not None else (min((p.date for s in out for p in s.points), default=effective_end))
         return PositionsSeriesResponse(
             currency=base_currency,
-            date_from=date_from if date_from is not None else (min((p.date for s in out for p in s.points), default=effective_end)),
+            date_from=window_start,
             date_to=effective_end,
+            range=DateSpan(start=window_start, end=effective_end),
             series=out,
             missing_fx_pairs=[info.pair for info in missing_pairs],
         )
