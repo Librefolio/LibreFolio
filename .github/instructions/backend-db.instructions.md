@@ -130,7 +130,9 @@ git cat-file -e <tag>:backend/alembic/versions/<file>   # is it inside a release
 
 Anything inside a released tag stays in the chain. Anything not released may be consolidated.
 
-**One migration per release.** Before a release, the cycle's unreleased migrations are folded into one
+**One migration per release** (confirmed 24/10/2026). During the cycle a schema change edits the release's file
+directly; branches developed in parallel each edit it and are merged into it at integration, never into a second
+revision. Before a release, any unreleased migrations of the cycle are folded into one
 `00N_release_<version>_schema`: 004 for 1.2, and `005_release_1_3_0_schema` for 1.3 (decision of 19/10/2026).
 The folded file must give the same schema as the chain it replaces: freeze that schema before deleting
 the chain, and test the new file against it (`test_migration_005_release_1_3.py`). A database stamped with a
