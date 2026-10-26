@@ -7517,3 +7517,7 @@ dello slot visibile: da non spostare; (c) gli errori di conversione portano l'in
    `subtractMonths`, `snapshotDataRenderer.dateOrdinal` (esportata per il test): `utcMs` al posto di `Date.UTC`. Verdi: Vitest
    `stores`, `features/ai-export`, `utils`, `components/charts` 135 file / 4 088 test; `front check` 0 errori 0 avvisi (dopo
    `api sync`: il client generato era vecchio e dava 4 errori in `txTradeAmountApi.ts`, non miei); Prettier pulito.
+5. ✅ 26/10 — Probe rifatto dopo l'unione di J (`7c33de840`, J `968cff655`: il lettore del rischio a tratti), **senza**
+   `Z_PROBE_IGNORE_RISK`: stesse 6 copie, stesse 60 costruzioni per copia (360), HEAD contro il ramo. **0 differenze** su
+   tutte, comprese `portfolio.drawdown_summary` e `broker.drawdown_summary` (`n_observations`, `coverage_ratio`) e le
+   statistiche di dimensione. Log: `ondata5/Z-probe/out_full.log`.
