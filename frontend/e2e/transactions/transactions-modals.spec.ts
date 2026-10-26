@@ -80,6 +80,16 @@ async function fillCashAmount(page: Page, amount: string) {
     await expect(amountInput).not.toBeFocused({timeout: 3_000});
 }
 
+/** Type a date in the form's date picker and leave the field, which is when the picker takes it. */
+async function typeFormDate(page: Page, date: string) {
+    const dateInput = page.getByTestId('tx-form-date-wrap').getByTestId('single-date-picker-root').locator('input[type="text"]');
+    await dateInput.click();
+    await dateInput.fill(date);
+    await dateInput.press('Tab');
+    await expect(dateInput).not.toBeFocused({timeout: 3_000});
+    await expect(dateInput).toHaveValue(date);
+}
+
 /** Compare the effective browser border color, not merely an inline declaration
  * that an important Tailwind utility could still override. The probe lets
  * Chromium choose its own supported serialization for OKLCH. */
@@ -503,6 +513,71 @@ test.describe('Transactions', () => {
 
             // Nothing saved: the broker is this test's own, and holds no row.
             expect(await readTransactions(page, {broker_id: broker.id}), 'the refused BUY must not have been saved').toEqual([]);
+        });
+    });
+
+    // ===================================================================
+    // D-P4 (lot L3) — a date before 1900 is accepted: one confirmation, then it is saved with its date
+    // ===================================================================
+    // The backend has no floor any more (only the ceiling, tomorrow by the server's calendar): the frontend's warning and
+    // its one confirmation at Save All are the only protection against a typo. On a broker of the test's own: a row of
+    // 1850 on a seeded broker would move every other test's NAV, positions and history, and `Transaction` has no user.
+    test.describe('Date before 1900 — saved (D-P4 L3)', () => {
+        const OLD_DATE = '1850-05-01';
+
+        test('a DEPOSIT dated 1850-05-01 is saved once the user confirms the warning, and reads back with that date', async ({page, request}, testInfo) => {
+            // The account goes through the real welcome flow before the DEPOSIT itself.
+            test.setTimeout(60_000);
+            await openOwnedAccount(page, request, owned, `l3_${testInfo.project.name}`);
+            const broker = await createOwnedBroker(page, 'l3', owned.brokerIds);
+            // After the broker exists, so the page's broker list has it.
+            await goToTransactions(page);
+            await openCreateFlow(page);
+            await selectType(page, 'DEPOSIT');
+            await pickBroker(page, broker.name);
+            await fillCashAmount(page, '100');
+            await typeFormDate(page, OLD_DATE);
+            await expect(page.getByTestId('tx-form-pre-floor'), 'the form warns about a date before 1900').toBeVisible({timeout: 3_000});
+
+            const bulkRoot = page.getByTestId('tx-bulk-modal-root');
+            const runsBefore = await validateRuns(bulkRoot);
+            await clickApply(page);
+            await expect(page.getByTestId('tx-bulk-modal')).toBeVisible();
+            // The workspace is this test's own: it holds the applied row and nothing else.
+            const rows = page.getByTestId('tx-bulk-body').locator('tbody tr[data-row-id]');
+            await expect(rows, 'the workspace must hold exactly the applied row').toHaveCount(1, {timeout: 3_000});
+            await expect(rows.getByTestId('tx-bulk-row-status')).toHaveAttribute('data-status', 'new');
+            await waitForValidateRun(bulkRoot, runsBefore);
+            // The validation of the row (the backend's own check) finds no problem with its date: nothing blocks Save All.
+            await expect(page.getByTestId('tx-bulk-pre-floor')).toHaveAttribute('data-count', '1');
+            await expect(page.getByTestId('tx-bulk-error'), 'the backend has no floor: the old date raises no error').toHaveCount(0);
+
+            // Save All asks once; the commit leaves only after the user confirms.
+            const commitBtn = page.getByTestId('tx-bulk-commit');
+            await expect(commitBtn).toBeEnabled({timeout: 8_000});
+            await commitBtn.click();
+            const confirm = page.getByTestId('confirm-modal-confirm');
+            await expect(confirm, 'Save All asks before it commits a date before 1900').toBeVisible({timeout: 5_000});
+            // Armed after the question, before the answer: the request is what the answer sends.
+            const response = page.waitForResponse((res) => res.request().method() === 'POST' && new URL(res.url()).pathname === `${API}/transactions/commit`, {timeout: 15_000});
+            await confirm.click();
+            const res = await response;
+            const sent = (res.request().postDataJSON() as {creates?: Array<{type: string; broker_id: number; date: string}>}).creates ?? [];
+            expect(
+                sent.map((create) => [create.type, create.broker_id, create.date]),
+                'the commit sends the applied DEPOSIT and nothing else, dated as typed',
+            ).toEqual([['DEPOSIT', broker.id, OLD_DATE]]);
+            expect(res.status(), `the commit is accepted: ${await res.text()}`).toBe(200);
+            const answer = (await res.json()) as {committed?: boolean; issues?: unknown[]; results?: CommitBody['results']};
+            expect(answer.committed, `the DEPOSIT must be saved — issues: ${JSON.stringify(answer.issues ?? [])}`).toBe(true);
+            const ids = (answer.results ?? []).filter((result) => result.operation === 'create' && result.status === 'success').flatMap((result) => result.ids ?? []);
+            expect(ids, 'the commit creates exactly the DEPOSIT').toHaveLength(1);
+            await expect(page.getByTestId('tx-bulk-modal')).toBeHidden({timeout: 10_000});
+
+            // Found again on the server, by its id, with the date it was sent.
+            const saved = (await readTransactions(page, {broker_id: broker.id})).find((tx) => tx.id === ids[0]);
+            expect(saved, `transaction ${ids[0]} must be on broker ${broker.id}`).toBeDefined();
+            expect([saved!.type, saved!.date, Number(saved!.cash?.amount)], `transaction ${ids[0]} as saved`).toEqual(['DEPOSIT', OLD_DATE, 100]);
         });
     });
 
@@ -979,7 +1054,8 @@ test.describe('Transactions', () => {
     // ===================================================================
     // D-P4 (W5-10) — a date before 1900: the forms warn, the bulk editor asks once at Save All
     // ===================================================================
-    // The backend floor stays (it refuses such a date at save), so these tests never commit: they prove the warning, the
+    // These tests never commit (the one that saves such a row is in the owned-account block above, «Date before 1900 —
+    // saved»: a row of 1850 on a seeded broker would shift every other test's NAV): they prove the warning, the
     // flag that says «this form does not ask itself» and the bulk editor's banner. The form opened from the page's «+» is
     // the bulk editor's (`commitOnSave` false): it shows the banner without a confirm button and its Apply is not gated.
     // The form that saves by itself and asks for its own confirmation (button `tx-form-pre-floor-confirm`) has no page
@@ -995,16 +1071,6 @@ test.describe('Transactions', () => {
                 if (req.method() === 'POST' && new URL(req.url()).pathname === `${API}/transactions/commit`) commits.push(req.url());
             });
             return commits;
-        }
-
-        /** Type a date in the form's date picker and leave the field, which is when the picker takes it. */
-        async function typeFormDate(page: Page, date: string) {
-            const dateInput = page.getByTestId('tx-form-date-wrap').getByTestId('single-date-picker-root').locator('input[type="text"]');
-            await dateInput.click();
-            await dateInput.fill(date);
-            await dateInput.press('Tab');
-            await expect(dateInput).not.toBeFocused({timeout: 3_000});
-            await expect(dateInput).toHaveValue(date);
         }
 
         test('a date before 1900 typed in the form shows the warning; the form handed to the bulk editor does not ask and Apply stays open', async ({page}) => {
@@ -1062,7 +1128,7 @@ test.describe('Transactions', () => {
             await cancel.click();
             await expect(cancel).toBeHidden({timeout: 5_000});
             await expect(banner).toHaveAttribute('data-count', '2');
-            expect(commits, 'nothing was committed: the floor would refuse it, and the user did not confirm').toEqual([]);
+            expect(commits, 'nothing was committed: the user did not confirm').toEqual([]);
         });
     });
 

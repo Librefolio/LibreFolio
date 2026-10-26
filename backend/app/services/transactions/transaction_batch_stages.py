@@ -22,7 +22,7 @@ from backend.app.services.transactions.transaction_batch_context import (
     cost_fields,
     rule_values,
 )
-from backend.app.utils.datetime_utils import EARLIEST_RANGE_START, latest_range_end
+from backend.app.utils.datetime_utils import latest_range_end
 from backend.app.utils.pydantic_errors import error_params, loc_to_field
 
 if TYPE_CHECKING:
@@ -198,13 +198,17 @@ def _cost_basis_negative(operation: str, index: int, ref_id: Optional[int]) -> T
     )
 
 
-def transaction_date_bounds() -> tuple[date, date]:
-    """The first and the last date a transaction may carry (N74, R13-SEC7-3): ``EARLIEST_RANGE_START`` (1900-01-01, the
-    floor of every replay and history walk too: MF-SEC8-2) and ``latest_range_end()``, tomorrow by the server's calendar —
+def latest_transaction_date() -> date:
+    """The last date a transaction may carry (N74, R13-SEC7-3): ``latest_range_end()``, tomorrow by the server's calendar —
     the last date of a price or a rate written by hand too (N83). One day past today is the slack for a user east of the
     server. The interface never offers a future date, and a broker import keeps only settled rows (the plugin guide's
-    rule): a later date is a typing error."""
-    return EARLIEST_RANGE_START, latest_range_end()
+    rule): a later date is a typing error.
+
+    There is no first date (decision D-P4, 26/10/2026): a transaction of 1850, or of the year 1, is written like any other,
+    and the engine and the lots replay it from its own day. The protection against a typo in the year is the user's: the
+    form, the bulk editor and the import review ask for a confirmation before a date earlier than 1900.
+    """
+    return latest_range_end()
 
 
 def _promote_date(item: TXPromoteBatchItem) -> Optional[date]:
@@ -214,33 +218,33 @@ def _promote_date(item: TXPromoteBatchItem) -> Optional[date]:
 
 
 def check_dates(context: TransactionBatchContext) -> bool:
-    """Refuse a transaction date outside ``transaction_date_bounds`` (decision N74, R13-SEC7-3).
+    """Refuse a transaction date after ``latest_transaction_date`` (decision N74, R13-SEC7-3; the first-date floor went with D-P4).
 
     Checked on a create, on an update that sets a date, and on the date a promotion resolves; an update that leaves an
-    older row's date alone is not refused for it. Out of the bounds the row gets ``dateOutOfRange`` on ``date``,
-    ``params`` ``{"min", "max"}`` (ISO dates), and the batch is not saved. A broker import confirms through this batch, so
+    older row's date alone is not refused for it. Past the ceiling the row gets ``dateOutOfRange`` on ``date``,
+    ``params`` ``{"max"}`` (an ISO date), and the batch is not saved. A broker import confirms through this batch, so
     its rows are checked here too.
 
     Returns:
         True when a date is refused: ``execute_batch`` then stops after the access check, as for the integer digits —
         the stages after it replay a broker's days and look rates up at the row's date.
     """
-    earliest, latest = transaction_date_bounds()
+    latest = latest_transaction_date()
     candidates = [("create", index, None, item.date) for index, item in context.parsed_creates]
     candidates += [("update", index, item.id, item.date) for index, item in context.parsed_updates]
     candidates += [("promote", index, None, _promote_date(item)) for index, item in context.parsed_promotes]
     refused = False
     for operation, index, ref_id, value in candidates:
-        if value is not None and not earliest <= value <= latest:
+        if value is not None and value > latest:
             refused = True
             context.issues.append(
                 TXValidationIssue(
                     operation=operation,
                     index=index,
                     ref_id=ref_id,
-                    error=f"Date: between {earliest.isoformat()} and {latest.isoformat()}",
+                    error=f"Date: not after {latest.isoformat()}",
                     code=TXValidationCode.DATE_OUT_OF_RANGE.value,
-                    params={"min": earliest.isoformat(), "max": latest.isoformat()},
+                    params={"max": latest.isoformat()},
                     field="date",
                 )
             )
