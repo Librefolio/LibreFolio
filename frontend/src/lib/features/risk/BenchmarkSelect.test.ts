@@ -187,7 +187,8 @@ const engine = vi.hoisted(() => ({api: vi.fn()}));
 
 vi.mock('$lib/api', async (importOriginal) => {
     const actual = await importOriginal<typeof import('$lib/api')>();
-    return {...actual, zodiosApi: {...actual.zodiosApi, asset_eligibility_api_v1_risk_eligibility_post: engine.api}};
+    // A one-key view of the client (as in `$test/spyOnApi`): spreading its whole type overflows TypeScript's instantiation depth
+    return {...actual, zodiosApi: {...(actual.zodiosApi as unknown as Record<string, unknown>), asset_eligibility_api_v1_risk_eligibility_post: engine.api}};
 });
 
 /** The panel's currency menu puts flags beside the codes, from the currency cache: kept empty, and off the network. */
