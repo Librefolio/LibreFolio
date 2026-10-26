@@ -5520,13 +5520,9 @@
         "carried_forward_price_points": 0,
         "data_quality_status": "ok",
         "in_transit_cost_basis_warnings": [],
-        "incomplete_allocation_dates": [],
         "incomplete_allocation_ranges": [],
-        "incomplete_book_value_dates": [],
         "incomplete_book_value_ranges": [],
-        "incomplete_nav_dates": [],
         "incomplete_nav_ranges": [],
-        "incomplete_valuation_dates": [],
         "incomplete_valuation_ranges": [],
         "issues": [
           {
@@ -7123,13 +7119,9 @@
           "carried_forward_price_points": 0,
           "data_quality_status": "ok",
           "in_transit_cost_basis_warnings": [],
-          "incomplete_allocation_dates": [],
           "incomplete_allocation_ranges": [],
-          "incomplete_book_value_dates": [],
           "incomplete_book_value_ranges": [],
-          "incomplete_nav_dates": [],
           "incomplete_nav_ranges": [],
-          "incomplete_valuation_dates": [],
           "incomplete_valuation_ranges": [],
           "issues": [
             {
@@ -7742,13 +7734,9 @@
         "carried_forward_price_points": 0,
         "data_quality_status": "ok",
         "in_transit_cost_basis_warnings": [],
-        "incomplete_allocation_dates": [],
         "incomplete_allocation_ranges": [],
-        "incomplete_book_value_dates": [],
         "incomplete_book_value_ranges": [],
-        "incomplete_nav_dates": [],
         "incomplete_nav_ranges": [],
-        "incomplete_valuation_dates": [],
         "incomplete_valuation_ranges": [],
         "issues": [
           {
@@ -10180,13 +10168,9 @@
         "carried_forward_price_points": 0,
         "data_quality_status": "carried_forward",
         "in_transit_cost_basis_warnings": [],
-        "incomplete_allocation_dates": [],
         "incomplete_allocation_ranges": [],
-        "incomplete_book_value_dates": [],
         "incomplete_book_value_ranges": [],
-        "incomplete_nav_dates": [],
         "incomplete_nav_ranges": [],
-        "incomplete_valuation_dates": [],
         "incomplete_valuation_ranges": [],
         "issues": [
           {
@@ -10948,13 +10932,9 @@
           "carried_forward_price_points": 0,
           "data_quality_status": "carried_forward",
           "in_transit_cost_basis_warnings": [],
-          "incomplete_allocation_dates": [],
           "incomplete_allocation_ranges": [],
-          "incomplete_book_value_dates": [],
           "incomplete_book_value_ranges": [],
-          "incomplete_nav_dates": [],
           "incomplete_nav_ranges": [],
-          "incomplete_valuation_dates": [],
           "incomplete_valuation_ranges": [],
           "issues": [
             {
@@ -11521,13 +11501,9 @@
         "carried_forward_price_points": 0,
         "data_quality_status": "carried_forward",
         "in_transit_cost_basis_warnings": [],
-        "incomplete_allocation_dates": [],
         "incomplete_allocation_ranges": [],
-        "incomplete_book_value_dates": [],
         "incomplete_book_value_ranges": [],
-        "incomplete_nav_dates": [],
         "incomplete_nav_ranges": [],
-        "incomplete_valuation_dates": [],
         "incomplete_valuation_ranges": [],
         "issues": [
           {

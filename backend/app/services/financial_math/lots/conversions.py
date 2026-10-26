@@ -12,7 +12,7 @@ from typing import Sequence
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import PriceHistory, Transaction
-from backend.app.schemas.common import Currency
+from backend.app.schemas.common import Currency, DateSpan
 from backend.app.schemas.portfolio import (
     LotAnalysisType,
 )
@@ -22,6 +22,7 @@ from backend.app.services.financial_math.fx_rates import AskedDayRates
 from backend.app.services.financial_math.lots.prices import opening_reference_price
 from backend.app.services.financial_math.price_marks import AssetPriceSeries
 from backend.app.services.financial_math.returns import realized_gain
+from backend.app.services.financial_math.series_steps import merged_spans
 from backend.app.services.fx.conversion import unit_rate_steps
 
 #: One unit of a currency: the amount every rate of the resolver converts.
@@ -69,6 +70,8 @@ class FxRateResolver:
         #: tests fill by hand.
         self._rates: ChainMap[tuple[str, date_type], Decimal] = ChainMap()
         self._missing: dict[str, set[date_type]] = defaultdict(set)
+        #: The stretches of valuation days with no rate (``convert_through``), by pair.
+        self._missing_spans: dict[str, list[tuple[date_type, date_type]]] = defaultdict(list)
 
     def need(self, currency: str | None, as_of_date: date_type) -> None:
         """Ask the rate of ``currency`` on one day."""
@@ -127,13 +130,18 @@ class FxRateResolver:
         """``amount`` at the rate of ``first``, for a stretch ``first``..``last`` over which the rate does not move.
 
         The market price is read only on the days a rate can change (``rate_change_days``); a day between two of them
-        has the rate of the one before. When there is no rate, every day of the stretch is a gap of the pair, as when
-        each of them was asked one by one.
+        has the rate of the one before. When there is no rate the whole stretch is a gap of the pair, kept as one span
+        (``missing_pairs`` gives it as a range, D-P4), not as a date per day.
         """
-        converted = self.convert(amount, currency, first)
-        if converted is None and amount is not None and currency and currency != self.target_currency and last > first:
-            self._missing[f"{currency}/{self.target_currency}"].update(first + timedelta(days=offset) for offset in range(1, (last - first).days + 1))
-        return converted
+        if amount is None:
+            return None
+        if not currency or currency == self.target_currency:
+            return amount
+        rate = self._rates.get((currency, first))
+        if rate is None:
+            self._missing_spans[f"{currency}/{self.target_currency}"].append((first, last))
+            return None
+        return amount * rate
 
     def rate_change_days(self) -> tuple[date_type, ...]:
         """The days on which the rate of a currency valued over a window (``need_days``) can differ from the day before,
@@ -153,7 +161,8 @@ class FxRateResolver:
 
     def missing_pairs(self) -> list[WACMissingPairInfo]:
         """Every conversion asked for and not made, one entry per pair, as the data-quality report lists them."""
-        return [WACMissingPairInfo(pair=pair, dates=sorted(dates)) for pair, dates in sorted(self._missing.items())]
+        pairs = sorted({*self._missing, *self._missing_spans})
+        return [WACMissingPairInfo(pair=pair, dates=sorted(self._missing.get(pair, ())), ranges=[DateSpan(start=first, end=last) for first, last in merged_spans(self._missing_spans.get(pair, ()))]) for pair in pairs]
 
 
 @dataclass(frozen=True, slots=True)
