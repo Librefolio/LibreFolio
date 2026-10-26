@@ -221,7 +221,7 @@ the AI Export FX loader all size their load with it.
 A warm-up can also be unbounded. A plugin whose result depends on the whole past returns
 `SignalWarmupRequirement(full_history=True)`, and the plan sets `requires_full_history`:
 the Asset price query (`price_query.py`) then extends the point-derived warm-up back to
-the start of the available history, but not before `EARLIEST_RANGE_START` (1900-01-01),
+the start of the available history, but not before `FULL_HISTORY_LOAD_START` (1900-01-01),
 never shortening it (a warm-up that starts earlier keeps its start, and a price stored
 before the load start can only seed the fill), and still slices to the visible range after
 the computation. Underwater drawdown (`RISK_DRAWDOWN`) does so through its `full_history`

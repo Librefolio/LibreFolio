@@ -286,7 +286,7 @@ server's calendar (`latest_range_end()`, `utils/datetime_utils.py`: `server_toda
 server's local date, plus one day); `latest_transaction_date()` returns it. There is **no
 first date** since decision D-P4 (26/10/2026): a transaction of 1850, or of the year 1, is
 written like any other, and the engine and the lots replay it from its own day (before, the
-floor was 1900-01-01, `EARLIEST_RANGE_START`). The protection against a typo in the year is
+floor was 1900-01-01). The protection against a typo in the year is
 in the interface: the form, the bulk editor and the import review ask for one confirmation
 before a date earlier than 1900 (`preFloorDate.ts`). The last day is also the last one a
 price or a rate written by hand may carry (N83). The stage reads:

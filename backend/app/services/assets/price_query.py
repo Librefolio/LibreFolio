@@ -42,7 +42,7 @@ from backend.app.schemas.provider import (
     FAVolumeKind,
 )
 from backend.app.services.assets import core
-from backend.app.services.assets.base import AssetRateLimitedError, AssetSourceProvider
+from backend.app.services.assets.base import ASSET_HISTORY_MIN_FALLBACK, AssetRateLimitedError, AssetSourceProvider
 from backend.app.services.assets.market_calendar import ensure_market_holidays
 from backend.app.services.assets.observed_prices import ObservedPrices, fill_point, observe, series_points
 from backend.app.services.assets.price_sampling import SampleResolution, choose_resolution, resolve_sample_references, sample_dates
@@ -54,11 +54,17 @@ from backend.app.services.signals.execution import SignalPreparedSeriesBundle
 from backend.app.services.signals.sampling import sample_signal_result
 from backend.app.services.signals.service import SignalService
 from backend.app.utils.date_range_limits import MAX_BULK_ITEM_DAYS, BulkTooManyDaysError
-from backend.app.utils.datetime_utils import EARLIEST_RANGE_START, latest_range_end, utcnow
+from backend.app.utils.datetime_utils import latest_range_end, utcnow
 
 logger = structlog.get_logger(__name__)
 
 RISK_WARMUP_DAY_MULTIPLIER = 2
+
+#: The first day a full-history signal (an underwater drawdown, whose peak may predate the visible range by years) loads
+#: (Z-30): the start of every provider's history, ``ASSET_HISTORY_MIN_FALLBACK`` (1 January 1900). A cost limit of the
+#: per-day price fill, not a floor of the stored data: a price stored earlier — writes have no first date (N83) — is at
+#: most the fill's seed, so a price at 0001-01-01 never makes one visible day walk about 740 000 days (D-P4).
+FULL_HISTORY_LOAD_START = ASSET_HISTORY_MIN_FALLBACK
 
 #: Rows read per page, after the latest one, while looking for the last close that reads a number (W-B62).
 _FALLBACK_PAGE = 32
@@ -537,16 +543,12 @@ class PriceQueryOperations:
                 plan.max_history_days_before_visible,
                 plan.max_prepared_history_points_before_visible * RISK_WARMUP_DAY_MULTIPLIER,
             )
-            # E1: a full-history computation (e.g. underwater drawdown, whose
-            # relevant peak may predate the visible range by years) loads from
-            # the beginning of the available history, which Z-30 sets at
-            # EARLIEST_RANGE_START (1900-01-01, the floor of every full-history
-            # load): the load starts at the earlier of that floor and the warm-up's
-            # start above. A row stored before 1900 (writes have no floor since
-            # N83) is at most the fill's seed, so a price at 0001-01-01 no longer
-            # makes one visible day walk ~740,000 days.
+            # E1: a full-history computation (e.g. underwater drawdown) loads
+            # from the beginning of the available history, FULL_HISTORY_LOAD_START
+            # (Z-30): the load starts at the earlier of that day and the warm-up's
+            # start above. An older stored row is at most the fill's seed.
             if plan.requires_full_history:
-                warmup_days = max(warmup_days, (req.date_range.start - EARLIEST_RANGE_START).days)
+                warmup_days = max(warmup_days, (req.date_range.start - FULL_HISTORY_LOAD_START).days)
             warmup_days = min(
                 warmup_days,
                 (req.date_range.start - date_type.min).days,
@@ -619,7 +621,7 @@ class PriceQueryOperations:
                     seed_prices[aid] = seed_row
 
         # Z-25: the per-day points the fills will build, comparison series included, against the request's budget. The
-        # count follows the fill, not the request: a full-history signal loads from 1900-01-01 at the latest (Z-30), and
+        # count follows the fill, not the request: a full-history signal loads from FULL_HISTORY_LOAD_START at the latest (Z-30), and
         # its fill emits from the first stored price, or from the load start when an older row seeds it, even when the
         # visible range is one day. A sampled item counts its points and its two bounds (Z-29); an item without prices
         # that only gives its step, nothing (Z-29a-f); a sampled item with signals, its fill, as any item with signals
