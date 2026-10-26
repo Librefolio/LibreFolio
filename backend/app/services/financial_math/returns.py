@@ -19,7 +19,7 @@ import bisect
 import math
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import NamedTuple
 
@@ -384,9 +384,23 @@ class FixedPeriodChange:
     inverse_change_ratio: Decimal | None
 
 
+def day_before(day: date, days: int) -> date | None:
+    """``day`` minus ``days`` calendar days; None when that day falls before 0001-01-01, the first day ``date`` has.
+
+    The reference day of a fixed period that would sit before the calendar's start does not exist, so the change over it is
+    "no data" (null, shown «—»), not an ``OverflowError``: a table anchored in the year 3 still has its 1D.
+    """
+    ordinal = day.toordinal() - days
+    return date.fromordinal(ordinal) if ordinal >= 1 else None
+
+
 def fixed_period_dates(as_of: date, periods: Sequence[tuple[str, int]] = FIXED_PERIODS) -> tuple[date, ...]:
-    """The days a fixed-period table values: ``as_of``, then ``as_of − days`` for each period (calendar days)."""
-    return (as_of, *(as_of - timedelta(days=days) for _key, days in periods))
+    """The days a fixed-period table values: ``as_of``, then ``as_of − days`` for each period (calendar days).
+
+    A period whose reference day would fall before 0001-01-01 has none (see :func:`day_before`): the days returned are the
+    ones that exist, so no caller ever asks for a day the calendar has not.
+    """
+    return (as_of, *(day for _key, days in periods if (day := day_before(as_of, days)) is not None))
 
 
 def fixed_period_changes(values: Mapping[date, Decimal | None], as_of: date, periods: Sequence[tuple[str, int]] = FIXED_PERIODS) -> tuple[FixedPeriodChange, ...]:
@@ -394,13 +408,15 @@ def fixed_period_changes(values: Mapping[date, Decimal | None], as_of: date, per
 
     ``values`` maps a day to the series' value on it — the caller's valuation of that day (the last stored price on or
     before it, a rate converted at it), None or absent when the day has none. The anchor is the value on ``as_of``, each
-    reference the value on ``as_of − days``. The rule of :func:`range_change`: never a number from a missing value, a
-    reference ≤ 0 or a negative anchor; an anchor of 0 is −100 %, without an inverse.
+    reference the value on ``as_of − days``; a period whose reference day is before 0001-01-01 has no reference, so its change
+    is None. The rule of :func:`range_change`: never a number from a missing value, a reference ≤ 0 or a negative anchor; an
+    anchor of 0 is −100 %, without an inverse.
     """
     anchor = values.get(as_of)
     changes = []
     for key, days in periods:
-        change = range_change(values.get(as_of - timedelta(days=days)), anchor)
+        reference_day = day_before(as_of, days)
+        change = range_change(values.get(reference_day) if reference_day is not None else None, anchor)
         changes.append(FixedPeriodChange(key=key, days=days, change_ratio=change.change_ratio, inverse_change_ratio=change.inverse_change_ratio))
     return tuple(changes)
 

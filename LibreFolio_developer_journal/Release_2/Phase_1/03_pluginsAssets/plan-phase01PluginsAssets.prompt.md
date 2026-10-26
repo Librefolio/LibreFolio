@@ -9257,3 +9257,17 @@ i valori li risolve il **genitore** e viaggiano col lavoro, come per il parse BR
 > `utils/dateOnly.ts` (portata da Y nel commit `b2fc380b0`). Rossi prima (test-author): 6 rossi, `rangeStartFor` con `0024-03-01`, `0001-01-01` e `0000-02-29` (l'anno 0 è bisestile,
 > il 1900 no) dà `1900-01-01` invece di `null`; `visiblePeriodColumns` con gli anni 24, 1 e il confine 99→100 restituiva `[]`. Guardie verdi prima e dopo: `0001-02-29`, `0024-02-30`,
 > `0024-13-01`, inizio raddrizzato dopo `asOf`, fine prima dell'inizio. Dopo: i 3 file 195/195, i test collegati 347/347, `front check` 0/0, Prettier pulito.
+
+### X5-6 · D-P4 L4: le variazioni 1G…5A senza limite di data (26/10, base `6b02bc7f6`)
+
+> **Note implementazione** (✅ 26/10/2026): decisione del developer, via coordinatore: nessun limite di data su `as_of` e `range_start` di `POST /assets/prices/period-changes`,
+> `POST /fx/currencies/period-changes` e `range_start` di `POST /assets/prices/current`, a parte il calendario (anno ≥ 1) e il tetto in avanti (`latest_range_end()`, solo per `/prices/current`).
+> Una variazione il cui giorno di riferimento cade prima dell'anno 1 (5A con `as_of` nel 0003) è `null`, «—»: niente 500, niente 422.
+> - **Backend**: `schemas/common.py` perde `period_changes_as_of` e `PeriodChangesAsOf` (gli schemi `prices`/`fx` usano `date`); `_range_start_in_bounds` tiene solo il tetto;
+>   `financial_math/returns.py` ha `day_before(giorno, n)` (None sotto 0001-01-01), `fixed_period_dates` omette i giorni che non esistono e `fixed_period_changes` dà `None` per quei periodi.
+>   Le descrizioni OpenAPI non parlano più del 1900.
+> - **Frontend**: `utils/rangeChange.ts` perde `EARLIEST_RANGE_START`; `rangeStartFor` manda la partenza com'è (null se non è un giorno del calendario, se l'anno è < 1 o se segue `asOf`).
+> - **Rossi prima** (test-author, su una copia con la produzione di `6b02bc7f6`): schemi 42, `fixed_period_changes` 14, `current-prices-bulk` 3, servizio `period-changes` 20, API `period-changes` 22; frontend 16.
+> - **⚠️ Fuori pista**: la guardia `test_only_the_split_loader_names_the_split_event_type` era rossa dal mio X5-3 (`currency_change.py` nominava `AssetEventType.SPLIT`). Ho aggiunto
+>   `split_event_condition()` e `not_split_event_condition()` a `financial_math/splits.py` e le uso in `currency_change.py`.
+> - **Non toccato** (R1–R5 dell'inventario di MF): i tetti di costo delle serie giornaliere, `ASSET_HISTORY_MIN_FALLBACK`, `SCHEDULE_MIN_DATE`; il pavimento di scrittura delle transazioni è di W.

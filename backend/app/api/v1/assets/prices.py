@@ -37,7 +37,7 @@ from backend.app.services.assets.price_store import PriceCurrencyMismatchError, 
 from backend.app.services.signals.planning import SignalRequestValidationError
 from backend.app.services.signals.registry import SignalPluginRegistry
 from backend.app.utils.date_range_limits import MAX_BULK_ITEMS, MAX_BULK_WRITE_ITEMS, BulkTooManyDaysError, DateOutOfRangeError, bulk_too_many_days_detail, bulk_too_many_items_detail, date_out_of_range_detail
-from backend.app.utils.datetime_utils import EARLIEST_RANGE_START, latest_range_end
+from backend.app.utils.datetime_utils import latest_range_end
 
 logger = get_logger(__name__)
 
@@ -45,10 +45,10 @@ price_router = APIRouter(prefix="/prices", tags=["FA Prices"])
 
 
 def _range_start_in_bounds(value: date_type | None) -> date_type | None:
-    """``range_start`` of ``POST /prices/current`` (R13-SEC9-4): from ``EARLIEST_RANGE_START`` to ``latest_range_end()``, as
-    the period changes bound their days; refused by the parameter itself, so the 422 has the standard shape."""
-    if value is not None and not EARLIEST_RANGE_START <= value <= latest_range_end():
-        raise ValueError(f"range_start ({value}) must be between {EARLIEST_RANGE_START} and {latest_range_end()}")
+    """``range_start`` of ``POST /prices/current`` (R13-SEC9-4): any day of the calendar up to ``latest_range_end()``, as the
+    period changes bound their days (D-P4: no floor); refused by the parameter itself, so the 422 has the standard shape."""
+    if value is not None and value > latest_range_end():
+        raise ValueError(f"range_start ({value}) must be on or before {latest_range_end()}")
     return value
 
 
@@ -195,7 +195,7 @@ async def get_current_prices_bulk(
     asset_ids: List[int],
     range_start: Annotated[
         Optional[date_type],
-        Query(description="First day of the range the page shows: each result also carries its whole-range change to the current price (X-R59); from 1900-01-01 to tomorrow"),
+        Query(description="First day of the range the page shows: each result also carries its whole-range change to the current price (X-R59); any day up to tomorrow"),
         AfterValidator(_range_start_in_bounds),
     ] = None,
     target_currency: Annotated[
@@ -300,7 +300,7 @@ async def query_period_changes_bulk(
     day's rate when ``target_currency`` is given. Each change is a fraction, null without a usable price on either day.
     Limits (``period_changes_request_refusal``): at most ``MAX_BULK_ITEMS`` items (422 ``bulk_too_many_items``, as the
     price query) and ``PERIOD_CHANGES_MAX_AS_OF_DAYS`` distinct ``as_of`` and ``range_start`` days (422
-    ``period_changes_too_many_days``), each from 1900-01-01.
+    ``period_changes_too_many_days``).
     """
     refusal = period_changes_request_refusal(requests)
     if refusal is not None:

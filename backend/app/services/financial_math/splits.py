@@ -106,6 +106,16 @@ def is_split_event_type(value: object) -> bool:
     return isinstance(value, str) and value.strip().upper() == AssetEventType.SPLIT
 
 
+def split_event_condition():
+    """SQL condition: the asset event is a SPLIT. How a query outside this module selects the splits without naming the member."""
+    return AssetEvent.type == AssetEventType.SPLIT
+
+
+def not_split_event_condition():
+    """SQL condition: the asset event is not a SPLIT (a dividend, an interest, a price adjustment…)."""
+    return AssetEvent.type != AssetEventType.SPLIT
+
+
 async def split_linked_ids(db: AsyncSession, transactions: Sequence[Transaction]) -> set[int]:
     """The ids of the given transactions linked to a SPLIT asset event; an empty set without candidates.
 

@@ -5,16 +5,16 @@
  * — the Assets cards’ Δ, the FX table’s Δ Abs and Δ %, the FX card’s and the pair page’s — stops being computed in the
  * browser, in floats, from the prices or rates it loaded (`computeDerivedPriceState`, `displayFxDelta`). Each item of
  * `POST /assets/prices/period-changes` and `POST /fx/currencies/period-changes` may carry a `range_start` — on or after
- * 1900-01-01 and on or before its `as_of`, or the whole request is a 422 —, and its result then carries a `range_change`:
+ * 0001-01-01 and on or before its `as_of`, or the whole request is a 422 —, and its result then carries a `range_change`:
  * `{reference_date, change_abs, change_ratio}`, plus `inverse_change_abs` and `inverse_change_ratio` for a pair read the
  * other way round. A decimal arrives as a string, a ratio as a fraction (`"0.105"` = +10.5 %); with a `range_start` asked
  * and no usable price (rate), every field is null.
  *
  * The pure module the pages read it through — no Svelte, no API client:
- *   - `EARLIEST_RANGE_START`: 1900-01-01, the first day the backend values;
- *   - `rangeStartFor(dateStart, asOf)`: the `range_start` a request sends, the start of the range raised to 1900-01-01;
- *     null — send none — when either day is not a bare `YYYY-MM-DD` the calendar has, or when the raised start falls
- *     after `asOf`: a refused `range_start` would take every Δ column of the request down with it;
+ *   - `rangeStartFor(dateStart, asOf)`: the `range_start` a request sends, the start of the range itself, whatever its
+ *     year (X5-6, D-P4 L4: the backend values any day, so nothing is raised to 1900 any more); null — send none — when
+ *     either day is not a bare `YYYY-MM-DD` the calendar has, or when the start falls after `asOf`: a refused
+ *     `range_start` would take every Δ column of the request down with it;
  *   - `assetRangeDelta(raw)`, `fxRangeDeltas(raw)`: a `range_change` as the page shows it — `abs` in the price’s (the
  *     rate’s) unit, `pct` in percent, read as `ratioToPercent` reads a period’s change —, a pair’s both ways, each
  *     orientation from its own fields; null wherever the backend has nothing usable, never 0, and a zero never −0. Only
@@ -35,7 +35,8 @@ vi.mock('$lib/api', () => {
     return {zodiosApi: {post: vi.fn()}, ApiError: class ApiError extends Error {}, axiosInstance: {}};
 });
 
-import {EARLIEST_RANGE_START, assetRangeDelta, fxRangeDeltas, rangeStartFor, type RangeDelta} from '../rangeChange';
+import * as rangeChangeModule from '../rangeChange';
+import {assetRangeDelta, fxRangeDeltas, rangeStartFor, type RangeDelta} from '../rangeChange';
 
 /** The anchor day of the ranges here: the end of the range on screen. */
 const AS_OF = '2026-10-17';
@@ -54,23 +55,27 @@ function fxChange(changeAbs: unknown, changeRatio: unknown, inverseChangeAbs: un
     return {reference_date: referenceDate, change_abs: changeAbs, change_ratio: changeRatio, inverse_change_abs: inverseChangeAbs, inverse_change_ratio: inverseChangeRatio};
 }
 
-describe('EARLIEST_RANGE_START — the first day the backend values', () => {
-    it('is 1 January 1900: an earlier range_start is refused, and the whole request with it', () => {
-        expect(EARLIEST_RANGE_START).toBe('1900-01-01');
+// X5-6 (D-P4 L4): the backend values any day, so the module no longer knows a first day to raise a start to.
+describe('rangeChange exports — no earliest range start any more', () => {
+    it('does not export EARLIEST_RANGE_START: the start of a range is never raised', () => {
+        expect(Object.keys(rangeChangeModule)).not.toContain('EARLIEST_RANGE_START');
     });
 });
 
 describe('rangeStartFor — the range_start a request sends', () => {
     // X5-5 (D-P4): a year before 100 is read as typed, not as 19xx (`Date.UTC(24, …)` is 1924).
+    // X5-6 (D-P4 L4): a start before 1900 is sent as it is, not raised to 1900-01-01.
     it.each([
         {case: 'a year on screen sends its first day', start: RANGE_START, asOf: AS_OF, sent: RANGE_START},
         {case: 'a 29 February sends itself, in a leap year', start: '2024-02-29', asOf: AS_OF, sent: '2024-02-29'},
         {case: 'a range of one day sends its day: the start may be as_of', start: AS_OF, asOf: AS_OF, sent: AS_OF},
         {case: 'a start on 1900-01-01 sends itself', start: '1900-01-01', asOf: AS_OF, sent: '1900-01-01'},
-        {case: 'a start the day before 1900-01-01 is raised to it', start: '1899-12-31', asOf: AS_OF, sent: '1900-01-01'},
-        {case: 'a start in 1850 is raised to 1900-01-01', start: '1850-06-01', asOf: AS_OF, sent: '1900-01-01'},
-        {case: 'a start in the year 999 is raised to 1900-01-01', start: '0999-12-31', asOf: AS_OF, sent: '1900-01-01'},
-        {case: 'a start before 1900 with as_of on 1900-01-01 is raised onto as_of', start: '1850-06-01', asOf: '1900-01-01', sent: '1900-01-01'},
+        {case: 'a start the day before 1900-01-01 sends itself', start: '1899-12-31', asOf: AS_OF, sent: '1899-12-31'},
+        {case: 'a start in 1850 sends itself', start: '1850-03-01', asOf: AS_OF, sent: '1850-03-01'},
+        {case: 'a start in the year 999 sends itself', start: '0999-12-31', asOf: AS_OF, sent: '0999-12-31'},
+        {case: 'a start before 1900 with as_of on 1900-01-01 sends itself', start: '1850-06-01', asOf: '1900-01-01', sent: '1850-06-01'},
+        {case: 'a start and an as_of both before 1900, in order, send the start', start: '1850-06-01', asOf: '1899-12-31', sent: '1850-06-01'},
+        {case: 'a start on as_of, both before 1900: a range of one day', start: '1899-12-31', asOf: '1899-12-31', sent: '1899-12-31'},
     ])('$case ($start … $asOf)', ({start, asOf, sent}) => {
         expect(rangeStartFor(start, asOf)).toBe(sent);
     });
@@ -78,30 +83,37 @@ describe('rangeStartFor — the range_start a request sends', () => {
     it.each([
         {case: 'a start the day after as_of', start: '2026-10-18', asOf: AS_OF},
         {case: 'a start a year after as_of', start: '2027-10-17', asOf: AS_OF},
-        {case: 'as_of before 1900 and a start before it: the raised start falls after as_of', start: '1850-06-01', asOf: '1899-12-31'},
-        {case: 'a start on as_of, both before 1900: the raised start falls after as_of', start: '1899-12-31', asOf: '1899-12-31'},
+        {case: 'a start the day after as_of, both before 1900', start: '1850-06-02', asOf: '1850-06-01'},
+        {case: 'a start in 1900 after an as_of before 1900', start: '1900-01-01', asOf: '1899-12-31'},
     ])('sends none for $case ($start … $asOf): the backend would refuse it, every Δ column with it', ({start, asOf}) => {
         expect(rangeStartFor(start, asOf)).toBeNull();
     });
 
-    // X5-5 (D-P4): the year is read as typed. Every start here is before 1900, so it is raised to 1900-01-01; the year
-    // 0 is a leap year of the proleptic Gregorian calendar (divisible by 400), where 1900 is not.
+    // X5-5 (D-P4): the year is read as typed; X5-6 (D-P4 L4): and the start is sent as typed, never raised to 1900-01-01.
     it.each([
-        {case: 'a start in the year 24 is a real day, raised to 1900-01-01', start: '0024-03-01'},
-        {case: 'a start on 1 January of the year 1 is a real day, raised to 1900-01-01', start: '0001-01-01'},
-        {case: 'a start on 29 February of the year 0 is a real day (year 0 is leap), raised to 1900-01-01', start: '0000-02-29'},
+        {case: 'a start in the year 24 is a real day, sent as it is', start: '0024-03-01'},
+        {case: 'a start on 1 January of the year 1 is a real day, sent as it is', start: '0001-01-01'},
     ])('$case ($start … 2026-10-25)', ({start}) => {
-        expect(rangeStartFor(start, '2026-10-25')).toBe(EARLIEST_RANGE_START);
+        expect(rangeStartFor(start, '2026-10-25')).toBe(start);
     });
 
-    // X5-5 (D-P4): guards that stay null, before and after the fix: the calendar still refuses, and a raised start still may not pass as_of.
+    // X5-5 (D-P4): guards that stay null, before and after the fix: the calendar still refuses, and a start still may not pass as_of.
     it.each([
         {case: '29 February of the year 1, which is not leap', start: '0001-02-29', asOf: '2026-10-25'},
         {case: '30 February of the year 24', start: '0024-02-30', asOf: '2026-10-25'},
         {case: 'a thirteenth month in the year 24', start: '0024-13-01', asOf: '2026-10-25'},
-        {case: 'as_of in the year 24 and a start in the year 1: the raised start (1900) falls after as_of', start: '0001-01-01', asOf: '0024-03-01'},
+        {case: 'as_of in the year 24 and a start the day after it', start: '0024-03-02', asOf: '0024-03-01'},
+        // X5-6 (D-P4 L4): the backend takes year >= 1, so a year-0 start (even the leap 29 February) would be a 422 on the wire.
+        {case: 'the year 0 does not exist for the backend (year >= 1): 1 January', start: '0000-01-01', asOf: '2026-10-25'},
+        {case: 'the year 0 does not exist for the backend (year >= 1): 29 February, though year 0 is leap in the proleptic calendar', start: '0000-02-29', asOf: '2026-10-25'},
+        {case: 'the year 0 does not exist for the backend (year >= 1): as_of on 1 January of the year 0', start: '0000-01-01', asOf: '0000-01-01'},
     ])('sends none for $case ($start … $asOf)', ({start, asOf}) => {
         expect(rangeStartFor(start, asOf)).toBeNull();
+    });
+
+    // X5-6 (D-P4 L4): an as_of in the first years is a real day too, and a start in the year 1 reaches it.
+    it('sends a start in the year 1 for an as_of in the year 24: the range is read from where it starts', () => {
+        expect(rangeStartFor('0001-01-01', '0024-03-01')).toBe('0001-01-01');
     });
 
     // Each of these but "min" comes before as_of as text, so only the shape of the day can refuse it.
@@ -124,7 +136,7 @@ describe('rangeStartFor — the range_start a request sends', () => {
         {case: 'a thirteenth month', start: '2025-13-01'},
         {case: 'a month 00', start: '2026-00-10'},
         {case: 'a day 00', start: '2026-01-00'},
-        {case: '30 February 1850: before 1900, refused rather than raised', start: '1850-02-30'},
+        {case: '30 February 1850: refused, whatever the year', start: '1850-02-30'},
     ])('sends none for a start the calendar does not have: $case ($start)', ({start}) => {
         expect(rangeStartFor(start, AS_OF)).toBeNull();
     });
