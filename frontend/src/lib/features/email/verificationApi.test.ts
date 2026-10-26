@@ -43,6 +43,9 @@ import {ApiError, axiosInstance, zodiosApi} from '$lib/api';
 import {instanceBlock} from '$lib/features/instance/instanceBlock.svelte';
 import {confirmEmailVerification, readLinkRefusal, readResendFailure, resendEmailVerification, type ResendFailure, type VerificationLinkRefusal} from './verificationApi';
 
+// A plain table of functions: the generated client's own type has grown past what TypeScript will instantiate for spyOn
+const api = zodiosApi as unknown as Record<string, (...args: unknown[]) => unknown>;
+
 const CONFIRM_ALIAS = 'confirm_email_verification_api_v1_email_verification_confirm_post';
 const RESEND_ALIAS = 'resend_email_verification_api_v1_email_verification_resend_post';
 const TOKEN = 'zq-Verify_Token-0123';
@@ -85,7 +88,7 @@ afterEach(() => {
 // =====================================================================================================================
 describe('confirmEmailVerification and resendEmailVerification — through their aliases', () => {
     it('VFA-01: confirm posts {token} alone, once, and answers {username} alone', async () => {
-        const alias = vi.spyOn(zodiosApi, CONFIRM_ALIAS).mockResolvedValueOnce({username: 'zq_alice'});
+        const alias = vi.spyOn(api, CONFIRM_ALIAS).mockResolvedValueOnce({username: 'zq_alice'});
 
         await expect(confirmEmailVerification(TOKEN)).resolves.toStrictEqual({username: 'zq_alice'});
         expect(alias).toHaveBeenCalledTimes(1);
@@ -93,7 +96,7 @@ describe('confirmEmailVerification and resendEmailVerification — through their
     });
 
     it('VFA-02: resend posts {username, password}, once, and answers the language alone', async () => {
-        const alias = vi.spyOn(zodiosApi, RESEND_ALIAS).mockResolvedValueOnce({language: 'it'});
+        const alias = vi.spyOn(api, RESEND_ALIAS).mockResolvedValueOnce({language: 'it'});
 
         await expect(resendEmailVerification('zq_alice', 'Pass-2026')).resolves.toBe('it');
         expect(alias).toHaveBeenCalledTimes(1);
@@ -103,8 +106,8 @@ describe('confirmEmailVerification and resendEmailVerification — through their
     it('VFA-03: a refusal of either reaches the caller as the client raised it', async () => {
         const refusedLink = axiosRefusal(400, {detail: {error_code: 'TOKEN_INVALID', status: 'expired'}});
         const refusedResend = axiosRefusal(401, INVALID_CREDENTIALS_BODY);
-        vi.spyOn(zodiosApi, CONFIRM_ALIAS).mockRejectedValueOnce(refusedLink);
-        vi.spyOn(zodiosApi, RESEND_ALIAS).mockRejectedValueOnce(refusedResend);
+        vi.spyOn(api, CONFIRM_ALIAS).mockRejectedValueOnce(refusedLink);
+        vi.spyOn(api, RESEND_ALIAS).mockRejectedValueOnce(refusedResend);
 
         await expect(confirmEmailVerification(TOKEN)).rejects.toBe(refusedLink);
         await expect(resendEmailVerification('zq_alice', 'wrong')).rejects.toBe(refusedResend);

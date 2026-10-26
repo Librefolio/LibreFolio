@@ -28,11 +28,15 @@ from backend.app.schemas.users import (
     InviteRead,
     LinkTokenResponse,
     OnboardingResetRequest,
+    OverLimitRead,
+    OverLimitResolveRequest,
+    OverLimitResolveResponse,
+    OverLimitUserRead,
     UserSearchItem,
     UserSearchResponse,
     UserUsageRead,
 )
-from backend.app.services.accounts import address_probe, registration_service, token_service, user_service
+from backend.app.services.accounts import address_probe, registration_service, token_service, user_limit_service, user_service
 from backend.app.services.accounts.onboarding_service import reset_onboarding_progress
 from backend.app.services.accounts.registration_service import RegistrationError
 from backend.app.services.accounts.user_service import search_users
@@ -152,6 +156,39 @@ async def revoke_invite(invite_id: int, admin: Annotated[User, Depends(require_a
     await session.commit()
     logger.info("Invitation revoked by an administrator", invite_id=invite_id, admin_id=admin.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/over-limit", response_model=OverLimitRead, summary="The accounts over the plan, and who may stay (admin)")
+async def list_over_limit(admin: Annotated[User, Depends(require_admin)], session: AsyncSession = Depends(get_session_generator)) -> OverLimitRead:
+    """When the active accounts outnumber ``LIBREFOLIO_MAX_USERS``: the numbers and the active accounts to choose from
+    (who must stay is marked ``protected``). Otherwise ``over_limit`` is false and ``users`` is empty."""
+    choice = await user_limit_service.list_for_choice(session, admin)
+    return OverLimitRead(
+        over_limit=choice.over_limit,
+        active=choice.active,
+        max_users=choice.max_users,
+        live_invites=choice.live_invites,
+        waiting_accounts=choice.waiting_accounts,
+        max_keep=choice.max_keep,
+        users=[OverLimitUserRead(id=row.id, username=row.username, email=row.email, is_superuser=row.is_superuser, protected=row.protected, owned_brokers_alone=row.owned_brokers_alone) for row in choice.users],
+    )
+
+
+_OVER_LIMIT_REFUSALS = {"NOT_OVER_LIMIT": status.HTTP_409_CONFLICT}
+
+
+@router.post("/over-limit/resolve", response_model=OverLimitResolveResponse, summary="Choose who keeps the access when the accounts are over the plan (admin)")
+async def resolve_over_limit(request: OverLimitResolveRequest, admin: Annotated[User, Depends(require_admin)], session: AsyncSession = Depends(get_session_generator)) -> OverLimitResolveResponse:
+    """Keep the accounts of ``keep_user_ids``; deactivate every other active account (sessions end, nothing is deleted).
+    Live invitations are revoked only as far as the kept accounts need their places. All or nothing, in one transaction.
+
+    409 ``NOT_OVER_LIMIT``: the instance is not over its limit (another administrator chose first). 422 ``UNKNOWN_USER``,
+    ``TOO_MANY_KEPT``, ``PROTECTED_MISSING`` or ``NO_ADMIN_KEPT``: the choice breaks a rule, and nothing changed."""
+    try:
+        resolution = await user_limit_service.resolve(session, admin, request.keep_user_ids)
+    except user_limit_service.UserLimitError as refused:
+        raise HTTPException(status_code=_OVER_LIMIT_REFUSALS.get(refused.code, status.HTTP_422_UNPROCESSABLE_CONTENT), detail={"error_code": refused.code, "message": str(refused)}) from None
+    return OverLimitResolveResponse(kept=resolution.kept, deactivated=resolution.deactivated, revoked_invites=resolution.revoked_invites)
 
 
 @router.post("/address-probe", response_model=AddressProbeIssued, summary="A nonce to check that this instance answers at another address (admin)")
