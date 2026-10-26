@@ -38,7 +38,7 @@ from backend.app.db.models import (
     TransactionType,
 )
 from backend.app.db.precision import round_computed_value
-from backend.app.schemas.common import Currency, FxBackwardFillInfo, is_canonical_iso_currency
+from backend.app.schemas.common import Currency, DateSpan, FxBackwardFillInfo, is_canonical_iso_currency
 from backend.app.schemas.portfolio import (
     AcquisitionFundingPoint,
     AcquisitionFundingSeries,
@@ -57,6 +57,7 @@ from backend.app.schemas.portfolio import (
     IncomeHistoryPoint,
     IncomeHistorySeries,
     MissingPriceAsset,
+    MwrrLinePoint,
     OtherPeriodEffect,
     PnlCandlePoint,
     PnlCandleSeries,
@@ -114,6 +115,7 @@ from backend.app.services.financial_math.returns import (
     rebase_to_period,
     timing_effect,
 )
+from backend.app.services.financial_math.series_steps import merged_spans
 from backend.app.services.financial_math.splits import split_linked_ids
 from backend.app.services.financial_math.valuation import compute_holding_value
 from backend.app.services.financial_math.weights import percent_of
@@ -337,23 +339,22 @@ def _period_realized_sales(sales: list[Any], date_from: date_type | None, date_t
 
 
 def _engine_missing_fx_pairs(engine_result: Any, period_from: date_type | None, period_to: date_type | None) -> list[WACMissingPairInfo]:
-    """Every conversion the engine could not make, as pair + dates for the data-quality banner.
+    """Every conversion the engine could not make, as pair + dates + ranges for the data-quality banner.
 
-    Movements (cost, cash, external flows, in-transit cost) count on whatever date they happened;
-    valuations only on the days of the period shown, [period_from, period_to], whose first day is
-    the opening state of the period.
+    ``dates``: the movements (cost, cash, external flows, in-transit cost), on whatever date they happened. ``ranges``:
+    the valuation days, only those of the period shown, [period_from, period_to], whose first day is the opening state of
+    the period, with the consecutive days merged (D-P4: no list of every day).
     """
     dates_by_pair: dict[str, set[date_type]] = defaultdict(set)
     for pair, dates in (getattr(engine_result, "missing_fx", None) or {}).items():
         dates_by_pair[pair].update(dates)
+    spans_by_pair: dict[str, list[tuple[date_type, date_type]]] = defaultdict(list)
     daily_states = getattr(engine_result, "daily_states", None) or []
     if isinstance(daily_states, DailyStates):
-        # Every day of a segment reads its state's pairs (P4): the days are listed, no state is built
+        # Every day of a segment reads its state's pairs (P4): no state is built
         for segment in daily_states.iter_segments(period_from, period_to):
-            if segment.state.missing_fx_pairs:
-                days = [segment.start + timedelta(days=offset) for offset in range((segment.end - segment.start).days + 1)]
-                for pair in segment.state.missing_fx_pairs:
-                    dates_by_pair[pair].update(days)
+            for pair in segment.state.missing_fx_pairs:
+                spans_by_pair[pair].append((segment.start, segment.end))
     else:
         for state in daily_states:
             if not state.missing_fx_pairs:
@@ -361,8 +362,17 @@ def _engine_missing_fx_pairs(engine_result: Any, period_from: date_type | None, 
             if (period_from is not None and state.date < period_from) or (period_to is not None and state.date > period_to):
                 continue
             for pair in state.missing_fx_pairs:
-                dates_by_pair[pair].add(state.date)
-    return [WACMissingPairInfo(pair=pair, dates=sorted(dates)) for pair, dates in sorted(dates_by_pair.items())]
+                spans_by_pair[pair].append((state.date, state.date))
+    return [WACMissingPairInfo(pair=pair, dates=sorted(dates_by_pair.get(pair, ())), ranges=[DateSpan(start=first, end=last) for first, last in merged_spans(spans_by_pair.get(pair, ()))]) for pair in sorted(set(dates_by_pair) | set(spans_by_pair))]
+
+
+@dataclass(frozen=True)
+class HistorySteps:
+    """The report's history in steps (D-P4): its ``range``, the steps, and the MWRR line of true points."""
+
+    range: DateSpan | None
+    history: list[PortfolioHistoryPoint]
+    mwrr_line: list[MwrrLinePoint]
 
 
 def _engine_native_cash(engine_result: Any, report_currency: str) -> NativeCash:
@@ -576,9 +586,11 @@ class PortfolioService:
     @staticmethod
     def _merge_missing_pairs(items: list[WACMissingPairInfo]) -> list[WACMissingPairInfo]:
         merged: dict[str, set[date_type]] = defaultdict(set)
+        spans: dict[str, list[tuple[date_type, date_type]]] = defaultdict(list)
         for item in items:
             merged[item.pair].update(item.dates)
-        return [WACMissingPairInfo(pair=pair, dates=sorted(dates)) for pair, dates in sorted(merged.items())]
+            spans[item.pair].extend((span.start, span.end) for span in item.ranges)
+        return [WACMissingPairInfo(pair=pair, dates=sorted(dates), ranges=[DateSpan(start=first, end=last) for first, last in merged_spans(spans[pair])]) for pair, dates in sorted(merged.items())]
 
     async def _get_configured_fx_pair_sets(self) -> tuple[set[str], set[str]]:
         from backend.app.services.financial_math.portfolio.data_quality import load_configured_fx_pair_sets  # noqa: PLC0415 — same lazy engine import as the methods below
@@ -1185,7 +1197,7 @@ class PortfolioService:
             data_quality=data_quality,
         )
 
-    async def get_history(  # noqa: C901 — sequential engine→metrics→merge pipeline with period-rebase if/else
+    async def get_history(
         self,
         user_id: int,
         broker_ids: list[int] | None = None,
@@ -1194,11 +1206,31 @@ class PortfolioService:
         target_currency_override: str | None = None,
         _precomputed_engine_result=None,
     ) -> list[PortfolioHistoryPoint]:
-        """Return daily portfolio value series via PortfolioCalculationEngine.
+        """Return the portfolio value series in steps via PortfolioCalculationEngine: see :meth:`get_history_steps`.
 
         _precomputed_engine_result: if provided by get_report(), skip engine re-run.
         """
-        from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder  # noqa: PLC0415
+        steps = await self.get_history_steps(user_id, broker_ids, date_from, date_to, target_currency_override, _precomputed_engine_result)
+        return steps.history
+
+    async def get_history_steps(
+        self,
+        user_id: int,
+        broker_ids: list[int] | None = None,
+        date_from: date_type | None = None,
+        date_to: date_type | None = None,
+        target_currency_override: str | None = None,
+        _precomputed_engine_result=None,
+    ) -> HistorySteps:
+        """The history of ``[date_from, date_to]`` in steps, its ``range`` and its MWRR line (D-P4, contract §1.2, §2).
+
+        Each point holds from its ``date`` to its ``through``: the values of every day in it, TWRR and ROI included, are
+        the daily series' values of that day. The MWRR moves even on a quiet day, so it is not in the steps: the line has
+        its true values at each step's ``date`` and ``through``, and at the month ends inside a long step.
+
+        _precomputed_engine_result: if provided by get_report(), skip engine re-run.
+        """
+        from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder, mwrr_line_days  # noqa: PLC0415
         from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine  # noqa: PLC0415
 
         base_currency = target_currency_override or await self._get_base_currency(user_id)
@@ -1214,96 +1246,60 @@ class PortfolioService:
                 target_currency=base_currency,
             )
 
-        if not result.daily_states:
-            return []
-
         views = DerivedViewsBuilder(result.daily_states, base_currency)
+        window = views.window_range(date_from, date_to) if result.daily_states else None
+        if window is None:
+            return HistorySteps(range=None, history=[], mwrr_line=[])
+        start, end = window
 
-        # ── Build history dicts ──
-        history_dicts = views.build_history(date_from, date_to)
+        # The first point pins the TWRR to 0, so the day after it may differ from it even when nothing happens
+        pins = (start + timedelta(days=1),) if start < end else ()
 
-        # ── Performance metrics ──
-        nav_snapshots, cash_flows = views.build_performance_inputs(date_from)
-
-        # Period re-basing for ROI metrics
+        # ── TWRR and ROI on the days a step may start (a quiet day keeps both) ──
+        nav_snapshots, cash_flows = views.build_performance_inputs(date_from, days=[*views.change_days(start, end, pins), end])
         period = rebase_to_period(nav_snapshots, cash_flows, date_from)
         period_cash_flows = list(period.cash_flows)
         period_nav_snapshots = list(period.nav_snapshots)
-
         twrr_map: dict[date_type, Decimal] = {}
         roi_map: dict[date_type, Decimal] = {}
-        mwrr_map: dict[date_type, Decimal | None] = {}
-
         if period_nav_snapshots and period_cash_flows:
-            twrr_series = calculate_twrr_series(period_nav_snapshots, period_cash_flows)
-            roi_series = calculate_simple_roi_series(period_nav_snapshots, period_cash_flows)
+            twrr_map = {pt.date: pt.twrr for pt in calculate_twrr_series(period_nav_snapshots, period_cash_flows)}
+            roi_map = {pt.date: pt.roi for pt in calculate_simple_roi_series(period_nav_snapshots, period_cash_flows)}
+
+        # First point pinned to 0% for the TWRR (and the MWRR line): period-relative returns measured from inception are
+        # 0 at the period start by definition. ROI is NOT pinned — it is an absolute ratio (NAV − net_invested)/net_invested,
+        # so on the very first day it must already reflect any seeded cost-vs-market gap (e.g. an in-kind succession
+        # seeded above/below market shows its day-1 gain/loss instead of a flat 0).
+        def metrics(day: date_type) -> dict[str, Decimal | None]:
+            return {"twrr": Decimal("0") if day == start else twrr_map.get(day), "roi": roi_map.get(day)}
+
+        history_dicts = views.build_history(start, end, metrics=metrics, extra_days=pins)
+        history = [PortfolioHistoryPoint(**point) for point in history_dicts]
+        mwrr_line = await self._mwrr_line(views, date_from, mwrr_line_days(history_dicts), start)
+        return HistorySteps(range=DateSpan(start=start, end=end), history=history, mwrr_line=mwrr_line)
+
+    @staticmethod
+    async def _mwrr_line(views: Any, date_from: date_type | None, days: list[date_type], start: date_type) -> list[MwrrLinePoint]:
+        """The MWRR line's true points on ``days`` (D-P4, contract §2): each the period MWRR ending that day — the value
+        the daily line gives there, bit for bit (:func:`returns.period_mwrr_series`, every point its own solve) — and its
+        cumulative form from the period's start; the first day pinned to 0."""
+        nav_snapshots, cash_flows = views.build_performance_inputs(date_from, days=days)
+        period = rebase_to_period(nav_snapshots, cash_flows, date_from)
+        period_nav_snapshots, period_cash_flows = list(period.nav_snapshots), list(period.cash_flows)
+        mwrr_map: dict[date_type, Decimal | None] = {}
+        if period_nav_snapshots and period_cash_flows:
             # The same rule as the card, at every point (D-MF5): no rate where the card would have none.
             mwrr_series = await asyncio.to_thread(period_mwrr_series, period_nav_snapshots, period_cash_flows)
-            twrr_map = {pt.date: pt.twrr for pt in twrr_series}
-            roi_map = {pt.date: pt.roi for pt in roi_series}
             mwrr_map = {pt.date: pt.mwrr for pt in mwrr_series}
-
-        # Period start date for cumulative MWRR calculation
         period_start = period_nav_snapshots[0].date if period_nav_snapshots else None
-
-        # ── Slice to [date_from, date_to] and merge performance ──
-        history_points: list[PortfolioHistoryPoint] = []
-        for h in history_dicts:
-            d = h["date"]
-            if date_from and d < date_from:
+        line: list[MwrrLinePoint] = []
+        for day in days:
+            if day == start:
+                line.append(MwrrLinePoint(date=day, annualized=Decimal("0"), cumulative=Decimal("0")))
                 continue
-            # Defensive upper bound: daily_states should already be bound to
-            # date_to by the engine, but guard against a stale/wider cached
-            # blob leaking extra days into the returned history array.
-            if date_to and d > date_to:
-                continue
-
-            twrr = twrr_map.get(d)
-            roi = roi_map.get(d)
-            mwrr_ann = mwrr_map.get(d)
-
-            # Compute cumulative MWRR from annualized
-            days_from_start = (d - period_start).days if period_start else 0
-            mwrr_cum = annualized_to_cumulative(mwrr_ann, days_from_start)
-
-            history_points.append(
-                PortfolioHistoryPoint(
-                    date=d,
-                    cash_value=h["cash_value"],
-                    market_value=h["market_value"],
-                    broker_nav_value=h.get("broker_nav_value"),
-                    in_transit_cash_value=h.get("in_transit_cash_value"),
-                    in_transit_asset_market_value=h.get("in_transit_asset_market_value"),
-                    in_transit_market_value=h.get("in_transit_market_value"),
-                    nav_value=h["nav_value"],
-                    open_cost_basis=h.get("open_cost_basis"),
-                    in_transit_asset_cost_basis=h.get("in_transit_asset_cost_basis"),
-                    in_transit_book_value=h.get("in_transit_book_value"),
-                    book_value=h.get("book_value"),
-                    capital_baseline=h["capital_baseline"],
-                    book_asset_like=h["book_asset_like"],
-                    cash_from_contributed_capital=h["cash_from_contributed_capital"],
-                    cash_from_generated_returns=h["cash_from_generated_returns"],
-                    total_pnl=h["total_pnl"],
-                    unrealized_gain_loss=h.get("unrealized_gain_loss"),
-                    twrr=twrr,
-                    mwrr_annualized=mwrr_ann,
-                    mwrr_cumulative=mwrr_cum,
-                    roi=roi,
-                )
-            )
-
-        # First point pinned to 0% for the cumulative growth measures (TWRR/MWRR): they are
-        # period-relative returns measured from inception, so they are 0 at the period start by
-        # definition. ROI is NOT pinned — it is an absolute ratio (NAV − net_invested)/net_invested,
-        # so on the very first day it must already reflect any seeded cost-vs-market gap (e.g. an
-        # in-kind succession seeded above/below market shows its day-1 gain/loss instead of a flat 0).
-        if history_points:
-            history_points[0].twrr = Decimal("0")
-            history_points[0].mwrr_annualized = Decimal("0")
-            history_points[0].mwrr_cumulative = Decimal("0")
-
-        return history_points
+            annualized = mwrr_map.get(day)
+            line.append(MwrrLinePoint(date=day, annualized=annualized, cumulative=annualized_to_cumulative(annualized, (day - period_start).days if period_start else 0)))
+        return line
 
     async def get_broker_pnl_history(
         self,
@@ -1352,8 +1348,7 @@ class PortfolioService:
         for broker_id, points in by_broker.items():
             broker = await self._get_broker(broker_id)
             broker_name = broker.name if broker else f"Broker {broker_id}"
-            sliced_points = [BrokerPnlHistoryPoint(date=p["date"], total_pnl=p["total_pnl"]) for p in points if (date_from is None or p["date"] >= date_from) and (date_to is None or p["date"] <= date_to)]
-            broker_pnl_history.append(BrokerPnlHistory(broker_id=broker_id, broker_name=broker_name, points=sliced_points))
+            broker_pnl_history.append(BrokerPnlHistory(broker_id=broker_id, broker_name=broker_name, points=[BrokerPnlHistoryPoint(**point) for point in points]))
 
         return broker_pnl_history
 
@@ -1396,9 +1391,7 @@ class PortfolioService:
             return PnlCandleSeries(points=[])
 
         views = DerivedViewsBuilder(result.daily_states, base_currency)
-        raw_points = views.build_pnl_candles(date_from, date_to)
-        sliced_points = [PnlCandlePoint(date=p["date"], open=p["open"], high=p["high"], low=p["low"], close=p["close"]) for p in raw_points if (date_from is None or p["date"] >= date_from) and (date_to is None or p["date"] <= date_to)]
-        return PnlCandleSeries(points=sliced_points)
+        return PnlCandleSeries(points=[PnlCandlePoint(**point) for point in views.build_pnl_candles(date_from, date_to)])
 
     async def _signed_transaction_sums_by_date(
         self,
@@ -2092,9 +2085,10 @@ class PortfolioService:
 
         # ── 3. History ──
         history: list[PortfolioHistoryPoint] | None = None
+        mwrr_line: list[MwrrLinePoint] | None = None
         if query.include_history:
             included.append("history")
-            history = await self.get_history(
+            history_steps = await self.get_history_steps(
                 user_id=user_id,
                 broker_ids=query.broker_ids,
                 date_from=date_from,
@@ -2102,6 +2096,7 @@ class PortfolioService:
                 target_currency_override=base_currency,
                 _precomputed_engine_result=engine_result,
             )
+            history, mwrr_line = history_steps.history, history_steps.mwrr_line
 
         # ── 4. Allocation history (all 4 dimensions from same engine result) ──
         alloc_history: AllocationHistoryDimensions | None = None
@@ -2245,10 +2240,16 @@ class PortfolioService:
             included_features=included,
         )
 
+        # The window of the step series (D-P4): the days of the period that have a state
+        step_series_included = query.include_history or query.include_allocation_history or query.include_broker_pnl_history or query.include_pnl_candles
+        window = views.window_range(date_from, effective_date_to) if step_series_included and engine_result.daily_states else None
+
         report = PortfolioReportResponse(
             metadata=metadata,
+            range=DateSpan(start=window[0], end=window[1]) if window is not None else None,
             summary=summary,
             history=history,
+            mwrr_line=mwrr_line,
             allocation_history=alloc_history,
             data_quality=data_quality,
             positions_contribution=positions_contribution,

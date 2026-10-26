@@ -111,6 +111,34 @@ class AskedDayRates(Mapping[tuple, Decimal]):
     def __len__(self) -> int:
         return sum(1 for _key in self)
 
+    def rate_day_at(self, source: str, destination: str, day: date) -> date | None:
+        """The date of the stored row the reading of ``(source, destination)`` on ``day`` comes from; None where the view
+        reads nothing (outside the windows asked, before the first rate) or the steps carry no row dates."""
+        pair = (source, destination)
+        steps = self._steps.get(pair)
+        if steps is None or not self._asked(pair, day):
+            return None
+        rate_day_at = getattr(steps, "rate_day_at", None)
+        return rate_day_at(day) if rate_day_at is not None else None
+
+    def stale_turn_days(self, source: str, destination: str, threshold_days: int) -> tuple[date, ...]:
+        """The days on which the reading of ``(source, destination)`` turns stale: its stored row becomes more than
+        ``threshold_days`` days old before a newer step replaces it, on a day the view reads (D-P4: a novelty)."""
+        pair = (source, destination)
+        steps = self._steps.get(pair)
+        rate_days = getattr(steps, "rate_days", None) if steps is not None else None
+        if not rate_days:
+            return ()
+        turns: list[date] = []
+        for index, (step_day, rate_day) in enumerate(zip(steps.days, rate_days, strict=True)):
+            if rate_day + timedelta(days=threshold_days) >= date.max:
+                continue
+            turn = rate_day + timedelta(days=threshold_days + 1)
+            next_day = steps.days[index + 1] if index + 1 < len(steps.days) else None
+            if step_day <= turn and (next_day is None or turn < next_day) and self._asked(pair, turn):
+                turns.append(turn)
+        return tuple(turns)
+
     def reading_change_days(self, source: str, destination: str | None = None) -> tuple[date, ...]:
         """The days on which this view's reading of a pair may differ from its reading the day before, ascending.
 
