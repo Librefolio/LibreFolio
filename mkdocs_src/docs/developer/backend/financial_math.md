@@ -197,11 +197,11 @@ One call of `PortfolioCalculationEngine.calculate()` (`portfolio/engine.py`):
    (`InvalidSplitEvent`, sorted by event id), which the data-quality report turns into `INVALID_SPLIT_RATIO`.
    The range of daily states it computes starts no earlier than the first
    transaction and ends no later than `latest_range_end()` (tomorrow, `utils/datetime_utils.py`): the replay walks every
-   day, and an end far in the future held the instance (R13-SEC7-1). Nor does it start before `EARLIEST_RANGE_START`
-   (1 January 1900, same module, R13-SEC8): a transaction stored before it is still replayed on its own date (see
-   [The Days the Engine Recomputes](#recomputed-days)), but no state is emitted for a day before it, and none of the
-   per-day rates of steps 4 and 5 is asked before it — a movement's own conversion is still asked at its date. A
-   range that ends before the first transaction gives an empty result;
+   day, and an end far in the future held the instance (R13-SEC7-1). It has no date floor at the start: `actual_from` is
+   `max(date_from, first_tx_date)`, so a transaction dated before 1900, year 1 included, starts the states on its own
+   day. The cost follows the engine's segments — the days something changes (see
+   [The Days the Engine Recomputes](#recomputed-days)) — not the calendar days. A range that ends before the first
+   transaction gives an empty result;
 3. returns the cached `PortfolioCalculationResult` when the `portfolio_blob` cache holds one for
    the same key — scope, currency, options, data fingerprints and the day of
    `position_states_start` — that starts on or before the requested start and ends on the
@@ -337,7 +337,7 @@ read-only `Sequence` of one state a day held as `StateSegment`s: `start` (a comp
 can change is dirty. Indexing, slicing and iteration build a quiet day when it is read
 (`StateSegment.state_on()`: `dataclasses.replace()`, its containers copied), so the output is the
 one a day-by-day walk gives, while memory grows with the computed days only. Measured on a copy of
-the test database with one deposit typed in 1500 (the floor lowered for the measure): 192 413
+the test database with one deposit typed in 1500: 192 413
 states and 686 MB kept before P4, 397 segments and 5 MB after. A reader that needs the values,
 not one object a day, asks one day (`state_on()`, `state_as_of()`) or walks
 `iter_segments(date_from, date_to)` (segments clipped to the window): `period.state_as_of()`, the
@@ -396,13 +396,12 @@ expanding the steps gives the daily answer field for field. A missing rate is a 
 asset id), plus the Liquidity slice of `by_type` (cash and cash in transit): the report's
 `summary.allocation_by_asset` and `allocation_history.asset`.
 
-A movement stored before `EARLIEST_RANGE_START` (1 January 1900, `utils/datetime_utils.py`) is
-replayed exactly, on its own date and in its own order, never moved onto 1900; `calculate()` never
-passes a `date_from` before that floor, so the replay crosses the years between such a movement
-and `date_from` from dirty day to dirty day. `calculate()` counts those rows into
-`PortfolioCalculationResult.rows_before_floor` (`RowsBeforeFloor(count, earliest)`), which the
-data-quality report turns into the warning `TRANSACTIONS_BEFORE_FLOOR` (MF-SEC8-2a; see
-[Data Quality Banner](../frontend/data-quality-banner.md)).
+The engine has no date floor (lot MF-PAV-L1): a movement stored in 1500, or in year 1, is replayed
+exactly, on its own date and in its own order, and the states start at the first transaction. When the
+requested `date_from` is later than a movement, the replay starts at the movement and crosses the years
+between it and `date_from` from dirty day to dirty day. The old counter `rows_before_floor`
+(`RowsBeforeFloor`) and the data-quality issue `TRANSACTIONS_BEFORE_FLOOR` no longer exist: nothing is
+moved or dropped, so there is nothing to warn about.
 
 !!! info "Why: R13-SEC8"
 
@@ -410,7 +409,9 @@ data-quality report turns into the warning `TRANSACTIONS_BEFORE_FLOOR` (MF-SEC8-
     calendar day since: a state carried on each quiet day, a rate calendar for each currency, a rate
     request for each day of each foreign currency it values (finding R13-SEC8, lot MF-SEC8-2). A row
     dated `0001-01-01` could even raise `OverflowError`: a rate calendar starts the day before the
-    replay, and `date.min` has none.
+    replay, and `date.min` has none. The floor of 1 January 1900 that lot MF-SEC8-2 put in front of the
+    replay is gone: the cost no longer depends on the calendar days (rates are read as steps, calendars
+    hold only the candidate days), and a calendar has no day before `date.min`.
 
 Both rate rules take their days from one pure function, the one home of «the day a rate changes»:
 `native_cash.change_days(read, currencies, days)` returns the days of the calendar `days`, in its
@@ -419,12 +420,13 @@ calendar's previous day; a rate on the calendar's first day counts. The caller c
 and the calendar. The native cash reads the last rate known on or before the day, on the calendar
 of its rate points. The engine reads the rate `fx_rate_map` holds for that exact day
 (`_read_rate()`), on every replayed day — or day of the transit, for cash in transit — each
-compared with the day before (`_calendar()` starts one day early); its calendars start on
-`EARLIEST_RANGE_START` at the earliest, since no rate is loaded before it. `_read_rate()` reads only the
+compared with the day before; its calendars start at the replay's start, and each holds only the
+candidate days (`_reading_calendar()`: the steps and window bounds of the rates, each with the day
+before it), never every day since. `_read_rate()` reads only the
 map, which `_preload_fx_rates()` already answers for these currencies on every day of
 `[date_from, date_to]` (a day replayed before a later `date_from` may find none there, and its
-state is not emitted), and for cash in transit on every day of its transit from
-`EARLIEST_RANGE_START` on: the rule asks the FX service for nothing more.
+state is not emitted), and for cash in transit on every day of its transit, from the interval's own
+start: the rule asks the FX service for nothing more.
 
 When you add an input that can change a day's value — a rate, a price, a mark's source, an age —
 add its days to the dirty days, or show that the day cannot change.

@@ -8,7 +8,8 @@ on which a rate the valuation reads changes from the day before. Today (HEAD ``3
 ``self._read_rate`` (``fx_rate_map.get((currency, target, day))``), once for the currencies of the securities and once
 per cash in-transit interval. A book with a deposit on 1900-01-02 and activity in 2025 is read on ~46 000 days per
 currency, although the map changes on a handful of them. And ``replay_from - timedelta(days=1)`` raises
-``OverflowError`` on ``date.min`` once the 1900 floor (``EARLIEST_RANGE_START``) is lowered.
+``OverflowError`` on ``date.min`` once a date floor is lowered. Since D-P4 / MF-PAV-L1 the floor is gone: the calendars
+start at ``builder._replay_from`` (the earliest movement, or ``date_from``), even in year 1.
 
 THE CONTRACT (MF5-2a):
 
@@ -21,9 +22,10 @@ THE CONTRACT (MF5-2a):
    ``AskedDayRates`` or a plain dict keyed ``(currency, target, day)``), but reads only candidate days: the reads are
    bounded by a small multiple of the candidate days (rate keys / steps / window bounds, + 2 per in-transit interval),
    not by the calendar length.
-3. With the floor lowered (``EARLIEST_RANGE_START = date.min``) and a movement on ``date(1, 1, 1)``, the method (and
-   ``build()``) do not raise; the same for a cash in-transit interval starting on ``date(1, 1, 1)``. With today's floor
-   nothing changes.
+3. With no date floor (D-P4, MF-PAV-L1) a movement on ``date(1, 1, 1)`` makes the method (and ``build()``) read from
+   ``date.min`` without raising, and the reads stay bounded by the candidate days, not by the ~740 000 calendar days to
+   today; the same for a cash in-transit interval starting on ``date(1, 1, 1)``. The calendar starts at the replay start,
+   never at 1900.
 
 What is tested:
 
@@ -32,26 +34,26 @@ What is tested:
   ``merged_windows`` joins, a reversed window), both key formats, every pair compared with a dense scan of ``get`` over a
   range covering everything by more than 3 days; hand cases; the fixed-destination rules; a window on ``date.min``.
 - ``TestBuilderEquivalence`` — ``_valuation_rate_change_days()`` against an independent dense reference written here
-  (HEAD's algorithm: every day from ``replay_from`` - 1, plus each cash in-transit interval), on named builders (dict and
+  (the dense algorithm: every day from ``replay_from`` - 1, plus each cash in-transit interval; no date floor), on named builders (dict and
   ``AskedDayRates`` maps; a foreign security; a foreign quote currency; cash in transit in a foreign currency, clipped,
   ignored when of an asset or in the report currency, or empty; a replay that starts before ``date_from``; ``date_from``
-  on a rate change) and on 40 seeded random builders per map kind. Green on HEAD: these pin that the cure changes no day.
-- ``TestReadCost`` — the cost red: ``_read_rate`` calls, map lookups and steps ``at`` calls during one call are at most
-  50 × the candidate days and at most 5 000. HEAD: ~2 × 46 000 (dict book through ``build()``), ~137 000 (view with a
-  long cash in-transit interval).
-- ``TestDateMin`` — the floor red: with ``EARLIEST_RANGE_START`` monkeypatched to ``date.min`` and a movement on
-  ``date(1, 1, 1)``, the method (dict map, view map, cash in transit from ``date.min``) and ``build()`` do not raise and
-  equal the dense reference from ``date.min`` (no day before it: a rate on ``date.min`` counts as a change there). HEAD:
-  ``OverflowError: date value out of range`` from ``replay_from - timedelta(days=1)`` (and ``start - timedelta(days=1)``
-  for the interval). Plus a green guard: with today's floor a movement on ``date(1, 1, 1)`` still reads from 1900.
+  on a rate change) and on 40 seeded random builders per map kind: these pin that the cure changes no day.
+- ``TestReadCost`` — the cost guarantee: ``_read_rate`` calls, map lookups and steps ``at`` calls during one call are at
+  most 50 × the candidate days and at most 5 000, from 1900 and from ``date.min`` (dict book through ``build()``, view with
+  a long cash in-transit interval, both maps over the ~740 000 days from year 1 to today). A walk of the calendar would read
+  ~2 × 46 000 (dict book), ~137 000 (view with a long transit), ~740 000 (from year 1).
+- ``TestDateMin`` — no floor: with a movement on ``date(1, 1, 1)`` the method (dict map, view map, cash in transit from
+  ``date.min``) and ``build()`` do not raise and equal the dense reference from ``date.min`` (no day before it: a rate on
+  ``date.min`` counts as a change there). Plus the opposite of the old guard: a movement on year 1 reads from year 1, the
+  calendar starts at the replay start, not on 1 January 1900. A walk that computes ``replay_from - timedelta(days=1)``
+  raises ``OverflowError`` there.
 
 Note on ``_replay_from``: ``build()`` sets it (the earliest movement, or ``date_from``) before calling the method; the
 method-level tests set it directly, as ``build()`` would, to keep each case to the method's own inputs. The build-level
 tests (``test_cost_dict_book_through_build``, ``test_build_does_not_raise_on_date_min``) take it from a real book.
 
-RED on HEAD 352d48ff3: ``TestReadingChangeDays`` by absence (``AskedDayRates`` has no ``reading_change_days``),
-``TestReadCost`` by count, ``TestDateMin`` (four) by ``OverflowError``. GREEN on HEAD: ``TestBuilderEquivalence`` and the
-today's-floor guard.
+History: written red on HEAD ``352d48ff3`` (MF5-2a); the oracles read the 1900 floor until MF-PAV-L1 removed it (D-P4):
+now they start at ``_replay_from``.
 
 Runs in ``./dev.py test services financial-math`` (the runner collects the whole ``test_financial_math/`` directory);
 alone: ``./dev.py test services financial-math test_rate_change_days_on_steps``.
@@ -77,7 +79,6 @@ import pytest
 from backend.app.db.models import TransactionType
 from backend.app.services.financial_math.fx_rates import AskedDayRates
 from backend.app.services.financial_math.native_cash import NativeCash
-from backend.app.services.financial_math.portfolio import daily_state as daily_state_module
 from backend.app.services.financial_math.portfolio.classifier import ScopeAwareTransactionClassifier
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
 from backend.app.services.financial_math.portfolio.models import InTransitInterval
@@ -368,8 +369,9 @@ def _builder(
 
 
 def _dense_reference(builder: DailyStateBuilder, fx_rate_map: Mapping | None = None) -> set[date]:
-    """HEAD's algorithm, written again: every day from ``replay_from`` - 1 (none before ``date.min``) through ``date_to``,
-    the exact day's rate of each watched currency; plus each cash in-transit interval on its own days."""
+    """The dense algorithm, written again: every day from ``replay_from`` - 1 (none before ``date.min``) through
+    ``date_to``, the exact day's rate of each watched currency, with no date floor (D-P4, MF-PAV-L1); plus each cash
+    in-transit interval on its own days."""
     rates = builder.fx_rate_map if fx_rate_map is None else fx_rate_map
     target = builder.target_currency
 
@@ -383,7 +385,7 @@ def _dense_reference(builder: DailyStateBuilder, fx_rate_map: Mapping | None = N
             previous = current
         return changed
 
-    replay_from = max(builder._replay_from, daily_state_module.EARLIEST_RANGE_START)
+    replay_from = builder._replay_from  # no date floor (D-P4, MF-PAV-L1): the calendars start at the replay's start
     currencies = {currency for prices in builder.price_map.values() for _day, _close, currency in prices if currency}
     currencies.update(currency for currency in builder.asset_currencies.values() if currency)
     currencies.discard(target)
@@ -401,6 +403,7 @@ def _rates(currency: str, points: Mapping[date, str], target: str = REPORT) -> d
     return {(currency, target, day): Decimal(rate) for day, rate in points.items()}
 
 
+D = lambda offset: date.min + timedelta(days=offset)  # noqa: E731
 J = lambda day: date(2025, 1, day)  # noqa: E731
 F = lambda day: date(2025, 2, day)  # noqa: E731
 
@@ -681,6 +684,94 @@ class TestReadCost:
         assert at_calls <= budget, f"{at_calls} steps .at() calls for {candidates} candidate days (budget {budget})"
 
 
+class TestReadCostFromYearOne:
+    """The same guarantee with no date floor: from 1 Jan year 1 to 2025 (~740 000 calendar days) the reads follow the
+    stored rows and the transit's bounds, not the days (D-P4, MF-PAV-L1: this is the default case, not an exception)."""
+
+    LAST = date(2025, 12, 31)
+
+    def test_cost_dict_map_from_date_min(self) -> None:
+        """A dict map with rows on year 1 and in 2025, a foreign security and a CHF transit of 2 025 years."""
+        usd = _rates("USD", {D(0): "0.5", D(1): "0.5", D(10): "0.6", date(2025, 3, 3): "1.04", date(2025, 3, 4): "1.05"})
+        chf = _rates("CHF", {D(0): "0.9", D(3): "0.95", date(2024, 12, 31): "0.95", date(2025, 1, 1): "0.96"})
+        fx_rate_map = _CountingDict(usd | chf)
+        builder = _builder(
+            fx_rate_map=fx_rate_map,
+            replay_from=D(0),
+            date_from=date(2025, 1, 1),
+            date_to=self.LAST,
+            asset_currencies={X: "USD"},
+            intervals=[_cash_interval(D(0), date(2025, 1, 1), "CHF")],
+        )
+        calls = _count_read_rate(builder)
+        fx_rate_map.lookups = 0
+
+        got = builder._valuation_rate_change_days()
+
+        usd_changes = {D(0), D(2), D(10), D(11), date(2025, 3, 3), date(2025, 3, 4), date(2025, 3, 5)}
+        chf_changes = {D(0), D(1), D(3), D(4), date(2024, 12, 31), date(2025, 1, 1), date(2025, 1, 2)}
+        # the transit reads CHF on [D(0), 2025-01-01]: 2025-01-02 is outside it, 2025-01-01 is its last day
+        assert got == usd_changes | (chf_changes - {date(2025, 1, 2)}), sorted(got)
+        candidates = len({day for _currency, _target, day in fx_rate_map}) + 2
+        budget = _budget(candidates)
+        assert calls[0] <= budget, f"_read_rate called {calls[0]} times for {candidates} candidate days (budget {budget}): the calendar is walked day by day"
+        assert fx_rate_map.lookups <= budget, f"{fx_rate_map.lookups} rate map lookups for {candidates} candidate days (budget {budget})"
+
+    def test_cost_view_from_date_min(self) -> None:
+        """An ``AskedDayRates`` asked on every day since year 1 and a CHF transit from ``date.min``."""
+        usd = _Steps({D(0): Decimal("0.5"), D(100): Decimal("0.6"), date(1950, 6, 1): Decimal("3.1"), date(2025, 3, 3): Decimal("1.04")})
+        chf = _Steps({D(0): Decimal("0.2"), date(1971, 8, 15): Decimal("0.25"), date(2015, 1, 15): Decimal("0.95")})
+        steps = {("USD", REPORT): usd, ("CHF", REPORT): chf}
+        windows = {pair: [(D(0), self.LAST)] for pair in steps}
+        view = _CountingView(steps, windows)
+        builder = _builder(
+            fx_rate_map=view,
+            replay_from=D(0),
+            date_from=date(2025, 1, 1),
+            date_to=self.LAST,
+            asset_currencies={X: "USD"},
+            intervals=[_cash_interval(D(0), date(2024, 12, 31), "CHF")],
+        )
+        candidates = sum(len(reader.days) for reader in steps.values()) + 2 * len(windows) + 2 * len(builder.in_transit_intervals)
+        calls = _count_read_rate(builder)
+        view.lookups = 0
+        for reader in steps.values():
+            reader.calls = 0
+
+        got = builder._valuation_rate_change_days()
+
+        # USD (the security) changes on each step day; CHF (the transit) on D(0) and its two steps inside the transit
+        assert got == {D(0), D(100), date(1950, 6, 1), date(2025, 3, 3), date(1971, 8, 15), date(2015, 1, 15)}, sorted(got)
+        budget = _budget(candidates)
+        at_calls = sum(reader.calls for reader in steps.values())
+        assert calls[0] <= budget, f"_read_rate called {calls[0]} times for {candidates} candidate days (budget {budget}): the calendar is walked day by day"
+        assert view.lookups <= budget, f"{view.lookups} view lookups for {candidates} candidate days (budget {budget})"
+        assert at_calls <= budget, f"{at_calls} steps .at() calls for {candidates} candidate days (budget {budget})"
+
+    def test_build_from_date_min_reads_stored_rows_not_days(self) -> None:
+        """``build()`` of a book whose first deposit is on 1 Jan year 1 and whose last movement is in 2025: the rate map
+        is read about as many times as it holds rows, not once per day of the 2 025 years."""
+        usd = _rates("USD", {D(0): "0.5", D(1): "0.5", date(1900, 1, 2): "4.8", date(2025, 3, 3): "1.04", date(2025, 3, 4): "1.05"})
+        fx_rate_map = _CountingDict(usd)
+        txs = [
+            _tx(id=1, dt=D(0), amount="1000", currency="USD"),
+            _tx(id=2, dt=date(2025, 3, 3), amount="-100", currency="USD", type="BUY", quantity="2", asset_id=X),
+        ]
+        builder = _book_builder(txs, fx_rate_map=fx_rate_map, asset_currencies={X: "USD"}, price_map={}, date_from=date(2025, 1, 1), date_to=self.LAST)
+        builder.build()
+        assert builder._replay_from == D(0), "fixture: the replay starts on the year-1 deposit"
+        calls = _count_read_rate(builder)
+        fx_rate_map.lookups = 0
+
+        got = builder._valuation_rate_change_days()
+
+        assert {D(0), D(2), date(1900, 1, 2), date(2025, 3, 3), date(2025, 3, 4), date(2025, 3, 5)} <= got
+        candidates = len({day for _currency, _target, day in fx_rate_map})
+        budget = _budget(candidates)
+        assert calls[0] <= budget, f"_read_rate called {calls[0]} times for {candidates} candidate days (budget {budget}): the calendar is walked day by day"
+        assert fx_rate_map.lookups <= budget, f"{fx_rate_map.lookups} rate map lookups for {candidates} candidate days (budget {budget})"
+
+
 # =============================================================================
 # 4. THE FIRST DAY OF THE CALENDAR
 # =============================================================================
@@ -693,17 +784,9 @@ def _call(method: Callable[[], Any]) -> Any:
         pytest.fail(f"MF5-2a: OverflowError on date.min ({error}) — HEAD computes replay_from - 1 day (or start - 1 day)")
 
 
-D = lambda offset: date.min + timedelta(days=offset)  # noqa: E731
-
-
 class TestDateMin:
-    """With the floor lowered to ``date.min``, a movement on 1 Jan year 1 is read like any other (red on HEAD)."""
+    """With no date floor, a movement on 1 Jan year 1 is read like any other (D-P4, MF-PAV-L1)."""
 
-    @pytest.fixture
-    def floor_lowered(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(daily_state_module, "EARLIEST_RANGE_START", date.min)
-
-    @pytest.mark.usefixtures("floor_lowered")
     def test_dict_map_from_date_min(self) -> None:
         usd = _rates("USD", {D(0): "0.5", D(1): "0.5", D(4): "0.6", D(6): "0.6", D(9): "0.7", D(40): "0.8"})
         builder = _builder(fx_rate_map=usd, replay_from=D(0), date_from=D(20), date_to=D(60), asset_currencies={X: "USD"})
@@ -711,7 +794,6 @@ class TestDateMin:
         assert D(0) in expected and D(1) not in expected, "fixture: a rate on date.min is a change there"
         assert _call(builder._valuation_rate_change_days) == expected
 
-    @pytest.mark.usefixtures("floor_lowered")
     def test_view_map_from_date_min(self) -> None:
         steps = {("USD", REPORT): _Steps({D(0): Decimal("0.5"), D(5): Decimal("0.6"), D(30): Decimal("0.7")})}
         view = AskedDayRates(steps, {("USD", REPORT): [(D(0), D(10)), (D(25), D(50))]})
@@ -720,7 +802,6 @@ class TestDateMin:
         assert {D(0), D(5), D(11), D(25), D(30), D(51)} == expected, f"fixture: {sorted(expected)}"
         assert _call(builder._valuation_rate_change_days) == expected
 
-    @pytest.mark.usefixtures("floor_lowered")
     def test_cash_in_transit_from_date_min(self) -> None:
         chf = _rates("CHF", {D(0): "0.9", D(3): "0.95", D(4): "0.95", D(12): "1.0"})
         builder = _builder(fx_rate_map=chf, replay_from=D(0), date_to=D(30), intervals=[_cash_interval(D(0), D(10), "CHF")])
@@ -728,7 +809,6 @@ class TestDateMin:
         assert expected == {D(0), D(1), D(3), D(5)}, f"fixture: {sorted(expected)}"
         assert _call(builder._valuation_rate_change_days) == expected
 
-    @pytest.mark.usefixtures("floor_lowered")
     def test_build_does_not_raise_on_date_min(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A USD deposit and a USD security bought on 1 Jan year 1: ``build()`` runs, and the method's days inside it are
         the dense reference's."""
@@ -753,8 +833,15 @@ class TestDateMin:
         assert captured, "build() did not ask for the valuation rate-change days"
         assert captured[-1] == _dense_reference(builder) == {D(0), D(1), D(2), D(35), D(36), D(37)}
 
-    def test_todays_floor_still_reads_from_1900(self) -> None:
-        """Guard (green on HEAD): with the floor unchanged, a movement on 1 Jan year 1 reads rates from 1899-12-31 on."""
-        usd = _rates("USD", {D(0): "0.1", date(1899, 12, 31): "0.5", date(1900, 1, 1): "0.5", date(1900, 1, 10): "0.6"})
+    def test_the_calendar_starts_at_the_replay_start_not_at_1900(self) -> None:
+        """Opposite of the old guard: a movement on 1 Jan year 1 reads rates from year 1 on, with no floor on 1900.
+
+        Rates on year 1 (0.1 on D(0), 0.2 on D(5)) and around 1900; replay from D(0), date_from in 1900. Every change
+        day of the whole span is found: the year-1 ones (D(0), D(1), D(5), D(6)) as well as the 1900 ones.
+        """
+        usd = _rates("USD", {D(0): "0.1", D(5): "0.2", date(1899, 12, 31): "0.5", date(1900, 1, 1): "0.5", date(1900, 1, 10): "0.6"})
         builder = _builder(fx_rate_map=usd, replay_from=D(0), date_from=date(1900, 1, 5), date_to=date(1900, 2, 1), asset_currencies={X: "USD"})
-        assert builder._valuation_rate_change_days() == _dense_reference(builder) == {date(1900, 1, 2), date(1900, 1, 10), date(1900, 1, 11)}
+        got = builder._valuation_rate_change_days()
+        assert {D(0), D(1), D(5), D(6)} <= got, f"the year-1 change days are lost: {sorted(got)[:8]}"
+        assert min(got) == D(0), f"the first change day is the replay start, not 1900: {min(got)}"
+        assert got == {D(0), D(1), D(5), D(6), date(1899, 12, 31), date(1900, 1, 2), date(1900, 1, 10), date(1900, 1, 11)}, sorted(got)
