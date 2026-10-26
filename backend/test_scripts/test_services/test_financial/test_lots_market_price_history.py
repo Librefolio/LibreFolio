@@ -54,7 +54,7 @@ from backend.app.db.models import Asset, AssetType, Broker, FxConversionRoute, F
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.portfolio import LotAnalysisType, LotsAnalysisResponse
 from backend.app.services.lots_analysis_service import get_lots_analysis
-from backend.test_scripts.test_services._lots_steps import daily_points
+from backend.test_scripts.test_services._lots_steps import daily_points, gap_days
 from backend.test_scripts.test_services._scope_boundary_books import add_prices, asset_row, new_asset, new_broker, new_user
 
 D = Decimal
@@ -275,7 +275,7 @@ def _issue_codes(result: LotsAnalysisResponse) -> list[str]:
 
 
 def _missing_fx(result: LotsAnalysisResponse) -> dict[str, list[date]]:
-    return {item.pair: list(item.dates) for item in result.data_quality.missing_fx_pairs}
+    return {item.pair: gap_days(item) for item in result.data_quality.missing_fx_pairs}
 
 
 def _market_issue_pairs(result: LotsAnalysisResponse) -> list[list[str]]:

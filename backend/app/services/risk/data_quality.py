@@ -25,6 +25,7 @@ from backend.app.schemas.risk import (
     RiskWarning,
 )
 from backend.app.services.financial_math.portfolio.data_quality import load_configured_fx_pair_sets, normalize_fx_pair_slug
+from backend.app.services.financial_math.series_steps import merged_spans
 from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.risk.base import (
     RiskExecutionContext,
@@ -137,9 +138,11 @@ def data_quality_warnings(data_quality: DataQualityReport) -> list[RiskWarning]:
     fx_pairs = sorted(set(data_quality.unresolved_fx_pairs) | {item.pair for item in data_quality.missing_fx_pairs})
     if fx_pairs:
         warnings.append(RiskWarning(code=code, message=message, details={"status": status, "cause": "missing_fx_rates", "pairs": fx_pairs}, message_i18n_key="risk.warnings.data_quality_missing_fx_rates", message_params={"pairs": ", ".join(fx_pairs)}))
-    incomplete_dates = set(data_quality.incomplete_nav_dates) | set(data_quality.incomplete_book_value_dates) | set(data_quality.incomplete_allocation_dates) | set(data_quality.incomplete_valuation_dates)
-    if incomplete_dates:
-        warnings.append(RiskWarning(code=code, message=message, details={"status": status, "cause": "incomplete_dates", "count": len(incomplete_dates)}, message_i18n_key="risk.warnings.data_quality_incomplete_dates", message_params={"count": len(incomplete_dates)}))
+    # The days the four lists give, counted once each: the union of their ranges (D-P4), never a list of days.
+    incomplete_spans = merged_spans((span.start, span.end) for ranges in (data_quality.incomplete_nav_ranges, data_quality.incomplete_book_value_ranges, data_quality.incomplete_allocation_ranges, data_quality.incomplete_valuation_ranges) for span in ranges)
+    incomplete_days = sum((last - first).days + 1 for first, last in incomplete_spans)
+    if incomplete_days:
+        warnings.append(RiskWarning(code=code, message=message, details={"status": status, "cause": "incomplete_dates", "count": incomplete_days}, message_i18n_key="risk.warnings.data_quality_incomplete_dates", message_params={"count": incomplete_days}))
     if not warnings and not data_quality.unusable_assets:
         warnings.append(RiskWarning(code=code, message=message, details={"status": status}, message_i18n_key="risk.warnings.data_quality_degraded"))
     return warnings

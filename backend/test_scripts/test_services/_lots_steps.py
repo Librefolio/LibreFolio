@@ -87,3 +87,24 @@ def compress_days(daily_rows: Sequence[Mapping], key_name: str | None) -> list[d
 def as_daily_rows(rows: Sequence[Mapping], key_name: str | None) -> list[Mapping[str, Any]]:
     """The daily rows of a section, whichever form it comes in: expanded when it holds steps, as it is when it holds days."""
     return expand_steps(rows, key_name) if rows and "through" in rows[0] else order_by_key(rows, key_name)
+
+
+def gap_days(item) -> list[date]:
+    """The days a ``WACMissingPairInfo`` stands for: its movement ``dates`` and every day of its ``ranges`` (the valuation days with
+    no rate, D-P4), ascending. For a test about WHICH days lack a rate, not about how they are grouped."""
+    days = set(item.dates)
+    for span in item.ranges:
+        days.update(span.start + timedelta(days=offset) for offset in range((span.end - span.start).days + 1))
+    return sorted(days)
+
+
+def fold_gap_ranges(dump: dict) -> dict:
+    """``dump`` (a ``model_dump(mode="json")`` of a lots analysis) with each missing pair's ``ranges`` folded into its ``dates``:
+    the same days, grouped the old way, so an answer with ranges compares with one that lists every day."""
+    for pair in (dump.get("data_quality") or {}).get("missing_fx_pairs", []):
+        days = set(pair.get("dates", []))
+        for span in pair.pop("ranges", []):
+            first, last = date.fromisoformat(span["start"]), date.fromisoformat(span["end"])
+            days.update((first + timedelta(days=offset)).isoformat() for offset in range((last - first).days + 1))
+        pair["dates"] = sorted(days)
+    return dump

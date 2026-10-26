@@ -104,7 +104,7 @@ from backend.app.services.financial_math.price_marks import AssetPriceSeries
 from backend.app.services.fx import conversion as fx_conversion
 from backend.app.services.fx.conversion import convert_bulk
 from backend.app.services.lots_analysis_service import get_lots_analysis
-from backend.test_scripts.test_services._lots_steps import daily_points
+from backend.test_scripts.test_services._lots_steps import daily_points, fold_gap_ranges
 
 # Non-test names of the L1a battery: its books, readings and comparison helpers. Never its ``test_*`` functions.
 from backend.test_scripts.test_services.test_financial.test_lots_change_days_parity import (
@@ -508,7 +508,7 @@ async def test_parity_the_steps_answer_what_the_days_answered(session, monkeypat
             assert handed > 0, f"precondition: today's resolver handed convert_bulk {handed} conversions on a book with a foreign currency"
     if (target, scenario_name) == (USD, "1900-usd") and not empty_window:
         assert handed >= LEGACY_FLOOR, f"precondition: the legacy copy handed convert_bulk {handed} conversions, the 44 240 days of today's computation are missing"
-    difference = _first_difference(_dump(as_is), _dump(legacy))
+    difference = _first_difference(fold_gap_ranges(_dump(as_is)), fold_gap_ranges(_dump(legacy)))
     assert difference is None, f"{target} / {scenario_name} / {window} / {scope}: the steps' answer differs from the days' at {difference} — points A/B {_point_counts(as_is, legacy)}"
 
 

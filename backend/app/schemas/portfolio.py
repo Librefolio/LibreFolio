@@ -238,10 +238,6 @@ class DataQualityReport(StrictModel):
     missing_price_assets: List[MissingPriceAsset] = Field(default_factory=list)
     missing_fx_pairs: List[WACMissingPairInfo] = Field(default_factory=list)
     stale_prices: List[StalePriceAsset] = Field(default_factory=list)
-    incomplete_nav_dates: List[date_type] = Field(default_factory=list)
-    incomplete_book_value_dates: List[date_type] = Field(default_factory=list)
-    incomplete_allocation_dates: List[date_type] = Field(default_factory=list)
-    incomplete_valuation_dates: List[date_type] = Field(default_factory=list)
     incomplete_nav_ranges: List[DateSpan] = Field(default_factory=list, description="The days with an incomplete NAV, as ranges (D-P4)")
     incomplete_book_value_ranges: List[DateSpan] = Field(default_factory=list)
     incomplete_allocation_ranges: List[DateSpan] = Field(default_factory=list)
@@ -261,7 +257,7 @@ class DataQualityReport(StrictModel):
     @property
     def data_quality_status(self) -> DataQualityStatus:
         """Derive status so legacy producers cannot emit contradictory values."""
-        if self.missing_price_assets or self.missing_fx_pairs or self.incomplete_nav_dates or self.incomplete_book_value_dates or self.incomplete_allocation_dates or self.incomplete_valuation_dates or self.unresolved_fx_pairs or self.unusable_assets:
+        if self.missing_price_assets or self.missing_fx_pairs or self.incomplete_nav_ranges or self.incomplete_book_value_ranges or self.incomplete_allocation_ranges or self.incomplete_valuation_ranges or self.unresolved_fx_pairs or self.unusable_assets:
             return DataQualityStatus.PARTIAL
         if self.stale_prices or self.carried_forward_price_points or self.carried_forward_fx_points:
             return DataQualityStatus.CARRIED_FORWARD
