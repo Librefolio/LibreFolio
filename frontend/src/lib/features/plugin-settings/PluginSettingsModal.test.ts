@@ -11,6 +11,8 @@
  *     closed; the dialog's content publishes `data-busy` (with `aria-busy`) true while that read is in flight, and
  *     shows the form of the entry once it is in (`plugin-settings-form-{code}`), `plugin-settings-none` when the plugin
  *     declares no settings, `plugin-settings-load-error` (role alert) when the read fails;
+ *   - a tool plugin (`family: 'tool'`, X5-4b) opens as any other: the read names that family and code, the title
+ *     names the plugin, the form is its own, a save is written with the family tool;
  *   - only the latest read writes: an answer to an opening that was closed since never replaces the answer to a newer
  *     opening;
  *   - the title names the plugin: `pluginName` while its state loads, the entry's own name once it is in, the code
@@ -305,5 +307,26 @@ describe('PluginSettingsModal — its frame', () => {
         await waitFor(() => expect(within(modal()).getByTestId('plugin-settings-form-justetf')).toHaveAttribute('data-configured', 'true'));
         expect(fake.save.mock.calls).toStrictEqual([[[{family: 'asset', plugin_code: 'justetf', field_key: 'nickname', scope: 'user', value: 'someone'}]]]);
         expect(onClose, 'a save does not close the dialog').not.toHaveBeenCalled();
+    });
+
+    it('PSM-10: a tool plugin opens like any other: the read names the family tool, the title its name, the form its own, and a save is written with the family tool', async () => {
+        const tool: PluginSettingsEntry = {family: 'tool', plugin_code: 'fx_converter', plugin_name: 'FX converter', icon_url: null, configured: false, fields: [nickname()]};
+        const fresh: PluginSettingsEntry = {...tool, configured: true, fields: [{...nickname(), value: 'someone', is_set: true, source: 'db'}]};
+        fake.fetchEntry.mockResolvedValueOnce(tool).mockResolvedValueOnce(fresh);
+        fake.save.mockResolvedValueOnce({kind: 'saved'});
+        const {onSaved} = mount({family: 'tool', pluginCode: 'fx_converter'});
+
+        await loaded();
+        expect(fake.fetchEntry.mock.calls).toEqual([['tool', 'fx_converter']]);
+        expect(title()).toBe('pluginSettings.modal.title {plugin=FX converter}');
+        const toolForm = within(modal()).getByTestId('plugin-settings-form-fx_converter');
+        expect(toolForm).toHaveAttribute('data-family', 'tool');
+        expect(within(toolForm).getByTestId('plugin-settings-plugin-icon-fallback'), 'a tool has no icon_url: the neutral icon').toBeInTheDocument();
+
+        await fireEvent.input(within(toolForm).getByTestId('plugin-setting-input'), {target: {value: 'someone'}});
+        await fireEvent.click(within(toolForm).getByTestId('plugin-settings-save'));
+
+        await waitFor(() => expect(onSaved).toHaveBeenCalledWith(fresh));
+        expect(fake.save.mock.calls).toStrictEqual([[[{family: 'tool', plugin_code: 'fx_converter', field_key: 'nickname', scope: 'user', value: 'someone'}]]]);
     });
 });

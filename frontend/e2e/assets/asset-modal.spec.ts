@@ -17,6 +17,7 @@ import {uniqueSuffix, uniqueToken} from '../fixtures/unique';
 import {daysAgoIso, todayIso} from '../fixtures/dates';
 import {INSTANCE_CONFIG_PATH} from '../fixtures/instance-config';
 import {schemas} from '../../src/lib/api/generated';
+import {createOwnedAsset as createEventsAsset, deleteOwned, jsonFrom, linkDividend, seedProviderDividend, type Owned} from './asset-events-owned';
 
 /**
  * Every asset a test saved, by the unique name it gave it: its id once the create response has
@@ -523,6 +524,7 @@ test.describe('NR — Sync on create with provider (Bug K)', () => {
 
     // ========================================================================
     // Switching away from a parametric provider must warn *before* destroying
+    // (X5-1: the counts are the server's dry run, one dialog for every provider change)
     //
     // A parametric series is invented from provider_params; under a market provider it
     // is not history, so the backend discards it ("provider changed" in
@@ -678,24 +680,34 @@ test.describe('NR — Sync on create with provider (Bug K)', () => {
             await selectNewProvider();
             // Two reads, two purposes. `inventedAtSave` is what the wipe must destroy and
             // what the cancel branch must find intact. `pricesAtSave` is the global total,
-            // read here only because the modal quotes it: `countGeneratedSeries()` in
-            // AssetModal.svelte calls the very same summary endpoint.
+            // read here only to prove that nothing deletes before the confirm.
             const inventedAtSave = (await inventedDates()).length;
             expect(inventedAtSave, 'the series must still be there when the switch is attempted').toBeGreaterThan(0);
             const pricesAtSave = await countPrices();
+
+            // X5-1: the count the dialog quotes is the server's dry run (POST /assets/provider/impact),
+            // not a second read of the market-data summary. The response is awaited from the click, so
+            // the figure the dialog must say is the very one the server answered.
+            const impactResponse = page.waitForResponse((r) => r.request().method() === 'POST' && new URL(r.url()).pathname === `${API_BASE}/assets/provider/impact`, {timeout: 15_000});
             await page.getByTestId('asset-modal-save').click();
+            type ImpactBody = {results: Array<{asset_id: number; action: string; reason: string; prices_deleted: number; events_deleted: number; transactions_unlinked: number; blocking_splits?: unknown[]}>};
+            const impact = ((await (await impactResponse).json()) as ImpactBody).results.find((result) => result.asset_id === assetId);
+            expect(impact, 'the dry run answers for the asset being saved').toBeTruthy();
+            expect(impact!.action).toBe('assign');
+            expect(impact!.reason, 'leaving a parametric provider for a market one').toBe('provider_changed');
+            expect(impact!.blocking_splits ?? [], 'no split with an adjustment to refuse the change').toEqual([]);
+            // The series this test authored is part of what the server says it will delete; the total
+            // is global and may hold a foreign write-back, so the claim is a lower bound.
+            expect(impact!.prices_deleted, 'the dry run counts at least the invented series').toBeGreaterThanOrEqual(inventedAtSave);
+            // The dialog writes the figure with the language's own number format; below a thousand that is its digits.
+            expect(impact!.prices_deleted, 'a figure of three digits or fewer is written without a group separator').toBeLessThan(1000);
 
             // Branch 1 — the warning appears, and it can say how much it is about to destroy.
             await expect(page.getByTestId('asset-parametric-switch-confirm')).toBeVisible({timeout: 15_000});
-            // The modal fetched that total itself, somewhere between the click and now, and
-            // the total is global: a foreign write-back landing in that gap makes the quoted
-            // number one higher than the one read a moment ago. Nothing deletes before the
-            // confirm, so the total can only grow — bracket it between the two reads instead
-            // of pinning it to either. The claim is unchanged: the warning quotes a real count.
+            // Nothing deletes before the confirm, so the total can only grow.
             const pricesAtWarning = await countPrices();
             expect(pricesAtWarning, 'nothing may delete rows before the confirm').toBeGreaterThanOrEqual(pricesAtSave);
-            const quotable = Array.from({length: pricesAtWarning - pricesAtSave + 1}, (_, i) => String(pricesAtSave + i));
-            await expect(page.getByTestId('confirm-modal-message')).toContainText(new RegExp(`\\b(${quotable.join('|')})\\b`));
+            await expect(page.getByTestId('confirm-modal-message')).toContainText(new RegExp(`\\b${impact!.prices_deleted}\\b`));
 
             await page.getByTestId('confirm-modal-cancel').click();
             await expect(page.getByTestId('asset-parametric-switch-confirm')).not.toBeVisible({timeout: 5000});
@@ -719,6 +731,82 @@ test.describe('NR — Sync on create with provider (Bug K)', () => {
             if (assetId !== null) {
                 await page.request.delete(`/api/v1/assets?asset_ids=${assetId}`).catch(() => {});
             }
+        }
+    });
+
+    // ========================================================================
+    // X5-1 (C-65a + W-B2 + X-R69): removing a provider is no longer refused for the transactions
+    // linked to the events it generated. A dialog says how many prices, events and linked
+    // transactions are lost (the transactions are kept, only unlinked); confirm goes through.
+    //
+    // Data: an asset of the test's own, a scheduled_investment assignment whose planned DIVIDEND a
+    // price sync stores under it (is_auto), and a DIVIDEND on a broker of the test's own that
+    // realises that event. Nothing shared is read or written; the broker (with its transaction) and
+    // the asset go afterwards, whatever the outcome.
+    // ========================================================================
+    test('X5-1: removing a provider whose generated dividend a transaction is linked to asks first, then removes it and only unlinks the transaction', async ({page}) => {
+        test.setTimeout(90_000);
+        const own: Owned = {assetIds: [], brokerIds: []};
+        try {
+            const asset = await createEventsAsset(page, own, {label: 'E2E X5-1 remove'});
+            const eventId = await seedProviderDividend(page, asset.id, 5, `x5-1 ${uniqueSuffix()}`, '0.80');
+            const txId = await linkDividend(page, own, asset.id, eventId, daysAgoIso(5));
+
+            // Verified, not inferred: the DIVIDEND realises the generated event, and the provider is assigned.
+            const readTransaction = async () => {
+                const rows = await jsonFrom<Array<{id: number; asset_event_id?: number | null}>>(await page.request.get(`${API_BASE}/transactions`, {params: {ids: txId}}), `read transaction ${txId}`);
+                const row = rows.find((candidate) => candidate.id === txId);
+                if (!row) throw new Error(`Transaction ${txId} is not stored: ${JSON.stringify(rows)}`);
+                return row;
+            };
+            const assignmentsOf = async () => jsonFrom<Array<{asset_id: number; provider_code: string}>>(await page.request.get(`${API_BASE}/assets/provider/assignments`, {params: {asset_ids: asset.id}}), `read the assignment of asset ${asset.id}`);
+            expect((await readTransaction()).asset_event_id, 'the DIVIDEND realises the provider event').toBe(eventId);
+            expect(
+                (await assignmentsOf()).filter((assignment) => assignment.asset_id === asset.id).map((assignment) => assignment.provider_code),
+                'the asset is priced by the scheduled provider',
+            ).toEqual(['scheduled_investment']);
+
+            // Nothing here is about live prices: the detail page's OHLC write-back is answered locally.
+            await page.route('**/api/v1/assets/prices/current*', async (route) => {
+                await route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify({results: [], success_count: 0, errors: []})});
+            });
+            await goToAssetDetailPage(page, String(asset.id));
+            await openEditAssetModal(page);
+
+            const noProvider = page.getByTestId('asset-modal-no-provider');
+            await expect(noProvider).toBeVisible();
+            await noProvider.check();
+            await expect(noProvider).toBeChecked();
+
+            // Save: the dry run goes first, the dialog follows, and nothing has been removed yet.
+            const impactResponse = page.waitForResponse((r) => r.request().method() === 'POST' && new URL(r.url()).pathname === `${API_BASE}/assets/provider/impact`, {timeout: 15_000});
+            await page.getByTestId('asset-modal-save').click();
+            type ImpactBody = {results: Array<{asset_id: number; action: string; reason: string; events_deleted: number; transactions_unlinked: number; blocking_splits?: unknown[]}>};
+            const impact = ((await (await impactResponse).json()) as ImpactBody).results.find((result) => result.asset_id === asset.id);
+            expect(impact, 'the dry run answers for the asset being saved').toBeTruthy();
+            expect(impact!.action).toBe('remove');
+            expect(impact!.reason).toBe('provider_removed');
+            expect(impact!.events_deleted, 'the generated DIVIDEND is among what is lost').toBeGreaterThanOrEqual(1);
+            expect(impact!.transactions_unlinked, 'the one DIVIDEND this test linked loses its link').toBe(1);
+            expect(impact!.blocking_splits ?? [], 'a DIVIDEND is no split: nothing refuses the removal').toEqual([]);
+
+            await expect(page.getByTestId('asset-provider-remove-confirm')).toBeVisible({timeout: 15_000});
+            expect(
+                (await assignmentsOf()).some((assignment) => assignment.asset_id === asset.id),
+                'nothing is removed before the confirm',
+            ).toBe(true);
+            expect((await readTransaction()).asset_event_id, 'the link is intact before the confirm').toBe(eventId);
+
+            await page.getByTestId('confirm-modal-confirm').click();
+            await expect(page.getByTestId('asset-modal-form')).not.toBeVisible({timeout: 20_000});
+
+            // The provider is gone, and the transaction is still there — unlinked, not deleted.
+            await expect.poll(async () => (await assignmentsOf()).some((assignment) => assignment.asset_id === asset.id), {message: 'the confirmed removal takes the provider away', timeout: 15_000}).toBe(false);
+            const kept = await readTransaction();
+            expect(kept.id, 'the transaction is kept').toBe(txId);
+            expect(kept.asset_event_id ?? null, 'but it no longer realises the deleted event').toBeNull();
+        } finally {
+            await deleteOwned(page, own);
         }
     });
 

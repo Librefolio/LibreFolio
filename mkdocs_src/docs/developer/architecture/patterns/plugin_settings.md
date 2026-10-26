@@ -8,7 +8,8 @@ core resolves them, stores them, protects the secret ones and hands them to the 
   `BoundSettings`, in `backend/app/services/plugin_settings/contract.py`
 - **Families**: asset providers (`AssetSourceProvider`), FX providers (`FXRateProvider`) and the
   broker-import plugins (`BRIMProvider`, `brim`: prepared, no plugin declares a field yet:
-  [BRIM settings](../../backend/brim/architecture.md#brim-settings)). Tools are still to come
+  [BRIM settings](../../backend/brim/architecture.md#brim-settings)) and the Tool plugins (`ToolPlugin`,
+  `tool`: prepared, no shipped Tool declares a field yet: [A Field in a Tool Plugin](#tool-field))
 - **API**: `GET /api/v1/settings/plugins` and `PATCH /api/v1/settings/plugins/bulk`
 - **Interface**: the **Plugins** tab of Settings, and **Configure** in the asset dialog and in the
   asset search, in `frontend/src/lib/features/plugin-settings/` ([The Interface](#interface))
@@ -43,6 +44,7 @@ Paths are relative to `backend/`.
 | `app/services/assets/search.py` | Search for a user: `providers_not_configured`, and the stream's `provider_error` with its `error_code` ([NOT_CONFIGURED](#not-configured)) |
 | `app/services/fx/runtime.py` | `configured_fx_provider()`, `call_fx_provider()` (the boundary of every FX provider call), `settings_cache_part()` |
 | `app/services/brim/brim_parse_pool.py`, `app/services/brim/brim_provider.py` | The BRIM parse: `parse_file_offloaded()` resolves the values in the parent, `parse_file()` binds them in the worker and holds the secrets in flight ([BRIM](#brim-parse)) |
+| `app/services/tools/settings.py`, `app/services/tools/worker.py` | The Tool compute: `bound_settings_for_batch()` resolves the values in the parent, one set per tool code; `ToolWorkerJob.settings` carries them and the worker binds them ([Tools](#tool-field)) |
 | `app/utils/runtime/secret_masking.py` | The masking of the secrets in flight, in log lines and in exceptions, each text either masked in place or, with `whole`, hidden entirely; and the check that an error still shows one |
 | `app/config/plugins.py` | `plugin_setting_env()` and `plugin_setting_env_origin()`: the environment variables of the fields |
 | `app/db/models.py`, `alembic/versions/005_release_1_3_0_schema.py` (step 4) | The tables `plugin_system_settings` and `plugin_user_settings` |
@@ -118,7 +120,146 @@ resolves the values instead, and only for a plugin that declares fields:
 create a plugin (the detection of the plugin, `api/v1/brokers.py` for the preview and the report sets,
 `brim_report_sets.get_set_plugin`, `brim_gap_fix`) see the defaults and no secret: a value a plugin needs there
 must not depend on a setting. The details are in
-[BRIM settings](../../backend/brim/architecture.md#brim-settings).
+[BRIM settings](../../backend/brim/architecture.md#brim-settings). How a BRIM plugin declares a field, and when a
+parse is stale because a setting changed: [A field in a BRIM plugin](../../backend/brim/architecture.md#brim-field-contract).
+
+### 🧰 A Field in a Tool Plugin {: #tool-field }
+
+The Tool family (`tool`) is prepared like the BRIM one: `ToolPlugin` inherits `PluginSettingsMixin`, so a
+Tool plugin can declare `settings_fields` exactly like an asset, FX or BRIM plugin, but **no shipped Tool
+declares a field yet**, so nothing changes for users today. The tests use private registries
+(`backend/test_scripts/test_services/_tool_settings_fixtures.py`), never a folder under
+`tool_plugins/`. What a Tool is, and what it must not do, is in [Tool plugins](tool_plugins.md); this
+section is what the settings add to it.
+
+#### The rules of the family
+
+`FAMILY_RULES["tool"] = FamilyRules(user_scope=True, secrets=False)` (`fields.py`):
+
+| | Allowed | Why |
+|---|:---:|-----|
+| Personal (`user`) field | ✅ | A Tool is computed on behalf of the user who asks, so the values of that user reach it |
+| Instance (`system`) field | ✅ | An administrator, or an [environment variable](#environment), sets it for everybody |
+| Secret field | ❌ | A Tool calls no external source, so it has nothing to keep secret: a declaration with a secret field is refused (`SettingsDeclarationError`) |
+
+The other rules of a declaration are those of every family ([Declaring Fields](#declaring-fields)).
+
+#### Declaring a field
+
+The worked example is a Tool that rounds with a personal `select` field (the rounding Tool of the test
+fixtures, `_tool_settings_fixtures.py`, whose test `test_tool_settings_contract.py` runs this very shape):
+
+```python
+# backend/app/services/tool_plugins/my_tool/plugin.py
+from backend.app.services.plugin_settings.fields import PluginSettingField, SettingOption, SettingScope, SettingType
+from backend.app.services.tools.base import ToolExecutionContext, ToolPlugin
+
+class MyRoundingTool(ToolPlugin):
+    contract_version = "1.0.0"
+    implementation_version = "1.0.0"
+    settings_fields = (
+        PluginSettingField(
+            key="rounding",
+            type=SettingType.SELECT,
+            scope=SettingScope.USER,  # each user rounds the way they like
+            label="Rounding of a tie",
+            description="How 2.5 is rounded: to the even neighbour (2) or away from zero (3).",
+            default="half_even",      # the behaviour before the field existed
+            options=(SettingOption("half_even", "Half even"), SettingOption("half_up", "Half up")),
+        ),
+    )
+    services = (...)  # the ToolService values, as for any Tool
+
+    def compute(self, tool_code: str, parameters: BaseModel, context: ToolExecutionContext) -> BaseModel:
+        mode = ROUND_HALF_UP if self.settings.get("rounding") == "half_up" else ROUND_HALF_EVEN
+        ...
+```
+
+1. **The default is the old behaviour.** A field added to a Tool that already computes must not change
+   what it gives: an instance nobody configured and a user who chose nothing see exactly what the Tool
+   did before. Give a required `user` field a default as well ([Scopes and Families](#scopes)).
+2. **Read it inside `compute()`**, as `self.settings.get("rounding")`, never in `__init__`: the worker
+   creates the plugin first and binds the values right after ([Never read settings in `__init__`](#reading-values)).
+   `compute()` still touches no database, request or provider; its settings arrive with the job.
+3. **Texts.** The field's `label`, `description` and options are the English the interface shows.
+   The i18n ownership gate does not read the keys of a Tool field, and the space of a Tool's fragment is
+   exactly its two `name_i18n_key` and `description_i18n_key` keys
+   ([The Ownership Gate](registry_pattern.md#plugin-i18n-gate)), so a Tool field has no translated texts
+   yet: settle where they live with the first real field.
+
+#### Keyed by tool code
+
+The settings of a Tool are keyed by its **tool code** (`ToolService.tool_code`), not by the plugin: a
+plugin that bundles several services gets one independent set of values, and one set of
+[environment variables](#environment), per service.
+
+- The stored rows and the catalogue use the tool code as `plugin_code`:
+  `LIBREFOLIO_PLUGIN_TOOL_<TOOL_CODE>_<FIELD>` for a `system` field.
+- `GET /api/v1/settings/plugins` lists a Tool by its tool code, with the `ToolService.name` as its
+  name, and no icon: the family is in `FAMILIES_WITHOUT_ICON` (`plugin_settings/service.py`), so the
+  neutral puzzle piece shows. The Plugins tab groups the Tools under **Tools** (wrench icon, after
+  **Broker imports**), only when a Tool declares fields.
+- `configure_instance(instance, family, *, user_id=None, plugin_code=None)` takes the tool code as
+  `plugin_code`, because a Tool has no `provider_code` attribute to read it from.
+
+#### How a compute gets its values
+
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant R as POST /tools/compute<br/>(compute_tools)
+    participant S as bound_settings_for_batch
+    participant E as ToolExecutor
+    participant W as Spawn worker
+    participant P as Plugin
+    B->>R: batch of items (tool_code, parameters)
+    R->>S: batch, user_id of the caller
+    Note over S: per distinct tool code with fields:<br/>the instance's values + the caller's own<br/>(no database read for a Tool without fields)
+    S-->>R: BoundSettings by tool code
+    R->>E: compute(batch, settings=…)
+    alt a required field has no value
+        E-->>R: that item: service_unavailable, no worker
+    else configured
+        E->>W: ToolWorkerJob(settings=BoundSettings), pickled to the child
+        W->>P: plugin_class() then bind_settings()
+        W->>P: compute(tool_code, parameters, context)
+        P-->>W: result (reads self.settings)
+        W-->>E: result frame
+    end
+    E-->>B: batch of results
+```
+
+1. `compute_tools` (`app/api/v1/tools.py`) calls `bound_settings_for_batch(batch, user_id=current_user.id)`
+   (`app/services/tools/settings.py`) in the parent. For each **distinct** tool code of the batch whose
+   plugin declares fields, it asks `bound_settings_for(ToolPluginRegistry, tool_code, user_id=…)` for the
+   instance's values and the personal ones of the user who asks. A Tool without fields, or a code the
+   registry does not know, is left out: no database read and no key. The values are resolved again for
+   every batch and kept nowhere, so one user's values never reach another's compute.
+2. The route hands the mapping to `ToolExecutor.compute(…, settings=…)`, which gives each item the
+   values of its own tool code, and the job carries them as `ToolWorkerJob.settings` (picklable, like
+   the BRIM parse's).
+3. In the spawn child, `_execute` (`app/services/tools/worker.py`) creates the plugin with its
+   zero-argument constructor and binds the settings **right after**, before `compute`. A job without
+   settings (`None`, a Tool without fields) binds nothing and the plugin reads its defaults.
+
+**A required field without a value.** `BoundSettings.missing` lists the required fields that have no
+usable value, and any field whose variable is set but invalid. When it is not empty,
+`ToolExecutor._run_item` ends that item with the error `service_unavailable`, **not retryable**, before
+any worker starts; the other items of the batch run. It is the Tool's counterpart of
+[`NOT_CONFIGURED`](#not-configured), and the catalogue shows the Tool as not configured the same way.
+
+**An invalid declaration.** The Tool registry builds its own definitions, so the checks of the shared
+`register()` do not run for it. `build_tool_definition()` (`app/services/tools/registry.py`) validates
+the declaration with family `tool` and claims the environment variables for each tool code
+([One owner per variable](#one-owner-per-variable)). A refusal quarantines that service with the
+discovery reason `invalid_settings` (`ToolDiscoveryReason` in `app/schemas/tools.py`), as
+`invalid_schema` or `invalid_operation_policy` do: its siblings stay available, and the catalogue
+and the diagnostics report it as unavailable. A `test_only` Tool is left out of the snapshot outside
+test mode ([Test-Only Plugins](#test-only)).
+
+The tests to copy are in [Tests](#tests): `tool-settings-contract` (the declaration, the registry, the
+worker, the executor and the route), `tool-settings-runtime` (the values on a private database, the
+catalogue and the writes) and `tool-settings-lifecycle` (real spawn workers).
 
 ---
 
@@ -215,6 +356,7 @@ under the branch of its settings:
 
 `<family>` is `asset`, `fx` or `brim`, and `<code>` the code as the registry has it: the `provider_code` of
 an asset provider (`justetf`, `borsa_italiana`), the FX code with its case (`pluginSettings.fx.ECB`).
+The `tool` family has no such branch yet ([A Field in a Tool Plugin](#tool-field)).
 justETF's field, for example:
 
 ```python
@@ -271,9 +413,9 @@ What a family may declare (`FAMILY_RULES` in `fields.py`):
 | `asset` | ✅ | ✅ | Search and the probe of a configuration are made for a user |
 | `fx` | ❌ | ✅ | A sync serves every user: an FX provider receives the instance's values only |
 | `brim` | ✅ | ✅ | A parse runs for the user who imports: a personal value reaches it, and so does the instance's. Prepared: no shipped plugin declares a field yet |
+| `tool` | ✅ | ❌ | A Tool is computed on behalf of the user who asks, so a personal value reaches it; it calls no external source, so there is nothing to keep secret. Prepared: no shipped Tool declares a field yet ([A Field in a Tool Plugin](#tool-field)) |
 
-No other family supports settings yet (Tools are still to come): the signal and risk registries
-refuse a plugin that declares them.
+No other family supports settings: the signal and risk registries refuse a plugin that declares them.
 
 **What a call receives.** The instance's values always; the user's values only when the call is made
 for a user. Prices, history and metadata are shared by every user of an asset, and scheduled jobs run
@@ -286,6 +428,7 @@ for nobody in particular, so they never depend on one user's values:
 | Asset current value, history, metadata and their refreshes, scheduled jobs included | The instance's values | Their defaults |
 | FX `fetch_rates()` and `get_supported_currencies()` | The instance's values | — (none declared) |
 | BRIM `parse()` (`POST /api/v1/brokers/import/files/{file_id}/parse`), only for a plugin that declares a field | The instance's values | The values of the user who imports |
+| Tool `compute()` (`POST /api/v1/tools/compute`), only for a Tool that declares a field | The instance's values | The values of the user who asks |
 
 So give a required `user` field a default. Without one, every call made for nobody, prices and
 scheduled jobs included, finds the field empty and answers [`NOT_CONFIGURED`](#not-configured), while
@@ -336,8 +479,8 @@ At registration, `validate_declaration()` checks that:
 
 A `system` field can be set by the environment; a `user` field cannot, since a variable is one value
 for the whole instance. `env_name(family, plugin_code, field_key)` gives the derived name:
-`LIBREFOLIO_PLUGIN_<FAMILY>_<CODE>_<FIELD>`, where `<CODE>` is the plugin's `provider_code` and each
-part is put in uppercase with every character other than a letter or a digit turned into `_`.
+`LIBREFOLIO_PLUGIN_<FAMILY>_<CODE>_<FIELD>`, where `<CODE>` is the plugin's `provider_code` (a Tool's
+tool code) and each part is put in uppercase with every character other than a letter or a digit turned into `_`.
 
 ```bash
 # The api_key field of the asset provider my_provider
@@ -421,7 +564,7 @@ never their values.
   provider lists), which get no settings at all.
 - **Read them in the operations the core calls through the boundary**: asset `search()`,
   `resolve_url()`, `get_current_value()`, `get_history_value()` and `fetch_asset_metadata()`; FX
-  `fetch_rates()` and `get_supported_currencies()`. Other members (properties, `params_schema`,
+  `fetch_rates()` and `get_supported_currencies()`; BRIM `parse()`; Tool `compute()`. Other members (properties, `params_schema`,
   `get_asset_url()`, `validate_params()`) may run on an instance the core did not configure, with the
   defaults and no secret.
 - **Expect `None` for an optional field**: from `get()` when the field has no value and no default,
@@ -668,13 +811,16 @@ does not set the flag (every real provider, every plugin of the other families) 
 `./dev.py test services test-only-providers` covers the registries, the family runtimes and the
 validation of an assignment and of a probe, in both modes.
 
-**Asset and FX plugins only (X-R44c).** The flag is for these two families. `BRIMProvider` inherits
+**Asset, FX and Tool plugins (X-R44c, X5-4b).** The flag is for these three families. `BRIMProvider` inherits
 `PluginSettingsMixin` too, and with it the attribute, but a flagged BRIM plugin would still be served
 in production by methods of its registry that never ask `_withheld()`: BRIM's `auto_detect_plugin()`,
-`get_compatible_plugins()` and `list_plugin_info()`, like signal and risk `list_definitions()` and the
-tool snapshot (`get_snapshot()`, `get_definition()`, `get_plugin_instance()`). A guard in the same suite reads every
+`get_compatible_plugins()` and `list_plugin_info()`, like signal and risk `list_definitions()`. A guard in the same suite reads every
 `services/*/registry.py` in test mode, a new family too, and fails on such a plugin, naming registry,
 code, class and methods: make them ask `_withheld()`, then add the registry to `TEST_ONLY_FAMILIES`.
+The Tool registry is in `TEST_ONLY_FAMILIES` too: it serves only its snapshot, and `ToolPluginRegistry`
+builds that snapshot without the withheld classes (`_withheld()`, once, in the mode then set), so
+`get_snapshot()`, `get_definition()` and `get_plugin_instance()` never serve a `test_only` Tool outside
+test mode.
 The test plugin of the BRIM family therefore lives in a test module, never under `brim_providers/`
 ([BRIM settings](../../backend/brim/architecture.md#brim-settings)).
 
@@ -743,9 +889,10 @@ manual, [Plugin Settings](../../../user/settings/plugins.md); the code is in
   `Puzzle`, order 25, visible to everyone; `?tab=plugins` opens it: see
   [Tab registry](../../frontend/components/features/settings.md#tab-registry)). It reads the whole
   catalogue once, unfiltered, so a test-only plugin is never listed, and groups it under **Prices**
-  (`asset`), **Exchange rates** (`fx`) then **Broker imports** (`brim`), leaving out a family without
-  entries, which is every one of them for `brim` until a plugin declares a field. Each title follows
-  its family's icon from `FAMILY_ICONS` (`ChartColumn`, `Coins`, `Briefcase`: the first two are the
+  (`asset`), **Exchange rates** (`fx`), **Broker imports** (`brim`) then **Tools** (`tool`), leaving out
+  a family without entries, which is every one of them for `brim` and `tool` until a plugin declares a
+  field. Each title follows
+  its family's icon from `FAMILY_ICONS` (`ChartColumn`, `Coins`, `Briefcase`, `Wrench`: the first two are the
   icons the families have on the documentation's home), so a new family adds one row there. Each plugin is a
   `PluginSettingsForm`, saved on its own; an empty catalogue and a failed read have their own message.
   Its book icon (`DocsLink`) opens the user page.
@@ -870,6 +1017,9 @@ The other units that touch the plugin settings:
 | `./dev.py test services provider-errors` | Among the provider error paths, justETF's `preferred_currency` declaration and the rows its search keeps |
 | `./dev.py test services borsa-italiana-search` | Borsa Italiana's `preferred_language` on a fund and on a share, the site searched in Italian whatever the preference |
 | `./dev.py test services brim-parse-settings` | The BRIM parse hook ([The BRIM Parse](#brim-parse)): no field, called as before; fields, `BoundSettings` resolved in the parent and bound in the worker; errors and logs masked; the route passes the user; the pickle round trip. It uses the test plugin `_brim_settings_lab.py` |
+| `./dev.py test services tool-settings-contract` | The Tool family ([A Field in a Tool Plugin](#tool-field)): `FAMILY_RULES["tool"]` (personal yes, secret refused), `ToolPlugin` inherits the mixin, the declaration checked when the definition is built (`invalid_settings`, siblings untouched, variables per tool code, `test_only` withheld outside test mode), the default is the old behaviour, `ToolWorkerJob.settings` pickles and the worker binds it before `compute`, an unconfigured Tool is `service_unavailable` with no worker, `compute_tools` resolves the batch for the caller. Pure; it runs the worked example above with the fixtures `_tool_settings_fixtures.py` |
+| `./dev.py test services tool-settings-runtime` | The Tool values on a private database: `configure_instance(plugin_code=…)`, `bound_settings_for_batch()` (instance and user values, per tool code, one read per code, none for a Tool without fields), the catalogue by tool code, and the writes of a Tool (scopes, bounds, variable lock, all or nothing). Pure |
+| `./dev.py test services tool-settings-lifecycle` | Real spawn workers: the plugin sees the value the parent delivered, the defaults when none, the values of its own tool code, never another caller's; an unconfigured Tool starts no worker while its sibling runs. It starts processes, so it is exclusive like `tools-lifecycle` |
 | `./dev.py test services plugin-secrets-check` | The startup check of the stored secrets ([Plugin Secrets Check](../security.md#plugin-secrets-check)): `ok` without an unreadable `system` secret, otherwise an `error` that counts them alone; nothing logged and no key file generated without a stored secret; a check that cannot run is a warning, never an exception |
 | `./dev.py test front-utility core-unit` | `pluginSettingsForm.test.ts` (the rules without the DOM, `FAMILY_ICONS` included) and `pluginSettingsApi.test.ts` (the narrowing of the answers, `icon_url` included, and every outcome of a save through the real client, only the transport faked) |
 | `./dev.py test front-utility component-unit` | `PluginSettingsForm.component.test.ts` (PSF-01…30, the plugin's icon and its fallback in PSF-26…30), `PluginSettingsTab.test.ts` (PST-01…09, the families' icons in PST-07…09) and `PluginSettingsModal.test.ts` (PSM-01…09); **Configure**, the badge, the search's row and the 👑 legend in `ProviderAssignmentSection.test.ts` and `AssetSearchAutocomplete.test.ts` |
@@ -882,6 +1032,7 @@ The other units that touch the plugin settings:
 - 🧩 [Registry Pattern Overview](registry_pattern.md) — Discovery and registration, where the
   declaration is checked
 - 📈 [Asset Plugin Guide](asset_plugin_guide.md#settings) — Settings in an asset provider
+- 🧰 [Tool plugins](tool_plugins.md#settings) — A Tool's settings and the rule of `compute()`
 - 💱 [FX Plugin Guide](fx_plugin_guide.md#settings) — Settings in an FX provider
 - 🔐 [Security → Instance Key](../security.md#instance-key) — Where the key comes from and how keys
   are derived

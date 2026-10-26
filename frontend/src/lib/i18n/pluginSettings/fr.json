@@ -10,7 +10,8 @@
     "families": {
       "asset": "Prix",
       "fx": "Taux de change",
-      "brim": "Imports des courtiers"
+      "brim": "Imports des courtiers",
+      "tool": "Outils"
     },
     "status": {
       "configured": "Configuré",
