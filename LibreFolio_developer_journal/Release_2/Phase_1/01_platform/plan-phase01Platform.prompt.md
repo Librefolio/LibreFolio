@@ -10768,3 +10768,24 @@ DOC-2 (ricerca per lingua), DOC-1 (riordino della guida admin, con le guide Tail
    > **⚠️ Fuori pista**: le liste di chiavi esatte di `/system/instance` non cambiano (il campo è di `/system/ready`): le ho solo rieseguite. La risposta pubblica
    > ora dice a chiunque a che revisione sta il DB: l'`app_version` è già pubblico e la revisione ne dipende, quindi il guadagno per chi attacca è piccolo (scritto in `security.md`).
    > `contratto-istanza.md` del cloud va aggiornato da loro (`mismatch` → `behind`/`ahead`, campo nuovo).
+10. ✅ **H5-7 · D6: `instance_key: ok|mismatch` in `panel/status`, i backup del pannello e `wake-sync` fermi con la chiave sbagliata** (26/10). Decisione del
+    developer: il campo con un valore di controllo; con la chiave sbagliata si fermano solo i backup del pannello e `wake-sync`, l'istanza resta aperta; il cambio voluto con
+    una variabile valida per un solo avvio.
+    > **Note implementazione**: nuovo `services/platform/instance_key_check.py`. Il riferimento (R2) è `secrets/instance.key.check`, 64 hex = HMAC di una frase fissa con la
+    > sottochiave `instance.key-check.v1`; la guardia della prima scrittura è R1 (segreti salvati: `mismatch` solo se ce n'è almeno uno e **tutti** sono sotto un'altra chiave; con
+    > `mismatch` per R1 non si scrive nulla, scriverlo sposerebbe la chiave sbagliata). `instance_key_state(session)` si ricalcola a **ogni** richiesta (nessuna memoria: la chiave
+    > giusta rimessa è `ok` alla richiesta dopo, e i backup riprendono da soli la prima notte); non solleva mai; senza chiave o con chiave inutilizzabile → `ok` (non genera la
+    > chiave); file illeggibile o non di 64 hex → `ok` più un solo avviso per processo (mai il contenuto). Scrittura: file temporaneo + `link` (vince il primo worker) o `replace`
+    > (accept), file `0600` in cartella `0700`. `LIBREFOLIO_INSTANCE_KEY_ACCEPT=1` (`config.platform.instance_key_accept()`, stessi valori di `awaiting_restore()`, valore non valido
+    > ferma l'avvio in `log_configuration_audit`) riscrive il valore a ogni avvio in cui è impostata, con un avviso nel log. Passo di avvio `instance-key-check` dopo
+    > `plugin-secrets-check` (non bloccante, senza `skip_when`). Cablaggio: `PanelStatusResponse.instance_key` (obbligatorio, dopo `owner_email_change`: otto chiavi, `users_over_limit` verrà con
+    > A5-7); `POST /backup/panel/jobs` → `409 backup_instance_key_mismatch` con una dipendenza dopo `PanelToken` (non quando l'istanza aspetta un ripristino), nessun job; `_wake_run`
+    > → `status: instance_key_mismatch` dopo `awaiting_restore` e `restore_interrupted`; `/security/checks` ha il controllo `platform.instance_key_check`. Frontend: `securityFindings.ts`,
+    > `checkGuides.json` (→ `admin/configuration_secrets/#instance-key-check`), chiave `instance.checks.instanceKey.mismatch` in 4 lingue. Doc: `configuration_secrets` (sezione e
+    > variabile), `hosting_panel_backups` (la guida per l'host: le tre strade d'uscita e la ripresa automatica), `hosting_panel_api`, `wake_sync`, `security.md`, `api/index.md`, `.env.example`.
+    > Test (test-author, rossi prima): `services instance-key-check` 91, `api instance-key-check` 30 (compresi i due del ritorno: chiave A → B (409) → A di nuovo (`ok`, 202, nulla
+    > di memorizzato) e il percorso accept), più le liste a otto chiavi in `api panel-status`, `await-restore-mode`, `restore-interrupted`, i controlli di sicurezza e le guide. `api sync` fatto.
+    > **⚠️ Fuori pista**: l'id del contratto `platform.instance_key` era già del controllo del file della chiave (`config_audit.check_instance_key`): il nuovo è `platform.instance_key_check`
+    > (la chiave del messaggio `ok` è condivisa). Un dizionario di sette chiavi in `test_panel_status_api.py` (riga 1068) era sfuggito al test-author: aggiornato a mano.
+    > Il limite vero, scritto nella doc: un'istanza 1.2 che passa alla 1.3 con la chiave già sbagliata e senza segreti salvati non si può scoprire. `contratto-istanza.md` del cloud va
+    > aggiornato da loro (`instance_key`, `instance_key_mismatch`, `backup_instance_key_mismatch`).

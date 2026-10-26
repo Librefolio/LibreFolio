@@ -875,6 +875,14 @@ def api_restore_interrupted(verbose: bool = False, test_names: list[str] | None 
     return run_command(cmd, "Restore interrupted API tests", verbose=verbose)
 
 
+def api_instance_key_check(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the instance key check's API tests: the panel's status, its backup start, wake-sync, the Security list, the way back (H5-7, H)."""
+    print_section("Instance Key Check API")
+    print_info("Testing: GET /panel/status instance_key ok|mismatch (eight keys), POST /backup/panel/jobs 409 backup_instance_key_mismatch after the credential, wake-sync instance_key_mismatch, the instance keeps serving, /security/checks platform.instance_key_check, the state read at every request, the way back on real files")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_instance_key_check_api.py", test_names)
+    return run_command(cmd, "Instance key check API tests", verbose=verbose)
+
+
 def api_restore_owner_guard(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run the owner guard's API tests: 423 while the restored owner has no account, its recheck, the reason in /system/instance (H5-3, H)."""
     print_section("Restore Owner Guard API")
@@ -1446,6 +1454,16 @@ Tests for REST API endpoints (server auto-started):
         desc="B-33 (H, 22/10): while restore_guard.restore_interrupted() every /api/v1 route but ALLOWED_WHEN_RESTORE_INTERRUPTED (= ALLOWED_WHEN_AWAITING_RESTORE, pinned by name and route) answers 423 instance_restore_interrupted to anyone, login, registration, setup, me and data included; refuse_when_restore_interrupted the third router dependency after block and mode; /system/instance restore_interrupted; wake-sync restore_interrupted with nothing past the switches; GET /panel/status still allowed (restore unreadable with its reason, D7); the panel's backup start 409 backup_restore_interrupted after its credential (D7), its poll, download and delete allowed",
         # PURE: the app of main.py in this process (ASGI), every request's session on a private SQLite file under
         # tmp_path, the interruption and the switches by monkeypatch: the lane's backend and DB are never reached.
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "instance-key-check",
+        api_instance_key_check,
+        name="Instance Key Check API",
+        desc="H5-7 (H, D6): GET /panel/status holds instance_key ok|mismatch (eight keys, required, never the value) on a blocked, awaiting and interrupted instance too, from the check file or R1; POST /backup/panel/jobs on a mismatch is 409 backup_instance_key_mismatch with no job, after the credential, not over an awaiting restore, the poll/download/delete untouched, the dependency right after the credential; wake-sync answers instance_key_mismatch and runs nothing; users are still served and /system/instance is unchanged; /security/checks lists platform.instance_key_check; the state is read at every request; the way back: key A, B (409), A again (ok, 202, nothing stored) and the accept path",
+        # PURE: the app of main.py in this process (ASGI), every request's session on a private SQLite file under tmp_path, real
+        # check files in the data directory there, the keys by monkeypatch: the lane's backend and DB are never reached.
         isolation="pure",
     )
     add_test(
