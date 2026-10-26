@@ -20,6 +20,7 @@ import type {z} from 'zod';
 import type {schemas} from '$lib/api/generated';
 import {safeDecimal, safeString} from '$lib/types';
 import {makePositionKey} from '$lib/utils/core/positionKey';
+import {indexHoldingDay} from '$lib/utils/stepSeries';
 
 /** The two views of the chart: the position's result in money, or its return in «base 100». */
 export type PositionsChartView = 'absolute' | 'percentage';
@@ -90,18 +91,38 @@ export function lineValue(point: Pick<PositionSeriesPoint, 'pnl' | 'pnl_percent'
     return fraction === null ? null : 100 * (1 + fraction);
 }
 
-/** A position's line: the ticker (else the name), then the broker when the series is for one broker. */
+/**
+ * A position's line: the ticker (else the name), then the broker when the series is for one broker. The series is steps (each
+ * holds from its `date` to its `through`): one point per step and a closing point on the last `through`, so the line reaches the
+ * last day the position is known; drawn as steps.
+ */
 export function positionLine(series: PositionSeries, view: PositionsChartView): PositionLine {
     const name = safeString(series.asset_ticker) || series.asset_name;
     const broker = safeString(series.broker_name);
+    const steps = series.points ?? [];
+    const points: ChartPoint[] = steps.map((point) => ({date: point.date, value: lineValue(point, view)}));
+    const last = steps[steps.length - 1];
+    if (last && last.through > last.date) points.push({date: last.through, value: points[points.length - 1].value});
     return {
         id: positionLineId(series.key),
         label: broker ? `${name} · ${broker}` : name,
-        points: (series.points ?? []).map((point) => ({date: point.date, value: lineValue(point, view)})),
+        points,
         closedOn: safeString(series.closed_on),
         complete: series.complete !== false,
         kind: 'position',
+        stepped: true,
     };
+}
+
+/**
+ * What a line says on a day, for a tooltip: the point holding the day (the last one on or before it), with its own date; null when
+ * the line does not exist that day (before its first point, after its last). A stepped line reads the day the pointer is on, not the
+ * drawn point nearest to it.
+ */
+export function lineOnDay(line: PositionLine, day: string): ChartPoint | null {
+    const points = line.points;
+    if (points.length === 0 || day < points[0].date || day > points[points.length - 1].date) return null;
+    return points[indexHoldingDay(points, day)];
 }
 
 /** The lines of an answer, in the order the positions were asked. */
