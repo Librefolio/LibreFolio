@@ -50,6 +50,7 @@ from backend.app.db.models import Asset, Transaction, TransactionType, User
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.portfolio import LotAnalysisType, LotsAnalysisResponse
 from backend.app.services.lots_analysis_service import get_lots_analysis
+from backend.test_scripts.test_services._lots_steps import daily_points
 from backend.test_scripts.test_services._scope_boundary_books import (
     L1_ARRIVAL_DAY,
     L1_BUY_DAY,
@@ -139,7 +140,7 @@ def _event_kinds(result: LotsAnalysisResponse) -> set[str]:
 
 
 def _series(result: LotsAnalysisResponse) -> list[tuple]:
-    return [(point.date, point.roi, point.twrr) for point in result.performance_history or []]
+    return [(point.date, point.roi, point.twrr) for point in daily_points(result.performance_history)]
 
 
 # --------------------------------------------------------------------------- #

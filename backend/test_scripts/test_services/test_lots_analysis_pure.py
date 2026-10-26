@@ -68,6 +68,7 @@ from backend.app.services.financial_math.lots.prices import opening_reference_pr
 from backend.app.services.financial_math.lots.scope_boundary import BoundaryLeg
 from backend.app.services.financial_math.price_marks import AssetPriceSeries, ObservationKind, PriceObservation, build_asset_price_series
 from backend.app.services.lots_analysis_service import LotsAnalysisService, _parse_transfer_pair_id
+from backend.test_scripts.test_services._lots_steps import daily_points
 
 # --------------------------------------------------------------------------- #
 # Builders
@@ -2238,8 +2239,8 @@ class TestWacHistoryBuilders:
         points = build_broker_wac_history([1, 2], lines, _days(date(2024, 1, 10), 2))
 
         assert points == [
-            BrokerWACHistoryPoint(date=date(2024, 1, 10), broker_id=1, wac=D("5"), pool_qty=D("10")),
-            BrokerWACHistoryPoint(date=date(2024, 1, 11), broker_id=1, wac=D("5"), pool_qty=D("10")),
+            BrokerWACHistoryPoint(date=date(2024, 1, 10), through=date(2024, 1, 10), broker_id=1, wac=D("5"), pool_qty=D("10")),
+            BrokerWACHistoryPoint(date=date(2024, 1, 11), through=date(2024, 1, 11), broker_id=1, wac=D("5"), pool_qty=D("10")),
         ]
 
     def test_each_broker_gets_its_own_line_in_scope_order(self):
@@ -2269,8 +2270,8 @@ class TestWacHistoryBuilders:
         points = build_cumulative_wac_history(lines, _days(date(2024, 1, 10), 2))
 
         assert points == [
-            CumulativeWACHistoryPoint(date=date(2024, 1, 10), wac=D("5"), pool_qty=D("10")),
-            CumulativeWACHistoryPoint(date=date(2024, 1, 11), wac=D("10"), pool_qty=D("15")),
+            CumulativeWACHistoryPoint(date=date(2024, 1, 10), through=date(2024, 1, 10), wac=D("5"), pool_qty=D("10")),
+            CumulativeWACHistoryPoint(date=date(2024, 1, 11), through=date(2024, 1, 11), wac=D("10"), pool_qty=D("15")),
         ]
 
     def test_an_asset_without_an_all_brokers_line_has_no_cumulative_history(self):
@@ -3517,7 +3518,7 @@ async def _sec8_analysis(
 
 def _sec8_history_dates(response: LotsAnalysisResponse) -> dict[str, list[date]]:
     """The dates of every point of the four histories, by history."""
-    return {name: [point.date for point in getattr(response, name) or []] for name in ("value_history", "return_history", "price_history", "performance_history")}
+    return {name: [point.date for point in daily_points(getattr(response, name))] for name in ("value_history", "return_history", "price_history", "performance_history")}
 
 
 class TestALotOpenedBeforeTheFloor:
@@ -3550,7 +3551,7 @@ class TestALotOpenedBeforeTheFloor:
         assert len(lots) == 1, f"precondition: transaction 1 opens one lot, got {response.lots}"
         lot = lots[0]
         assert (lot.opening_date, lot.original_quantity, lot.open_quantity, lot.original_cost, lot.asset_income, lot.open_value) == (_SEC8_OPENED, D("10"), D("10"), D("1200"), D("50"), D("1500"))
-        value_by_day = {point.date: point for point in response.value_history or [] if point.lot_id == lot.lot_id}
+        value_by_day = {point.date: point for point in daily_points(response.value_history) if point.lot_id == lot.lot_id}
         assert (value_by_day[_SEC8_FLOOR].open_value, value_by_day[_SEC8_FLOOR].original_cost, value_by_day[_SEC8_FLOOR].income) == (D("1200"), D("1200"), D("50"))
         assert value_by_day[_SEC8_END].open_value == D("1500")
 
@@ -3645,13 +3646,13 @@ class TestTheMarketPriceLineBuilder:
         """
         point_type = portfolio_module.MarketPriceHistoryPoint
 
-        assert set(point_type.model_fields) == {"date", "market_price", "currency", "estimated"}
-        point = point_type(date=date(2024, 1, 10), market_price=D("10"), currency="USD")
+        assert set(point_type.model_fields) == {"date", "through", "market_price", "currency", "estimated"}
+        point = point_type(date=date(2024, 1, 10), through=date(2024, 1, 10), market_price=D("10"), currency="USD")
         assert (point.date, point.market_price, point.currency, point.estimated) == (date(2024, 1, 10), D("10"), "USD", False)
         with pytest.raises(ValueError):
-            point_type(date=date(2024, 1, 10), market_price=D("10"), currency="USD", lot_id=1)
+            point_type(date=date(2024, 1, 10), through=date(2024, 1, 10), market_price=D("10"), currency="USD", lot_id=1)
         with pytest.raises(ValueError):
-            point_type(date=date(2024, 1, 10), market_price=D("10"), currency="NOT-A-CODE")
+            point_type(date=date(2024, 1, 10), through=date(2024, 1, 10), market_price=D("10"), currency="NOT-A-CODE")
 
 
 class TestTheMarketPriceLineAtTheFloor:
@@ -3669,7 +3670,7 @@ class TestTheMarketPriceLineAtTheFloor:
         """
         response, _ = await _sec8_analysis(monkeypatch, date_from=date_from, analyses=[_MARKET_PRICE_HISTORY])
 
-        line = [(point.date, point.market_price, point.estimated) for point in response.market_price_history]
+        line = [(point.date, point.market_price, point.estimated) for point in daily_points(response.market_price_history)]
         assert [day for day, _price, _estimated in line if day < _SEC8_FLOOR] == []
         assert line == [(day, D("120"), True) for day in _days(_SEC8_FLOOR, 4)] + [(day, D("150"), False) for day in _days(_SEC8_QUOTED, 6)]
 
@@ -3685,7 +3686,7 @@ class TestTheMarketPriceLineAtTheFloor:
 
         response, _ = await _sec8_analysis(monkeypatch, date_from=None, opening=adjustment, analyses=[_MARKET_PRICE_HISTORY])
 
-        line = [(point.date, point.market_price, point.estimated) for point in response.market_price_history]
+        line = [(point.date, point.market_price, point.estimated) for point in daily_points(response.market_price_history)]
         assert line == [(day, D("150"), False) for day in _days(_SEC8_QUOTED, 6)]
 
 

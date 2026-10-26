@@ -4,6 +4,7 @@ Portfolio API endpoints for LibreFolio.
 Provides read-only portfolio calculations on committed data:
 - POST /portfolio/wac           — WAC time series per (broker, asset)
 - POST /portfolio/report        — UNIFIED: summary+history+allocation+contribution+data_quality
+- POST /portfolio/positions-series — the daily P&L / value series of the chosen positions (#48)
 - POST /portfolio/lots/analysis — FifoLotEngine bulk multi-analysis (lots, Gantt, histories, WAC)
 
 Legacy standalone endpoints (/summary, /history, /allocation-history) removed —
@@ -27,6 +28,8 @@ from backend.app.schemas.portfolio import (
     PortfolioPlannerSourceResponse,
     PortfolioReportQuery,
     PortfolioReportResponse,
+    PositionsSeriesQuery,
+    PositionsSeriesResponse,
     WACAnalyticsRequest,
     WACAnalyticsResponse,
     WACAnalyticsResultItem,
@@ -238,6 +241,31 @@ async def get_portfolio_report(
 
     service = PortfolioService(session)
     return await service.get_report(user_id=current_user.id, query=body)
+
+
+@portfolio_router.post(
+    "/positions-series",
+    response_model=PositionsSeriesResponse,
+    summary="Daily series of the chosen positions",
+    description=(
+        "The daily series of the positions asked for, and only those: for each calendar day its quantity, market value, cost, "
+        "result since the window's start (the Performance table's period P&L at that day) and the percent on the capital deployed, "
+        "in the report currency and at the owner's share. A position of a broker the user cannot read comes back empty. The "
+        "frontend draws the lines of the positions chart from it and computes nothing."
+    ),
+)
+async def get_positions_series(
+    body: PositionsSeriesQuery,
+    session: AsyncSession = Depends(get_session_generator),
+    current_user: User = Depends(get_current_user),
+) -> PositionsSeriesResponse:
+    """Return the daily series of the chosen positions from one engine run with the position frames."""
+    from backend.app.services.platform.date_sentinel import resolve_date_sentinels  # noqa: PLC0415
+
+    if body.date_range and body.date_range.has_sentinels():
+        body.date_range = await resolve_date_sentinels(body.date_range, current_user.id, session, broker_ids=body.broker_ids)
+
+    return await PortfolioService(session).get_positions_series(user_id=current_user.id, query=body)
 
 
 @portfolio_router.post(
