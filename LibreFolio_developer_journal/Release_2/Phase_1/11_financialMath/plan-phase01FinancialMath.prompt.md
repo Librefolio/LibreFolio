@@ -4999,3 +4999,37 @@ nel frontend (Y), `value_at` lato backend per l'AI Export (Z).
   - lotti: L1 MF ∥ L2 J → L3 W → L5 chiusura (+ L4 X se deciso); rischi.
   > **Note implementazione**: `git grep` sulle refs MF `01e180028`, J `7336910f9`, W `8db10d43d`, Y `36eaffa4d`, Z
   > `a8d1aab57` (storia committata, nessun worktree altrui). Nessun codice, nessun test. CHECKPOINT READY inviato, FROZEN.
+
+#### MF-PAV-L1 · motore e report senza il pavimento del 1900 (26/10, base `999f1899e`)
+Via del coordinatore (26/10): P1–P5 dell'inventario, via `RowsBeforeFloor` / `TRANSACTIONS_BEFORE_FLOOR` (decisione 2
+del coordinatore: fuori dall'enum, mai rilasciato), porte di costo (report «tutto» sull'anno 1 < 50 MB), MWRR su 2000
+anni senza `inf`/`nan`, rossi prima. In parallelo J fa L2 (lotti); W fa L3 (scrittura) dopo L1 e L2.
+Passi:
+1. ✅ Rossi (test-author): `test_engine_replay_floor.py` riscritto («la storia parte dalla prima riga»), parte calendari
+   di `test_replay_floor.py`, `TestTransactionsBeforeFloorIssue` via, `test_portfolio_api.py` (sezione floor), nuovo
+   `test_financial/test_report_before_1900.py` (costo anno 1, MWRR 2000 anni). Su `999f1899e`: 16 rossi, 51 verdi di
+   guardia (`ondata5/MF-pavL1-red-*.log`); costo e MWRR verdi già con il pavimento (il frame era di 125 anni).
+2. ✅ Cura: `engine.py` (frame dalla prima riga, transito dal suo inizio, via `rows_before_floor`), `daily_state.py`
+   (calendari da `_replay_from`), `native_cash._unit_windows` (una finestra dal primo movimento), `models.py`
+   (`RowsBeforeFloor` via), `data_quality.py` (parametro e avviso via), `schemas/portfolio.py` (`IssueCode` senza
+   `TRANSACTIONS_BEFORE_FLOOR`), `portfolio_service.py` (due chiamate). I rossi: 142/142 verdi (`MF-pavL1-green-1.log`).
+   > **Note implementazione**: docs `developer/backend/financial_math.md` (docs-writer; build strict 0, link 0; debito di
+   > traduzione reale).
+3. ✅ Riparazioni (test-author): `test_rate_change_days_on_steps.py` 33 (nuova `TestReadCostFromYearOne`: da `date.min`
+   10–18 letture), `test_native_cash.py` 144, `test_fx_steps_service_parity.py` 15.
+   > **Note implementazione**: misura su `typo0001` (`MF-pavL1-measure.log`): motore 739 914 giorni in 398 segmenti, primo
+   > giorno 0001-01-02; report «tutto» 288 punti, 0,7 MB di JSON, 1,1 s, picco RSS 141,7 MB (1M: 133,9 MB: il resto sono
+   > gli import). Prima dei gradini, con il pavimento abbassato, lo stesso report superava 4,4 GB.
+2. Cura: `engine.py:308,572-573,674`, `daily_state.py:1011-1014`, `native_cash.py:526-545`, `models.py` (`RowsBeforeFloor`),
+   `data_quality.py` (parametro e avviso), `schemas/portfolio.py` (`IssueCode`), `portfolio_service.py` (due chiamate).
+3. Riparazioni dei test d'oracolo (native cash, asked-day rates, calendari, fx steps parity, segmenti).
+4. ✅ Porte e parità (`ondata5/MF-pavL1-verify.log`, 14:08–14:21): `financial-math` **3679**, `portfolio-engine` **41**,
+   `roi-fifo-utils` **2095 + 1 rosso atteso** (`test_date_range_bounds::…analyzed_range…`, il lettore del rischio di J,
+   come nel checkpoint precedente), `api portfolio` **55** (compresa la nuova `TestRowsBefore1900StartTheHistory`).
+   Parità contro `1164a1e65` espansa: base, eur1900, usd1900, buy1900, nocrypto **0 differenze**; `typo1500`: differenze
+   tutte volute — via l'avviso `TRANSACTIONS_BEFORE_FLOOR`, storia e stati dal 1500-01-02, MWRR del periodo «tutto» dal
+   1500 (card 0,000785, finita); le finestre 1M, 1Y, «mid», «1900» uguali salvo l'avviso. Report «tutto» del 1500:
+   0,8 s (HEAD 21 s). CHECKPOINT READY inviato, FROZEN.
+   > **⚠️ Fuori pista**: nel frontend restano la chiave `dataQuality.transactionsBeforeFloor` (`i18n/dataQuality/*.json`),
+   > un dato di test in `DataQualityBanner.layout.test.ts` e il membro dell'enum nei tipi generati: li toglie Y (o W)
+   > dopo il merge, con `api sync`.
