@@ -154,20 +154,20 @@ const MISSING_PRICE: DataQualityIssue = {
     group_key: 'missing_price',
 };
 
-/** Three transactions dated before 1900: the banner has nothing to do about them, the user corrects their dates. */
-const BEFORE_FLOOR: DataQualityIssue = {
+/** One asset with a split of an invalid ratio: the banner has nothing to do about it, the user fixes the split in the asset's events. */
+const INVALID_SPLIT: DataQualityIssue = {
     domain: 'portfolio',
-    code: 'TRANSACTIONS_BEFORE_FLOOR',
+    code: 'INVALID_SPLIT_RATIO',
     severity: 'warning',
-    message_i18n_key: 'dataQuality.transactionsBeforeFloor',
-    message_params: {count: 3, earliest: '1899-12-30'},
-    count: 3,
+    message_i18n_key: 'dataQuality.invalidSplitRatio',
+    message_params: {count: 1},
+    count: 1,
     affected_asset_ids: [],
     affected_asset_names: [],
     affected_fx_pairs: [],
     cta_action: null,
     cta_target: null,
-    group_key: 'transactions_before_floor',
+    group_key: 'invalid_split_ratio',
 };
 
 /** The three actions that act on one item at a time, given no item: their one button stands in for the chips. */
@@ -180,11 +180,11 @@ const SHAPES: Array<{issue: DataQualityIssue; shape: Shape}> = [
     {issue: ADD_FX, shape: 'one chip per pair'},
     {issue: MANUAL_FX, shape: 'one chip per pair'},
     {issue: MISSING_PRICE, shape: 'one chip per asset'},
-    {issue: BEFORE_FLOOR, shape: 'no action'},
+    {issue: INVALID_SPLIT, shape: 'no action'},
 ];
 
 /** The same issues, mounted in another order: the banner sorts them by severity, so nothing may lean on this list's. */
-const MOUNTED: DataQualityIssue[] = [STALE, BEFORE_FLOOR, MANUAL_FX, MISSING_PRICE, ADD_FX, SYNC_FX];
+const MOUNTED: DataQualityIssue[] = [STALE, INVALID_SPLIT, MANUAL_FX, MISSING_PRICE, ADD_FX, SYNC_FX];
 
 // --- Helpers ---------------------------------------------------------------------------------------------------------
 
