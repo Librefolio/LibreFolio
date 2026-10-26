@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import date as date_type
 from decimal import Decimal
 
@@ -89,6 +90,42 @@ def closed_position_base(cost_sold: Decimal, sales: int, moved_out: tuple[Decima
         return None
     base = cost_sold + moved_cost + (moved_in or _ZERO)
     return base if base > 0 else None
+
+
+@dataclass(frozen=True, slots=True)
+class PositionPeriodPnl:
+    """A position's P&L over a period: the change of its unrealized result, and the whole (unrealized + realized + income
+    - fees); None where a part is unknown."""
+
+    unrealized_delta: Decimal | None
+    period_pnl: Decimal | None
+
+
+def position_period_pnl(
+    *,
+    held_at_start: bool,
+    held_at_end: bool,
+    unrealized_start: Decimal | None,
+    unrealized_end: Decimal | None,
+    transfer_adjustment: Decimal | None,
+    realized: Decimal | None,
+    income: Decimal | None,
+    fees: Decimal | None,
+) -> PositionPeriodPnl:
+    """A position's period P&L from its boundaries and the period's realized result, income and fees (R4).
+
+    Not held at a boundary counts as zero; held there with an unknown unrealized result (no rate, incomplete cost) makes
+    the change unknown — never a figure that hides the missing part. ``transfer_adjustment`` is the internal-transfer
+    tract adjustment of the position (``transfer_tract_adjustments``). The P&L adds the parts that are known, fees
+    subtracted; None when none is.
+    """
+    unknown_boundary = (held_at_start and unrealized_start is None) or (held_at_end and unrealized_end is None)
+    unrealized_delta = None
+    if not unknown_boundary and (unrealized_end is not None or unrealized_start is not None or transfer_adjustment is not None):
+        unrealized_delta = (unrealized_end or _ZERO) - (unrealized_start or _ZERO) + (transfer_adjustment or _ZERO)
+    parts = [unrealized_delta, realized, income, _ZERO - fees if fees else None]
+    known = [part for part in parts if part is not None]
+    return PositionPeriodPnl(unrealized_delta=unrealized_delta, period_pnl=sum(known, _ZERO) if known else None)
 
 
 def period_return_on_start(period_pnl: Decimal | None, start_value: Decimal | None) -> Decimal | None:
