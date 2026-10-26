@@ -1172,6 +1172,10 @@ describe('calendarLength', () => {
         {case: 'clamped: 31 January plus a month is 28 February, so to 28 February is a month and a day — not 29 days, as with a month rolling over into March', start: '2026-01-31', end: '2026-02-28', length: {years: 0, months: 1, days: 1}},
         {case: 'from the start, never chained: 31 January plus two months is 31 March, not 28 March by way of a clamped February', start: '2026-01-31', end: '2026-03-30', length: {years: 0, months: 2, days: 0}},
         {case: 'from a leap day: a year on is clamped to 28 February 2029, and 1 March is one day more', start: '2028-02-29', end: '2029-02-28', length: {years: 1, months: 0, days: 1}},
+        // A year typed with fewer than four digits is a year of the first century, not 19xx (`Date.UTC` reads 0–99 as 1900–1999).
+        {case: 'a date typed in the year 24: three months and a day, as in any other year', start: '0024-03-01', end: '0024-06-01', length: {years: 0, months: 3, days: 1}},
+        {case: 'year 24, a year on from 29 February: clamped to 28 February 25', start: '0024-02-29', end: '0025-02-28', length: {years: 1, months: 0, days: 1}},
+        {case: 'year 0 is a leap year (1900, where Date.UTC would put it, is not): 31 January plus a month is 29 February', start: '0000-01-31', end: '0000-02-29', length: {years: 0, months: 1, days: 1}},
     ];
 
     /**
