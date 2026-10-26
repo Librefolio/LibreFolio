@@ -42,11 +42,13 @@
     import {trySave} from '$lib/utils/trySave';
     import {formatDay} from '$lib/utils/core/formatAxisDate';
     import {wipeRefusalMessage} from './currencyChangeErrors';
+    import {IMPACT_DIALOG, impactValues, loadProviderImpact, type ProviderImpact} from './providerImpact';
+    import {currentLanguage} from '$lib/stores/app/language';
     import {IDENTIFIER_TYPES} from '$lib/utils/assetTypes';
     import {columnsToIdentifierRows, fieldToIdType, identifierValue, withIdentifier, mergeOtherIdentifierValues, withElectedPrimary} from './assetIdentifiers';
     import {searchResultAssetType, searchResultIdentifier, searchResultProviderParams} from './assetSearchSelection';
     import {compareMetadata, type ComparisonAction, type ComparisonSnapshot} from './assetMetadataComparison';
-    import {isCurrencyChangeBlockedMessage, parseCurrencyChangeBlocker} from './currencyBlocker';
+    import {hasSomethingToLose, loadCurrencyChangeImpact, type CurrencyChangeImpact} from './currencyImpact';
     import {buildClassificationParams, buildCreateItem, buildPatchItem, buildProviderAssignItem, type AssetFormFields, type ClassificationParams, type ProviderAssignment} from './assetPayload';
     import {isQuoteBaseQuantityInvalid, quoteBaseQuantityErrorKey, defaultQuoteBaseQuantity, proposeQuoteBase, quoteBaseNote, computeHasProvider, computeProviderDirty, groupImportNotices, type QuoteBaseSource, type QuoteBaseSuggestion} from './assetFormState';
     import {ensureAssetProvidersCached, getAssetProviderName, isParametricProvider} from '$lib/utils/providerHelpers';
@@ -276,21 +278,14 @@
     // Using a separate state allows {#key} remount of AssetSearchAutocomplete.
     let activeSearchQuery = $state(untrack(() => initialSearchQuery));
 
-    // #R3-4 — scheduled_investment regenerate confirm. Shown when the user edits an
-    // existing scheduled_investment asset and changes its provider_params (schedule /
-    // maturation_frequency / …). Confirming wipes the old prices server-side and
-    // triggers an immediate re-sync so the chart reflects the new schedule.
-    let showScheduledRegenConfirm = $state(false);
+    // X5-1 — one confirmation for every provider change that deletes something: new parameters of a parametric provider
+    // (its series is invented from them), leaving it, and removing any provider (the events it generated go). The dialog
+    // states the server's own count (the dry run `POST /assets/provider/impact`): prices, provider events, transactions that
+    // lose the link to a deleted event. Confirming re-enters `saveEdit`, which skips the question while `pendingSaveAssetId`
+    // is set, then triggers the re-sync of the regenerated series.
+    let providerImpactDialog = $state<{impact: ProviderImpact; from: string; to: string} | null>(null);
     let pendingSaveAssetId: number | null = $state(null);
     let initialProviderParamsJson: string = $state('');
-
-    // Leaving a parametric provider (scheduled_investment → Yahoo, …) wipes the
-    // generated series server-side, for the same reason a params change does: the
-    // prices were *invented* from the params, so under a market provider they are
-    // not history. Unlike the params change the user has no reason to expect it,
-    // so the warning states the actual counts before anything is destroyed.
-    let showParametricSwitchConfirm = $state(false);
-    let parametricSwitchInfo = $state<{prices: number; events: number; from: string; to: string} | null>(null);
 
     // I-bis #2 — snapshot of the provider config as loaded from the DB.
     // Used by the ``providerDirty`` derived below to gate the
@@ -301,19 +296,9 @@
     let initialProviderIdentifier: string = $state('');
     let initialProviderIdentifierType: string = $state('TICKER');
 
-    // I.6 — destructive currency-change modal state.
+    // I.6 + N68 — the confirm modal of a currency change that would delete something.
     let currencyChangeModalOpen = $state(false);
-    let currencyChangeBlocker = $state<{
-        assetId: number;
-        prices: number;
-        eventsManual: number;
-        eventsProvider: number;
-        linkedTx: number;
-        oldest: string;
-        newest: string;
-        from: string;
-        to: string;
-    } | null>(null);
+    let currencyChangeImpact = $state<CurrencyChangeImpact | null>(null);
     let currencyChangePatchPayload: Record<string, unknown> | null = $state(null);
     let currencyChangeProviderAssigned = $state(false);
     let pendingSearchResult: any = $state(null);
@@ -1207,11 +1192,9 @@
         // I-bis #22 (Batch 4.d-part2) — route the orchestrator through
         // ``trySave`` for uniform error extraction. Two custom
         // semantics are preserved:
-        //   (a) **409 currency-change** is NOT handled here: it's intercepted
-        //       deeper in ``saveEdit`` (see the patch_assets_bulk try/catch
-        //       around the PATCH call) which rewrites the ``patchResp`` from
-        //       ``detail.results[]`` and opens the destructive
-        //       ``AssetCurrencyChangeModal``. That path never throws to us.
+        //   (a) **currency change** (N68): never refused. ``saveEdit`` asks the server's dry run first and,
+        //       when the change would delete something, opens ``AssetCurrencyChangeModal`` and returns without
+        //       throwing; if the dry run itself fails, the error lands in the inline banner like any other.
         //   (b) **409 duplicate-name** (create path) still maps to the
         //       dedicated ``duplicateName`` i18n key via the ``onError``
         //       hook below.
@@ -1318,99 +1301,53 @@
         }
     }
 
-    /** How much of the asset's series was generated, for the warning below.
-     *
-     * Uses the market-data summary — the same counters the currency-change flow
-     * relies on — because it reports *stored rows*. The price query endpoint
-     * cannot be used here: it backward-fills every calendar day in the requested
-     * range, so it would answer with the width of the window instead of the size
-     * of the series, and the warning would quote a plausible wrong number.
-     *
-     * Best effort on purpose: a failed count must never block a save, so a
-     * failure degrades to zeroes and the warning stays generic rather than
-     * lying with a number it does not have.
-     */
-    async function countGeneratedSeries(assetId: number): Promise<{prices: number; events: number}> {
-        try {
-            const summary: any = await zodiosApi.market_data_summary_api_v1_assets__asset_id__market_data_summary_get({params: {asset_id: assetId}});
-            return {prices: summary?.prices ?? 0, events: summary?.events_provider ?? 0};
-        } catch (err) {
-            console.warn('Could not count the generated series before the provider switch:', err);
-            return {prices: 0, events: 0};
-        }
-    }
-
     async function saveEdit(assetId: number) {
-        // #R3-4 — for PARAMETRIC_GENERATION providers (e.g. scheduled_investment), if the
-        // user changed `provider_params` intercept the save flow to show an explicit
-        // regenerate confirmation. Confirming will: (1) PATCH/assign through the normal
-        // path, (2) BE wipes old prices + invalidates caches atomically, (3) we trigger
-        // an immediate re-sync so the chart reflects the new schedule without requiring
-        // a manual click. Gating on `isParametricProvider()` (kind-based) instead of
-        // hardcoding 'scheduled_investment' so future parametric providers inherit the
-        // flow for free.
+        // X5-1 — a change of provider, of its parameters, or its removal is first measured by the server (a dry run that
+        // writes nothing): when it would delete something, the user is told how much and confirms; when it would delete
+        // nothing, or the measure fails, the save goes on and the server judges the real call. Confirming re-enters here
+        // with `pendingSaveAssetId` set, which skips the question.
         await ensureAssetProvidersCached();
-        if (isParametricProvider(providerCode) && !providerNoProvider && initialProviderParamsJson && JSON.stringify(providerParams ?? null) !== initialProviderParamsJson && !pendingSaveAssetId) {
-            pendingSaveAssetId = assetId;
-            showScheduledRegenConfirm = true;
-            return; // wait for confirm; the modal will re-invoke saveEdit()
-        }
-
-        // Same interception for the *other* destructive parametric case: swapping the
-        // provider away from a parametric one. The backend wipes the generated prices
-        // and events (services/assets/provider_management.py, "provider changed"), and without that wipe the
-        // next sync would resume from the day after the last invented price and never
-        // backfill the real past. Counts come from the two existing query endpoints —
-        // a warning that cannot say how much it is about to destroy is not a warning.
-        if (!providerNoProvider && hasProvider && initialProviderCode && providerCode !== initialProviderCode && isParametricProvider(initialProviderCode) && !pendingSaveAssetId) {
-            pendingSaveAssetId = assetId;
-            parametricSwitchInfo = {
-                ...(await countGeneratedSeries(assetId)),
-                from: getAssetProviderName(initialProviderCode) || initialProviderCode,
-                to: getAssetProviderName(providerCode) || providerCode,
-            };
-            showParametricSwitchConfirm = true;
-            return; // wait for confirm; the modal will re-invoke saveEdit()
+        if (!pendingSaveAssetId) {
+            const paramsChanged = !!initialProviderParamsJson && JSON.stringify(providerParams ?? null) !== initialProviderParamsJson;
+            let impact: ProviderImpact | null = null;
+            if (providerNoProvider && initialProviderCode) {
+                impact = await loadProviderImpact(assetId, {action: 'remove'});
+            } else if (!providerNoProvider && hasProvider && initialProviderCode && (providerCode !== initialProviderCode || paramsChanged)) {
+                impact = await loadProviderImpact(assetId, {action: 'assign', item: buildProviderAssignItem(assetId, providerAssignment())});
+            }
+            if (impact) {
+                pendingSaveAssetId = assetId;
+                providerImpactDialog = {
+                    impact,
+                    from: getAssetProviderName(initialProviderCode) || initialProviderCode,
+                    to: getAssetProviderName(providerCode) || providerCode,
+                };
+                return; // wait for the confirmation; the dialog re-invokes saveEdit()
+            }
         }
 
         // Step 1: Patch asset (classification_params only when it changed since the modal opened)
         const patchItem = buildPatchItem(assetId, formFields(), initialClassification);
         const patchPayload = [patchItem];
 
-        // I.3 + R3-3 Policy D — PATCH returns a per-item failure with the structured
-        // blocker token when the user changed the currency on an asset that still has
-        // *any* market data (prices, events or linked transactions). Token format:
-        //   CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA|prices=N|events_manual=M|
-        //     events_provider=K|linked_tx=L|oldest=...|newest=...|from=X|to=Y
-        // The modal turns this into the destructive-confirm dialog.
-        //
-        // I-bis #7 — the backend now also returns HTTP 409 when *every* item in
-        // the batch is blocked by market data (single-asset edits always fall in
-        // this case). Axios throws on non-2xx; we catch below and re-extract the
-        // ``results[]`` from the response body so the UX is identical.
-        let patchResp: any;
-        try {
-            patchResp = await zodiosApi.patch_assets_bulk_api_v1_assets_patch(patchPayload as any);
-        } catch (err: any) {
-            const status = err?.response?.status;
-            const detail = err?.response?.data?.detail;
-            if (status === 409 && detail && typeof detail === 'object' && Array.isArray(detail.results)) {
-                patchResp = {results: detail.results, success_count: 0};
-            } else {
-                throw err;
+        // N68 — a currency change is never refused, but the PATCH that makes it deletes, in the same call, the asset's prices and
+        // its events that are not SPLITs, and disconnects the transactions linked to them (the SPLITs stay). So the server's
+        // dry run comes first: when something would go, the user is told how much and confirms (the modal sends the PATCH);
+        // when nothing would, the PATCH goes on its own. The dry run is a gate: when it fails the save fails, nothing is sent.
+        const storedCurrency = editData?.currency;
+        if (storedCurrency && currency !== storedCurrency) {
+            const impact = await loadCurrencyChangeImpact(assetId, storedCurrency, currency);
+            if (hasSomethingToLose(impact)) {
+                currencyChangeImpact = impact;
+                currencyChangePatchPayload = patchItem;
+                currencyChangeProviderAssigned = hasProvider && !providerNoProvider;
+                currencyChangeModalOpen = true;
+                return; // abort save — the modal sends the PATCH on confirm, or the user cancels
             }
         }
+
+        const patchResp = await zodiosApi.patch_assets_bulk_api_v1_assets_patch(patchPayload as any);
         const resultItem = patchResp?.results?.[0];
-        if (resultItem && resultItem.success === false && isCurrencyChangeBlockedMessage(resultItem.message)) {
-            currencyChangeBlocker = {
-                assetId,
-                ...parseCurrencyChangeBlocker(resultItem.message),
-            };
-            currencyChangePatchPayload = patchItem;
-            currencyChangeProviderAssigned = hasProvider && !providerNoProvider;
-            currencyChangeModalOpen = true;
-            return; // abort save — the modal will either finish the flow or the user cancels
-        }
         if (!resultItem?.success) throw new Error(resultItem?.message || $t('assets.modal.saveFailed'));
 
         // PATCH succeeded — sync the patched fields into the shared cache so
@@ -1761,67 +1698,34 @@
     zIndex={zIndex + 20}
 />
 
-<!-- #R3-4 — Confirmation: regenerate scheduled_investment prices on params change -->
+<!-- X5-1 — Confirmation: a provider change that deletes prices or provider events, with the server's own count -->
 <ConfirmModal
-    open={showScheduledRegenConfirm}
-    title={$t('assets.modal.scheduledRegenTitle')}
-    message={$t('assets.modal.scheduledRegenMessage')}
-    confirmText={$t('assets.modal.scheduledRegenConfirm')}
+    open={providerImpactDialog !== null}
+    title={providerImpactDialog ? $t(IMPACT_DIALOG[providerImpactDialog.impact.kind].title) : ''}
+    message={providerImpactDialog
+        ? $t(IMPACT_DIALOG[providerImpactDialog.impact.kind].message, {
+              values: {...impactValues(providerImpactDialog.impact, $t, $currentLanguage), from: providerImpactDialog.from, to: providerImpactDialog.to},
+          })
+        : ''}
+    confirmText={providerImpactDialog ? $t(IMPACT_DIALOG[providerImpactDialog.impact.kind].confirm) : ''}
     cancelText={$t('common.cancel')}
     danger={true}
-    testId="asset-scheduled-regen-confirm"
+    testId={providerImpactDialog ? IMPACT_DIALOG[providerImpactDialog.impact.kind].testId : 'asset-provider-impact-confirm'}
     onConfirm={() => {
-        showScheduledRegenConfirm = false;
+        providerImpactDialog = null;
         const aid = pendingSaveAssetId;
-        // pendingSaveAssetId is kept non-null so the guard in saveEdit() skips
-        // re-showing this modal and proceeds to PATCH+assign+sync.
+        // pendingSaveAssetId stays non-null so the guard in saveEdit() skips the question on the second pass and
+        // proceeds to PATCH + assign/remove + sync.
         if (aid !== null) {
             saveEdit(aid).catch((err) => {
-                console.error('saveEdit after regenerate confirm failed:', err);
+                console.error('saveEdit after the provider-impact confirmation failed:', err);
                 toasts.error($t('common.errorOccurred'));
                 pendingSaveAssetId = null;
             });
         }
     }}
     onCancel={() => {
-        showScheduledRegenConfirm = false;
-        pendingSaveAssetId = null;
-    }}
-    zIndex={zIndex + 20}
-/>
-
-<!-- Confirmation: swapping away from a parametric provider discards its generated series -->
-<ConfirmModal
-    open={showParametricSwitchConfirm}
-    title={$t('assets.modal.parametricSwitchTitle')}
-    message={$t('assets.modal.parametricSwitchMessage', {
-        values: {
-            from: parametricSwitchInfo?.from ?? '',
-            to: parametricSwitchInfo?.to ?? '',
-            prices: parametricSwitchInfo?.prices ?? 0,
-            events: parametricSwitchInfo?.events ?? 0,
-        },
-    })}
-    confirmText={$t('assets.modal.parametricSwitchConfirm')}
-    cancelText={$t('common.cancel')}
-    danger={true}
-    testId="asset-parametric-switch-confirm"
-    onConfirm={() => {
-        showParametricSwitchConfirm = false;
-        const aid = pendingSaveAssetId;
-        // pendingSaveAssetId stays non-null so the guard in saveEdit() skips this
-        // modal on the second pass and proceeds to PATCH+assign+sync.
-        if (aid !== null) {
-            saveEdit(aid).catch((err) => {
-                console.error('saveEdit after parametric switch confirm failed:', err);
-                toasts.error($t('common.errorOccurred'));
-                pendingSaveAssetId = null;
-            });
-        }
-    }}
-    onCancel={() => {
-        showParametricSwitchConfirm = false;
-        parametricSwitchInfo = null;
+        providerImpactDialog = null;
         pendingSaveAssetId = null;
     }}
     zIndex={zIndex + 20}
@@ -1839,10 +1743,10 @@
     }}
 />
 
-<!-- I.6 + R3-3 Policy D — Destructive currency-change modal. Triggered by the CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA marker. -->
+<!-- I.6 + R3-3 Policy D + N68 — confirm modal of a currency change that deletes market data. Opened by the dry run of saveEdit. -->
 <AssetCurrencyChangeModal
     bind:open={currencyChangeModalOpen}
-    blocker={currencyChangeBlocker}
+    impact={currencyChangeImpact}
     patchPayload={currencyChangePatchPayload}
     providerAssigned={currencyChangeProviderAssigned}
     zIndex={zIndex + 20}
@@ -1854,7 +1758,7 @@
         handleCurrencyChangeConfirmed();
     }}
     oncanceled={() => {
-        currencyChangeBlocker = null;
+        currencyChangeImpact = null;
         currencyChangePatchPayload = null;
     }}
 />

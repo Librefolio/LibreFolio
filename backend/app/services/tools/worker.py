@@ -13,6 +13,7 @@ import psutil
 from pydantic import BaseModel, ValidationError
 
 from backend.app.schemas.tools import ToolError, ToolErrorCode, ToolItemMetrics
+from backend.app.services.plugin_settings.contract import BoundSettings
 from backend.app.services.tools.base import ToolExecutionContext, ToolExecutionError
 from backend.app.services.tools.registry import ToolDefinition, ToolPluginRegistry
 from backend.app.services.tools.wire import decode_json, encode_json, plain_json_object, validation_error
@@ -66,6 +67,8 @@ class ToolWorkerJob:
     max_json_depth: int
     engine_timeout_ms: int = 4_000
     memory_limit_bytes: int = 1_073_741_824
+    #: The values of the plugin's settings for this job (resolved by the parent for the user who asks), or None for a tool without fields.
+    settings: BoundSettings | None = None
 
 
 def _elapsed_ms(started_ns: int) -> int:
@@ -137,6 +140,8 @@ def _execute(job: ToolWorkerJob, cancellation: CancellationSignal, registry_clas
         context.checkpoint()
         phase = "construction"
         plugin = definition.plugin_class()
+        if job.settings is not None:
+            plugin.bind_settings(job.settings)
         context.checkpoint()
         phase = "compute"
         started = time.monotonic_ns()

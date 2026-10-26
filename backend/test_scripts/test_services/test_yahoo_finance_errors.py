@@ -286,7 +286,7 @@ async def test_history_finite_range_uses_exclusive_remote_end_and_inclusive_exch
 
     result = await YahooFinanceProvider().get_history_value("ENI.MI", IdentifierType.TICKER, None, requested_start, requested_end)
 
-    assert ticker.history_calls == [{"start": "2026-01-02", "end": "2026-01-04"}]
+    assert ticker.history_calls == [{"start": "2026-01-02", "end": "2026-01-04", "auto_adjust": False}]
     assert [(point.date, point.close) for point in result.prices] == [(requested_start, Decimal("100.0")), (requested_end, Decimal("110.0"))], "each Milan bar must count for its own exchange day"
 
 
@@ -425,7 +425,7 @@ async def test_history_retries_transient_fetch_through_retry_boundary(monkeypatc
 
     result = await YahooFinanceProvider().get_history_value("AAPL", IdentifierType.TICKER, None, date(2026, 1, 1), date(2026, 1, 31))
 
-    expected_kwargs = {"start": "2026-01-01", "end": "2026-02-01"}
+    expected_kwargs = {"start": "2026-01-01", "end": "2026-02-01", "auto_adjust": False}
     assert ticker.history_calls == [expected_kwargs, expected_kwargs, expected_kwargs]
     assert retry_labels == ["history(AAPL)"]
     assert delays == [1.5, 3.0]
@@ -440,7 +440,7 @@ async def test_history_min_period_and_currency_fallback(monkeypatch):
     _install_yf(monkeypatch, ticker=ticker)
 
     result = await YahooFinanceProvider().get_history_value("AAPL", IdentifierType.TICKER, None, "min", date(2026, 1, 31))
-    assert ticker.history_calls == [{"period": "max"}]
+    assert ticker.history_calls == [{"period": "max", "auto_adjust": False}]
     assert result.currency == "USD"
     assert [point.date for point in result.prices] == [date(2026, 1, 5)]
 
@@ -1291,3 +1291,105 @@ async def test_z39_search_other_error_on_a_result_currency_answers_then_asks_aga
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v", "-s"])
+
+
+# ── Z-35 / Z-32 (a, b): the closes as the exchange gives them, the pence of a dividend ───────────────────────────────
+
+
+class _AdjustingTicker(_FakeTicker):
+    """A ticker whose ``history`` answers as yfinance 1.7.0 does: the closes rewritten for the dividends paid since
+    (``auto_adjust=True``, its default) unless the caller asks for the raw ones (``auto_adjust=False``, which adds
+    ``Adj Close``). The splits are in both: Yahoo's ``Close`` is split-adjusted in either mode."""
+
+    def __init__(self, *, raw: pd.DataFrame, adjusted: pd.DataFrame, **kwargs):
+        super().__init__(history=None, **kwargs)
+        self._raw = raw
+        self._adjusted = adjusted
+
+    def history(self, **kwargs):
+        self.history_calls.append(dict(kwargs))
+        return self._adjusted if kwargs.get("auto_adjust", True) else self._raw
+
+
+def _raw_and_adjusted(dates: list[str], raw_closes: list[float], adjusted_closes: list[float]) -> tuple[pd.DataFrame, pd.DataFrame]:
+    index = _utc_index(dates)
+    frame = lambda closes: pd.DataFrame({"Open": closes, "High": closes, "Low": closes, "Close": closes, "Volume": [1000] * len(closes)}, index=index)  # noqa: E731
+    raw = frame(raw_closes)
+    raw["Adj Close"] = adjusted_closes
+    return raw, frame(adjusted_closes)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("start", [date(2026, 1, 1), "min"], ids=["finite-range", "whole-history"])
+async def test_history_closes_are_saved_as_the_exchange_gives_them_not_adjusted_for_dividends(monkeypatch, start):
+    """Z-35: ``ticker.history`` is asked with ``auto_adjust=False`` (both branches), so the stored close is the day's
+    raw one. Left to its default yfinance rewrote every close for the dividends paid after it, as of the day it was read:
+    the rows read today carried today's adjustment and the older rows kept an older one. Red before the cure: the
+    adjusted frame (98.0, 99.0) comes back, and the call carries no ``auto_adjust``."""
+    raw, adjusted = _raw_and_adjusted(["2026-01-05", "2026-01-06"], [100.0, 101.0], [98.0, 99.0])
+    ticker = _AdjustingTicker(raw=raw, adjusted=adjusted, info={"currency": "EUR"})
+    _install_yf(monkeypatch, ticker=ticker)
+
+    result = await YahooFinanceProvider().get_history_value("ENI.MI", IdentifierType.TICKER, None, start, date(2026, 1, 31))
+
+    assert [call.get("auto_adjust") for call in ticker.history_calls] == [False], "the raw closes are asked for"
+    assert [point.close for point in result.prices] == [Decimal("100.0"), Decimal("101.0")], "the exchange's close, not the adjusted one"
+
+
+@pytest.mark.asyncio
+async def test_history_unadjusted_frame_with_the_adj_close_column_is_read_on_close(monkeypatch):
+    """The ``Adj Close`` column the raw frame adds is not a price of ours: the required columns are met and the close is
+    the ``Close`` one, whatever ``Adj Close`` holds."""
+    raw, adjusted = _raw_and_adjusted(["2026-01-05"], [100.0], [7.0])
+    ticker = _AdjustingTicker(raw=raw, adjusted=adjusted, info={"currency": "USD"})
+    _install_yf(monkeypatch, ticker=ticker)
+
+    result = await YahooFinanceProvider().get_history_value("AAPL", IdentifierType.TICKER, None, date(2026, 1, 1), date(2026, 1, 31))
+
+    assert [point.close for point in result.prices] == [Decimal("100.0")]
+
+
+@pytest.mark.asyncio
+async def test_a_dividend_of_a_pence_line_is_saved_in_pounds_and_its_prices_stay_in_pence(monkeypatch):
+    """Z-32 (a, b): Yahoo gives a London line's closes and its dividends in pence (``GBp``); the schemas fold the code to
+    ``GBP`` without scaling. The prices stay as they are (the asset's quote base, 100, divides them back), the dividend
+    becomes an amount: 1.9542 pence is 0.019542 GBP. Red before the cure: the dividend comes out as 1.9542 GBP."""
+    raw, adjusted = _raw_and_adjusted(["2026-06-04", "2026-06-05"], [74.0, 73.5], [74.0, 73.5])
+    dividends = pd.Series([1.9542], index=_utc_index(["2026-06-05"]))
+    ticker = _AdjustingTicker(raw=raw, adjusted=adjusted, info={"currency": "GBp"}, dividends=dividends)
+    _install_yf(monkeypatch, ticker=ticker)
+
+    result = await YahooFinanceProvider().get_history_value("VOD.L", IdentifierType.TICKER, None, date(2026, 6, 1), date(2026, 6, 30))
+
+    assert [point.close for point in result.prices] == [Decimal("74.0"), Decimal("73.5")], "the pence are kept: the quote base divides them"
+    dividend = next(event for event in result.events if event.type == "DIVIDEND")
+    assert (dividend.value.code, dividend.value.amount) == ("GBP", Decimal("0.019542"))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("currency", ["EUR", "GBP", "USD"])
+async def test_a_dividend_of_a_major_unit_line_is_unchanged(monkeypatch, currency):
+    """Only a minor unit (``MINOR_UNIT_FACTORS``) scales a dividend: ``GBP`` (capitals) is pounds, ``EUR`` and ``USD`` too."""
+    raw, adjusted = _raw_and_adjusted(["2026-06-05"], [100.0], [100.0])
+    dividends = pd.Series([0.5], index=_utc_index(["2026-06-05"]))
+    ticker = _AdjustingTicker(raw=raw, adjusted=adjusted, info={"currency": currency}, dividends=dividends)
+    _install_yf(monkeypatch, ticker=ticker)
+
+    result = await YahooFinanceProvider().get_history_value("X", IdentifierType.TICKER, None, date(2026, 6, 1), date(2026, 6, 30))
+
+    dividend = next(event for event in result.events if event.type == "DIVIDEND")
+    assert (dividend.value.code, dividend.value.amount) == (currency, Decimal("0.5"))
+
+
+@pytest.mark.asyncio
+async def test_a_split_of_a_pence_line_keeps_its_ratio(monkeypatch):
+    """A split ratio is a number of shares, not an amount of money: a pence line's 2:1 is still 2."""
+    raw, adjusted = _raw_and_adjusted(["2026-06-05"], [100.0], [100.0])
+    splits = pd.Series([2.0], index=_utc_index(["2026-06-05"]))
+    ticker = _AdjustingTicker(raw=raw, adjusted=adjusted, info={"currency": "GBp"}, splits=splits)
+    _install_yf(monkeypatch, ticker=ticker)
+
+    result = await YahooFinanceProvider().get_history_value("VOD.L", IdentifierType.TICKER, None, date(2026, 6, 1), date(2026, 6, 30))
+
+    split = next(event for event in result.events if event.type == "SPLIT")
+    assert split.value.amount == Decimal("2.0")

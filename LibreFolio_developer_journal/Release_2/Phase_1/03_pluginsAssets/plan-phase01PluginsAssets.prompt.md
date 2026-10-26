@@ -9007,3 +9007,267 @@ sonda lo legge come «nessun suggerimento» e `call_provider` mette in pausa.
    - **Prova che i casi mordono** (mutazione, file ripristinati con `cmp`): `loadSignalFxPairs` spenta in tutte e due le
      pagine → `-g Y-41` **4 rossi su 4** (`X-mut-y41-*.log`).
    Porta 6191 libera.
+
+---
+
+## Ondata 5 (23/10, base `1fd80c481` = `dev_release2`, treni 9 e 10)
+
+> Brief: `salvataggi-worktrees-20261021/ondata5/kickoff-X.md`. Lotti: X5-2 (Z-35 + Z-32 a/b, **11a**, blocca il tag),
+> X5-4a (contratto CP12, 11b, piccolo e subito), X5-1 (C-65a + W-B2 + X-R69, 11a), X5-F1 (Rolling Return nel cambio, 11a,
+> dopo il commit di Y5-1), X5-3 (N68, 11b), X5-4b (resto di CP12, 11b), due revisioni (Z Q1…S1; Y5-F4). Regola del
+> brief: un checkpoint alla volta, il successivo parte dopo il commit del coordinatore.
+
+### Analisi breve (23/10, sul codice di `1fd80c481`)
+
+**X5-2 · Z-35 + Z-32 (a/b)** — peso piccolo.
+- `ticker.history(...)` è chiamato in due punti (`yahoo_finance/plugin.py` `_acquire_history_data`: `period="max"` e il
+  ramo a intervallo), senza `auto_adjust`. Cura: `auto_adjust=False` in entrambi. Il frame grezzo aggiunge `Adj Close`,
+  ignorato (le colonne richieste restano `Open/High/Low/Close/Volume`).
+- **Provato dal vivo (AAPL, split 4:1 del 31/08/2020, yfinance 1.7.0)**: con `auto_adjust=False` il `Close` del 28/08 è
+  124,81, non ~499: **Yahoo rettifica il `Close` per gli split in ogni modo**, `Adj Close` è l'unico a contare anche i
+  dividendi. Quindi `auto_adjust=False` toglie **solo la rettifica dei dividendi**: il «gradino» di uno split non
+  compare nelle chiusure (non c'è mai stato). Gli split arrivano comunque come eventi (`ticker.splits` → `SPLIT`).
+  **Domanda per MF** (non blocca): il motore, per un asset Yahoo, applica lo SPLIT alla quantità pre-split e legge il
+  prezzo già rettificato per split? È invariata da Z-35 (anche `auto_adjust=True` rettificava gli split), ma è il punto
+  da guardare con i rendimenti.
+- Z-32 (a/b): VOD.L, `info.currency = GBp`, `Close` 73,5 (pence), dividendo 1,9542 (pence, stessa unità). Il dividendo è
+  l'unico punto in cui un evento diventa un importo e il plugin conosce ancora `GBp` (gli schemi piegano il codice a `GBP`
+  senza scala): `_parse_dividend_events` divide per `minor_unit_factor(currency)`. I prezzi restano in pence (la base 100
+  suggerita da Z-32 (d) li divide); lo split è un rapporto, non si scala. Le righe già salvate non si toccano (decisione).
+- Rossi: 6 (3 vecchie asserzioni sui parametri di `history` + chiusure grezze ×2 + `Adj Close` + dividendo `GBp`),
+  guardie: dividendo di un'unità maggiore invariato, split di una linea in pence invariato. Doc: `provider_yahoo_finance.md`
+  e la pagina utente, con la frase «rifai il Sync completo».
+
+**X5-4a · il contratto di CP12** — peso piccolo, **la fondazione c'è già**: famiglia `brim` (`FAMILY_RULES`, `BRIMProvider(
+PluginSettingsMixin)`, `parse_file_offloaded` + `bound_settings_for`, plugin di prova `_brim_settings_lab.py`, doc `plugin_settings.md#brim-parse`).
+Quello che manca per W è «come un plugin BRIM dichiara un campo» (esempio guidato, chiavi i18n, lettura in `parse`) e un
+**punto di contratto aperto**: oggi la modifica di un'impostazione non rende «stantio» un file già interpretato (la
+staleness del parse guarda solo `parsed_plugin_version`, `brim_provider.py` ~909). Per l'«ordine della data» del CSV
+generico serve (proposta): salvare nei metadati del parse l'impronta delle impostazioni (`BoundSettings.fingerprint` c'è già)
+e confrontarla. Il file è di W; decido con il coordinatore se è nel contratto o nel lotto di W. Consegna: sezione nella guida
+dei plugin con l'esempio + un test di contratto (plugin d'esempio dichiara un campo `select`, il predefinito = comportamento
+di oggi, il parse senza valori vede il predefinito, con il valore vede il suo).
+
+**X5-1 · C-65a + W-B2 + X-R69** — peso medio-alto. Stato: `provider_management.py` cancella e scollega in silenzio (una riga di
+log) quando un piano parametrico cambia (`_wipe_reason`), «togli» rifiuta con transazioni collegate (`_reject_removals_of_linked_events`,
+`PROVIDER_REMOVAL_LINKED_TRANSACTIONS`), e rifiuta il cambio con SPLIT con rettifiche senza costo (X-R49). Nuovo: un **dry-run**
+(`POST /assets/providers/impact`, stesse forme dell'assegnazione/rimozione) che restituisce i conteggi (prezzi, eventi, transazioni
+che perdono il collegamento, SPLIT bloccante), la modale (`AssetModal.svelte`, `parametricSwitchInfo` esiste già per prezzi/eventi)
+li mostra prima di «cambia» **e** prima di «togli»; «togli» smette di rifiutare e scollega; resta il rifiuto duro per gli SPLIT.
+Rossi: `api assets` (dry-run con conteggi, «togli» con transazioni collegate non rifiuta più, rifiuto SPLIT), Vitest, E2E
+`front-asset asset-modal`. `api sync`, i18n 4 lingue con lo stesso vocabolario di N68.
+
+**Ordine** (regola del brief: un checkpoint alla volta): X5-2 → (commit) → X5-4a → X5-1 → … Le altre voci (X5-F1, X5-3, X5-4b,
+revisioni) aspettano i loro segnali (Y5-1 committato; il via del coordinatore).
+
+### X5-2 · Z-35 + Z-32 (a/b) — esecuzione
+
+1. ✅ 23/10 · I rossi in `backend/test_scripts/test_services/test_yahoo_finance_errors.py` (file già registrato): le 3
+   asserzioni esatte sui parametri di `history` ora vogliono `auto_adjust: False`; `_AdjustingTicker` (risponde come
+   yfinance: frame rettificato di default, grezzo con `auto_adjust=False` più `Adj Close`); chiusure grezze (intervallo e
+   storia intera), colonna `Adj Close` ignorata, dividendo `GBp` in sterline con prezzi in pence, guardie per unità
+   maggiori (EUR/GBP/USD) e per lo split. Visti **6 rossi su 86** per il motivo giusto (`ondata5/X-z35-red.log`).
+2. ✅ 23/10 · La cura in `yahoo_finance/plugin.py` (`_acquire_history_data`: `auto_adjust=False` nei due rami;
+   `_parse_dividend_events`: importo diviso per `minor_unit_factor(currency)`). Verdi: `test_yahoo_finance_errors.py` +
+   `test_yahoo_finance_fund_metadata.py` + `test_quote_base_suggestion.py` **152/152**; vicini che citano `history_calls`
+   (`rate_limit_results`, `asset_source_refresh`, `range_ceiling`, `current_price_storable`, `provider_core_cache`)
+   **180/180**; `ruff` e `black` puliti.
+   > **⚠️ Fuori pista**: una terza asserzione esatta sui parametri di `history` (retry transitorio) era rossa solo per il
+   > nuovo argomento: aggiornata.
+3. ✅ 23/10 · Doc (EN): `provider_yahoo_finance.md` (acquire, eventi, «Rows saved before Z-35 stay adjusted») e
+   `yahoo-finance.en.md` (voci «History» e «Dividends», limite «Data saved before…» con il Sync completo).
+
+### X5-4a · il contratto di CP12 (BRIM) — esecuzione (23/10, base `2c0cdba05`)
+
+> Via del coordinatore: l'impronta delle impostazioni sta nel contratto («un parse è stantio anche quando l'impronta delle
+> impostazioni legate è diversa da quella salvata nei metadati del parse»): la regola e il test sono miei; il codice in
+> `brim_provider.py` e nella route lo fa W (W5-8).
+
+1. ✅ 23/10 · La regola, pura: `plugin_settings/resolver.py` → `default_settings_fingerprint(fields)` (l'impronta di un plugin
+   i cui campi valgono il predefinito: il riferimento di un parse fatto prima del campo) e `settings_changed_since(saved,
+   current, fields)`: `current` None (plugin senza campi) → mai; altrimenti `current.fingerprint != (saved or default)`.
+   `current` è il valore che avrebbe un parse **per l'utente che guarda**, non per chi ha fatto il parse.
+2. ✅ 23/10 · Il test di contratto `backend/test_scripts/test_services/test_brim_field_contract.py` (nuovo, **11 casi**,
+   puro: niente DB, server, file; registrato come `services brim-field-contract`, `isolation="pure"`): il plugin d'esempio
+   (`date_order`, select personale, predefinito `day_first`) si dichiara e si registra; una dichiarazione che la famiglia
+   rifiuta (segreto personale `required`) è rifiutata; senza configurazione il plugin legge il predefinito e dà l'output di
+   sempre; il parse vede il valore dell'utente che importa e non quello di un altro; la regola (senza campi, uguale/diverso,
+   scelto e rimesso, nessun salvato = predefiniti, chi guarda decide, un segreto impostato dopo il parse). **Visto che morde**:
+   con la base sbagliata (`saved or ""`) 1 rosso, con `return False` 4 rossi; file ripristinato (`cmp`).
+3. ✅ 23/10 · Doc (EN): `developer/backend/brim/architecture.md` (§ «A field in a BRIM plugin: the contract», con l'esempio
+   di dichiarazione, le regole 1-4, un diagramma Mermaid e l'elenco **«To do for W (W5-8)»**) e un rinvio in `plugin_settings.md`.
+   > **Da fare per W (W5-8)**: (1) salvare `bound.fingerprint` nei metadati del parse (`save_parse_result` e la route) come
+   > `parsed_settings_fingerprint`; (2) nella route di elenco e info del file (async, non in `_build_file_info_from_metadata`,
+   > che è sincrona e non conosce l'utente) risolvere `current` per l'utente e fare `parse_is_stale = … or settings_changed_since(
+   > saved, current, plugin.settings_fields)`; (3) un test end-to-end: parse col predefinito, l'utente cambia il valore → stantio;
+   > nuovo parse → non stantio.
+   > **⚠️ Fuori pista**: il punto dell'impronta, che nel kickoff era «una domanda», è risolto dal coordinatore nel contratto.
+
+### X5-1 · C-65a + W-B2 + X-R69 — il dry-run e la modale unica (23/10, base `38150d30e`)
+
+> Decisione del developer (22-23/10): «togli» e «cambia» seguono la stessa regola: un dry-run dice che cosa si perde, la
+> modale lo mostra con i conteggi, e se confermi si **scollegano** le transazioni. Il rifiuto duro resta solo per gli SPLIT
+> con rettifiche senza costo (X-R49). Nello stesso lotto, per MF-SPL1 (opzione C): la nota «Known limitation: splits» nei
+> documenti di Yahoo e la correzione della frase di X5-2 sul Sync completo.
+
+1. ✅ 23/10 · Analisi del codice: la modifica dei parametri di un piano parametrico e l'uscita da esso cancellavano i prezzi e
+   gli eventi del fornitore scollegando le transazioni **con una riga di log**; «togli» rifiutava appena un evento
+   generato aveva una transazione collegata (X-R62, `PROVIDER_REMOVAL_LINKED_TRANSACTIONS`); una modifica fra fornitori di
+   mercato non cancella nulla. Un solo riepilogo esisteva, quello della valuta (`market_data_summary`).
+2. ✅ 23/10 · I rossi backend (`test-author`): `test_provider_removal_link_guard.py` riscritto (26 test, 17 rossi, 9 guardie),
+   `test_provider_change_impact.py` nuovo (32 test, tutti rossi), `test_routes_generic_500.py` (1 rosso). Il test-author li ha
+   provati anche contro un prototipo fuori dal repo (verdi): rossi per il motivo giusto (`X-x51-*.log`).
+3. ✅ 23/10 · La cura backend. `schemas/provider.py`: `FAProviderImpactRequest/Response/Result/Split`.
+   `provider_management.py`: `provider_change_impact` (conta prezzi, eventi dell'assegnazione e transazioni collegate, **totale
+   anche delle non visibili e mai nominate**; `blocking_splits` come il rifiuto X-R49), `_reject_removals_of_costless_splits`
+   al posto di `_reject_removals_of_linked_events`, e «togli» scollega (`asset_event_id` a NULL) prima di cancellare. Rotta
+   `POST /api/v1/assets/provider/impact`; la 409 della rimozione ora è `PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST`.
+   Verdi: 26 + 32 + 34 (generic 500) + 12 (wipe guard). `ruff`/`black` puliti.
+   > **Note implementazione**: ogni elemento del dry-run è misurato sullo stato salvato, senza sequenza (un asset che compare
+   > in assegnazione e in rimozione ha i conteggi suoi in entrambi); il motivo di un asset nominato due volte fra le
+   > assegnazioni segue l'elemento precedente, come il ciclo di scrittura.
+4. ✅ 23/10 · I rossi frontend (`test-author`): `providerImpact.test.ts` (nuovo), `AssetModal.providerLifecycle.test.ts` riscritto
+   (69 test, 24 rossi), `currencyChangeErrors.test.ts` (8 rossi), `AssetModal.test.ts` (2 guardie), E2E in `asset-modal.spec.ts`.
+5. ✅ 23/10 · La cura frontend. `providerImpact.ts` nuovo (`loadProviderImpact` mai bloccante: nessun lutto, blocco o errore
+   → nessuna modale; `impactValues`; `IMPACT_DIALOG`); `AssetModal.svelte`: **una** `ConfirmModal` al posto delle due (rigenera e
+   «scarta la serie»), con i testId di prima più `asset-provider-remove-confirm`; il riepilogo `market_data_summary` non si usa
+   più qui. `currencyChangeErrors.ts` perde il ramo della vecchia rimozione. i18n: 13 chiavi `assets.modal.providerImpact.*`
+   in 4 lingue, 7 chiavi vecchie tolte, la frase del rifiuto per gli split ora vale anche per «togli» (con il ramo `many` del
+   francese). Vocabolario per N68: «punti prezzo», «eventi generati dal provider», «perdono il collegamento a un evento cancellato».
+   > **⚠️ Fuori pista**: due bug nei test del test-author, corretti: la lista delle cifre attese per una rimozione (non cancella
+   > prezzi) e il registro delle chiamate dopo un primo passaggio. Il `front check` ha trovato un errore di tipo su una riga
+   > vecchia di `AssetModal.test.ts` (il tipo generato di `provider_params` con il lock nuovo): un cast.
+6. ✅ 23/10 · Doc (`docs-writer`, EN): `developer/backend/assets/{events,architecture}.md`, `transactions/wac.md`,
+   `user/assets/create-edit.en.md` (sezione «Changing or removing the provider»). Debito di traduzione: `create-edit.{it,fr,es}`.
+7. ✅ 23/10 · Nota sugli split (MF-SPL1, opzione C): `yahoo-finance.en.md` («Known limitation: splits», con l'esempio AAPL 4:1) e una
+   voce per sviluppatori in `provider_yahoo_finance.md`; la frase sul Sync completo dice che non cambia questo limite.
+8. ✅ 23/10 · Prove: `front check` **0 errori, 0 avvisi**; `component-unit` e `core-unit` verdi; Vitest dei file toccati (219
+   test su `providerImpact`, `currencyChangeErrors`, `AssetModal.providerLifecycle`); `i18n audit`: 0 chiavi mancanti o
+   inutilizzate. **E2E non lanciati** (`front-asset asset-modal`, `asset-detail`): aspettano lo slot.
+
+### X5-F1 · Rolling Return nel dettaglio del cambio (23/10, base `61318d901`: X5-1 e Y5-1 dentro)
+
+1. ✅ 23/10 · Analisi: la lista dei cambi ha già la vista (Y-40, `fetchCalendarReturns`, `reducedFxQuery.ts`), il backend calcola il rolling return
+   delle coppie (Z-29fx), `AssetChartModeToggle` / `AssetCalendarWindowControls` esistono; mancava il dettaglio. `primaryView` è già
+   un'impostazione della coppia (`'calendar-return'`), condivisa con la scheda della lista.
+2. ✅ 23/10 · I rossi (`test-author`): `fxDetailCalendar.test.ts` (27, il modulo mancava), `AssetCalendarControls.idPrefix.test.ts` (16, 13 rossi),
+   `fxDetailRollingReturn.wiring.test.ts` (8, 3 rossi: la pagina non importava né disegnava i controlli), E2E nuovo
+   `fx/fx-detail-rolling-return.spec.ts` (6 casi `X5-F1`, non osservati rossi: la pagina non aveva la modalità) con la categoria
+   `fx-detail-rolling-return` nel runner. Spec in un file nuovo per non incrociare Y sulla spec del cambio.
+3. ✅ 23/10 · La cura. `AssetChartModeToggle` e `AssetCalendarWindowControls`: prop opzionale `idPrefix` (predefinito `asset`: gli id
+   dell'asset non cambiano; `fx` sul cambio). `lib/charts/fxDetailCalendar.ts` nuovo (puro): `buildFxDetailCalendarQuery` (una conversione di 1
+   unità nel verso mostrato dalla pagina, giornaliera, senza `key`/`max_points`/`sample_like`, con un solo segnale; una in più per ogni
+   `fx-pair` salvato) e `fxDetailCalendarViews`. `fx/[pair]/+page.svelte`: `primaryMode` (aperto da `primaryView`, una scheda in Rolling Return
+   apre il dettaglio in esso), `loadCalendarReturn` (a ogni cambio di periodo, finestra, verso, coppie confrontate, Refresh e al cambio
+   di sessione), finestra come l'asset (`effectiveCalendarReturnWindow`), interruttore e controlli, segnaposto `fx-calendar-return-*`,
+   attributi `data-primary-mode|window-days|series-state|calendar-comparison-*` sulla scheda del grafico, pannello dei segnali
+   limitato a `fx-pair`, `renderCalendarPairComparisons` per le linee dei confronti, salvataggio con `setPairSettings(primaryView)`
+   (il ritorno ai prezzi riporta la vista che la coppia aveva prima, non quella del dettaglio), niente richiesta tornando ai prezzi.
+   Nel Rolling Return i bottoni misura e modifica sono nascosti.
+   > **⚠️ Fuori pista**: nessuna cache dei risultati del rolling return (come N64): ogni cambio di periodo o finestra chiede di nuovo; da valutare se serve.
+4. ✅ 23/10 · Prove: Vitest 51/51 (i tre file nuovi), `front check` 0/0, E2E `front-fx fx-detail-rolling-return` **6/6** al primo giro,
+   `front-fx fx-detail` **33/33**. Poi (24/10, un solo giro sotto il lucchetto, `X-f1-verify`): `core-unit` **10464/10464** (245 file), `component-unit` **5598/5598** (209 file),
+   `fx-unit` **165/165**, `front-asset asset-detail` **56/56**; Prettier `--check` pulito sui file toccati.
+5. ✅ 23/10 · Doc (EN): `user/fx/detail/chart.en.md` («Rolling Return»), `signals.en.md`, `developer/frontend/components/charts.md` (sezione
+   del cambio; corretto il paragrafo dell'asset, che diceva ancora «mai persistita»). Debito di traduzione: `chart` e `signals` it/fr/es.
+
+### X5-F4b · `is_benchmark` nella pagina del cambio e test di cablaggio delle quattro pagine (24/10, base `9e7c65ab1`)
+
+Nata dalla mia revisione di Y5-F4 (`cf9d58ec0`): il commit di Y porta `currency` e `is_benchmark` ad `availableAssets` di tre pagine su
+quattro; il dettaglio del cambio (`fx/[pair]/+page.svelte`) no, quindi lì il selettore di confronto non mostra mai la sezione «Benchmark».
+
+1. ✅ 24/10 · Rosso: `lib/charts/__tests__/comparisonAssetsFeed.wiring.test.ts` (16 casi, 4 pagine × 4 proprietà), registrato in
+   `_frontend_utility.py`. Sul mio ramo (senza il commit di Y): **5 rossi** — `is_benchmark` su tutte e quattro le pagine, `currency` sulla lista
+   degli asset. Il rosso del dettaglio del cambio è il difetto reale.
+2. ✅ 24/10 · Cura: `fx/[pair]/+page.svelte` tipo di `allAssets` e mappa di `loadAssetList` con `is_benchmark: a.is_benchmark === true`.
+   Sul mio ramo restano 4 rossi, tutti per il codice di Y non ancora dentro; sui sorgenti di `cf9d58ec0` (copiati in una cartella
+   temporanea, poi tolta) il test dà 15/16 e l'unico rosso è proprio il dettaglio del cambio, curato qui: dopo il merge è tutto verde.
+   `front check` 0/0, Prettier pulito, `chartPageSignals` + `fxDetailRollingReturn.wiring` 119/119.
+
+### X5-3 · N68: il cambio di valuta non è più bloccato; «Ricollega eventi» (24/10, base `9e7c65ab1`)
+
+Decisione del developer (19/10): niente blocco al cambio di valuta, gli split sopravvivono, un bottone «Ricollega eventi» in Transazioni. Le due scelte
+che il brief non scriveva le ha confermate il coordinatore il 24/10 (registrate come sue, il developer può cambiarle): **(A)** la PATCH passa sempre e,
+nella stessa transazione, cancella i prezzi e gli eventi non-SPLIT, scollega le transazioni di quegli eventi e conserva gli SPLIT con le loro
+rettifiche; **candidato** = stesso asset, **stessa data**, tipo corrispondente (nessuna finestra di date, nessun collegamento automatico: `TODO_FUTURI`).
+
+1. ✅ 24/10 · Rossi (`test-author`, backend): `test_asset_currency_change.py` riscritto (8), `test_market_data_wipe.py` (7), `test_assets_crud.py`
+   (flusso summary/wipe con SPLIT), `test_asset_source.py` (wipe e p05: le SELECT non crescono con gli asset), `test_routes_generic_500.py`
+   (via il ramo 409 del wipe), `test_provider_core_cache.py` (+3, la PATCH svuota le cache del provider), nuovi `test_market_data_wipe_keeps_splits.py`
+   (13, al posto di `test_market_data_wipe_split_guard.py`) e `test_event_reconciliation_api.py` (10). Primo giro: tutti rossi per il motivo giusto
+   (PATCH bloccata dal token, 409 del wipe, `splits_kept` assente, rotta 404), le guardie verdi.
+2. ✅ 24/10 · Cura backend. `currency_change.py`: `events_that_go`, `delete_market_data_of_assets` (3 istruzioni, qualunque numero di asset),
+   `provider_cache_keys`, `drop_provider_caches`; il wipe non cancella più gli SPLIT, riepilogo con `splits_kept`, via `_reject_wipe_of_costless_split_adjustments`
+   (resta `split_guard` per X-R49). `crud.py` `patch_assets_bulk`: via il blocco e il token, gli asset la cui valuta è davvero cambiata (confronto prima/dopo il ciclo,
+   quindi anche se un campo successivo dell'elemento fallisce) perdono prezzi ed eventi non-SPLIT nella stessa transazione; cache del provider dopo il commit.
+   `api/v1/assets/crud.py`: via il 409 «tutti bloccati». `market_data.py`: via il 409 X-R48. NUOVO `GET /transactions/event-reconciliation` (`TXEventReconciliationItem`,
+   `TransactionEventSuggestionsMixin.event_reconciliation`, che riusa `suggest_events_bulk` con `tolerance_days=0`; solo broker dove il chiamante è almeno Editor).
+   `api sync` rigenerato.
+   > **⚠️ Fuori pista**: il collegamento non è un `PATCH /transactions` (non esiste): è `POST /transactions/commit` con `updates: [{id, asset_event_id}]`. La mappa degli
+   > ADJUSTMENT è quella già esistente di `suggest_events_bulk` (PRICE_ADJUSTMENT **o** SPLIT), più larga del «ADJUSTMENT↔SPLIT» che avevo scritto nella domanda.
+3. ✅ 24/10 · Rossi frontend (`test-author`): `currencyImpact.test.ts`, `eventReconciliation.test.ts`, `EventReconciliationModal.test.ts`, `AssetCurrencyChangeModal.test.ts` riscritto,
+   `AssetModal.currencyChange.test.ts` (nuovo), `currencyChangeErrors.test.ts`, wiring del bottone; E2E `tx-event-reconciliation.spec.ts` (6), `asset-currency-change.spec.ts` (1)
+   e `tx-import-asset-inspector` adattato. Vitest: 7 file rossi (47 test) prima della cura.
+4. ✅ 24/10 · Cura frontend. `currencyImpact.ts` (il riepilogo a vuoto è un **cancello**: se fallisce il salvataggio fallisce, a differenza del dry-run dei fornitori che è un consiglio),
+   `AssetModal.saveEdit` lo chiede prima di ogni PATCH e apre la modale solo se c'è qualcosa da perdere (gli split da soli non bastano), `AssetCurrencyChangeModal` fa **una** PATCH
+   poi la sincronizzazione (niente passo «wipe», `data-step` sul progresso, riga `currency-change-summary-splits`), via `currencyBlocker.ts` e il ramo X-R48 di `currencyChangeErrors.ts`;
+   `eventReconciliation.ts` + `EventReconciliationModal.svelte`; bottone `tx-reconcile-events-button` in `transactions/+page.svelte` (l'`onlinked` ricarica la pagina). i18n in 4 lingue:
+   `assetDetail.currencyChange.*` (stesso vocabolario di X5-1) e `transactions.reconcile.*`; Vitest dalle cartelle toccate 3783/3786 (i 3 rossi sono `GapFixStep.test.ts`, formattazione
+   per locale, non toccato).
+5. ✅ 24/10 · Prove (un solo lucchetto, `X-n68-verify`): `api assets-crud` 35, `asset-currency-change` 8, `market-data-wipe` 7, `event-reconciliation` 10, `services
+   market-data-wipe-keeps-splits` 13, `asset-source` 61/62 (il rosso era `test_yfinance_history_uses_native_max_for_min_start`, **un avanzo di X5-2**: la chiamata ora porta
+   `auto_adjust=False`; test corretto, verde), `routes-generic-500` 34, `provider-core-cache` 49; `core-unit` 10513/10517 (i 4 rossi sono `comparisonAssetsFeed.wiring` di X5-F4b,
+   che chiede il codice di Y: attesi fino al merge), `component-unit` 5631/5631; E2E `asset-modal` 22, `asset-detail` 56, **nuovi** `tx-event-reconciliation` 6, `asset-currency-change` 1,
+   `tx-import-asset-inspector` 5 (tutti verdi; i rossi li ho visti solo come Vitest: gli E2E sono andati in coda dopo la cura). `front check` 0/0, `i18n check`/`audit` puliti, Prettier pulito.
+   > **⚠️ Fuori pista**: dopo `api sync` la rotta nuova ha fatto superare al compilatore il limite di profondità dei tipi in 6 test che fanno `vi.spyOn(zodiosApi, alias)`
+   > («Type instantiation is excessively deep»). Ho messo `frontend/src/__tests__/spyOnApi.ts` (stesso spy, tipo largo) e l'ho usato nei 5 file toccati; tornerà a capitare
+   > a ogni aggiunta di operazioni: chi scrive un nuovo spy sul client usi l'aiuto.
+6. ⏳ Doc in inglese scritta (docs-writer: `create-edit`, `transactions/index`, `events`, `architecture`, `service`, `wac`…), ma `mkdocs build` e `check-links` sono ancora in coda
+   sul lucchetto: log `/tmp/libreFolio_docs_n68_build.log` e `…_links.log`. Debito di traduzione: `user/assets/create-edit` e `user/transactions/index` (it/fr/es).
+
+### X5-4b · CP12: la famiglia `tool` e la consegna al runtime (24/10, base `6472fe901`)
+
+Decisioni di progetto (nel contratto, non nel brief): le impostazioni di un tool sono **per tool code** (un plugin con più servizi ne ha una serie per servizio);
+`FAMILY_RULES["tool"] = FamilyRules(user_scope=True, secrets=False)` (un tool si calcola per l'utente che lo chiede; non chiama fonti esterne, niente segreti);
+i valori li risolve il **genitore** e viaggiano col lavoro, come per il parse BRIM (il `compute` resta puro: niente database).
+
+1. ✅ 24/10 · Rossi (`test-author`): backend 77 test nuovi (`test_tool_settings_contract/runtime/lifecycle.py` + `_tool_settings_fixtures.py`, 71 rossi e 6 guardie verdi;
+   `test_plugin_settings_contract.py` aggiornato); frontend +21 test in `features/plugin-settings` (15 rossi). Nessun tool di prodotto di prova: registri privati.
+2. ✅ 24/10 · Cura backend: `ToolPlugin(PluginSettingsMixin)`; `ToolPluginRegistry.settings_family() == "tool"`, `build_tool_definition` valida la dichiarazione e
+   reclama le variabili d'ambiente per tool code (motivo di quarantena nuovo `invalid_settings`); lo snapshot lascia fuori i `test_only` fuori dalla modalità di test
+   (X-R44; il registro dei tool entra in `TEST_ONLY_FAMILIES`); `configure_instance(..., plugin_code=)`; nuovo `tools/settings.py` `bound_settings_for_batch`;
+   `ToolWorkerJob.settings` e `bind_settings` nel worker; `ToolExecutor.compute(..., settings=)` con `service_unavailable` per un campo obbligatorio senza valore
+   (nessun lavoro avviato, gli altri elementi vanno); `api/v1/tools.py` risolve e passa; catalogo: `FAMILY_REGISTRIES["tool"]`, nome del servizio, nessuna icona
+   (`FAMILIES_WITHOUT_ICON`, guardia aggiornata). `api sync`.
+   > **⚠️ Fuori pista**: l'API del catalogo è `GET /api/v1/settings/plugins`, non `/plugin-settings`. Il compilatore ha ancora una volta superato il limite di profondità
+   > dei tipi in un test con `vi.spyOn(zodiosApi, …)` (risolto con `spyOnApi`, che ora è quello di J byte per byte).
+3. ✅ 24/10 · Cura frontend: `'tool'` in `pluginSettingsApi.ts` e `pluginSettingsForm.ts` (titolo `pluginSettings.families.tool`, icona `Wrench`, dopo `brim`);
+   `invalid_settings` nel pannello di diagnostica dei tool (`tools.diagnostics.reason.invalid_settings`, 4 lingue). i18n in 4 lingue.
+4. ✅ 24/10 · Prove (un solo lucchetto, `X-x54-verify`): `services tool-settings-contract` 35, `tool-settings-runtime` 31, `tool-settings-lifecycle` 10 (processi veri), `plugin-settings-contract` 254,
+   `plugin-settings-service` 113, `plugin-settings-guards` 25, `tools-registry` 109, `tools-lifecycle` 98, `test-only-providers` 31, `api plugin-settings` 19, `api tools` 10/12 (i 2 rossi erano
+   due finti di `test_tools_api.py` con la firma vecchia di `compute`: aggiornati, verdi); `component-unit` 5639/5639; `core-unit` 10530/10534 (i 4 rossi sono `comparisonAssetsFeed.wiring` di X5-F4b,
+   attesi fino al merge di Y). `front check` 0/0, Prettier e `i18n check` puliti. Doc in inglese: `mkdocs build` (strict) e `check-links` exit 0.
+5. **Revisione di W5-8** (sola lettura): il campo `date_order` di W non è ancora nel worktree di W (HEAD `86c014295`, nessun `settings_fields` nei plugin BRIM): da fare quando c'è.
+   Backlog: dove vivono le traduzioni di un campo di un tool (il gate dei nomi i18n legge le chiavi di asset e fx; oggi si vede l'inglese `label`/`description`).
+
+### X5-5 · D-P4: l'anno breve nei due controlli di X (25/10, base `b2fc380b0`)
+
+> **Note implementazione** (✅ 25/10/2026): `Date.UTC(24, …)` legge l'anno come 1924, quindi il controllo di andata e ritorno rifiutava il giorno. Due punti miei dall'elenco di Y
+> (`Y-anno-breve-fuori-ambito.md`, punti 7 e 8): `isCalendarDay` in `utils/rangeChange.ts` e `isoDayNumber` in `utils/periodChanges.ts` ora usano `utcMs(anno, indiceMese, giorno)` di
+> `utils/dateOnly.ts` (portata da Y nel commit `b2fc380b0`). Rossi prima (test-author): 6 rossi, `rangeStartFor` con `0024-03-01`, `0001-01-01` e `0000-02-29` (l'anno 0 è bisestile,
+> il 1900 no) dà `1900-01-01` invece di `null`; `visiblePeriodColumns` con gli anni 24, 1 e il confine 99→100 restituiva `[]`. Guardie verdi prima e dopo: `0001-02-29`, `0024-02-30`,
+> `0024-13-01`, inizio raddrizzato dopo `asOf`, fine prima dell'inizio. Dopo: i 3 file 195/195, i test collegati 347/347, `front check` 0/0, Prettier pulito.
+
+### X5-6 · D-P4 L4: le variazioni 1G…5A senza limite di data (26/10, base `6b02bc7f6`)
+
+> **Note implementazione** (✅ 26/10/2026): decisione del developer, via coordinatore: nessun limite di data su `as_of` e `range_start` di `POST /assets/prices/period-changes`,
+> `POST /fx/currencies/period-changes` e `range_start` di `POST /assets/prices/current`, a parte il calendario (anno ≥ 1) e il tetto in avanti (`latest_range_end()`, solo per `/prices/current`).
+> Una variazione il cui giorno di riferimento cade prima dell'anno 1 (5A con `as_of` nel 0003) è `null`, «—»: niente 500, niente 422.
+> - **Backend**: `schemas/common.py` perde `period_changes_as_of` e `PeriodChangesAsOf` (gli schemi `prices`/`fx` usano `date`); `_range_start_in_bounds` tiene solo il tetto;
+>   `financial_math/returns.py` ha `day_before(giorno, n)` (None sotto 0001-01-01), `fixed_period_dates` omette i giorni che non esistono e `fixed_period_changes` dà `None` per quei periodi.
+>   Le descrizioni OpenAPI non parlano più del 1900.
+> - **Frontend**: `utils/rangeChange.ts` perde `EARLIEST_RANGE_START`; `rangeStartFor` manda la partenza com'è (null se non è un giorno del calendario, se l'anno è < 1 o se segue `asOf`).
+> - **Rossi prima** (test-author, su una copia con la produzione di `6b02bc7f6`): schemi 42, `fixed_period_changes` 14, `current-prices-bulk` 3, servizio `period-changes` 20, API `period-changes` 22; frontend 16.
+> - **⚠️ Fuori pista**: la guardia `test_only_the_split_loader_names_the_split_event_type` era rossa dal mio X5-3 (`currency_change.py` nominava `AssetEventType.SPLIT`). Ho aggiunto
+>   `split_event_condition()` e `not_split_event_condition()` a `financial_math/splits.py` e le uso in `currency_change.py`.
+> - **Non toccato** (R1–R5 dell'inventario di MF): i tetti di costo delle serie giornaliere, `ASSET_HISTORY_MIN_FALLBACK`, `SCHEDULE_MIN_DATE`; il pavimento di scrittura delle transazioni è di W.

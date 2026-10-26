@@ -516,6 +516,8 @@ describe('AssetModal — opt-in creation success links', () => {
             await expectCreationClosed(oncreated, [id, {syncing: true}]);
             expect(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).toHaveBeenCalledTimes(1);
             expect(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).toHaveBeenCalledWith([{asset_id: id, provider_code: PROVIDER_CODE, identifier: PROVIDER_IDENTIFIER, identifier_type: 'TICKER', provider_params: null}]);
+            // X5-1: a new asset has no provider to lose, so the save asks no dry run.
+            expect(zodiosApi.provider_change_impact_api_v1_assets_provider_impact_post).not.toHaveBeenCalled();
             expect(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).toHaveBeenCalledTimes(1);
             expect(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).toHaveBeenCalledWith([{asset_id: id, date_range: {start: 'resume', end: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/)}}]);
             expect(within(toastMarkup('success')).getByTestId('toast-asset-link')).toHaveAttribute('href', `/assets/${id}`);
@@ -757,7 +759,7 @@ describe('AssetModal — opt-in creation success links', () => {
             expect(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).toHaveBeenCalledTimes(1);
             const assignment = vi.mocked(zodiosApi.assign_providers_bulk_api_v1_assets_provider_post).mock.calls[0]?.[0]?.[0];
             expect(assignment).toMatchObject({asset_id: id, provider_code: SCHEDULED, identifier_type: 'AUTO_GENERATED'});
-            expect(assignment?.provider_params?.schedule, 'the assignment carries the schedule the editor built').toHaveLength(1);
+            expect((assignment?.provider_params as {schedule?: unknown[]} | undefined)?.schedule, 'the assignment carries the schedule the editor built').toHaveLength(1);
             expect(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).toHaveBeenCalledTimes(1);
             expect(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post).toHaveBeenCalledWith([{asset_id: id, date_range: {start: 'resume', end: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/)}}]);
             await waitFor(() => expect(onsynced).toHaveBeenCalledWith(id, result));
@@ -787,32 +789,30 @@ describe('AssetModal — edit submit', () => {
         expect(patchFn()).toHaveBeenCalledWith([expect.objectContaining({asset_id: 7, display_name: 'New Name', currency: 'USD'})]);
         // No provider on editData → provider removed.
         expect(removeProviderFn()).toHaveBeenCalled();
+        // X5-1: no provider before, nothing to lose: no dry run either.
+        expect(zodiosApi.provider_change_impact_api_v1_assets_provider_impact_post).not.toHaveBeenCalled();
     });
 
-    it('opens the destructive currency-change modal when the PATCH is blocked by market data', async () => {
-        patchFn().mockResolvedValue({
-            results: [
-                {
-                    success: false,
-                    message: 'CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA|prices=3|events_manual=1|events_provider=0|linked_tx=2|oldest=2020-01-01|newest=2024-01-01|from=USD|to=EUR',
-                },
-            ],
-        } as never);
+    // N68 (lot X5-3): the currency change is no longer blocked by the PATCH. The dry run (`GET /assets/{id}/market-data/summary`)
+    // is asked before any write, the confirm modal opens only when something would be lost, and the old token/409 branch is
+    // gone: the whole flow is in `AssetModal.currencyChange.test.ts` (it needs a currency list, which this file leaves empty).
+    it('a save that keeps the currency never asks the currency-change dry run (N68)', async () => {
+        patchFn().mockResolvedValue({results: [{success: true, asset_id: 7}], success_count: 1} as never);
         const onupdated = vi.fn();
         render(AssetModal, {
             open: true,
             editMode: true,
-            editData: {id: 7, display_name: 'Blocked Asset', currency: 'EUR', asset_type: 'STOCK', quote_base_quantity: 1, active: true},
+            editData: {id: 7, display_name: 'Same Currency', currency: 'EUR', asset_type: 'STOCK', quote_base_quantity: 1, active: true},
             onupdated,
         });
         await waitForForm();
-        await waitFor(() => expect(nameInput().value).toBe('Blocked Asset'));
+        await waitFor(() => expect(nameInput().value).toBe('Same Currency'));
 
         await fireEvent.click(saveBtn());
 
-        // The blocker token routes into the destructive confirm modal instead of updating.
-        await waitFor(() => expect(screen.queryByTestId('currency-change-modal')).not.toBeNull());
-        expect(onupdated).not.toHaveBeenCalled();
+        await waitFor(() => expect(onupdated).toHaveBeenCalled());
+        expect(zodiosApi.market_data_summary_api_v1_assets__asset_id__market_data_summary_get).not.toHaveBeenCalled();
+        expect(screen.queryByTestId('currency-change-modal')).toBeNull();
     });
 });
 

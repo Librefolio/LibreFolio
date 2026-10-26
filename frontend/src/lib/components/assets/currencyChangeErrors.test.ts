@@ -71,13 +71,32 @@
  * `hidden`, `more`, `n` and `type`, counts the three with ICU plurals, and carries the French `many` branch; the second
  * names nothing; through svelte-i18n nothing is left raw, and the type is written by its name in the interface language.
  *
+ * X5-1 (lot X5-1, developer decision). The removal no longer refuses for linked transactions — it disconnects them, and the
+ * asset modal tells how many in a dialog first — so `PROVIDER_REMOVAL_LINKED_TRANSACTIONS`, its `params.events`/`type` branch
+ * and its catalogue key `assets.modal.providerRemovalLinkedTransactions` are REMOVED: the code is now unknown (`null`, the
+ * catalogue not asked). The removal's remaining 409s are `PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST` (the assignment's
+ * code, key and `params.splits`, for both operations) and `PROVIDER_REMOVAL_CONFLICT` (unchanged). The X-R62 text below
+ * is history for those two.
+ *
  * Expected (X-R62). Red before the cure: the module answers `null` to both codes and asks nothing, so every case of
  * their two describes is red, the side-by-side case included; the catalogue cases stay red until both keys are in the
  * four sources (`src/lib/i18n/assets/<lang>.json`). Green before the cure and after it: the near misses — another code
  * of the removal, a code in a list, a detail without a code or that is not an object.
  *
+ * N68 (lot X5-3, developer decision 19/10/2026). Changing a currency is no longer blocked: `PATCH /assets/patch` deletes the
+ * prices and the non-SPLIT events itself and KEEPS the splits and their transactions, so the market-data wipe — the only
+ * thing that could refuse with `MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST` — is no longer called by the interface (the
+ * confirm modal sends one PATCH). The X-R48 branch therefore DISAPPEARS: that code is now an unknown code (`null`, the
+ * catalogue not asked), and its sentence `assetDetail.currencyChange.splitAdjustmentsWithoutCost` leaves the four catalogues.
+ * The X-R48 cases below are rewritten as those absences; the X-R49 / X5-1 / X-R62 branches (`PROVIDER_*`) stay untouched, and
+ * so do their catalogue cases, which no longer lean on the X-R48 sentence for their controls.
+ *
+ * Expected (N68). Red before the cure: the module still words `MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST` (so the
+ * «unknown code» cases fail: they get a sentence and a catalogue call) and the catalogues still hold the key. Green before and
+ * after: every `PROVIDER_*` case.
+ *
  * Registered in `scripts/test_runner/_frontend_utility.py`, in the Vitest list of `front_utility_unit` (action
- * `core-unit`), next to `currencyBlocker.test.ts`.
+ * `core-unit`), next to `currencyImpact.test.ts` (the place `currencyBlocker.test.ts` had).
  */
 import {afterEach, beforeAll, describe, expect, it} from 'vitest';
 import {get} from 'svelte/store';
@@ -90,18 +109,18 @@ import fr from '$lib/i18n/fr.json';
 import es from '$lib/i18n/es.json';
 import {wipeRefusalMessage} from './currencyChangeErrors';
 
+/** N68: the wipe's refusal and its sentence's key — GONE (the interface no longer wipes); kept here to prove they are unknown now. */
 const CODE = 'MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST';
 const KEY = 'assetDetail.currencyChange.splitAdjustmentsWithoutCost';
 /** X-R49: the provider assignment's refusal, and the key it is worded by. */
 const PLAN_CODE = 'PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST';
 const PLAN_KEY = 'assets.modal.planSplitAdjustmentsWithoutCost';
-/** X-R62: the provider removal's refusals, and the keys they are worded by. */
-const REMOVAL_CODE = 'PROVIDER_REMOVAL_LINKED_TRANSACTIONS';
-const REMOVAL_KEY = 'assets.modal.providerRemovalLinkedTransactions';
+/** X-R62, trimmed by X5-1: the provider removal's refusal that stays, and the key it is worded by. */
 const CONFLICT_CODE = 'PROVIDER_REMOVAL_CONFLICT';
 const CONFLICT_KEY = 'assets.modal.providerRemovalConflict';
-/** X-R62: where the catalogue names an event type. */
-const EVENT_TYPE_KEY = 'assetDetail.eventType.';
+/** X5-1: the code the removal no longer has (it disconnects the linked transactions instead), and the key that worded it. */
+const GONE_CODE = 'PROVIDER_REMOVAL_LINKED_TRANSACTIONS';
+const GONE_KEY = 'assets.modal.providerRemovalLinkedTransactions';
 
 type Values = Record<string, string | number>;
 type Call = {key: string; values: Values | undefined};
@@ -154,46 +173,14 @@ function split(date: string, transactionIds: unknown[], hidden: number, eventId 
 /** The removal's own sentence (X-R62), English and totals only: the user must never read it either. */
 const REMOVAL_SERVER_SENTENCE = "Provider not removed: the server's own sentence";
 
-/** The params of the removal's refusal (X-R62): the asset and the item of the request, beside the events as given. */
-function removalParams(events: unknown) {
-    return {asset_id: 7, item_index: 0, events};
-}
-
-/** The removal refused for the transactions linked to its events (X-R62), 409, with its params as given. */
-function removalRefused(params: unknown) {
-    return apiError(409, {error_code: REMOVAL_CODE, message: REMOVAL_SERVER_SENTENCE, params});
-}
-
 /** The removal's conflict (X-R62) — a link appeared between the check and the delete — 409, with its params as given: the server sends them empty. */
 function removalConflict(params: unknown) {
     return apiError(409, {error_code: CONFLICT_CODE, message: REMOVAL_SERVER_SENTENCE, params});
 }
 
-/** One event as the removal's refusal lists it (X-R62): its date and type, the transactions the user can see, and how many others. */
-function linkedEvent(date: string, type: string, transactionIds: unknown[], hidden: number, eventId = 21) {
-    return {event_id: eventId, date, type, transaction_ids: transactionIds, hidden_transactions_count: hidden};
-}
-
-/** The name the fake catalogue gives an event type (X-R62): words of its own, never its key. */
-function typeName(type: string): string {
-    return `Type<${type}>`;
-}
-
-/**
- * X-R62: a fake `t` as `fakeT`, except that it answers an event type's key with the type's name, as a catalogue does —
- * never the key itself — so the sentence is read with the name the module got back, however it asked for it.
- */
-function fakeTNamingTypes() {
-    const calls: Call[] = [];
-    const outputs: string[] = [];
-    const t = (key: string, options?: {values?: Values}): string => {
-        calls.push({key, values: options?.values});
-        const rendered = Object.entries(options?.values ?? {}).map(([name, value]) => `${name}=${String(value)}`);
-        const output = key.startsWith(EVENT_TYPE_KEY) ? typeName(key.slice(EVENT_TYPE_KEY.length)) : [key, ...rendered].join(' | ');
-        outputs.push(output);
-        return output;
-    };
-    return {t, calls, outputs};
+/** The refusal the removal no longer sends: 409 with its old code and the events it listed. */
+function goneRefusal(params: unknown) {
+    return apiError(409, {error_code: GONE_CODE, message: REMOVAL_SERVER_SENTENCE, params});
 }
 
 const dateLabel = (iso: string) => `D<${iso}>`;
@@ -204,106 +191,45 @@ function onlyCall(calls: Call[]): Call {
     return calls[0];
 }
 
-/**
- * The translations a removal's sentence is built from (X-R62), in order: the name of the first event's type, asked by
- * its key alone, when that type is a string (`type`, else null) — then the sentence, with `values`.
- */
-function expectRemovalCalls(calls: Call[], type: string | null, values: Values) {
-    const sentence = {key: REMOVAL_KEY, values};
-    if (type === null) expect(calls, 'no type, no name asked: the sentence alone').toEqual([sentence]);
-    else expect(calls, "the first event's type by its name, then the sentence").toEqual([{key: EVENT_TYPE_KEY + type, values: undefined}, sentence]);
-}
-
 /** What a sentence for the user never carries. */
 function expectReadable(message: string) {
     expect(message).not.toContain('[object Object]');
     expect(message).not.toContain("the server's own sentence");
     expect(message).not.toContain(CODE);
     expect(message).not.toContain(PLAN_CODE);
-    expect(message).not.toContain(REMOVAL_CODE);
+    expect(message).not.toContain(GONE_CODE);
     expect(message).not.toContain(CONFLICT_CODE);
 }
 
-describe('wipeRefusalMessage — a split whose adjustments have no purchase cost (X-R48)', () => {
-    it('one split, one adjustment in sight and none hidden: its date as the server wrote it, n 1, hidden 0, more 0', () => {
-        const {t, calls, outputs} = fakeT();
-        const message = wipeRefusalMessage(wipeRefused({splits: [split('2026-02-10', [5], 0)]}), t);
-
-        expect(onlyCall(calls)).toEqual({key: KEY, values: {date: '2026-02-10', n: 1, hidden: 0, more: 0}});
-        expect(message, 'the sentence is the translation, as t wrote it').toBe(outputs[0]);
-        expectReadable(String(message));
-    });
-
-    it('fail-closed, none in sight: no id listed and two hidden — n 2, hidden 2', () => {
-        const {t, calls, outputs} = fakeT();
-        const message = wipeRefusalMessage(wipeRefused({splits: [split('2026-02-10', [], 2)]}), t);
-
-        expect(onlyCall(calls)).toEqual({key: KEY, values: {date: '2026-02-10', n: 2, hidden: 2, more: 0}});
-        expect(message).toBe(outputs[0]);
-        expectReadable(String(message));
-    });
-
-    it('two splits: the first is named — its date, its adjustments — and the second is only counted in more', () => {
-        const {t, calls} = fakeT();
-        // The second split differs from the first in every value: a sum, or the last split, reads otherwise.
-        const splits = [split('2026-02-10', [5], 1, 12), split('2026-05-04', [7, 8, 9], 4, 15)];
-        const message = wipeRefusalMessage(wipeRefused({splits}), t);
-
-        expect(onlyCall(calls)).toEqual({key: KEY, values: {date: '2026-02-10', n: 2, hidden: 1, more: 1}});
-        expectReadable(String(message));
-    });
-
-    it("the date label is applied to the first split's date", () => {
-        const {t, calls} = fakeT();
-        const splits = [split('2026-02-10', [5, 6], 0, 12), split('2026-05-04', [7], 0, 15)];
-        wipeRefusalMessage(wipeRefused({splits}), t, dateLabel);
-
-        expect(onlyCall(calls)).toEqual({key: KEY, values: {date: 'D<2026-02-10>', n: 2, hidden: 0, more: 1}});
-    });
-
-    it.each<[string, unknown, Values]>([
-        ['params missing', undefined, {date: '', n: 0, hidden: 0, more: 0}],
-        ['params null', null, {date: '', n: 0, hidden: 0, more: 0}],
-        ['params without splits', {}, {date: '', n: 0, hidden: 0, more: 0}],
-        ['splits an empty list (more is never -1)', {splits: []}, {date: '', n: 0, hidden: 0, more: 0}],
-        ['splits not a list: an object with a length', {splits: {0: split('2026-02-10', [5], 1), length: 1}}, {date: '', n: 0, hidden: 0, more: 0}],
-        ['splits not a list: a string', {splits: '2026-02-10'}, {date: '', n: 0, hidden: 0, more: 0}],
-        ['a split that is not an object', {splits: [null]}, {date: '', n: 0, hidden: 0, more: 0}],
-        ['a split without transaction_ids', {splits: [{event_id: 12, date: '2026-02-10', hidden_transactions_count: 0}]}, {date: '2026-02-10', n: 0, hidden: 0, more: 0}],
-    ])('%s: no throw — each missing piece is 0 or the empty string', (_label, params, values) => {
-        const {t, calls} = fakeT();
-        const message = wipeRefusalMessage(wipeRefused(params), t);
-
-        expect(onlyCall(calls)).toEqual({key: KEY, values});
-        expectReadable(String(message));
-    });
-
-    it.each<[string, Record<string, unknown>, number, number]>([
-        ['hidden_transactions_count missing', {transaction_ids: [5, 6]}, 2, 0],
-        ["hidden_transactions_count 'x'", {transaction_ids: [5, 6], hidden_transactions_count: 'x'}, 2, 0],
-        ['hidden_transactions_count null', {transaction_ids: [5, 6], hidden_transactions_count: null}, 2, 0],
-        ['hidden_transactions_count -1', {transaction_ids: [5, 6], hidden_transactions_count: -1}, 2, 0],
-        ['hidden_transactions_count 1.5', {transaction_ids: [5, 6], hidden_transactions_count: 1.5}, 2, 0],
-        // Not a list: no id in sight, whatever a length says.
-        ["transaction_ids a string, '5,6'", {transaction_ids: '5,6', hidden_transactions_count: 1}, 1, 1],
-        ['transaction_ids an object with a length', {transaction_ids: {0: 5, 1: 6, length: 2}, hidden_transactions_count: 1}, 1, 1],
-        ['transaction_ids null', {transaction_ids: null, hidden_transactions_count: 1}, 1, 1],
-    ])('%s: hidden is a whole number from 0, n the ids listed plus the hidden ones — never NaN', (_label, adjustments, n, hidden) => {
-        const {t, calls} = fakeT();
-        wipeRefusalMessage(wipeRefused({splits: [{event_id: 12, date: '2026-02-10', ...adjustments}]}), t);
-
-        expect(onlyCall(calls)).toEqual({key: KEY, values: {date: '2026-02-10', n, hidden, more: 0}});
-    });
-
+describe('wipeRefusalMessage — the wipe’s refusal no longer exists: an unknown code (N68)', () => {
     it.each<[string, unknown]>([
-        ['an object', {year: 2026, month: 2, day: 10}],
-        ['null', null],
-        ['missing', undefined],
-    ])('a date that is not a string (%s) is the empty string — never [object Object]', (_label, date) => {
+        ['one split, one adjustment in sight and none hidden', wipeRefused({splits: [split('2026-02-10', [5], 0)]})],
+        ['fail-closed, none in sight and two hidden', wipeRefused({splits: [split('2026-02-10', [], 2)]})],
+        ['two splits', wipeRefused({splits: [split('2026-02-10', [5], 1, 12), split('2026-05-04', [7, 8, 9], 4, 15)]})],
+        ['params missing', wipeRefused(undefined)],
+        ['params null', wipeRefused(null)],
+        ['params without splits', wipeRefused({})],
+        ['splits not a list', wipeRefused({splits: '2026-02-10'})],
+        ['the code with the plan’s params (asset, item, splits)', wipeRefused(planParams([split('2026-02-10', [5], 1)]))],
+    ])('MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST, %s: null, and the catalogue is not asked — nothing words it any more', (_label, err) => {
         const {t, calls} = fakeT();
-        const message = wipeRefusalMessage(wipeRefused({splits: [{event_id: 12, date, transaction_ids: [5], hidden_transactions_count: 0}]}), t);
 
-        expect(onlyCall(calls)).toEqual({key: KEY, values: {date: '', n: 1, hidden: 0, more: 0}});
+        expect(wipeRefusalMessage(err, t, dateLabel)).toBeNull();
+        expect(calls, 'the caller keeps its generic sentence: nothing is asked of the catalogue, under the old key or any other').toEqual([]);
+    });
+
+    it('the old code is looked up like any unknown one: a list holding it is no code either', () => {
+        const {t, calls} = fakeT();
+
+        expect(wipeRefusalMessage(apiError(409, {error_code: [CODE], message: SERVER_SENTENCE, params: {splits: [split('2026-02-10', [5], 1)]}}), t)).toBeNull();
+        expect(calls).toEqual([]);
+    });
+
+    it('the plan’s code keeps its own sentence beside it: removing the wipe’s branch did not take the provider’s', () => {
+        const {t, calls} = fakeT();
+        const message = wipeRefusalMessage(planRefused(planParams([split('2026-02-10', [5, 6], 1, 12)])), t, dateLabel);
+
+        expect(onlyCall(calls)).toEqual({key: PLAN_KEY, values: {date: 'D<2026-02-10>', n: 3, hidden: 1, more: 0}});
         expectReadable(String(message));
     });
 });
@@ -361,18 +287,6 @@ describe('wipeRefusalMessage — a split of the plan the provider assignment wou
         expect(onlyCall(calls)).toEqual({key: PLAN_KEY, values});
         expectReadable(String(message));
     });
-
-    it('side by side with the currency change: the same splits under each code — each to its own key, with the same values', () => {
-        const splits = [split('2026-02-10', [5, 6], 1, 12), split('2026-05-04', [7], 0, 15)];
-        const currencyChange = fakeT();
-        const providerChange = fakeT();
-        wipeRefusalMessage(wipeRefused({splits}), currencyChange.t, dateLabel);
-        wipeRefusalMessage(planRefused(planParams(splits)), providerChange.t, dateLabel);
-
-        const values = {date: 'D<2026-02-10>', n: 3, hidden: 1, more: 1};
-        expect(onlyCall(currencyChange.calls), 'the currency change keeps its key').toEqual({key: KEY, values});
-        expect(onlyCall(providerChange.calls), 'the provider change has a key of its own: the sentence is about another operation').toEqual({key: PLAN_KEY, values});
-    });
 });
 
 describe('wipeRefusalMessage — anything else is null, and the catalogue is not asked', () => {
@@ -412,111 +326,21 @@ describe('wipeRefusalMessage — anything else is null, and the catalogue is not
     });
 });
 
-describe('wipeRefusalMessage — a provider removal refused for the transactions linked to its events (X-R62)', () => {
-    it.each(['DIVIDEND', 'INTEREST'])("one %s event, one transaction in sight and none hidden: the removal's own key, the type by its name, the date as the server wrote it, n 1, hidden 0, more 0", (type) => {
-        const {t, calls, outputs} = fakeTNamingTypes();
-        const message = wipeRefusalMessage(removalRefused(removalParams([linkedEvent('2026-03-02', type, [5], 0)])), t);
+describe('wipeRefusalMessage — the provider removal’s split refusal is the assignment’s (X5-1)', () => {
+    it('DELETE /assets/provider refuses a split with adjustments without a cost with the same code and params as the assignment: the plan’s key, the same values', () => {
+        // The removal's params as the server sends them: the asset, the item and the splits, like the assignment's.
+        const params = {asset_id: 7, item_index: 0, splits: [split('2026-02-10', [5, 6], 1, 12), split('2026-05-04', [7], 0, 15)]};
+        const removal = fakeT();
+        const assignment = fakeT();
+        const refusal = (message: string) => apiError(409, {error_code: PLAN_CODE, message, params});
+        const removalMessage = wipeRefusalMessage(refusal('Provider not removed: the server’s own sentence'), removal.t, dateLabel);
+        wipeRefusalMessage(planRefused(params), assignment.t, dateLabel);
 
-        expectRemovalCalls(calls, type, {type: typeName(type), date: '2026-03-02', n: 1, hidden: 0, more: 0});
-        expect(message, 'the sentence is the translation, as t wrote it').toBe(outputs[outputs.length - 1]);
-        expectReadable(String(message));
-    });
-
-    it.each([0, 1, 2])('hidden %i: n counts the transactions in sight and the hidden ones, hidden only the hidden ones', (hidden) => {
-        const {t, calls} = fakeTNamingTypes();
-        wipeRefusalMessage(removalRefused(removalParams([linkedEvent('2026-03-02', 'DIVIDEND', [5, 6], hidden)])), t);
-
-        expectRemovalCalls(calls, 'DIVIDEND', {type: typeName('DIVIDEND'), date: '2026-03-02', n: 2 + hidden, hidden, more: 0});
-    });
-
-    it('fail-closed, none in sight: no id listed and two hidden — n 2, hidden 2', () => {
-        const {t, calls, outputs} = fakeTNamingTypes();
-        const message = wipeRefusalMessage(removalRefused(removalParams([linkedEvent('2026-03-02', 'INTEREST', [], 2)])), t);
-
-        expectRemovalCalls(calls, 'INTEREST', {type: typeName('INTEREST'), date: '2026-03-02', n: 2, hidden: 2, more: 0});
-        expect(message).toBe(outputs[outputs.length - 1]);
-        expectReadable(String(message));
-    });
-
-    it.each<[number, ReturnType<typeof linkedEvent>[]]>([
-        [0, [linkedEvent('2026-03-02', 'DIVIDEND', [5], 1, 21)]],
-        [1, [linkedEvent('2026-03-02', 'DIVIDEND', [5], 1, 21), linkedEvent('2026-06-01', 'INTEREST', [7, 8, 9], 4, 22)]],
-        [2, [linkedEvent('2026-03-02', 'DIVIDEND', [5], 1, 21), linkedEvent('2026-06-01', 'INTEREST', [7, 8, 9], 4, 22), linkedEvent('2026-09-01', 'MATURITY_SETTLEMENT', [10, 11], 0, 23)]],
-    ])('more %i: the first event is named — its type, its date, its transactions — and the others are only counted', (more, events) => {
-        const {t, calls} = fakeTNamingTypes();
-        // The other events differ from the first in every value: a sum, or the last event, reads otherwise.
-        wipeRefusalMessage(removalRefused(removalParams(events)), t);
-
-        expectRemovalCalls(calls, 'DIVIDEND', {type: typeName('DIVIDEND'), date: '2026-03-02', n: 2, hidden: 1, more});
-    });
-
-    it("the date label is applied to the first event's date", () => {
-        const {t, calls} = fakeTNamingTypes();
-        wipeRefusalMessage(removalRefused(removalParams([linkedEvent('2026-03-02', 'INTEREST', [5, 6], 0, 21), linkedEvent('2026-06-01', 'DIVIDEND', [7], 0, 22)])), t, dateLabel);
-
-        expectRemovalCalls(calls, 'INTEREST', {type: typeName('INTEREST'), date: 'D<2026-03-02>', n: 2, hidden: 0, more: 1});
-    });
-
-    it.each<[string, Record<string, unknown>]>([
-        ['missing', {event_id: 21, date: '2026-03-02', transaction_ids: [5], hidden_transactions_count: 1}],
-        ['null', {event_id: 21, date: '2026-03-02', type: null, transaction_ids: [5], hidden_transactions_count: 1}],
-        ['a number', {event_id: 21, date: '2026-03-02', type: 3, transaction_ids: [5], hidden_transactions_count: 1}],
-        ['an object', {event_id: 21, date: '2026-03-02', type: {code: 'DIVIDEND'}, transaction_ids: [5], hidden_transactions_count: 1}],
-        // A type is a string. JSON can carry a list, and a list of one type, joined to a key, reads as that type's key.
-        ['a list holding a type', {event_id: 21, date: '2026-03-02', type: ['DIVIDEND'], transaction_ids: [5], hidden_transactions_count: 1}],
-    ])('a type that is not a string (%s) is the empty string, and no name is asked — never [object Object], never a key built from it', (_label, event) => {
-        const {t, calls} = fakeTNamingTypes();
-        const message = wipeRefusalMessage(removalRefused(removalParams([event])), t, dateLabel);
-
-        expectRemovalCalls(calls, null, {type: '', date: 'D<2026-03-02>', n: 2, hidden: 1, more: 0});
-        expectReadable(String(message));
-    });
-
-    it.each<[string, Record<string, unknown>]>([
-        ['missing', {event_id: 21, type: 'DIVIDEND', transaction_ids: [5], hidden_transactions_count: 0}],
-        ['empty', {event_id: 21, date: '', type: 'DIVIDEND', transaction_ids: [5], hidden_transactions_count: 0}],
-        ['null', {event_id: 21, date: null, type: 'DIVIDEND', transaction_ids: [5], hidden_transactions_count: 0}],
-        ['an object', {event_id: 21, date: {year: 2026, month: 3, day: 2}, type: 'DIVIDEND', transaction_ids: [5], hidden_transactions_count: 0}],
-    ])('no date (%s): the empty string — the date label is never applied to what is not a date, never [object Object]', (_label, event) => {
-        const {t, calls} = fakeTNamingTypes();
-        const message = wipeRefusalMessage(removalRefused(removalParams([event])), t, dateLabel);
-
-        expectRemovalCalls(calls, 'DIVIDEND', {type: typeName('DIVIDEND'), date: '', n: 1, hidden: 0, more: 0});
-        expectReadable(String(message));
-    });
-
-    it.each<[string, unknown, string | null, Values]>([
-        ['params missing', undefined, null, {type: '', date: '', n: 0, hidden: 0, more: 0}],
-        ['params null', null, null, {type: '', date: '', n: 0, hidden: 0, more: 0}],
-        ['params with the asset and the item but no events', {asset_id: 7, item_index: 0}, null, {type: '', date: '', n: 0, hidden: 0, more: 0}],
-        ['events an empty list (more is never -1)', removalParams([]), null, {type: '', date: '', n: 0, hidden: 0, more: 0}],
-        ['events not a list: a string', removalParams('2026-03-02'), null, {type: '', date: '', n: 0, hidden: 0, more: 0}],
-        ['events not a list: an object with a length', removalParams({0: linkedEvent('2026-03-02', 'DIVIDEND', [5], 1), length: 1}), null, {type: '', date: '', n: 0, hidden: 0, more: 0}],
-        ['an event that is not an object', removalParams([null]), null, {type: '', date: '', n: 0, hidden: 0, more: 0}],
-        ['an event without transaction_ids', removalParams([{event_id: 21, date: '2026-03-02', type: 'DIVIDEND', hidden_transactions_count: 0}]), 'DIVIDEND', {type: typeName('DIVIDEND'), date: '2026-03-02', n: 0, hidden: 0, more: 0}],
-        ['ids that are not a list and a hidden count of -1', removalParams([{event_id: 21, date: '2026-03-02', type: 'DIVIDEND', transaction_ids: '5,6', hidden_transactions_count: -1}]), 'DIVIDEND', {type: typeName('DIVIDEND'), date: '2026-03-02', n: 0, hidden: 0, more: 0}],
-        ['a hidden count that is not a whole number', removalParams([{event_id: 21, date: '2026-03-02', type: 'DIVIDEND', transaction_ids: [5, 6], hidden_transactions_count: 1.5}]), 'DIVIDEND', {type: typeName('DIVIDEND'), date: '2026-03-02', n: 2, hidden: 0, more: 0}],
-    ])('%s: no throw — each missing piece is 0 or the empty string', (_label, params, type, values) => {
-        const {t, calls} = fakeTNamingTypes();
-        const message = wipeRefusalMessage(removalRefused(params), t);
-
-        expectRemovalCalls(calls, type, values);
-        expectReadable(String(message));
-    });
-
-    it('each code reads its own list: the same params, events and splits side by side — the removal names its first event, the wipe and the plan their first split', () => {
-        const params = {asset_id: 7, item_index: 0, events: [linkedEvent('2026-03-02', 'INTEREST', [7, 8, 9], 0, 21), linkedEvent('2026-06-01', 'DIVIDEND', [10], 0, 22)], splits: [split('2026-02-10', [5], 1, 12)]};
-        const removal = fakeTNamingTypes();
-        const currencyChange = fakeT();
-        const providerChange = fakeT();
-        wipeRefusalMessage(removalRefused(params), removal.t, dateLabel);
-        wipeRefusalMessage(wipeRefused(params), currencyChange.t, dateLabel);
-        wipeRefusalMessage(planRefused(params), providerChange.t, dateLabel);
-
-        expectRemovalCalls(removal.calls, 'INTEREST', {type: typeName('INTEREST'), date: 'D<2026-03-02>', n: 3, hidden: 0, more: 1});
-        const splitValues = {date: 'D<2026-02-10>', n: 2, hidden: 1, more: 0};
-        expect(onlyCall(currencyChange.calls), 'the currency change keeps reading its splits').toEqual({key: KEY, values: splitValues});
-        expect(onlyCall(providerChange.calls), 'the provider change keeps reading its splits').toEqual({key: PLAN_KEY, values: splitValues});
+        const values = {date: 'D<2026-02-10>', n: 3, hidden: 1, more: 1};
+        expect(onlyCall(removal.calls), 'one sentence for both operations: its own key, never a removal-specific one').toEqual({key: PLAN_KEY, values});
+        expect(onlyCall(assignment.calls)).toEqual(onlyCall(removal.calls));
+        expect(removalMessage).toBe(removal.outputs[0]);
+        expectReadable(String(removalMessage));
     });
 });
 
@@ -524,9 +348,9 @@ describe('wipeRefusalMessage — a provider removal that met a link made meanwhi
     it.each<[string, unknown]>([
         ['its params empty, as the server sends them', {}],
         ['params missing', undefined],
-        ['params carrying events after all', removalParams([linkedEvent('2026-03-02', 'DIVIDEND', [5], 1)])],
-    ])("%s: the conflict's own key, asked with no values — its sentence names nothing, and no type name is asked", (_label, params) => {
-        const {t, calls, outputs} = fakeTNamingTypes();
+        ['params carrying a list after all', {events: [{event_id: 21, date: '2026-03-02', type: 'DIVIDEND', transaction_ids: [5], hidden_transactions_count: 1}]}],
+    ])("%s: the conflict's own key, asked with no values — its sentence names nothing", (_label, params) => {
+        const {t, calls, outputs} = fakeT();
         const message = wipeRefusalMessage(removalConflict(params), t, dateLabel);
 
         expect(onlyCall(calls).key, 'one message, one translation: the conflict’s own').toBe(CONFLICT_KEY);
@@ -536,22 +360,24 @@ describe('wipeRefusalMessage — a provider removal that met a link made meanwhi
     });
 });
 
-describe("wipeRefusalMessage — near misses of the removal's codes are null, and the catalogue is not asked (X-R62)", () => {
-    const EVENTS = removalParams([linkedEvent('2026-03-02', 'DIVIDEND', [5], 1)]);
+describe('wipeRefusalMessage — the code the removal no longer has is an unknown code (X5-1)', () => {
+    const EVENTS = {asset_id: 7, item_index: 0, events: [{event_id: 21, date: '2026-03-02', type: 'DIVIDEND', transaction_ids: [5], hidden_transactions_count: 1}]};
 
     it.each<[string, unknown]>([
+        ['PROVIDER_REMOVAL_LINKED_TRANSACTIONS with the events it used to list', goneRefusal(EVENTS)],
+        ['the same code with no params', goneRefusal(undefined)],
+        ['the same code with splits, as if it were the plan’s', goneRefusal({splits: [split('2026-02-10', [5], 1)]})],
         ['another code of the removal, with the same events', apiError(409, {error_code: 'PROVIDER_REMOVAL_SOMETHING_NEW', message: REMOVAL_SERVER_SENTENCE, params: EVENTS})],
         // A code is a string. JSON can carry a list, and a list of one code, used as a property name, is that code.
-        ["a list holding the removal's code", apiError(409, {error_code: [REMOVAL_CODE], message: REMOVAL_SERVER_SENTENCE, params: EVENTS})],
         ["a list holding the conflict's code", apiError(409, {error_code: [CONFLICT_CODE], message: REMOVAL_SERVER_SENTENCE, params: {}})],
         ['a structured detail without a code, with the events', apiError(409, {message: REMOVAL_SERVER_SENTENCE, params: EVENTS})],
-        ['a string detail naming the code', apiError(409, REMOVAL_CODE)],
-        ['a list detail holding the refusal', apiError(409, [{error_code: REMOVAL_CODE, message: REMOVAL_SERVER_SENTENCE, params: EVENTS}])],
-    ])('%s', (_label, err) => {
-        const {t, calls} = fakeTNamingTypes();
+        ['a string detail naming the old code', apiError(409, GONE_CODE)],
+        ['a list detail holding the old refusal', apiError(409, [{error_code: GONE_CODE, message: REMOVAL_SERVER_SENTENCE, params: EVENTS}])],
+    ])('%s: null, and the catalogue is not asked — the caller keeps its generic sentence', (_label, err) => {
+        const {t, calls} = fakeT();
 
         expect(wipeRefusalMessage(err, t)).toBeNull();
-        expect(calls, 'the caller keeps its generic sentence: nothing is asked of the catalogue').toEqual([]);
+        expect(calls, 'nothing is asked of the catalogue').toEqual([]);
     });
 });
 
@@ -622,7 +448,7 @@ function figures(message: string): string[] {
     return message.replace(/D<[^>]*>/g, '').match(/\d+/g) ?? [];
 }
 
-describe('the sentence in the four generated catalogues (X-R48)', () => {
+describe('the wipe’s sentence is gone from the four generated catalogues (N68)', () => {
     beforeAll(async () => {
         init({fallbackLocale: 'en', initialLocale: 'en'});
         await waitLocale('en');
@@ -641,36 +467,12 @@ describe('the sentence in the four generated catalogues (X-R48)', () => {
         expect(cardinalPlurals('{n, selectordinal, one {#st} other {#th}}'), 'an ordinal is not a count').toEqual([]);
     });
 
-    it.each(SUPPORTED_LOCALES)('%s: the generated catalogue has the key, in words of its own', (lang) => {
-        const text = messageAt(CATALOGUES[lang], KEY);
-
-        expect(typeof text, `the generated ${lang} catalogue has no ${KEY}`).toBe('string');
-        if (lang !== 'en') expect(text, `the ${lang} source has no ${KEY}: this is the English text the build fills it with`).not.toBe(messageAt(CATALOGUES.en, KEY));
+    it.each(SUPPORTED_LOCALES)('%s: the key of the refusal that no longer exists is gone from the catalogue', (lang) => {
+        expect(messageAt(CATALOGUES[lang], KEY), `the generated ${lang} catalogue still carries ${KEY}: MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST does not exist any more`).toBeUndefined();
     });
 
-    it.each(SUPPORTED_LOCALES)('%s: its text names exactly date, n, hidden and more — the values the module passes — and counts n, hidden and more with ICU plurals', (lang) => {
-        const text = messageAt(CATALOGUES[lang], KEY);
-        expect(typeof text, `premise: the generated ${lang} catalogue has ${KEY}`).toBe('string');
-
-        expect(argumentNames(String(text)), 'a name the module does not pass leaves the raw text on screen; one it passes and the text drops is a figure lost').toEqual(['date', 'hidden', 'more', 'n']);
-        expect(cardinalPlurals(String(text)), 'n, hidden and more are counts: ICU plurals').toEqual(['hidden', 'more', 'n']);
-    });
-
-    it.each(SUPPORTED_LOCALES)('%s: through the module and svelte-i18n, every value is written, no ICU syntax is left, and a 0 says nothing', async (lang) => {
-        await uiLanguage(lang);
-        // n 5 (3 in sight, 2 hidden), hidden 2, more 3: three figures above 1, which every language writes as digits.
-        const several = wipeRefusalMessage(wipeRefused({splits: [split('2026-02-10', [5, 6, 7], 2, 12), split('2026-03-11', [8], 0, 13), split('2026-04-12', [], 1, 14), split('2026-05-13', [9], 0, 15)]}), get(_), dateLabel);
-        // n 1, hidden 0, more 0: nothing hidden and no other split.
-        const one = wipeRefusalMessage(wipeRefused({splits: [split('2026-02-10', [5], 0)]}), get(_), dateLabel);
-
-        for (const message of [several, one]) {
-            expect(message, `control: the ${lang} catalogue has the message, not the bare key`).not.toBe(KEY);
-            expectReadable(String(message));
-            expect(message, 'the first split, by its date label').toContain('D<2026-02-10>');
-            expect(message, 'every argument and plural formatted: a name the text needs and the module does not pass leaves the raw text').not.toMatch(/[{}]/);
-            expect(figures(String(message)), 'no figure 0: with nothing hidden and no other split, the sentence says nothing of either').not.toContain('0');
-        }
-        expect(figures(String(several)), 'n = 5, hidden = 2 and more = 3 are written').toEqual(expect.arrayContaining(['5', '2', '3']));
+    it.each(SUPPORTED_LOCALES)('%s: the plan’s key, its sibling, is still there', (lang) => {
+        expect(typeof messageAt(CATALOGUES[lang], PLAN_KEY), `the generated ${lang} catalogue lost ${PLAN_KEY} with the wipe’s key`).toBe('string');
     });
 });
 
@@ -685,12 +487,11 @@ describe("the plan's sentence in the four generated catalogues (X-R49)", () => {
         await uiLanguage('en');
     });
 
-    it.each(SUPPORTED_LOCALES)("%s: the generated catalogue has the key, in words of its own — not the English, not the currency change's sentence", (lang) => {
+    it.each(SUPPORTED_LOCALES)('%s: the generated catalogue has the key, in words of its own — not the English', (lang) => {
         const text = messageAt(CATALOGUES[lang], PLAN_KEY);
 
         expect(typeof text, `the generated ${lang} catalogue has no ${PLAN_KEY}`).toBe('string');
         if (lang !== 'en') expect(text, `the ${lang} source has no ${PLAN_KEY}: this is the English text the build fills it with`).not.toBe(messageAt(CATALOGUES.en, PLAN_KEY));
-        expect(text, 'a provider change is not a currency change: the sentence of the wipe, copied over, would tell the user about the wrong operation').not.toBe(messageAt(CATALOGUES[lang], KEY));
     });
 
     it.each(SUPPORTED_LOCALES)('%s: its text names exactly date, n, hidden and more — the values the module passes — and counts n, hidden and more with ICU plurals', (lang) => {
@@ -701,9 +502,9 @@ describe("the plan's sentence in the four generated catalogues (X-R49)", () => {
         expect(cardinalPlurals(String(text)), 'n, hidden and more are counts: ICU plurals').toEqual(['hidden', 'more', 'n']);
     });
 
-    it("fr: n, hidden and more each carry the CLDR many branch, as the currency change's sentence does", () => {
+    it('fr: n, hidden and more each carry the CLDR many branch', () => {
         expect(pluralsWithMany('{n, plural, one {# item} other {# items}}'), 'control: a count without the branch').toEqual([]);
-        expect(pluralsWithMany(String(messageAt(CATALOGUES.fr, KEY))), "control: the currency change's French sentence, which has it in its three counts").toEqual(['hidden', 'more', 'n']);
+        expect(pluralsWithMany('{n, plural, one {# a} many {# b} other {# c}}{hidden, plural, one {# a} many {# b} other {# c}}{more, plural, one {# a} many {# b} other {# c}}'), 'control: a message with the branch in its three counts').toEqual(['hidden', 'more', 'n']);
         const text = messageAt(CATALOGUES.fr, PLAN_KEY);
         expect(typeof text, `premise: the generated fr catalogue has ${PLAN_KEY}`).toBe('string');
 
@@ -729,21 +530,7 @@ describe("the plan's sentence in the four generated catalogues (X-R49)", () => {
     });
 });
 
-/** A removal's sentence as svelte-i18n wrote it in `lang` (X-R62): its first event by its date label and by the name of its `type`, every value formatted, no 0 said. */
-function expectWrittenRemoval(lang: SupportedLocale, message: string | null, type: string) {
-    const name = get(_)(EVENT_TYPE_KEY + type);
-    expect(name, `premise: the ${lang} catalogue names the ${type} events`).not.toBe(EVENT_TYPE_KEY + type);
-    expect(message, "the module words the removal's refusal").not.toBeNull();
-    expect(message, `control: the ${lang} catalogue has the message, not the bare key`).not.toBe(REMOVAL_KEY);
-    expectReadable(String(message));
-    expect(message, 'the first event, by its date label').toContain('D<2026-02-10>');
-    expect(message, 'the first event, by the name of its type in the interface language').toContain(name);
-    expect(message, 'no type left as its key').not.toContain(EVENT_TYPE_KEY);
-    expect(message, 'every argument and plural formatted: a name the text needs and the module does not pass leaves the raw text').not.toMatch(/[{}]/);
-    expect(figures(String(message)), 'no figure 0: with nothing hidden and no other event, the sentence says nothing of either').not.toContain('0');
-}
-
-describe("the provider removal's sentences in the four generated catalogues (X-R62)", () => {
+describe("the provider removal's sentences in the four generated catalogues (X-R62, trimmed by X5-1)", () => {
     beforeAll(async () => {
         init({fallbackLocale: 'en', initialLocale: 'en'});
         await waitLocale('en');
@@ -754,24 +541,16 @@ describe("the provider removal's sentences in the four generated catalogues (X-R
         await uiLanguage('en');
     });
 
-    it.each(SUPPORTED_LOCALES)("%s: the generated catalogue has both keys, each in words of its own — not the English, not each other's, not the plan's sentence", (lang) => {
-        const linked = messageAt(CATALOGUES[lang], REMOVAL_KEY);
+    it.each(SUPPORTED_LOCALES)("%s: the conflict's key is in words of its own — not the English, not the plan's sentence", (lang) => {
         const conflict = messageAt(CATALOGUES[lang], CONFLICT_KEY);
 
-        expect(typeof linked, `the generated ${lang} catalogue has no ${REMOVAL_KEY}`).toBe('string');
         expect(typeof conflict, `the generated ${lang} catalogue has no ${CONFLICT_KEY}`).toBe('string');
-        if (lang !== 'en') expect(linked, `the ${lang} source has no ${REMOVAL_KEY}: this is the English text the build fills it with`).not.toBe(messageAt(CATALOGUES.en, REMOVAL_KEY));
         if (lang !== 'en') expect(conflict, `the ${lang} source has no ${CONFLICT_KEY}: this is the English text the build fills it with`).not.toBe(messageAt(CATALOGUES.en, CONFLICT_KEY));
-        expect(linked, 'two refusals, two sentences').not.toBe(conflict);
-        expect(linked, "a removal is not a provider change: the plan's sentence, copied over, would tell the user about the wrong operation").not.toBe(messageAt(CATALOGUES[lang], PLAN_KEY));
+        expect(conflict, 'two refusals, two sentences').not.toBe(messageAt(CATALOGUES[lang], PLAN_KEY));
     });
 
-    it.each(SUPPORTED_LOCALES)('%s: the linked sentence names exactly date, hidden, more, n and type — the values the module passes — and counts n, hidden and more with ICU plurals', (lang) => {
-        const text = messageAt(CATALOGUES[lang], REMOVAL_KEY);
-        expect(typeof text, `premise: the generated ${lang} catalogue has ${REMOVAL_KEY}`).toBe('string');
-
-        expect(argumentNames(String(text)), 'a name the module does not pass leaves the raw text on screen; one it passes and the text drops is a figure lost').toEqual(['date', 'hidden', 'more', 'n', 'type']);
-        expect(cardinalPlurals(String(text)), 'n, hidden and more are counts: ICU plurals').toEqual(['hidden', 'more', 'n']);
+    it.each(SUPPORTED_LOCALES)('%s: the key of the refusal that no longer exists is gone from the catalogue', (lang) => {
+        expect(messageAt(CATALOGUES[lang], GONE_KEY), `the generated ${lang} catalogue still carries ${GONE_KEY}: PROVIDER_REMOVAL_LINKED_TRANSACTIONS does not exist any more`).toBeUndefined();
     });
 
     it.each(SUPPORTED_LOCALES)('%s: the conflict sentence names nothing — the module passes it nothing', (lang) => {
@@ -781,27 +560,10 @@ describe("the provider removal's sentences in the four generated catalogues (X-R
         expect(argumentNames(String(text)), 'a name the text needs and no value fills leaves the raw text on screen').toEqual([]);
     });
 
-    it("fr: n, hidden and more each carry the CLDR many branch, as the plan's sentence does", () => {
-        expect(pluralsWithMany(String(messageAt(CATALOGUES.fr, PLAN_KEY))), "control: the plan's French sentence, which has it in its three counts").toEqual(['hidden', 'more', 'n']);
-        const text = messageAt(CATALOGUES.fr, REMOVAL_KEY);
-        expect(typeof text, `premise: the generated fr catalogue has ${REMOVAL_KEY}`).toBe('string');
-
-        expect(pluralsWithMany(String(text))).toEqual(['hidden', 'more', 'n']);
-    });
-
-    it.each(SUPPORTED_LOCALES)('%s: through the module and svelte-i18n, every value is written, the type by its name, no ICU syntax is left, and a 0 says nothing', async (lang) => {
+    it.each(SUPPORTED_LOCALES)('%s: through the module and svelte-i18n, the conflict is written with no ICU syntax left', async (lang) => {
         await uiLanguage(lang);
-        // n 5 (3 in sight, 2 hidden), hidden 2, more 3: three figures above 1, which every language writes as digits.
-        const events = [linkedEvent('2026-02-10', 'DIVIDEND', [5, 6, 7], 2, 21), linkedEvent('2026-03-11', 'INTEREST', [8], 0, 22), linkedEvent('2026-04-12', 'SPLIT', [], 1, 23), linkedEvent('2026-05-13', 'PRICE_ADJUSTMENT', [9], 0, 24)];
-        const several = wipeRefusalMessage(removalRefused(removalParams(events)), get(_), dateLabel);
-        // n 1, hidden 0, more 0: nothing hidden and no other event.
-        const one = wipeRefusalMessage(removalRefused(removalParams([linkedEvent('2026-02-10', 'INTEREST', [5], 0)])), get(_), dateLabel);
-
-        expectWrittenRemoval(lang, several, 'DIVIDEND');
-        expectWrittenRemoval(lang, one, 'INTEREST');
-        expect(figures(String(several)), 'n = 5, hidden = 2 and more = 3 are written').toEqual(expect.arrayContaining(['5', '2', '3']));
-
         const conflict = wipeRefusalMessage(removalConflict({}), get(_), dateLabel);
+
         expect(conflict, "the module words the removal's conflict").not.toBeNull();
         expect(conflict, `control: the ${lang} catalogue has the message, not the bare key`).not.toBe(CONFLICT_KEY);
         expectReadable(String(conflict));

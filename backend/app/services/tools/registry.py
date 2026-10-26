@@ -15,6 +15,7 @@ from pydantic import TypeAdapter, ValidationError
 
 from backend.app.logging_config import get_logger
 from backend.app.schemas.tools import ToolDescriptor, ToolDiscoveryFailure, ToolDiscoveryReason
+from backend.app.services.plugin_settings.fields import SettingsDeclarationError, claim_env_variables, validate_declaration
 from backend.app.services.provider_registry import PLUGIN_MODULE_NAME, AbstractPluginRegistry
 from backend.app.services.tools.base import ToolDefinitionError, ToolPlugin, ToolService
 from backend.app.services.tools.schema import declared_operations, generate_tool_schema, require_roundtrip_output, schema_fingerprint
@@ -115,6 +116,15 @@ def build_tool_definition(plugin_class: type[ToolPlugin], service: ToolService) 
     except Exception as exc:
         # One malformed bundled service must not hide sibling services.
         raise ToolDefinitionError("invalid_schema") from exc
+    fields = getattr(plugin_class, "settings_fields", ())
+    if fields:
+        # This registry builds its own definitions, so the checks of the shared ``register`` (the declaration and the claim of the
+        # environment variables) are made here, per tool code: an invalid declaration quarantines that service only.
+        try:
+            validate_declaration(fields, family="tool")
+            claim_env_variables("tool", service.tool_code, fields)
+        except SettingsDeclarationError as exc:
+            raise ToolDefinitionError("invalid_settings") from exc
     operations = declared_operations(input_schema)
     if not service.operations or {policy.operation for policy in service.operations} != operations:
         raise ToolDefinitionError("invalid_operation_policy")
@@ -194,6 +204,10 @@ class ToolPluginRegistry(AbstractPluginRegistry):
         return "services"
 
     @classmethod
+    def settings_family(cls) -> str | None:
+        return "tool"
+
+    @classmethod
     def register(cls, plugin_class: type) -> None:
         with cls._lock:
             if cls._snapshot is not None:
@@ -240,6 +254,9 @@ class ToolPluginRegistry(AbstractPluginRegistry):
         for module_name, claim, service in expanded:
             entry = _resolve_claim(claim, service, module_name, failed_modules, collisions, module_namespace)
             if isinstance(entry, ToolDefinition):
+                if cls._withheld(entry.plugin_class):
+                    # X-R44: a plugin that exists for the tests is not served outside test mode (the snapshot is built once).
+                    continue
                 definitions[entry.descriptor.tool_code] = entry
             else:
                 failures.append(entry)

@@ -13,6 +13,8 @@ This capability is stable and still being refined. Its boundaries are integrated
 
 All calculation inputs must be explicit and packed before dispatch. A calculation must not receive a principal, database session, provider, or service-layer dependency. Authentication belongs at the API boundary: `get_current_user` performs the authenticated-user database lookup there, not in the calculation child.
 
+The one thing besides the parameters that reaches a calculation is the values of its [settings](#settings): `compute()` touches no database, request or provider, and its settings arrive with the job, already resolved by the parent for the user who asks.
+
 The current contract excludes:
 
 - Portfolio writes and automatic broker orders.
@@ -31,7 +33,8 @@ Paths below are relative to the repository root.
 | Source | Responsibility |
 |--------|----------------|
 | `backend/app/schemas/tools.py` | Descriptors, policies, batch envelopes, errors, metrics, and diagnostics DTOs. |
-| `backend/app/services/tools/base.py` | `ToolPlugin`, `ToolService`, `ToolExecutionContext`, and typed definition/execution errors. |
+| `backend/app/services/tools/base.py` | `ToolPlugin` (which inherits `PluginSettingsMixin`), `ToolService`, `ToolExecutionContext`, and typed definition/execution errors. |
+| `backend/app/services/tools/settings.py` | `bound_settings_for_batch()`: the settings values of a batch, resolved in the parent for the user who asks ([A Tool's settings](#settings)). |
 | `backend/app/services/tools/registry.py` | Staged registration claims, quarantine, definition validation, and the published snapshot. |
 | `backend/app/services/tools/schema.py` | Pydantic schema profile, local references, operation discovery, and fingerprinting. |
 | `backend/app/services/tools/schema_export.py` | Build-only Tool manifest and schema bundles derived from registry definitions. |
@@ -58,7 +61,7 @@ Paths below are relative to the repository root.
 | `frontend/src/routes/(app)/tools/[tool_code]/+page.svelte` | Dynamic per-service Tool host route. |
 | `frontend/src/lib/components/ui/DocsLink.svelte` | Language-aware documentation URLs and an optional localized fallback. |
 
-See also the [shared registry pattern](registry_pattern.md). Tools specialize that registry rather than inheriting provider capabilities.
+See also the [shared registry pattern](registry_pattern.md). Tools specialize that registry rather than inheriting provider capabilities. A Tool's settings are the exception: they follow the [plugin settings](plugin_settings.md#tool-field) of the other plugin families.
 
 ## 🧩 Plugin contract
 
@@ -114,6 +117,10 @@ A calculation that hands its work to a long-running engine, such as a solver, cl
 
 A reusable calculation library can accept a no-argument checkpoint callback without depending on Tool types. Constructors, imports, and calculation code must respect the same authority and job-lifetime boundaries.
 
+### 🎛️ A Tool's settings {: #settings }
+
+A Tool plugin may declare `settings_fields`, exactly like an asset, FX or BRIM plugin (family `tool`). Personal fields (the user who asks) and instance fields are allowed; a secret field is refused at registration, because a Tool calls no external source. The values are keyed by **tool code**, so a plugin that bundles several services gets one independent set per service. The core resolves them in the parent for each batch and delivers them with the job (`ToolWorkerJob.settings`); the worker binds them right after constructing the plugin, and `compute()` reads `self.settings.get("key")` — never `__init__`, where nothing is bound yet. A field's default must be the behaviour before the field existed. A required field without a value ends that item with the non-retryable `service_unavailable` and starts no worker; a declaration the registry refuses quarantines that service with the discovery reason `invalid_settings`. No shipped Tool declares a field yet. The rules, a worked example, the delivery path and the tests are in [Plugin Settings → A Field in a Tool Plugin](plugin_settings.md#tool-field).
+
 ## 🔎 Discovery and version lifecycle
 
 `ToolPluginRegistry` extends `AbstractPluginRegistry`, selects the `tool_plugins` discovery folder, and registers packaged classes with `register_plugin(ToolPluginRegistry)`. Its static declaration is the `services` tuple; publication expands each service into a definition keyed by that service's `tool_code`. Each package is a folder of `tool_plugins/`, whose `plugin.py` discovery loads (see [Folder and translations](#folder-and-translations)).
@@ -126,7 +133,7 @@ Discovery is transactional:
 4. Claims from failed imports cannot become usable partial registrations. Unrelated healthy definitions remain available.
 5. Publication creates a code-sorted, read-only service-definition mapping and a tuple of sanitized failures. New registration claims are closed after publication.
 
-Each expanded definition retains both the packaged class and its `ToolService`. Definition validation checks a concrete `ToolPlugin` class, synchronous computation, the zero-argument constructor signature, real adapters, schema validity, operation agreement, and the service's complete descriptor metadata. One invalid service is quarantined without hiding a healthy sibling service. The shared registry module imports no domain base class; importing it is not permission for a Tool to import or use provider services.
+Each expanded definition retains both the packaged class and its `ToolService`. Definition validation checks a concrete `ToolPlugin` class, synchronous computation, the zero-argument constructor signature, real adapters, schema validity, operation agreement, the settings declaration when the plugin has one (an invalid one quarantines the service with the reason `invalid_settings`; see [A Tool's settings](#settings)), and the service's complete descriptor metadata. One invalid service is quarantined without hiding a healthy sibling service. The shared registry module imports no domain base class; importing it is not permission for a Tool to import or use provider services.
 
 The schema fingerprint is SHA-256 over canonical JSON containing `input_schema`, `output_schema`, and sorted operation names. It is generated from the schemas, not supplied by a plugin author. Input schemas use Pydantic's **validation** mode; output schemas use **serialization** mode. Both include the Draft 2020-12 `$schema` declaration.
 
@@ -203,7 +210,7 @@ Transport failures are distinct from per-item results. The route rejects malform
 
 Per-item `ToolError` exposes a code, `retryable`, and bounded validation issues. The sanitizer omits input values, validator context, URLs, and raw messages. It returns at most 32 issues, each with at most 16 safe path segments; `issue_count` retains the total issue count.
 
-The platform sets `retryable=True` only on `queue_full`, `queue_timeout`, `execution_limit`, `execution_timeout`, `version_mismatch`, and a `service_unavailable` raised by the supervisor. Every other platform code — and the `service_unavailable` of the child's non-POSIX guard — carries `retryable=False`; a plugin's own `ToolExecutionError` keeps the flag it was raised with. Renderers read this flag to decide whether to offer a retry: the PAC planner's `ToolErrorPanel.svelte` shows **Retry** only when it is set.
+The platform sets `retryable=True` only on `queue_full`, `queue_timeout`, `execution_limit`, `execution_timeout`, `version_mismatch`, and a `service_unavailable` raised by the supervisor. Every other platform code — and the `service_unavailable` of the child's non-POSIX guard, and that of a Tool whose required [setting](#settings) has no value — carries `retryable=False`; a plugin's own `ToolExecutionError` keeps the flag it was raised with. Renderers read this flag to decide whether to offer a retry: the PAC planner's `ToolErrorPanel.svelte` shows **Retry** only when it is set.
 
 The handler watches for client disconnection and cancels the awaited computation task. The executor propagates cancellation to item tasks and signals owned jobs; tickets and cleanup callbacks govern capacity release. Cancellation alone is not evidence that physical cleanup has completed.
 
@@ -247,7 +254,7 @@ Do not maintain a second handwritten I/O contract beside the Pydantic models. Ca
 
 ### 🧵 Worker primitives
 
-`ToolWorkerJob` carries bounded parameter bytes and server-owned identity, deadlines, and limits. It has no principal, database session, or provider handle.
+`ToolWorkerJob` carries bounded parameter bytes and server-owned identity, deadlines, and limits. It has no principal, database session, or provider handle. Its optional `settings` field holds the `BoundSettings` the parent resolved for the user who asks (`None` for a Tool without fields): plain values only, picklable to the spawn child.
 
 `execute_tool_job` is a child-only entry point run in an owned spawn process. It rejects invocation outside a multiprocessing child. On POSIX, it creates a fresh session with `setsid` and sends a `ready` frame containing execution and process identity. The executor checks the execution identifier, PID, process group, and creation time before sending the start ACK (`b"\x00"`). Plugin discovery and computation wait for that ACK. On non-POSIX systems, this entry point reports `service_unavailable`; it is not a portable process-containment implementation.
 
@@ -255,7 +262,7 @@ Once started, the child:
 
 1. Resolves the definition and verifies the requested versions and fingerprint.
 2. Bounds and decodes input, validates it with the input adapter in strict mode, and verifies the operation.
-3. Constructs the plugin once and calls synchronous `compute`, with checkpoints around the execution phases.
+3. Constructs the plugin once, binds the job's settings on it when it carries any (`bind_settings`), and calls synchronous `compute`, with checkpoints around the execution phases.
 4. Requires a model result, serializes through the output adapter, encodes bounded JSON, and validates the emitted bytes with the output adapter in strict mode.
 5. Checks the hard deadline and cancellation before returning a result frame. Exceptions become sanitized platform failures.
 
@@ -371,6 +378,7 @@ The following work must be completed and verified before presenting a new Tool a
 - [ ] Register the packaged class and verify service expansion, healthy siblings, failed imports, duplicate-code quarantine, invalid definitions, and closed registration.
 - [ ] Place the package in its folder, `tool_plugins/<name>/plugin.py` beside a docstring-only `__init__.py`, and add each service's `name_i18n_key` and `description_i18n_key` texts to its `i18n/` fragment in the four languages (`./dev.py i18n add … --into tool_plugins/<name>`); `./dev.py test utils gate-plugin-layout` and `gate-plugin-i18n-ownership` hold both.
 - [ ] Implement a zero-argument constructor and synchronous code-based dispatch with bounded checkpoints and job-scoped child work.
+- [ ] If the Tool declares `settings_fields`: personal or instance fields only, no secret; defaults that keep the behaviour before the field; read in `compute()`, never `__init__`; tests copied from `tool-settings-contract`, `tool-settings-runtime` and `tool-settings-lifecycle` ([A Field in a Tool Plugin](plugin_settings.md#tool-field)).
 - [ ] Verify input/output adapters, schema references, fingerprints, Unicode and byte limits, safe errors, and unchanged caller scenarios.
 - [ ] Integrate generated codecs and the compiled renderer map; verify acceptance parity, unsupported renderer/version handling, and language-aware documentation links.
 - [ ] Verify authenticated route mounting, response order/cardinality/pins, platform-versus-domain outcomes, and process-local diagnostic privacy.

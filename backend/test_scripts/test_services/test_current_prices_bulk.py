@@ -1,5 +1,5 @@
 """R13-SEC9-1, -3, -4 (security review by E; lands with X-R59) — ``POST /assets/prices/current``: one fetch per distinct
-asset, 1 000 ids at most, a ``range_start`` up to tomorrow, and no 500 that echoes its error.
+asset, 1 000 ids at most, a ``range_start`` up to tomorrow (and no floor, X5-6), and no 500 that echoes its error.
 
 The defects, on HEAD f252acb4a:
 
@@ -14,6 +14,8 @@ The defects, on HEAD f252acb4a:
 - SEC9-3. A failure of ``POST /prices/query`` or ``POST /prices/current`` answered 500 with ``detail=str(e)``: an SQL
   error echoed its statement, naming the schema.
 - SEC9-4. ``range_start`` was refused before 1900-01-01 only: any later day, 9999-12-31 included, was accepted.
+  X5-6 (D-P4 L4, developer decision) withdrew the lower half: ``range_start`` has no floor but the calendar's (0001-01-01,
+  which ``date`` enforces itself); only the ceiling, ``latest_range_end()``, stays.
 
 The cure's contract, pinned here:
 
@@ -26,10 +28,10 @@ The cure's contract, pinned here:
    ONE provider call. Lookups of distinct keys each make their own (guard).
 4. The route computes the whole-range change once per distinct id; every item carries its id's change.
 5. ``range_start`` is bounded by its PARAMETER (X's review, point 4: ``Annotated[…, Query(…),
-   AfterValidator(_range_start_in_bounds)]``): outside ``EARLIEST_RANGE_START`` (1900-01-01) … ``latest_range_end()``
-   (tomorrow, by the server's calendar) the request is refused by FastAPI's own validation — 422 in the standard shape,
+   AfterValidator(_range_start_in_bounds)]``): after ``latest_range_end()`` (tomorrow, by the server's calendar; there is
+   no lower bound: 1899-12-31 and 0001-01-01 are accepted, X5-6) the request is refused by FastAPI's own validation — 422 in the standard shape,
    ``detail`` a list whose error has ``loc`` ``["query", "range_start"]`` and ``type`` ``value_error`` — before the route
-   body runs, so before the item cap too; both ends are accepted.
+   body runs, so before the item cap too; tomorrow itself and every earlier day are accepted.
 6. A failure of either route answers 500 with a detail that does not echo the error; the error is logged, with its
    exception.
 7. Guard (X's review, point 1 — the try/except entered with X-R59): when the whole-range change fails, the quotes still
@@ -58,16 +60,16 @@ Red on HEAD f252acb4a, each for the reason its docstring gives: ``test_sec9_1_a_
 ``test_sec9_1_a_repeated_id_writes_todays_row_once``,
 ``test_sec9_1_lookups_of_one_cache_key_waiting_for_the_slot_make_one_provider_call``,
 ``test_sec9_1_more_than_1000_ids_refused_before_any_read``, ``test_sec9_1_the_range_change_is_computed_once_per_distinct_id``,
-``test_sec9_4_range_start_after_tomorrow_refused`` (both cases: accepted), ``test_sec9_4_range_start_before_1900_refused``
-(both cases: refused, but by the route body, a 422 whose ``detail`` is a string, not the parameter's error),
+``test_sec9_4_range_start_after_tomorrow_refused`` (both cases: accepted),
 ``test_sec9_4_range_start_is_checked_before_the_item_cap`` (accepted, the ids not capped),
 ``test_sec9_3_a_failure_answers_500_without_echoing_it`` (both routes), ``test_d1_target_currency_reaches_the_range_change_normalized``
 (both cases) and ``test_d1_invalid_target_currency_refused_by_its_parameter`` (both cases): no such parameter, ignored.
 Green before and after — what the cure keeps:
 ``test_sec9_1_guard_lookups_of_distinct_keys_each_ask_their_provider``, ``test_sec9_1_exactly_1000_ids_pass``,
-``test_sec9_4_range_start_from_1900_to_tomorrow_accepted``, ``test_xr59_guard_the_quotes_stand_when_the_range_change_fails``,
+``test_sec9_4_range_start_up_to_tomorrow_accepted``, ``test_xr59_guard_the_quotes_stand_when_the_range_change_fails``,
 ``test_d1_guard_without_target_currency_the_change_is_native``,
 ``test_d1_guard_target_currency_without_range_start_changes_nothing``.
+Red on HEAD 6b02bc7f6 (X5-6): ``test_sec9_4_range_start_before_1900_accepted`` (every case: refused with the parameter's 422).
 
 Isolation: PURE — no lane database, no server, no network. Every row is written to the test's own in-memory database,
 closed and disposed at teardown; the cache, the provider lookup, the service's today, the route's service, change and
@@ -882,28 +884,31 @@ async def test_sec9_4_range_start_after_tomorrow_refused(client, route, tomorrow
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("range_start", [pytest.param(date(1899, 12, 31), id="1899-12-31"), pytest.param(date(1, 1, 1), id="0001-01-01")])
-async def test_sec9_4_range_start_before_1900_refused(client, route, tomorrow, range_start):
-    """A ``range_start`` before 1900-01-01: the parameter's 422, before the route body — nothing read.
+@pytest.mark.parametrize("range_start", [pytest.param(date(1899, 12, 31), id="1899-12-31"), pytest.param(date(1850, 6, 15), id="1850-06-15"), pytest.param(date(1, 1, 1), id="0001-01-01")])
+async def test_sec9_4_range_start_before_1900_accepted(client, route, tomorrow, range_start):
+    """A ``range_start`` before 1900-01-01 — down to ``date.min`` — is accepted (X5-6, D-P4 L4: the 1900 floor is withdrawn):
+    200, the service called once, the change asked for that day, the quote and its change answered.
 
-    Red on HEAD f252acb4a for the SHAPE only: refused there too, but by the route body, a 422 whose ``detail`` is a string.
+    Red on HEAD 6b02bc7f6: the parameter's 422 (``value_error`` at ``query.range_start``), nothing read.
     """
-    (http, session), (service, changes) = client, route
-    print_section(f"R13-SEC9-4: range_start {range_start} refused")
+    (http, _session), (service, changes) = client, route
+    print_section(f"X5-6: range_start {range_start} accepted")
 
-    response = await _post_current(http, [1], range_start)
+    response = await _post_current(http, [3], range_start)
 
-    _assert_range_start_refused_by_its_parameter(response)
-    assert (service.calls, changes.handed, session.statements) == ([], [], 0)
-    print_success(f"range_start {range_start}: 422 at query.range_start")
+    assert response.status_code == 200, f"{response.status_code}: {response.text[:300]}"
+    assert (service.calls, changes.handed) == ([[3]], [[3]])
+    expected = FACurrentPriceResponse(results=[service.item(3).model_copy(update={"range_change": changes.change_of(3, range_start)})], success_count=1)
+    assert FACurrentPriceResponse.model_validate(response.json()) == expected
+    print_success(f"range_start {range_start}: answered")
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("which", ["1900-01-01", "today", "tomorrow"])
-async def test_sec9_4_range_start_from_1900_to_tomorrow_accepted(client, route, tomorrow, which):
-    """A ``range_start`` on either end of the allowed range, or between, is accepted: 200, the quote and its change.
+async def test_sec9_4_range_start_up_to_tomorrow_accepted(client, route, tomorrow, which):
+    """A ``range_start`` on the old floor, today, or the ceiling (tomorrow) is accepted: 200, the quote and its change.
 
-    Green on HEAD f252acb4a too.
+    Green on HEAD f252acb4a too; the days before 1900 are ``test_sec9_4_range_start_before_1900_accepted``'s (X5-6).
     """
     (http, _session), (service, changes) = client, route
     range_start = {"1900-01-01": EARLIEST, "today": tomorrow - timedelta(days=1), "tomorrow": tomorrow}[which]

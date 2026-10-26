@@ -323,6 +323,22 @@
       "spread": "Spread",
       "stale": "non agg. {days}g",
       "marketNotAvailable": "Tasso di mercato non disponibile"
+    },
+    "reconcile": {
+      "button": "Ricollega eventi",
+      "buttonTitle": "Collega dividendi, interessi e rettifiche all'evento dell'asset dello stesso giorno",
+      "title": "Ricollega eventi",
+      "intro": "Dividendi, interessi e rettifiche senza un evento dell'asset. Un evento è proposto solo se è dello stesso asset, nello stesso giorno e di tipo corrispondente: un dividendo accreditato qualche giorno dopo l'evento non è proposto, e lo colleghi a mano nella transazione.",
+      "loading": "Cerco le transazioni senza evento…",
+      "loadError": "Impossibile leggere le transazioni senza evento.",
+      "empty": "Ogni transazione che può avere un evento dell'asset ce l'ha.",
+      "statusUnique": "Un evento in quel giorno",
+      "statusNone": "Nessun evento in quel giorno",
+      "statusSeveral": "{n} eventi in quel giorno: scegli nella transazione",
+      "link": "Collega",
+      "linkAll": "Collega tutte le righe con un solo evento",
+      "linkError": "Non è stato collegato nulla: il server ha rifiutato la modifica.",
+      "close": "Chiudi"
     }
   }
 }

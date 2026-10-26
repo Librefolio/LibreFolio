@@ -545,9 +545,13 @@ def test_the_name_is_provider_name_else_name_else_the_code(plugin_class: type, n
 def test_every_settings_family_has_its_icon_attribute():
     """1, guard: a family added to ``FAMILY_REGISTRIES`` adds its row to ``FAMILY_ICON_ATTRIBUTES``, or its plugins show
     no icon without a word; and every plugin its registry holds has the attribute the row names, so it is no typo."""
-    unmapped = sorted(set(service.FAMILY_REGISTRIES) - set(service.FAMILY_ICON_ATTRIBUTES))
+    unmapped = sorted(set(service.FAMILY_REGISTRIES) - set(service.FAMILY_ICON_ATTRIBUTES) - service.FAMILIES_WITHOUT_ICON)
     assert not unmapped, f"add the icon attribute of these families to FAMILY_ICON_ATTRIBUTES: {unmapped}"
+    # A family without icons (the Tools: the Tools page draws them with the ``icon_key`` of the service) names no attribute.
+    assert not set(service.FAMILIES_WITHOUT_ICON) & set(service.FAMILY_ICON_ATTRIBUTES), "a family is either without icons or has an attribute"
     for family, registry in service.FAMILY_REGISTRIES.items():
+        if family in service.FAMILIES_WITHOUT_ICON:
+            continue
         attribute = service.FAMILY_ICON_ATTRIBUTES[family]
         codes = registry.list_plugin_codes()
         assert codes, f"barrier: the {family} registry holds no plugin"

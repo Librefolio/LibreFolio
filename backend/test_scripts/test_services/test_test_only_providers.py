@@ -535,14 +535,13 @@ REGISTRY_MODULE = "registry"
 #: The registries of the base the application defines today: the walk finds at least these.
 KNOWN_REGISTRIES: tuple[type[AbstractPluginRegistry], ...] = (AssetProviderRegistry, FXProviderRegistry, BRIMProviderRegistry, SignalPluginRegistry, RiskAnalyticRegistry, ToolPluginRegistry)
 #: The families whose plugins may be flagged ``test_only``: their registries serve a plugin only through the base doors,
-#: which ask ``_withheld``.
-TEST_ONLY_FAMILIES: tuple[type[AbstractPluginRegistry], ...] = (AssetProviderRegistry, FXProviderRegistry)
+#: which ask ``_withheld``, or (the Tools, X5-4b) through a snapshot that is built without the withheld classes.
+TEST_ONLY_FAMILIES: tuple[type[AbstractPluginRegistry], ...] = (AssetProviderRegistry, FXProviderRegistry, ToolPluginRegistry)
 #: The doors of the other families that serve a plugin without asking ``_withheld`` (read at 9e8f6e8dc).
 UNGUARDED_DOORS: dict[type[AbstractPluginRegistry], str] = {
     BRIMProviderRegistry: "auto_detect_plugin, get_compatible_plugins and list_plugin_info walk _providers",
     SignalPluginRegistry: "list_definitions() walks _plugins",
     RiskAnalyticRegistry: "list_definitions() walks _plugins",
-    ToolPluginRegistry: "get_snapshot, get_definition and its own get_plugin_instance serve the registry's own snapshot",
 }
 
 
