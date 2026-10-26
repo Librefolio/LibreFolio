@@ -277,7 +277,7 @@
       "decimalPlacesExceeded": "At most {max} decimal places",
       "significantDigitsExceeded": "At most {max} significant digits",
       "integerDigitsExceeded": "At most {max} digits before the decimal point",
-      "dateOutOfRange": "Between {min} and {max}",
+      "dateOutOfRange": "Not after {max}",
       "autoCostUnreadable": "Automatic cost unavailable: {count, plural, one {# transaction used} other {# transactions used}} for this asset's average cost {count, plural, one {holds} other {hold}} a value that is not a number. Enter the cost by hand.",
       "autoCostEmptyPool": "Automatic cost unavailable: no units of this asset were held on that date to average. Choose Manual and enter what these units cost you; if you received them as a gift, enter 0.",
       "autoCostUnknownPool": "Automatic cost unavailable: the units of this asset held on that date have no known cost to average. Choose Manual and enter what these units cost you.",

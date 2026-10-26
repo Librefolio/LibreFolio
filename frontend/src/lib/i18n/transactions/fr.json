@@ -277,7 +277,7 @@
       "decimalPlacesExceeded": "Au maximum {max} décimales",
       "significantDigitsExceeded": "Au maximum {max} chiffres significatifs",
       "integerDigitsExceeded": "Au maximum {max} chiffres avant la virgule",
-      "dateOutOfRange": "Entre {min} et {max}",
+      "dateOutOfRange": "Pas après le {max}",
       "autoCostUnreadable": "Coût automatique indisponible : {count, plural, one {# transaction utilisée} many {# transactions utilisées} other {# transactions utilisées}} pour le coût moyen de cet actif {count, plural, one {contient} many {contiennent} other {contiennent}} une valeur qui n'est pas un nombre. Saisissez le coût à la main.",
       "autoCostEmptyPool": "Coût automatique indisponible : aucune unité de cet actif n'était détenue à cette date pour en faire la moyenne. Choisissez Manuel et saisissez ce que ces unités vous ont coûté ; si vous les avez reçues en don, saisissez 0.",
       "autoCostUnknownPool": "Coût automatique indisponible : les unités de cet actif détenues à cette date n'ont aucun coût connu dont faire la moyenne. Choisissez Manuel et saisissez ce que ces unités vous ont coûté.",

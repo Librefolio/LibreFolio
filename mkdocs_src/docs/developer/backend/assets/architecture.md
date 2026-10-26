@@ -304,7 +304,7 @@ A risk range starts no earlier than `range_span_floor()`, 100 years before its e
   point, before 1900 included, is stored and counted.
 
 The [FX rate writes](../fx/architecture.md#stored-rate-dates) keep to the same last date.
-Transactions keep their own floor, 1900-01-01 since N74, and the same last date
+Transactions have no first date since D-P4 (26/10/2026; the floor was 1900-01-01 since N74) and keep the same last date
 ([Transaction dates](../transactions/service.md#transaction-dates), where the code is
 `dateOutOfRange`). The web app's data editors tell these 422s in the interface language, naming
 the dates refused and the last day a date may carry (*N dates are after …*,

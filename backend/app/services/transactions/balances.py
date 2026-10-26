@@ -16,7 +16,6 @@ from backend.app.services.financial_math.ledger_totals import position_quantitie
 from backend.app.services.financial_math.native_cash import cash_movement_from_transaction, native_balances
 from backend.app.services.transactions.transaction_batch_context import BalanceValidationError
 from backend.app.services.transactions.unreadable_rows import UnreadableLedgerError, count_unreadable_rows
-from backend.app.utils.datetime_utils import EARLIEST_RANGE_START
 
 
 class TransactionBalancesMixin:
@@ -62,7 +61,7 @@ class TransactionBalancesMixin:
         if unreadable:
             raise BalanceValidationError(
                 broker_id=broker_id,
-                date=from_date if from_date is not None else EARLIEST_RANGE_START,
+                date=from_date if from_date is not None else date_type.min,
                 currency_or_asset="",
                 balance=Decimal("0"),
                 message=f"The balances of broker {broker_id} cannot be checked: {unreadable} of its transactions hold a value that is not a number",

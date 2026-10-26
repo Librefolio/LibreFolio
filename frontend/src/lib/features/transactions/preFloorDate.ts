@@ -1,16 +1,17 @@
 /**
  * preFloorDate.ts — the warning for a transaction dated before 1 January 1900 (D-P4, W5-10).
  *
- * A date that early is almost always a typo (`1024` for `2024`, `1925` for `2025`). The backend still refuses a
- * transaction before 1900-01-01 today (the floor stays until the steps of MF, J and Y have lifted it), so this is the
- * early warning: the form, the bulk editor and the import review tell the user, and ask for one confirmation before the
- * save goes on. Nothing here refuses a date; it only asks.
+ * A date that early is almost always a typo (`1024` for `2024`, `1925` for `2025`). The backend writes it (D-P4,
+ * 26/10/2026: a transaction of 1850, or of the year 1, is stored like any other and replayed from its own day; only the
+ * forward ceiling, tomorrow, is still refused), so this is the only protection against the typo: the form, the bulk
+ * editor and the import review tell the user, and ask for one confirmation before the save goes on. Nothing here refuses
+ * a date; it only asks.
  *
  * Dates are `YYYY-MM-DD` text, compared as text: a four-digit year makes the text order the calendar order.
  */
 import type {ImportTodo} from '$lib/features/transactions/txPayloadHelpers';
 
-/** The first day the backend accepts for a transaction (`EARLIEST_RANGE_START`). */
+/** The first day of 1900: a date before it asks for a confirmation (it is no longer a limit of the backend). */
 export const PRE_FLOOR_DATE_LIMIT = '1900-01-01';
 
 /** The reason code of the todo the import review puts on such a row. */
