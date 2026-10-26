@@ -383,20 +383,10 @@ STEPS_BUDGET = 50
 PEAK_BYTES = 100 * 1024 * 1024
 
 
-def _lower_the_floor(monkeypatch: pytest.MonkeyPatch, floor: date) -> list[str]:
-    """``EARLIEST_RANGE_START`` is ``floor`` in this process only, in the module that defines it and in every backend module that imported it by value."""
-    patched = []
-    for name, module in list(sys.modules.items()):
-        if name.startswith("backend.app") and module is not None and "EARLIEST_RANGE_START" in vars(module):
-            monkeypatch.setattr(module, "EARLIEST_RANGE_START", floor)
-            patched.append(name)
-    return patched
-
-
 @pytest.mark.asyncio
 async def test_red_a_buy_typed_in_year_one_costs_steps_not_days(session, keep_alive, monkeypatch):
-    """RED until J5-5. A BUY dated 3 Jan of year 1 (a typo) at a broker, the position still held, the prices stored only for 2024 (Monday closes), the
-    floor of the product lowered to 1 Jan of year 1 in this test's process only, the window open at the start (the whole life): the series of the position
+    """A BUY dated 3 Jan of year 1 (a typo) at a broker, the position still held, the prices stored only for 2024 (Monday closes), no floor (D-P4, L1 and L2:
+    the engine starts on the first row), the window open at the start (the whole life): the series of the position
     has few steps (under 50: the first, from year 1 to the first close, and about one a week after it), and the peak of ``tracemalloc`` is under 100 MB.
 
     The guard: the daily series asks ``_PositionReader.on`` once per calendar day (739 912 days here); a spy raises after 5 000 calls, so that today the
@@ -413,8 +403,6 @@ async def test_red_a_buy_typed_in_year_one_costs_steps_not_days(session, keep_al
         base._tx(broker, asset, T.BUY, YEAR_ONE_DAY, "10", "-1000"),
         *_mondays(asset, date(2024, 1, 1), TO),
     )
-    # D-P4 L1 takes the engine's floor away: until it lands the floor is lowered where the engine reads it, after it there is nothing to lower
-    _lower_the_floor(monkeypatch, date(1, 1, 1))
 
     calls = [0]
     original_on = position_series_module._PositionReader.on
