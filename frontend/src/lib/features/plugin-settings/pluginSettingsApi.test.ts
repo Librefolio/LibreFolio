@@ -38,11 +38,14 @@ import {AxiosError, AxiosHeaders, type AxiosAdapter, type AxiosResponse, type In
 import {ApiError, axiosInstance, zodiosApi} from '$lib/api';
 import {entryOf, fetchPluginEntry, fetchPluginSettings, fieldOf, savePluginSettings, type PluginSettingsEntry, type PluginSettingWriteItem, type SaveOutcome, type SettingField} from './pluginSettingsApi';
 
+// A plain table of functions: the generated client's own type has grown past what TypeScript will instantiate for spyOn
+const api = zodiosApi as unknown as Record<string, (...args: unknown[]) => unknown>;
+
 /** What `GET /settings/plugins` answers, as the generated client types it. */
 type CatalogAnswer = Awaited<ReturnType<typeof zodiosApi.get_plugin_settings_api_v1_settings_plugins_get>>;
 
-const readAlias = () => vi.spyOn(zodiosApi, 'get_plugin_settings_api_v1_settings_plugins_get');
-const writeAlias = () => vi.spyOn(zodiosApi, 'update_plugin_settings_api_v1_settings_plugins_bulk_patch');
+const readAlias = () => vi.spyOn(api, 'get_plugin_settings_api_v1_settings_plugins_get');
+const writeAlias = () => vi.spyOn(api, 'update_plugin_settings_api_v1_settings_plugins_bulk_patch');
 
 /** An answer of the wrong shape, handed to the alias as the client would hand it over. */
 const answered = (value: unknown) => value as CatalogAnswer;

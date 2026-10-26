@@ -5,7 +5,7 @@ These schemas are separate from auth.py to keep authentication-specific
 schemas distinct from general user info schemas.
 """
 
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import EmailStr, Field, model_validator
 
@@ -166,3 +166,38 @@ class OnboardingResetRequest(StrictModel):
     """Which onboarding flow to put back to pending; all of them when omitted."""
 
     flow: Optional[OnboardingFlow] = None
+
+
+class OverLimitUserRead(StrictModel):
+    """An active account in the choice of who keeps the access (A5-7). No password, no token: what the administrator needs to choose."""
+
+    id: int
+    username: str
+    email: str
+    is_superuser: bool
+    protected: Optional[Literal["owner", "you"]] = Field(None, description="owner: the paying administrator of a managed instance, who always stays; you: the administrator who chooses, when there is no owner to protect")
+    owned_brokers_alone: int = Field(..., ge=0, description="How many brokers this account is the only owner of: the others lose their access to them until it is reactivated")
+
+
+class OverLimitRead(StrictModel):
+    """The state over the user limit and what to choose from; ``users`` is empty when the instance is not over the limit."""
+
+    over_limit: bool
+    active: int = Field(..., ge=0, description="Active accounts")
+    max_users: Optional[int] = None  # LIBREFOLIO_MAX_USERS. No description: with one the client generator types a nullable number as a number or an array
+    live_invites: int = Field(..., ge=0, description="Live invitations: they take places and are revoked, newest first, only as far as the kept accounts need theirs")
+    waiting_accounts: int = Field(..., ge=0, description="Inactive accounts waiting for their verification or their setup: their places cannot be freed here")
+    max_keep: int = Field(..., ge=0, description="Most accounts that may be kept: the limit less the accounts that wait")
+    users: list[OverLimitUserRead]
+
+
+class OverLimitResolveRequest(StrictModel):
+    """Who keeps the access: every other active account is deactivated, never deleted."""
+
+    keep_user_ids: list[int] = Field(..., description="The ids of the active accounts to keep")
+
+
+class OverLimitResolveResponse(StrictModel):
+    kept: int
+    deactivated: int
+    revoked_invites: int

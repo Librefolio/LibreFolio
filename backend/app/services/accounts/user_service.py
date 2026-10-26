@@ -483,6 +483,19 @@ async def update_user_status(
     return None
 
 
+async def deactivate_for_limit(session: AsyncSession, user: User) -> None:
+    """Deactivate an active ``user`` chosen to lose the access because the instance is over its limit of users (A5-7). Not committed.
+
+    The caller holds SQLite's write lock and has decided: the last-administrator rule is its own check (it keeps an
+    administrator). As ``update_user_status(is_active=False)`` does: the verification and setup links are retired and the
+    sessions end; nothing is deleted.
+    """
+    await _apply_active_flag(session, user, False, False)
+    await end_sessions(session, user)
+    user.updated_at = utcnow()
+    session.add(user)
+
+
 async def _apply_active_flag(session: AsyncSession, user: User, is_active: Optional[bool], waiting: bool) -> bool:
     """The ``is_active`` part of ``update_user_status``, under its lock: whether anything changed. Not committed.
 
