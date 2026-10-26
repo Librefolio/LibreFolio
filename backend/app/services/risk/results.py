@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from collections.abc import Set as AbstractSet
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Optional
 
 from sqlalchemy import select
@@ -35,6 +36,7 @@ from backend.app.schemas.risk import (
     RiskWarning,
 )
 from backend.app.services.financial_math.returns import observed_annualization
+from backend.app.services.financial_math.series_steps import value_at
 from backend.app.services.risk.base import (
     RiskComputation,
     RiskExecutionContext,
@@ -50,6 +52,12 @@ from backend.app.services.risk.scope import ScopeInputs, scope_exclusions, scope
 # What the scope says about its per-asset composition: the assets left without a series, and a
 # zero-return residual that includes value in transit. Neither enters the portfolio TWRR.
 _COMPOSITION_WARNING_CODES = frozenset({"assets_excluded", "zero_risk_residual_includes_in_transit"})
+
+
+def _days(first: date, last: date) -> Iterator[date]:
+    """The calendar days ``first``..``last``, both included."""
+    for offset in range((last - first).days + 1):
+        yield first + timedelta(days=offset)
 
 
 def held_quote_dates(prepared: PreparedAssetSeriesSet, held_asset_ids: tuple[int, ...]) -> frozenset[date]:
@@ -71,23 +79,29 @@ def portfolio_twrr_returns(
 ]:
     """The portfolio TWRR as period returns, read on the observation days (developer's decision of 30/09/2026).
 
-    The report has one TWRR point per calendar day, so a day on which nothing held was quoted is a
-    zero return that no market produced. With `observation_dates` — the days a held asset was quoted —
-    only those points are kept after the baseline, and each return is chain-linked from the cumulative
-    TWRR across the days dropped, so the TWRR stays exact; coverage is then measured against those
-    days, not against the calendar. With none (nothing held has a quote), every calendar day is kept.
+    The report gives its TWRR as steps (D-P4): a point holds from its ``date`` to its ``through``, and the cumulative TWRR of a
+    day is the point's that holds it. A day on which nothing held was quoted is a zero return that no market produced. With
+    `observation_dates` — the days a held asset was quoted — only those days are kept after the baseline, and each return is
+    chain-linked from the cumulative TWRR across the days dropped, so the TWRR stays exact; coverage is then measured against
+    those days, not against the calendar. With none (nothing held has a quote), every calendar day is kept.
     """
     if report is None or not report.history:
         return None, (), (), 0, None, 0.0
-    points = [point for point in report.history if point.twrr is not None]
+    with_twrr = [step for step in report.history if step.twrr is not None]
+    if not with_twrr:
+        return None, (), (), 0, None, 0.0
+    baseline_day, last_day = with_twrr[0].date, with_twrr[-1].through
     if observation_dates:
-        points = points[:1] + [point for point in points[1:] if point.date in observation_dates]
+        kept_days = [baseline_day, *(day for day in sorted(observation_dates) if baseline_day < day <= last_day and (step := value_at(report.history, day)) is not None and step.twrr is not None)]
+        points = [(day, value_at(report.history, day).twrr) for day in kept_days]
+    else:
+        points = [(day, step.twrr) for step in with_twrr for day in _days(max(step.date, baseline_day), step.through)]
     if len(points) < 2:
         return None, (), (), 0, None, 0.0
-    cumulative = [float(point.twrr) for point in points]
+    cumulative = [float(twrr) for _day, twrr in points]
     returns = tuple(period_returns_from_cumulative(cumulative))
-    return_dates = tuple(point.date for point in points[1:])
-    baseline = points[0].date
+    return_dates = tuple(day for day, _twrr in points[1:])
+    baseline = points[0][0]
     calendar_days = (return_dates[-1] - baseline).days
     annualization_factor = observed_annualization(len(returns), baseline, return_dates[-1])[1] if calendar_days > 0 else None
     if observation_dates:

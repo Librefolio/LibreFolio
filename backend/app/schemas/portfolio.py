@@ -238,10 +238,6 @@ class DataQualityReport(StrictModel):
     missing_price_assets: List[MissingPriceAsset] = Field(default_factory=list)
     missing_fx_pairs: List[WACMissingPairInfo] = Field(default_factory=list)
     stale_prices: List[StalePriceAsset] = Field(default_factory=list)
-    incomplete_nav_dates: List[date_type] = Field(default_factory=list)
-    incomplete_book_value_dates: List[date_type] = Field(default_factory=list)
-    incomplete_allocation_dates: List[date_type] = Field(default_factory=list)
-    incomplete_valuation_dates: List[date_type] = Field(default_factory=list)
     incomplete_nav_ranges: List[DateSpan] = Field(default_factory=list, description="The days with an incomplete NAV, as ranges (D-P4)")
     incomplete_book_value_ranges: List[DateSpan] = Field(default_factory=list)
     incomplete_allocation_ranges: List[DateSpan] = Field(default_factory=list)
@@ -261,7 +257,7 @@ class DataQualityReport(StrictModel):
     @property
     def data_quality_status(self) -> DataQualityStatus:
         """Derive status so legacy producers cannot emit contradictory values."""
-        if self.missing_price_assets or self.missing_fx_pairs or self.incomplete_nav_dates or self.incomplete_book_value_dates or self.incomplete_allocation_dates or self.incomplete_valuation_dates or self.unresolved_fx_pairs or self.unusable_assets:
+        if self.missing_price_assets or self.missing_fx_pairs or self.incomplete_nav_ranges or self.incomplete_book_value_ranges or self.incomplete_allocation_ranges or self.incomplete_valuation_ranges or self.unresolved_fx_pairs or self.unusable_assets:
             return DataQualityStatus.PARTIAL
         if self.stale_prices or self.carried_forward_price_points or self.carried_forward_fx_points:
             return DataQualityStatus.CARRIED_FORWARD
@@ -974,11 +970,10 @@ class LotTimelineEventSchema(StrictModel):
     )
 
 
-class LotValueHistoryPoint(StrictModel):
+class LotValueHistoryPoint(StepSpan):
     """Per-lot value history point."""
 
     lot_id: int
-    date: date_type
     open_value: SafeDecimal
     proceeds: SafeDecimal
     total_value: SafeDecimal
@@ -990,11 +985,10 @@ class LotValueHistoryPoint(StrictModel):
     net_pnl: Optional[SafeDecimal] = Field(default=Decimal("0"), description="pnl - allocated_fees - allocated_taxes up to date, in target_currency; None when fees or taxes are unknown.")
 
 
-class LotReturnHistoryPoint(StrictModel):
+class LotReturnHistoryPoint(StepSpan):
     """Per-lot relative return point."""
 
     lot_id: int
-    date: date_type
     total_return: Optional[SafeDecimal] = Field(
         None,
         description="(OpenValue(t)+Proceeds(t)+Income(t))/OriginalCost - 1. Includes asset-linked income. Computable when original_cost != 0.",
@@ -1005,11 +999,10 @@ class LotReturnHistoryPoint(StrictModel):
     net_total_return: Optional[SafeDecimal] = Field(None, description="(total_value + income - allocated_fees - allocated_taxes)/original_cost - 1, when original_cost != 0.")
 
 
-class LotPriceHistoryPoint(StrictModel):
+class LotPriceHistoryPoint(StepSpan):
     """Per-lot market price point."""
 
     lot_id: int
-    date: date_type
     market_price: SafeDecimal
     currency: str = Field(..., description="Currency of market_price, normally equal to response target_currency.")
     estimated: bool = Field(default=False, description="True when market_price is estimated from the last-known trade (no real market quote on/before this date), False for an actual price-history quote.")
@@ -1020,10 +1013,9 @@ class LotPriceHistoryPoint(StrictModel):
         return Currency.validate_code(v)
 
 
-class MarketPriceHistoryPoint(StrictModel):
+class MarketPriceHistoryPoint(StepSpan):
     """The asset's market price on one day, whatever lots are open (Y-30): a LotPriceHistoryPoint without lot_id."""
 
-    date: date_type
     market_price: SafeDecimal
     currency: str = Field(..., description="Currency of market_price: the response target_currency.")
     estimated: bool = Field(default=False, description="True when market_price is estimated from the last-known trade (no real market quote on/before this date), False for an actual price-history quote, exact or carried forward.")
@@ -1034,27 +1026,24 @@ class MarketPriceHistoryPoint(StrictModel):
         return Currency.validate_code(v)
 
 
-class BrokerWACHistoryPoint(StrictModel):
+class BrokerWACHistoryPoint(StepSpan):
     """Broker-scoped WAC time-series point for selected asset."""
 
-    date: date_type
     broker_id: int
     wac: SafeDecimal
     pool_qty: SafeDecimal
 
 
-class CumulativeWACHistoryPoint(StrictModel):
+class CumulativeWACHistoryPoint(StepSpan):
     """Combined WAC time-series point across requested brokers."""
 
-    date: date_type
     wac: SafeDecimal
     pool_qty: SafeDecimal
 
 
-class PerformanceHistoryPoint(StrictModel):
+class PerformanceHistoryPoint(StepSpan):
     """Asset-level ROI/TWRR time-series point (whole asset in filtered broker scope, independent of selected_lot_ids)."""
 
-    date: date_type
     roi: Optional[SafeDecimal] = Field(None, description="Simple ROI at this date, None if not computable (e.g. no cash flow yet).")
     twrr: Optional[SafeDecimal] = Field(None, description="Cumulative TWRR at this date, None if not computable.")
 
@@ -1163,6 +1152,10 @@ class LotsAnalysisResponse(StrictModel):
     )
     calculation_status: LotAnalysisStatus
     calculation_metadata: LotsAnalysisMetadata
+    range: Optional[DateSpan] = Field(
+        None,
+        description="The days the histories cover: the first day of the window with data (the later of the requested start and the scope's first transaction) to its last day. None when the window holds no day. Every history point holds from its `date` to its `through`, both inside it.",
+    )
     data_quality: Optional[DataQualityReport] = None
     lots: Optional[List[LotSummarySchema]] = Field(None, description="LOT_SUMMARY payload.")
     gantt_segments: Optional[List[GanttSegmentSchema]] = Field(None, description="GANTT_TOPOLOGY payload.")
@@ -1742,3 +1735,66 @@ class PortfolioReportResponse(StrictModel):
     cost_history: Optional[CostHistorySeries] = Field(None, description="Signed FEE+TAX cost history (batch 2). Only when include_cost_history=True.")
     deposit_history: Optional[DepositHistorySeries] = Field(None, description="DEPOSIT history (batch 2). Only when include_deposit_history=True.")
     acquisition_funding: Optional[AcquisitionFundingSeries] = Field(None, description="New-vs-reinvested BUY funding split (batch 2). Only when include_acquisition_funding=True.")
+
+
+# =============================================================================
+# POSITIONS SERIES — the daily series of the chosen positions (#48, J5-1)
+# =============================================================================
+
+
+class PositionKey(StrictModel):
+    """A position asked for: an asset at one broker, or at all the brokers of the scope."""
+
+    asset_id: int
+    broker_id: Optional[int] = Field(None, description="Broker that holds the position. None = the asset summed over the brokers of the scope.")
+
+
+class PositionsSeriesQuery(StrictModel):
+    """Request body for POST /portfolio/positions-series: the daily series of the chosen positions, and only those."""
+
+    broker_ids: Optional[List[int]] = Field(None, description="Broker filter, as the report's. None = all accessible brokers.")
+    date_range: Optional[OpenDateRangeModel] = Field(None, description="The window of the chart: its start is the period's start (every figure is the result since it). None = full history.")
+    target_currency: Optional[str] = Field(None, description="Override base currency (ISO 4217).")
+    positions: List[PositionKey] = Field(..., min_length=1, max_length=50, description="The positions to draw (max 50), as the rows of the Portfolio table: (asset, broker).")
+
+
+class PositionSeriesPoint(StepSpan):
+    """One step of a position's series, in the report currency and at the owner's share: the figures hold from `date` to `through`, both included."""
+
+    quantity: SafeDecimal = Field(..., description="Units held; 0 on the day the position closes")
+    market_value: Optional[SafeDecimal] = Field(None, description="Value as the portfolio values it that day; 0 once closed; None when it cannot be valued (missing price or rate)")
+    cost_basis: Optional[SafeDecimal] = Field(None, description="Historical cost of the open quantity; None when it is incomplete")
+    pnl: Optional[SafeDecimal] = Field(
+        None, description="The position's result since the window's start, the Performance table's period P&L at this day: the change of the unrealized result + realized + income - fees and taxes. A sum of the parts that are known when `complete` is False; None when none is."
+    )
+    base: Optional[SafeDecimal] = Field(None, description="The capital the percent is on: |value at the window's start| + the cost of what is bought after it + what an internal transfer brings in, at its value on arrival. A sale never lowers it. None when the start value is unknown.")
+    pnl_percent: Optional[SafeDecimal] = Field(None, description="pnl / base, a fraction (0.12 = 12 %), unrounded; None when the base is 0 or unknown. «Base 100» is 1 + pnl_percent.")
+    valuation_source: Optional[Literal["MARKET_PRICE", "LAST_TRADE_PRICE", "ESTIMATED_AT_COST", "MISSING"]] = Field(None, description="How the value was found, as the holdings report it; None when the position is not held that day")
+    complete: bool = Field(True, description="False when a boundary value of the unrealized result is unknown that day, so `pnl` leaves that part out")
+
+
+class PositionSeries(StrictModel):
+    """The series of one asked position."""
+
+    key: PositionKey
+    asset_name: str
+    asset_ticker: Optional[str] = None
+    broker_name: Optional[str] = Field(None, description="None for an asset summed over the brokers")
+    first_date: Optional[date_type] = Field(None, description="First day with a point: the window's start if the position is held then, else the first day held; None if never held in the window")
+    last_date: Optional[date_type] = Field(None, description="The window's end while the position is held, else the day it went to 0")
+    held_at_start: bool = False
+    held_at_end: bool = False
+    closed_on: Optional[date_type] = Field(None, description="The day the position went to 0 for good; None while it is held")
+    complete: bool = Field(True, description="False when any point is not complete")
+    points: List[PositionSeriesPoint] = Field(default_factory=list, description="Steps, contiguous from first_date to last_date: each holds from its `date` to its `through` while nothing changes")
+
+
+class PositionsSeriesResponse(StrictModel):
+    """Response for POST /portfolio/positions-series."""
+
+    currency: str
+    date_from: date_type
+    date_to: date_type
+    range: DateSpan = Field(..., description="The window of the chart: `date_from` to `date_to`. Every point of every series holds inside it, from its `date` to its `through`.")
+    series: List[PositionSeries] = Field(default_factory=list, description="In the order asked; a position never held in the window has points = []")
+    missing_fx_pairs: List[str] = Field(default_factory=list, description="Pairs the engine could not convert in the window: the values that depend on them are None")
