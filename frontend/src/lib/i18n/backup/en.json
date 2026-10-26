@@ -151,7 +151,8 @@
         },
         "expires": "The checked copy is kept until {date}.",
         "drop": "Drop this archive",
-        "ownAccountMissing": "Your account is not among the administrators of this backup: after the restart you cannot sign in with it."
+        "ownAccountMissing": "Your account is not among the administrators of this backup: after the restart you cannot sign in with it.",
+        "usersOverLimit": "This backup holds {active} active accounts, but this instance accepts {limit}. The restore goes on; when an administrator signs in, they choose who keeps access, and the others are deactivated, not deleted."
       },
       "confirm": {
         "word": "restore",

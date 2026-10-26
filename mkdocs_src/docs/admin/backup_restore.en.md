@@ -237,7 +237,7 @@ A restore replaces the data of the installation with the archive's: the database
     - the ledger totals: the same as when the backup was made, different on the lines listed ([how to read them](backup_moving.md#check-refused)), not recorded, recorded by another version of the method, or unreadable;
     - the administrators of the backup, with *After the restore you sign in with one of them, with the password of then; every session open now ends.*
     - *Invitations and links sent before the restore will have expired: send them again if needed.*
-    - the warnings, which let the restore go on, and the blocker, which forbids it: a backup without an active administrator;
+    - the warnings, which let the restore go on, among them a backup with more active accounts than the plan allows ([More Accounts Than the Plan Allows](#users-limit)), and the blocker, which forbids it: a backup without an active administrator;
     - until when the checked copy is kept: 24 hours after the check.
 
     **Drop this archive** drops the check and its copy: nothing is restored.
@@ -326,6 +326,15 @@ A restore confirmed on the command line (`backup restore`) or by the hosting pan
 - 🛑 **A backup with owner conflicts** (two accounts on one address or one name, the owner's address as another account's name, an administrator still waiting for its setup link) is refused here as from the app, with `owner_conflict`: the command prints `❌ <reason> (owner_conflict)` and the panel answers HTTP 409. Remove the duplicate account or free the address in the instance the backup comes from, make a new backup, and check it again.
 - 🔁 **A report read for another owner's address** than the current one is refused with `restore_stage_outdated`: check the archive again.
 - ❌ **If the assignment fails after the swap** (a refusal such as the address already taken), the instance serves nothing but the recovery until `./dev.py backup pending --recover owner` ([Follow or Cancel a Restore](cli_backup.md#backup-pending)): now for a restore from the command line or the panel too, not only from the app.
+
+### 👥 More Accounts Than the Plan Allows {: #users-limit }
+
+A restore is **never refused** because the backup holds more active accounts than `LIBREFOLIO_MAX_USERS` allows. The check only warns you, before you confirm: in the app, in the report of `backup restore` and in the report the hosting panel reads. For instance, a backup that holds *anna*, *bruno*, *carla*, *dario* and *elena* as active accounts, restored on an instance that accepts 3, is confirmed like any other.
+
+- 🧮 **What it counts.** The active accounts of the backup, plus, on a `managed` instance with `LIBREFOLIO_ADMIN_EMAIL` set, the inactive account that holds the owner's address: the restore activates it ([The Owner's Account on a Hosted Instance](#owner-account)). The warning appears when that number is above the limit. It carries the two numbers, the accounts counted and the limit, and no name and no address.
+- 🔢 **A limit that is not a number** is no limit for this warning: a typo in `LIBREFOLIO_MAX_USERS` never makes it appear. With no limit set, there is nothing to warn about.
+- 🖱️ **In the app,** the report window shows a notice apart from the other warnings, such as *This backup holds 5 active accounts, but this instance accepts 3.* The confirmation does not change: you type the word, and choose the owner's account when it is asked. [From the command line](cli_backup.md#backup-restore), `restore --yes` and `--dry-run` go on as for any other backup.
+- 🪪 **After the restore,** at the first sign-in of an administrator the instance sees more active accounts than the plan allows, and asks that administrator to choose who keeps access. The others are **deactivated**, never deleted: a deactivated account keeps its password and its data, so reactivating it brings it back as it was, when a place is free. The full backup can be downloaded first from that screen.
 
 ### ⌨️ Restore from the Command Line {: #restore-command }
 

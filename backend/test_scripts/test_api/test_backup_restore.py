@@ -1893,9 +1893,10 @@ async def test_a_check_dropped_while_a_poll_probes_its_lock_is_not_found(instanc
 
 TOTALS_STATUSES = {"same", "changed", "absent", "other_version", "unreadable"}
 #: Every warning code of ``RestoreStageReport.warnings``: the five of before E-19b1, then ``non_iso_currencies`` (E-19b1:
-#: the copy holds stored currency values that are not ISO 4217 codes), then the two of lot L3, ``credentials_from_backup``
+#: the copy holds stored currency values that are not ISO 4217 codes), then ``users_over_limit`` (B5-1k2: the backup holds
+#: more active accounts than ``LIBREFOLIO_MAX_USERS``), then the two of lot L3, ``credentials_from_backup``
 #: (every report) and ``confirming_account_not_in_backup`` (added per viewer by the route).
-STAGE_WARNINGS = {"rows_changed", "foreign_key_violations", "foreign_key_violations_added", "control_totals_changed", "control_totals_unreadable", "non_iso_currencies", "credentials_from_backup", "confirming_account_not_in_backup"}
+STAGE_WARNINGS = {"rows_changed", "foreign_key_violations", "foreign_key_violations_added", "control_totals_changed", "control_totals_unreadable", "non_iso_currencies", "users_over_limit", "credentials_from_backup", "confirming_account_not_in_backup"}
 TOTALS_DIFFERENCE_FIELDS = {"kind", "broker_id", "currency", "asset_id", "before", "after"}
 
 
@@ -1984,7 +1985,7 @@ def test_openapi_documents_the_totals_of_the_report():
     missing = [field for field in cases.TOTALS_FIELDS if field not in report]
     assert missing == [], f"RestoreStageReport documents the totals: {missing} missing"
     assert enum_of(report["control_totals"], schemas) == TOTALS_STATUSES, f"the five statuses: {report['control_totals']}"
-    assert enum_of(report["warnings"]["items"], schemas) == STAGE_WARNINGS, f"the eight warnings, the two of the totals and the two of the accounts (L3) included: {report['warnings']}"
+    assert enum_of(report["warnings"]["items"], schemas) == STAGE_WARNINGS, f"the nine warnings, the two of the totals, users_over_limit (B5-1k2) and the two of the accounts (L3) included: {report['warnings']}"
     assert report["control_totals_differences"].get("items") == {"$ref": "#/components/schemas/RestoreTotalsDifference"}, f"a list of RestoreTotalsDifference: {report['control_totals_differences']}"
     assert report["control_totals_differences_count"].get("type") == "integer", f"a count: {report['control_totals_differences_count']}"
     difference = schemas.get("RestoreTotalsDifference", {}).get("properties", {})
