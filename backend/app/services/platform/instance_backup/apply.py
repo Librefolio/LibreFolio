@@ -185,9 +185,10 @@ class RestoreState(BaseModel):
     waiting: WaitReason | None = None
     #: The session version every account got at the commit: the restore time in milliseconds (decision 40).
     session_version: int | None = None
-    #: B5-1: the account of the backup the owner chose (a restore confirmed from the app of a managed instance); what the
-    #: first start did with it (``sent``, ``link_only`` or ``error:<CODE>``). The owner's link is never kept: for
-    #: ``link_only`` A writes it in the instance log.
+    #: B5-1: the account of the backup the owner chose (a restore confirmed from the app of a managed instance), or that
+    #: B5-1j picked (confirmed on the command line or by the hosting panel); what the first start did with it (``sent``,
+    #: ``link_only`` or ``error:<CODE>``), or ``none`` recorded at the confirmation when nobody could be picked. The
+    #: owner's link is never kept: for ``link_only`` A writes it in the instance log.
     owner_user_id: int | None = None
     owner_outcome: str | None = None
     #: B5-1d: the largest id of the one-time links the restored database held right after the swap, taken by this
@@ -254,7 +255,8 @@ class RestoreOwnerChoiceInvalidError(RestoreStateError):
 
 class RestoreOwnerConflictError(RestoreStateError):
     """The backup holds what would defeat the owner's assignment: two accounts on one address or one name, or the owner's
-    address as another account's name (B5-1). Its restore from the app of a managed instance is refused."""
+    address as another account's name (B5-1). Its restore to a managed instance that has the owner's address is refused,
+    from the app, the command line or the hosting panel (B5-1j), with what to do."""
 
     code = "owner_conflict"
 
@@ -624,41 +626,105 @@ def owner_choices(candidates, owner_email: str) -> tuple[frozenset[int], int | N
     return frozenset(candidate.user_id for candidate in candidates if candidate.is_superuser and candidate.is_active), None
 
 
-def _check_owner_choice(report, confirmed_via: str, owner_user_id: int | None) -> None:
-    """The owner's choice of a confirmation (B5-1): mandatory, and one of the report's, for a restore confirmed from the
-    app of a managed instance; refused elsewhere. The hosting panel and the command line never name one."""
+@dataclass(frozen=True)
+class OwnerPick:
+    """The account a restore with nobody to ask gives the owner (B5-1j): ``how`` is ``holds_address`` (it already has the
+    owner's address), ``marked`` (the one active administrator the backup marks as its owner) or ``none``."""
+
+    user_id: int | None
+    username: str | None
+    how: Literal["holds_address", "marked", "none"]
+
+
+def pick_owner(candidates, owner_email: str) -> OwnerPick:
+    """The owner's account of a restore confirmed on the command line or by the hosting panel of a managed instance, from
+    the report's candidates, in this order: (1) the account that holds the owner's address, whatever its role (the
+    comparison ``owner_choices`` makes); (2) the one active administrator the backup marks as its owner; (3) nobody. Two
+    marked, or a marked account that is not an active administrator, is nobody: never the first by id. The mark is written
+    by whoever prepared the backup, so it only suggests which account; the restore closes that account's password whatever
+    the choice, and the owner's link goes to ``LIBREFOLIO_ADMIN_EMAIL``, never to an address of the backup."""
+    from backend.app.services.accounts.user_service import same_email  # noqa: PLC0415
+
+    holder = next((candidate for candidate in candidates if candidate.email is not None and same_email(candidate.email, owner_email)), None)
+    if holder is not None:
+        return OwnerPick(holder.user_id, holder.username, "holds_address")
+    marked = [candidate for candidate in candidates if candidate.is_instance_owner and candidate.is_superuser and candidate.is_active]
+    if len(marked) == 1:
+        return OwnerPick(marked[0].user_id, marked[0].username, "marked")
+    return OwnerPick(None, None, "none")
+
+
+def owner_plan(report) -> OwnerPick | None:
+    """What a restore with nobody to ask does about the owner, for the command line's report: ``None`` where it does
+    nothing (not a managed instance, or no ``LIBREFOLIO_ADMIN_EMAIL``)."""
     from backend.app.services.platform.instance_backup.owner import configured_owner_email, owner_choice_required  # noqa: PLC0415 — owner imports this module
 
-    if confirmed_via != "admin" or not owner_choice_required():
-        if owner_user_id is not None:
-            raise RestoreOwnerChoiceNotApplicableError("No owner's account is chosen for this restore")
-        return
+    owner_email = configured_owner_email() if owner_choice_required() else None
+    return None if owner_email is None else pick_owner(report.owner_candidates, owner_email)
+
+
+#: The outcome recorded at the confirmation of a restore that found nobody for the owner: ``backup pending`` says so.
+OWNER_OUTCOME_NONE = "none"
+
+#: What to do about a backup the owner's assignment would refuse: said in the refusal.
+_OWNER_CONFLICT_ADVICE = "remove the duplicate account or free the address in the instance the backup comes from, make a new backup, and check it again"
+
+
+def _check_owner_report(report, owner_email: str) -> None:
+    """The report must have been read for this owner's address (the candidates depend on it) and hold nothing that would
+    defeat the owner's assignment; a refusal says what to do."""
     from backend.app.services.accounts.user_service import email_fold  # noqa: PLC0415
 
-    owner_email = configured_owner_email()
-    if owner_email is None:
-        raise RestoreOwnerEmailNotSetError("LIBREFOLIO_ADMIN_EMAIL is not set: no owner to give an account to")
-    # The candidates were read for the address of the check: another address, or a report written before, is checked again.
     if report.owner_email_checked is None or email_fold(report.owner_email_checked) != email_fold(owner_email):
         raise RestoreStageOutdatedError("The owner's address changed since the check: check the archive again")
     if report.owner_conflicts:
-        raise RestoreOwnerConflictError(f"The backup cannot give the owner their account: {', '.join(report.owner_conflicts)}")
+        raise RestoreOwnerConflictError(f"The backup cannot give the owner their account: {', '.join(report.owner_conflicts)}. To restore it: {_OWNER_CONFLICT_ADVICE}")
+
+
+def _check_owner_choice(report, confirmed_via: str, owner_user_id: int | None) -> tuple[int | None, str | None]:
+    """The owner's account of a confirmation, and the outcome to record at once (B5-1, B5-1j).
+
+    From the app of a managed instance (``admin``): the owner's choice, mandatory and one of the report's. By the hosting
+    panel or on the command line of a managed instance with ``LIBREFOLIO_ADMIN_EMAIL`` set: nobody chooses, so the
+    account is picked from the report (``pick_owner``); ``none`` is recorded when nobody can be. Elsewhere none, and a
+    choice named is refused. Where the account is chosen or picked, the report must have been read for this owner's
+    address, and must hold no conflict."""
+    from backend.app.services.platform.instance_backup.owner import configured_owner_email, owner_choice_required  # noqa: PLC0415 — owner imports this module
+
+    by_the_app = confirmed_via == "admin"
+    if owner_user_id is not None and (not owner_choice_required() or not by_the_app):
+        raise RestoreOwnerChoiceNotApplicableError("No owner's account is chosen for this restore")
+    if not owner_choice_required():
+        return None, None
+    owner_email = configured_owner_email()
+    if owner_email is None:
+        if by_the_app:
+            raise RestoreOwnerEmailNotSetError("LIBREFOLIO_ADMIN_EMAIL is not set: no owner to give an account to")
+        return None, None  # nobody to ask and no trusted address: as before, no owner is named
+    _check_owner_report(report, owner_email)
+    if not by_the_app:
+        picked = pick_owner(report.owner_candidates, owner_email)
+        if picked.user_id is None:
+            logger.warning("No account of the backup can be taken for the owner: the restore goes on without one; name one afterwards with ./dev.py user reassign-owner <username>")
+            return None, OWNER_OUTCOME_NONE
+        return picked.user_id, None
     if owner_user_id is None:
         raise RestoreOwnerChoiceRequiredError("Choose the account of the backup that becomes the owner's")
     allowed, _forced = owner_choices(report.owner_candidates, owner_email)
     if owner_user_id not in allowed:
         raise RestoreOwnerChoiceInvalidError("This account cannot become the owner's: choose one the report offers")
+    return owner_user_id, None
 
 
 def owner_assignment_problem(data_dir: Path | None = None) -> str | None:
-    """What still keeps the owner from their account after a restore from the app (B5-1), for the restore guard (H):
+    """What still keeps the owner from their account after a restore that names one (B5-1, B5-1j), for the restore guard (H):
     ``pending`` until the first start gave it, the code of the refusal when it could not; ``None`` when there is nothing
     to give (no such restore, done, a state that cannot be read: ``restore_state_problem`` says that one). Never raises."""
     try:
         state = read_restore(data_dir or get_data_dir())
     except Exception:  # noqa: BLE001 — a probe: an unreadable state is restore_state_problem's to report
         return None
-    if state is None or state.status != "committed" or state.confirmed_via != "admin" or state.owner_user_id is None:
+    if state is None or state.status != "committed" or state.owner_user_id is None:
         return None
     if state.owner_outcome is None:
         return "pending"
@@ -672,7 +738,7 @@ def owner_pending(data_dir: Path) -> tuple[str, int] | None:
     if not _state_present(data_dir, "restore-owner"):
         return None
     state = _state_at_start(data_dir)
-    if state is None or state.status != "committed" or state.confirmed_via != "admin" or state.owner_user_id is None or state.owner_outcome is not None:
+    if state is None or state.status != "committed" or state.owner_user_id is None or state.owner_outcome is not None:
         return None
     return state.stage_id, state.owner_user_id
 
@@ -708,7 +774,7 @@ def reset_owner_assignment(data_dir: Path | None = None) -> bool:
             raise RestoreInUseError("The owner's account is being set by another process: run the command again in a moment")
         with _apply_lock(data_dir), _exclusive_serving_lock(data_dir) as served:
             state = _read_state(data_dir)
-            if state is None or state.status != "committed" or state.confirmed_via != "admin" or state.owner_user_id is None or state.owner_outcome is None or not state.owner_outcome.startswith("error:"):
+            if state is None or state.status != "committed" or state.owner_user_id is None or state.owner_outcome is None or not state.owner_outcome.startswith("error:"):
                 raise RestoreOwnerNotFailedError("The owner's account has no failed assignment: nothing to try again")
             code = state.owner_outcome.removeprefix("error:")
             _write_state(data_dir, state.model_copy(update={"owner_outcome": None}))
@@ -751,7 +817,7 @@ def confirm_restore(
     head = alembic_head_revision()
     if head is not None and head != report.head_revision:
         raise RestoreStageOutdatedError("LibreFolio was updated since the check: check the archive again")
-    _check_owner_choice(report, confirmed_via, owner_user_id)
+    owner_user_id, owner_outcome = _check_owner_choice(report, confirmed_via, owner_user_id)
     ensure_private_dir(restore_dir(data_dir), data_dir)
     with _apply_lock(data_dir):
         current = _read_state(data_dir)
@@ -769,6 +835,7 @@ def confirm_restore(
             backup_app_version=report.backup.app_version,
             action=report.action,
             owner_user_id=owner_user_id,
+            owner_outcome=owner_outcome,
         )
         _write_state(data_dir, state)
         # A new restore: no ticket of an older one reads it.

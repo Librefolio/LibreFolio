@@ -650,11 +650,37 @@ def _print_stage_report(report, *, instance_key_given: bool = False) -> None:
         print(f"   Administrators: {', '.join(_safe(name) for name in report.administrators)}")
         print("   After a restore you sign in with one of them, with the password of then; every session open now ends.")
         print("   Invitations and links sent before the restore will have expired: send them again if needed.")
+    for line in _owner_lines(report):
+        print(line)
     for code in report.warnings:
         if code not in _STAGE_WARNINGS_SAID_APART:
             print(f"⚠️  {_STAGE_WARNINGS.get(code, code)}")
     for code in report.blockers:
         print(f"❌ {_STAGE_BLOCKERS.get(code, code)}")
+
+
+#: What to do after a restore that found nobody for the owner (B5-1j): the command arrives with workstream A's lot A5-4.
+_NO_OWNER_LINE = "⚠️  No owner: no account of the backup can be taken for it. The restore goes on; name one afterwards with ./dev.py user reassign-owner <username>"
+
+
+_NO_OWNER_PENDING_LINE = "⚠️  No owner was assigned at the restore: no account of the backup could be taken for it. Name one with ./dev.py user reassign-owner <username>"
+
+
+def _owner_lines(report) -> list[str]:
+    """What a restore confirmed here does about the owner of a managed instance with ``LIBREFOLIO_ADMIN_EMAIL`` set
+    (B5-1j): the account it gives the owner, by username (it comes from the archive: ``_safe``), or that there is none; or
+    that the backup cannot be restored as it is. Nothing elsewhere. Never an address: the owner's link goes to the
+    owner's own, which is not printed."""
+    from backend.app.services.platform.instance_backup.apply import owner_plan  # noqa: PLC0415 — keep dev.py's start light
+
+    plan = owner_plan(report)
+    if plan is None:
+        return []
+    if report.owner_conflicts:
+        return ["❌ The backup cannot give the owner their account: remove the duplicate account or free the address in the instance the backup comes from, make a new backup, and check it again"]
+    if plan.user_id is None:
+        return [_NO_OWNER_LINE]
+    return [f"👤 The owner's account will be {_safe(plan.username)}: its password is closed at the restore, and a link to choose a new one goes to the owner's address (or the owner uses Forgot password?)"]
 
 
 _ROLLBACK_REASONS = {
@@ -718,10 +744,23 @@ def _confirm(args, stage_id: str, data_dir: Path) -> bool:
         return False
     print("✅ The restore waits for the next start of the server: restart LibreFolio to apply it.")
     print("   That start replaces the database and the files, and ends every session: sign in with an administrator of the backup.")
+    _print_owner_of_confirmed(stage_id, data_dir)
     print("   ./dev.py backup pending shows it; ./dev.py backup pending --cancel drops it.")
     if _instance_blocked():
         print("⚠️  The hosting provider blocked this instance: the restore waits until it is unblocked (instance_blocked)")
     return True
+
+
+def _print_owner_of_confirmed(stage_id: str, data_dir: Path) -> None:
+    """The owner line again, once the restore is confirmed (``_owner_lines`` of the checked copy, still there)."""
+    from backend.app.services.platform.instance_backup.staging import read_report  # noqa: PLC0415 — keep dev.py's start light
+
+    try:
+        report = read_report(data_dir, stage_id)
+    except (FileNotFoundError, OSError):
+        return
+    for line in _owner_lines(report):
+        print(line)
 
 
 def _restore_already_active(data_dir: Path) -> bool:
@@ -938,8 +977,11 @@ _OWNER_OUTCOMES = {
 
 
 def _print_owner_outcome(state) -> None:
-    """The owner's account of a restore confirmed from the app of a managed instance (B5-1); nothing for any other."""
+    """The owner's account of a restore on a managed instance (B5-1, B5-1j); and, where nobody could be picked, the way to
+    name one. Nothing for any other."""
     if getattr(state, "owner_user_id", None) is None:
+        if getattr(state, "owner_outcome", None) == "none":
+            print(_NO_OWNER_PENDING_LINE)
         return
     outcome = state.owner_outcome
     if outcome is None:
@@ -1302,7 +1344,7 @@ def _pending_snapshot(data_dir: Path) -> dict:
     elif state.status == "committed":
         name, reason, choices = "committed", None, []
         # B5-1b: the owner's assignment failed for good (a recorded error): the way out is --recover owner.
-        if state.confirmed_via == "admin" and state.owner_user_id is not None and (state.owner_outcome or "").startswith("error:"):
+        if state.owner_user_id is not None and (state.owner_outcome or "").startswith("error:"):
             reason, choices = "owner_assignment", ["owner"]
     elif state.status == "rolled_back":
         name, reason, choices = "rolled_back", state.reason, []

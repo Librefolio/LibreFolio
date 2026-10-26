@@ -859,6 +859,14 @@ def api_panel_restore(verbose: bool = False, test_names: list[str] | None = None
     return run_command(cmd, "Hosting panel restore API tests", verbose=verbose)
 
 
+def api_backup_owner_channels(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the tests of the owner of a restore confirmed by the hosting panel or from the command line (B5-1j)."""
+    print_section("Restore Owner, Panel and Command Line API")
+    print_info("Testing: the panel's confirmation on a managed instance picks the account holding the owner's address (nobody found: 202, outcome none), 409 owner_conflict with advice, 409 restore_stage_outdated, self-hosted unchanged; the real restore guard for a restore of the command line or panel (423 owner_assignment while pending, served once recorded, an error keeps refusing, reset allowed)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_owner_channels_api.py", test_names)
+    return run_command(cmd, "Restore owner, panel and command line API tests", verbose=verbose)
+
+
 def api_await_restore_mode(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run the «awaiting restore» mode's API tests: refuse_when_awaiting_restore, its allowed set, ready/instance/wake/panel status (H-62, §6)."""
     print_section("Awaiting Restore Mode API")
@@ -1438,6 +1446,18 @@ Tests for REST API endpoints (server auto-started):
     )
     add_test(
         api,
+        "backup-owner-channels",
+        api_backup_owner_channels,
+        name="Restore Owner, Panel and CLI",
+        desc="Lot B5-1j: the owner of a restore confirmed by the hosting panel (or the command line) on a managed instance with LIBREFOLIO_ADMIN_EMAIL set. Through the panel's confirm route (H's, untouched): a real check, then 202 with the state recording the account that holds the owner's address (the answer names no account or address); nobody found is still 202 with owner_outcome none; owner conflicts are 409 owner_conflict whose message says to make a new backup, nothing pending; a check made with another address is 409 restore_stage_outdated; self-hosted reads neither. The restore guard with the REAL hook and a state of the command line or panel: 423 while the owner is pending, served once the outcome is recorded, an error keeps refusing and the reset (backup pending --recover owner) is allowed; a restore where nobody was picked never keeps the instance from serving",
+        tests="Panel confirm → owner picked / outcome none; 409 owner_conflict; 409 outdated; guard 423 for cli/panel",
+        # PURE: the app of main.py in this process (ASGI) on a private database / the panel's fixtures of test_panel_restore_api.py,
+        # data directories under tmp_path, real archives from the staging tests' alembic databases; no lane server, DB or network
+        # is reached (the api category still starts the lane's backend around it).
+        isolation="pure",
+    )
+    add_test(
+        api,
         "await-restore-mode",
         api_await_restore_mode,
         name="Awaiting Restore Mode API",
@@ -1580,8 +1600,8 @@ Complete workflow tests via REST API:
         "backup-roundtrip-owner",
         e2e_backup_roundtrip_owner,
         name="Backup Round Trip Owner",
-        desc="Lot B5-1f: a backup uploaded and restored from the app on a managed instance (LIBREFOLIO_PROFILE=managed, LIBREFOLIO_ADMIN_EMAIL, no SMTP), real uvicorn children on Unix sockets across pending-restore, admin-bootstrap, restore-commit, restore-owner, owner-sync: the check offers owner_choice, a confirmation without an owner is 409 owner_choice_required, with the backup's administrator 202; the restart exits and a new process commits; the chosen account has the owner's address, is an active administrator and the only owner, its old password and a session of before are refused, the owner's link is only in the child's log (not in the status, the state file or the data directory), is spent once and the owner signs in; another start calls nothing again; an address change that A refuses (EMAIL_TAKEN) serves no data until backup pending --recover owner; a restore with no owner chosen clears the backup's is_instance_owner flag",
-        tests="Managed target → Upload, check, confirm (owner), restart → Committed → Owner link in the log → Spent once; restart: nothing again; fail closed → recover; no owner: flag cleared",
+        desc="Lot B5-1f: a backup uploaded and restored from the app on a managed instance (LIBREFOLIO_PROFILE=managed, LIBREFOLIO_ADMIN_EMAIL, no SMTP), real uvicorn children on Unix sockets across pending-restore, admin-bootstrap, restore-commit, restore-owner, owner-sync: the check offers owner_choice, a confirmation without an owner is 409 owner_choice_required, with the backup's administrator 202; the restart exits and a new process commits; the chosen account has the owner's address, is an active administrator and the only owner, its old password and a session of before are refused, the owner's link is only in the child's log (not in the status, the state file or the data directory), is spent once and the owner signs in; another start calls nothing again; an address change that A refuses (EMAIL_TAKEN) serves no data until backup pending --recover owner; B5-1j, the real CLI restore on the same managed instance picks the owner itself: Anna, the only flagged active administrator with an old address, holds LIBREFOLIO_ADMIN_EMAIL after the restart and is the only flagged account, her old password and old session are refused, her password-reset link is only in the child's log and spends once, and the CLI names her by username and prints no address; with a flag on an ordinary account, or two flagged administrators, nobody is picked: outcome none, the CLI gives ./dev.py user reassign-owner <username>, the instance serves, nobody is flagged, no account is closed and the warning names nobody",
+        tests="Managed target → Upload, check, confirm (owner), restart → Committed → Owner link in the log → Spent once; restart: nothing again; fail closed → recover; CLI restore: Anna picked, link only in the log; nobody picked: outcome none",
         # PURE: every data directory and archive under tmp_path, every server a child uvicorn of the test on a Unix socket
         # under /tmp (never a TCP port), in test mode on its own data directory; the lane's data directory, database and
         # server are never read nor written.
