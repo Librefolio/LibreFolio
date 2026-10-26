@@ -2868,3 +2868,133 @@ def test_openapi_documents_the_owner_conflict():
     described = api.restore_app().openapi()["paths"][CONFIRM]["post"]["responses"].get("409", {}).get("description", "")
     assert "owner_conflict" in described.replace("owner_conflicts", ""), f"the 409 names owner_conflict: {described!r}"
     print_success("OpenAPI: owner_conflict")
+
+
+# -----------------------------------------------------------------------------
+# (o) Lot B5-1g: a pending administrator in the backup, and a backup with no active administrator
+# -----------------------------------------------------------------------------
+#
+# Admin-bootstrap runs before ``restore-commit`` at the first start: an inactive account with an admin-setup link nobody
+# used takes the owner's address unless some account holds it, and A's assignment then fails with EMAIL_TAKEN for good.
+# So the check names it (``pending_administrator``, in the owner's conflicts) and the confirmation is refused
+# ``owner_conflict``. And a backup with no ACTIVE administrator is not restorable at all (blocker ``no_administrator``):
+# the confirmation is refused ``restore_not_restorable`` on a managed instance whatever owner it names.
+
+ADA_ACCOUNT = ("ada_admin", "ada.b51@example.com", 1, 1)
+PENDING_ACCOUNT = ("pend_admin", "pend.b51@example.com", 0, 1)
+HOLDER_ACCOUNT = ("owen_user", cases.OWNER_EMAIL_STORED, 1, 0)
+SETUP_LINK = [("pend_admin", "admin_setup", False)]
+
+
+def built_archives(root: Path, databases: Any, recipes: dict[str, dict[str, Any]]) -> dict[str, OwnerArchive]:
+    """One archive per recipe, ``cases.crafted_backup``'s arguments, built without writing in the configured data
+    directory; each with its accounts by username as a candidate would describe them (ids 1, 2, … in the order given)."""
+    built: dict[str, OwnerArchive] = {}
+    for name, recipe in recipes.items():
+        with pytest.MonkeyPatch.context() as patch:
+            cases.configure(patch, root / f"configured-{name}")
+            try:
+                archive = cases.crafted_backup(root / name, databases, **recipe)
+            finally:
+                cases.get_git_version.cache_clear()
+        assert not (root / f"configured-{name}").exists(), "precondition: the archive was built without writing in the configured data directory"
+        built[name] = OwnerArchive(archive=archive, accounts={account[0]: {"user_id": number} for number, account in enumerate(recipe["accounts"], start=1)})
+    return built
+
+
+@pytest.fixture(scope="module")
+def pending_archives(databases, tmp_path_factory) -> dict[str, OwnerArchive]:
+    root = tmp_path_factory.mktemp("b51g-pending-archives")
+    return built_archives(
+        root,
+        databases,
+        {
+            "alone": {"accounts": (ADA_ACCOUNT, PENDING_ACCOUNT), "tokens": SETUP_LINK},
+            "address-held": {"accounts": (ADA_ACCOUNT, PENDING_ACCOUNT, HOLDER_ACCOUNT), "tokens": SETUP_LINK},
+        },
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("chosen", ["ada_admin", None], ids=["a-valid-choice", "no-body"])
+async def test_a_managed_confirmation_of_a_copy_with_a_pending_administrator_is_409_owner_conflict(instance, pending_archives, monkeypatch, chosen):
+    """(o) B5-1g: a backup holding an administrator that waits for its setup (inactive, an admin-setup link unused) while no
+    account holds the owner's address: the check ends restorable, and the confirmation is 409 ``owner_conflict``
+    whatever the choice; nothing written. Red before B5-1g: the check found no conflict and the confirmation was 202."""
+    print_section("(o) B5-1g pending administrator: 409 owner_conflict")
+    owner_setting(monkeypatch, "managed", cases.OWNER_EMAIL)
+    archive = pending_archives["alone"]
+    stage_id = await checked(archive.archive)
+    copy_before = api.tree(stage_dir(instance.root, stage_id))
+    response = await (confirm(stage_id) if chosen is None else confirm_with(stage_id, {"owner_user_id": archive.accounts[chosen]["user_id"]}))
+    assert api.code(response) == (409, "owner_conflict"), f"{chosen}: 409 owner_conflict: {api.shown(response)}"
+    assert not os.path.lexists(state_path(instance.root)), "nothing confirmed: no state written"
+    assert api.tree(stage_dir(instance.root, stage_id)) == copy_before, "the copy as it was"
+    print_success(f"{chosen}: 409 owner_conflict")
+
+
+@pytest.mark.asyncio
+async def test_a_pending_administrator_does_not_refuse_the_confirmation_when_another_account_holds_the_owner_s_address(instance, pending_archives, monkeypatch):
+    """(o) B5-1g, the guard: the same pending administrator, but another account of the backup holds the owner's address:
+    no conflict, the forced choice is 202 and recorded. Green before B5-1g, and it must stay so."""
+    owner_setting(monkeypatch, "managed", cases.OWNER_EMAIL)
+    archive = pending_archives["address-held"]
+    stage_id = await checked(archive.archive)
+    owen = archive.accounts["owen_user"]["user_id"]
+    response = await confirm_with(stage_id, {"owner_user_id": owen})
+    assert response.status_code == 202, f"another account holds the address: confirmed: {api.shown(response)}"
+    assert owner_on_disk(instance.root) == (owen, None), f"restore.json records the owner: {owner_on_disk(instance.root)}"
+    print_success("another holder: 202")
+
+
+#: (the accounts of the backup, the holder of the owner's address among them or None): none is an active administrator.
+NO_ADMINISTRATOR_RECIPES = {
+    "nobody-holds-the-address": {"accounts": (("bob_user", "bob.b51@example.com", 1, 0), ("olga_former_admin", "olga.b51@example.com", 0, 1))},
+    "the-only-account-is-a-plain-user-holding-the-address": {"accounts": (HOLDER_ACCOUNT,)},
+    "the-only-account-is-a-disabled-administrator-holding-the-address": {"accounts": (("owen_off_admin", cases.OWNER_EMAIL_STORED, 0, 1),)},
+    "a-plain-holder-and-a-disabled-administrator": {"accounts": (HOLDER_ACCOUNT, ("olga_former_admin", "olga.b51@example.com", 0, 1))},
+}
+#: The username that holds the owner's address in each recipe; ``None`` where nobody does.
+NO_ADMINISTRATOR_HOLDERS = {
+    "nobody-holds-the-address": None,
+    "the-only-account-is-a-plain-user-holding-the-address": "owen_user",
+    "the-only-account-is-a-disabled-administrator-holding-the-address": "owen_off_admin",
+    "a-plain-holder-and-a-disabled-administrator": "owen_user",
+}
+
+
+@pytest.fixture(scope="module")
+def no_administrator_archives(databases, tmp_path_factory) -> dict[str, OwnerArchive]:
+    return built_archives(tmp_path_factory.mktemp("b51g-no-administrator-archives"), databases, NO_ADMINISTRATOR_RECIPES)
+
+
+#: (the recipe, who the confirmation names): "the-holder" only where somebody holds the owner's address.
+NO_ADMINISTRATOR_CASES = [pytest.param(recipe, naming, id=f"{recipe}--{naming}") for recipe in NO_ADMINISTRATOR_RECIPES for naming in ("no-body", "the-holder", "an-account-of-the-backup", "an-id-that-is-no-account") if not (naming == "the-holder" and NO_ADMINISTRATOR_HOLDERS[recipe] is None)]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("recipe", "naming"), NO_ADMINISTRATOR_CASES)
+async def test_a_managed_confirmation_of_a_backup_with_no_active_administrator_is_409_not_restorable(instance, no_administrator_archives, monkeypatch, recipe, naming):
+    """(o) B5-1g: a backup with no ACTIVE administrator cannot be restored on a ``managed`` instance: the check ends with
+    the blocker ``no_administrator`` (not restorable, no administrators), and the confirmation is 409
+    ``restore_not_restorable`` — whatever owner it names, none, the holder of the owner's address, another account of the
+    backup or an id that is no account, and even when the only account of the backup holds the owner's address
+    without being an active administrator. The refusal names the blocker's code; nothing written, the copy as it was.
+    Pins: the blocker is checked before the owner."""
+    print_section(f"(o) B5-1g no active administrator: {recipe} / {naming}")
+    owner_setting(monkeypatch, "managed", cases.OWNER_EMAIL)
+    archive = no_administrator_archives[recipe]
+    state = await api.ended(archive.archive.path.read_bytes())
+    report = state["report"]
+    assert (state["status"], report["restorable"], report["blockers"], report["administrators"]) == ("done", False, ["no_administrator"], []), f"precondition: the check blocks the archive: {state['status']}, {report['restorable']}, {report['blockers']}, {report['administrators']}"
+    stage_id = state["stage_id"]
+    holder = NO_ADMINISTRATOR_HOLDERS[recipe]
+    ids = {"no-body": None, "the-holder": archive.accounts.get(holder, {}).get("user_id"), "an-account-of-the-backup": next(iter(archive.accounts.values()))["user_id"], "an-id-that-is-no-account": 999_999}
+    copy_before = api.tree(stage_dir(instance.root, stage_id))
+    owner_id = ids[naming]
+    response = await (confirm(stage_id) if naming == "no-body" else confirm_with(stage_id, {"owner_user_id": owner_id}))
+    assert api.code(response) == (409, "restore_not_restorable"), f"409 restore_not_restorable: {api.shown(response)}"
+    assert "no_administrator" in response.json()["detail"]["message"], f"the refusal names the blocker: {response.json()['detail']}"
+    assert not os.path.lexists(state_path(instance.root)), "nothing confirmed: no state written"
+    assert api.tree(stage_dir(instance.root, stage_id)) == copy_before, "the copy as it was"
+    print_success(f"{recipe} / {naming}: 409 restore_not_restorable")

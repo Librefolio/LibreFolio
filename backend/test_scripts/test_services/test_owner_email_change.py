@@ -63,6 +63,7 @@ from backend.app.services.email import delivery, messages, smtp
 from backend.app.services.email.messages import EmailContent
 from backend.app.services.platform import app_lifespan
 from backend.app.services.platform.instance_backup import apply
+from backend.app.services.platform.instance_backup import owner as backup_owner
 from backend.app.services.platform.lifecycle import run_startup_steps
 from backend.app.utils.datetime_utils import ensure_utc
 from backend.app.utils.runtime.rate_window import SlidingWindowLimiter
@@ -954,25 +955,45 @@ async def test_a_restore_revokes_a_change_link_it_finds_live(owner: ModuleType, 
 
 
 @pytest.mark.asyncio
-async def test_after_a_restore_with_the_variable_changed_the_link_issued_at_the_start_is_alive(owner: ModuleType, outbox: Outbox, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """OWN-083 (N3): the first start on a restored database whose owner's address differs from the variable: the real ``restore-commit`` and ``owner-sync`` steps, in the order ``STARTUP_STEPS`` gives them, with the restore's commit being ``_close_the_way_in`` on the restored database. The link issued by the sync is still live afterwards and is the one emailed."""
+async def test_after_a_restore_with_the_variable_changed_the_owner_gets_the_address_and_one_reset_link(owner: ModuleType, outbox: Outbox, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """OWN-083 (N3, B5-1j): the first start on a restored database whose owner's address differs from the variable, the real ``restore-commit``, ``restore-owner`` and ``owner-sync`` steps in the order ``STARTUP_STEPS`` gives them. The restore's commit revokes the change link the backup carried; ``restore-owner`` (B's real ``assign_restored_owner``, A's real ``assign_owner_and_send_reset``) gives the owner the variable's address, verified, with an unusable password, and emails ONE reset link marked with it; ``owner-sync`` then finds the address settled and issues no change link. No change link is live afterwards, and the only email is that reset."""
     data_dir, private = await _restored_database(tmp_path)
     try:
         owner_id = await _add_user(private, "own_owner", OLD_EMAIL, admin=True, instance_owner=True)
+        async with AsyncSession(private, expire_on_commit=False) as session:
+            carried = await token_service.issue_token(session, CHANGE, user_id=owner_id, email=NEW_EMAIL, now=datetime.now(UTC))
+            await session.commit()
         _managed(monkeypatch, variable=NEW_EMAIL)
         _email_ready(monkeypatch)
         _links_ready(monkeypatch)
+        (data_dir / ".restore").mkdir()
+        monkeypatch.setattr(apply, "owner_pending", lambda _data_dir: ("own083-stage", owner_id))
+        recorded: list[str] = []
+        monkeypatch.setattr(apply, "record_owner_outcome", lambda _data_dir, _stage, outcome: recorded.append(outcome))
         monkeypatch.setattr(app_lifespan, "finish_pending_restore", lambda: apply._close_the_way_in(data_dir, datetime.now(UTC)))
+        monkeypatch.setattr(app_lifespan, "assign_restored_owner", lambda: backup_owner.assign_restored_owner(data_dir))
+        monkeypatch.setattr(app_lifespan, "probe_owner_assignment", lambda: None)
         monkeypatch.setattr(app_lifespan, "startup_owner_sync", lambda: owner.startup_owner_sync(private))
-        steps = [step for step in app_lifespan.STARTUP_STEPS if step.name in ("restore-commit", "owner-sync")]
-        assert sorted(step.name for step in steps) == ["owner-sync", "restore-commit"], "barrier: the two steps are in STARTUP_STEPS (run in the order it gives them)"
+        wanted = ("restore-commit", "restore-owner", "owner-sync")
+        steps = [step for step in app_lifespan.STARTUP_STEPS if step.name in wanted]
+        assert [step.name for step in steps] == list(wanted), "barrier: the three steps are in STARTUP_STEPS, in this order"
 
         await run_startup_steps(steps)
         await _drain_deliveries(owner)
 
-        rows = await _change_rows(private, owner_id)
-        assert [_live(row, datetime.now(UTC)) for row in rows] == [True], "the link issued at the start must survive the restore's commit"
-        assert [mail.to for mail in outbox.attempts] == [NEW_EMAIL]
+        assert recorded == ["sent"], "barrier: the restore-owner step ran the real assignment and recorded its outcome"
+        account = await _account(private, owner_id)
+        assert (account.email, account.is_superuser, account.is_active, account.is_instance_owner) == (NEW_EMAIL, True, True, True)
+        assert account.email_verified_at is not None
+        assert account.hashed_password != MARKER_HASH and not auth_service.verify_password("anything", account.hashed_password), "the password the backup carried opens nothing"
+        assert await _owner_ids(private) == [owner_id]
+        now = datetime.now(UTC)
+        changes = await _change_rows(private, owner_id)
+        assert [row.token_hash for row in changes] == [hash_token(carried.token)] and [_live(row, now) for row in changes] == [False], "no email-change link is live: the one the backup carried died at the commit and none was issued since"
+        async with AsyncSession(private) as session:
+            resets = list((await session.execute(select(AccountToken).where(AccountToken.purpose == AccountTokenPurpose.PASSWORD_RESET, AccountToken.user_id == owner_id))).scalars().all())
+        assert [(row.email, _live(row, now)) for row in resets] == [(NEW_EMAIL, True)], "ONE reset link, live, marked with the owner's address"
+        assert [(mail.to, mail.content.kind) for mail in outbox.attempts] == [(NEW_EMAIL, "password_reset")], "the only email is the reset link"
     finally:
         await private.dispose()
 

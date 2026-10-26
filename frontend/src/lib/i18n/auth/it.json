@@ -87,7 +87,9 @@
       "submit": "Attiva l'account",
       "failed": "Non è stato possibile configurare l'account. Riprova.",
       "blocked": "Questa istanza è bloccata dal suo fornitore: l'account si potrà configurare quando sarà sbloccata.",
-      "newLinkHint": "Chiedi un nuovo link al tuo fornitore. Sul tuo server, esegui «dev.py user setup-link»."
+      "newLinkHint": "Chiedi un nuovo link al tuo fornitore. Sul tuo server, esegui «dev.py user setup-link».",
+      "expiredManagedHint": "Se non ne hai ricevuto uno nuovo per email, scrivi all'assistenza.",
+      "supportLink": "Scrivi all'assistenza"
     },
     "notices": {
       "openRegistration": "La registrazione è aperta e questa istanza è raggiungibile da fuori dalla tua rete locale: chiunque la trovi può crearsi un account.",

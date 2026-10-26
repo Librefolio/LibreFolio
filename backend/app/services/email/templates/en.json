@@ -10,7 +10,12 @@
     "intro": "We received a request to reset the password of your account on $instance.",
     "action": "Choose a new password",
     "expiry": "The link works only once and expires in $duration.",
-    "ignore": "If you did not ask for it, you can ignore this email: your password stays the same."
+    "ignore": "If you did not ask for it, you can ignore this email: your password stays the same.",
+    "restore_subject": "Choose a new password for LibreFolio",
+    "restore_intro": "Your account on $instance was restored from a backup.",
+    "restore_note": "For your security, your password was revoked after the restore. Use the button below to choose a new one.",
+    "restore_fallback": "If the link has expired, choose “Forgot Password?” on the sign-in page, with this email address, to get a new one.",
+    "restore_unexpected": "If you were not expecting this, contact whoever manages this LibreFolio."
   },
   "invite": {
     "subject": "You are invited to LibreFolio",

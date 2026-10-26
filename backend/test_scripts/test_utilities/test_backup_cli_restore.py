@@ -119,6 +119,16 @@ it), printed by ``pending`` and by a confirmation on a blocked instance.
     ``./dev.py backup pending --recover owner`` (and still the code and «the server log has the cause»); no other
     outcome's line mentions ``--recover``.
 
+(n) Lot B5-1j (analysis ``B-5-1j-analisi-titolare-nel-restore-cli.md`` §2, §4, §6, §8; written RED before it): the owner of a
+    restore confirmed from the command line on a ``managed`` instance whose ``LIBREFOLIO_ADMIN_EMAIL`` is set. The report a
+    check prints says ONE line about the owner: with an account picked (the holder of the address, else the one marked
+    administrator) it names it by USERNAME — never an address, not the owner's, not the backup's —; with nobody picked it
+    says there is no owner and gives the command ``./dev.py user reassign-owner <username>``; with conflicts a ❌ line says
+    to make a new backup. Nothing about the owner on a self-hosted instance or without the address. ``restore --yes`` repeats
+    the line after its ✅ and a conflict is the usual one-line ``❌ <message> (owner_conflict)``, exit 1, nothing pending.
+    ``pending`` of a committed restore says what became of the owner for the command line as for the app, and says that
+    nobody was picked (``owner_outcome`` ``none``). The English words are the contract: the CLI is not translated.
+
 Pure, as ``test_backup_cli.py``, whose fixtures and helpers are imported: data directories under ``tmp_path`` seen through
 ``LIBREFOLIO_DATA_DIR`` (production mode, checked); a real database at the head made once by ``alembic upgrade`` for the
 module. The commands go through the parser ``register_subparser`` builds, as ``dev.py backup`` runs them. A terminal is a
@@ -141,14 +151,16 @@ import json
 import os
 import pty
 import re
+import shutil
+import sqlite3
 import stat
 import sys
 import zipfile
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
 from typing import Any
 
 import pytest
@@ -156,9 +168,9 @@ import pytest
 from backend.app.config import ENVIRONMENT_PROFILE_DEFAULTS, SecretFileError, read_secret_file
 from backend.app.config.backup import MAX_UPLOAD_VARIABLE
 from backend.app.config.platform import instance_blocked
-from backend.app.services.platform.instance_backup.archive import read_manifest
+from backend.app.services.platform.instance_backup.archive import build_archive, read_manifest
 from backend.app.services.platform.instance_backup.paths import DATABASE_ENTRY, restore_dir, stage_data_dir, stage_dir, stages_dir
-from backend.app.services.platform.instance_backup.staging import read_report
+from backend.app.services.platform.instance_backup.staging import StagingReport, read_report
 from backend.app.services.platform.instance_key import instance_key_status
 from backend.test_scripts.test_services import test_backup_secure as secure_cases
 from backend.test_scripts.test_services import test_backup_staging as staging_cases
@@ -1813,3 +1825,359 @@ def test_pending_names_no_recover_command_for_an_owner_who_is_not_in_error(tmp_p
     extra, out = owner_lines(tmp_path, monkeypatch, capsys, owner_user_id=OWNER_ID, owner_outcome=outcome)
     assert "--recover" not in out, f"{outcome}: no recover command: {out}"
     print_success(f"{outcome}: no --recover")
+
+
+# =============================================================================
+# (n) Lot B5-1j: the owner of a restore confirmed from the command line
+# =============================================================================
+
+#: The owner's address (``LIBREFOLIO_ADMIN_EMAIL``): held by nobody in the backups below unless a case says so.
+NEW_OWNER_EMAIL = "new.owner.b51j@example.com"
+#: What the owner line must give for nobody picked: the command, word for word, and the words that say there is no owner.
+REASSIGN_HINT = "./dev.py user reassign-owner <username>"
+MAKE_A_NEW_BACKUP = "make a new backup"
+#: The accounts of the report-only cases (``_print_stage_report`` takes a report, not an archive).
+ANNA = {"user_id": 3, "username": "anna_admin", "email": "old.anna.b51j@example.com", "is_superuser": True, "is_active": True, "is_instance_owner": True}
+CARL = {"user_id": 5, "username": "carl_admin", "email": "carl.b51j@example.com", "is_superuser": True, "is_active": True, "is_instance_owner": False}
+DORA = {"user_id": 6, "username": "dora_admin", "email": "dora.b51j@example.com", "is_superuser": True, "is_active": True, "is_instance_owner": False}
+HOLDER = {"user_id": 9, "username": "holder_user", "email": NEW_OWNER_EMAIL.upper(), "is_superuser": False, "is_active": True, "is_instance_owner": False}
+EVIL = {**ANNA, "username": "an\x1b[2Jna_admin"}
+
+
+def managed_owner(monkeypatch, *, profile: str = "managed", owner_email: str | None = NEW_OWNER_EMAIL) -> None:
+    """The profile and the owner's address of this process, the other variables of the initial administrator unset."""
+    for name in ("LIBREFOLIO_ADMIN_USERNAME", "LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN", "LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN_FILE"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("LIBREFOLIO_PROFILE", profile)
+    if owner_email is None:
+        monkeypatch.delenv("LIBREFOLIO_ADMIN_EMAIL", raising=False)
+    else:
+        monkeypatch.setenv("LIBREFOLIO_ADMIN_EMAIL", owner_email)
+
+
+def owner_report(candidates: list[dict[str, Any]], *, checked: str | None = NEW_OWNER_EMAIL, conflicts: tuple[str, ...] = ()) -> StagingReport:
+    """The report of a check as B5-1j writes it: ``test_backup_cli.upgrade_report`` with these candidates."""
+    data = cli.upgrade_report().model_dump(mode="json")
+    data.update(owner_candidates=candidates, owner_email_checked=checked, owner_conflicts=list(conflicts))
+    return StagingReport.model_validate(data)
+
+
+def owner_words(out: str) -> list[str]:
+    """The lines of ``out`` that speak of the owner."""
+    return [line for line in out.splitlines() if "owner" in line.lower()]
+
+
+def no_address_in(out: str, *addresses: str) -> None:
+    shown = [address for address in (NEW_OWNER_EMAIL, *addresses) if address.lower() in out.lower()]
+    assert shown == [], f"[B5-1j] no address in the output, the owner's nor the backup's: {shown}\n{out}"
+
+
+#: (the report's candidates, the account the line names).
+NAMED_BY_THE_REPORT = [
+    pytest.param([ANNA, CARL], "anna_admin", id="the-one-marked-administrator"),
+    pytest.param([CARL, HOLDER], "holder_user", id="the-holder-of-the-address"),
+    pytest.param([ANNA, HOLDER, CARL], "holder_user", id="the-holder-wins-over-a-marked-administrator"),
+]
+
+
+@pytest.mark.parametrize(("candidates", "named"), NAMED_BY_THE_REPORT)
+def test_the_report_names_the_owner_s_account_by_its_username_and_no_address(monkeypatch, capsys, candidates, named):
+    """(n) B5-1j: ``managed``, the owner's address set: the report of a check says ONE line about the owner, naming the
+    account the restore will give it, by username. No address anywhere in what is printed (the owner's, the backup's
+    accounts'). Red before B5-1j: the report says nothing of the owner."""
+    print_section("(n) B5-1j the report names the owner")
+    capsys.readouterr()  # the section title is output too
+    managed_owner(monkeypatch)
+    backup_cli._print_stage_report(owner_report(candidates))
+    out = capsys.readouterr().out
+    lines = owner_words(out)
+    assert len(lines) == 1, f"[new] B5-1j: one line about the owner, not {len(lines)}: {lines}\n{out}"
+    assert named in lines[0], f"the line names the account {named} by username: {lines[0]!r}"
+    assert REASSIGN_HINT not in out, f"an account was found: no reassign hint: {out}"
+    no_address_in(out, *(row["email"] for row in candidates))
+    print_success(f"{named}: {lines[0]}")
+
+
+def test_the_report_shows_a_username_from_the_backup_without_its_control_characters(monkeypatch, capsys):
+    """(n) B5-1j: the picked account's name comes from the archive, so it reaches the terminal through ``_safe``: a control
+    character is a ``?``."""
+    managed_owner(monkeypatch)
+    backup_cli._print_stage_report(owner_report([EVIL, CARL]))
+    out = capsys.readouterr().out
+    unprintable = sorted({repr(char) for line in out.split("\n") for char in line if not char.isprintable()})
+    assert unprintable == [], f"no control character reaches the terminal: {unprintable} in {out!r}"
+    assert len(owner_words(out)) == 1 and "an?[2Jna_admin" in out, f"[new] B5-1j: the owner line shows the name with a ? for the control character: {out!r}"
+    print_success("control characters shown as ?")
+
+
+#: Reports from which nobody can be picked.
+NOBODY_PICKED = [
+    pytest.param([CARL, DORA], id="nobody-is-marked"),
+    pytest.param([{**CARL, "is_instance_owner": True}, {**DORA, "is_instance_owner": True}], id="two-are-marked"),
+    pytest.param([], id="no-candidate"),
+]
+
+
+@pytest.mark.parametrize("candidates", NOBODY_PICKED)
+def test_the_report_says_there_is_no_owner_and_gives_the_command_that_names_one(monkeypatch, capsys, candidates):
+    """(n) B5-1j: nobody can be picked: ONE line about the owner, saying there is no owner and holding, word for word, the
+    command ``./dev.py user reassign-owner <username>``; still no address. Red before B5-1j: no such line."""
+    print_section("(n) B5-1j the report: no owner")
+    capsys.readouterr()  # the section title is output too
+    managed_owner(monkeypatch)
+    backup_cli._print_stage_report(owner_report(candidates))
+    out = capsys.readouterr().out
+    lines = owner_words(out)
+    assert len(lines) == 1, f"[new] B5-1j: one line about the owner, not {len(lines)}: {lines}\n{out}"
+    assert REASSIGN_HINT in lines[0] and "no owner" in lines[0].lower(), f"the line says there is no owner and gives the command: {lines[0]!r}"
+    no_address_in(out, *(row["email"] for row in candidates))
+    print_success(lines[0])
+
+
+@pytest.mark.parametrize("conflicts", [("duplicate_email",), ("duplicate_username", "pending_administrator"), ("address_is_a_username",)])
+def test_the_report_of_a_copy_with_owner_conflicts_says_in_a_failing_line_to_make_a_new_backup(monkeypatch, capsys, conflicts):
+    """(n) B5-1j: a report with owner conflicts: a ❌ line saying to make a new backup (the restore will be refused)."""
+    managed_owner(monkeypatch)
+    backup_cli._print_stage_report(owner_report([ANNA, CARL], conflicts=conflicts))
+    out = capsys.readouterr().out
+    failing = [line for line in out.splitlines() if line.startswith("❌") and MAKE_A_NEW_BACKUP in line]
+    assert len(failing) == 1, f"[new] B5-1j: one ❌ line that says «{MAKE_A_NEW_BACKUP}»: {out}"
+    no_address_in(out, ANNA["email"], CARL["email"])
+    print_success(failing[0])
+
+
+#: Where the report says nothing about an owner: self-hosted, or managed without the owner's address.
+NO_OWNER_CONCEPT = [
+    pytest.param("selfhosted", NEW_OWNER_EMAIL, id="selfhosted"),
+    pytest.param("managed", None, id="managed-no-address"),
+]
+
+
+@pytest.mark.parametrize(("profile", "owner_email"), NO_OWNER_CONCEPT)
+@pytest.mark.parametrize("conflicts", [(), ("duplicate_email",)])
+def test_the_report_says_nothing_of_an_owner_without_the_managed_profile_and_the_address(monkeypatch, capsys, profile, owner_email, conflicts):
+    """(n) B5-1j: self-hosted, or managed without ``LIBREFOLIO_ADMIN_EMAIL``: no line about an owner and no ❌ line about
+    conflicts, whatever the report holds (a guard)."""
+    managed_owner(monkeypatch, profile=profile, owner_email=owner_email)
+    backup_cli._print_stage_report(owner_report([ANNA, CARL], conflicts=conflicts))
+    out = capsys.readouterr().out
+    assert owner_words(out) == [] and MAKE_A_NEW_BACKUP not in out, f"{profile}: nothing about an owner: {out}"
+    print_success(f"{profile}: nothing about an owner")
+
+
+# --- a real restore through the command ---------------------------------------------------
+
+#: (name, active, administrator) and the owner's address of each account is ``<name>@example.test``.
+ANNA_BACKUP = (("anna_admin", 1, 1), ("bob_user", 1, 0))
+TWO_ADMINISTRATORS = (("carl_admin", 1, 1), ("dora_admin", 1, 1))
+INSERT = "INSERT INTO users (username, email, hashed_password, is_active, is_superuser, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+
+
+def owner_archive(tmp_path: Path, database: Path, accounts, *, flagged: tuple[str, ...] = (), before_accounts: tuple[str, ...] = (), same_email: str | None = None) -> Path:
+    """The archive of a data directory whose database is a copy of ``database`` with ``accounts`` (their email is
+    ``<name>@example.test``, or ``same_email`` for all of them, in another case after the first: the column is unique as written), ``flagged`` marked as the instance's owner, ``before_accounts``
+    run before they are added (a crafted copy: an index dropped)."""
+    data = cli.make_data_dir(tmp_path / "source", database=False)
+    (data / DATABASE_ENTRY).parent.mkdir(parents=True)
+    shutil.copyfile(database, data / DATABASE_ENTRY)
+    with closing(sqlite3.connect(data / DATABASE_ENTRY)) as conn, conn:
+        for statement in before_accounts:
+            conn.execute(statement)
+        conn.executemany(INSERT, [(name, (same_email if number == 0 else same_email.upper()) if same_email else f"{name}@example.test", "$argon2id$not-a-real-hash", active, admin, cli.CREATED, cli.CREATED) for number, (name, active, admin) in enumerate(accounts)])
+        conn.executemany("UPDATE users SET is_instance_owner = 1 WHERE username = ?", [(name,) for name in flagged])
+    work = tmp_path / "work"
+    work.mkdir()
+    return build_archive(data, work, work / cli.NAME, origin="cli").path
+
+
+def id_of(root: Path, username: str) -> int:
+    """The id of ``username`` in the backup the check staged (its copy under ``.restore/stage``)."""
+    stage = cli.stages_left(root)[0]
+    with closing(sqlite3.connect(f"{(stage_data_dir(root, stage) / DATABASE_ENTRY).resolve().as_uri()}?mode=ro", uri=True)) as conn:
+        return conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()[0]
+
+
+def test_a_dry_run_of_a_backup_with_one_marked_administrator_names_it_and_confirms_nothing(tmp_path, monkeypatch, capsys, head_database):
+    """(n) B5-1j §8 (Anna): a backup whose active administrator Anna is marked as the owner, the address she held not the
+    instance's: ``restore ARCHIVE --dry-run`` prints ONE owner line naming ``anna_admin``, and no address (the owner's, hers,
+    Bob's). Nothing is confirmed."""
+    print_section("(n) B5-1j dry run: Anna")
+    capsys.readouterr()  # the section title is output too
+    root = instance(tmp_path, monkeypatch)
+    managed_owner(monkeypatch)
+    archive = owner_archive(tmp_path, head_database, ANNA_BACKUP, flagged=("anna_admin",))
+    code = run("restore", str(archive), "--dry-run")
+    out = capsys.readouterr().out
+    assert code == 0, f"a dry run: exit 0: {out}"
+    lines = owner_words(out)
+    assert len(lines) == 1 and "anna_admin" in lines[0], f"[new] B5-1j: one owner line, naming anna_admin: {lines}\n{out}"
+    no_address_in(out, "anna_admin@example.test", "bob_user@example.test")
+    nothing_pending(root)
+    print_success(lines[0])
+
+
+def test_restore_yes_picks_the_marked_administrator_and_says_it_twice_without_an_address(tmp_path, monkeypatch, capsys, head_database):
+    """(n) B5-1j §8 (Anna): ``restore ARCHIVE --yes``: confirmed, exit 0; the state records the picked account's id and no
+    outcome yet; the owner line is in the report and again after the ✅ line; no address in the output."""
+    print_section("(n) B5-1j restore --yes: Anna")
+    capsys.readouterr()  # the section title is output too
+    root = instance(tmp_path, monkeypatch)
+    managed_owner(monkeypatch)
+    archive = owner_archive(tmp_path, head_database, ANNA_BACKUP, flagged=("anna_admin",))
+    code = run("restore", str(archive), "--yes")
+    out = capsys.readouterr().out
+    assert code == 0, f"confirmed: exit 0: {out}"
+    lines = out.splitlines()
+    confirmed_at = next(index for index, line in enumerate(lines) if line.startswith("✅") and "waits for the next start" in line)
+    before_it = [line for line in lines[:confirmed_at] if "owner" in line.lower()]
+    after_it = [line for line in lines[confirmed_at:] if "owner" in line.lower()]
+    assert len(before_it) == 1 and len(after_it) == 1, f"[new] B5-1j: the owner line in the report and again after the confirmation: {before_it} / {after_it}\n{out}"
+    assert "anna_admin" in before_it[0] and "anna_admin" in after_it[0], f"both name anna_admin: {before_it} {after_it}"
+    state = json.loads(state_path(root).read_text(encoding="utf-8"))
+    assert (state["status"], state["confirmed_via"], state["owner_user_id"], state["owner_outcome"]) == ("pending", "cli", id_of(root, "anna_admin"), None), f"[new] B5-1j: the state records the picked account: {state}"
+    no_address_in(out, "anna_admin@example.test", "bob_user@example.test")
+    print_success("Anna picked, said twice, no address")
+
+
+def test_restore_yes_of_a_backup_with_two_marked_administrators_picks_nobody_and_gives_the_command(tmp_path, monkeypatch, capsys, head_database):
+    """(n) B5-1j §2.3: two administrators marked (a crafted copy: the unique index dropped): the restore is confirmed, nobody
+    picked — ``owner_user_id`` ``None``, ``owner_outcome`` ``"none"`` —, and the owner line, in the report and after the ✅, says
+    there is no owner and gives ``./dev.py user reassign-owner <username>``."""
+    root = instance(tmp_path, monkeypatch)
+    managed_owner(monkeypatch)
+    archive = owner_archive(tmp_path, head_database, TWO_ADMINISTRATORS, before_accounts=("DROP INDEX ux_users_instance_owner",), flagged=("carl_admin", "dora_admin"))
+    code = run("restore", str(archive), "--yes")
+    out = capsys.readouterr().out
+    assert code == 0, f"confirmed all the same: exit 0: {out}"
+    lines = owner_words(out)
+    assert len(lines) == 2 and all(REASSIGN_HINT in line and "no owner" in line.lower() for line in lines), f"[new] B5-1j: twice, there is no owner and the command: {lines}\n{out}"
+    state = json.loads(state_path(root).read_text(encoding="utf-8"))
+    assert (state["status"], state["owner_user_id"], state["owner_outcome"]) == ("pending", None, "none"), f"[new] B5-1j: nobody picked, recorded: {state}"
+    no_address_in(out, "carl_admin@example.test", "dora_admin@example.test")
+    print_success("two marked: no owner, the command given")
+
+
+def test_restore_yes_of_a_backup_with_owner_conflicts_is_refused_with_what_to_do_and_nothing_pending(tmp_path, monkeypatch, capsys, head_database):
+    """(n) B5-1j: two accounts on one address (a crafted copy: its unique index dropped): the check reports the conflict and
+    the report says to make a new backup (a ❌ line); ``--yes`` is refused as the administrators' route refuses it — one ❌ line
+    ending ``(owner_conflict)`` that says to make a new backup, exit 1, the copy removed, nothing pending."""
+    print_section("(n) B5-1j restore --yes: owner conflict")
+    capsys.readouterr()  # the section title is output too
+    root = instance(tmp_path, monkeypatch)
+    managed_owner(monkeypatch)
+    archive = owner_archive(tmp_path, head_database, TWO_ADMINISTRATORS, before_accounts=("DROP INDEX ux_users_email_lower",), same_email="shared.b51j@example.test")
+    code = run("restore", str(archive), "--yes")
+    out = capsys.readouterr().out
+    refusal = [line for line in out.splitlines() if line.startswith("❌") and line.endswith("(owner_conflict)")]
+    assert code == 1 and len(refusal) == 1, f"[new] B5-1j: refused, exit 1, one ❌ line ending (owner_conflict): exit {code}: {out}"
+    assert MAKE_A_NEW_BACKUP in refusal[0], f"the refusal says what to do: {refusal[0]!r}"
+    assert [line for line in out.splitlines() if line.startswith("❌") and MAKE_A_NEW_BACKUP in line and not line.endswith("(owner_conflict)")], f"and the report said it before: {out}"
+    nothing_pending(root)
+    no_address_in(out, "shared.b51j@example.test")
+    print_success("owner_conflict: exit 1, nothing pending")
+
+
+@pytest.mark.parametrize(("profile", "owner_email"), NO_OWNER_CONCEPT)
+def test_restore_yes_says_nothing_of_an_owner_without_the_managed_profile_and_the_address(tmp_path, monkeypatch, capsys, head_database, profile, owner_email):
+    """(n) B5-1j, a guard: the same Anna backup on a self-hosted instance, or a managed one without the owner's address: no
+    word about an owner, confirmed as before, no owner in the state."""
+    root = instance(tmp_path, monkeypatch)
+    managed_owner(monkeypatch, profile=profile, owner_email=owner_email)
+    archive = owner_archive(tmp_path, head_database, ANNA_BACKUP, flagged=("anna_admin",))
+    code = run("restore", str(archive), "--yes")
+    out = capsys.readouterr().out
+    assert code == 0 and owner_words(out) == [], f"{profile}: confirmed, nothing about an owner: exit {code}: {out}"
+    state = json.loads(state_path(root).read_text(encoding="utf-8"))
+    assert (state.get("owner_user_id"), state.get("owner_outcome")) == (None, None), f"{profile}: no owner in the state: {state}"
+    print_success(f"{profile}: no owner word")
+
+
+def test_confirm_prints_the_refusal_of_an_owner_conflict_as_one_line_and_returns_false(tmp_path, monkeypatch, capsys):
+    """(n) B5-1j, pinned: ``_confirm`` handles ``RestoreOwnerConflictError`` as every ``RestoreStateError``: ``❌ <message>
+    (owner_conflict)``, ``False``, nothing else printed as a success."""
+    apply = apply_module()
+    root = instance(tmp_path, monkeypatch)
+
+    def refuse(*_args, **_kwargs):
+        raise apply.RestoreOwnerConflictError(f"The backup cannot give the owner their account: duplicate_email. Remove the duplicate, {MAKE_A_NEW_BACKUP} and check it again")
+
+    monkeypatch.setattr(apply, "confirm_restore", refuse)
+    answered = backup_cli._confirm(argparse.Namespace(yes=True), "0123456789abcdef0123456789abcdef", root)
+    out = capsys.readouterr().out
+    assert answered is False, "not confirmed"
+    lines = [line for line in out.splitlines() if line.strip()]
+    assert len(lines) == 1 and lines[0].startswith("❌") and lines[0].endswith("(owner_conflict)") and MAKE_A_NEW_BACKUP in lines[0], f"one ❌ line, the message and the code: {lines}"
+    print_success("owner_conflict: one ❌ line, False")
+
+
+# --- pending: what became of the owner -----------------------------------------------------
+
+
+def owner_lines_via(tmp_path: Path, monkeypatch, capsys, via: str, **owner: Any) -> tuple[list[str], str]:
+    """The lines ``pending`` prints for a committed restore confirmed via ``via`` with ``owner``, beyond those of the same
+    restore without any outcome; and the whole output."""
+    by = {"confirmed_by": via, "confirmed_via": via}
+    baseline_root = instance(tmp_path / "baseline", monkeypatch)
+    write_state(baseline_root, "committed", **by)
+    baseline = pending_lines(capsys)
+    root = instance(tmp_path / "with-owner", monkeypatch)
+    write_state(root, "committed", **by, **owner)
+    lines = pending_lines(capsys)
+    return [line for line in lines if line not in baseline], "\n".join(lines)
+
+
+@pytest.mark.parametrize("via", ["cli", "panel"])
+def test_pending_tells_a_restore_where_nobody_was_picked_to_name_an_owner(tmp_path, monkeypatch, capsys, via):
+    """(n) B5-1j: a committed restore via the command line or the panel whose outcome is ``none`` and whose owner is ``None``:
+    ``pending`` prints one line more than the same restore without outcome — that there is no owner and the command
+    ``./dev.py user reassign-owner <username>``. Red before B5-1j: nothing is printed without an owner id."""
+    print_section("(n) B5-1j pending: nobody was picked")
+    capsys.readouterr()  # the section title is output too
+    extra, out = owner_lines_via(tmp_path, monkeypatch, capsys, via, owner_user_id=None, owner_outcome="none")
+    assert len(extra) == 1, f"[new] B5-1j: one line about the owner, not {len(extra)}: {extra}\n{out}"
+    assert REASSIGN_HINT in extra[0] and "no owner" in extra[0].lower(), f"no owner and the command: {extra[0]!r}"
+    print_success(extra[0])
+
+
+def test_the_owner_outcome_printer_gives_the_command_for_none_and_stays_silent_without_an_owner_or_an_outcome(capsys):
+    """(n) B5-1j: ``_print_owner_outcome`` of ``none`` with no owner prints the reassign hint; of no owner and no outcome, or no
+    owner and anything else, nothing — as before."""
+    capsys.readouterr()
+    backup_cli._print_owner_outcome(SimpleNamespace(owner_user_id=None, owner_outcome="none"))
+    said = [line for line in capsys.readouterr().out.splitlines() if line.strip()]
+    assert len(said) == 1 and REASSIGN_HINT in said[0] and "no owner" in said[0].lower(), f"[new] B5-1j: the hint: {said}"
+    for outcome in (None, "sent", "link_only", "error:EMAIL_TAKEN"):
+        backup_cli._print_owner_outcome(SimpleNamespace(owner_user_id=None, owner_outcome=outcome))
+        assert capsys.readouterr().out == "", f"no owner, outcome {outcome!r}: nothing printed"
+    print_success("none: the hint; otherwise silent")
+
+
+@pytest.mark.parametrize("via", ["cli", "panel"])
+@pytest.mark.parametrize(("outcome", "words"), OWNER_OUTCOMES)
+def test_pending_says_what_became_of_the_owner_of_a_command_line_or_panel_restore_as_for_the_app(tmp_path, monkeypatch, capsys, via, outcome, words):
+    """(n) B5-1j: a committed restore via ``cli`` or ``panel`` with the picked owner: one line more than without an owner,
+    the same words as the app's: ``sent``, ``link_only`` (the instance log, never a link), ``error:<CODE>`` (the code and the
+    way out), and "next start" while nothing is recorded; no link or path."""
+    extra, out = owner_lines_via(tmp_path, monkeypatch, capsys, via, owner_user_id=OWNER_ID, owner_outcome=outcome)
+    assert len(extra) == 1, f"one line about the owner's account, not {len(extra)}: {extra}\n{out}"
+    assert "owner" in extra[0].lower(), f"the line names the owner: {extra[0]!r}"
+    assert [word for word in words if word.lower() not in extra[0].lower()] == [], f"{outcome}: the line holds {words}: {extra[0]!r}"
+    assert "reset-password" not in out, f"no link: {out}"
+    print_success(f"via {via}, {outcome}: {extra[0]}")
+
+
+@pytest.mark.parametrize("via", ["cli", "panel"])
+def test_pending_json_of_a_restore_where_nobody_was_picked_holds_nothing_of_the_owner(tmp_path, monkeypatch, capsys, via):
+    """(n) B5-1j, a guard: ``pending --json`` of such a restore has the usual keys, ``choices`` empty, and none of the owner's
+    words, id, outcome or address."""
+    monkeypatch.setenv("LIBREFOLIO_ADMIN_EMAIL", NEW_OWNER_EMAIL)
+    root = instance(tmp_path, monkeypatch)
+    write_state(root, "committed", confirmed_by=via, confirmed_via=via, owner_user_id=None, owner_outcome="none")
+    code = run("pending", "--json")
+    captured = capsys.readouterr()
+    answer = json.loads(captured.out)
+    assert (code, answer.get("state"), answer.get("choices"), answer.get("reason")) == (0, "committed", [], None), f"the usual line, nothing to recover: {captured.out}"
+    both = (captured.out + captured.err).lower()
+    shown = [secret for secret in ("owner", NEW_OWNER_EMAIL, "reassign") if secret in both]
+    assert shown == [], f"pending --json holds {shown}: {captured.out}"
+    print_success(f"via {via}: nothing of the owner")

@@ -85,6 +85,30 @@
       "ownerTitle": "The owner's account is not ready",
       "ownerMessage": "The data was restored, but the owner does not have their account yet, so LibreFolio shows none until your administrator sets it.",
       "ownerAdminHint": "Administrator: stop LibreFolio, run ./dev.py backup pending --recover owner to set the owner's account again, then start LibreFolio again."
+    },
+    "userLimit": {
+      "title": "More users than your plan allows",
+      "description": "This instance has {active} active users but its plan allows {max}. Choose who keeps the access: the others are deactivated, not deleted, so no data is lost, and you can reactivate them if a place frees up.",
+      "counter": "{chosen} of {max} chosen",
+      "administrator": "Administrator",
+      "protectedOwner": "Owner of the instance: always stays",
+      "protectedYou": "You: you are choosing",
+      "brokersAlone": "Only owner of {count} broker(s): the others lose access to them",
+      "noAdministrator": "Keep at least one administrator.",
+      "invitesCancelled": "{count} pending invitation(s) will be cancelled to make room.",
+      "confirm": "Deactivate the others and continue",
+      "backupTitle": "Download a full backup first",
+      "waitingTitle": "The administrator has to choose who keeps the access",
+      "waitingDescription": "This instance has more active users than its plan allows. Until an administrator chooses who keeps the access, nobody else can use it. Try again later.",
+      "checkAgain": "Check again",
+      "error": {
+        "load": "The list could not be loaded. Try again.",
+        "generic": "The choice could not be saved. Try again.",
+        "UNKNOWN_USER": "One of the chosen accounts is no longer active. Reload the page.",
+        "TOO_MANY_KEPT": "Too many accounts chosen for the plan.",
+        "PROTECTED_MISSING": "The owner of the instance, or you, must stay.",
+        "NO_ADMIN_KEPT": "At least one administrator must keep the access."
+      }
     }
   }
 }

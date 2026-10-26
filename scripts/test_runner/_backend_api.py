@@ -859,6 +859,14 @@ def api_panel_restore(verbose: bool = False, test_names: list[str] | None = None
     return run_command(cmd, "Hosting panel restore API tests", verbose=verbose)
 
 
+def api_backup_owner_channels(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the tests of the owner of a restore confirmed by the hosting panel or from the command line (B5-1j)."""
+    print_section("Restore Owner, Panel and Command Line API")
+    print_info("Testing: the panel's confirmation on a managed instance picks the account holding the owner's address (nobody found: 202, outcome none), 409 owner_conflict with advice, 409 restore_stage_outdated, self-hosted unchanged; the real restore guard for a restore of the command line or panel (423 owner_assignment while pending, served once recorded, an error keeps refusing, reset allowed)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_owner_channels_api.py", test_names)
+    return run_command(cmd, "Restore owner, panel and command line API tests", verbose=verbose)
+
+
 def api_await_restore_mode(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run the «awaiting restore» mode's API tests: refuse_when_awaiting_restore, its allowed set, ready/instance/wake/panel status (H-62, §6)."""
     print_section("Awaiting Restore Mode API")
@@ -1089,6 +1097,15 @@ def e2e_backup_roundtrip_l3(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Backup round trip L3 E2E tests", verbose=verbose)
 
 
+def e2e_backup_roundtrip_owner(verbose: bool = False, test_names: list = None) -> bool:
+    """Test a backup restored from the app on a managed instance with the owner's choice: real servers on Unix sockets (B5-1f)."""
+    print_section("E2E: Backup Restored on a Managed Instance, the Owner's Choice (B5-1f)")
+    print_info("Testing: the restore from the app on LIBREFOLIO_PROFILE=managed across pending-restore, restore-commit, restore-owner, owner-sync")
+    print_info("Tests: owner_choice required → restart → owner assigned, link only in the log, spent once; at most once; fail closed and recovered; no owner chosen clears the flag")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_e2e/test_backup_roundtrip_owner.py", test_names)
+    return run_command(cmd, "Backup round trip owner E2E tests", verbose=verbose)
+
+
 def e2e_test(verbose: bool = False) -> bool:
     """Run all E2E tests."""
     if _common.nothing_left_to_run("e2e"):
@@ -1273,7 +1290,7 @@ Tests for REST API endpoints (server auto-started):
         "backup-restore-apply",
         api_backup_restore_apply,
         name="Backup API Restore Confirmation",
-        desc="The restore confirmed through /backup/restore (lot B3): POST /stage/{id}/confirm → 202 pending, .restore/restore.json 0600 with the report's backup and action, confirmed_by the administrator, the copy kept; every refusal (404 restore_stage_not_found, 409 restore_stage_running / restore_not_restorable / restore_stage_outdated / restore_already_pending, 410 restore_stage_expired, 500 restore_folder_unusable for a .restore link or file; checks/ or stage/ a link → 404), nothing written; GET /status none (nothing created), each phase, links never followed; DELETE /pending 204 or 404 restore_not_pending without creating the lock; POST /restart 202 then one SIGTERM to the server's root process through restart.send_signal after the answer, 409 without a pending restore; the copy of an active restore: DELETE /stage 409 restore_pending, prune keeps it however old (the CLI's unrecorded copy too); administrators only (403); none of the routes allowed when blocked; OpenAPI; lot B5c: the restart's one-time ticket (43 characters, only its hash on disk, 0600, no-store, replaced by a second restart, none on a 409), GET /outcome without a session, the ticket in X-Restore-Ticket only, every invalid ticket the same 404 restore_outcome_not_found, the outcome's three fields, read again until it expires, a final outcome included (decision N53), never logged, answered on a blocked instance (H's allow-list entry); B-17: DELETE /pending drops the copy and its check record, and the ticket; B-32: a state the file system cannot read (os.open refusing restore.json alone with EACCES or EIO, or its mode 000 unless root): GET /status, DELETE /pending, POST /restart and the confirmation of a fresh check 500 restore_state_unreadable, the reader's error logged, no path or system words in the answer, nothing written (state, copy, check record, ticket untouched; no ticket issued, no restart), the restore still pending once readable; GET /outcome still the one 404, its ticket kept (guard); OpenAPI names restore_state_unreadable in the four 500s; B-41: a ticket that does not open the outcome never makes it open the state file nor log that it cannot (every case of (i) the ticket alone decides, the state made unreadable)",
+        desc="The restore confirmed through /backup/restore (lot B3): POST /stage/{id}/confirm → 202 pending, .restore/restore.json 0600 with the report's backup and action, confirmed_by the administrator, the copy kept; every refusal (404 restore_stage_not_found, 409 restore_stage_running / restore_not_restorable / restore_stage_outdated / restore_already_pending, 410 restore_stage_expired, 500 restore_folder_unusable for a .restore link or file; checks/ or stage/ a link → 404), nothing written; GET /status none (nothing created), each phase, links never followed; DELETE /pending 204 or 404 restore_not_pending without creating the lock; POST /restart 202 then one SIGTERM to the server's root process through restart.send_signal after the answer, 409 without a pending restore; the copy of an active restore: DELETE /stage 409 restore_pending, prune keeps it however old (the CLI's unrecorded copy too); administrators only (403); none of the routes allowed when blocked; OpenAPI; lot B5c: the restart's one-time ticket (43 characters, only its hash on disk, 0600, no-store, replaced by a second restart, none on a 409), GET /outcome without a session, the ticket in X-Restore-Ticket only, every invalid ticket the same 404 restore_outcome_not_found, the outcome's three fields, read again until it expires, a final outcome included (decision N53), never logged, answered on a blocked instance (H's allow-list entry); B-17: DELETE /pending drops the copy and its check record, and the ticket; B-32: a state the file system cannot read (os.open refusing restore.json alone with EACCES or EIO, or its mode 000 unless root): GET /status, DELETE /pending, POST /restart and the confirmation of a fresh check 500 restore_state_unreadable, the reader's error logged, no path or system words in the answer, nothing written (state, copy, check record, ticket untouched; no ticket issued, no restart), the restore still pending once readable; GET /outcome still the one 404, its ticket kept (guard); OpenAPI names restore_state_unreadable in the four 500s; B-41: a ticket that does not open the outcome never makes it open the state file nor log that it cannot (every case of (i) the ticket alone decides, the state made unreadable); B5-1g: a backup with a pending administrator (inactive, an unused admin_setup link) and nobody holding the owner's address is 409 owner_conflict whatever the choice, 202 when another account holds the address; a backup with no active administrator (nobody holds the address; the only account a plain user or a disabled administrator holding it) is 409 restore_not_restorable on a managed instance whatever owner it names or none, the blocker named",
         # PURE: an app of the test holds backup_router under /api/v1 (get_current_user overridden), the data directory
         # of restore.py, restore_jobs.py and apply.py is under tmp_path and the process's own one is a folder of the
         # test that must stay absent; restart.send_signal and os.kill as restart sees them record and never signal;
@@ -1437,6 +1454,18 @@ Tests for REST API endpoints (server auto-started):
     )
     add_test(
         api,
+        "backup-owner-channels",
+        api_backup_owner_channels,
+        name="Restore Owner, Panel and CLI",
+        desc="Lot B5-1j: the owner of a restore confirmed by the hosting panel (or the command line) on a managed instance with LIBREFOLIO_ADMIN_EMAIL set. Through the panel's confirm route (H's, untouched): a real check, then 202 with the state recording the account that holds the owner's address (the answer names no account or address); nobody found is still 202 with owner_outcome none; owner conflicts are 409 owner_conflict whose message says to make a new backup, nothing pending; a check made with another address is 409 restore_stage_outdated; self-hosted reads neither. The restore guard with the REAL hook and a state of the command line or panel: 423 while the owner is pending, served once the outcome is recorded, an error keeps refusing and the reset (backup pending --recover owner) is allowed; a restore where nobody was picked never keeps the instance from serving",
+        tests="Panel confirm → owner picked / outcome none; 409 owner_conflict; 409 outdated; guard 423 for cli/panel",
+        # PURE: the app of main.py in this process (ASGI) on a private database / the panel's fixtures of test_panel_restore_api.py,
+        # data directories under tmp_path, real archives from the staging tests' alembic databases; no lane server, DB or network
+        # is reached (the api category still starts the lane's backend around it).
+        isolation="pure",
+    )
+    add_test(
+        api,
         "await-restore-mode",
         api_await_restore_mode,
         name="Awaiting Restore Mode API",
@@ -1579,6 +1608,18 @@ Complete workflow tests via REST API:
         name="Backup Round Trip L3",
         desc="Contract L3 (lot B5): a populated instance served with LIBREFOLIO_BACKUP_RECIPIENTS makes a sealed backup for the hosting panel (a backup ticket): a .tar without the instance key, its download the job's SHA-256, read with read_sealed, its password opened by the test identity and checked against the envelope; an empty instance in LIBREFOLIO_AWAIT_RESTORE (the source's instance key) answers mode awaiting_restore, 423 instance_awaiting_restore, 409 backup_awaiting_restore; the panel uploads the envelope, checks it (R1: no administrators, differences or tables), confirms, restarts; a new process commits it; out of the mode the target has the source's rows, files, ledger totals and reports, and its administrator signs in; a backup ticket never opens the restore routes, and out of the mode they answer 409 restore_mode_required. RED until H-62",
         tests="Sealed backup → Await restore → Upload, Stage, Confirm, Restart → Committed → Same totals",
+        # PURE: every data directory and archive under tmp_path, every server a child uvicorn of the test on a Unix socket
+        # under /tmp (never a TCP port), in test mode on its own data directory; the lane's data directory, database and
+        # server are never read nor written.
+        isolation="pure",
+    )
+    add_test(
+        e2e,
+        "backup-roundtrip-owner",
+        e2e_backup_roundtrip_owner,
+        name="Backup Round Trip Owner",
+        desc="Lot B5-1f: a backup uploaded and restored from the app on a managed instance (LIBREFOLIO_PROFILE=managed, LIBREFOLIO_ADMIN_EMAIL, no SMTP), real uvicorn children on Unix sockets across pending-restore, admin-bootstrap, restore-commit, restore-owner, owner-sync: the check offers owner_choice, a confirmation without an owner is 409 owner_choice_required, with the backup's administrator 202; the restart exits and a new process commits; the chosen account has the owner's address, is an active administrator and the only owner, its old password and a session of before are refused, the owner's link is only in the child's log (not in the status, the state file or the data directory), is spent once and the owner signs in; another start calls nothing again; an address change that A refuses (EMAIL_TAKEN) serves no data until backup pending --recover owner; B5-1j, the real CLI restore on the same managed instance picks the owner itself: Anna, the only flagged active administrator with an old address, holds LIBREFOLIO_ADMIN_EMAIL after the restart and is the only flagged account, her old password and old session are refused, her password-reset link is only in the child's log and spends once, and the CLI names her by username and prints no address; with a flag on an ordinary account, or two flagged administrators, nobody is picked: outcome none, the CLI gives ./dev.py user reassign-owner <username>, the instance serves, nobody is flagged, no account is closed and the warning names nobody",
+        tests="Managed target → Upload, check, confirm (owner), restart → Committed → Owner link in the log → Spent once; restart: nothing again; fail closed → recover; CLI restore: Anna picked, link only in the log; nobody picked: outcome none",
         # PURE: every data directory and archive under tmp_path, every server a child uvicorn of the test on a Unix socket
         # under /tmp (never a TCP port), in test mode on its own data directory; the lane's data directory, database and
         # server are never read nor written.
