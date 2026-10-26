@@ -1206,7 +1206,7 @@ async def test_bulk_read_get_all_list_and_delete_identifier_variants(test_server
 
 @pytest.mark.asyncio
 async def test_patch_market_data_summary_and_wipe_flow(test_server):
-    """Test 21: Cover patch + market-data summary/wipe happy path."""
+    """Test 21: Cover patch + market-data summary/wipe happy path (N68: the SPLIT survives, ``splits_kept``)."""
     print_section("Test 21: PATCH + market-data summary/wipe")
 
     async with httpx.AsyncClient() as client:
@@ -1269,7 +1269,13 @@ async def test_patch_market_data_summary_and_wipe_flow(test_server):
                             "type": "DIVIDEND",
                             "value": {"code": "USD", "amount": "1.25"},
                             "notes": "wipe me",
-                        }
+                        },
+                        {
+                            "date": "2025-01-11",
+                            "type": "SPLIT",
+                            "value": {"code": "USD", "amount": "2"},
+                            "notes": "keep me",
+                        },
                     ],
                 }
             ],
@@ -1288,7 +1294,9 @@ async def test_patch_market_data_summary_and_wipe_flow(test_server):
             timeout=TIMEOUT,
         )
         assert query_resp.status_code == 200, query_resp.text
-        event_id = query_resp.json()["items"][0]["events"][0]["id"]
+        events_before = query_resp.json()["items"][0]["events"]
+        event_id = next(e["id"] for e in events_before if e["type"] == "DIVIDEND")
+        split_id = next(e["id"] for e in events_before if e["type"] == "SPLIT")
 
         broker_resp = await client.post(
             f"{API_BASE}/brokers",
@@ -1320,7 +1328,9 @@ async def test_patch_market_data_summary_and_wipe_flow(test_server):
         assert summary_resp.status_code == 200, summary_resp.text
         summary = summary_resp.json()
         assert summary["prices"] == 1
-        assert summary["events_manual"] == 1
+        assert summary["events_manual"] == 1, "the SPLIT is not counted among the events that go"
+        assert summary["events_provider"] == 0
+        assert summary["splits_kept"] == 1
         assert summary["linked_tx"] == 1
         assert summary["dry_run"] is True
         print_success("✓ Market-data summary reports existing rows")
@@ -1330,6 +1340,7 @@ async def test_patch_market_data_summary_and_wipe_flow(test_server):
         wiped = wipe_resp.json()
         assert wiped["prices"] == 1
         assert wiped["events_manual"] == 1
+        assert wiped["splits_kept"] == 1
         assert wiped["linked_tx"] == 1
         assert wiped["dry_run"] is False
 
@@ -1344,7 +1355,7 @@ async def test_patch_market_data_summary_and_wipe_flow(test_server):
             timeout=TIMEOUT,
         )
         assert post_wipe_query.status_code == 200, post_wipe_query.text
-        assert post_wipe_query.json()["items"][0]["events"] == []
+        assert [e["id"] for e in post_wipe_query.json()["items"][0]["events"]] == [split_id], "only the SPLIT survives the wipe"
 
         price_check = await client.post(
             f"{API_BASE}/assets/prices/query",
@@ -1358,7 +1369,7 @@ async def test_patch_market_data_summary_and_wipe_flow(test_server):
         )
         assert price_check.status_code == 200, price_check.text
         assert price_check.json()["items"][0]["prices"] == []
-        print_success("✓ Market-data wipe removed prices/events and disconnected tx links")
+        print_success("✓ Market-data wipe removed prices/non-split events, kept the SPLIT and disconnected tx links")
 
 
 # ============================================================================

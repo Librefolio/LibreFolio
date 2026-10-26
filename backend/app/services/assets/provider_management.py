@@ -10,7 +10,7 @@ from datetime import timedelta
 from typing import Dict, List, Optional
 
 import structlog
-from sqlalchemy import and_, delete, select
+from sqlalchemy import and_, delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,6 +29,9 @@ from backend.app.schemas import (
 )
 from backend.app.schemas.provider import (
     FAProviderConfigBase,
+    FAProviderImpactRequest,
+    FAProviderImpactResponse,
+    FAProviderImpactResult,
     FAProviderKind,
     FAProviderProbeResponse,
     FAQuoteBaseSuggestion,
@@ -50,7 +53,6 @@ from backend.app.utils.runtime.cooldown import RateLimitedError
 logger = structlog.get_logger(__name__)
 
 _PROVIDER_WIPE_REFUSAL = "PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST"
-_PROVIDER_REMOVAL_REFUSAL = "PROVIDER_REMOVAL_LINKED_TRANSACTIONS"
 _PROVIDER_REMOVAL_CONFLICT = "PROVIDER_REMOVAL_CONFLICT"
 
 
@@ -78,6 +80,25 @@ def _wipe_reason(stored_code: str, stored_params: object, code: str, params: obj
     # resumes from the day after the last stored price and therefore
     # never backfills the real past.
     return "provider changed" if _is_parametric(stored_code) else ""
+
+
+#: ``_wipe_reason``'s words, as the dry-run (``FAProviderImpactResult.reason``) says them.
+_IMPACT_REASONS = {"params changed": "params_changed", "provider changed": "provider_changed"}
+
+
+async def _assignment_event_rows(session: AsyncSession, assignment_id: int) -> list[tuple[int, date_type, str]]:
+    """The events one assignment generated (``provider_assignment_id``): (id, date, type). Manual events are not here."""
+    rows = (await session.execute(select(AssetEvent.id, AssetEvent.date, AssetEvent.type).where(AssetEvent.provider_assignment_id == assignment_id))).all()
+    return [(int(event_id), event_date, str(event_type)) for event_id, event_date, event_type in rows]
+
+
+async def _unlink_transactions_of(session: AsyncSession, event_ids: list[int]) -> int:
+    """Disconnect the transactions linked to ``event_ids`` (``asset_event_id`` to NULL), the events about to be deleted:
+    the transactions stay, without the link (Policy D). Returns how many."""
+    if not event_ids:
+        return 0
+    result = await session.execute(Transaction.__table__.update().where(Transaction.asset_event_id.in_(event_ids)).values(asset_event_id=None))
+    return result.rowcount or 0
 
 
 def _probe_failure_fields(error: Exception) -> dict:
@@ -338,18 +359,18 @@ class ProviderManagementOperations:
             stored[item.asset_id] = (item.provider_code, params)
 
     @staticmethod
-    async def _reject_removals_of_linked_events(asset_ids: list[int], session: AsyncSession, current_user_id: Optional[int]) -> None:
-        """X-R62: refuse the request when removing an asset's assignment would delete an event its provider generated
-        (``asset_events.provider_assignment_id`` is ``ON DELETE CASCADE``) that a transaction is linked to
-        (``transactions.asset_event_id`` is ``RESTRICT``: the delete would fail on it). Manual events stay, so they are
-        not read.
+    async def _reject_removals_of_costless_splits(asset_ids: list[int], session: AsyncSession, current_user_id: Optional[int]) -> None:
+        """Refuse the request when removing an asset's assignment would delete a SPLIT its provider generated while
+        incoming adjustments linked to it have no purchase cost (the rule of X-R49, here for the removal too, X5-1): with
+        the SPLIT gone they would be acquisitions of unknown cost. Any other linked transaction is disconnected, as a
+        change of provider does.
 
         Run before the request's only write, so a refusal leaves nothing behind. The assets are followed in the request's
         order; an asset named twice is read once, at its first position.
 
         Raises:
-            AssetSourceError(code="PROVIDER_REMOVAL_LINKED_TRANSACTIONS"): ``details`` = ``asset_id``, ``item_index``
-                (the asset's first position in the request) and ``events`` as ``event_links`` names them for
+            AssetSourceError(code="PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST"): ``details`` = ``asset_id``, ``item_index``
+                (the asset's first position in the request) and ``splits`` as ``split_guard`` names them for
                 ``current_user_id``; the message gives the totals only.
         """
         seen: set[int] = set()
@@ -357,24 +378,89 @@ class ProviderManagementOperations:
             if asset_id in seen:
                 continue
             seen.add(asset_id)
-            generated = select(AssetEvent.id, AssetEvent.date, AssetEvent.type).join(AssetProviderAssignment, AssetEvent.provider_assignment_id == AssetProviderAssignment.id).where(AssetProviderAssignment.asset_id == asset_id)
-            rows = (await session.execute(generated)).all()
-            events = await events_with_linked_transactions(session, [(int(event_id), event_date, event_type) for event_id, event_date, event_type in rows], current_user_id)
-            if events:
-                linked = sum(len(event["transaction_ids"]) + event["hidden_transactions_count"] for event in events)
+            assignment_id = (await session.execute(select(AssetProviderAssignment.id).where(AssetProviderAssignment.asset_id == asset_id))).scalar_one_or_none()
+            if assignment_id is None:
+                continue
+            rows = await _assignment_event_rows(session, int(assignment_id))
+            splits = await splits_with_costless_adjustments(session, [(event_id, event_date) for event_id, event_date, _ in rows], current_user_id)
+            if splits:
                 raise AssetSourceError(
-                    f"{_PROVIDER_REMOVAL_REFUSAL}: removing the provider would delete {len(events)} event(s) it generated, linked to {linked} transaction(s); unlink them first",
-                    _PROVIDER_REMOVAL_REFUSAL,
-                    {"asset_id": asset_id, "item_index": item_index, "events": events},
+                    f"{_PROVIDER_WIPE_REFUSAL}: removing the provider would delete {len(splits)} split(s) it generated, with {adjustments_count(splits)} linked adjustment(s) without a purchase cost; give them a cost first",
+                    _PROVIDER_WIPE_REFUSAL,
+                    {"asset_id": asset_id, "item_index": item_index, "splits": splits},
                 )
+
+    @staticmethod
+    async def provider_change_impact(request: FAProviderImpactRequest, session: AsyncSession, *, current_user_id: Optional[int] = None) -> FAProviderImpactResponse:
+        """What saving the assignments and removing the providers of ``request`` would delete, counted, nothing written (X5-1).
+
+        The numbers are those of the real operations: an assignment that wipes (``_wipe_reason``: a parametric provider's
+        new parameters, or leaving it) deletes every price of the asset and the events its assignment generated, and
+        disconnects the transactions linked to them; a removal deletes the events the assignment generated, disconnects
+        those transactions, and keeps the prices. ``blocking_splits`` is the X-R49 refusal's list: when it is not empty the
+        real operation is refused. The transactions are counted in total, the ones the caller cannot see included, and
+        never named. The counts of each item are read from what is stored now, on their own; the reason of an asset named twice among the assignments follows its previous item, as the write loop compares it.
+        """
+        asset_ids = [item.asset_id for item in request.assignments] + list(request.removals)
+        stored: Dict[int, AssetProviderAssignment] = {}
+        if asset_ids:
+            stored = {row.asset_id: row for row in (await session.execute(select(AssetProviderAssignment).where(AssetProviderAssignment.asset_id.in_(asset_ids)))).scalars().all()}
+        state = {asset_id: (row.provider_code, row.provider_params) for asset_id, row in stored.items()}
+        results: list[FAProviderImpactResult] = []
+
+        async def measure(asset_id: int, with_prices: bool) -> tuple[int, int, int, list[dict]]:
+            assignment = stored.get(asset_id)
+            if assignment is None:
+                return 0, 0, 0, []
+            prices = int((await session.execute(select(func.count()).select_from(PriceHistory).where(PriceHistory.asset_id == asset_id))).scalar_one()) if with_prices else 0
+            rows = await _assignment_event_rows(session, assignment.id)
+            linked = await events_with_linked_transactions(session, rows, current_user_id)
+            unlinked = sum(len(event["transaction_ids"]) + event["hidden_transactions_count"] for event in linked)
+            splits = await splits_with_costless_adjustments(session, [(event_id, event_date) for event_id, event_date, _ in rows], current_user_id)
+            return prices, len(rows), unlinked, splits
+
+        for item in request.assignments:
+            params = _params_to_store(item.provider_params)
+            reason = _wipe_reason(*state[item.asset_id], item.provider_code, params) if item.asset_id in state else ""
+            prices = events = unlinked = 0
+            splits: list[dict] = []
+            if reason:
+                prices, events, unlinked, splits = await measure(item.asset_id, True)
+            state[item.asset_id] = (item.provider_code, params)
+            results.append(
+                FAProviderImpactResult(
+                    asset_id=item.asset_id,
+                    action="assign",
+                    reason=_IMPACT_REASONS[reason] if reason else "none",
+                    prices_deleted=prices,
+                    events_deleted=events,
+                    transactions_unlinked=unlinked,
+                    blocking_splits=splits,
+                )
+            )
+        for asset_id in request.removals:
+            _, events, unlinked, splits = await measure(asset_id, False)
+            results.append(
+                FAProviderImpactResult(
+                    asset_id=asset_id,
+                    action="remove",
+                    reason="provider_removed" if asset_id in stored else "none",
+                    prices_deleted=0,
+                    events_deleted=events,
+                    transactions_unlinked=unlinked,
+                    blocking_splits=splits,
+                )
+            )
+        return FAProviderImpactResponse(results=results)
 
     @staticmethod
     async def bulk_remove_providers(asset_ids: list[int], session: AsyncSession, *, current_user_id: Optional[int] = None) -> FABulkRemoveResponse:
         """
         Bulk remove provider assignments (PRIMARY bulk method).
 
-        Removing an assignment deletes the events its provider generated; while a transaction is linked to one of them
-        the request is refused before any write (X-R62, ``_reject_removals_of_linked_events``).
+        Removing an assignment deletes the events its provider generated and disconnects the transactions linked to them,
+        as a change of provider does; the prices stay (X5-1). The one refusal is the X-R49 rule: a SPLIT among those events
+        with adjustments linked to it that have no purchase cost (``_reject_removals_of_costless_splits``, before any write).
 
         Args:
             asset_ids: List of asset IDs
@@ -385,7 +471,7 @@ class ProviderManagementOperations:
             FABulkRemoveResponse with results and success count
 
         Raises:
-            AssetSourceError(code="PROVIDER_REMOVAL_LINKED_TRANSACTIONS"): see ``_reject_removals_of_linked_events``.
+            AssetSourceError(code="PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST"): see ``_reject_removals_of_costless_splits``.
             AssetSourceError(code="PROVIDER_REMOVAL_CONFLICT"): the delete still broke a reference (a link made after the
                 check): rolled back, nothing removed; ``details`` is empty and the message carries no SQL.
 
@@ -393,10 +479,16 @@ class ProviderManagementOperations:
         """
         if not asset_ids:
             return FABulkRemoveResponse(results=[], success_count=0)
-        await ProviderManagementOperations._reject_removals_of_linked_events(asset_ids, session, current_user_id)
+        await ProviderManagementOperations._reject_removals_of_costless_splits(asset_ids, session, current_user_id)
         try:
+            # The events of the assignments go with them (ON DELETE CASCADE); the transactions linked to those events
+            # would stop the delete (RESTRICT), so they lose the link first, in the same transaction.
+            event_ids = [int(row[0]) for row in (await session.execute(select(AssetEvent.id).join(AssetProviderAssignment, AssetEvent.provider_assignment_id == AssetProviderAssignment.id).where(AssetProviderAssignment.asset_id.in_(asset_ids)))).all()]
+            disconnected = await _unlink_transactions_of(session, event_ids)
             await session.execute(delete(AssetProviderAssignment).where(AssetProviderAssignment.asset_id.in_(asset_ids)))
             await session.commit()
+            if event_ids:
+                logger.info("provider removed for asset(s) %s — deleted %d generated event(s), disconnected %d transaction(s)", asset_ids, len(event_ids), disconnected)
         except IntegrityError as exc:
             await session.rollback()
             logger.warning("provider removal for asset(s) %s stopped by a reference to the generated events, nothing removed: %s", asset_ids, exc.orig)

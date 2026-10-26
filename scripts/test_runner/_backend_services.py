@@ -992,6 +992,16 @@ def services_brim_parse_settings(verbose: bool = False, test_names: list = None)
     return run_command(cmd, "BRIM parse settings tests", verbose=verbose)
 
 
+def services_brim_field_contract(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the contract of a field in a BRIM plugin: declaration, default = old behaviour, per-user value, stale parse."""
+    print_section("Services: BRIM Field Contract")
+    print_info("Testing: plugin_settings/resolver.py (default_settings_fingerprint, settings_changed_since), the worked example of the BRIM plugin guide")
+    print_info("Tests: a BRIM plugin declares a field and registers, the default is the old behaviour, the parse sees the importing user's value, a parse is stale exactly when the values a re-parse would receive differ")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_field_contract.py", test_names)
+    return run_command(cmd, "BRIM field contract tests", verbose=verbose)
+
+
 def services_settings(verbose: bool = False, test_names: list = None) -> bool:
     """Test settings service: user settings CRUD, get_effective_base_currency."""
     print_section("Services: Settings Service")
@@ -1240,13 +1250,13 @@ def services_test_only_providers(verbose: bool = False, test_names: list = None)
     return run_command(cmd, "Test-only provider tests", verbose=verbose)
 
 
-def services_market_data_wipe_split_guard(verbose: bool = False, test_names: list = None) -> bool:
-    """Run X-R48: the market-data wipe refuses while a SPLIT of the asset has incoming adjustments without a purchase cost."""
-    print_section("Services: Market Data Wipe Split Guard")
-    print_info("Testing: backend/app/services/assets/currency_change.py (wipe_market_data_for_currency_change), backend/app/api/v1/assets/market_data.py")
-    print_info("Tests: the wipe refused with MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST (HTTP 409) naming each such split by date and only the caller's adjustments, nothing written; with a cost, an outgoing row, no link or a dry run the wipe is as before")
-    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_market_data_wipe_split_guard.py", test_names)
-    return run_command(cmd, "Market data wipe split guard tests", verbose=verbose)
+def services_market_data_wipe_keeps_splits(verbose: bool = False, test_names: list = None) -> bool:
+    """Run N68: the market-data wipe and the currency change keep the SPLIT events."""
+    print_section("Services: Market Data Wipe Keeps Splits")
+    print_info("Testing: backend/app/services/assets/currency_change.py (wipe_market_data_for_currency_change), backend/app/services/assets/crud.py (patch_assets_bulk), backend/app/api/v1/assets/market_data.py")
+    print_info("Tests: the wipe and the currency PATCH delete the prices and the non-split events, unlink their transactions and keep every SPLIT with the transactions linked to it, never refusing; summary keys incl. splits_kept")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_market_data_wipe_keeps_splits.py", test_names)
+    return run_command(cmd, "Market data wipe keeps splits tests", verbose=verbose)
 
 
 def services_routes_generic_500(verbose: bool = False, test_names: list = None) -> bool:
@@ -1268,12 +1278,21 @@ def services_provider_wipe_split_guard(verbose: bool = False, test_names: list =
 
 
 def services_provider_removal_link_guard(verbose: bool = False, test_names: list = None) -> bool:
-    """Run X-R62: removing a provider refuses while a transaction is linked to an event it generated."""
+    """Run X-R69 (was X-R62): removing a provider unlinks the transactions linked to the events it generated; only a SPLIT with costless adjustments refuses."""
     print_section("Services: Provider Removal Link Guard")
-    print_info("Testing: backend/app/services/assets/provider_management.py (bulk_remove_providers), backend/app/services/assets/event_links.py, backend/app/api/v1/assets/providers.py")
-    print_info("Tests: a removal refused with PROVIDER_REMOVAL_LINKED_TRANSACTIONS (HTTP 409) while a generated event has a linked transaction, only the caller's transactions named, nothing written; a link the check missed is PROVIDER_REMOVAL_CONFLICT (409, no SQL); else the removal is as before")
+    print_info("Testing: backend/app/services/assets/provider_management.py (bulk_remove_providers), backend/app/services/assets/event_links.py, backend/app/services/assets/split_guard.py, backend/app/api/v1/assets/providers.py")
+    print_info("Tests: a removal unlinks (asset_event_id NULL) every transaction linked to an event of the assignment and deletes the assignment with its events; a SPLIT with costless adjustments is refused with PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST (HTTP 409), only the caller's transactions named, nothing written; a link made meanwhile is PROVIDER_REMOVAL_CONFLICT (409, no SQL); else the removal is as before")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_removal_link_guard.py", test_names)
     return run_command(cmd, "Provider removal link guard tests", verbose=verbose)
+
+
+def services_provider_change_impact(verbose: bool = False, test_names: list = None) -> bool:
+    """Run X-R69 / C-65a: the dry run of a provider change or removal (POST /assets/provider/impact) tells what would be deleted and unlinked, and writes nothing."""
+    print_section("Services: Provider Change Impact")
+    print_info("Testing: backend/app/services/assets/provider_management.py (provider_change_impact), backend/app/schemas/provider.py (FAProviderImpact*), backend/app/api/v1/assets/providers.py (POST /provider/impact)")
+    print_info("Tests: per assignment or removal, the reason (none, params_changed, provider_changed, provider_removed) and the prices, events and transactions that would go, the blocking SPLITs as the caller may see them; parity with the real operation; route 200, 401, 422")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_change_impact.py", test_names)
+    return run_command(cmd, "Provider change impact tests", verbose=verbose)
 
 
 def services_event_split_ratio(verbose: bool = False, test_names: list = None) -> bool:
@@ -2012,6 +2031,33 @@ def services_tools_lifecycle(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Tool lifecycle tests", verbose=verbose)
 
 
+def services_tool_settings_contract(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the settings of the Tool family: rules, quarantine, tool-code keys, worker binding, refusal of an unconfigured Tool."""
+    print_section("Services: Tool Settings Contract")
+    print_info("Testing: plugin_settings/fields.py (FAMILY_RULES['tool']), tools/base.py, registry.py, worker.py (settings), executor.py (settings), api/v1/tools.py (compute_tools)")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_tool_settings_contract.py", test_names)
+    return run_command(cmd, "Tool settings contract tests", verbose=verbose)
+
+
+def services_tool_settings_runtime(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the values of a Tool on a private database: configure_instance, bound_settings_for_batch, the catalogue and the writes."""
+    print_section("Services: Tool Settings Resolution and Catalogue")
+    print_info("Testing: plugin_settings/runtime.py (plugin_code), tools/settings.py (bound_settings_for_batch), plugin_settings/service.py (family tool)")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_tool_settings_runtime.py", test_names)
+    return run_command(cmd, "Tool settings runtime tests", verbose=verbose)
+
+
+def services_tool_settings_lifecycle(verbose: bool = False, test_names: list = None) -> bool:
+    """Test a Tool's settings through the real executor and the real spawn worker."""
+    print_section("Services: Tool Settings Lifecycle")
+    print_info("Testing: real POSIX spawn workers receive the values the parent resolved (ToolWorkerJob.settings), per tool code and per caller")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_tool_settings_lifecycle.py", test_names)
+    return run_command(cmd, "Tool settings lifecycle tests", verbose=verbose)
+
+
 def services_all(verbose: bool = False) -> bool:
     """Run all backend service tests."""
     if _common.nothing_left_to_run("services"):
@@ -2644,6 +2690,14 @@ Note: No backend server required.
         desc="Plugin settings on the BRIM parse: no field = called as before, fields = BoundSettings resolved in the parent and bound in the child, secrets masked in errors and logs, the endpoint passes the user",
         isolation="pure",
     )
+    add_test(
+        cat,
+        "brim-field-contract",
+        services_brim_field_contract,
+        name="BRIM Field Contract",
+        desc="A field in a BRIM plugin (CP12): declaration, default = the behaviour before the field, the importing user's value, and the stale-parse rule (settings_changed_since)",
+        isolation="pure",
+    )
     add_test(cat, "settings", services_settings, name="Settings Service", desc="User settings CRUD, get_effective_base_currency")
     add_test(cat, "current-price-bootstrap", services_current_price_bootstrap, name="Current Price Bootstrap", desc="OHLC widening helper (F.2/F.3)")
     add_test(cat, "scheduled-investment-param-change", services_scheduled_investment_param_change, name="Scheduled Investment Param Change", desc="Symmetric wipe on provider_params change")
@@ -2751,7 +2805,7 @@ Note: No backend server required.
         "current-prices-bulk",
         services_current_prices_bulk,
         name="Current Prices Bulk (R13-SEC9)",
-        desc="POST /prices/current: one fetch and one write-back per distinct id, the 2-min cache re-read after the provider slot, 1 000 ids, range_start (1900…tomorrow) and target_currency bounded by their parameters, the range change once per distinct id and in the target currency, the quotes standing when it fails; POST /prices/query and /current 500s never echo their error; MF-SEC9c: the DB fallbacks read after the live quotes, one grouped read (an unreadable latest close looked up alone), never two statements in flight on the session",
+        desc="POST /prices/current: one fetch and one write-back per distinct id, the 2-min cache re-read after the provider slot, 1 000 ids, range_start (any day up to tomorrow, no floor: X5-6) and target_currency bounded by their parameters, the range change once per distinct id and in the target currency, the quotes standing when it fails; POST /prices/query and /current 500s never echo their error; MF-SEC9c: the DB fallbacks read after the live quotes, one grouped read (an unreadable latest close looked up alone), never two statements in flight on the session",
         # PURE: the service on a private in-memory SQLite (create_all), the provider a double behind core.configured_provider,
         # a private current-value cache, the route called directly or through a fresh in-process app (httpx.ASGITransport),
         # its service and live_range_changes replaced by recorders, all by monkeypatch.
@@ -2847,10 +2901,10 @@ Note: No backend server required.
     )
     add_test(
         cat,
-        "market-data-wipe-split-guard",
-        services_market_data_wipe_split_guard,
-        name="Market Data Wipe Split Guard",
-        desc="X-R48: POST /assets/{id}/market-data/wipe refused before any write with MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST (409) while a SPLIT of the asset, manual or provider, has linked incoming ADJUSTMENTs without a purchase cost; details list every such SPLIT by date then id with the caller's visible transaction_ids and hidden_transactions_count (none named without a caller); a cost of 0, an outgoing row, a SPLIT without links, another asset's SPLIT and the dry run leave the wipe as before",
+        "market-data-wipe-keeps-splits",
+        services_market_data_wipe_keeps_splits,
+        name="Market Data Wipe Keeps Splits",
+        desc="N68 (X5-3, policy A): the market-data wipe (POST /assets/{id}/market-data/wipe) and the currency PATCH delete the prices and every NON-SPLIT event (manual and provider), set asset_event_id to NULL on the transactions linked to those, and keep every SPLIT event, manual or provider, with the transactions linked to it (a costless incoming ADJUSTMENT stays linked and costless); never a refusal for it (X-R48's MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST and the token CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA are gone). Answer and summary keys: prices, events_manual, events_provider (non-split), splits_kept, linked_tx, oldest, newest, dry_run",
         # WRITE-SCOPED, the category default: every row is this unit's own (assets, brokers, users and accesses under a
         # unique marker), wiped by asset and broker id; the route runs in process on an app of the call's own.
     )
@@ -2877,9 +2931,18 @@ Note: No backend server required.
         "provider-removal-link-guard",
         services_provider_removal_link_guard,
         name="Provider Removal Link Guard",
-        desc="X-R62: DELETE /assets/provider refused before any write with PROVIDER_REMOVAL_LINKED_TRANSACTIONS (409) while an event the removed assignment generated (deleted with it, CASCADE) has a linked transaction (RESTRICT); details name the asset (asset_id, item_index: its first position) and each such event (event_id, date, type) with the caller's visible transaction_ids and hidden_transactions_count (none named without a caller), the message the totals only; the assets before the blocked one are not removed either. A link the check missed is rolled back and answered PROVIDER_REMOVAL_CONFLICT (409, empty params, no SQL text). No linked transaction, a manual event, an asset without an assignment or an empty request: as before",
+        desc="X-R69 (was X-R62): DELETE /assets/provider unlinks (asset_event_id NULL) every transaction linked to an event the removed assignment generated, whoever owns the broker, then deletes the assignment with its events (CASCADE); prices and manual events (and their links) are kept. The one refusal left is X-R49's: PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST (409) while a generated SPLIT has linked incoming ADJUSTMENTs without a purchase cost; details name the asset (asset_id, item_index: its first position) and each such SPLIT with the caller's visible transaction_ids and hidden_transactions_count (none named without a caller), the message gives no id; the assets before the blocked one are not removed either. A link made between the unlinking and the delete is rolled back and answered PROVIDER_REMOVAL_CONFLICT (409, empty params, no SQL text). No linked transaction, a manual event, an asset without an assignment or an empty request: as before",
         # WRITE-SCOPED, the category default: three inactive assets (no lane scheduler refreshes them), two users and two
         # brokers under a unique marker, dated 1984; each test writes its own assignments and wipes by asset and broker id.
+    )
+    add_test(
+        cat,
+        "provider-change-impact",
+        services_provider_change_impact,
+        name="Provider Change Impact",
+        desc="X-R69 / C-65a: POST /assets/provider/impact (AssetSourceManager.provider_change_impact), the dry run of «cambia» and «togli», writes nothing. Per assignment item: reason none | params_changed | provider_changed exactly when the save would wipe (a parametric provider with other params, or leaving one), with prices_deleted (all the asset's), events_deleted (the stored assignment's, manual events excluded), transactions_unlinked (visible or hidden, counted, never named) and blocking_splits (costless-adjustment SPLITs as the caller may see them); none and zeros for a market -> market change, the same code and params or an asset without an assignment. Per removal: provider_removed (else none), prices_deleted 0, the rest as above. Results in order (assignments, then removals). Parity: the numbers equal what the real save or removal then deletes and unlinks, and a blocking SPLIT is the refusal it answers. Route: 200, 401 without a user, 422 for junk (unknown keys included), a missing list defaults to empty",
+        # WRITE-SCOPED, the category default: three inactive assets (no lane scheduler refreshes them), two users and two
+        # brokers under a unique marker, dated 1983; each test writes its own assignments and wipes by asset and broker id.
     )
     add_test(
         cat,
@@ -3416,6 +3479,30 @@ Note: No backend server required.
         name="Tool Lifecycle",
         desc="Owned spawn workers, quotas, ready/ACK, cancellation, PID identity and full-tree cleanup",
         exclusive_because=("owns native POSIX process groups and exercises forceful teardown and executor quarantine; " "requires an explicitly leased lifecycle run rather than concurrent shared-backend manual review"),
+    )
+    add_test(
+        cat,
+        "tool-settings-contract",
+        services_tool_settings_contract,
+        name="Tool Settings Contract",
+        desc="CP12 X5-4b: FAMILY_RULES['tool'] (personal ok, secret refused), ToolPlugin inherits the settings mixin, the registry validates the declaration when it builds the definition (invalid_settings quarantine, siblings untouched, claims per tool code, test_only withheld outside test mode), the default is the old behaviour, ToolWorkerJob.settings pickles and the worker binds it, an unconfigured Tool is service_unavailable without a worker, compute_tools resolves bound_settings_for_batch for the caller",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "tool-settings-runtime",
+        services_tool_settings_runtime,
+        name="Tool Settings Resolution",
+        desc="CP12 X5-4b on a private DB: configure_instance(plugin_code), bound_settings_for a tool code, bound_settings_for_batch (instance and user values, per tool code, no read for a Tool without fields), the catalogue lists Tools by tool code, writes with family=tool (scopes, bounds, env lock, all or nothing)",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "tool-settings-lifecycle",
+        services_tool_settings_lifecycle,
+        name="Tool Settings Lifecycle",
+        desc="CP12 X5-4b with real spawn workers: the plugin sees the value the parent delivered, the defaults when none, the values of its own tool code, never another caller's; an unconfigured Tool starts no worker while its sibling runs",
+        exclusive_because=("starts real multiprocessing spawn workers that own native POSIX process sessions and the executor's process-wide pool, " "like tools-lifecycle; run it in the same leased resource slot, never beside other process-owning units"),
     )
     add_test(cat, "all", services_all, test_names=False, name="All Services Tests", desc="Run all service tests")
     registry["services"] = cat

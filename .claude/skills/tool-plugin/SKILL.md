@@ -133,6 +133,14 @@ Money in a custom renderer goes only through the D8 primitives
 A renderer that formats money by hand is caught by the privacy gate only when the line carries a
 currency token; any other form breaks privacy mode without a red test.
 
+## Settings
+
+A tool may declare `settings_fields` (family `tool`, CP12): personal (`user`) or instance (`system`) fields, **never secret**.
+The values are keyed by the **tool code** of each service. The parent resolves them for the user who asks
+(`services/tools/settings.py`) and the job carries them to the worker; `compute()` reads `self.settings.get("key")` and still
+touches no database. A required field without a value makes that item `service_unavailable` before any worker starts. Details and
+a worked example: `mkdocs_src/docs/developer/architecture/patterns/plugin_settings.md#tool-field`.
+
 ## Completion evidence
 
 - New or repaired tests go through `test-author`; follow actual runner ownership.

@@ -6481,6 +6481,10 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
 - **X-50t · Tradurre la pagina utente di Yahoo (settori, TER, emittente dei fondi)** — minimo, documentazione; X, 22/10
   (#50). `yahoo-finance.en.md` ha la voce «Fund details»; mancano `.it/.fr/.es`, non timbrati. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «Ondata 4».
 
+- **X-51t · Tradurre le pagine nuove del lotto X5-1 e di Yahoo** — minimo, documentazione; X, 23/10. `user/assets/create-edit.en.md`
+  (sezione «Changing or removing the provider») e `yahoo-finance.en.md` («Known limitation: splits») non hanno ancora `.it/.fr/.es`.
+  Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), «Ondata 5».
+
 ## W · Import e transazioni (fase 01)
 
 Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01ImportTransactions.prompt.md).

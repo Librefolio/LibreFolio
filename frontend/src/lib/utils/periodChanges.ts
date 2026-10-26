@@ -19,6 +19,7 @@
  */
 import {zodiosApi} from '$lib/api';
 import {sendBulkBatches} from '$lib/api/bulkBatches';
+import {utcMs} from './dateOnly';
 import {assetRangeDelta, fxRangeDeltas, rangeStartFor, ratioToPercent, type RangeDelta} from './rangeChange';
 
 export {ratioToPercent};
@@ -49,7 +50,7 @@ function isoDayNumber(iso: string): number | null {
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
     if (!match) return null;
     const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
-    const time = Date.UTC(year, month - 1, day);
+    const time = utcMs(year, month - 1, day);
     const back = new Date(time);
     if (!Number.isFinite(time) || back.getUTCFullYear() !== year || back.getUTCMonth() !== month - 1 || back.getUTCDate() !== day) return null;
     return time / DAY_MS;

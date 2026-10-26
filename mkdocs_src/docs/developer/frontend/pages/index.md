@@ -201,6 +201,9 @@ frontend/src/routes/
 - A row opens read-only in the Form modal; adding, editing, cloning, deleting and importing go
   through the bulk workspace (`TransactionBulkModal`). After every saved operation the page clears
   its selection ([Selection on the Transactions page](../state/transaction-draft.md#transactions-selection))
+- **Relink events** (`tx-reconcile-events-button`) opens `EventReconciliationModal`: the dividends, interest and
+  adjustments without an asset event, each with the event of the same day the server found; see
+  [Event Reconciliation](../../backend/transactions/service.md#event-reconciliation)
 
 ### 💼 Assets (`/assets`)
 

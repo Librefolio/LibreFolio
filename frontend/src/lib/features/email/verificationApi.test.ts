@@ -43,6 +43,7 @@ import {AxiosError, AxiosHeaders, type AxiosAdapter, type AxiosResponse, type In
 import {ApiError, axiosInstance, zodiosApi} from '$lib/api';
 import {instanceBlock} from '$lib/features/instance/instanceBlock.svelte';
 import {confirmEmailVerification, readLinkRefusal, readResendFailure, resendEmailVerification, type ResendFailure, type VerificationLinkRefusal} from './verificationApi';
+import {spyOnApi} from '$test/spyOnApi';
 
 const CONFIRM_ALIAS = 'confirm_email_verification_api_v1_email_verification_confirm_post';
 const RESEND_ALIAS = 'resend_email_verification_api_v1_email_verification_resend_post';

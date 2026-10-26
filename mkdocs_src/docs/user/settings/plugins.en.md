@@ -16,7 +16,7 @@ Only the plugins that ask for something are listed, under **Prices** for the
 chart for prices, coins for exchange rates); a heading with no such plugin is left out. Of
 the plugins shipped with LibreFolio, two have a setting today, a personal search preference each:
 **JustETF** and **Borsa Italiana** (see [Search Preferences](#search-preferences)). A plugin added
-to your installation may ask for more. When no plugin asks for anything, the tab says *No installed
+to your installation may ask for more. The tab also has a **Tools** group, for the [Tools](../tools/index.md) that have settings of their own; none of them does yet, so you will not see it today. When no plugin asks for anything, the tab says *No installed
 plugin asks for settings.*
 
 ## 🧾 One Plugin, One Form {: #form }

@@ -13,29 +13,31 @@
     interface Props {
         primaryMode: AssetChartPrimaryMode;
         onselect: (mode: AssetChartPrimaryMode) => void;
+        /** The first part of every test id: the asset detail's own, or `fx` on the pair detail (X5-F1). */
+        idPrefix?: string;
     }
 
-    let {primaryMode, onselect}: Props = $props();
+    let {primaryMode, onselect, idPrefix = 'asset'}: Props = $props();
 </script>
 
 <div class="flex rounded-lg overflow-hidden border border-lf-subtle text-xs font-medium">
     <button
         class="inline-flex items-center gap-1.5 px-3 py-1 transition-colors {primaryMode === 'price' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
-        data-testid="asset-chart-primary-price"
+        data-testid={`${idPrefix}-chart-primary-price`}
         aria-pressed={primaryMode === 'price'}
         onclick={() => onselect('price')}
     >
-        <ChartLine size={14} data-testid="asset-chart-primary-price-icon" />
+        <ChartLine size={14} data-testid={`${idPrefix}-chart-primary-price-icon`} />
         {$t('assetDetail.pricesTab')}
     </button>
     <button
         class="inline-flex items-center gap-1.5 px-3 py-1 border-l border-lf-subtle transition-colors disabled:opacity-40 disabled:cursor-not-allowed {primaryMode === 'calendar-return' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
-        data-testid="asset-chart-primary-calendar-return"
+        data-testid={`${idPrefix}-chart-primary-calendar-return`}
         aria-pressed={primaryMode === 'calendar-return'}
         onclick={() => onselect('calendar-return')}
     >
         <!-- The rolling-return icon of the list cards and of the Chart Settings (developer decision V-8b). -->
-        <CalendarSync size={14} data-testid="asset-chart-primary-calendar-return-icon" />
+        <CalendarSync size={14} data-testid={`${idPrefix}-chart-primary-calendar-return-icon`} />
         {$t('signals.riskRollingReturn.name')}
     </button>
 </div>

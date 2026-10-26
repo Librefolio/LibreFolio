@@ -309,7 +309,7 @@ async def test_compute_route_uses_the_batch_effective_request_budget(
         captured["timeout_ms"] = timeout_ms
         return request
 
-    async def compute_until_disconnect(actual_batch, request, principal_key):
+    async def compute_until_disconnect(actual_batch, request, principal_key, settings=None):
         captured["batch"] = actual_batch
         captured["bounded_request"] = request
         captured["principal_key"] = principal_key
@@ -352,7 +352,7 @@ async def test_disconnect_cancels_compute_before_any_engine_start(
     engine_starts = []
 
     class _Executor:
-        async def compute(self, actual_batch, *, principal_key, request_started):
+        async def compute(self, actual_batch, *, principal_key, request_started, settings=None):
             assert actual_batch is batch
             assert principal_key == "owned-principal"
             assert request_started == 123.0

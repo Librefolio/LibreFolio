@@ -166,10 +166,16 @@ def test_every_type_declares_cleanly_for_the_asset_family():
 
 
 def test_the_family_rules_are_the_documented_ones():
-    """1: assets and BRIM take user fields and secrets; FX takes secrets but no user field; no other family is open yet.
+    """1: assets and BRIM take user fields and secrets; FX takes secrets but no user field; a Tool takes user fields and no
+    secret (a call is made for a user, and a Tool calls no external source); no other family is open yet.
 
-    Red today (W-BS): ``brim`` has no rules, so a BRIM plugin cannot declare a setting."""
-    assert FAMILY_RULES == {"asset": FamilyRules(user_scope=True, secrets=True), "fx": FamilyRules(user_scope=False, secrets=True), "brim": FamilyRules(user_scope=True, secrets=True)}
+    Red today (CP12, X5-4b): ``tool`` has no rules, so a Tool plugin cannot declare a setting."""
+    assert FAMILY_RULES == {
+        "asset": FamilyRules(user_scope=True, secrets=True),
+        "fx": FamilyRules(user_scope=False, secrets=True),
+        "brim": FamilyRules(user_scope=True, secrets=True),
+        "tool": FamilyRules(user_scope=True, secrets=False),
+    }
 
 
 def test_an_fx_plugin_declares_system_fields_and_secrets_but_no_user_field():

@@ -246,7 +246,7 @@ A specialized `SearchSelect` for currency selection.
   `data-suggestion`). The answer is asked once per value, through `currencyStore.suggestCurrency()`;
   until it comes, and for an ISO code the list lacks, the value is shown as it is. There is no
   one-click fix: choosing the code is up to the user, since in the asset modal a new currency is a
-  currency change, whose only path today deletes the asset's prices and events (Policy D)
+  currency change, whose only path today deletes the asset's prices and events other than splits (Policy D, N68)
 
 **Used in**: currency fields across the app — FX pair creation (base/quote), broker form, asset
 modal, dashboard and asset detail target currency, settings.

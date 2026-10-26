@@ -28,7 +28,7 @@ from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
 from backend.app.schemas.common import DateRangeModel
 from backend.app.schemas.transactions.batch import TXBatchResponse, TXMixedBatch, TXPromoteBatchItem, TXSplitBatchItem
-from backend.app.schemas.transactions.event_suggest import TXEventSuggestRequestItem, TXEventSuggestResultItem
+from backend.app.schemas.transactions.event_suggest import TXEventReconciliationItem, TXEventSuggestRequestItem, TXEventSuggestResultItem
 from backend.app.schemas.transactions.promotion import TXPromoteSuggestInput, TXPromoteSuggestResponse, TXTransferPromoteRequest, TXTransferPromoteResponse
 from backend.app.schemas.transactions.trade_amount import TXTradeAmountRequest, TXTradeAmountResponse
 from backend.app.schemas.transactions.transactions import TXCreateItem, TXQueryParams, TXReadItem, TXUpdateItem
@@ -262,6 +262,27 @@ async def suggest_events(
     """
     service = TransactionService(session)
     return await service.suggest_events_bulk(requests)
+
+
+@tx_router.get("/event-reconciliation", response_model=List[TXEventReconciliationItem])
+async def event_reconciliation(
+    broker_id: Optional[int] = Query(None, gt=0, description="Only this broker"),
+    asset_id: Optional[int] = Query(None, gt=0, description="Only this asset"),
+    session: AsyncSession = Depends(get_session_generator),
+    current_user: User = Depends(get_current_user),
+) -> List[TXEventReconciliationItem]:
+    """
+    The transactions that could link an asset event and have none (`asset_event_id` NULL, type DIVIDEND, INTEREST or
+    ADJUSTMENT, with an asset), on the brokers where the caller is at least EDITOR, newest first.
+
+    Each item carries the events it could be linked to: same asset, **same date**, the event type that corresponds
+    (no window of dates). `status` is `unique` for one candidate, `none` for no event that day, `several` for more than
+    one. Nothing is written and nothing is linked automatically: link with `POST /transactions/commit`
+    (`updates: [{id, asset_event_id}]`). After a currency change deletes an asset's events, this lists the transactions
+    that lost their link.
+    """
+    service = TransactionService(session)
+    return await service.event_reconciliation(current_user.id, broker_id=broker_id, asset_id=asset_id)
 
 
 # =============================================================================

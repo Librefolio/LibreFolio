@@ -47,7 +47,6 @@ from backend.app.schemas.common import (
     Currency,
     DateRangeModel,
     FxBackwardFillInfo,
-    PeriodChangesAsOf,
     SafeDecimal,
     StrictModel,
 )
@@ -499,9 +498,9 @@ class FAPeriodChangesQueryItem(StrictModel):
     """One asset of a fixed-period changes request: the Assets table's Δ columns (1D … 5Y), up to ``as_of``."""
 
     asset_id: int = Field(..., description="Asset ID")
-    as_of: PeriodChangesAsOf = Field(..., description="Anchor day: the end of the range the table shows (1900-01-01 or later)")
+    as_of: date_type = Field(..., description="Anchor day: the end of the range the table shows (any day of the calendar; a period whose reference day falls before 0001-01-01 has a null change)")
     target_currency: Optional[str] = Field(None, description="Value the prices in this currency, each day's at that day's rate (None = native currency)")
-    range_start: Optional[PeriodChangesAsOf] = Field(None, description="First day of the range the page shows: asks its whole-range change (X-R59); on or before as_of")
+    range_start: Optional[date_type] = Field(None, description="First day of the range the page shows: asks its whole-range change (X-R59); on or before as_of")
 
     @field_validator("target_currency")
     @classmethod
