@@ -81,6 +81,7 @@ from backend.app.services.financial_math.portfolio.daily_state import DailyState
 from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder
 from backend.app.services.financial_math.portfolio.models import AcquisitionFundingContribution, ClassifiedTransaction, PortfolioCalculationResult
 from backend.app.services.financial_math.price_marks import build_asset_price_series
+from backend.app.services.financial_math.series_steps import value_at
 from backend.app.services.portfolio_service import PortfolioService
 from backend.app.utils.datetime_utils import utcnow
 from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
@@ -795,12 +796,13 @@ class TestGetAcquisitionFundingHistoryPure:
         candles = await service.get_pnl_candles(user_id=1, target_currency_override="EUR", _precomputed_engine_result=result, **window)
         funding = await service.get_acquisition_funding_history(user_id=1, target_currency_override="EUR", _precomputed_engine_result=result, **window)
 
-        # LEVEL series: date_from itself is the period's opening baseline -> kept.
-        assert date(2025, 1, 2) in [p.date for p in candles.points], "get_pnl_candles must still INCLUDE its date_from day (level-series semantics, unchanged)"
+        # LEVEL series (steps: a candle holds from its date to its through): date_from itself is the period's opening
+        # baseline -> a step holds it.
+        assert value_at(candles.points, date(2025, 1, 2)) is not None, "get_pnl_candles must still INCLUDE its date_from day (level-series semantics, unchanged)"
         # FLOW series: a BUY on date_from belongs to the previous period -> dropped.
         assert date(2025, 1, 2) not in [p.date for p in funding.points], "get_acquisition_funding_history must EXCLUDE its date_from day (flow-series semantics)"
         # ...and both agree on every day strictly inside the window.
-        assert date(2025, 1, 5) in [p.date for p in candles.points]
+        assert value_at(candles.points, date(2025, 1, 5)) is not None
         assert date(2025, 1, 5) in [p.date for p in funding.points]
 
     @pytest.mark.asyncio

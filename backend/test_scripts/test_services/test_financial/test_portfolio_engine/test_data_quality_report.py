@@ -24,7 +24,7 @@ from unittest.mock import MagicMock
 import pytest
 
 import backend.app.services.financial_math.portfolio.models as portfolio_models
-from backend.app.schemas.common import shown_currency_text, suggested_iso_currency
+from backend.app.schemas.common import DateSpan, shown_currency_text, suggested_iso_currency
 from backend.app.schemas.portfolio import (
     DataQualityStatus,
     IssueCode,
@@ -290,6 +290,69 @@ class TestMissingFxMarketIssue:
         assert market_issue.affected_fx_pairs == ["EUR-USD"]
         assert real_issue.affected_fx_pairs == ["EUR-RON"]
         assert manual_issue.affected_fx_pairs == ["EUR-NOK"]
+
+
+# =============================================================================
+# MISSING_FX_RATES — the days of the ranges count too (D-P4)
+# =============================================================================
+
+
+def _rates_issues(report) -> list:
+    """The MISSING_FX_RATES issues of the report that carry dates (the real-provider bucket), found by code and key."""
+    return [i for i in report.issues if i.code == IssueCode.MISSING_FX_RATES and i.message_i18n_key == "dataQuality.missingFxRates"]
+
+
+def _rates_params(pairs: list[WACMissingPairInfo], *slugs: str) -> dict:
+    """``message_params`` of the single real-provider MISSING_FX_RATES issue for ``pairs``, all configured with a real provider."""
+    report = build_data_quality_report([], missing_fx_pairs_dto=pairs, configured_fx_pairs=set(slugs), real_provider_fx_pairs=set(slugs))
+    issues = _rates_issues(report)
+    assert len(issues) == 1
+    return issues[0].message_params
+
+
+class TestMissingFxRatesCountsTheRanges:
+    """MISSING_FX_RATES ``date_from`` / ``date_to`` / ``dates_count`` cover the UNION of the days of ``dates`` and of every
+    day of ``ranges``.
+
+    D-P4 moved the valuation days of a missing pair from ``dates`` (one entry per day) to ``ranges`` (consecutive days
+    merged), keeping in ``dates`` the movements' dates only. The report once read ``dates`` alone: a pair missing a
+    rate on a long valuation range showed the count and the bounds of its movements only, hiding most of the gap the
+    user is asked to sync. Each case below gives numbers that differ from the ``dates``-only ones, so ignoring the
+    ranges fails it.
+    """
+
+    def test_dates_and_a_range_are_added(self):
+        d1, d3, d7 = date(2025, 1, 1), date(2025, 1, 3), date(2025, 1, 7)
+        pair = WACMissingPairInfo(pair="RON/EUR", dates=[d1], ranges=[DateSpan(start=d3, end=d7)])
+        params = _rates_params([pair], "EUR-RON")
+        assert params["date_from"] == "2025-01-01"
+        assert params["date_to"] == "2025-01-07"  # dates alone would stop at 2025-01-01
+        assert params["dates_count"] == 6  # 1 movement date + 5 days of the range; dates alone: 1
+
+    def test_a_date_inside_a_range_is_counted_once(self):
+        d3, d4, d5 = date(2025, 1, 3), date(2025, 1, 4), date(2025, 1, 5)
+        pair = WACMissingPairInfo(pair="RON/EUR", dates=[d4], ranges=[DateSpan(start=d3, end=d5)])
+        params = _rates_params([pair], "EUR-RON")
+        assert params["date_from"] == "2025-01-03"
+        assert params["date_to"] == "2025-01-05"
+        assert params["dates_count"] == 3  # not 4: the date is one of the range's days
+
+    def test_ranges_alone_give_the_bounds_and_the_days(self):
+        d2, d6 = date(2025, 1, 2), date(2025, 1, 6)
+        pair = WACMissingPairInfo(pair="RON/EUR", dates=[], ranges=[DateSpan(start=d2, end=d6)])
+        params = _rates_params([pair], "EUR-RON")
+        assert params["date_from"] == "2025-01-02"  # dates alone: "" (no bound)
+        assert params["date_to"] == "2025-01-06"
+        assert params["dates_count"] == 5  # dates alone: 0
+
+    def test_touching_ranges_of_two_pairs_merge_into_one_span(self):
+        first = WACMissingPairInfo(pair="RON/EUR", dates=[], ranges=[DateSpan(start=date(2025, 1, 1), end=date(2025, 1, 2))])
+        second = WACMissingPairInfo(pair="NOK/EUR", dates=[], ranges=[DateSpan(start=date(2025, 1, 3), end=date(2025, 1, 4))])
+        params = _rates_params([first, second], "EUR-RON", "EUR-NOK")
+        assert params["count"] == 2
+        assert params["date_from"] == "2025-01-01"
+        assert params["date_to"] == "2025-01-04"
+        assert params["dates_count"] == 4  # 2 + 2 consecutive days, one merged span
 
 
 # =============================================================================
