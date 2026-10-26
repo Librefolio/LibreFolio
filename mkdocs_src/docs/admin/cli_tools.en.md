@@ -155,6 +155,18 @@ The same change as a new email in the user's [Profile](../user/settings/profile.
 - 🚪 A new address signs the account out of every device, cancels any password-reset link still open, and is recorded as not verified; the account can still sign in. The account's own address with other capitals is the same address: only the way it is written changes, nobody is signed out, and it stays verified.
 - 👑 On the initial administrator still waiting for its setup link, a new address also stops that link, which went to the old address: the account still waits, and [`user setup-link`](#setup-link) gives it a new one. While `LIBREFOLIO_ADMIN_EMAIL` is set, each start of the server gives the waiting account that address again: change the variable as well, or the next start brings the old address back and stops the new link too.
 - ❌ An address another account already has, in any capitals, is refused: the command stops with the error `Email already registered` and exits with `1`, changing nothing. So does an address that is another account's username, in any capitals: an account created before version 1.3 may have an `@` in its username ([Usernames with an @](users.md#usernames-with-at)), and once that name is someone's address, the sign-in, which reads an address first, would no longer find that account by its name. The account's own username is no obstacle: it can become its address. An address that is not valid (`Not an email address`) or an unknown username (`User '<username>' not found`) stops the command too.
+- 📮 A new address also cancels any email-change link still waiting for the account. It does not touch the password: to take back the administrator account of a [managed instance](hosting_instances.md#owner-reassign), use `user reassign-owner`.
+
+### 🛟 Give a Managed Instance Back to Its Owner {: #reassign-owner }
+
+```bash
+pipenv run ./dev.py user reassign-owner <username>
+```
+
+For a managed instance whose administrator's address was confirmed by mistake: the account takes the address of `LIBREFOLIO_ADMIN_EMAIL`, becomes the only owner, loses its password and its sessions, and one reset link is emailed to that address. The whole procedure is in [A Wrong Address Was Confirmed](hosting_instances.md#owner-reassign).
+
+- ❌ On an instance that is not managed, without `LIBREFOLIO_ADMIN_EMAIL`, for an unknown username, or when another account has that address, the command prints the reason, changes nothing and exits with `1`.
+- 🔗 It never prints the link: when the email cannot go, the link is in a log line on the terminal (*Password-reset link for the instance owner*), and [`user reset-link`](#reset-link) prints another.
 
 ### 👑 Grant or Remove Administrator Rights
 

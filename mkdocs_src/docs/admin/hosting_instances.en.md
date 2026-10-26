@@ -231,6 +231,38 @@ you is recorded from the start.
     Security (`info` while pending, `warning` when blocked), and the startup log. A *blocked* change asks you to
     act: change the variable to an address no other account uses and restart.
 
+### 🛟 A Wrong Address Was Confirmed: Giving the Instance Back {: #owner-reassign }
+
+If the confirmation link of [a change of the administrator's address](#owner-email-change) went to a wrong address and has
+**not** been opened, nothing moved: put the right address in `LIBREFOLIO_ADMIN_EMAIL` and restart, and the link sent to the
+wrong one stops working. If it **was** opened, the person who opened it now holds the administrator account: the address
+moved, the protection followed it, and the password did not change. The same applies when that account is in other hands
+for any other reason. Check that the request really comes from your customer before you do this.
+
+1. Stop the instance, and set `LIBREFOLIO_ADMIN_EMAIL` to the **right** address.
+2. Give the instance back, on the server (in Docker, in a one-off container, as for [`user set-email`](cli_tools.md#reset-a-password-or-lock-an-account)):
+
+    ```bash
+    pipenv run ./dev.py user reassign-owner <username of the administrator account>
+    ```
+
+3. Start the instance. Your customer receives **one** password-reset link at the right address and chooses a password.
+
+What the command does, in one step, on a **managed** instance only: the account takes the address of
+`LIBREFOLIO_ADMIN_EMAIL`, is an active administrator and the only owner; its password stops working (whoever knew it is
+out), its sessions end, every one-time link of the account is cancelled (an address-change link still waiting included),
+and the one reset link is emailed to the new address. If the email cannot go, the link is in a log line on the terminal
+where you ran the command (*Password-reset link for the instance owner*); `./dev.py user reset-link <username>` prints
+another.
+
+Good to know:
+
+- 🔒 The command works only on a managed instance with `LIBREFOLIO_ADMIN_EMAIL` set, and stops without changing anything if
+  another account already has that address: free it first with [`user set-email`](cli_tools.md#reset-a-password-or-lock-an-account).
+- 🧹 It cannot undo what the other person did as administrator while they had access: check the accounts and the data.
+- 📮 `user set-email` on the owner's account now also cancels an address-change link still waiting, but it leaves the
+  password as it was: to take the account back, use `user reassign-owner`.
+
 ### 🔁 Restoring a Backup on a Managed Instance: the Owner {: #restore-owner }
 
 A backup can come from any instance, and whoever prepared it can write anything in it, so on a managed instance nothing in its
@@ -243,7 +275,7 @@ account of that backup is the owner, and then, in one step:
    open sessions end;
 3. every one-time link of that account that the backup carried is cancelled: its password-reset links are deleted and its
    other links (email verification, setup, email change) are revoked, whatever they said;
-4. one new password-reset link is emailed to the address of `LIBREFOLIO_ADMIN_EMAIL`, so the real owner chooses a password.
+4. one new password-reset link is emailed to the address of `LIBREFOLIO_ADMIN_EMAIL`, so the real owner chooses a password. The email says that, for the owner's security, the password was revoked after the restore, and that *Forgot Password?* on the sign-in page gives a new link if this one expires. It does not say who restored the backup.
 
 If the email cannot go (email off or unusable, no `LIBREFOLIO_PUBLIC_URL`, the hourly limit, a refusal by the SMTP server), the
 link is written in the **log of the instance** as a `warning`, *Password-reset link for the instance owner*, and nowhere else:
