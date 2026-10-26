@@ -115,6 +115,9 @@
     let computedRange = $state<DateRange | null>(null);
 
     let selectedLotIds = $state<number[]>([]);
+    /** The days the histories cover (each response's `range`): the main answer's for the average-cost and price lines, the selection's for the lots' value and return. */
+    let mainRange = $state<{start: string; end: string} | null>(null);
+    let selectionRange = $state<{start: string; end: string} | null>(null);
     let valueHistory = $state<LotValueHistoryPoint[]>([]);
     let returnHistory = $state<LotReturnHistoryPoint[]>([]);
     let selectionLoading = $state(false);
@@ -207,6 +210,7 @@
         marketPriceHistory = asArray<MarketPriceHistoryPoint>(response.market_price_history);
         brokerWacHistory = asArray<BrokerWACHistoryPoint>(response.broker_wac_history);
         cumulativeWacHistory = asArray<CumulativeWACHistoryPoint>(response.cumulative_wac_history);
+        mainRange = asObject<{start: string; end: string}>(response.range);
         quoteBaseQuantity = normalizeQuoteBaseQuantity(response.quote_base_quantity);
         incomeEvents = lotSection<{type: 'DIVIDEND' | 'INTEREST'; date: string; broker_id?: number | null; amount: string | null; lot_ids?: number[]}>(response.income_events).map((event) => ({
             type: event.type,
@@ -283,6 +287,7 @@
         shownSelection = response;
         valueHistory = asArray<LotValueHistoryPoint>(response.value_history);
         returnHistory = asArray<LotReturnHistoryPoint>(response.return_history);
+        selectionRange = asObject<{start: string; end: string}>(response.range);
     }
 
     async function loadSelectionHistories(currentAssetId: number, currentBrokerIds: number[], currentCurrency: string, ids: number[], force = false) {
@@ -541,6 +546,7 @@
                     {brokerWacHistory}
                     {cumulativeWacHistory}
                     {marketPriceHistory}
+                    range={mainRange}
                     {lotEvents}
                     {incomeEvents}
                     {brokers}
@@ -588,7 +594,7 @@
                         onRowDoubleClick={handleTableRowDoubleClick}
                     />
 
-                    <LotComparisonChart selectedLots={effectiveSelectedLots} {valueHistory} {returnHistory} {incomeEvents} {brokers} {currency} {xAxisRange} />
+                    <LotComparisonChart selectedLots={effectiveSelectedLots} {valueHistory} {returnHistory} range={selectionRange} {incomeEvents} {brokers} {currency} {xAxisRange} />
                 {/if}
             {/if}
         </div>
