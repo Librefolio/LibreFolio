@@ -11,7 +11,7 @@ Workstream J «Numeri e analisi», lot L1a. Pure: no DB, no server, no FX — th
 ``Transaction`` rows (never added to a session) and the home's daily price series (``financial_math/price_marks.py``).
 The service-level reds and the parity battery are in ``test_financial/test_lots_change_days_parity.py``.
 
-WHY. ``lots_analysis_service`` hands every calendar day from the first transaction (floored at 1900-01-01) to the
+WHY. ``lots_analysis_service`` hands every calendar day from the first transaction (floored at 1900-01-01 until L2) to the
 reading day to the per-day builders of ``financial_math/lots/histories.py`` and ``lots/average_cost_lines.py``, then
 trims to the window: a lot bought on 2 Jan 1900 and read on 15 Feb 2021 is valued on 44 240 days per history. Between two
 days on which nothing changes — the same converted price, the same estimated mark, no event, no day at cost ending —
