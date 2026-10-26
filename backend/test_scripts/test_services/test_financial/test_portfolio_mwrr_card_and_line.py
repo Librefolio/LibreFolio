@@ -6,7 +6,10 @@ sparisca». The card (get_summary) gives ``mwrr_annualized_percent`` only for a 
 snapshots and flows, a value above zero at its end and capital in it; otherwise it is None and the
 data-quality report carries MWRR_NOT_CALCULABLE. With MF-K2 every point of the line (get_history)
 is the card of the period ending on that day (financial_math/returns.period_mwrr_series): None
-where that card is None, the first point still pinned to 0.
+where that card is None, the first point still pinned to 0. Since D-P4 cure B the line is the
+report's ``mwrr_line`` (``history[].mwrr_*`` are gone): a point on each step's ``date`` and
+``through`` of the history, so «the point on day d» is the line point dated d and «the last point»
+is the one dated ``range.end``.
 
 The capital is the one the solve itself sees (returns._net_invested, decision N54): the value of
 the period's first snapshot — what the investor «buys» at the start, a deposit of that day
@@ -65,10 +68,12 @@ Isolation: every test owns its user, broker and asset (unique names) and writes 
 session that is rolled back: nothing is committed. Every amount is in EUR and is read in EUR
 (target_currency_override), so no FX rate and no other test's row reaches the figures. The report,
 WAC and engine blob caches are emptied around each test. A history belongs to the test's user
-alone and comes back one point a day, sorted here by date: its first and last points are the
-period's ends by construction, not a position in a shared collection.
+alone and comes back in steps (D-P4 cure B): the history holds the days of each step, the MWRR is
+the report's ``mwrr_line`` (PortfolioService.get_history_steps), true values at each step's date and
+through, dated within the response's ``range``. The line's first and last points are the period's
+ends by construction (range.start, range.end), not a position in a shared collection.
 
-Reference: backend/app/services/portfolio_service.py (get_summary, get_history),
+Reference: backend/app/services/portfolio_service.py (get_summary, get_history_steps),
 backend/app/services/financial_math/returns.py (period_mwrr, period_mwrr_series).
 """
 
@@ -95,8 +100,9 @@ import backend.app.services.financial_math.portfolio.engine as portfolio_engine_
 import backend.app.services.portfolio_service as portfolio_service_module
 from backend.app.db.models import Asset, AssetType, Broker, BrokerUserAccess, PriceHistory, Transaction, TransactionType, User, UserRole
 from backend.app.db.session import get_async_engine
-from backend.app.schemas.portfolio import IssueCode, PortfolioHistoryPoint, PortfolioSummary
-from backend.app.services.portfolio_service import PortfolioService
+from backend.app.schemas.portfolio import IssueCode, MwrrLinePoint, PortfolioHistoryPoint, PortfolioSummary
+from backend.app.services.financial_math.series_steps import value_at
+from backend.app.services.portfolio_service import HistorySteps, PortfolioService
 
 EUR = "EUR"
 
@@ -293,10 +299,9 @@ async def _card(session: AsyncSession, scope: _Scope, date_from: date | None, da
     return await PortfolioService(session).get_summary(user_id=scope.user.id, target_currency_override=EUR, date_from=date_from, date_to=date_to)
 
 
-async def _line(session: AsyncSession, scope: _Scope, date_from: date | None, date_to: date | None) -> list[PortfolioHistoryPoint]:
-    """The Dashboard's history of the period (the MWRR line), sorted by date."""
-    points = await PortfolioService(session).get_history(user_id=scope.user.id, date_from=date_from, date_to=date_to, target_currency_override=EUR)
-    return sorted(points, key=lambda point: point.date)
+async def _line(session: AsyncSession, scope: _Scope, date_from: date | None, date_to: date | None) -> HistorySteps:
+    """The Dashboard's history of the period in steps: its ``range``, the steps and the MWRR line."""
+    return await PortfolioService(session).get_history_steps(user_id=scope.user.id, date_from=date_from, date_to=date_to, target_currency_override=EUR)
 
 
 def _reports_mwrr_not_calculable(summary: PortfolioSummary) -> bool:
@@ -304,39 +309,50 @@ def _reports_mwrr_not_calculable(summary: PortfolioSummary) -> bool:
     return any(issue.code == IssueCode.MWRR_NOT_CALCULABLE for issue in summary.data_quality.issues)
 
 
-def _point_on(points: list[PortfolioHistoryPoint], day: date) -> PortfolioHistoryPoint:
+def _step_on(line: HistorySteps, day: date) -> PortfolioHistoryPoint:
+    """The history step holding ``day`` (the history has no gap inside its range)."""
+    step = value_at(line.history, day)
+    span = f"{line.range.start}..{line.range.end}" if line.range else "nothing"
+    assert step is not None, f"the history has no step holding {day} (its range is {span})"
+    return step
+
+
+def _mwrr_on(points: list[MwrrLinePoint], day: date) -> MwrrLinePoint:
+    """The MWRR line's true point dated ``day`` (a step's date or through)."""
     point = next((point for point in points if point.date == day), None)
     span = f"{points[0].date}..{points[-1].date}" if points else "nothing"
-    assert point is not None, f"the line has no point on {day} (it spans {span})"
+    assert point is not None, f"the MWRR line has no point on {day} (it spans {span})"
     return point
 
 
-def _shown(points: list[PortfolioHistoryPoint]) -> list[tuple[str, str | None, str | None]]:
+def _shown(points: list[MwrrLinePoint]) -> list[tuple[str, str | None, str | None]]:
     """(date, annualized, cumulative) of each point, for a failure message."""
-    return [(point.date.isoformat(), None if point.mwrr_annualized is None else str(point.mwrr_annualized), None if point.mwrr_cumulative is None else str(point.mwrr_cumulative)) for point in points]
+    return [(point.date.isoformat(), None if point.annualized is None else str(point.annualized), None if point.cumulative is None else str(point.cumulative)) for point in points]
 
 
-def _assert_line_spans(points: list[PortfolioHistoryPoint], first_day: date, last_day: date | None) -> None:
-    """Presence barrier: the line covers the period end to end, so an absent MWRR is not an absent point.
+def _assert_line_spans(line: HistorySteps, first_day: date, last_day: date | None) -> None:
+    """Presence barrier: the history and its MWRR line cover the period end to end, so an absent MWRR is not an absent point.
 
-    ``last_day`` None: the period ends today, read from the line rather than from the clock."""
-    assert points, "the line is empty"
-    assert points[0].date == first_day, f"the line spans {points[0].date}..{points[-1].date}, expected it to open on {first_day}"
+    ``last_day`` None: the period ends today, read from the response's range rather than from the clock."""
+    assert line.range is not None and line.history and line.mwrr_line, "the history or its MWRR line is empty"
+    assert line.range.start == first_day, f"the range is {line.range.start}..{line.range.end}, expected it to open on {first_day}"
     if last_day is not None:
-        assert points[-1].date == last_day, f"the line spans {points[0].date}..{points[-1].date}, expected it to end on {last_day}"
+        assert line.range.end == last_day, f"the range is {line.range.start}..{line.range.end}, expected it to end on {last_day}"
+    assert (line.history[0].date, line.history[-1].through) == (line.range.start, line.range.end), "the history does not cover its range end to end"
+    assert (line.mwrr_line[0].date, line.mwrr_line[-1].date) == (line.range.start, line.range.end), f"the MWRR line spans {line.mwrr_line[0].date}..{line.mwrr_line[-1].date}, the range {line.range.start}..{line.range.end}"
 
 
-def _assert_card_is_the_last_point(summary: PortfolioSummary, points: list[PortfolioHistoryPoint], period_start: date, date_to: date | None) -> None:
-    """The card has an MWRR, reports no MWRR_NOT_CALCULABLE, and equals the line's last point, the same Decimal."""
-    _assert_line_spans(points, period_start, date_to)
-    last = points[-1]
+def _assert_card_is_the_last_point(summary: PortfolioSummary, line: HistorySteps, period_start: date, date_to: date | None) -> None:
+    """The card has an MWRR, reports no MWRR_NOT_CALCULABLE, and equals the line's last point (dated range.end), the same Decimal."""
+    _assert_line_spans(line, period_start, date_to)
+    last = line.mwrr_line[-1]
     # Without date_to both end "today": the card's MWRR window ends where the line does, read
     # from the card instead of the clock so a midnight between the calls cannot pass for a defect.
     assert summary.mwrr_period_days == (last.date - period_start).days, f"the card's MWRR covers {summary.mwrr_period_days} days, the line {period_start}..{last.date}"
     assert summary.mwrr_annualized_percent is not None, f"the card shows «—» (data-quality MWRR_NOT_CALCULABLE: {_reports_mwrr_not_calculable(summary)}), the line's last point ({last.date}) {_shown([last])}"
     assert not _reports_mwrr_not_calculable(summary), "the card has an MWRR, MWRR_NOT_CALCULABLE should not be reported"
-    assert (last.mwrr_annualized, str(last.mwrr_annualized)) == (summary.mwrr_annualized_percent, str(summary.mwrr_annualized_percent)), f"annualized: card {summary.mwrr_annualized_percent}, last point ({last.date}) {last.mwrr_annualized}"
-    assert (last.mwrr_cumulative, str(last.mwrr_cumulative)) == (summary.mwrr_cumulative_percent, str(summary.mwrr_cumulative_percent)), f"cumulative: card {summary.mwrr_cumulative_percent}, last point ({last.date}) {last.mwrr_cumulative}"
+    assert (last.annualized, str(last.annualized)) == (summary.mwrr_annualized_percent, str(summary.mwrr_annualized_percent)), f"annualized: card {summary.mwrr_annualized_percent}, last point ({last.date}) {last.annualized}"
+    assert (last.cumulative, str(last.cumulative)) == (summary.mwrr_cumulative_percent, str(summary.mwrr_cumulative_percent)), f"cumulative: card {summary.mwrr_cumulative_percent}, last point ({last.date}) {last.cumulative}"
 
 
 def _assert_close(actual: Decimal | None, expected: float, what: str) -> None:
@@ -344,25 +360,26 @@ def _assert_close(actual: Decimal | None, expected: float, what: str) -> None:
     assert abs(actual - Decimal(repr(expected))) <= CLOSED_FORM_TOLERANCE, f"{what}: {actual}, expected ≈ {expected:.6f} (± {CLOSED_FORM_TOLERANCE})"
 
 
-def _assert_first_point_pinned(points: list[PortfolioHistoryPoint]) -> None:
+def _assert_first_point_pinned(points: list[MwrrLinePoint]) -> None:
     first = points[0]
-    assert (first.mwrr_annualized, first.mwrr_cumulative) == (Decimal("0"), Decimal("0")), f"the first point ({first.date}) is not pinned to 0: {_shown([first])}"
+    assert (first.annualized, first.cumulative) == (Decimal("0"), Decimal("0")), f"the first point ({first.date}) is not pinned to 0: {_shown([first])}"
 
 
-def _assert_rates_before(points: list[PortfolioHistoryPoint], cutoff: date) -> None:
-    """Every point strictly between the first one and ``cutoff`` has a rate, annualized and cumulative:
+def _assert_rates_before(points: list[MwrrLinePoint], cutoff: date) -> None:
+    """Every line point strictly between the first one and ``cutoff`` has a rate, annualized and cumulative:
     the period ending there has capital in it and a positive value, so its card has one."""
     before = [point for point in points if points[0].date < point.date < cutoff]
     assert before, f"no point between {points[0].date} and {cutoff}"
-    blank = [point for point in before if point.mwrr_annualized is None or point.mwrr_cumulative is None]
+    blank = [point for point in before if point.annualized is None or point.cumulative is None]
     assert blank == [], f"{len(blank)}/{len(before)} points before {cutoff} lost their MWRR, e.g. {_shown(blank[:3])}"
 
 
-def _assert_no_rate_from(points: list[PortfolioHistoryPoint], cutoff: date, why: str) -> None:
-    """D-MF5: from ``cutoff`` on the card of the period ending on each day is «—», and so is the line."""
+def _assert_no_rate_from(points: list[MwrrLinePoint], cutoff: date, why: str) -> None:
+    """D-MF5: from ``cutoff`` on the card of the period ending on each day is «—», and so is the line (every point dated on or after it)."""
     after = [point for point in points if point.date >= cutoff]
     assert after, f"no point from {cutoff} on"
-    drawn = [point for point in after if point.mwrr_annualized is not None or point.mwrr_cumulative is not None]
+    assert after[0].date == cutoff, f"presence barrier: a step starts on {cutoff}, so the line has a true point on it, yet its first point from there is {after[0].date}"
+    drawn = [point for point in after if point.annualized is not None or point.cumulative is not None]
     assert drawn == [], f"D-MF5: from {cutoff} on {why}, so the card shows «—», yet {len(drawn)}/{len(after)} points of the line carry an MWRR: first {_shown(drawn[:3])}, last {_shown(drawn[-1:])}"
 
 
@@ -424,38 +441,43 @@ class TestNetWithdrawalPeriod:
         """Red on HEAD: calculate_mwrr_series draws a rate on every day from the withdrawal on."""
         scope = await _net_withdrawal_scope(session, keep_alive)
 
-        points = await _line(session, scope, date_from, NW_END)
+        line = await _line(session, scope, date_from, NW_END)
 
-        _assert_line_spans(points, date_from or NW_START, NW_END)
-        not_positive = [point.date for point in points if point.nav_value.amount <= 0]
+        _assert_line_spans(line, date_from or NW_START, NW_END)
+        not_positive = [step.date for step in line.history if step.nav_value.amount <= 0]
         assert not_positive == [], f"precondition: the value stays above zero, yet it is ≤ 0 on {not_positive[:3]}"
-        assert _point_on(points, NW_WITHDRAWAL).nav_value.amount == NW_END_NAV
-        _assert_first_point_pinned(points)
-        _assert_rates_before(points, NW_WITHDRAWAL)
-        _assert_no_rate_from(points, NW_WITHDRAWAL, "the net invested is −500")
+        assert _step_on(line, NW_WITHDRAWAL).nav_value.amount == NW_END_NAV
+        _assert_first_point_pinned(line.mwrr_line)
+        _assert_rates_before(line.mwrr_line, NW_WITHDRAWAL)
+        _assert_no_rate_from(line.mwrr_line, NW_WITHDRAWAL, "the net invested is −500")
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("date_from", [None, NW_REBASED_FROM], ids=["whole-history", "rebased"])
     async def test_each_point_is_the_card_of_the_period_ending_there(self, session, keep_alive, date_from):
-        """Point by point, D-MF5: the line on day d equals the card of the same period ended on d.
+        """Point by point, D-MF5: the line's true point on day d equals the card of the same period ended on d.
 
         Green on the day before the withdrawal (both a rate) before and after; red on HEAD from the
         withdrawal on (card None, line a rate)."""
         scope = await _net_withdrawal_scope(session, keep_alive)
-        points = await _line(session, scope, date_from, NW_END)
-        _assert_line_spans(points, date_from or NW_START, NW_END)
+        line = await _line(session, scope, date_from, NW_END)
+        _assert_line_spans(line, date_from or NW_START, NW_END)
 
         day_before = NW_WITHDRAWAL - timedelta(days=1)
+        # The line has true points on a step's date and through, and at the month ends inside a long step: the days
+        # sampled are line points, the day before the withdrawal (the through of the step before it), the withdrawal
+        # itself (the date of its step), a month end inside the step it opens, and the last day.
+        inside = [point.date for point in line.mwrr_line if NW_WITHDRAWAL < point.date < NW_END]
+        assert inside, f"presence barrier: the line has no point between {NW_WITHDRAWAL} and {NW_END}, nothing proves the days after the withdrawal"
         problems: list[str] = []
-        for day in (day_before, NW_WITHDRAWAL, NW_WITHDRAWAL + timedelta(days=31), NW_END):
+        for day in (day_before, NW_WITHDRAWAL, inside[0], NW_END):
             # Each card runs the engine afresh: the comparison is about the MWRR, not the blob cache's range handling.
             _clear_portfolio_caches()
             card = await _card(session, scope, date_from, day)
             if day == day_before:
                 assert card.mwrr_annualized_percent is not None, f"anchor: the card ending {day_before} has capital and value, it should have an MWRR"
-            point = _point_on(points, day)
+            point = _mwrr_on(line.mwrr_line, day)
             card_pair = (card.mwrr_annualized_percent, card.mwrr_cumulative_percent)
-            line_pair = (point.mwrr_annualized, point.mwrr_cumulative)
+            line_pair = (point.annualized, point.cumulative)
             if card_pair != line_pair:
                 problems.append(f"{day}: card {card_pair}, line {line_pair}")
 
@@ -490,14 +512,14 @@ class TestValueGonePeriod:
         a cumulative from −0.5 falling to ≈ −0.6203 on the last day)."""
         scope = await _value_gone_scope(session, keep_alive)
 
-        points = await _line(session, scope, None, VG_END)
+        line = await _line(session, scope, None, VG_END)
 
-        _assert_line_spans(points, VG_START, VG_END)
-        assert [point.date for point in points if point.date < VG_EMPTY and point.nav_value.amount <= 0] == [], "precondition: the value is above zero before the last withdrawal"
-        assert [point.date for point in points if point.date >= VG_EMPTY and point.nav_value.amount != 0] == [], "precondition: the value is 0 from the last withdrawal on"
-        _assert_first_point_pinned(points)
-        _assert_rates_before(points, VG_EMPTY)
-        _assert_no_rate_from(points, VG_EMPTY, "the value is 0")
+        _assert_line_spans(line, VG_START, VG_END)
+        assert [step.date for step in line.history if step.date < VG_EMPTY and step.nav_value.amount <= 0] == [], "precondition: the value is above zero before the last withdrawal"
+        assert [step.date for step in line.history if step.date >= VG_EMPTY and step.nav_value.amount != 0] == [], "precondition: the value is 0 from the last withdrawal on"
+        _assert_first_point_pinned(line.mwrr_line)
+        _assert_rates_before(line.mwrr_line, VG_EMPTY)
+        _assert_no_rate_from(line.mwrr_line, VG_EMPTY, "the value is 0")
 
 
 # =============================================================================
@@ -519,11 +541,11 @@ class TestDepositsOnlyParity:
         scope = await _deposits_only_scope(session, keep_alive)
 
         summary = await _card(session, scope, date_from, date_to)
-        points = await _line(session, scope, date_from, date_to)
+        line = await _line(session, scope, date_from, date_to)
 
-        assert points, "the line is empty"
-        assert summary.net_worth.amount == Decimal("1800") and points[-1].nav_value.amount == Decimal("1800"), f"precondition: value 1800 at the end, card {summary.net_worth.amount}, line {points[-1].nav_value.amount}"
-        _assert_card_is_the_last_point(summary, points, date_from or DO_START, date_to)
+        assert line.history, "the history is empty"
+        assert summary.net_worth.amount == Decimal("1800") and line.history[-1].nav_value.amount == Decimal("1800"), f"precondition: value 1800 at the end, card {summary.net_worth.amount}, history {line.history[-1].nav_value.amount}"
+        _assert_card_is_the_last_point(summary, line, date_from or DO_START, date_to)
 
 
 # =============================================================================
@@ -567,14 +589,14 @@ class TestRangeOpeningOnOrBeforeThePortfolio:
         after the first point either). opens-on: green on all three."""
         scope = await _single_deposit_scope(session, keep_alive)
 
-        points = await _line(session, scope, date_from, date_to)
+        line = await _line(session, scope, date_from, date_to)
         summary = await _card(session, scope, date_from, date_to)
 
-        _assert_line_spans(points, OB_START, date_to)
-        assert _point_on(points, OB_START).nav_value.amount == OB_OPENING_NAV, f"precondition: the first day's value is {_point_on(points, OB_START).nav_value.amount}, expected {OB_OPENING_NAV}"
-        _assert_first_point_pinned(points)
-        _assert_rates_before(points, points[-1].date + timedelta(days=1))
-        _assert_card_is_the_last_point(summary, points, OB_START, date_to)
+        _assert_line_spans(line, OB_START, date_to)
+        assert _step_on(line, OB_START).nav_value.amount == OB_OPENING_NAV, f"precondition: the first day's value is {_step_on(line, OB_START).nav_value.amount}, expected {OB_OPENING_NAV}"
+        _assert_first_point_pinned(line.mwrr_line)
+        _assert_rates_before(line.mwrr_line, line.range.end + timedelta(days=1))
+        _assert_card_is_the_last_point(summary, line, OB_START, date_to)
 
 
 # =============================================================================
@@ -605,15 +627,15 @@ class TestYoungPortfolioPartialWithdrawal:
         after the first point)."""
         scope = await _young_withdrawal_scope(session, keep_alive, YW_PARTIAL)
 
-        points = await _line(session, scope, YW_FROM, YW_END)
+        line = await _line(session, scope, YW_FROM, YW_END)
         summary = await _card(session, scope, YW_FROM, YW_END)
 
-        _assert_line_spans(points, YW_START, YW_END)
-        not_positive = [point.date for point in points if point.nav_value.amount <= 0]
+        _assert_line_spans(line, YW_START, YW_END)
+        not_positive = [step.date for step in line.history if step.nav_value.amount <= 0]
         assert not_positive == [], f"precondition: the value stays above zero, yet it is ≤ 0 on {not_positive[:3]}"
-        _assert_first_point_pinned(points)
-        _assert_rates_before(points, YW_END + timedelta(days=1))
-        _assert_card_is_the_last_point(summary, points, YW_START, YW_END)
+        _assert_first_point_pinned(line.mwrr_line)
+        _assert_rates_before(line.mwrr_line, YW_END + timedelta(days=1))
+        _assert_card_is_the_last_point(summary, line, YW_START, YW_END)
 
 
 class TestYoungPortfolioWithdrawalExhaustingCapital:
@@ -650,11 +672,11 @@ class TestYoungPortfolioWithdrawalExhaustingCapital:
         scope = await _young_withdrawal_scope(session, keep_alive, withdrawal)
         net_invested_after = Decimal("1000") - Decimal(withdrawal)
 
-        points = await _line(session, scope, YW_FROM, YW_END)
+        line = await _line(session, scope, YW_FROM, YW_END)
 
-        _assert_line_spans(points, YW_START, YW_END)
-        not_positive = [point.date for point in points if point.nav_value.amount <= 0]
+        _assert_line_spans(line, YW_START, YW_END)
+        not_positive = [step.date for step in line.history if step.nav_value.amount <= 0]
         assert not_positive == [], f"precondition: the value stays above zero, yet it is ≤ 0 on {not_positive[:3]}"
-        _assert_first_point_pinned(points)
-        _assert_rates_before(points, YW_WITHDRAWAL)
-        _assert_no_rate_from(points, YW_WITHDRAWAL, f"the net invested is {net_invested_after}")
+        _assert_first_point_pinned(line.mwrr_line)
+        _assert_rates_before(line.mwrr_line, YW_WITHDRAWAL)
+        _assert_no_rate_from(line.mwrr_line, YW_WITHDRAWAL, f"the net invested is {net_invested_after}")

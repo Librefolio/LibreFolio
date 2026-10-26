@@ -5,7 +5,6 @@ from __future__ import annotations
 import bisect
 from collections import defaultdict
 from collections.abc import Mapping
-from dataclasses import replace
 from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
@@ -18,6 +17,7 @@ from backend.app.services.financial_math.average_cost import (
     CostEffect,
     CostStep,
 )
+from backend.app.services.financial_math.fx_rates import AskedDayRates
 from backend.app.services.financial_math.native_cash import NativeCash, change_days
 from backend.app.services.financial_math.portfolio.classifier import _CASH_LINKED_TYPES, _LINKED_TYPES
 from backend.app.services.financial_math.portfolio.models import (
@@ -26,14 +26,18 @@ from backend.app.services.financial_math.portfolio.models import (
     ClassifiedTransaction,
     DailyPortfolioState,
     DailyPositionState,
+    DailyStates,
     EngineEndState,
     InternalAssetTransfer,
     InTransitInterval,
+    MarketValueTransfer,
     PnlCandleContribution,
     PortfolioCalculationResult,
+    PositionFrame,
     RealizedSale,
     SplitHistory,
     SplitRecord,
+    StateSegment,
     UnrealizedSplit,
     ValuationResult,
     ValuationSource,
@@ -41,7 +45,6 @@ from backend.app.services.financial_math.portfolio.models import (
 from backend.app.services.financial_math.price_marks import AssetPriceSeries
 from backend.app.services.financial_math.valuation import compute_holding_value
 from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
-from backend.app.utils.datetime_utils import EARLIEST_RANGE_START
 
 logger = structlog.get_logger(__name__)
 
@@ -58,9 +61,9 @@ def _cumulative_split_ratio(history: SplitHistory, reference_date: date_type, va
     return ratio, adjusted
 
 
-def _calendar(first: date_type, last: date_type) -> list[date_type]:
-    """Every day from ``first`` to ``last``, both included."""
-    return [first + timedelta(days=offset) for offset in range((last - first).days + 1)]
+def _exact(values: tuple) -> tuple:
+    """``values`` with every Decimal as its digits and exponent: equal only when the Decimals are the same."""
+    return tuple(value.as_tuple() if isinstance(value, Decimal) else value for value in values)
 
 
 def _valued_at_cost(cost_value: Decimal) -> ValuationResult:
@@ -153,6 +156,7 @@ class DailyStateBuilder:
         mark_series: dict[int, AssetPriceSeries] | None = None,
         compute_candles: bool = False,
         compute_acquisition_funding: bool = False,
+        compute_position_frames: bool = False,
     ) -> None:
         self.classified_txs = classified_txs
         self.in_transit_intervals = in_transit_intervals
@@ -209,6 +213,8 @@ class DailyStateBuilder:
         # but stays opt-in for consistency with compute_candles's "extra output stays
         # off ordinary reports unless requested" convention.
         self.compute_acquisition_funding = compute_acquisition_funding
+        # #48 (J): each held position's values as frames, from date_from on (PositionFrame). Off by default.
+        self.compute_position_frames = compute_position_frames
 
     def build(self) -> PortfolioCalculationResult:  # noqa: C901 — TODO(P2-refactor): monolithic daily-replay engine; extract the day's stages
         """Build daily states for [date_from, date_to] + position snapshots + period accumulators.
@@ -226,6 +232,7 @@ class DailyStateBuilder:
             for missing in average_cost.missing:
                 self._missing_fx[missing.pair].update(missing.dates)
         realized_sales: list[RealizedSale] = []
+        market_value_transfers: list[MarketValueTransfer] = []
 
         # ── 1. Cash ledger: sum amount deltas per day ──
         cash_deltas: dict[date_type, Decimal] = defaultdict(lambda: zero)
@@ -272,7 +279,8 @@ class DailyStateBuilder:
             internal_flow_dates.add(flow_date)
 
         # ── 4. Accumulators ──
-        states: list[DailyPortfolioState] = []
+        # The states computed from date_from on, one per dirty day: each holds until the next one (P4)
+        computed: list[DailyPortfolioState] = []
         cumulative_cash = zero
         cumulative_ecf = zero
         # G1a — additive per-broker contribution accumulators. Mirrors of the scope
@@ -301,41 +309,22 @@ class DailyStateBuilder:
         movement_days = set(all_txs_by_date) | set(ecf_by_date) | internal_flow_dates
         self._replay_from = min([self.date_from, *movement_days])
         frame_fx_days = set(self.native_cash.rate_change_days(self._replay_from, self.date_to))
-        dirty_days = self._collect_dirty_days(set(cash_deltas) | set(position_txs_by_date) | set(ecf_by_date) | internal_flow_dates, set(position_txs_by_date), frame_fx_days)
+        dirty_days = self._collect_dirty_days(set(cash_deltas) | set(position_txs_by_date) | set(ecf_by_date) | internal_flow_dates, frame_fx_days)
         ordered_dirty_days = sorted(dirty_days)
+
+        # #48: each position's closed frames, and the frame still open on the last computed day (start, values)
+        closed_frames: dict[tuple[int, int], list[PositionFrame]] = defaultdict(list)
+        open_frames: dict[tuple[int, int], tuple[date_type, tuple]] = {}
 
         previous_state: DailyPortfolioState | None = None
         current = self._replay_from
         while current <= self.date_to:
-            # Day skipping: if this day is stationary (no tx, ecf, price change, or
-            # in-transit boundary), reuse the previous state with updated date.
+            # A quiet day (no movement, flow, quote, rate change, in-transit boundary, stale turn or split) carries the
+            # previous state: it is never visited. The loop jumps to the next dirty day, and from date_from on the
+            # carried days live in the segment of the state they carry (P4: DailyStates builds one when it is read).
             if current not in dirty_days and previous_state is not None:
-                if current < self.date_from:
-                    # R13-SEC8: nothing is emitted before date_from, and a quiet day only carries the state: on to the
-                    # next dirty day (date_from is one). A row stored centuries back costs its dirty days, not a walk.
-                    position = bisect.bisect_right(ordered_dirty_days, current)
-                    current = ordered_dirty_days[position] if position < len(ordered_dirty_days) else self.date_to + timedelta(days=1)
-                    continue
-                # The containers are copied, never shared between two days' states.
-                previous_state = replace(
-                    previous_state,
-                    date=current,
-                    external_cash_flow=zero,
-                    by_type=dict(previous_state.by_type),
-                    by_sector=dict(previous_state.by_sector),
-                    by_geography=dict(previous_state.by_geography),
-                    missing_price_asset_ids=set(previous_state.missing_price_asset_ids),
-                    missing_fx_pairs=set(previous_state.missing_fx_pairs),
-                    stale_price_asset_ids=set(previous_state.stale_price_asset_ids),
-                    transaction_implied_asset_ids=set(previous_state.transaction_implied_asset_ids),
-                    transaction_implied_last_quote_dates=dict(previous_state.transaction_implied_last_quote_dates),
-                    broker_contributions=dict(previous_state.broker_contributions),
-                    acquisition_funding=None,
-                    unrealized_by_currency=dict(previous_state.unrealized_by_currency),
-                )
-                if current >= self.date_from:
-                    states.append(previous_state)
-                current += timedelta(days=1)
+                position = bisect.bisect_right(ordered_dirty_days, current)
+                current = ordered_dirty_days[position] if position < len(ordered_dirty_days) else self.date_to + timedelta(days=1)
                 continue
 
             # 4a. Update cash
@@ -402,6 +391,17 @@ class DailyStateBuilder:
                     if transfer_capital is not None:
                         cumulative_ecf += transfer_capital
                         cumulative_ecf_by_broker[bid] += transfer_capital
+                        # B5: the leg, with the cost it moved, for the period breakdown's row of its own
+                        market_value_transfers.append(
+                            MarketValueTransfer(
+                                transaction_id=tx.id,
+                                broker_id=bid,
+                                asset_id=tx.asset_id,
+                                date=tx.date,
+                                capital=transfer_capital,
+                                cost=step.cost_report_change if step is not None else zero,
+                            )
+                        )
                     if tx.quantity > 0:
                         # In-kind ADJUSTMENT-in (priced, no cash): capital contribution.
                         # Add the cost it brings into the pool to the capital baseline so total
@@ -446,8 +446,12 @@ class DailyStateBuilder:
             by_type: dict[str, Decimal] = defaultdict(lambda: zero)
             by_sector: dict[str, Decimal] = defaultdict(lambda: zero)
             by_geo: dict[str, Decimal] = defaultdict(lambda: zero)
+            by_asset: dict[int, Decimal] = {}
+            frames_today = self.compute_position_frames and current >= self.date_from
+            held_today: set[tuple[int, int]] = set()
             missing: set[int] = set()
             stale: set[int] = set()
+            stale_fx: dict[str, date_type] = {}
             missing_fx: set[str] = set()
             implied: set[int] = set()
             implied_last_quotes: dict[int, date_type | None] = {}
@@ -470,6 +474,7 @@ class DailyStateBuilder:
                 if valuation.market_value is not None:
                     market_value += valuation.market_value
                     market_value_by_broker[position_broker_id] += valuation.market_value
+                    by_asset[asset_id] = by_asset.get(asset_id, zero) + valuation.market_value
                     self._distribute_allocation(asset_id, valuation.market_value, by_type, by_sector, by_geo)
                     if self.compute_candles:
                         has_ohlc = valuation.market_value_open is not None and valuation.market_value_high is not None and valuation.market_value_low is not None
@@ -481,6 +486,8 @@ class DailyStateBuilder:
                     missing.add(asset_id)
                 if valuation.stale:
                     stale.add(asset_id)
+                if valuation.market_value is not None and (stale_pair := self._stale_fx_pair(valuation.effective_currency, current)) is not None:
+                    stale_fx[stale_pair[0]] = stale_pair[1]
                 if valuation.missing_fx_pair:
                     missing_fx.add(valuation.missing_fx_pair)
                 if valuation.source == ValuationSource.LAST_TRADE_PRICE:
@@ -490,7 +497,17 @@ class DailyStateBuilder:
                 position_cost = cost_pool.get((asset_id, position_broker_id))
                 position_cost_report = position_cost.cost_report_for(qty) if position_cost is not None else zero
                 open_cost_basis += position_cost_report
+                if frames_today:
+                    key = (asset_id, position_broker_id)
+                    held_today.add(key)
+                    self._extend_frame(key, current, qty, valuation, position_cost, position_cost_report, open_frames, closed_frames)
                 self._add_unrealized_part(unrealized_parts, asset_id, qty, valuation.market_value, position_cost_report, position_cost, current, at_cost=valuation.source == ValuationSource.ESTIMATED_AT_COST)
+
+            if frames_today:
+                # A position no longer held ends its frame the day before: no frame where it is not held
+                for key in [key for key in open_frames if key not in held_today]:
+                    start, values = open_frames.pop(key)
+                    closed_frames[key].append(self._frame(key, start, current - timedelta(days=1), values))
 
             # 4d. In-transit values. `it_by_broker` is attributed to each interval's
             # departure-broker (cash+asset market value only — additive NAV
@@ -614,9 +631,11 @@ class DailyStateBuilder:
                 by_type=dict(by_type),
                 by_sector=dict(by_sector),
                 by_geography=dict(by_geo),
+                by_asset=by_asset,
                 missing_price_asset_ids=missing,
                 missing_fx_pairs=missing_fx,
                 stale_price_asset_ids=stale,
+                stale_fx_pairs=stale_fx,
                 transaction_implied_asset_ids=implied,
                 transaction_implied_last_quote_dates=implied_last_quotes,
                 nav_complete=len(missing) == 0,
@@ -626,7 +645,7 @@ class DailyStateBuilder:
                 unrealized_by_currency={currency: UnrealizedSplit(asset=part[0], fx=part[1], unsplit=part[2]) for currency, part in unrealized_parts.items()},
             )
             if current >= self.date_from:
-                states.append(previous_state)
+                computed.append(previous_state)
             current += timedelta(days=1)
 
         # End-of-frame position snapshot (t1)
@@ -636,8 +655,16 @@ class DailyStateBuilder:
             ps = self._build_position_state(aid, bid, qty, self.date_to, cost_pool)
             position_states_end.append(ps)
 
+        position_frames: tuple[PositionFrame, ...] | None = None
+        if self.compute_position_frames:
+            for key, (start, values) in open_frames.items():
+                closed_frames[key].append(self._frame(key, start, self.date_to, values))
+            # Grouped in the order the replay met the positions (the market value's summing order), each by start
+            position_frames = tuple(frame for key in cumulative_qty for frame in closed_frames.get(key, ()))
+
         return PortfolioCalculationResult(
-            daily_states=states,
+            daily_states=self._segments(computed),
+            position_frames=position_frames,
             position_states_start=position_states_start,
             position_states_start_date=self.period_start,
             position_states_end=position_states_end,
@@ -661,10 +688,62 @@ class DailyStateBuilder:
             date_to=self.date_to,
             average_costs=dict(self.average_costs),
             realized_sales=realized_sales,
+            market_value_transfers=market_value_transfers,
             missing_fx={pair: set(dates) for pair, dates in self._missing_fx.items()},
         )
 
     # ── Helper methods ──
+
+    @staticmethod
+    def _extend_frame(
+        key: tuple[int, int],
+        day: date_type,
+        qty: Decimal,
+        valuation: ValuationResult,
+        position_cost: CostStep | None,
+        cost_basis: Decimal,
+        open_frames: dict[tuple[int, int], tuple[date_type, tuple]],
+        closed_frames: dict[tuple[int, int], list[PositionFrame]],
+    ) -> None:
+        """Carry the position's open frame through ``day``, or close it the day before and open one when a value changed.
+
+        The values are those of ``_build_position_state`` for the day (the same valuation and cost the day's totals sum).
+        Values are compared with their exponent, so a frame holds exactly the Decimals of each of its days.
+        """
+        cost_complete = position_cost.report_complete if position_cost is not None else True
+        unrealized = valuation.market_value - cost_basis if valuation.market_value is not None and cost_complete else None
+        values = (qty, valuation.market_value, cost_basis, cost_complete, valuation.source, unrealized)
+        opened = open_frames.get(key)
+        if opened is not None:
+            if _exact(opened[1]) == _exact(values):
+                return
+            closed_frames[key].append(DailyStateBuilder._frame(key, opened[0], day - timedelta(days=1), opened[1]))
+        open_frames[key] = (day, values)
+
+    @staticmethod
+    def _frame(key: tuple[int, int], start: date_type, end: date_type, values: tuple) -> PositionFrame:
+        asset_id, broker_id = key
+        quantity, market_value, cost_basis, cost_complete, source, unrealized = values
+        return PositionFrame(
+            broker_id=broker_id,
+            asset_id=asset_id,
+            start=start,
+            end=end,
+            quantity=quantity,
+            market_value=market_value,
+            cost_basis=cost_basis,
+            cost_complete=cost_complete,
+            valuation_source=source,
+            unrealized_pnl=unrealized,
+        )
+
+    def _segments(self, computed: list[DailyPortfolioState]) -> DailyStates:
+        """The computed states from date_from on as segments: each holds up to the day before the next, the last one to
+        date_to. date_from is always computed (``_collect_dirty_days``), so the segments cover ``[date_from, date_to]``."""
+        if not computed:
+            return DailyStates()
+        ends = [state.date - timedelta(days=1) for state in computed[1:]] + [self.date_to]
+        return DailyStates(StateSegment(start=state.date, end=end, state=state) for state, end in zip(computed, ends, strict=True))
 
     def _build_position_state(
         self,
@@ -801,12 +880,13 @@ class DailyStateBuilder:
         """The rate the day reads from the pre-loaded map: the exact day's, or None."""
         return self.fx_rate_map.get((currency, self.target_currency, day))
 
-    def _collect_dirty_days(self, movement_days: set[date_type], position_days: set[date_type], fx_days: set[date_type]) -> set[date_type]:
+    def _collect_dirty_days(self, movement_days: set[date_type], fx_days: set[date_type]) -> set[date_type]:
         """The days from the replay's start to date_to whose state must be computed; any other day carries the last one.
 
         A movement (cash, position, external or internal flow); a rate change of a held foreign currency (its cash is
         revalued) or of a rate the day reads for its securities or its cash in transit; an in-transit boundary; a market
-        quote (it sets the day's mark and restarts the price's age); the day a carried price turns stale; a split; the
+        quote (it sets the day's mark and restarts the price's age); the day a carried price turns stale (only when no
+        newer observation of its mark comes first); the day a rate read for the securities turns stale; a split; the
         first replayed day, date_from and the period's start.
         """
         start, end = self._replay_from, self.date_to
@@ -820,11 +900,7 @@ class DailyStateBuilder:
             dirty_days.update(day for day in boundaries if day >= start)
         for prices in self.price_map.values():
             dirty_days.update(dt for dt, _close, _currency in prices if start <= dt <= end)
-        observed = {dt for prices in self.price_map.values() for dt, _close, _currency in prices} | position_days
-        for day in observed:
-            first_stale = day + timedelta(days=STALE_PRICE_THRESHOLD_DAYS + 1)
-            if start <= first_stale <= end:
-                dirty_days.add(first_stale)
+        dirty_days.update(day for day in self._stale_turn_days() if start <= day <= end)
         for history in self.split_history.values():
             dirty_days.update(split.date for split in history if start <= split.date <= end)
         dirty_days.add(start)
@@ -885,6 +961,43 @@ class DailyStateBuilder:
             _move_linked_cash(ctxn, amount, K, R, transfer_splits)
         return withdrawn, buy_from_k, buy_from_r
 
+    def _stale_turn_days(self) -> set[date_type]:
+        """The days a price or an exchange rate the valuation reads turns stale (D-P4).
+
+        A price turns stale STALE_PRICE_THRESHOLD_DAYS + 1 days after the last observation of its mark (a quote or a
+        trade), only when no newer observation comes first: no Friday + 8 behind Monday's quote. A rate read for the
+        securities turns stale the same way: its stored row grows older than the threshold before a newer step comes.
+        """
+        turns: set[date_type] = set()
+        for series in self.mark_series.values():
+            observed = series.observation_dates
+            for index, day in enumerate(observed):
+                first_stale = day + timedelta(days=STALE_PRICE_THRESHOLD_DAYS + 1)
+                if index + 1 < len(observed) and observed[index + 1] <= first_stale:
+                    continue
+                turns.add(first_stale)
+        if isinstance(self.fx_rate_map, AskedDayRates):
+            for currency in self._valuation_currencies():
+                turns.update(self.fx_rate_map.stale_turn_days(currency, self.target_currency, STALE_PRICE_THRESHOLD_DAYS))
+        return turns
+
+    def _valuation_currencies(self) -> set[str]:
+        """The currencies other than the report's that value the securities: the assets' and their quotes'."""
+        currencies = {currency for prices in self.price_map.values() for _day, _close, currency in prices if currency}
+        currencies.update(currency for currency in self.asset_currencies.values() if currency)
+        currencies.discard(self.target_currency)
+        return currencies
+
+    def _stale_fx_pair(self, currency: str | None, day: date_type) -> tuple[str, date_type] | None:
+        """``("CCY/TARGET", row date)`` when the day values a security in ``currency`` with a stored rate older than the
+        stale threshold."""
+        if not currency or currency == self.target_currency or not isinstance(self.fx_rate_map, AskedDayRates):
+            return None
+        rate_day = self.fx_rate_map.rate_day_at(currency, self.target_currency, day)
+        if rate_day is None or (day - rate_day).days <= STALE_PRICE_THRESHOLD_DAYS:
+            return None
+        return f"{currency}/{self.target_currency}", rate_day
+
     def _valuation_rate_change_days(self) -> set[date_type]:
         """Frame days on which a rate the day reads to value it changes from the day before.
 
@@ -893,21 +1006,47 @@ class DailyStateBuilder:
         valuation: the exact day's rate, so one that appears or disappears counts.
         """
         changed: set[date_type] = set()
-        currencies = {currency for prices in self.price_map.values() for _day, _close, currency in prices if currency}
-        currencies.update(currency for currency in self.asset_currencies.values() if currency)
-        currencies.discard(self.target_currency)
-        # R13-SEC8: no rate is read before EARLIEST_RANGE_START (none is loaded there), so the calendars start there at
-        # the earliest: a row stored centuries back never makes a calendar of every day since.
-        replay_from = max(self._replay_from, EARLIEST_RANGE_START)
+        currencies = self._valuation_currencies()
+        # Each calendar holds only the days a reading can change on (_reading_calendar): a row stored centuries back never
+        # makes a calendar of every day since, so the calendars start at the replay's start (no date floor, MF-PAV-L1).
+        replay_from = self._replay_from
         if currencies:
-            changed.update(day for day in change_days(self._read_rate, currencies, _calendar(replay_from - timedelta(days=1), self.date_to)) if day >= replay_from)
+            changed.update(day for day in change_days(self._read_rate, currencies, self._reading_calendar(currencies, replay_from, self.date_to)) if day >= replay_from)
         for interval in self.in_transit_intervals:
             currency = interval.departure_leg.currency
             start, end = max(interval.start_date, replay_from), min(interval.end_date, self.date_to)
             if interval.tx_type != "cash" or not currency or currency == self.target_currency or start > end:
                 continue
-            changed.update(day for day in change_days(self._read_rate, {currency}, _calendar(start - timedelta(days=1), end)) if day >= start)
+            changed.update(day for day in change_days(self._read_rate, {currency}, self._reading_calendar({currency}, start, end)) if day >= start)
         return changed
+
+    def _reading_calendar(self, currencies: set[str], first: date_type, last: date_type) -> list[date_type]:
+        """The days of ``[first − 1, last]`` on which the day's rate of ``currencies`` may differ from the day before.
+
+        A reader of the exact day's rate (:meth:`_read_rate`) sees a change only on such a day, so ``change_days`` on
+        these days, with the day before each, finds exactly the changes of the whole calendar. On an ``AskedDayRates``
+        they are its steps and window bounds (``reading_change_days``); on a plain map, each key's day and the day after.
+        No day before ``date.min``: there a rate counts as a change, as on a calendar's first day.
+        """
+        rates = self.fx_rate_map
+        candidates: set[date_type] = set()
+        if isinstance(rates, AskedDayRates):
+            for currency in currencies:
+                candidates.update(rates.reading_change_days(currency, self.target_currency))
+        else:
+            for key in rates:
+                if len(key) == 3 and key[0] in currencies and key[1] == self.target_currency:
+                    day = key[2]
+                    candidates.add(day)
+                    if day < date_type.max:
+                        candidates.add(day + timedelta(days=1))
+        days: set[date_type] = {first - timedelta(days=1)} if first > date_type.min else set()
+        for day in candidates:
+            if first <= day <= last:
+                days.add(day)
+                if day > date_type.min:
+                    days.add(day - timedelta(days=1))
+        return sorted(days)
 
     def _convert(self, amount: Decimal, from_ccy: str, dt: date_type) -> Decimal | None:
         """Convert amount from from_ccy to target_currency using pre-loaded FX map."""
