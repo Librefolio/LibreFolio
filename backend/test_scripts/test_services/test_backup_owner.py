@@ -44,6 +44,13 @@ which fails the test (``pytest.fail``, never a skip) with the ``ImportError``: t
     Afterwards ``owner_assignment_problem`` is ``"pending"`` and the startup step calls A again. One log line (stage,
     user id, the code reset), never an address, a name or a link.
 
+(g) B5-1j (analysis ``B-5-1j-analisi-titolare-nel-restore-cli.md`` §6; written RED before it): the filters ``confirmed_via !=
+    "admin"`` are gone. (b), (e) and (f) above now hold for a restore confirmed via ``cli`` or ``panel`` as for the app's:
+    the step ``restore-owner`` gives the account picked at the confirmation (``assign_restored_owner``), ``owner_pending``
+    answers its stage and account, ``owner_assignment_problem`` is ``pending`` / the code of an ``error:``, and
+    ``reset_owner_assignment`` clears such an error. A restore with NOBODY picked (``owner_user_id`` ``None``,
+    ``owner_outcome`` ``"none"`` recorded at the confirmation) is left alone by all of them.
+
 How. A's signature (``backend.app.services.accounts.instance_owner.assign_owner_and_send_reset(session, user_id, *,
 now=None) -> OwnerResetResult``) is played by the fakes of this module: ``FakeOutcome`` (a ``StrEnum`` of A's two
 values), ``FakeResult`` (A's frozen dataclass ``OwnerResetResult``: ``outcome``, ``user_id``, ``username``, ``email``,
@@ -605,18 +612,22 @@ async def test_without_a_s_code_the_owner_stays_pending_and_an_error_is_logged(o
 LEFT_ALONE = [
     pytest.param(None, id="no-restore"),
     *(pytest.param({"status": status, "owner_user_id": "owner"}, id=f"{status}") for status in ("pending", "applying", "applied", "rolling_back", "rolled_back")),
-    *(pytest.param({"confirmed_via": via, "owner_user_id": "owner"}, id=f"committed-via-{via}") for via in ("cli", "panel")),
+    # B5-1j: a restore confirmed from the command line or by the panel with NO owner picked (none found, or no address) has
+    # nothing to give: its outcome ``none`` is recorded at the confirmation and the step does not run for it.
+    *(pytest.param({"confirmed_via": via, "owner_user_id": None, "owner_outcome": "none"}, id=f"committed-via-{via}-nobody-picked") for via in ("cli", "panel")),
+    *(pytest.param({"confirmed_via": via, "owner_user_id": None}, id=f"committed-via-{via}-no-owner") for via in ("cli", "panel")),
     pytest.param({"owner_user_id": None}, id="committed-no-owner"),
     *(pytest.param({"owner_user_id": "owner", "owner_outcome": outcome}, id=f"already-{outcome}") for outcome in ("sent", "link_only", "error:EMAIL_TAKEN")),
+    *(pytest.param({"confirmed_via": via, "owner_user_id": "owner", "owner_outcome": "link_only"}, id=f"already-link_only-via-{via}") for via in ("cli", "panel")),
 ]
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("fields", LEFT_ALONE)
 async def test_anything_but_a_committed_admin_restore_waiting_for_its_owner_is_left_alone(owner, data_dir, monkeypatch, fields):
-    """(b) No state; a restore not committed; one confirmed via ``cli`` or ``panel`` (even with an owner id); one
-    without an owner; one whose outcome is recorded: ``None`` returned, A's function never called, ``restore.json`` byte
-    for byte."""
+    """(b) No state; a restore not committed; one without an owner (via ``cli`` or ``panel`` whose outcome ``none`` was
+    recorded at the confirmation, B5-1j, or not); one whose outcome is recorded: ``None`` returned, A's function never
+    called, ``restore.json`` byte for byte."""
     fake = FakeA(outcome=FakeOutcome.SENT)
     use_fake(monkeypatch, owner, fake)
     before = None
@@ -629,6 +640,43 @@ async def test_anything_but_a_committed_admin_restore_waiting_for_its_owner_is_l
     assert state_bytes(data_dir.root) == before, f"{fields}: restore.json as it was"
     no_secret_in(events)
     print_success(f"{fields}: left alone")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("via", ["cli", "panel"])
+@pytest.mark.parametrize("outcome", list(FakeOutcome), ids=[outcome.value for outcome in FakeOutcome])
+async def test_a_committed_command_line_or_panel_restore_assigns_the_picked_owner_once_and_records_the_outcome(owner, data_dir, monkeypatch, via, outcome):
+    """(b) B5-1j: the owner picked at the confirmation of a restore via ``cli`` or ``panel`` is given the account by the same
+    step as the app's: A's function called once with the picked id (a session on the data directory's database, nothing
+    else), its outcome recorded in ``restore.json`` and in the state returned, no link anywhere. Red before B5-1j: the step
+    left a state confirmed from the command line or the panel alone."""
+    print_section(f"(b) B5-1j assign_restored_owner via {via}: {outcome.value}")
+    fake = FakeA(outcome=outcome)
+    use_fake(monkeypatch, owner, fake)
+    write_state(data_dir.root, confirmed_via=via, owner_user_id=data_dir.owner_id)
+    returned, raised, events = await assigned(owner, data_dir.root)
+    assert raised is None, f"the step never raises: {type(raised).__name__}: {raised}"
+    assert fake.calls == [{"user_id": data_dir.owner_id, "async_session": True, "expire_on_commit": False, "username": OWNER_USERNAME, "now": None}], f"A's function called once, with the picked id: {fake.calls}"
+    assert recorded(data_dir.root) == (data_dir.owner_id, outcome.value), f"restore.json records {outcome.value}: {recorded(data_dir.root)}"
+    assert returned is not None and (returned.confirmed_via, returned.owner_user_id, returned.owner_outcome) == (via, data_dir.owner_id, outcome.value), f"the state returned says it too: {returned}"
+    no_secret_in(events)
+    print_success(f"via {via}: {outcome.value} recorded, one call")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("via", ["cli", "panel"])
+@pytest.mark.parametrize("code", ASSIGNMENT_CODES)
+async def test_an_owner_assignment_error_of_a_command_line_or_panel_restore_is_recorded_as_error_and_its_code(owner, data_dir, monkeypatch, via, code):
+    """(b) B5-1j: A refuses the account picked for a restore via ``cli`` or ``panel``: ``error:<CODE>`` recorded as for the
+    app, nothing raised."""
+    fake = FakeA(raises=FakeOwnerAssignmentError(code))
+    use_fake(monkeypatch, owner, fake)
+    write_state(data_dir.root, confirmed_via=via, owner_user_id=data_dir.owner_id)
+    _returned, raised, events = await assigned(owner, data_dir.root)
+    assert raised is None and len(fake.calls) == 1, f"nothing raised, A called once: {raised}, {fake.calls}"
+    assert recorded(data_dir.root) == (data_dir.owner_id, f"error:{code}"), f"restore.json records error:{code}: {recorded(data_dir.root)}"
+    no_secret_in(events)
+    print_success(f"via {via}: error:{code}")
 
 
 @pytest.mark.asyncio
@@ -841,7 +889,11 @@ PROBLEMS = [
     pytest.param({"owner_user_id": "owner"}, "pending", id="committed-owner-pending"),
     *(pytest.param({"owner_user_id": "owner", "owner_outcome": f"error:{code}"}, code, id=f"committed-error-{code}") for code in ASSIGNMENT_CODES),
     *(pytest.param({"owner_user_id": "owner", "owner_outcome": outcome.value}, None, id=f"committed-{outcome.value}") for outcome in FakeOutcome),
-    *(pytest.param({"confirmed_via": via, "owner_user_id": "owner"}, None, id=f"committed-via-{via}") for via in ("cli", "panel")),
+    # B5-1j: the owner picked at a confirmation via the command line or the panel is the guard's concern like the app's.
+    *(pytest.param({"confirmed_via": via, "owner_user_id": "owner"}, "pending", id=f"committed-via-{via}-owner-pending") for via in ("cli", "panel")),
+    *(pytest.param({"confirmed_via": via, "owner_user_id": "owner", "owner_outcome": f"error:{code}"}, code, id=f"committed-via-{via}-error-{code}") for via in ("cli", "panel") for code in ("EMAIL_TAKEN", "USER_NOT_FOUND")),
+    *(pytest.param({"confirmed_via": via, "owner_user_id": "owner", "owner_outcome": outcome.value}, None, id=f"committed-via-{via}-{outcome.value}") for via in ("cli", "panel") for outcome in FakeOutcome),
+    *(pytest.param({"confirmed_via": via, "owner_user_id": None, "owner_outcome": "none"}, None, id=f"committed-via-{via}-nobody-picked") for via in ("cli", "panel")),
     pytest.param({"owner_user_id": None}, None, id="committed-no-owner"),
     *(pytest.param({"status": status, "owner_user_id": "owner"}, None, id=f"{status}") for status in ("pending", "applying", "applied", "rolling_back", "rolled_back")),
 ]
@@ -849,9 +901,10 @@ PROBLEMS = [
 
 @pytest.mark.parametrize(("fields", "expected"), PROBLEMS)
 def test_owner_assignment_problem_says_whether_the_owner_s_account_is_still_open(data_dir, fields, expected):
-    """(e) B5-1 §7.4: for the last restore — committed, confirmed from the app, an owner named — ``"pending"`` while no
-    outcome is recorded, the code of an ``error:<CODE>``; ``None`` otherwise: no restore, an outcome of A, a restore
-    via the panel or the command line, without an owner, or not committed. Nothing written."""
+    """(e) B5-1 §7.4, B5-1j: for the last restore — committed, an owner named, whoever confirmed it (the app, the command
+    line, the hosting panel) — ``"pending"`` while no outcome is recorded, the code of an ``error:<CODE>``; ``None``
+    otherwise: no restore, an outcome of A, a restore without an owner (``none`` recorded at the confirmation included), or
+    not committed. Nothing written."""
     print_section("(e) B5-1 §7.4 owner_assignment_problem")
     hook = problem_hook()
     before = None
@@ -1157,6 +1210,39 @@ def test_a_failure_after_the_reset_can_be_reset_again(owner, data_dir, monkeypat
     print_success("fail, reset, fail, reset")
 
 
+@pytest.mark.parametrize("via", ["cli", "panel"])
+@pytest.mark.parametrize("code", ["EMAIL_TAKEN", "USER_NOT_FOUND"])
+def test_reset_clears_the_failed_outcome_of_a_command_line_or_panel_restore_too(data_dir, via, code):
+    """(f) B5-1j: ``owner_outcome`` ``error:<CODE>`` of a restore confirmed via ``cli`` or ``panel``, with the picked owner:
+    cleared, nothing else changed, the guard goes from the code to ``pending``. Red before B5-1j: refused as «not failed»."""
+    print_section(f"(f) B5-1j reset_owner_assignment via {via}")
+    reset = reset_function()
+    hook = problem_hook()
+    failed_state(data_dir.root, code, data_dir.owner_id, confirmed_via=via)
+    before = apply_module().read_restore(data_dir.root).model_dump()
+    assert hook(data_dir.root) == code, "precondition: the guard sees the code (B5-1j: for the command line and the panel too)"
+    assert reset(data_dir.root) is False, "nobody serves the data directory: False"
+    after = apply_module().read_restore(data_dir.root).model_dump()
+    assert after["owner_outcome"] is None and {key: value for key, value in after.items() if key != "owner_outcome"} == {key: value for key, value in before.items() if key != "owner_outcome"}, "the outcome cleared, nothing else"
+    assert hook(data_dir.root) == "pending", "after the reset the owner is pending again"
+    print_success(f"via {via}: {code} cleared")
+
+
+@pytest.mark.parametrize("via", ["admin", "cli", "panel"])
+def test_owner_pending_gives_the_stage_and_the_account_of_a_committed_restore_whoever_confirmed_it(data_dir, via):
+    """(e) B5-1j: ``apply.owner_pending(data_dir)`` — the startup step's question — answers ``(stage_id, owner_user_id)`` for
+    a committed restore with an owner named and no outcome, confirmed via ``admin``, ``cli`` or ``panel``; ``None`` once
+    an outcome is recorded, and for a restore with nobody picked. Red before B5-1j for ``cli`` and ``panel``."""
+    apply = apply_module()
+    write_state(data_dir.root, confirmed_via=via, owner_user_id=data_dir.owner_id)
+    assert apply.owner_pending(data_dir.root) == (STAGE_ID, data_dir.owner_id), f"via {via}: the stage and the account to give"
+    apply.record_owner_outcome(data_dir.root, STAGE_ID, "sent")
+    assert apply.owner_pending(data_dir.root) is None, "an outcome recorded: nothing pending"
+    write_state(data_dir.root, confirmed_via=via, owner_user_id=None, owner_outcome="none")
+    assert apply.owner_pending(data_dir.root) is None, "nobody picked: nothing pending"
+    print_success(f"via {via}: owner_pending")
+
+
 # --- reset_owner_assignment: the refusals -------------------------------------
 
 #: (the state's fields; ``owner_outcome`` is given as the case needs) for a restore that is not
@@ -1165,7 +1251,8 @@ NOT_FAILED = [
     pytest.param({"owner_user_id": "owner"}, id="committed-pending-owner"),
     pytest.param({"owner_user_id": "owner", "owner_outcome": "sent"}, id="outcome-sent"),
     pytest.param({"owner_user_id": "owner", "owner_outcome": "link_only"}, id="outcome-link_only"),
-    *(pytest.param({"confirmed_via": via, "owner_user_id": "owner", "owner_outcome": "error:EMAIL_TAKEN"}, id=f"via-{via}-error") for via in ("cli", "panel")),
+    *(pytest.param({"confirmed_via": via, "owner_user_id": "owner", "owner_outcome": "link_only"}, id=f"via-{via}-link_only") for via in ("cli", "panel")),
+    *(pytest.param({"confirmed_via": via, "owner_user_id": None, "owner_outcome": "none"}, id=f"via-{via}-nobody-picked") for via in ("cli", "panel")),
     pytest.param({"owner_user_id": None, "owner_outcome": "error:EMAIL_TAKEN"}, id="error-without-owner"),
     *(pytest.param({"status": status, "owner_user_id": "owner", "owner_outcome": "error:EMAIL_TAKEN"}, id=f"{status}-error") for status in ("pending", "applying", "applied", "rolling_back", "rolled_back")),
 ]
@@ -1173,8 +1260,8 @@ NOT_FAILED = [
 
 @pytest.mark.parametrize("fields", NOT_FAILED)
 def test_reset_refuses_anything_but_a_failed_owner_assignment_and_writes_nothing(data_dir, fields):
-    """(f) B5-1b §9.1: a restore that is not committed, confirmed from the app, with an owner and an ``error:`` outcome
-    (no outcome yet; an outcome of A; the panel or the command line; no owner; any other phase): ``RestoreOwnerNotFailedError``,
+    """(f) B5-1b §9.1, B5-1j: a restore that is not committed, with an owner and an ``error:`` outcome — whoever confirmed it —
+    (no outcome yet; an outcome of A; nobody picked; no owner; any other phase): ``RestoreOwnerNotFailedError``,
     ``restore.json`` byte for byte."""
     reset = reset_function()
     given = {name: (data_dir.owner_id if value == "owner" else value) for name, value in fields.items()}
