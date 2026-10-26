@@ -150,6 +150,28 @@ def _same(got, expected) -> bool:
     return got == expected and got.as_tuple() == expected.as_tuple()
 
 
+def _by_day(steps: list[dict]) -> dict[date, dict]:
+    """The history's steps (D-P4: each holds from ``date`` to ``through``, both included) as one entry per day.
+
+    Also asserts the series' invariant: in order, no overlap, no gap (an allocation history has a state every day).
+    """
+    days: dict[date, dict] = {}
+    for step in steps:
+        assert step["date"] <= step["through"], f"step {step['date']}..{step['through']} ends before it starts"
+        for day in _days(step["date"], step["through"]):
+            assert day not in days, f"{day} is covered by two steps"
+            days[day] = step
+    ordered = sorted(days)
+    assert ordered == _days(ordered[0], ordered[-1]) if ordered else True, "the steps leave a gap"
+    assert list(days) == ordered, "the steps are not in order"
+    return days
+
+
+def _same_components(got: list[dict], expected: list[dict]) -> bool:
+    """Two components lists equal field by field, the Decimals with their exponent."""
+    return len(got) == len(expected) and all(a.keys() == b.keys() and all(_same(a[k], b[k]) for k in a) for a, b in zip(got, expected, strict=True))
+
+
 # =============================================================================
 # 1. by_asset FROM THE ENGINE
 # =============================================================================
@@ -382,29 +404,44 @@ class TestTheViews:
             _state(D3, by_asset={W: "45"}, cash="1000"),
         ]
         got = DerivedViewsBuilder(states, "EUR").build_asset_allocation_history(NAMES)
-        assert [point["date"] for point in got] == [D1, D2, D3]
+        # Steps (D-P4): on a plain list every state is a change day, and these three states differ, so one step a day
+        assert [(point["date"], point["through"]) for point in got] == [(D1, D1), (D2, D2), (D3, D3)]
         for point, state in zip(got, states, strict=True):
-            assert set(point) == {"date", "components"}
+            assert set(point) == {"date", "through", "components"}
             _assert_components(point["components"], _expected_components(state), emoji_key_required=False)
+
+    def test_history_on_a_list_merges_identical_consecutive_states(self):
+        """Steps are maximal (D-P4): on a plain list two consecutive days with the same components (Decimals with their
+        exponent) are one step, while a day whose amount has another exponent starts a new one."""
+        states = [
+            _state(D1, by_asset={X: "100"}, cash="900"),
+            _state(D2, by_asset={X: "100"}, cash="900"),
+            _state(D3, by_asset={X: "100.0"}, cash="900"),
+        ]
+        got = DerivedViewsBuilder(states, "EUR").build_asset_allocation_history(NAMES)
+        assert [(point["date"], point["through"]) for point in got] == [(D1, D2), (D3, D3)]
+        _assert_components(got[0]["components"], _expected_components(states[0]), emoji_key_required=False)
+        _assert_components(got[1]["components"], _expected_components(states[2]), emoji_key_required=False)
 
     def test_history_from_date_from(self):
         states = [_state(day, by_asset={X: str(100 + index)}, cash=str(50 - index)) for index, day in enumerate((D1, D2, D3, D4))]
         got = DerivedViewsBuilder(states, "EUR").build_asset_allocation_history(NAMES, date_from=D3)
-        assert [point["date"] for point in got] == [D3, D4]
+        assert [(point["date"], point["through"]) for point in got] == [(D3, D3), (D4, D4)]
         _assert_components(got[0]["components"], _expected_components(states[2]), emoji_key_required=False)
 
-    def test_history_over_segments_reads_each_quiet_day(self):
-        """On the engine's DailyStates a quiet day reads its segment's state: same components, its own date."""
+    def test_history_over_segments_holds_each_quiet_day(self):
+        """On the engine's DailyStates a quiet day is inside its segment's step (D-P4): the window start and the segment
+        start are the change days, each step holds its segment's components from its ``date`` to its ``through``."""
         s1 = _state(D1, by_asset={X: "100", UNNAMED: "7"}, cash="20")
         s3 = _state(D4, by_asset={W: "70"}, cash="30", in_transit_cash="5")
         ds = DailyStates([StateSegment(start=D1, end=D3, state=s1), StateSegment(start=D4, end=D5, state=s3)])
         got = DerivedViewsBuilder(ds, "EUR").build_asset_allocation_history(NAMES, date_from=D2)
-        assert [point["date"] for point in got] == [D2, D3, D4, D5]
-        for point in got:
-            state = s1 if point["date"] <= D3 else s3
+        assert [(point["date"], point["through"]) for point in got] == [(D2, D3), (D4, D5)], "window start D2 opens a step, the segment start D4 the next"
+        for day, point in _by_day(got).items():
+            state = s1 if day <= D3 else s3
             _assert_components(point["components"], _expected_components(state), emoji_key_required=False)
         whole = DerivedViewsBuilder(ds, "EUR").build_asset_allocation_history(NAMES)
-        assert [point["date"] for point in whole] == [D1, D2, D3, D4, D5]
+        assert [(point["date"], point["through"]) for point in whole] == [(D1, D3), (D4, D5)]
 
     def test_current_on_segments_reads_the_last_day(self):
         s1 = _state(D1, by_asset={X: "100"}, cash="20")
@@ -413,13 +450,19 @@ class TestTheViews:
         _assert_components(DerivedViewsBuilder(ds, "EUR").build_asset_allocation_current(NAMES), _expected_components(s2), emoji_key_required=True)
 
     def test_the_engines_states_give_the_views(self):
-        """On the engine's book: on every day the components are the contract's on that day's state (G never one)."""
+        """On the engine's book, the steps expanded to days (D-P4) cover every day of the book once, and on every day the
+        components are the contract's on that day's state (G never one); two consecutive steps never hold the same
+        components, so the steps are maximal."""
         ds = _result().daily_states
         names = {X: "X", W: "W", G: "G"}
         history = DerivedViewsBuilder(ds, "EUR").build_asset_allocation_history(names)
-        assert [point["date"] for point in history] == _days(BOOK_FROM, BOOK_TO)
-        for point in history:
-            state = ds.state_on(point["date"])
+        by_day = _by_day(history)
+        assert list(by_day) == _days(BOOK_FROM, BOOK_TO)
+        assert len(history) < len(by_day), "the quiet days of the book are inside steps, not one step each"
+        for earlier, later in zip(history, history[1:], strict=False):
+            assert not _same_components(earlier["components"], later["components"]), f"steps ending {earlier['through']} and starting {later['date']} hold the same components"
+        for day, point in by_day.items():
+            state = ds.state_on(day)
             amounts = {c["id"]: c["amount"] for c in point["components"]}
             assert set(amounts) == set(state.by_asset) | {None}
             assert G not in amounts
@@ -446,7 +489,7 @@ class TestTheSchemas:
 
     def test_allocation_history_dimensions_has_asset_empty_by_default(self):
         assert AllocationHistoryDimensions().asset == []
-        point = AllocationHistoryPoint(date=D1, components=[{"name": "Alpha Corp", "id": X, "value": Decimal("100.00"), "amount": Decimal("1"), "emoji": None}])
+        point = AllocationHistoryPoint(date=D1, through=D2, components=[{"name": "Alpha Corp", "id": X, "value": Decimal("100.00"), "amount": Decimal("1"), "emoji": None}])
         assert AllocationHistoryDimensions(asset=[point]).asset[0].components[0].id == X
 
     def test_the_state_field_defaults_to_an_empty_dict(self):

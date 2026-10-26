@@ -164,3 +164,21 @@ def steps_from_rows[R](
                 continue
             steps.append(StepRow(row=run_row, date=max(run_day, range_start), through=min(through, range_end), key=series_key))
     return steps
+
+
+def merged_spans(spans: Iterable[tuple[date, date]]) -> list[tuple[date, date]]:
+    """``(first, last)`` day spans, both included, with the overlapping and the consecutive ones merged, in order.
+
+    The data-quality report's ranges (D-P4): ``[(1 Mar, 3 Mar), (4 Mar, 4 Mar), (9 Mar, 9 Mar)]`` gives
+    ``[(1 Mar, 4 Mar), (9 Mar, 9 Mar)]``. A span with ``last < first`` raises ValueError.
+    """
+    merged: list[tuple[date, date]] = []
+    for first, last in sorted(spans):
+        if last < first:
+            raise ValueError(f"span {first}..{last} ends before it starts")
+        if merged and (first - merged[-1][1]).days <= 1:
+            if last > merged[-1][1]:
+                merged[-1] = (merged[-1][0], last)
+            continue
+        merged.append((first, last))
+    return merged
