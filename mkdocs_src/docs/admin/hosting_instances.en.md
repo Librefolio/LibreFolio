@@ -283,7 +283,11 @@ the report of the restore says only that the link is in the log, and never conta
 administrator. Pass the link to the owner. When the email went, the link is in no log.
 
 If the first start after the restore is repeated, the step is repeated too: the previous link stops working and a new one is
-sent. A restore made from the hosting panel does none of this. The whole restore is described in
+sent. A restore made from your hosting panel has nobody to ask, so the confirmation picks the owner's account itself from the
+checked copy, by the rules of [Without Anyone to Ask](backup_restore.md#owner-pick), and then does the same steps. In one case it
+leaves the owner's password alone: when the panel restores the same instance after a fault and the owner of the backup already
+holds the address of `LIBREFOLIO_ADMIN_EMAIL`, the owner keeps their password and their open sessions, and no link is sent
+([The Owner Keeps Their Password](backup_restore.md#owner-kept)). The whole restore is described in
 [Backup & Restore](backup_restore.md).
 
 ---
@@ -382,7 +386,7 @@ On a blocked instance, only these API calls answer as usual:
 | Taking the data away: a backup of the whole instance, by an administrator or by your hosting panel | For an administrator, `POST /api/v1/backup/instance`, then `GET`, `GET …/file` and `DELETE` on `/api/v1/backup/instance/jobs/{job_id}`, and `GET /api/v1/backup/instance/options`, the rules of a secure backup's password, so that the card can offer a secure backup too: the backup card of the block page calls them ([What Users See](#what-users-see)). For your panel, its [four routes](hosting_panel_backups.md#panel-jobs), with its token |
 | The outcome of a restore, for the page that asked the restart, with the one-time ticket of that request: when the block took effect at that restart, it says that the restore waits for the unblock, and starts nothing | `GET /api/v1/backup/restore/outcome` |
 | The block page | `GET /api/v1/system/block` (signed-in users only), `GET /api/v1/system/instance` |
-| Probes and version | `GET /api/v1/system/health`, `GET /api/v1/system/ready`, `GET /api/v1/system/info` |
+| Probes and version | `GET /api/v1/system/health`, `GET /api/v1/system/ready`, `GET /api/v1/system/info`. `/system/ready` carries `app_version` too, the same text as `/system/info`, so after an update you can check the version with the probe alone |
 | The [scheduled wake-up](wake_sync.md#wake-sync), with its own token: it answers `blocked` and runs no job | `POST /api/v1/system/wake-sync` |
 | Your panel's [setup status](hosting_panel_api.md#panel-status), with its own token | `GET /api/v1/panel/status` |
 

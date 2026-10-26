@@ -939,7 +939,7 @@ def api_restore_interrupted(verbose: bool = False, test_names: list[str] | None 
 def api_instance_key_check(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run the instance key check's API tests: the panel's status, its backup start, wake-sync, the Security list, the way back (H5-7, H)."""
     print_section("Instance Key Check API")
-    print_info("Testing: GET /panel/status instance_key ok|mismatch (eight keys), POST /backup/panel/jobs 409 backup_instance_key_mismatch after the credential, wake-sync instance_key_mismatch, the instance keeps serving, /security/checks platform.instance_key_check, the state read at every request, the way back on real files")
+    print_info("Testing: GET /panel/status instance_key ok|mismatch (nine keys since H5-8), POST /backup/panel/jobs 409 backup_instance_key_mismatch after the credential, wake-sync instance_key_mismatch, the instance keeps serving, /security/checks platform.instance_key_check, the state read at every request, the way back on real files")
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_instance_key_check_api.py", test_names)
     return run_command(cmd, "Instance key check API tests", verbose=verbose)
 
@@ -1159,6 +1159,15 @@ def e2e_backup_roundtrip_owner(verbose: bool = False, test_names: list = None) -
     return run_command(cmd, "Backup round trip owner E2E tests", verbose=verbose)
 
 
+def e2e_backup_roundtrip_over_limit(verbose: bool = False, test_names: list = None) -> bool:
+    """Test a backup with more active accounts than LIBREFOLIO_MAX_USERS restored and then met by the over-limit state: real servers on Unix sockets (B5-1k2)."""
+    print_section("E2E: Backup With More Accounts Than the Plan Holds (B5-1k2)")
+    print_info("Testing: the check's numbers and warning users_over_limit, the confirmation never refused, the restore of every account, then A5-7's over-limit state (423 user_limit_exceeded, GET /users/over-limit, POST /users/over-limit/resolve)")
+    print_info("Tests: self-hosted app, managed app (the owner protected), self-hosted command line: nothing is removed, the others are deactivated by the administrator's choice")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_e2e/test_backup_roundtrip_over_limit.py", test_names)
+    return run_command(cmd, "Backup round trip over-limit E2E tests", verbose=verbose)
+
+
 def e2e_test(verbose: bool = False) -> bool:
     """Run all E2E tests."""
     if _common.nothing_left_to_run("e2e"):
@@ -1255,7 +1264,7 @@ Tests for REST API endpoints (server auto-started):
         name="Utilities API: Currency Suggestion (E-19b1)",
         desc="GET /utilities/currencies/suggest: canonical, the one ISO code a stored value stands for (978, EURO -> EUR), the candidates of an ambiguous one (VED, VES), none for a subunit; public; value of 1 to 200 characters, else 422",
     )
-    add_test(api, "system", api_system, name="System API", desc="parse_pipfile, deps, info (public or full), connection, instance, ready, route order")
+    add_test(api, "system", api_system, name="System API", desc="parse_pipfile, deps, info (public or full), connection, instance, ready (codes, database_revision, mode, app_version: required string last, the public info's, in the 200 and the 503, no session), route order")
     # Read-only on the lane (one anonymous GET); every case with a variable runs in-process on a private database.
     add_test(api, "instance-legal", api_instance_config_legal, name="Instance Configuration: Legal Links (A9)", desc="GET /system/instance legal {terms_url, privacy_url}: valid, unset, invalid (null, still 200), no secret; the schema and the OpenAPI document; live on the lane: both null")
     add_test(
@@ -1504,7 +1513,7 @@ Tests for REST API endpoints (server auto-started):
         "panel-status",
         api_panel_status,
         name="Hosting Panel Status API",
-        desc="H-61 R1: GET /panel/status off 404 without a token, panel_status_unauthorized, the four states of the initial administrator's setup with the expiry of a pending one only, no personal data, answered on a blocked instance, its OpenAPI schema",
+        desc="H-61 R1: GET /panel/status off 404 without a token, panel_status_unauthorized, the four states of the initial administrator's setup with the expiry of a pending one only, no personal data, answered on a blocked instance, its OpenAPI schema; the places taken and the limit, owner_email_change, instance_key (nine keys in all); H5-8 users_over_limit: true only while the ACTIVE accounts outnumber LIBREFOLIO_MAX_USERS (invitations and waiting accounts do not count, a deactivated one neither), recomputed at each request, never who, on a blocked, awaiting-restore or unreadable-restore instance, a required boolean right after instance_key in the OpenAPI",
         isolation="pure",
     )
     add_test(
@@ -1734,6 +1743,18 @@ Complete workflow tests via REST API:
         name="Backup Round Trip Owner",
         desc="Lot B5-1f: a backup uploaded and restored from the app on a managed instance (LIBREFOLIO_PROFILE=managed, LIBREFOLIO_ADMIN_EMAIL, no SMTP), real uvicorn children on Unix sockets across pending-restore, admin-bootstrap, restore-commit, restore-owner, owner-sync: the check offers owner_choice, a confirmation without an owner is 409 owner_choice_required, with the backup's administrator 202; the restart exits and a new process commits; the chosen account has the owner's address, is an active administrator and the only owner, its old password and a session of before are refused, the owner's link is only in the child's log (not in the status, the state file or the data directory), is spent once and the owner signs in; another start calls nothing again; an address change that A refuses (EMAIL_TAKEN) serves no data until backup pending --recover owner; B5-1j, the real CLI restore on the same managed instance picks the owner itself: Anna, the only flagged active administrator with an old address, holds LIBREFOLIO_ADMIN_EMAIL after the restart and is the only flagged account, her old password and old session are refused, her password-reset link is only in the child's log and spends once, and the CLI names her by username and prints no address; with a flag on an ordinary account, or two flagged administrators, nobody is picked: outcome none, the CLI gives ./dev.py user reassign-owner <username>, the instance serves, nobody is flagged, no account is closed and the warning names nobody",
         tests="Managed target → Upload, check, confirm (owner), restart → Committed → Owner link in the log → Spent once; restart: nothing again; fail closed → recover; CLI restore: Anna picked, link only in the log; nobody picked: outcome none",
+        # PURE: every data directory and archive under tmp_path, every server a child uvicorn of the test on a Unix socket
+        # under /tmp (never a TCP port), in test mode on its own data directory; the lane's data directory, database and
+        # server are never read nor written.
+        isolation="pure",
+    )
+    add_test(
+        e2e,
+        "backup-roundtrip-over-limit",
+        e2e_backup_roundtrip_over_limit,
+        name="Backup Round Trip Over Limit",
+        desc="Lot B5-1k2, last piece: a backup of five active accounts (and a disabled one, eight brokers, twenty transactions) restored on an instance that accepts LIBREFOLIO_MAX_USERS=3, real uvicorn children on Unix sockets across pending-restore, restore-commit (and, managed, restore-owner): the check says users_active 5, users_limit 3, users_over_limit 2 and carries the warning users_over_limit before credentials_from_backup; the confirmation (no account in the body) is 202, never refused; after the start every account, broker, access and transaction is there and the ledger's control totals are the source's; then workstream A's over-limit state (A5-7): an administrator and a plain user sign in and a data route answers 423 user_limit_exceeded, GET /users/over-limit lists the five active accounts (numbers, brokers owned alone, protected) for the administrator only, the full backup's routes answer the administrator; POST /users/over-limit/resolve keeping three accounts is 200 and the others are deactivated (ACCOUNT_DISABLED) with nothing deleted and the same totals; on a managed instance the owner's password is closed (link_only), the owner is protected in the choice, a choice without the owner is 422 PROTECTED_MISSING and one with her works; the real CLI restore --yes of the same backup exits 0, leaves the restore pending with ONE warning line (5 active accounts, 3 accepted) that names nobody, and the next start commits all six accounts",
+        tests="Self-hosted app: check 5/3/2 + warning → confirm 202 → restart → all data → 423 → choice → resolve; managed app: owner link_only, protected, PROTECTED_MISSING, resolve; CLI: confirmed with one warning line, committed with every account",
         # PURE: every data directory and archive under tmp_path, every server a child uvicorn of the test on a Unix socket
         # under /tmp (never a TCP port), in test mode on its own data directory; the lane's data directory, database and
         # server are never read nor written.

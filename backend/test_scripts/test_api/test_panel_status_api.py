@@ -49,6 +49,9 @@ Isolation: pure. No server, no lane database, no network, no file: the in-memory
 disposed at teardown, and every change to the process (variables, the route's function, the limiter, the activity
 record, the dependency override, structlog's processors) is undone after each test.
 
+H5-8 (last section, R1-18 to R1-26): ``users_over_limit``, the ninth key, a boolean, ``over_limit_state(session) is not
+None``; red until H5-8.
+
 Red today: ``backend/app/api/v1/panel.py`` does not exist. R1-01 to R1-05 fail on their first step, installing the
 stand-in in the route's module; R1-06 and R1-07 on the OpenAPI document, which has no ``GET /api/v1/panel/status``.
 """
@@ -80,7 +83,7 @@ from backend.app.db.base import SQLModel  # imports every model: the in-memory d
 from backend.app.db.models import AccountTokenPurpose, User
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
-from backend.app.services.accounts import instance_owner, registration_service, token_service
+from backend.app.services.accounts import instance_owner, registration_service, token_service, user_limit_service
 from backend.app.services.accounts.auth_service import create_jwt_token
 from backend.app.services.accounts.token_service import DEFAULT_TTL
 from backend.app.services.platform.instance_backup import apply as restore_apply
@@ -121,7 +124,9 @@ BLOCKED_ANSWER = {"detail": {"code": "instance_blocked", "message": "This instan
 #: H5-4 adds ``owner_email_change`` (pending, blocked or null, never an address): the seventh key, red until H5-4.
 #: H5-7 adds ``instance_key`` (``ok`` or ``mismatch``, required, never an impression of the check value): the eighth key,
 #: red until H5-7. Its own cases are in ``test_instance_key_check_api.py``.
-ANSWER_KEYS = {"admin_setup", "setup_expires_at", "mode", "restore", "users_used", "users_limit", "owner_email_change", "instance_key"}
+#: H5-8 adds ``users_over_limit`` (a boolean, required, declared right after ``instance_key``: whether the active accounts
+#: outnumber ``LIBREFOLIO_MAX_USERS``, never who): the ninth key, red until H5-8. Its cases are the last section.
+ANSWER_KEYS = {"admin_setup", "setup_expires_at", "mode", "restore", "users_used", "users_limit", "owner_email_change", "instance_key", "users_over_limit"}
 SETUP_STATES = ("none", "pending", "done", "expired")
 
 #: The OpenAPI document: the route's responses, exactly; its one tag; the scheme of its token.
@@ -149,7 +154,8 @@ STRAY_DATE = datetime(2026, 10, 17, 6, 5, 0, tzinfo=UTC)
 #: H5-1: an instance without accounts and without a limit: no place taken (``users_used`` 0), ``users_limit`` null.
 #: H5-4: and no change of the owner's address waiting (``owner_email_change`` null).
 #: H5-7: and no instance key to compare (no key, no check file, in this test's data directory): ``instance_key`` ``ok``.
-PENDING_ANSWER = {"admin_setup": "pending", "setup_expires_at": SETUP_EXPIRES_AT, "mode": "normal", "restore": None, "users_used": 0, "users_limit": None, "owner_email_change": None, "instance_key": "ok"}
+#: H5-8: and no limit, so the accounts cannot outnumber it: ``users_over_limit`` false.
+PENDING_ANSWER = {"admin_setup": "pending", "setup_expires_at": SETUP_EXPIRES_AT, "mode": "normal", "restore": None, "users_used": 0, "users_limit": None, "owner_email_change": None, "instance_key": "ok", "users_over_limit": False}
 
 #: Logged through a logger of this file inside the capture first: a capture that sees nothing proves nothing.
 LOG_CANARY = "R1-04 canary: a line written inside the capture reaches it"
@@ -547,6 +553,7 @@ async def test_the_status_answers_the_setup_state_and_the_expiry_of_a_pending_se
         "users_limit": None,
         "owner_email_change": None,
         "instance_key": "ok",
+        "users_over_limit": False,
     }, f"the setup {state}, its status holding {held.isoformat()}: expected admin_setup {state!r} and setup_expires_at {answered.isoformat() if answered else None} (ISO 8601 with the UTC offset, for pending only), got {response.text}"
     assert len(reader.calls) == 1, f"admin_setup_status is called once per request: {reader.calls}"
     call = reader.calls[0]
@@ -991,19 +998,19 @@ async def test_the_status_gives_the_state_of_the_owners_email_change(in_process,
 
 # red today: the answer has no owner_email_change
 @pytest.mark.asyncio
-async def test_the_owner_key_is_present_in_every_mode_and_the_answer_keeps_its_eight_keys(in_process, monkeypatch):
+async def test_the_owner_key_is_present_in_every_mode_and_the_answer_keeps_its_nine_keys(in_process, monkeypatch):
     """R1-14 (H5-4): the key is in the answer whatever the instance does: the default (nothing waits, real function on an empty
-    database: null), the awaiting-restore mode, and an unreadable restore; the answer holds exactly ``ANSWER_KEYS``, eight keys (H5-7)."""
-    print_section("R1-14: owner_email_change always present, eight keys")
-    assert len(ANSWER_KEYS) == 8, "Barrier: ANSWER_KEYS is the eight keys of the contract (H5-7)"
+    database: null), the awaiting-restore mode, and an unreadable restore; the answer holds exactly ``ANSWER_KEYS``, nine keys (H5-8)."""
+    print_section("R1-14: owner_email_change always present, nine keys")
+    assert len(ANSWER_KEYS) == 9, "Barrier: ANSWER_KEYS is the nine keys of the contract (H5-8)"
 
     response, body = await _status_body(in_process, monkeypatch)
-    assert set(body) == ANSWER_KEYS and body[OWNER_KEY] is None, f"default: exactly the eight keys, {OWNER_KEY} null (an empty database, no managed profile): {response.text}"
+    assert set(body) == ANSWER_KEYS and body[OWNER_KEY] is None, f"default: exactly the nine keys, {OWNER_KEY} null (an empty database, no managed profile): {response.text}"
 
     monkeypatch.setenv("LIBREFOLIO_AWAIT_RESTORE", "1")
     response, body = await _status_body(in_process, monkeypatch)
     assert body.get("mode") == "awaiting_restore", f"Barrier: the mode is awaiting_restore: {response.text}"
-    assert set(body) == ANSWER_KEYS and body[OWNER_KEY] is None, f"awaiting restore: exactly the eight keys: {response.text}"
+    assert set(body) == ANSWER_KEYS and body[OWNER_KEY] is None, f"awaiting restore: exactly the nine keys: {response.text}"
 
     def unreadable(_root: Any) -> Any:
         raise restore_apply.RestoreStateUnreadableError("invalid")
@@ -1012,8 +1019,8 @@ async def test_the_owner_key_is_present_in_every_mode_and_the_answer_keeps_its_e
     monkeypatch.setattr(restore_apply, "read_restore", unreadable)
     response, body = await _status_body(in_process, monkeypatch)
     assert (body.get("restore") or {}).get("state") == "unreadable", f"Barrier: the restore is unreadable: {response.text}"
-    assert set(body) == ANSWER_KEYS and body[OWNER_KEY] is None, f"unreadable restore: exactly the eight keys: {response.text}"
-    print_success("eight keys in every mode")
+    assert set(body) == ANSWER_KEYS and body[OWNER_KEY] is None, f"unreadable restore: exactly the nine keys: {response.text}"
+    print_success("nine keys in every mode")
 
 
 # red today: the answer has no owner_email_change, so the barrier on it fails
@@ -1065,10 +1072,266 @@ async def test_the_owner_change_does_not_change_the_other_answers_or_the_refusal
     print_section("R1-17: the owner change touches nothing else")
     stand_in = _stand_in_for_owner_change(monkeypatch, "blocked")
     response, body = await _status_body(in_process, monkeypatch)
-    assert body == {"admin_setup": "none", "setup_expires_at": None, "mode": "normal", "restore": None, "users_used": 0, "users_limit": None, OWNER_KEY: "blocked", "instance_key": "ok"}, f"the whole answer, blocked change (eight keys): {response.text}"
+    assert body == {"admin_setup": "none", "setup_expires_at": None, "mode": "normal", "restore": None, "users_used": 0, "users_limit": None, OWNER_KEY: "blocked", "instance_key": "ok", "users_over_limit": False}, f"the whole answer, blocked change (nine keys): {response.text}"
 
     calls = len(stand_in.sessions)
     refused = await _send(in_process.app, "GET", STATUS_PATH, None)
     assert _answer(refused) == (401, UNAUTHORIZED_ANSWER), f"without the token the 401 is unchanged: {refused.status_code} {refused.text}"
     assert len(stand_in.sessions) == calls, "a refused request does not read the owner's change"
     print_success("answer whole; 401 unchanged")
+
+
+# =============================================================================
+# R1-18 .. R1-26 — H5-8: ``users_over_limit``, whether the active accounts outnumber the limit, never who
+# =============================================================================
+
+#: The key H5-8 adds (a boolean, required, declared right after ``instance_key``). Its value is
+#: ``await user_limit_service.over_limit_state(session) is not None``: the state exists only while the ACTIVE accounts
+#: outnumber the valid limit ``LIBREFOLIO_MAX_USERS`` (strictly); live invitations and accounts waiting for their
+#: verification or their setup are places, not users, and do not count; no limit is never a state. Read again at every
+#: request, nothing stored. Red until H5-8: the answer has no ``users_over_limit``.
+OVER_KEY = "users_over_limit"
+
+
+async def _over(instance: InProcess, monkeypatch: pytest.MonkeyPatch) -> tuple[httpx.Response, Any]:
+    """The answer to the status request and its ``users_over_limit`` (a missing key reads as ``"<missing>"``, never as false)."""
+    response, body = await _status_body(instance, monkeypatch)
+    return response, body.get(OVER_KEY, "<missing>")
+
+
+# red today: the answer has no users_over_limit
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("seeding", "limit", "over"),
+    [
+        pytest.param({"active": 4}, None, False, id="no-limit-never-over-however-many-accounts"),
+        pytest.param({"active": 2}, "3", False, id="active-below-the-limit"),
+        pytest.param({"active": 3}, "3", False, id="active-equal-to-the-limit-is-not-over"),
+        pytest.param({"active": 4}, "3", True, id="active-above-the-limit"),
+    ],
+)
+async def test_the_status_says_whether_the_active_accounts_outnumber_the_limit(in_process, monkeypatch, seeding, limit, over):
+    """R1-18 (H5-8): ``users_over_limit`` is false with no limit, with the active accounts below the limit and equal to it,
+    true only strictly above it, always a boolean (``True`` / ``False``, never null). Barrier: what the service itself
+    says on the same session is the expected state, so the seeding is what the case says."""
+    print_section(f"R1-18: users_over_limit with {seeding} and {MAX_USERS_VARIABLE}={limit!r}")
+    await _seed(in_process.session, **seeding)
+    if limit is not None:
+        monkeypatch.setenv(MAX_USERS_VARIABLE, limit)
+    assert (await user_limit_service.over_limit_state(in_process.session) is not None) is over, f"Barrier: over_limit_state agrees the case is {'over' if over else 'not over'} the limit"
+
+    response, value = await _over(in_process, monkeypatch)
+
+    assert value is over, f"{seeding} active against {MAX_USERS_VARIABLE}={limit!r}: users_over_limit is {over!r}, a boolean: {response.text}"
+    print_success(f"{seeding} / {limit!r}: users_over_limit {over}")
+
+
+# red today: the answer has no users_over_limit
+@pytest.mark.asyncio
+async def test_only_active_accounts_decide_the_places_that_wait_do_not(in_process, monkeypatch):
+    """R1-19 (H5-8): the limit is 2 and two accounts are active. Beside them live invitations, accounts waiting for their
+    email verification and the account waiting for its setup take places (``users_used`` 8, far above the limit) and are
+    not users: ``users_over_limit`` stays false. Barriers: ``users_used`` is 8 and the limit 2, and the service says
+    there is no state."""
+    print_section("R1-19: invitations and waiting accounts do not make the instance over the limit")
+    await _seed(in_process.session, active=2, invitations=3, waiting_verification=2, waiting_setup=1)
+    monkeypatch.setenv(MAX_USERS_VARIABLE, "2")
+    assert (await registration_service.user_usage(in_process.session)).used == 8 and await user_limit_service.over_limit_state(in_process.session) is None, "Barrier: eight places taken, two of them users, no state"
+
+    response, body = await _status_body(in_process, monkeypatch)
+
+    assert (body.get("users_used"), body.get("users_limit")) == (8, 2), f"Barrier: eight places against a limit of 2: {response.text}"
+    assert body.get(OVER_KEY) is False, f"places that wait are not users: users_over_limit is false with two active accounts and a limit of 2: {response.text}"
+    print_success("8 places, 2 active, limit 2: not over")
+
+
+# red today: the answer has no users_over_limit
+@pytest.mark.asyncio
+async def test_a_deactivated_account_does_not_count(in_process, monkeypatch):
+    """R1-20 (H5-8): the limit is 2. Three active accounts: over. One of them deactivated (the account stays, with no
+    link): the two left do not outnumber the limit, at the next request. Inactive accounts added beside them change
+    nothing. Barrier: the first answer is true, so the second one's false comes from the deactivation."""
+    print_section("R1-20: a deactivated account does not count")
+    accounts = [await _account(in_process.session) for _ in range(3)]
+    monkeypatch.setenv(MAX_USERS_VARIABLE, "2")
+
+    _, before = await _over(in_process, monkeypatch)
+    accounts[0].is_active = False
+    in_process.session.add(accounts[0])
+    await in_process.session.commit()
+    for _ in range(3):
+        await _account(in_process.session, active=False)
+    response, after = await _over(in_process, monkeypatch)
+
+    assert before is True, f"Barrier: three active accounts against a limit of 2 is over: {before!r}"
+    assert after is False, f"one account deactivated and three inactive ones added: two active accounts, a limit of 2, not over: {response.text}"
+    print_success("3 active: over; 1 deactivated, 3 inactive added: not over")
+
+
+# red today: the answer has no users_over_limit
+@pytest.mark.asyncio
+async def test_the_answer_follows_the_limit_and_the_accounts_at_the_next_request(in_process, monkeypatch):
+    """R1-21 (H5-8): nothing is stored, the state is read again at each request. Three active accounts: limit 2 → true;
+    limit raised to 3 → false; lowered to 1 → true; the limit removed → false; limit 2 again → true; one more account
+    keeps it true while a limit of 4 clears it. Every answer is read in the same process with the same session."""
+    print_section("R1-21: users_over_limit is recomputed at each request")
+    await _seed(in_process.session, active=3)
+    steps = [("2", True), ("3", False), ("1", True), (None, False), ("2", True)]
+    seen = []
+
+    for limit, expected in steps:
+        if limit is None:
+            monkeypatch.delenv(MAX_USERS_VARIABLE)
+        else:
+            monkeypatch.setenv(MAX_USERS_VARIABLE, limit)
+        _, value = await _over(in_process, monkeypatch)
+        seen.append((limit, value, expected))
+    await _account(in_process.session)
+    monkeypatch.setenv(MAX_USERS_VARIABLE, "3")
+    _, with_a_fourth = await _over(in_process, monkeypatch)
+    monkeypatch.setenv(MAX_USERS_VARIABLE, "4")
+    _, room_again = await _over(in_process, monkeypatch)
+
+    assert [(limit, value) for limit, value, _ in seen] == [(limit, expected) for limit, _, expected in seen], f"users_over_limit at each request, limit by limit (three accounts): {seen}"
+    assert (with_a_fourth, room_again) == (True, False), f"a fourth account against a limit of 3 is over, against 4 is not: {with_a_fourth!r}, {room_again!r}"
+    print_success("limit and accounts changed between requests: the answer follows at the next one")
+
+
+# red today: the answer has no users_over_limit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("answer", [None, "state"], ids=["no-state", "a-state"])
+async def test_the_value_is_whether_over_limit_state_is_not_none(in_process, monkeypatch, answer):
+    """R1-22 (H5-8): ``users_over_limit`` is ``await user_limit_service.over_limit_state(session) is not None``, the function
+    called through the module, once per request, with the request's own database session: a stand-in answering None gives
+    false, one answering a state gives true, whatever the real accounts and limit are (none here). Barrier: the stand-in was
+    called, so the patch reached the route's call."""
+    print_section(f"R1-22: users_over_limit from over_limit_state ({answer!r})")
+    sessions: list[Any] = []
+    state = user_limit_service.OverLimitState(active=9, max_users=2, live_invites=0, waiting_accounts=0) if answer else None
+
+    async def stand_in(session: Any) -> Any:
+        sessions.append(session)
+        return state
+
+    monkeypatch.setattr(user_limit_service, "over_limit_state", stand_in)
+
+    response, value = await _over(in_process, monkeypatch)
+
+    assert len(sessions) >= 1 and all(session is in_process.session for session in sessions), f"Barrier: over_limit_state is called with the request's own session: {sessions!r}"
+    assert value is (state is not None), f"over_limit_state answered {state!r}: users_over_limit is {state is not None}: {response.text}"
+    print_success(f"over_limit_state {state!r}: users_over_limit {state is not None}")
+
+
+# red today: the answer has no users_over_limit
+@pytest.mark.asyncio
+async def test_the_status_never_says_who_is_over_the_limit(in_process, monkeypatch):
+    """R1-23 (H5-8): one yes or no. Accounts over the limit carry canary usernames and emails of this test (and so does an
+    invitation); none is anywhere in the answer (status, headers, raw body). Barriers: the key is true and the service
+    sees the state, so the canaries are in the rows the state was read from."""
+    print_section("R1-23: users_over_limit names nobody")
+    canaries: list[str] = []
+    for _ in range(3):
+        marker = f"h58-canary-{uuid4().hex[:12]}"
+        account = await _account(in_process.session, email=f"{marker}@canary.example")
+        account.username = marker
+        in_process.session.add(account)
+        canaries.extend((marker, account.email))
+    invited = f"h58-canary-{uuid4().hex[:12]}@canary.example"
+    canaries.append(invited)
+    await in_process.session.commit()
+    await _token_of(in_process.session, INVITE, email=invited)
+    monkeypatch.setenv(MAX_USERS_VARIABLE, "2")
+    assert await user_limit_service.over_limit_state(in_process.session) is not None, "Barrier: three active accounts against a limit of 2"
+
+    response, value = await _over(in_process, monkeypatch)
+
+    assert value is True, f"Barrier: the answer says the instance is over the limit: {response.text}"
+    shown = _everything_shown(response)
+    assert [canary for canary in canaries if canary in shown] == [], f"the answer shows a username or an email: {shown}"
+    assert "@" not in response.text, f"no address of any kind in the body: {response.text}"
+    print_success("over the limit: true, none of the eight canaries in the answer")
+
+
+# red today: the answer has no users_over_limit
+@pytest.mark.asyncio
+@pytest.mark.parametrize("case", ["blocked", "awaiting-restore", "restore-unreadable"])
+async def test_users_over_limit_answers_on_a_blocked_awaiting_or_unreadable_restore_instance(in_process, monkeypatch, case):
+    """R1-24 (H5-8): the key is in the answer, with the figure of the database, when the instance is blocked
+    (``LIBREFOLIO_BLOCKED=1``), awaiting its restore, or has a restore state that cannot be read (200 with
+    ``restore.state`` ``unreadable``), as the other fields are: here three active accounts against a limit of 2, true.
+    Barrier: the block, the mode or the restore says what the case claims."""
+    print_section(f"R1-24: users_over_limit while {case}")
+    await _seed(in_process.session, active=3)
+    monkeypatch.setenv(MAX_USERS_VARIABLE, "2")
+    if case == "blocked":
+        monkeypatch.setenv(BLOCKED_VARIABLE, "1")
+        assert instance_blocked(), f"Precondition: {BLOCKED_VARIABLE}=1 blocks the instance"
+    elif case == "awaiting-restore":
+        monkeypatch.setenv("LIBREFOLIO_AWAIT_RESTORE", "1")
+    else:
+
+        def unreadable(_root: Any) -> Any:
+            raise restore_apply.RestoreStateUnreadableError("invalid")
+
+        monkeypatch.setattr(restore_apply, "read_restore", unreadable)
+
+    response, body = await _status_body(in_process, monkeypatch)
+
+    if case == "awaiting-restore":
+        assert body.get("mode") == "awaiting_restore", f"Barrier: the mode is awaiting_restore: {response.text}"
+    elif case == "restore-unreadable":
+        assert (body.get("restore") or {}).get("state") == "unreadable", f"Barrier: the restore is unreadable: {response.text}"
+    assert set(body) == ANSWER_KEYS, f"{case}: the answer holds exactly {sorted(ANSWER_KEYS)}: {response.text}"
+    assert body[OVER_KEY] is True, f"{case}: three active accounts against a limit of 2: users_over_limit is true: {response.text}"
+    print_success(f"{case}: users_over_limit true")
+
+
+# red today: PanelStatusResponse has no such property
+def test_openapi_documents_users_over_limit_as_a_required_boolean_after_instance_key(app):
+    """R1-25 (H5-8): in the document, ``PanelStatusResponse.users_over_limit`` is a boolean, required (no default, so the
+    generated client reads it as always there), declared right after ``instance_key``, the last of nine properties;
+    ``additionalProperties`` stays false and the properties are exactly ``ANSWER_KEYS``."""
+    print_section("R1-25: users_over_limit in the OpenAPI document")
+    document = app.openapi()
+    component = document.get("components", {}).get("schemas", {}).get("PanelStatusResponse", {})
+    properties = component.get("properties", {})
+
+    assert set(properties) == ANSWER_KEYS, f"PanelStatusResponse has exactly the properties {sorted(ANSWER_KEYS)}: {sorted(properties)}"
+    assert component.get("additionalProperties") is False, f"PanelStatusResponse forbids any other property: {component}"
+    schema = _resolved(properties.get(OVER_KEY, {}), document)
+    assert schema.get("type") == "boolean" and "default" not in schema, f"{OVER_KEY} is a boolean without a default: {schema}"
+    assert OVER_KEY in component.get("required", []), f"{OVER_KEY} is always in the answer, so it is required: {component.get('required')}"
+    assert schema.get("description"), f"{OVER_KEY} is described: {schema}"
+    order = list(properties)
+    assert order[order.index("instance_key") + 1 :] == [OVER_KEY], f"{OVER_KEY} is declared right after instance_key, last: {order}"
+    print_success("users_over_limit: boolean, required, right after instance_key")
+
+
+# red today: the answer has no users_over_limit
+@pytest.mark.asyncio
+async def test_the_refusals_are_unchanged_by_the_over_limit_key(in_process, monkeypatch):
+    """R1-26 (H5-8): over the limit, a request without the token still gets the scope's own 401, whole, and the function that
+    reads the state is not even called for it. Barrier: the request with the token, right after, says true."""
+    print_section("R1-26: the 401 is unchanged on an instance over the limit")
+    await _seed(in_process.session, active=3)
+    monkeypatch.setenv(MAX_USERS_VARIABLE, "2")
+    calls: list[Any] = []
+    real = user_limit_service.over_limit_state
+
+    async def recording(session: Any) -> Any:
+        calls.append(session)
+        return await real(session)
+
+    monkeypatch.setattr(user_limit_service, "over_limit_state", recording)
+    _install_route(monkeypatch, SetupStatusStandIn(SetupStateStandIn.NONE))
+    token = _token()
+    monkeypatch.setenv(STATUS_TOKEN_VARIABLE, token)
+
+    refused = await _send(in_process.app, "GET", STATUS_PATH, None)
+    read_when_refused = list(calls)
+    accepted = await _send(in_process.app, "GET", STATUS_PATH, _bearer(token))
+
+    assert _answer(accepted)[1].get(OVER_KEY) is True, f"Barrier: with the token the answer says true: {accepted.text}"
+    assert _answer(refused) == (401, UNAUTHORIZED_ANSWER), f"without the token the 401 is unchanged: {refused.status_code} {refused.text}"
+    assert read_when_refused == [], f"a refused request does not read the state of the limit: {read_when_refused}"
+    print_success("401 unchanged, the state not read for it")
