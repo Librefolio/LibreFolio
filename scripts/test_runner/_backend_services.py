@@ -1810,6 +1810,22 @@ def services_backup_owner_real(verbose: bool = False, test_names: list = None) -
     return run_command(cmd, "Restore owner (real) tests", verbose=verbose)
 
 
+def services_backup_owner_kept(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that a restore from the hosting panel on a managed instance keeps the owner's password and sessions (lot B5-1l)."""
+    print_section("Services: Restore Owner kept")
+    print_info("Testing: instance_backup/staging.py (_owner_marks, StagingReport.owner_marks), apply.py (keeps_owner, OWNER_OUTCOME_KEPT, confirm_restore, finish_pending_restore, _close_the_way_in), owner.assign_restored_owner")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_owner_kept.py", test_names)
+    return run_command(cmd, "Restore owner kept tests", verbose=verbose)
+
+
+def services_backup_users_limit(verbose: bool = False, test_names: list = None) -> bool:
+    """Test a backup with more active accounts than LIBREFOLIO_MAX_USERS: the check only warns, the confirmation never refuses (lot B5-1k2)."""
+    print_section("Backup users limit: the report warns, the confirmation never refuses")
+    print_info("Testing: instance_backup/staging.py (users_active, users_limit, users_over_limit, the warning users_over_limit), apply.py (confirm_restore accepts, the state gains nothing)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_users_limit.py", test_names)
+    return run_command(cmd, "Backup users limit tests", verbose=verbose)
+
+
 def services_backup_secure_rules(verbose: bool = False, test_names: list = None) -> bool:
     """Test the rules of a secure backup: its password (the accounts' rules, at least 12 characters) and the key it carries."""
     print_section("Services: Secure Backup Rules")
@@ -3398,6 +3414,28 @@ Note: No backend server required.
         desc="The owner's account after a restore with A's real instance_owner.assign_owner_and_send_reset (lot B5-1e), nothing played but the mail (instance_owner.send_email an outbox, the SMTP transport a tripwire): a real backup at the migration head confirmed from the app in the managed profile, applied and committed, then owner.assign_restored_owner. The chosen account gets the owner's address, administrator, active, is_instance_owner (no other account marked), its password opens nothing; ONE live password-reset link (a planted one dated in the future is gone), one email to the owner, outcome sent; the token is in no restore.json, read_restore, backup pending (with and without --json) or log line; email failing or SMTP off gives link_only with the link in A's instance-log line only; another account holding the address gives error:EMAIL_TAKEN, owner_assignment_problem EMAIL_TAKEN, the database unchanged, and after the administrator frees it backup pending --recover owner (nobody serving) assigns the owner; a crash between the call and the record makes the next start call A again (old link dead, one live link, a second email, outcome recorded); A receives the chosen id only, on a fresh session (no since, no now)",
         # PURE: the data directory under tmp_path, the restore real, a migrated copy of the staging tests' database (alembic in
         # a process of its own); only the mail is fake. No lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-owner-kept",
+        services_backup_owner_kept,
+        name="Restore Owner, kept",
+        desc="Lot B5-1l: a restore confirmed by the hosting panel on a managed instance (LIBREFOLIO_ADMIN_EMAIL set) keeps the owner's password and sessions when the backup marks exactly ONE account as its instance's owner (StagingReport.owner_marks, counted over every account by staging._owner_marks; absent column or report written before: 0) and that account is an ACTIVE administrator holding the owner's address (apply.keeps_owner(candidates, owner_marks, owner_email), same_email: A-Z only; the truth table). confirm_restore records owner_user_id and owner_outcome kept (apply.OWNER_OUTCOME_KEPT) for the panel only; each missing condition falls back to B5-1j's pick (outcome None or none) and the command line, the app (owner chosen) and the same copy never keep; self-hosted, no address, owner_conflict and restore_stage_outdated as before. The commit (finish_pending_restore, _close_the_way_in(kept_owner_user_id=)) on a real restored database leaves the owner's hashed_password, session_version, address, role and is_instance_owner as the backup held them, ends every other session, clears the other flags, revokes the one-time links (the owner's too), logs one warning (stage and account only, no address); when the account no longer fits at the commit (not an administrator, disabled, another address, a second marked account, address unset) B5-1j applies and the outcome goes back to None; the command line and the app revoke the owner anyway. assign_restored_owner does nothing for kept and the guard lets the data go; the whole round (confirm, apply, commit, startup step): the owner's old password and cookie stand, another account's old cookie is refused",
+        tests="StagingReport.owner_marks, keeps_owner truth table → confirm kept / fallback / cli / admin → commit keeps the owner, re-check fails → startup step → real round",
+        # PURE: every data directory under tmp_path, real databases at the head made once by alembic in a process of their
+        # own (the staging tests' fixtures), real bcrypt hashes at cost 4; A's function a fake. No lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-users-limit",
+        services_backup_users_limit,
+        name="Backup Users Limit",
+        desc="Lot B5-1k2, a backup with more active accounts than LIBREFOLIO_MAX_USERS: the check only warns. The report carries users_active (the copy's active accounts, plus the inactive holder of LIBREFOLIO_ADMIN_EMAIL on a managed instance, which the restore activates; always computed), users_limit (None when unset, blank or invalid: an invalid value never fires the warning) and users_over_limit (max(0, active - limit)), and the warning users_over_limit before credentials_from_backup, which stays last; no warning when not over, at the limit or without a limit; report.json gains those three numbers and nothing that names an account; a report written before reads the defaults. The confirmation never refuses: the example (5 active accounts, limit 3) is accepted through the app, the command line and the hosting panel, self-hosted and managed with an owner, with the state's fields unchanged, and a limit that changed after the check is not restore_stage_outdated",
+        tests="Report users_* + warning order → limits, holder, report.json → confirm accepted on every channel, state unchanged, moved limit",
+        # PURE: every data directory and database under tmp_path (the staging tests' migrated database, the apply tests' instance);
+        # no lane DB, no server, no network.
         isolation="pure",
     )
     add_test(
