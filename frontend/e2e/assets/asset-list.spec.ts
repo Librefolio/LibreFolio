@@ -1699,9 +1699,6 @@ const STUBBED_RANGE_CHANGE: AssetRangeChange = {change_abs: '12.34', change_rati
 /** A Δ over the range the backend could not compute: every field null. */
 const NO_RANGE_CHANGE: AssetRangeChange = {change_abs: null, change_ratio: null};
 
-/** The first day the backend values (`EARLIEST_RANGE_START`): it refuses an earlier `range_start`, and the whole request with it. */
-const EARLIEST_RANGE_START = '1900-01-01';
-
 /** What `routeAssetRangeChanges` saw: every item asked, what went wrong, how many requests it answered. */
 type AssetRangeChangesLog = {asked: AssetRangeChangesQuery[]; failures: string[]; answered: number};
 
@@ -1781,8 +1778,7 @@ function arrowedAmount(figure: string, currency: string): RegExp {
 /**
  * Each card of the Assets list shows its Δ over the range on screen (X-R59, lot A): the change from the first to the last
  * day of the range, which the backend computes — the `range_change` of `POST /assets/prices/period-changes`, asked with
- * the first day of the range (`range_start`) in every item, raised to 1900-01-01, the first day the backend values, for a
- * range that starts before it. The card shows it in percent (`data-mode="percentage"`), in the asset's currency once
+ * the first day of the range (`range_start`) in every item, as it is (the backend takes any day from the year 1, D-P4). The card shows it in percent (`data-mode="percentage"`), in the asset's currency once
  * switched to absolute values (`data-mode="absolute"`), and draws no Δ where the backend has none. The browser computes
  * none.
  *
@@ -1790,7 +1786,7 @@ function arrowedAmount(figure: string, currency: string): RegExp {
  * with figures their prices could never give — they have none, created here and deleted at the end. The range is about
  * two months ending on a known day in the past, so no live quote is asked. The range before 1900 is drawn on a synthetic
  * list whose prices the browser answers, so no price series is walked back over a century; its period changes still
- * reach the backend, which says whether it takes the first day asked.
+ * reach the backend, which says whether it takes the first day asked, as it is.
  *
  * Red before the cure of lot A: the request asks no `range_start`, and the card computes its Δ from the prices it loaded
  * — none for an asset of this test's own.
@@ -1891,8 +1887,8 @@ test.describe('Assets list — each card shows the backend’s Δ over the range
         }
     });
 
-    test('a range that starts before 1900 asks every Δ from 1900-01-01, which the backend takes', async ({page}) => {
-        // A month before the first day the backend values: sent as is, the backend would refuse the whole request.
+    test('a range that starts before 1900 asks every Δ from its first day, as it is, which the backend takes', async ({page}) => {
+        // A month before 1900: the backend takes any day from the year 1 (D-P4), so the first day goes as it is.
         const range = {start: '1899-12-01', end: daysAgoIso(10)};
         const asset = syntheticAsset(910_591, 0, 0, {displayName: 'Synthetic range before 1900'});
         try {
@@ -1907,9 +1903,9 @@ test.describe('Assets list — each card shows the backend’s Δ over the range
             await expect(card, 'the synthetic asset is listed as a card').toBeVisible({timeout: 10_000});
 
             await expect.poll(() => log.answered, {message: 'the Assets list never asked POST /assets/prices/period-changes', timeout: 10_000}).toBeGreaterThan(0);
-            expect(log.failures, 'the backend took every request: none asks a day before the first it values').toEqual([]);
-            expect(log.asked, `the asset asks its Δ from ${EARLIEST_RANGE_START} to the last day of the range`).toContainEqual(expect.objectContaining({asset_id: asset.id, as_of: range.end, range_start: EARLIEST_RANGE_START}));
-            expect([...new Set(log.asked.map((item) => item.range_start))], `every asset asks its Δ from ${EARLIEST_RANGE_START}, never from ${range.start}`).toEqual([EARLIEST_RANGE_START]);
+            expect(log.failures, 'the backend took every request: it takes any day from the year 1').toEqual([]);
+            expect(log.asked, `the asset asks its Δ from ${range.start} to the last day of the range`).toContainEqual(expect.objectContaining({asset_id: asset.id, as_of: range.end, range_start: range.start}));
+            expect([...new Set(log.asked.map((item) => item.range_start))], `every asset asks its Δ from ${range.start}, never raised`).toEqual([range.start]);
             await expect(card.getByTestId('asset-range-delta'), 'the Δ over the range still reaches the card').toHaveText(arrowedPercent('+42.42'), {timeout: 10_000});
         } finally {
             await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
