@@ -63,11 +63,12 @@ themes, and every later change of the designer, with no `dark:` at all.
 | `tokens.css` | The 138 roles of the two themes (a light, a derived and a dark block) and the `@theme inline` table that turns 134 of them into utilities (`bg-lf-card`…) | it draws any colour: as a utility, or `var(--lf-…)` in a `<style>` | T | Only T: «Asking for a new role» below |
 | `components/media.css`, `table.css` | The last component tokens `--lf-cmp-<component>-<role>` (with `-dark` twins) that workstream R moved out of the `<style>` blocks at pixel parity, all categorical and waiting for the categorical roles: the image icon of `FileUploader` (`media.css`, 2 tokens, one colour per file type, AF-11) and the portfolio and benchmark row tints of `RiskReturnLevel` (`table.css`, 4, the designer's point 2.5). The dialogs, the files, the rest of the media and the tables, `CompactCashCell` included, read the roles | it is `FileUploader` or `RiskReturnLevel`; it loads its file with a side-effect import (`import '$lib/theme/components/table.css'`) | T | **Never a new token**: a new colour is a role. Migrating such a component replaces its `var(--lf-cmp-…)` with roles, deletes the tokens nobody reads any more, and deletes the file once it holds none (`src/themeComponentTokens.gate.test.ts`: each token defined once, imported where read, read by someone; every area file defines tokens) |
 | `toneClasses.ts` | Whole class strings on the roles: signed figures (`SIGN_TEXT`, `SIGN_BAR`, `SIGN_BADGE`), diverging measures (`POLARITY_TONES`), states (`STATUS_TONES`: sync, PAC, toasts, the chips and buttons inside a banner (`bannerChip`), import report and file sets, risk chips, data quality, live updates; `DATA_QUALITY_TONE`, the state a data-quality severity is drawn in). The kinds told apart by hue alone (`KIND_TONES`, `STATUS_TONES.fileSet.combined`) are categorical, still palette classes | it colours a sign, a polarity, a state or a kind: it takes the entry by name; the threshold (`>= 0`, `> 0`) stays with the caller | T | A new named entry, a whole literal string of role utilities (never assembled), in the table of its meaning. An entry keeps its own name even when its classes equal another's |
-| `chartCategories.ts` | The fixed colour of every asset type and sector, of the cash and of «unclassified», in both themes (GR1–GR3); the key sequences (GR5); `categoryColor`, `sequenceColor`, `lookupKey`, `isUnclassifiedCountry` | it draws a category: a chart, its legend, its tooltip | DV | A new key (a new asset type or sector) takes the designer's pair, one literal per line (C2), in her table order. Until then it reads as unclassified |
+| `chartCategories.ts` | The fixed colour of every sector and of «unclassified», in both themes (GR1–GR3), and the roles of the asset types and the cash (`CATEGORY_ROLES`, `--lf-cat-*`, DV-11); the key sequences (GR5); `categoryColor`, `sequenceColor`, `lookupKey`, `isUnclassifiedCountry` | it draws a category: a chart, its legend, its tooltip | DV | A new sector takes the designer's pair, one literal per line (C2), in her table order; a new asset type takes a new `--lf-cat-*` role (T) and its line in `CATEGORY_ROLES` order. Until then it reads as unclassified |
 | `chartShades.ts` | The colour arithmetic of the category charts: `mixOklab`, `familyShade` (subtypes, GR4; rounds past a sequence, GR5), `shadePoles`, `scaleColor` | it draws a subtype, a sequence past its end, a value on a continuous scale | DV | A new mixing rule here, with its test. Never mix colours in a component |
 | `chartPalettes.ts` | Two lists read as they are: `SIGNAL_DEFAULT_PALETTE` (a new signal's line; still one list for both themes, a default per theme is S9, waiting for Y4, Y8 and FE5c) and `GEO_CHOROPLETH_SCALE` (the world maps, GR5.1); and `growthBrokerColor` (the broker lines of the Growth chart), which reads `categoryColor` of the first eight asset types at each draw (TD-1b), so it follows the Designer Lab | it is one of those charts | DV | Through DV. A palette that colours categories goes through `chartCategories.ts` instead |
 | `chartColorScales.ts` | Colours computed from a value: `treemapPnlColor` (a treemap tile by its P&L; a legacy formula, for the designer), `timingEffectColor` (`color-mix` over `--lf-gain`/`--lf-loss`) | it is one of those | T and DV | A new value → colour formula here, on the roles: `color-mix(in oklab, var(--lf-…) …)` for CSS, `chartRoles` for a canvas |
-| `chartTheme.ts` | The colours of the ECharts charts, by meaning. **The neutrals on roles** (B4): `chartNeutrals(dark, scope)` reads, at each draw and on the chart's own element, the roles of the axes, grids and rules, labels, tooltip boxes, pointers and the gaps and rings in the card's colour, under the names of the tables they left. **The rest as named pairs**, `{light, dark}` or one string for both themes, with legacy values for the designer: series (prices, signals, income events, growth, performance, risk overlays, lots), gain and loss, states, the points of the risk-return chart, the map's land and highlight, divergences kept under two names | a neutral: `chartNeutrals`; a series, a state or a sign: `themed(pair, dark)` | DV | Reuse a name. A new neutral is a role in `chartNeutrals`, never a hex; a new series name only through DV; never a category: categories go to `chartCategories.ts` |
+| `chartTheme.ts` | The colours of the ECharts charts, by meaning. **The neutrals on roles** (B4): `chartNeutrals(dark, scope)` reads, at each draw and on the chart's own element, the roles of the axes, grids and rules, labels, tooltip boxes, pointers and the gaps and rings in the card's colour, under the names of the tables they left. **The rest as named pairs**, `{light, dark}` or one string for both themes, each the nearest role of `tokens.css` through `seriesRoles.ts` (D-T28, «da rivedere» with the designer): series (prices, signals, income events, growth, performance, risk overlays, lots), gain and loss, states, the points of the risk-return chart, the map's land and highlight, divergences kept under two names | a neutral: `chartNeutrals`; a series, a state or a sign: `themed(pair, dark)` | DV | Reuse a name. A new neutral is a role in `chartNeutrals`, never a hex; a new series name only through DV; never a category: categories go to `chartCategories.ts` |
+| `seriesRoles.ts` | The roles the series of `chartTheme.ts` stand on, as tokens.css resolves them per theme (`SERIES_ROLE_VALUES`, kept equal by `seriesRoles.test.ts`) and the helpers: `rolePair`, `rolePairSplit` (a fill dark enough for white text in both themes), `rolePairAlpha`, and `roleNow`/`pairNow` for a string the same in both themes | `chartTheme.ts` builds a pair or a getter; a component never calls it | DV (C2) | A new series reuses a row; a role not yet in the table is added to it with its parity |
 | `roleColors.ts` | The bridge from roles to whatever draws outside CSS: `chartRoles(dark, scope)` reads `--lf-*` on the drawing's own element, once per draw. `color(role)` is always sRGB, `#rrggbb` or `rgba()` for a translucent role (`--lf-selected`), whatever the canvas reports (`oklab()`, `oklch()` and `color(srgb …)` are converted, anything else stands in); `readableText(background)` picks the primary or the inverse text. Stand-ins equal to `tokens.css` answer where no stylesheet is loaded. **22 roles (`ChartRole`):** the card, panel, neutral, field and hover surfaces; the primary, secondary, muted and inverse texts; the subtle, raised and input borders; focus, selected, checked; the primary button and its text; the text on a state fill; warning, danger, info; the mark. **Read by** the charts — the neutrals (`chartNeutrals`), the GR4 shades and the broker lines (the card), the correlation scale (danger, panel, info), the PAC's ideal weight (the secondary text), `readableText` — and by the colours drawn outside CSS (`drawnColors.ts`, 18 of them) | a canvas chart or a drawn colour needs a role: take `chartRoles(dark, element)` once per draw and read `roles.color('--lf-…')` | DV | A missing role is added to `ChartRole` with its stand-in (an `rgba()` if translucent), which the parity test `roleColors.test.ts` keeps equal to `tokens.css`, channels and alpha, and **with its first reader**: production code must read every role through a literal `.color('--lf-…')` or `readableText` — a read through a variable or a loop is invisible — or the test's dead-role check fails. A role declared ahead of its reader waits in the test's `PENDING_READERS`, named with the batch that will read it; the list only shrinks: once the role is read, the test goes red until that batch removes the line. Ask through the colour coordinator |
 | `drawnColors.ts` | Colours drawn outside CSS — handed to a canvas library or baked into an SVG data URL, where a `var(--lf-…)` cannot reach: the spreadsheet preview (cheetah-grid, `FilePreviewModal`: the rows the caller points at, the light theme's borders, the whole dark theme), the `LazyImage` placeholders, the initial of an uploader's avatar (`FilesTable`); no chart. **Each colour is a role**, read when the caller draws, through the `chartRoles` it takes once per drawing: 18 of the 22 roles of `roleColors.ts`, and `readableText` for the initial (AF, 17/10). In the light theme the spreadsheet keeps cheetah-grid's `MATERIAL_DESIGN` theme, with only its two borders on roles (AF-14). Provisional choices, point 35 of the designer's collection: the pointed rows on the mark, the initial by `readableText`, the light spreadsheet | it draws one of those: it takes `chartRoles(dark, element)` and passes it in | T | Only for a colour that cannot be a `var()`, and then as a role read through the caller's `chartRoles`, never a hex. A translucent role is composited over its surface (`over()`) where the library does not clear what it fills, as cheetah-grid does. A role `roleColors.ts` lacks comes through DV, as its row says |
 | `colorAlpha.ts` | Alpha for a computed colour: `parseRgb`, `parseRgba`, `toRgba`, `withAlpha`, `withHexAlpha` | a chart or canvas colour needs transparency. Never build an `rgba(…)` string by hand | T and DV | With its test, through the colour coordinator |
@@ -284,9 +285,8 @@ D-T24): static copies of it, and of a few roles, live outside `tokens.css` (see 
   hand: a subtype in its **family's** colour (every `ETF_*` the ETF's blue, `CROWDFUND_REAL_ESTATE` the
   crowdfunding's), and a **dot** in the colour of what it contains, like its icon's pastille:
   `assetTypeBadgeDotClass()`, `bg-lf-cat-<content>-on-soft`, 4.30:1 at least on the family's tint (`ETF_MONETARY`'s
-  dot is the cash). The charts draw the same values: a type colour lives twice, in `chartCategories.ts` (DV) and in
-  `tokens.css`, until the Designer Lab moves to the roles (DV-11); change both together, the parity test of
-  `chartCategories.test.ts` holds them equal («Charts»).
+  dot is the cash). The charts draw the same roles: since DV-11 a type colour lives once, in `tokens.css`, and
+  `categoryColor` reads it («Charts»); the Designer Lab edits it as that role.
 - **Sectors, countries and the other kinds** have no roles yet: a chart takes `categoryColor`; the kinds a badge tells
   apart by hue alone (`KIND_TONES`, `STATUS_TONES.fileSet.combined`) are still palette classes until their categorical
   roles come: reuse them, never copy their classes.
@@ -348,9 +348,8 @@ draw. Owner: DV.
   `chartTheme.ts`; the actual weight in its row's category colour, a subtype in a shade of its family (§1.7).
 - **The type colours outside the canvas** (§1.9, decision A): the HTML that draws a type reads T's roles
   `--lf-cat-<type>` (`bg-lf-cat-etf`; `-soft` and `-on-soft` for a badge), as the book-value and cash bars of the
-  Dashboard's net-worth card do. Until the Designer Lab moves to the roles (DV-11) a type colour lives twice, in
-  `chartCategories.ts` and in tokens.css: change both together; the parity test of `chartCategories.test.ts` holds them
-  equal.
+  Dashboard's net-worth card do. The charts read the same roles (DV-11): `categoryColor` takes a type's and the cash's
+  colour from `--lf-cat-*` through `pageRoles` of `roleColors.ts`, so one edit of the role reaches badges and charts.
 - **Roles in a chart:** `chartRoles(dark, scope)` of `roleColors.ts` reads `--lf-*` on the chart's own element at each
   draw: `color(role)`, and `readableText(background)` for a label over a fill.
 - **Neutrals on roles (B4):** axes, grids and rules, labels, tooltip boxes, pointers, and the gaps and rings in the
@@ -360,8 +359,9 @@ draw. Owner: DV.
   - a tooltip box is a popover: the card, the raised border, the primary and the muted text;
   - the structure lines (axes, grids, separators, frames) `subtle`; reference lines, pointers and leader lines `input`;
   - always name a tooltip box and an axis pointer: ECharts' own are white and grey in both themes.
-- **Series, states and signs not on roles yet:** the named pairs of `chartTheme.ts`, read with `themed(pair, dark)`,
-  legacy values on purpose, for the designer; gain and loss wait for a batch with her. Computed scales are in
+- **Series, states and signs:** the named pairs of `chartTheme.ts`, read with `themed(pair, dark)`, on the nearest role
+  since D-T28 (`seriesRoles.ts`, parity-gated against `tokens.css`; a string the same in both themes is a getter of the
+  active theme); the map's land and the PAC's ideal weight are the designer's own values. Computed scales are in
   `chartColorScales.ts`, alpha in `colorAlpha.ts`, contrast in `contrast.ts`.
 - **Redraw** when the theme changes (`onThemeClassChange`) and when the Designer Lab edits a colour
   (`onChartColorsChange`, contract C4). A chart that otherwise updates its data only must rebuild its options at that
@@ -448,55 +448,24 @@ The sources:
 | T3-b | The edge of a banner chip in the state colour `X`, over 3:1 (her `X-line` measured 1.1–1.6:1) | round 3, developer |
 | R3 §1.3 | How serious a problem is: red for real errors, amber for missing data, blue for notes, green for successes, decided condition by condition (17/10: the portfolio's missing price and the four codes that fail the lots' replay are errors, the risk lab's missing price a warning) | round 3, developer |
 
-## Open questions for the designer: not decided
+## Values the designer has not confirmed
 
-Until she answers, follow what is written here and do not decide them in a component.
+Some roles carry a value nobody has confirmed with the designer yet: the comment next to it in `tokens.css` says
+«provisional», or gives her value beside a minimal contrast correction (D-T6). The rules:
 
-1. **The chart colours: answered by round 3** (17/10, §1 of `decisioni.md`): see «Charts» and rule 11.
-2. **Toasts and banners: answered by round 3** (17/10, §2): rule 12.
-3. **`panel` equals `hover`.** `--lf-surface-hover` is `--lf-surface-panel` in both themes, so `hover:bg-lf-hover`
-   shows nothing on a panel. Until then, on a panel, hover with `hover:bg-lf-neutral`: a secondary button is
-   `bg-lf-panel hover:bg-lf-neutral`.
-4. **The switch turned on.** 13 switches in 9 files, «on» today in the Libre green, emerald or amber; the palette says
-   `bg-lf-checked` (D-T16). The switch lot of T waits for her answer. Until then, do not migrate an existing switch on
-   its own. A new switch follows the Q2 rows of [`palette.md`](palette.md) and is reported to the colour
-   coordinator.
-5. **Three provisional roles of 16/10**, asked by the migration and built by T from her values:
-   - `--lf-success-hover` and `--lf-info-hover`, a solid success or info button hovered:
-     `color-mix(in oklab, var(--lf-X) 80%, var(--lf-text-primary))`, 20 % toward the primary text. It darkens in light
-     and lightens in dark, so the hover always moves away from its text `--lf-on-status`: 6.58:1 and 6.54:1 in light,
-     10.63:1 and 6.47:1 in dark. Her own Q3 hovers go darker in both themes instead (in dark: warning `#d97706`, danger
-     `#d51c42`); a darker info hover would fall under 4.5:1 in dark.
-   - `--lf-on-overlay`, text and icons on the backdrop: `#ffffff` in both themes, 4.98:1 at worst (the backdrop over a
-     white field).
+1. **Use a provisional role as it is.** Its value changes only through T, like any role («Asking for a new role», point
+   4); a component never works around it with a value of its own.
+2. **On a panel, hover with `neutral`.** `--lf-surface-hover` equals `--lf-surface-panel` in both themes, so
+   `hover:bg-lf-hover` shows nothing on a panel: a secondary button there is `bg-lf-panel hover:bg-lf-neutral`.
+3. **A switch turned on is `bg-lf-checked`** (D-T16), with the Q2 rows of [`palette.md`](palette.md).
+4. **On a selected row** follow rule 5: the captions turn secondary while the row is selected, `link` never over a
+   `panel`, and a selected chip under the pointer takes `hover:bg-lf-checked/20 hover:text-lf-primary`.
+5. **An empty page takes the app's accent**: the icon in `bg-lf-selected` with `text-lf-link`.
+6. **A case no role covers** follows «Asking for a new role»: the nearest role, noted «da rivedere» in the plan
+   (D-T27), never a hand-written colour.
 
-   Until then: use them as they are.
-6. **The selected tint.** `--lf-selected`, a selected or highlighted row, option or chip, is the focus green at 12 %
-   over its surface (T, from her «Focus, link attivi»). On it the muted text, the statuses and the signs fall to
-   3.84–4.48:1, and a lighter tint would not cure it (6 %: 4.17:1). Under review: the tint, and how a selected row keeps
-   its muted captions.
-
-   Until then: rule 5, «On a selected row» — the captions turn secondary while the row is selected (TC-15), `link`
-   never over a `panel`, and a selected chip under the pointer takes `hover:bg-lf-checked/20 hover:text-lf-primary`.
-7. **The accent of an empty page.** The empty states of the asset and the FX lists draw an icon in a tinted circle: the
-   assets' now takes the app's accent (`bg-lf-selected`, `text-lf-link`), the FX's is still amber, a page colour no role
-   covers (`warning` would read as a warning). Under review: one accent per page, or the app's green for every empty
-   state.
-
-   Until then: a new empty state takes the app's accent; the FX one stays as it is (`routes/(app)/fx/+page.svelte`).
-
-**Values waiting for her confirmation** (backlog TC-8):
-- the minimal contrast corrections of her round 2 (D-T6), each with her value in a comment of `tokens.css`: in
-  light `--lf-bar-text-muted`, in dark `--lf-warning-on-inverse`, `--lf-danger-solid`, `--lf-danger-hover` (round 3
-  confirmed the light `--lf-warning`, `--lf-danger-soft` and `--lf-info-soft`);
-- the roles marked «provisional»: `--lf-action-hover` in light, `--lf-on-ai`, `--lf-terminal-comment`,
-  `--lf-shadow-card` in dark, and the three of question 5;
-- the extension of the developer's dark red and green (D-T25, D-T26, which round 3 confirmed) to the states on the
-  green sidebar;
-- gain and loss kept apart from success and error; the switch turned off, recognised in light only by the edge of its
-  knob.
-
-The choices the night's migration made «da rivedere» are in the backlog, TC-10: the developer reviews them first.
+The questions still open for her are not kept here: they live in the review package of the current round and in the
+colour backlog. When she answers, the answer becomes a row of «Decisions» and, where it changes how to work, a rule.
 
 ## See also
 
