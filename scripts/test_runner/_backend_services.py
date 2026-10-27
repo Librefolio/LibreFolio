@@ -1385,7 +1385,9 @@ def services_provider_removal_link_guard(verbose: bool = False, test_names: list
     """Run X-R69 (was X-R62): removing a provider unlinks the transactions linked to the events it generated; only a SPLIT with costless adjustments refuses."""
     print_section("Services: Provider Removal Link Guard")
     print_info("Testing: backend/app/services/assets/provider_management.py (bulk_remove_providers), backend/app/services/assets/event_links.py, backend/app/services/assets/split_guard.py, backend/app/api/v1/assets/providers.py")
-    print_info("Tests: a removal unlinks (asset_event_id NULL) every transaction linked to an event of the assignment and deletes the assignment with its events; a SPLIT with costless adjustments is refused with PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST (HTTP 409), only the caller's transactions named, nothing written; a link made meanwhile is PROVIDER_REMOVAL_CONFLICT (409, no SQL); else the removal is as before")
+    print_info(
+        "Tests: a removal unlinks (asset_event_id NULL) every transaction linked to an event of the assignment and deletes the assignment with its events; a SPLIT with costless adjustments is refused with PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST (HTTP 409), only the caller's transactions named, nothing written; a link made meanwhile is PROVIDER_REMOVAL_CONFLICT (409, no SQL); else the removal is as before"
+    )
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_removal_link_guard.py", test_names)
     return run_command(cmd, "Provider removal link guard tests", verbose=verbose)
 

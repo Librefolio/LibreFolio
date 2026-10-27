@@ -2641,7 +2641,11 @@ class TestPayingAdministratorOtherPaths:
         renamed = await _call(private, "PUT", "/auth/profile", cookie=scene.owner_cookie, json={"username": "a51_owner_renamed"})
         recased = await _call(private, "PUT", "/auth/profile", cookie=scene.owner_cookie, json={"email": scene.owner.email.upper()})
         unchanged = await _call(private, "PUT", "/auth/profile", cookie=scene.owner_cookie, json={"username": "a51_owner_again", "email": scene.owner.email})
-        _expect(violations, (renamed.status_code, recased.status_code, unchanged.status_code) == (200, 200, 200), f"the username alone, the same address in another case and a new username with the same email are allowed: {renamed.status_code} {renamed.text}; {recased.status_code} {recased.text}; {unchanged.status_code} {unchanged.text}")
+        _expect(
+            violations,
+            (renamed.status_code, recased.status_code, unchanged.status_code) == (200, 200, 200),
+            f"the username alone, the same address in another case and a new username with the same email are allowed: {renamed.status_code} {renamed.text}; {recased.status_code} {recased.text}; {unchanged.status_code} {unchanged.text}",
+        )
         _expect(violations, (await _profile_of(private, scene.owner.user_id))[0] == "a51_owner_again", "the username must have changed")
         assert not violations, f"The paying administrator's email is the host's to change:{_verdict(violations)}"
         print_success("409 four times before the password; username, case and unchanged email 200")
