@@ -2,7 +2,7 @@
 
 The companion of [`SKILL.md`](SKILL.md), the design system (the themes, the shared colour folder, the rules). This file
 holds every role of [`tokens.css`](../../../frontend/src/lib/theme/tokens.css): its utility, its value in the light
-and in the dark theme, and when to use it. Rule numbers and open questions refer to `SKILL.md`.
+and in the dark theme, and when to use it. Rule numbers refer to `SKILL.md`.
 
 - **The values** are copied from `tokens.css` by a script and checked against it: every role has exactly one row, with
   its own utilities. If they ever differ, `tokens.css` wins, and whoever changes a role (T) updates this file in the
@@ -19,7 +19,7 @@ and in the dark theme, and when to use it. Rule numbers and open questions refer
 | `--lf-surface-card` | `bg-lf-card` | `#fafbfa` | `#151b19` | Cards, modals, menus, dropdowns, popovers |
 | `--lf-surface-panel` | `bg-lf-panel` | `#e8ece9` | `#1b2421` | The secondary surface: panels, table heads, boxes inside a card, the track of a segmented control, a secondary button, inline code |
 | `--lf-surface-field` | `bg-lf-field` | `#ffffff` | `#0f1413` | The inside of an input, a select trigger, a textarea |
-| `--lf-surface-hover` | `hover:bg-lf-hover` | `#e8ece9` | `#1b2421` | A row or an item under the pointer, on a card or a page. It equals `panel`: on a panel, hover with `hover:bg-lf-neutral` (open question 3) |
+| `--lf-surface-hover` | `hover:bg-lf-hover` | `#e8ece9` | `#1b2421` | A row or an item under the pointer, on a card or a page. It equals `panel`: on a panel, hover with `hover:bg-lf-neutral` (SKILL.md, «Values the designer has not confirmed», rule 2) |
 | `--lf-surface-neutral` | `bg-lf-neutral` | `#d8e0dc` | `#222c28` | Neutral fills: progress tracks, skeletons, neutral chips; the hover of a control that sits on a panel |
 | `--lf-surface-logo` | `bg-lf-logo` | `#ffffff` | `#ffffff` | The tile behind the logo: white in both themes, on the green too (N1) |
 
@@ -76,7 +76,7 @@ Four families: `success`, `warning`, `danger`, `info`. **Each one comes as a set
 | `--lf-success-soft` | `bg-lf-success-soft` | `#e6f4ed` | `#13261e` | The tint of a success alert, toast, badge or row |
 | `--lf-success-line` | `border-lf-success-line` | `#b8dfca` | `#1f4435` | Its border; the hover of a dismiss button on the tint |
 | `--lf-success-on-soft` | `text-lf-success-on-soft` | `#145937` | `#86efac` | Text on the success tint |
-| `--lf-success-hover` | `hover:bg-lf-success-hover` | `color-mix(in oklab, #18794e 80%, #1c2420)` | `color-mix(in oklab, #5ed69a 80%, #edf2f0)` | A solid success button under the pointer, with `text-lf-on-status`. **Provisional** (open question 5): 20 % toward the primary text (≈ `#1f6744` in light, `#81dcab` in dark), so it moves away from its text in both themes; 6.58:1 in light, 10.63:1 in dark |
+| `--lf-success-hover` | `hover:bg-lf-success-hover` | `color-mix(in oklab, #18794e 80%, #1c2420)` | `color-mix(in oklab, #5ed69a 80%, #edf2f0)` | A solid success button under the pointer, with `text-lf-on-status`. **Provisional**: 20 % toward the primary text (≈ `#1f6744` in light, `#81dcab` in dark), so it moves away from its text in both themes; 6.58:1 in light, 10.63:1 in dark |
 | `--lf-warning` | `text-lf-warning`, `bg-lf-warning` | `#ae4e00` | `#f59e0b` | A warning as text or icon, or its solid fill; the «modified» state of a setting (Q4); the edge of a chip inside a banner (rule 12) |
 | `--lf-warning-soft` | `bg-lf-warning-soft` | `#fef3c7` | `#291e0c` | The tint of a warning alert, toast, badge or row |
 | `--lf-warning-line` | `border-lf-warning-line` | `#fde68a` | `#54380e` | Its border; the hover of a dismiss button on the tint |
@@ -127,7 +127,7 @@ A sign, never a state (rule 7): as text `text-lf-gain`, `text-lf-loss`; on a tin
 | Role | Utility | Light | Dark | When to use |
 |---|---|---|---|---|
 | `--lf-surface-overlay` | `bg-lf-overlay` | `color-mix(in oklab, #0d1110 60%, transparent)` | `color-mix(in oklab, #0d1110 60%, transparent)` | The backdrop of a modal and of the guided tour: the dark page at 60 %, in both themes (Q13) |
-| `--lf-on-overlay` | `text-lf-on-overlay` | `#ffffff` | `#ffffff` | Text and icons on the backdrop: a camera on an avatar, an icon on a scrim. **Provisional** (open question 5): white in both themes, 4.98:1 at worst, the backdrop over a white field |
+| `--lf-on-overlay` | `text-lf-on-overlay` | `#ffffff` | `#ffffff` | Text and icons on the backdrop: a camera on an avatar, an icon on a scrim. **Provisional**: white in both themes, 4.98:1 at worst, the backdrop over a white field |
 | `--lf-shadow-raised` | `shadow-lf-shadow` | `color-mix(in oklab, #0d1110 25%, transparent)` | `color-mix(in oklab, #0d1110 50%, transparent)` | The shadow colour of a floating surface, beside a size: `shadow-xl shadow-lf-shadow` (Q8) |
 | `--lf-shadow-card` | `shadow-lf-shadow-card` | `color-mix(in oklab, #0d1110 7%, transparent)` | `color-mix(in oklab, #0d1110 40%, transparent)` | The shadow colour of a card on a page: `shadow-sm shadow-lf-shadow-card` (provisional in dark) |
 
