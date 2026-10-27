@@ -834,7 +834,7 @@ its nightly backup pushes a good copy out of the ones it keeps (contract L3, D6;
   broken file must not stop the backups. Without the file, the stored secrets decide (**R1**): `mismatch` only when there is at least one
   row with a secret, in either plugin table, and the `key_id` of every one is not the current key's; one readable row, or
   none, is `ok`.
-- **The start**, step `instance-key-check` right after `plugin-secrets-check`, no `skip_when`, never raises
+- **The start**, step `instance-key-check` right before `plugin-secrets-check` (which keeps its place right before `stored-currencies`), no `skip_when`, never raises
   (`check_instance_key_at_start()`): the file absent and the state `ok` writes it (exclusive create: of several workers the first
   wins); absent and `mismatch` writes nothing and logs an error, since writing would bless the wrong key; present
   and `mismatch` logs an error and rewrites nothing.
