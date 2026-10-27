@@ -157,8 +157,8 @@ data was written with**: a machine that got the wrong key, a key file replaced b
 - **The first start** writes the file. If saved plugin secrets already exist and the current key reads
   none of them, LibreFolio does not write it: it would take the wrong key for the right one. The check
   then says the key does not match until you put the right key back.
-- **With a key that does not match**, the log has an error (`check` is `platform.instance_key`), the
-  Security tab of Settings › Administration says so, and the [status of the hosting panel](hosting_panel_api.md#panel-status)
+- **With a key that does not match**, the log has an error at start, the
+  Security tab of Settings › Administration says so (the check is `platform.instance_key_check`), and the [status of the hosting panel](hosting_panel_api.md#panel-status)
   answers `"instance_key": "mismatch"`. Two things stop, and only these: the backups that the panel starts
   (a start answers `409` with the code `backup_instance_key_mismatch`, see
   [Backup Jobs](hosting_panel_backups.md#panel-jobs)) and the [scheduled wake-up](wake_sync.md#wake-sync)
