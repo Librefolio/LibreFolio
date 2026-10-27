@@ -156,6 +156,11 @@ async def admin_session(target: Instance) -> dict[str, str]:
 def prepare_wake(target: Instance) -> tuple[dict[str, str], list[str]]:
     """The wake-up route with its token and the real ``run_due_jobs``; everything the scheduler reaches past its switches is a trap that records."""
     target.monkeypatch.setattr(wake_module, "run_due_jobs", scheduler.run_due_jobs)
+    # The wake-up run opens its own session on the process-wide engine (``_instance_key_mismatch``), not on the dependency
+    # the ``Instance`` fixture overrides. Left alone, the first test to get there builds that engine on this test's
+    # ``tmp_path`` database, which pytest deletes: every later in-process test of the worker then fails with «unable to
+    # open database file». The private engine is the one the test already writes its secrets and users to.
+    target.monkeypatch.setattr(wake_module, "get_async_engine", lambda: target.engine)
     target.monkeypatch.delenv("LIBREFOLIO_NO_SCHEDULER", raising=False)
     target.monkeypatch.setattr(scheduler, "settle_clock", _settled_at_once, raising=False)
     target.monkeypatch.setattr(idle_monitor, "request_idle_check", lambda *_args, **_kwargs: None, raising=False)
