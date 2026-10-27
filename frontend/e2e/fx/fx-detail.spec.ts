@@ -2380,9 +2380,6 @@ const CHANGED_RANGE_CHANGE: FxRangeChange = {change_abs: '-0.0321', change_ratio
 /** A Δ over the range the backend could not compute: every field null, both ways. */
 const NO_RANGE_CHANGE: FxRangeChange = {change_abs: null, change_ratio: null, inverse_change_abs: null, inverse_change_ratio: null};
 
-/** The first day the backend values (`EARLIEST_RANGE_START`): it refuses an earlier `range_start`, and the whole request with it. */
-const EARLIEST_RANGE_START = '1900-01-01';
-
 /** What `routePairRangeChanges` saw: every item asked, what went wrong, how many requests it answered. */
 type FxRangeChangesLog = {asked: FxRangeChangesQuery[]; failures: string[]; answered: number};
 
@@ -2437,15 +2434,14 @@ function percentText(figure: string): RegExp {
  * The pair page's summary shows the pair's Δ over the range on screen (X-R59, lot A): the change from the first to the
  * last day of the range, which the backend computes both ways — the `range_change` of
  * `POST /fx/currencies/period-changes`, asked for the pair canonical (alphabetical) whichever way the URL shows it, from
- * the first day of the range (`range_start`, raised to 1900-01-01, the first day the backend values, for a range that
- * starts before it) to its last (`as_of`): on load, on a range change and after a refresh. Shown as configured the
+ * the first day of the range (`range_start`, as it is: the backend takes any day from the year 1, D-P4) to its last (`as_of`): on load, on a range change and after a refresh. Shown as configured the
  * summary reads `change_ratio`; inverted, `inverse_change_ratio`; where the backend has none it draws no Δ beside the
  * rate. The browser computes none.
  *
  * The pair is the seeded EUR/USD, read and never written: the real answer is fetched and only its `range_change` is
  * changed, with figures its rates do not give over these days. The range before 1900 has its rates answered in the
  * browser, empty, so no conversion is walked back over a century; its period changes still reach the backend, which says
- * whether it takes the first day asked. The refresh button publishes the page's big requests (`data-busy`, `pageBusy`),
+ * whether it takes the first day asked, as it is. The refresh button publishes the page's big requests (`data-busy`, `pageBusy`),
  * the Δ over the range among them: the barrier before reading what an answer left.
  *
  * Red before the cure of lot A: the page never asks the endpoint — the route never fires — and computes its Δ from the
@@ -2578,10 +2574,10 @@ test.describe('FX pair page — the summary’s Δ over the range is the backend
         }
     });
 
-    test('a range that starts before 1900 asks the Δ from 1900-01-01, which the backend takes', async ({page}) => {
-        // A month before the first day the backend values: sent as is, the backend would refuse the whole request.
+    test('a range that starts before 1900 asks the Δ from its first day, as it is, which the backend takes', async ({page}) => {
+        // A month before 1900: the backend takes any day from the year 1 (D-P4), so the first day goes as it is.
         const range = {start: '1899-12-01', end: daysAgoIso(10)};
-        const expected = {...RANGE_PAIR, as_of: range.end, range_start: EARLIEST_RANGE_START};
+        const expected = {...RANGE_PAIR, as_of: range.end, range_start: range.start};
         try {
             // The chart's rates answered in the browser, empty: no conversion is walked back over a century.
             await page.route(`**${FX_CONVERT_PATH}`, async (route) => {
@@ -2592,9 +2588,9 @@ test.describe('FX pair page — the summary’s Δ over the range is the backend
 
             await expect.poll(() => log.answered, {message: 'the pair page never asked POST /fx/currencies/period-changes', timeout: 10_000}).toBeGreaterThan(0);
             await expect(page.getByTestId('fx-detail-refresh-btn'), 'the load is over').toHaveAttribute('data-busy', 'false', {timeout: 20_000});
-            expect(log.failures, 'the backend took every request: none asks a day before the first it values').toEqual([]);
-            expect(log.asked, `the page asks the pair from ${EARLIEST_RANGE_START} to the last day of the range`).toContainEqual(expected);
-            for (const item of log.asked) expect(item, `never from ${range.start}: the backend would refuse the whole request`).toEqual(expected);
+            expect(log.failures, 'the backend took every request: it takes any day from the year 1').toEqual([]);
+            expect(log.asked, `the page asks the pair from ${range.start} to the last day of the range`).toContainEqual(expected);
+            for (const item of log.asked) expect(item, `never raised above ${range.start}`).toEqual(expected);
         } finally {
             await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
         }
