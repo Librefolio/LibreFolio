@@ -41,7 +41,9 @@ that a machine its hosting panel woke goes back to sleep. The contract pinned he
 (g) ``request_check(delay)``, from any thread: the loop runs a check ``delay`` seconds from now, earlier than its regular
     wait, and earlier than the grace (decision of 16/10/2026): the grace protects the request that woke the machine, and
     the check a wake-up asks for comes after that request, so that a machine nobody uses goes back to sleep at once.
-    Requests made before a check — while one runs included — make one check after it.
+    Requests made before a check — while one runs included — make one check after it, unless that check ends
+    "suspended" or "failed": the checks requested before a suspension (a timer still armed, or fired while the machine
+    slept) are forgotten with it, and only a request made after it ends the grace (lot Z5-S1).
 (h) The module's functions read ``idle_suspend_mode``, ``idle_suspend_minutes``, ``FlySuspender``, ``current_activity``,
     ``get_tool_executor`` and ``backup_in_progress`` as module globals at the call. ``start_idle_monitor()`` always
     returns None: H's startup runner awaits what a step returns, and the monitor never ends. In "none" mode it starts
@@ -1932,3 +1934,53 @@ async def test_a_requested_check_ends_the_resume_grace_early(rig: Rig, timeline:
     assert released == [], f"the grace's sleep never came to its end, the request ended the wait: {released}"
     assert timeline.count("reading", grace_at) >= 1, "the requested check read the busy reasons, after the grace began"
     print_success(f"after {outcome}: the grace ended by the request; the suspension asked for again")
+
+
+# =============================================================================
+# (g) A CHECK REQUESTED BEFORE A SUSPENSION (lot Z5-S1)
+# =============================================================================
+
+
+async def _loop_turns(count: int = 25) -> None:
+    """``count`` turns of the event loop: whatever is ready runs. Not a duration: nothing here waits on a clock."""
+    for _ in range(count):
+        await asyncio.sleep(0)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("outcome", ["suspended", "failed"])
+@pytest.mark.parametrize("requested", [pytest.param(0.0, id="fired-during-the-check"), pytest.param(LONG_GRACE_SECONDS, id="still-armed")])
+async def test_a_check_requested_before_a_suspension_does_not_cut_the_grace_short(rig: Rig, timeline: Timeline, monkeypatch: pytest.MonkeyPatch, outcome: str, requested: float) -> None:
+    """SWS-047 — contract (g): a wake-up ends and asks for a check, then the loop's own check suspends the machine first. The request made *before* the suspension must not count after it. The check is held at a gate while ``request_check`` arrives: with 0 s its timer fires during the check (the clock keeps running while a suspended machine sleeps, so on the resume it has fired), with 2000 s it is still armed. The check ends ``outcome``; the grace, 2000 s here, begins and, over many turns of the loop, no check follows and its sleep is not cancelled. A request made *after* it still ends the grace and asks for the suspension again, as in SWS-046 — which a timer left armed would swallow."""
+    print_section(f"SWS-047: a check requested before the suspension, {outcome}, {requested} s")
+    monkeypatch.setattr(idle_monitor, "IDLE_CHECK_SECONDS", LONG_CHECK_SECONDS)
+    monkeypatch.setattr(idle_monitor, "RESUME_GRACE_SECONDS", LONG_GRACE_SECONDS)
+    rig.activity.clock.now = rig.activity.started_at + LONG_IDLE
+    rig.activity.register_busy_check("gate", rig.gate)
+    rig.gate.arm()
+    if outcome == "failed":
+        rig.suspender.fail_with = _http_503
+    stop = asyncio.Event()
+
+    async with _running(rig, stop):
+        await timeline.until(lambda: timeline.count("gate-entered") >= 1, "the loop's first check, held at the gate")
+        rig.monitor.request_check(requested)
+        await _loop_turns()
+        rig.gate.release()
+        await timeline.until(lambda: _first_long_sleep(timeline, 0) is not None, f"the loop's grace after a check {outcome}")
+        found = _first_long_sleep(timeline, 0)
+        assert found is not None
+        grace_at, grace = found
+        await _loop_turns()
+        readings_in_the_grace = timeline.count("reading", grace_at)
+        cancelled_in_the_grace = timeline.count("sleep-cancelled", grace_at)
+        if outcome == "failed":
+            rig.monotonic.now = rig.monitor.retry_not_before
+        rig.monitor.request_check(0.0)
+        await timeline.until(lambda: timeline.count("suspend", grace_at) >= 1, f"the check requested after the suspension, during the grace after {outcome}, asking for it again")
+
+    assert grace >= LONG_GRACE_SECONDS - 1e-6, f"Precondition: after {outcome} the loop waits out the grace: sleep({grace})"
+    assert timeline.count("reading", 0) >= 2 and timeline.count("gate-entered") == 1, "Precondition: the first check was held, a second one followed"
+    assert readings_in_the_grace == 0, f"no check before the request made after the suspension: {timeline.entries[grace_at:]}"
+    assert cancelled_in_the_grace == 0, f"the grace was cut short by a check requested before the suspension: {timeline.entries[grace_at:]}"
+    print_success(f"after {outcome}: the grace kept; the later request ended it")
