@@ -9,7 +9,8 @@ the name ``i18n_catalog`` gives its fragment. Each plugin has a **space**, read 
 publishes, never from its source text:
 
 - BRIM (``BRIMProviderRegistry``): ``brimPlugins.<code>``, the key the UI builds (``brimPlugins.${plugin.code}.name``);
-  and the code is the folder;
+  and the code is the folder; and ``pluginSettings.brim.<code>``, the branch of its settings' keys (W5-8: the generic CSV's
+  ``date_order``);
 - asset (``AssetProviderRegistry``): ``assets.providerParams.<provider code>``, and ``pluginSettings.asset.<provider
   code>``, the branch of its settings' keys;
 - FX (``FXProviderRegistry``): ``pluginSettings.fx.<provider code>``, the branch of its settings' keys, the code as the
@@ -20,7 +21,7 @@ publishes, never from its source text:
 - tool (``ToolPluginRegistry``): exactly the keys ``name_i18n_key`` and ``description_i18n_key``, whose namespace a
   subsystem shares.
 
-The family in a settings branch, ``asset`` or ``fx``, is the one the registry names (``settings_family()``).
+The family in a settings branch, ``asset``, ``fx`` or ``brim``, is the one the registry names (``settings_family()``).
 
 A space is **exclusive** when exactly one plugin has it: ``signals.riskRollingReturn``, the space of two signal
 plugins, is not. The keys a plugin **declares** are those its metadata names: the BRIM ``name`` and, when it has one,
@@ -86,7 +87,7 @@ ASSET_SPACE = "assets.providerParams"
 # The root of the settings branches: pluginSettings.<settings family>.<code>, an asset or FX plugin's.
 SETTINGS_SPACE = "pluginSettings"
 # The registries whose plugins declare settings, in the order the gate reads them.
-SETTINGS_REGISTRIES = (AssetProviderRegistry, FXProviderRegistry)
+SETTINGS_REGISTRIES = (AssetProviderRegistry, FXProviderRegistry, BRIMProviderRegistry)
 
 # The module discovery loads a plugin folder's code from: backend.app.services.<family>.<folder>.plugin.
 SERVICES_PACKAGE = ("backend", "app", "services")
@@ -270,7 +271,7 @@ def brim_folder_problems(plugins: Iterable[PluginI18n]) -> list[str]:
         if plugin.family != BRIM_FAMILY:
             continue
         folder = plugin.name.split("/", 1)[1]
-        codes = [area.path.removeprefix(f"{BRIM_SPACE}.") for area in plugin.areas]
+        codes = [area.path.removeprefix(f"{BRIM_SPACE}.") for area in plugin.areas if area.path.startswith(f"{BRIM_SPACE}.")]
         if codes != [folder]:
             problems.append(f"{plugin.name}: BRIM code {', '.join(codes) or 'none'}, folder {folder}; the code must be the folder")
     return problems
@@ -366,7 +367,7 @@ def settings_plugin(registry: type, code: str, *areas: Area) -> PluginI18n:
 
 
 def settings_definitions() -> list[tuple[str, object]]:
-    """``(folder, settings dump)`` of every asset and FX plugin, with settings or not."""
+    """``(folder, settings dump)`` of every asset, FX and BRIM plugin, with settings or not."""
     found = []
     for registry in SETTINGS_REGISTRIES:
         for code in registry.list_plugin_codes():
@@ -395,7 +396,8 @@ def brim_plugins() -> list[PluginI18n]:
         info = BRIMProviderRegistry.get_plugin_instance(code).to_plugin_info()
         space = f"{BRIM_SPACE}.{info.code}"
         declared = (f"{space}.name", *((f"{space}.description",) if info.description else ()))
-        found.append(PluginI18n(plugin_folder(BRIMProviderRegistry.get_plugin(code).__module__), (Area(space),), declared))
+        plugin = settings_plugin(BRIMProviderRegistry, code, Area(space))
+        found.append(PluginI18n(plugin.name, plugin.areas, (*declared, *plugin.declared)))
     return found
 
 
@@ -719,6 +721,7 @@ def test_published_keys_names_a_key_attribute_a_settings_declaration_grows():
 def test_a_settings_space_is_the_family_its_registry_names_and_the_code_as_it_is():
     assert settings_space(AssetProviderRegistry, "probe_source") == "pluginSettings.asset.probe_source"
     assert settings_space(FXProviderRegistry, "PROBE_RATES") == "pluginSettings.fx.PROBE_RATES"
+    assert settings_space(BRIMProviderRegistry, "probe_broker") == "pluginSettings.brim.probe_broker"
 
 
 def test_a_space_is_exclusive_only_to_its_one_plugin(tmp_path):
@@ -956,13 +959,14 @@ def test_an_asset_or_fx_plugin_space_holds_its_settings_branch_under_its_registr
     assert spaces["asset_source_providers/justetf"] == (Area("assets.providerParams.justetf"), Area("pluginSettings.asset.justetf"))
     assert spaces["asset_source_providers/yahoo_finance"] == (Area("assets.providerParams.yfinance"), Area("pluginSettings.asset.yfinance"))
     assert spaces["fx_providers/ecb"] == (Area("pluginSettings.fx.ECB"),)
+    assert spaces["brim_providers/broker_generic_csv"] == (Area("brimPlugins.broker_generic_csv"), Area("pluginSettings.brim.broker_generic_csv"))
     assert spaces["fx_providers/mockfx"] == (Area("pluginSettings.fx.MOCKFX"), Area("pluginSettings.fx.MOCKFX_FAIL"))
 
 
 def test_an_asset_or_fx_plugin_declares_exactly_the_keys_of_its_settings(published):
     """Each field's ``label_key`` and ``description_key`` and each option's ``label_key``, read off the classes: the
     keys the model has each asset and FX plugin declare, no more, no fewer."""
-    declared = {plugin.name: set(plugin.declared) for plugin in published}
+    declared = {plugin.name: {key for key in plugin.declared if not key.startswith(f"{BRIM_SPACE}.")} for plugin in published}
     expected: dict[str, set[str]] = {}
     for registry in SETTINGS_REGISTRIES:
         for code in registry.list_plugin_codes():
@@ -971,7 +975,7 @@ def test_an_asset_or_fx_plugin_declares_exactly_the_keys_of_its_settings(publish
             for field in plugin_class.settings_fields:
                 keys.update(key for key in (field.label_key, field.description_key, *(option.label_key for option in field.options)) if key)
 
-    assert any(expected.values()), "no asset or FX plugin declares a settings key: nothing for the rules to read of the settings"
+    assert any(expected.values()), "no asset, FX or BRIM plugin declares a settings key: nothing for the rules to read of the settings"
     assert {folder: declared[folder] for folder in expected} == expected
 
 
