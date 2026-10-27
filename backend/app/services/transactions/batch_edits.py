@@ -315,6 +315,47 @@ def _validate_updated_final_state(
     )
 
 
+async def warn_inverted_updated_pairs(
+    service: TransactionService,
+    context: TransactionBatchContext,
+) -> None:
+    """Warn about a stored linked pair an update has just dated with the arrival before the departure (B2).
+
+    Only a pair with a leg whose ``date`` the batch really changed is judged, on the final dates of both legs: a pair already
+    inverted in the database is never judged again, and an update that carries the stored date changes nothing. One warning
+    per pair, on the first update that changed a leg of it.
+    """
+    judged: set[frozenset[int]] = set()
+    for original_index, item in context.parsed_updates:
+        transaction = context.existing_by_id.get(item.id)
+        if transaction is None or not transaction.related_transaction_id:
+            continue
+        if item.date is None or item.date == context.stored_dates.get(item.id):
+            continue
+        pair_ids = frozenset((transaction.id, transaction.related_transaction_id))
+        if pair_ids in judged:
+            continue
+        partner = context.existing_by_id.get(transaction.related_transaction_id)
+        if partner is None:
+            partner = await service.session.get(Transaction, transaction.related_transaction_id)
+        if partner is None:
+            continue
+        judged.add(pair_ids)
+        order_result = service._pair_order_warning(transaction, partner)
+        if order_result is not None:
+            order_message, order_code, order_params = order_result
+            context.warnings.append(
+                TXValidationIssue(
+                    operation="update",
+                    index=original_index,
+                    ref_id=item.id,
+                    error=order_message,
+                    code=order_code,
+                    params=order_params,
+                )
+            )
+
+
 async def validate_updated_pairs(
     service: TransactionService,
     context: TransactionBatchContext,

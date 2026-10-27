@@ -97,13 +97,13 @@ jq -rR 'fromjson? | select(.level == "ERROR" or .level == "CRITICAL") | "\(.time
 
 ### 🗄️ `cache/`
 
-Copies LibreFolio can fetch again. Today it holds `pdf-fonts/`, the Chinese, Japanese and Korean fonts the PDF preview needs for a PDF that uses them, kept after the first download: see [The Content-Security-Policy](configuration.md#csp). Deleting it loses nothing, and it is not part of a [backup](backup_restore.md).
+Copies LibreFolio can fetch again. Today it holds `pdf-fonts/`, the Chinese, Japanese and Korean fonts the PDF preview needs for a PDF that uses them, kept after the first download: see [The Content-Security-Policy](configuration_security.md#csp). Deleting it loses nothing, and it is not part of a [backup](backup_restore.md).
 
 ### 🔐 `secrets/`
 
-- 🔑 `instance.key` holds the [instance key](configuration.md#instance-key), the secret from which LibreFolio derives its encryption keys. LibreFolio creates it the first time it needs the key. After that, a missing `instance.key` looks the same as a first use: LibreFolio creates a new key, and what the old one encrypted can no longer be read.
-- 🔒 Only the user that runs LibreFolio can open the folder and the file: the folder is `0700`, the file `0600`. Keep them that way, and owned by that user: otherwise the [start log](configuration.md#startup-checks) has a warning, or an error when LibreFolio itself cannot open them.
-- ⛔ Never edit, replace or delete the `instance.key` in use: what was encrypted with it could no longer be read. If it is damaged, or if LibreFolio has already replaced a lost one with a new key, stop LibreFolio and put your copy back before anyone enters a plugin secret again: see [The Instance Key](configuration.md#instance-key).
+- 🔑 `instance.key` holds the [instance key](configuration_secrets.md#instance-key), the secret from which LibreFolio derives its encryption keys. LibreFolio creates it the first time it needs the key. After that, a missing `instance.key` looks the same as a first use: LibreFolio creates a new key, and what the old one encrypted can no longer be read.
+- 🔒 Only the user that runs LibreFolio can open the folder and the file: the folder is `0700`, the file `0600`. Keep them that way, and owned by that user: otherwise the [start log](configuration_security.md#startup-checks) has a warning, or an error when LibreFolio itself cannot open them.
+- ⛔ Never edit, replace or delete the `instance.key` in use: what was encrypted with it could no longer be read. If it is damaged, or if LibreFolio has already replaced a lost one with a new key, stop LibreFolio and put your copy back before anyone enters a plugin secret again: see [The Instance Key](configuration_secrets.md#instance-key).
 - ♻️ When you restore the data directory, put `secrets/` back with it before you start LibreFolio again. Never start LibreFolio on restored data without its `secrets/`.
 - ⚙️ When the key comes from `LIBREFOLIO_INSTANCE_KEY` or `LIBREFOLIO_INSTANCE_KEY_FILE`, LibreFolio does not use this folder.
 
@@ -122,7 +122,7 @@ The other variables, and the `.env` file, are described in [Configuration](confi
 
 ## 💾 Backup
 
-The recommended way is a backup archive, made while LibreFolio keeps running: see [Backup, Restore and Moving Your Instance](backup_restore.md). From the command line, `./dev.py backup create` writes one zip archive of the database, the uploaded files, the broker reports and your own stress scenarios, by default into the data directory's `backups/` folder: see [Back Up the Instance](cli_tools.md#backup), and [Back Up with Docker](cli_tools.md#backup-docker) for the command in the container. It leaves out `secrets/`, which you back up as [What to Back Up](#what-to-back-up) explains, unless you make it [secure](backup_restore.md#secure) (`--encrypt`): a secure archive carries the instance key LibreFolio generated. Copying the data directory by hand, below, is the alternative.
+The recommended way is a backup archive, made while LibreFolio keeps running: see [Backup, Restore and Moving Your Instance](backup_restore.md). From the command line, `./dev.py backup create` writes one zip archive of the database, the uploaded files, the broker reports and your own stress scenarios, by default into the data directory's `backups/` folder: see [Back Up the Instance](cli_backup.md#backup), and [Back Up with Docker](cli_backup.md#backup-docker) for the command in the container. It leaves out `secrets/`, which you back up as [What to Back Up](#what-to-back-up) explains, unless you make it [secure](backup_restore.md#secure) (`--encrypt`): a secure archive carries the instance key LibreFolio generated. Copying the data directory by hand, below, is the alternative.
 
 ### 📦 Simple Backup
 

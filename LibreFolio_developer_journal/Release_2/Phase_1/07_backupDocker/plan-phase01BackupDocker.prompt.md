@@ -7799,3 +7799,270 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 >
 > **⚠️ Fuori pista**: avevo cambiato il testo del messaggio del 500; i test lo fissano: rimesso com'era, l'informazione
 > nuova è in `reason`.
+
+## Ondata 5 (23/10/2026) — treno 11a
+
+> Kickoff: `salvataggi-worktrees-20261021/ondata5/kickoff-B.md`. Base `1fd80c481` (= `dev_release2`, treni 9 e 10).
+> Lotti: **B5-2** (`backup pending --json` e `--recover <scelta>`, richiesta formale del cloud per `lfc istanza recupera`),
+> **M-1** (immagine arm64), **B5-1** (ripristino con la scelta del titolare, su Opus, dopo la firma di A).
+
+#### B5-2 — `backup pending --json` e `--recover <scelta>` ✅ 2026-10-23
+
+> **Note implementazione** (interfaccia `ondata5/B-b52-interface.md`; rossi di un agente `test-author`):
+> - `--json`: una riga su stdout (`state`, `reason`, `waiting`, `backup_created_at`, `safety_copy`, `choices`, e dopo un
+>   `--recover` anche `recover` ed `error`); testo e log su stderr (anche il gestore dei log a `sys.stdout`); mai nomi,
+>   email, percorsi o id. `safety_copy` = i dati di prima in `.restore/previous/` (presente sì/no e l'ora).
+> - `--recover` prende una scelta obbligatoria: `previous` (stato illeggibile: rimette i dati di prima, è B-33) o
+>   `cancel` (butta il ripristino in attesa). Codici fissi: 0 fatto, 2 uso, 3 niente da recuperare, 4 scelta non valida
+>   in questo stato, 5 fallito. Ripetuto: 3 e non cambia niente. Non chiede mai nulla.
+> - `--json` e `--cancel` si escludono (messaggio di argparse, `_StoreTrueNotWith`); `--recover cancel` fa lo stesso di
+>   `--cancel`. `backup pending` senza opzioni è invariato.
+> - **Rossi**: `utils backup-cli-recover` (nuovo) 116, `backup-cli-restore` 11. **Verdi**: 116 e 120; `backup-cli` 106,
+>   `cli-secure` 106, `cli-sealed` 49, `services backup-apply` 331, `api backup-restore-apply` 262.
+>
+> **⚠️ Fuori pista**: `--recover` senza argomento (B-33, mai uscito) è diventato `--recover previous`: due file di H lo
+> citano ancora (`restore_guard.py:37` con il suo test, `hosting_providers.en.md` righe 1153 e 1188): richiesta nel checkpoint.
+
+#### M-1 — immagine arm64 ✅ 2026-10-23 (nessun test locale: è CI)
+
+> **Note implementazione** (sotto-agente Haiku, riletto): `platforms: linux/amd64,linux/arm64` sui due passi
+> `build-push-action` di `release.yml`; due passi di controllo dopo il push (`docker buildx imagetools inspect` su ogni
+> tag, fallisce se manca una piattaforma); una riga in `installation.en.md`. YAML valido. Il `Dockerfile` non ha niente
+> di specifico per amd64. **CI più lunga (QEMU); da provare al primo tag.**
+> **⚠️ Rischi non verificabili qui**: dipendenze senza pacchetto aarch64 già compilato (si compilerebbero sotto QEMU);
+> formato dell'output di `imagetools inspect`; il controllo gira dopo il push.
+
+#### M-2 — attestazione di build delle immagini su GHCR ✅ 2026-10-23 (nessun test locale: è CI)
+
+> Richiesta del coordinatore cloud, approvata dal developer il 23/10; stesso file di M-1 (`release.yml`).
+> **Note implementazione**: permessi del workflow `id-token: write` e `attestations: write` (oltre a `packages: write`);
+> `id: build-light` e `id: build-full` sui due `build-push-action`; dopo ciascuno `actions/attest-build-provenance@v4`
+> con `subject-name: ghcr.io/librefolio/librefolio` (senza tag, minuscolo), `subject-digest` del passo, `push-to-registry:
+> true`. Firma senza chiave (OIDC di GitHub + Sigstore): nessun segreto. Un'attestazione per digest copre tutti i tag di
+> quella variante. Doc: «Verify the Image You Pull» in `docker_advanced.en.md` (`#verify-image`) con
+> `gh attestation verify oci://ghcr.io/librefolio/librefolio@sha256:<digest> --owner Librefolio`.
+> **⚠️ Fuori pista**: dalla v4 `attest-build-provenance` è solo un involucro di `actions/attest` (l'involucro resta
+> supportato; i nuovi lavori dovrebbero usare `actions/attest`): ho tenuto l'azione richiesta. `create-storage-record`
+> vale `true` di default e chiede il permesso `artifact-metadata: write`: l'ho messo `false`, non serve e così i permessi
+> restano quelli decisi. Il `＠` a larghezza piena del messaggio di richiesta è stato scritto come `@` normale.
+> **Da provare al primo tag**: il passo gira solo se il passo di build dà un `digest`; le immagini già pubblicate non
+> hanno attestazione (la doc lo dice).
+
+#### B5-1 — ripristino di un backup caricato con la scelta del titolare ✅ 2026-10-23 (backend + frontend; lo step lo collega H)
+
+> Interfaccia: `salvataggi-worktrees-20261021/ondata5/B-b51-interface.md` (§0-§8). Firma di A (`assign_owner_and_send_reset`,
+> `OwnerChoiceModal`) usata con una funzione e una modale finte: il codice di A non è nel ramo.
+> **Note implementazione**:
+> - `staging.py`: `OwnerCandidate`; il rapporto registra `owner_candidates`, `owner_email_checked` e `owner_conflicts`
+>   (`duplicate_email`, `duplicate_username`, `address_is_a_username`); un account con un id non intero o senza nome
+>   (in tutta la tabella) → `database_damaged`. Tutto in sola lettura, con valori legati.
+> - `apply.py`: alla conferma dall'app sul profilo managed la scelta è obbligatoria. L'ordine dei controlli è:
+>   `owner_choice_not_applicable` (400, fuori dal managed) → `owner_email_not_set` → `restore_stage_outdated` (anche
+>   quando l'email del titolare è cambiata) → `owner_conflict` → `owner_choice_required` / `owner_choice_invalid`.
+>   - Se l'email del titolare è già di un account, quell'account è obbligato; altrimenti va bene qualunque admin attivo.
+>   - `RestoreState` riceve `owner_user_id`, `owner_outcome` e `owner_reset_path` (quest'ultimo segreto: mai nello
+>     stato dell'API, nel pannello o nei log).
+>   - Al commit, `_close_the_way_in` chiude l'account scelto nella stessa transazione:
+>     - password = vero hash bcrypt di un segreto casuale;
+>     - email del titolare, `is_superuser=1`, `is_active=1`;
+>     - `is_instance_owner` (prima 0 agli altri, poi 1), solo se la colonna della migrazione 006 di A esiste;
+>     - se l'email è già di un altro account, solo la password.
+>   - Il gancio `owner_assignment_problem()` serve alla guardia di H.
+> - `owner.py`: `assign_restored_owner` è lo step `restore-owner`, da mettere dopo `restore-commit` (la riga la scrive H).
+>   - Un lucchetto non bloccante `.restore/owner.lock` (0600) e un ricontrollo dello stato dopo averlo preso.
+>   - Chiama A con un motore dedicato e registra l'esito una volta sola.
+>   - Non solleva mai; nei log mai email, nomi o link.
+> - API: `owner_choice` nel rapporto; la conferma accetta il corpo `{owner_user_id}` (`extra="forbid"`). `RestoreStatus`
+>   resta invariato (lo schema chiuso del pannello di H).
+> - CLI: `backup pending` stampa una riga sull'account del titolare dopo un ripristino committato; `--json` resta
+>   invariato.
+> - Frontend:
+>   - `confirmRestore(stageId, ownerUserId)`;
+>   - nel flusso, `confirm(ownerUserId)`; `owner_conflict` dimentica il controllo;
+>   - `RestoreReportModal` apre la modale di A quando il rapporto ha `owner_choice` e le passa solo l'account obbligato
+>     o, se non c'è, gli admin attivi;
+>   - 4 codici d'errore nelle 4 lingue; il testo di `restore_stage_outdated` aggiornato;
+>   - `OwnerChoiceModal.svelte` è una **versione finta**: all'unione con il ramo di A si tiene il file di A.
+> - Test (rossi prima, con test-author):
+>   - services: staging 248, apply 387, owner 54;
+>   - api: restore-apply 285;
+>   - utils: cli-restore 132;
+>   - Vitest: 503 + 308 + 360 + 109;
+>   - regressione del backup verde (21 suite, comprese le E2E roundtrip e L3); `front check` 0 errori.
+> **⚠️ Fuori pista**:
+> - Un campo nuovo in `RestoreStatus` faceva rispondere 500 al pannello (lo schema chiuso `PanelRestoreStatus.of` di H):
+>   `owner_outcome` resta solo nello stato su disco.
+> - La revisione di sicurezza indipendente ha trovato il caso «chi prepara il backup forza il rifiuto di A»
+>   (fail-open). Lo chiudono il §7, approvato dal coordinatore, e la chiusura dell'account al commit, concordata con A.
+> **Da fare dopo l'unione dei rami** (H, A):
+> - H: lo step `restore-owner`, la guardia su `owner_assignment_problem`, il test sull'ordine degli step;
+> - A: la sua `unusable_password_hash()` al posto di `_unusable_password_hash`;
+> - l'E2E dell'avvio dopo un ripristino dall'app.
+> **Doc** (docs-writer): `admin/backup_restore.en.md`, sezione nuova `#owner-account` (quando si chiede, quali account,
+> cosa succede al commit, senza email, riga di `backup pending`, tabella dei rifiuti) + un punto in `#restore-settings`.
+> `mkdocs build` strict pulito, check-links 97 validi. Nessun `translate-stamp`: debito di traduzione IT/FR/ES.
+
+#### B5-1b — `backup pending --recover owner` ✅ 2026-10-24
+
+> Richiesta del coordinatore (buco trovato da H): un esito `error:<CODE>` dell'assegnazione del titolare è terminale
+> (`owner_pending` non riprova, `--recover previous` cura solo lo stato illeggibile) e la guardia di H tiene l'istanza chiusa.
+> Interfaccia: `ondata5/B-b51-interface.md` §9.
+> **Note implementazione**:
+> - `apply.reset_owner_assignment(data_dir)`: azzera `owner_outcome` e `owner_reset_path` solo se l'esito è `error:`; non scrive
+>   altro. Ordine dei lucchetti: `owner.lock` (nuovo `owner.held_owner_lock`) e poi il lucchetto di apply, come lo step di
+>   avvio. Ritorna se un server serve la cartella dati. Nuovo errore `RestoreOwnerNotFailedError` (`owner_not_failed`).
+> - CLI: `RECOVER_CHOICES` ora ha `owner`. Lo snapshot `--json` di un ripristino committato dall'app con esito `error:` dà
+>   `reason: "owner_assignment"` e `choices: ["owner"]` (mai codice, nome, id o link).
+>   - Server fermo: azzera e richiama subito `assign_restored_owner()`; stampa la riga dell'esito.
+>   - Server acceso: azzera soltanto; l'assegnazione avviene al prossimo avvio.
+>   - Codici d'uscita:
+>     - 0 fatto;
+>     - 3 niente da riprovare (gara persa con un altro azzeramento);
+>     - 4 lo stato non offre `owner`, anche al secondo lancio;
+>     - 5: `restore_in_use` (lucchetto occupato), `owner_assignment_failed` (rifiutato di nuovo) o `failed`.
+> - La riga d'errore di `backup pending` ora dice `…; ./dev.py backup pending --recover owner tries again`.
+> - Test (rossi prima): `backup-owner` 90, `backup-cli-recover` 199, `backup-cli-restore` 139; regressione verde (apply 387,
+>   staging 248, restore-apply 285, panel-restore 136, restore-interrupted 34, restore-guard 25, cli 106/49/106, E2E 3+3).
+> **⚠️ Fuori pista**: nel brief dei rossi avevo scritto «secondo lancio → exit 3»; il §9.2 dice 4 e il test-author ha seguito
+> il §9.2. Il caso «nessun esito registrato» stampa la riga già esistente di `_print_owner_outcome`, non una frase nuova.
+> **Doc** (docs-writer): `admin/cli_tools.en.md`, sezioni `#backup-pending` e `#backup-pending-json` (riga d'esempio, `reason`
+> `owner_assignment`, tabella dei codici d'uscita, paragrafo `--recover owner`, «Run again» con il 4). `mkdocs build` strict
+> pulito, check-links 97. Nessun `translate-stamp`: debito di traduzione IT/FR/ES su `admin/cli_tools`.
+
+#### B5-1c — il nuovo contratto di A: niente link segreto nello stato ✅ 2026-10-24
+
+> Richiesta del coordinatore: la revisione di sicurezza di A5-2 ha trovato due bloccanti nel contratto di A, e A ha cambiato
+> la firma. Il rapporto del ripristino lo leggono tutti gli admin, anche chi ha preparato il backup: il link non ci va mai.
+> **Note implementazione**:
+> - Chiamata: `backend.app.services.accounts.instance_owner.assign_owner_and_send_reset(session, user_id, *, now=None)`
+>   (non più in `email/flows.py`). Gli esiti sono solo `sent` e `link_only`; spariscono `already_issued`, `already_done`
+>   e `since`. A ripete tutto il trattamento a ogni chiamata e il rifare è innocuo: dopo un riavvio a metà si richiama e
+>   basta (il link vecchio è revocato, ne parte uno nuovo).
+> - `RestoreState.owner_reset_path` non esiste più (`extra="ignore"`: un file vecchio con la chiave si legge e la chiave
+>   cade). `record_owner_outcome(data_dir, stage_id, outcome)` ha tre argomenti. Gli esiti registrati: `sent`, `link_only`,
+>   `error:<CODE>`. Il codice non legge mai `reset_path` dal risultato di A.
+> - Con `link_only` il link lo scrive A nel log dell'istanza. `backup pending` e `--recover owner` stampano una riga sola
+>   che lo dice (nessun percorso, nessun token); `--json` non l'ha mai avuto.
+> - `reset_owner_assignment` azzera solo `owner_outcome`. Il controllo lato server «se un utente ha già l'email del
+>   titolare, l'unica scelta valida è lui» c'era già (`owner_choices`).
+> - Test (rossi prima): `backup-owner` 87, `backup-cli-recover` 193, `backup-cli-restore` 135, `backup-apply` 401,
+>   `backup-restore-apply` 285. Il canarino `reset_path` messo da un finto A non compare in stato, log, CLI né `--json`.
+> **⚠️ Fuori pista**: 4 test di `backup-owner` confrontavano il file grezzo prima e dopo l'azzeramento (`Z` contro
+> `+00:00`): ora confrontano i modelli.
+> **Doc** (docs-writer): `admin/backup_restore.en.md` (`#owner-account`: validità 30 minuti, senza email il link è nel log,
+> due righe tolte dalla tabella) e `admin/cli_tools.en.md` (`--recover owner`). Debito di traduzione IT/FR/ES.
+
+#### B5-1d — il link di `/setup` di questo avvio sopravvive al commit ✅ 2026-10-24
+
+> Caso (trovato da A, analizzato da H): primo avvio dopo un ripristino i cui dati non hanno **nessun account**.
+> `admin-bootstrap` gira prima di `restore-commit` ed emette un link `/setup` nuovo; `_close_the_way_in` revocava ogni token
+> vivo, anche quello. L'admin restava senza accesso fino a un riavvio e a `user setup-link`.
+> **Vincolo**: il criterio non può venire dal database ripristinato. `created_at` lo scrive chi prepara il backup, e un token
+> piantato con una data futura sopravvivrebbe.
+> **Scelta (la più semplice)**: il criterio lo prende questo processo allo scambio.
+> - `RestoreState.token_watermark`: l'id massimo di `account_tokens` letto in sola lettura subito dopo lo scambio
+>   (`_swap`, nello stato `applied`). `0` se non c'è la tabella o non ci sono token; `None` se il database non si legge
+>   o un id non è intero (fail-closed).
+> - `_close_the_way_in` revoca i token vivi con `id <= watermark` (un id non intero si revoca sempre). Un id maggiore
+>   l'ha emesso questo avvio, perché il server non serve prima del commit: resta. Senza watermark (stato di un server
+>   più vecchio, o `None`) si revoca tutto, come prima.
+> - Un id enorme piantato dal backup al massimo fa revocare anche il link nuovo: fallisce chiuso, e l'autore del backup
+>   non ci guadagna nulla. La data del database non conta mai.
+> - `admin-bootstrap` non si sposta (N57 e i test `test_backup_apply.py:89` e `test_admin_bootstrap.py:1881` restano).
+> - Test (rossi prima), in `test_backup_apply.py` sezione (h): il watermark nello stato dopo lo scambio (0, nessuna tabella,
+>   illeggibile → `None`); il link di questo avvio sopravvive (data futura, passata, uguale), anche nel caso senza account;
+>   i token del backup si revocano, anche con data futura e id uguale al massimo; stato senza watermark revoca tutto;
+>   database illeggibile allo scambio revoca tutto.
+
+#### B5-1e — i seguiti dopo l'unione con A ✅ 2026-10-24
+
+> Dopo l'unione del ramo di A (`e49afe27c`): la funzione vera, la modale vera, l'hash di A.
+> **Note implementazione**:
+> - Modale: la `OwnerChoiceModal.svelte` di A ha le stesse prop (`open`, `ownerEmail`, `users`, `onConfirm`, `onCancel`, `busy`) e gli
+>   stessi `data-testid` della mia finta; `RestoreReportModal` la usa com'è, con `import {type OwnerCandidate}`.
+>   `front check` 0 errori e 0 avvisi. Due commenti dei test («stand-in») aggiornati.
+> - `apply._unusable_password_hash` tolta: il commit prende l'hash di `auth_service.unusable_password_hash()` (una sola casa).
+>   Rosso prima: un test mette un hash noto al posto della funzione di A e guarda che l'account scelto lo riceva.
+> - Giro vero con la funzione vera di A (nuova suite `backup-owner-real`, 6 test, tutti verdi al primo colpo; solo la posta è finta):
+>   - dal lifecycle (conferma, scambio, commit, `assign_restored_owner`) a `sent`: l'account ha l'email del titolare, è admin attivo e
+>     titolare, la password non apre nulla, resta un solo link vivo (il token piantato dal backup con data futura è cancellato),
+>     nessun segreto in stato, `backup pending` e `--json`;
+>   - `link_only` (posta che fallisce, o spenta): il link sta nel log di A e in nessun altro, non nel nostro modulo né nello stato;
+>   - errore chiuso: `EMAIL_TAKEN` registrato come `error:EMAIL_TAKEN`, `owner_assignment_problem` = `EMAIL_TAKEN`, DB invariato;
+>     poi, tolta la causa, `backup pending --recover owner` richiama A e finisce `sent`/`link_only`;
+>   - caduta tra la chiamata e il registro: la ripartenza richiama A, il link vecchio muore, ne resta uno;
+>   - A riceve solo `(user_id)`, con una sessione nuova.
+> - Test vecchi invecchiati dall'unione (la colonna `is_instance_owner` ora c'è nello schema): tre test di `backup-apply` aggiornati.
+> **⚠️ Fuori pista / non fatto**: l'E2E con un server vero aspetta lo step `restore-owner` di H, che sta nel suo ramo e non nel
+> mio: qui `assign_restored_owner` non gira ancora all'avvio. Il resto della catena è coperto a livello di servizi con la funzione vera.
+
+#### B5-1f — l'E2E con il server vero ✅ 2026-10-24
+
+> Dopo l'unione di H (`f1382724b`): lo step `restore-owner` gira all'avvio. Nuovo E2E `e2e backup-roundtrip-owner`
+> (`test_backup_roundtrip_owner.py`, 5 test, «pure», figli uvicorn su socket Unix, profilo `managed`, posta spenta).
+> **Note implementazione**:
+> - Primo admin del bersaglio senza toccare il DB: il primo avvio crea l'admin iniziale (admin-bootstrap), il test legge il link di
+>   setup dal log del figlio e lo spende su `POST /auth/setup`. I token sono oscurati nei messaggi d'errore.
+> - Giro intero: carica, controllo (`owner_choice` obbligatorio), conferma senza scelta → 409 `owner_choice_required`, con scelta → 202,
+>   riavvio, commit + `restore-owner` → `link_only`. L'account scelto ha l'email del titolare, è admin attivo e unico titolare; la
+>   vecchia password e le sessioni di prima sono rifiutate; il link sta solo nel log del figlio (non in stato, rapporto, API, file di
+>   dati), si spende una volta sola e il titolare entra con la password nuova.
+> - Al più una volta: un altro avvio non scrive un secondo link, lo stato resta identico.
+> - Chiusura in fallimento: con `LIBREFOLIO_ADMIN_EMAIL` cambiata tra conferma e avvio su un indirizzo già di un altro account →
+>   `error:EMAIL_TAKEN`, login 423 (`restore_interrupted_reason = owner_assignment`), nessun link; `backup pending --recover owner` con
+>   l'indirizzo giusto → al riavvio `link_only` e l'istanza serve.
+> - Ripristino da CLI senza titolare: stato `committed` senza `owner_*`, nessun account col flag, nessun account chiuso.
+> - Un managed in modalità test vuole `LIBREFOLIO_TEST_LANE_ID` di 16–128 caratteri (H-46); il dominio di prova non può essere `.test`.
+
+#### B5-1g — le correzioni della revisione di sicurezza di A su `3a3c357d7` ✅ 2026-10-24
+
+> **Note implementazione** (rossi dal `test-author`, poi la cura; 5 punti su 6, il sesto era già giusto):
+> 1. Errore passeggero: `owner._assign_with_retries` riprova fino a `_ATTEMPTS = 4` volte, `_RETRY_PAUSE_SECONDS = 1.0`, solo se SQLite dice
+>    «locked/busy»; ogni altra eccezione esce subito. Il motore ha `timeout=30` s (busy timeout). Dopo l'ultimo tentativo resta `pending`
+>    per il prossimo avvio. (Il timeout di default del driver dava già 5 s; ora è esplicito e a 30.)
+> 2. Flag `is_instance_owner` del backup: `apply._clear_owner_flag` lo azzera su tutti gli account al commit; lo rimette solo
+>    `_close_owner_account` per l'account assegnato. Senza scelta (pannello, CLI) lo ricava `_heal` di A dalla variabile.
+> 3. `PRAGMA trusted_schema = OFF` come primo comando della connessione di `_close_the_way_in`.
+> 4. Admin in attesa nel backup: `staging._owner_check` aggiunge il conflitto `pending_administrator` (inattivo, con un link `admin_setup`
+>    non usato, e nessun account con l'indirizzo del titolare); la conferma lo rifiuta con `owner_conflict` (409). Testo della
+>    conferma aggiornato in 4 lingue.
+> 5. `link_only`: la nota della modale (`backup.ownerChoice.notice`) ora dice che, se l'email non parte, il link è nel log dell'istanza,
+>    per chi gestisce l'istanza, senza mostrarlo; docs allineate.
+> 6. Nessun admin attivo: già un blocco (`no_administrator`, 409 `restore_not_restorable`, la modale non apre la scelta): pin di test
+>    (15 casi API + 2 Vitest), nessuna cura.
+> **⚠️ Fuori pista**: `_largest_session_version` (lettura di `previous/`) non imposta `trusted_schema=OFF`: fuori dal percorso vivo, non
+> toccata. `black --check` fallisce già su `_backend_api.py` in HEAD (righe non mie).
+
+#### B5-1h — `trusted_schema = OFF` nella lettura di `previous/` ✅ 2026-10-24
+
+> **Note implementazione**: `apply._largest_session_version` apre la connessione a sola lettura e come primo comando dà
+> `PRAGMA trusted_schema = OFF`, come tutte le altre letture di una copia. Rosso prima (test con `RecordingConnect`, anche 0 per
+> percorso mancante o cartella), poi una riga. `backup-apply` 420, `backup-owner` 98, su data dir nuova `/tmp/librefolio-r13-b51h`.
+
+### B5-1i — Gate train 11: `owner-email-change` red in B (triage, no code change) — 2026-10-24
+
+> **Note implementazione**: triage only, nothing changed in the code. The red `test_owner_email_change.py::test_after_a_restore_with_the_variable_changed_the_link_issued_at_the_start_is_alive` comes from B5-1g point 2 (`a4d727e4a`): `apply._clear_owner_flag` clears `users.is_instance_owner` in the restore's commit, so A's owner sync finds no flagged owner, `_heal` looks for an account holding `LIBREFOLIO_ADMIN_EMAIL` (none) and issues no `email_change` link. Proof: with that one line disabled the suite is 50 passed (file restored afterwards, tree clean). Verdict: **design conflict** between A's security review (clear the flag) and A's test OWN-083 (the flag survives). Not changed: product decision for the developer; two options in the checkpoint. `backup-owner-real` 6 passed, `restore-owner-guard` 46 passed on `/tmp/librefolio-r13-c6`.
+
+### B5-1j — Owner of a restore from the command line or the hosting panel (managed) — 2026-10-26
+
+> **Note implementazione**: analysis `ondata5/B-5-1j-analisi-titolare-nel-restore-cli.md` (reviewed by A, decisions O1–O3 by the developer: self-hosted unchanged, no candidate → the restore goes on with a warning, email text is A5-5). Production: `staging.OwnerCandidate.is_instance_owner` (read from the copy; absent column → False); `apply.OwnerPick`, `pick_owner` (holder of V → the ONE active administrator the backup marks → nobody; two marked is nobody, never the first by id), `owner_plan`; `_check_owner_choice` now returns the account and the outcome to record (`none` when nobody) and, for cli/panel on managed with V set, refuses a report checked for another address (`restore_stage_outdated`) or with conflicts (`owner_conflict`, advice "make a new backup"); the `confirmed_via != "admin"` filters of `owner_assignment_problem`, `owner_pending`, `reset_owner_assignment` and of the CLI `--recover` gate are gone; `_clear_owner_flag` (B5-1g) stays and now matches the design. CLI: one owner line in the report and after `✅` (username through `_safe`, never an address), `./dev.py user reassign-owner <username>` when nobody, `backup pending` prints it for outcome `none`. `app_lifespan.py`, `restore_guard.py`, `panel_restore.py` untouched (H): the panel goes through `confirm_restore`. Docs EN: `backup_restore.en.md` (`#owner-pick`), `cli_backup.en.md` (`#backup-restore-owner`).
+> **⚠️ Fuori pista**: (1) the test-author's panel API tests used `.test` addresses as `LIBREFOLIO_ADMIN_EMAIL` (rejected: no pick) — fixed in the tests; (2) `user reassign-owner` does not exist yet (A5-4): docs and CLI quote it as "arrives with a later change"; (3) stale sentence in H's `hosting_panel_backups.en.md` (#restore-owner-pending) and `hosting_providers.en.md` ("names no owner"): reported to the coordinator, not touched.
+> **Results** (lane `/tmp/librefolio-r13-b51j`): backup-staging 266, backup-owner 133, owner-assignment 24, restore-guard 25, cli-recover 200, cli-restore 169, cli 106, restore-interrupted 34, backup-apply 501, panel-restore 136, backup-restore-apply 303, e2e backup-roundtrip-owner 7 — all passed; mkdocs build and check-links (97 links) passed. `api backup-owner-channels` 10 passed (after fixing the tests' `.test` address).
+
+### B5-1k — Superseded by A5-7 — 2026-10-26
+
+> **Note implementazione**: the delete-and-hand-over design (analysis `ondata5/B-5-1k-analisi-troppi-utenti.md`) was written, tested and verified, then superseded by the developer's decision: users over `LIBREFOLIO_MAX_USERS` are deactivated, not deleted, by one mechanism in A's domain (A5-7: the administrator chooses at the first sign-in), after a restore as after a plan change. A restore therefore refuses nothing for too many users. The whole work (40 files) is archived in the local branch `archive/b5-1k-delete-design` (`d06994afe`); only the removal of the «arrives with a later change» sentences about `user reassign-owner` (`backup_cli.py`, `backup_restore.en.md`, `cli_backup.en.md`) stays.
+
+### B5-1k2 — A restore warns about too many users, refuses nothing — 2026-10-26
+
+> **Note implementazione**: reduced version of the superseded B5-1k (contract `ondata5/B-5-1k2-contratto.md`). The check report gains `users_active` (active accounts, plus the inactive holder of the owner's address on managed: the restore activates it), `users_limit` (`None` for no limit or a value that is not valid: a typo never fires the warning) and `users_over_limit`, and the warning `users_over_limit` (before `credentials_from_backup`). Information only: `confirm_restore`, the CLI and the panel confirm as before; no state, no body field, no route, no error code. Panel view: the code reaches its `warnings` (it reuses the `Literal`), no numbers (H's closed list untouched). CLI: one ⚠️ line with the two numbers, no names. Frontend: a notice apart `restore-users-over-limit` in `RestoreReportModal` (the confirmation flow is unchanged), key `backup.restore.report.usersOverLimit` in 4 languages. Docs EN: `backup_restore.en.md` (`#users-limit`), `cli_backup.en.md`. What happens next is A5-7; the E2E with the 423 comes after A5-7 is merged.
+> **⚠️ Fuori pista**: three test expectations of the test-author fixed (report.json also holds the owner's candidates with their addresses since B5-1; a recorder not reset between a barrier mount and the real one); the stale `black` line of `scripts/test_runner/_backend_api.py` is not mine.
+> **Results** (lane `/tmp/librefolio-r13-b51k2`): services backup-users-limit 29, backup-staging 266, backup-owner 133, backup-apply 501; utils backup-cli-users-limit 14, cli-restore 169, cli 106; api backup-users-limit 13, panel 3, backup-restore 167, owner-channels 10, panel-restore 136, backup-restore-apply 303; Vitest `features/backup` 1219; mkdocs build and check-links (97) passed; i18n check and orphans clean.
+
+### B5-1l — A restore from the hosting panel keeps the owner's password (managed) — 2026-10-26
+
+> **Note implementazione**: contract `ondata5/B-5-1l-contratto.md`. Developer decision (option a, no «same instance» check): the restore does not revoke the owner's password, does not end their sessions and sends no link only if ALL hold: channel = hosting panel; managed with `LIBREFOLIO_ADMIN_EMAIL` set; exactly one account of the backup is marked as owner (`StagingReport.owner_marks`, counted over every account) and it is an active administrator holding that address; the report has no `owner_conflicts` and was read for the same address. Otherwise B5-1j to the letter. Production: `staging._owner_marks` + `owner_marks`; `apply.keeps_owner`, `OWNER_OUTCOME_KEPT`, the panel branch of `_check_owner_choice` (state `owner_user_id` = the account, `owner_outcome` = `kept`, no new state field); `_owner_at_commit`/`_kept_owner_valid` (the rule is checked again on the restored database before the commit; if it fails the owner is closed as in B5-1j and the outcome goes back to `None`, so the first start gives the link); `_close_the_way_in(kept_owner_user_id=…)` (everyone else's session version raised, the owner's kept; the flag cleared on all but the owner; links revoked as always; one warning `Panel restore: the owner's password and sessions are kept` with stage and account only); `owner_pending`/the guard/`assign_restored_owner` need no change (an outcome already recorded). CLI: `backup pending` line `🔑 …kept its password…`. Docs EN: `backup_restore.en.md` (`#owner-kept`, with the host's accepted-risk admonition), `cli_backup.en.md`.
+> **⚠️ Fuori pista**: (1) the risk accepted by the developer: no check on recipients or instance key (a sealed backup carries no instance key and the instance never sees the recipients), so whoever can write in the provider's store of copies could fabricate a copy that passes: said in the docs for the host; (2) a test of B5-1k2 now allows the new `owner_marks` key; (3) H should link to `#owner-kept` from `hosting_panel_backups.en.md` (not touched).
+> **Results** (lane `/tmp/librefolio-r13-b51l`): services backup-owner-kept 71, backup-users-limit 29, backup-staging 266, backup-owner 133, owner-assignment 39, restore-guard 25, backup-apply 501; utils backup-cli-owner-kept 7, cli-restore 169, cli-recover 200, cli 106; api backup-owner-kept 6, kept-app 2, owner-channels 10, users-limit 13, users-limit-panel 3, backup-restore 167, restore-interrupted 34, panel-restore 136, backup-restore-apply 303; e2e backup-roundtrip-owner 7; mkdocs build and check-links (97) passed; ruff and orphans clean.
+
+> **B5-1k2 — E2E (2026-10-26, after A5-7 was merged, `b16029c90`)**: `backend/test_scripts/test_e2e/test_backup_roundtrip_over_limit.py`, suite `e2e backup-roundtrip-over-limit` (8 tests, real servers). A backup of 5 active accounts restored on an instance that accepts 3: the check warns, the confirmation is 202 (from the app, self-hosted and managed, and from the command line), nothing is deleted (6 accounts, 8 brokers, the ledger totals equal the source's); after the start a normal route answers `423 user_limit_exceeded` to the administrator and to a plain user, the choice screen's API lists the accounts (the owner `protected` on managed; keeping everyone but the owner is `422 PROTECTED_MISSING`), the full-backup route stays open to the administrator; after `POST /users/over-limit/resolve` the kept accounts work, the others get `ACCOUNT_DISABLED`, and still nothing is deleted. Passed: 8 in 48 s.

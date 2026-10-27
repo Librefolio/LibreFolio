@@ -23,6 +23,7 @@ import {loginUrl} from '$lib/utils/internalPath';
 import {notifyPortfolioMutation} from '$lib/stores/portfolio/portfolioMutation';
 import {priceRefresh} from '$lib/features/price-refresh/priceRefresh';
 import {instanceBlockState, isInstanceAwaitingRestoreError, isInstanceBlockedError, isInstanceRestoreInterruptedError} from '$lib/features/instance/instanceBlockState';
+import {isUserLimitError, userLimitState} from '$lib/features/instance/userLimitState';
 
 // =============================================================================
 // CONFIGURATION
@@ -125,7 +126,7 @@ axiosInstance.interceptors.request.use(
  * The same pages as `_TOKEN_PATHS` in `backend/app/services/accounts/token_service.py`, the pages a link opens:
  * `test_account_tokens.py` checks that the two lists agree.
  */
-const LINK_PAGES = new Set(['/setup', '/invite', '/reset-password', '/verify-email']);
+const LINK_PAGES = new Set(['/setup', '/invite', '/reset-password', '/verify-email', '/confirm-email-change']);
 
 function isLinkPage(pathname: string): boolean {
     return LINK_PAGES.has(pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname);
@@ -159,6 +160,12 @@ axiosInstance.interceptors.response.use(
         // A 423 `instance_blocked`: the hosting provider blocked this instance, and the layout shows the block page.
         if (isInstanceBlockedError(error.response?.status, error.response?.data)) {
             instanceBlockState.markBlocked();
+        }
+
+        // A 423 `user_limit_exceeded` (A5-7): the active accounts outnumber the plan, and the layout shows the choice (an
+        // administrator) or the wait (anyone else).
+        if (isUserLimitError(error.response?.status, error.response?.data)) {
+            userLimitState.markExceeded();
         }
 
         // A 423 `instance_awaiting_restore` (H-62: the hosting panel is restoring this instance) or

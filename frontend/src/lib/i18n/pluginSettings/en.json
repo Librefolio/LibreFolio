@@ -10,7 +10,8 @@
     "families": {
       "asset": "Prices",
       "fx": "Exchange rates",
-      "brim": "Broker imports"
+      "brim": "Broker imports",
+      "tool": "Tools"
     },
     "status": {
       "configured": "Configured",

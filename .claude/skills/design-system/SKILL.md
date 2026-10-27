@@ -448,55 +448,24 @@ The sources:
 | T3-b | The edge of a banner chip in the state colour `X`, over 3:1 (her `X-line` measured 1.1–1.6:1) | round 3, developer |
 | R3 §1.3 | How serious a problem is: red for real errors, amber for missing data, blue for notes, green for successes, decided condition by condition (17/10: the portfolio's missing price and the four codes that fail the lots' replay are errors, the risk lab's missing price a warning) | round 3, developer |
 
-## Open questions for the designer: not decided
+## Values the designer has not confirmed
 
-Until she answers, follow what is written here and do not decide them in a component.
+Some roles carry a value nobody has confirmed with the designer yet: the comment next to it in `tokens.css` says
+«provisional», or gives her value beside a minimal contrast correction (D-T6). The rules:
 
-1. **The chart colours: answered by round 3** (17/10, §1 of `decisioni.md`): see «Charts» and rule 11.
-2. **Toasts and banners: answered by round 3** (17/10, §2): rule 12.
-3. **`panel` equals `hover`.** `--lf-surface-hover` is `--lf-surface-panel` in both themes, so `hover:bg-lf-hover`
-   shows nothing on a panel. Until then, on a panel, hover with `hover:bg-lf-neutral`: a secondary button is
-   `bg-lf-panel hover:bg-lf-neutral`.
-4. **The switch turned on.** 13 switches in 9 files, «on» today in the Libre green, emerald or amber; the palette says
-   `bg-lf-checked` (D-T16). The switch lot of T waits for her answer. Until then, do not migrate an existing switch on
-   its own. A new switch follows the Q2 rows of [`palette.md`](palette.md) and is reported to the colour
-   coordinator.
-5. **Three provisional roles of 16/10**, asked by the migration and built by T from her values:
-   - `--lf-success-hover` and `--lf-info-hover`, a solid success or info button hovered:
-     `color-mix(in oklab, var(--lf-X) 80%, var(--lf-text-primary))`, 20 % toward the primary text. It darkens in light
-     and lightens in dark, so the hover always moves away from its text `--lf-on-status`: 6.58:1 and 6.54:1 in light,
-     10.63:1 and 6.47:1 in dark. Her own Q3 hovers go darker in both themes instead (in dark: warning `#d97706`, danger
-     `#d51c42`); a darker info hover would fall under 4.5:1 in dark.
-   - `--lf-on-overlay`, text and icons on the backdrop: `#ffffff` in both themes, 4.98:1 at worst (the backdrop over a
-     white field).
+1. **Use a provisional role as it is.** Its value changes only through T, like any role («Asking for a new role», point
+   4); a component never works around it with a value of its own.
+2. **On a panel, hover with `neutral`.** `--lf-surface-hover` equals `--lf-surface-panel` in both themes, so
+   `hover:bg-lf-hover` shows nothing on a panel: a secondary button there is `bg-lf-panel hover:bg-lf-neutral`.
+3. **A switch turned on is `bg-lf-checked`** (D-T16), with the Q2 rows of [`palette.md`](palette.md).
+4. **On a selected row** follow rule 5: the captions turn secondary while the row is selected, `link` never over a
+   `panel`, and a selected chip under the pointer takes `hover:bg-lf-checked/20 hover:text-lf-primary`.
+5. **An empty page takes the app's accent**: the icon in `bg-lf-selected` with `text-lf-link`.
+6. **A case no role covers** follows «Asking for a new role»: the nearest role, noted «da rivedere» in the plan
+   (D-T27), never a hand-written colour.
 
-   Until then: use them as they are.
-6. **The selected tint.** `--lf-selected`, a selected or highlighted row, option or chip, is the focus green at 12 %
-   over its surface (T, from her «Focus, link attivi»). On it the muted text, the statuses and the signs fall to
-   3.84–4.48:1, and a lighter tint would not cure it (6 %: 4.17:1). Under review: the tint, and how a selected row keeps
-   its muted captions.
-
-   Until then: rule 5, «On a selected row» — the captions turn secondary while the row is selected (TC-15), `link`
-   never over a `panel`, and a selected chip under the pointer takes `hover:bg-lf-checked/20 hover:text-lf-primary`.
-7. **The accent of an empty page.** The empty states of the asset and the FX lists draw an icon in a tinted circle: the
-   assets' now takes the app's accent (`bg-lf-selected`, `text-lf-link`), the FX's is still amber, a page colour no role
-   covers (`warning` would read as a warning). Under review: one accent per page, or the app's green for every empty
-   state.
-
-   Until then: a new empty state takes the app's accent; the FX one stays as it is (`routes/(app)/fx/+page.svelte`).
-
-**Values waiting for her confirmation** (backlog TC-8):
-- the minimal contrast corrections of her round 2 (D-T6), each with her value in a comment of `tokens.css`: in
-  light `--lf-bar-text-muted`, in dark `--lf-warning-on-inverse`, `--lf-danger-solid`, `--lf-danger-hover` (round 3
-  confirmed the light `--lf-warning`, `--lf-danger-soft` and `--lf-info-soft`);
-- the roles marked «provisional»: `--lf-action-hover` in light, `--lf-on-ai`, `--lf-terminal-comment`,
-  `--lf-shadow-card` in dark, and the three of question 5;
-- the extension of the developer's dark red and green (D-T25, D-T26, which round 3 confirmed) to the states on the
-  green sidebar;
-- gain and loss kept apart from success and error; the switch turned off, recognised in light only by the edge of its
-  knob.
-
-The choices the night's migration made «da rivedere» are in the backlog, TC-10: the developer reviews them first.
+The questions still open for her are not kept here: they live in the review package of the current round and in the
+colour backlog. When she answers, the answer becomes a row of «Decisions» and, where it changes how to work, a rule.
 
 ## See also
 

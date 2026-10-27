@@ -5,8 +5,8 @@
  * The contract under test:
  *   - `fieldOf` and `entryOf` narrow what the server answers into what the components trust: the generated type of an
  *     optional field is wider than its runtime schema, so a value of the wrong shape is dropped to its default, never
- *     carried — a type, a source or a family it does not know reads as `string`, `none`, `asset` (`asset`, `fx` and `brim`
- *     are the families it knows: the import sources, W-BS, keep theirs); a scope other than
+ *     carried — a type, a source or a family it does not know reads as `string`, `none`, `asset` (`asset`, `fx`, `brim` and
+ *     `tool` are the families it knows: the import sources, W-BS, and the tools, X5-4b, keep theirs); a scope other than
  *     `system` as `user`; a flag that is not `true` as false; a key text that is empty or not text as null; a bound
  *     that is not a finite number as null; a label missing as the key (a name missing as the code); a problem that is not
  *     one of its three words, as text, as none (a list included, which the generated type admits); options and fields
@@ -34,6 +34,7 @@
  * Node environment: nothing here renders.
  */
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
+import {spyOnApi} from '$test/spyOnApi';
 import {AxiosError, AxiosHeaders, type AxiosAdapter, type AxiosResponse, type InternalAxiosRequestConfig} from 'axios';
 import {ApiError, axiosInstance, zodiosApi} from '$lib/api';
 import {entryOf, fetchPluginEntry, fetchPluginSettings, fieldOf, savePluginSettings, type PluginSettingsEntry, type PluginSettingWriteItem, type SaveOutcome, type SettingField} from './pluginSettingsApi';
@@ -41,8 +42,8 @@ import {entryOf, fetchPluginEntry, fetchPluginSettings, fieldOf, savePluginSetti
 /** What `GET /settings/plugins` answers, as the generated client types it. */
 type CatalogAnswer = Awaited<ReturnType<typeof zodiosApi.get_plugin_settings_api_v1_settings_plugins_get>>;
 
-const readAlias = () => vi.spyOn(zodiosApi, 'get_plugin_settings_api_v1_settings_plugins_get');
-const writeAlias = () => vi.spyOn(zodiosApi, 'update_plugin_settings_api_v1_settings_plugins_bulk_patch');
+const readAlias = () => spyOnApi(zodiosApi, 'get_plugin_settings_api_v1_settings_plugins_get');
+const writeAlias = () => spyOnApi(zodiosApi, 'update_plugin_settings_api_v1_settings_plugins_bulk_patch');
 
 /** An answer of the wrong shape, handed to the alias as the client would hand it over. */
 const answered = (value: unknown) => value as CatalogAnswer;
@@ -282,6 +283,22 @@ describe('entryOf — a plugin’s entry as the components trust it', () => {
             configured: true,
             fields: [CURRENCY],
         });
+    });
+
+    it('keeps tool, the family of the tools (X5-4b): it is not read as asset', () => {
+        const SYSTEM_TOOL_FIELD: SettingField = {...CURRENCY, key: 'workers', type: 'integer', scope: 'system', options: [], label_key: null, description_key: null, default: 2, value: 2, is_set: false, source: 'default'};
+        expect(entryOf({family: 'tool', plugin_code: 'fx_converter', plugin_name: 'FX converter', icon_url: null, configured: true, fields: [CURRENCY, SYSTEM_TOOL_FIELD]})).toStrictEqual({
+            family: 'tool',
+            plugin_code: 'fx_converter',
+            plugin_name: 'FX converter',
+            icon_url: null,
+            configured: true,
+            fields: [CURRENCY, SYSTEM_TOOL_FIELD],
+        });
+    });
+
+    it('keeps the four families apart, each as it was sent: none is read as another', () => {
+        for (const family of ['asset', 'fx', 'brim', 'tool'] as const) expect(entryOf({family, plugin_code: 'x'}).family).toBe(family);
     });
 
     it('narrows every field: a secret’s value does not survive the entry', () => {
@@ -558,6 +575,28 @@ describe('through the real client, only the transport faked: what is sent, and w
         await expect(fetchPluginSettings({family: 'brim'})).resolves.toStrictEqual([importer]);
 
         expect(received[0]?.params).toEqual({family: 'brim'});
+    });
+
+    it('the tools’ family passes the generated client both ways: asked as a query, answered as an entry of its own, one per tool code (X5-4b)', async () => {
+        // The generated schema is a zod enum: a client generated before `tool` joined it refuses both the query and the answer.
+        const tool: PluginSettingsEntry = {...JUSTETF, family: 'tool', plugin_code: 'fx_converter', plugin_name: 'FX converter', icon_url: null};
+        serverAnswers(200, {plugins: [tool]});
+
+        await expect(fetchPluginSettings({family: 'tool'})).resolves.toStrictEqual([tool]);
+        expect(received[0]?.params).toEqual({family: 'tool'});
+
+        serverAnswers(200, {plugins: [tool]});
+        await expect(fetchPluginEntry('tool', 'fx_converter')).resolves.toStrictEqual(tool);
+        expect(received[1]?.params).toEqual({family: 'tool', plugin_code: 'fx_converter'});
+    });
+
+    it('a write item of the tools’ family passes the generated client: sent as given, and a 200 is saved (X5-4b)', async () => {
+        serverAnswers(200, WRITTEN);
+        const item: PluginSettingWriteItem = {family: 'tool', plugin_code: 'fx_converter', field_key: 'workers', scope: 'user', value: 3};
+
+        await expect(savePluginSettings([item])).resolves.toStrictEqual({kind: 'saved'});
+
+        expect(JSON.parse(String(received[0]?.data))).toEqual({items: [item]});
     });
 
     it('PATCH /api/v1/settings/plugins/bulk carries {items} as given, and a 200 is saved', async () => {

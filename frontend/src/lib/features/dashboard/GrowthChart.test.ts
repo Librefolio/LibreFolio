@@ -257,7 +257,17 @@ import {currentLanguage} from '$lib/stores/app/language';
 import {isPrivacyEnabled, setPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
 import {uiLocale} from '$lib/stores/app/uiLocale';
 import {timeAxisGridRight} from '$lib/components/charts/responsiveXAxis';
-import type {PortfolioAcquisitionFundingSeries, PortfolioBrokerPnlHistory, PortfolioCostHistorySeries, PortfolioDepositHistorySeries, PortfolioHistoryPoint, PortfolioIncomeHistorySeries, PortfolioPnlCandlePoint, PortfolioPnlCandleSeries} from '$lib/stores/portfolio/portfolioStore.svelte';
+import type {
+    PortfolioAcquisitionFundingSeries,
+    PortfolioBrokerPnlHistory,
+    PortfolioCostHistorySeries,
+    PortfolioDepositHistorySeries,
+    PortfolioHistoryPoint,
+    PortfolioIncomeHistorySeries,
+    PortfolioMwrrLinePoint,
+    PortfolioPnlCandlePoint,
+    PortfolioPnlCandleSeries,
+} from '$lib/stores/portfolio/portfolioStore.svelte';
 import {formatPercent} from '$lib/utils/core/formatPercent';
 import {PRIVACY_PLACEHOLDER} from '$lib/utils/privacy/maskable';
 import {CATEGORY_SEQUENCE, categoryColor} from '$lib/theme/chartCategories';
@@ -370,6 +380,7 @@ const eur = (amount: number) => ({code: 'EUR', amount: amount.toFixed(2)});
  */
 const HISTORY: PortfolioHistoryPoint[] = DATES.map((date, index) => ({
     date,
+    through: date,
     cash_value: eur(1_000 + index),
     market_value: eur(10_000 + index * 100),
     nav_value: eur(11_000 + index * 100),
@@ -379,7 +390,6 @@ const HISTORY: PortfolioHistoryPoint[] = DATES.map((date, index) => ({
     cash_from_generated_returns: eur(200 + index),
     total_pnl: eur(500 + index * 100),
     twrr: (index * 0.001).toFixed(6),
-    mwrr_cumulative: (index * 0.0012).toFixed(6),
     roi: (index * 0.0009).toFixed(6),
 }));
 
@@ -387,6 +397,7 @@ const PNL_CANDLES: PortfolioPnlCandleSeries = {
     hypothetical: true,
     points: DATES.map((date, index) => ({
         date,
+        through: date,
         open: eur(500 + index * 100),
         high: eur(560 + index * 100),
         low: eur(480 + index * 100),
@@ -399,7 +410,7 @@ const BROKER_NAMES = ['Lazy Broker A', 'Lazy Broker B'] as const;
 const BROKER_PNL_HISTORY: PortfolioBrokerPnlHistory[] = BROKER_NAMES.map((broker_name, brokerIndex) => ({
     broker_id: brokerIndex + 1,
     broker_name,
-    points: DATES.map((date, index) => ({date, total_pnl: eur(200 + brokerIndex * 100 + index * 10)})),
+    points: DATES.map((date, index) => ({date, through: date, total_pnl: eur(200 + brokerIndex * 100 + index * 10)})),
 }));
 
 const INCOME_HISTORY: PortfolioIncomeHistorySeries = {
@@ -423,7 +434,25 @@ const ACQUISITION_FUNDING: PortfolioAcquisitionFundingSeries = {
 
 /** HISTORY with every return value removed, which the % toggle reads as "no % data". A new
  *  array is fine here, because no case that uses it depends on the memo's identity check. */
-const NO_PCT_HISTORY: PortfolioHistoryPoint[] = HISTORY.map((point) => ({...point, twrr: null, mwrr_cumulative: null, roi: null}));
+const NO_PCT_HISTORY: PortfolioHistoryPoint[] = HISTORY.map((point) => ({...point, twrr: null, roi: null}));
+
+/**
+ * The history's MWRR line for a mount: a true value on every day of its history, `index · 0.12 %`, as the daily history carried
+ * it before the report moved the MWRR to `mwrr_line`. One line per history array, built once, so a mount keeps the identity of
+ * what it was given (see the `HISTORY` docblock); a history with no return at all (`NO_PCT_HISTORY`) has none.
+ */
+const MWRR_LINES = new WeakMap<object, PortfolioMwrrLinePoint[]>();
+function withMwrr<P extends object>(props: P): P {
+    const {history, mwrrLine} = props as {history?: PortfolioHistoryPoint[]; mwrrLine?: PortfolioMwrrLinePoint[]};
+    if (mwrrLine !== undefined || history === undefined) return props;
+    let line = MWRR_LINES.get(history);
+    if (!line) {
+        const hasReturns = history.some((point) => point.twrr != null || point.roi != null);
+        line = hasReturns ? history.map((point, index) => ({date: point.date, annualized: null, cumulative: (index * 0.0012).toFixed(6)})) : [];
+        MWRR_LINES.set(history, line);
+    }
+    return {...props, mwrrLine: line};
+}
 
 /** Passed explicitly as a prop: the currency code is a value this file supplies, not UI text. */
 const BASE_CURRENCY = 'EUR';
@@ -448,6 +477,7 @@ function buildLadderFixture(dates: string[]): LadderFixture {
     return {
         history: dates.map((date, index) => ({
             date,
+            through: date,
             cash_value: eur(1_000 + index),
             market_value: eur(10_000 + index * 100),
             nav_value: eur(11_000 + index * 100),
@@ -457,12 +487,11 @@ function buildLadderFixture(dates: string[]): LadderFixture {
             cash_from_generated_returns: eur(200 + index),
             total_pnl: eur(500 + index * 100),
             twrr: (index * 0.001).toFixed(6),
-            mwrr_cumulative: (index * 0.0012).toFixed(6),
             roi: (index * 0.0009).toFixed(6),
         })),
         pnlCandles: {
             hypothetical: true,
-            points: dates.map((date, index) => ({date, open: eur(500 + index * 100), high: eur(560 + index * 100), low: eur(480 + index * 100), close: eur(540 + index * 100)})),
+            points: dates.map((date, index) => ({date, through: date, open: eur(500 + index * 100), high: eur(560 + index * 100), low: eur(480 + index * 100), close: eur(540 + index * 100)})),
         },
         incomeHistory: {points: dates.map((date, index) => ({date, dividend: eur(12 + index), interest: eur(3 + index)})), missing_fx_pairs: []},
         costHistory: {points: dates.map((date, index) => ({date, cost: eur(-(4 + index))})), missing_fx_pairs: []},
@@ -504,9 +533,9 @@ const ladderProps = (fixture: LadderFixture) => ({...fixture, baseCurrency: BASE
  * P&L = NAV − baseline), so no amount looks like a special case.
  */
 const MONEY_HISTORY: PortfolioHistoryPoint[] = [
-    {date: DATES[0], cash_value: eur(358.02), market_value: eur(876.54), nav_value: eur(1_234.56), capital_baseline: eur(1_000.25), book_asset_like: eur(876.54), cash_from_contributed_capital: eur(210.87), cash_from_generated_returns: eur(147.15), total_pnl: eur(234.31)},
-    {date: DATES[1], cash_value: eur(346.91), market_value: eur(1_998.76), nav_value: eur(2_345.67), capital_baseline: eur(3_702.91), book_asset_like: eur(1_998.76), cash_from_contributed_capital: eur(246.8), cash_from_generated_returns: eur(100.11), total_pnl: eur(-1_357.24)},
-    {date: DATES[2], cash_value: eur(412.33), market_value: eur(2_087.45), nav_value: eur(2_499.78), capital_baseline: eur(3_702.91), book_asset_like: eur(2_087.45), cash_from_contributed_capital: eur(246.8), cash_from_generated_returns: eur(165.53), total_pnl: eur(-1_203.13)},
+    {date: DATES[0], through: DATES[0], cash_value: eur(358.02), market_value: eur(876.54), nav_value: eur(1_234.56), capital_baseline: eur(1_000.25), book_asset_like: eur(876.54), cash_from_contributed_capital: eur(210.87), cash_from_generated_returns: eur(147.15), total_pnl: eur(234.31)},
+    {date: DATES[1], through: DATES[1], cash_value: eur(346.91), market_value: eur(1_998.76), nav_value: eur(2_345.67), capital_baseline: eur(3_702.91), book_asset_like: eur(1_998.76), cash_from_contributed_capital: eur(246.8), cash_from_generated_returns: eur(100.11), total_pnl: eur(-1_357.24)},
+    {date: DATES[2], through: DATES[2], cash_value: eur(412.33), market_value: eur(2_087.45), nav_value: eur(2_499.78), capital_baseline: eur(3_702.91), book_asset_like: eur(2_087.45), cash_from_contributed_capital: eur(246.8), cash_from_generated_returns: eur(165.53), total_pnl: eur(-1_203.13)},
 ];
 
 /**
@@ -520,14 +549,14 @@ const MONEY_HISTORY: PortfolioHistoryPoint[] = [
 const MONEY_CANDLES: PortfolioPnlCandleSeries = {
     hypothetical: true,
     points: [
-        {date: DATES[0], open: {code: 'EUR', amount: '-0.00'}, high: eur(250.75), low: eur(-10.5), close: eur(234.31)},
-        {date: DATES[1], open: eur(123.45), high: eur(234.56), low: eur(-98.76), close: eur(-12.34)},
-        {date: DATES[2], open: eur(-12.34), high: eur(60.02), low: eur(-20.48), close: eur(56.78)},
+        {date: DATES[0], through: DATES[0], open: {code: 'EUR', amount: '-0.00'}, high: eur(250.75), low: eur(-10.5), close: eur(234.31)},
+        {date: DATES[1], through: DATES[1], open: eur(123.45), high: eur(234.56), low: eur(-98.76), close: eur(-12.34)},
+        {date: DATES[2], through: DATES[2], open: eur(-12.34), high: eur(60.02), low: eur(-20.48), close: eur(56.78)},
     ],
 };
 
 /** One broker point per day, point `i` on day `i`, so a tooltip reads a broker by the day's index. */
-const brokerPoints = (totals: Array<{code: string; amount: string}>) => totals.map((total_pnl, index) => ({date: DATES[index], total_pnl}));
+const brokerPoints = (totals: Array<{code: string; amount: string}>) => totals.map((total_pnl, index) => ({date: DATES[index], through: DATES[index], total_pnl}));
 
 /**
  * Two brokers under the same three days: the overlay needs at least two. Their P&L adds up to the
@@ -1001,7 +1030,7 @@ describe('GrowthChart aggregation memo', () => {
         //    barrier below proves a render happened AFTER the arrival, not merely that
         //    some render happened at some point.
         const rendersBeforeArrival = setOptionCount();
-        await rerender(arrival);
+        await rerender(withMwrr(arrival));
         await waitFor(() => expect(setOptionCount()).toBeGreaterThan(rendersBeforeArrival), {timeout: 5_000});
 
         // 4. The aggregation must now carry the data that arrived — not the entry cached
@@ -1079,7 +1108,7 @@ describe('GrowthChart privacy masking (S2a)', () => {
         expect(localeMinus).toMatch(/[-\u2212]/);
         if (minus !== undefined) expect(localeMinus).toBe(minus);
         setPrivacyEnabled(true);
-        const {getByTestId} = render(GrowthChart, {props: {history: HISTORY}});
+        const {getByTestId} = render(GrowthChart, {props: withMwrr({history: HISTORY})});
 
         const absOption = await waitForFrame(FRAME.abs);
         expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-eur']);
@@ -1097,7 +1126,7 @@ describe('GrowthChart privacy masking (S2a)', () => {
         // useless under privacy without hiding anything personal. Catches `maskable`
         // wrapped around the % branch of the axis formatter.
         setPrivacyEnabled(true);
-        const {getByTestId} = render(GrowthChart, {props: {history: HISTORY}});
+        const {getByTestId} = render(GrowthChart, {props: withMwrr({history: HISTORY})});
 
         // Barrier: privacy really is on in this render, because the money axis is masked.
         const absOption = await waitForFrame(FRAME.abs);
@@ -1122,7 +1151,7 @@ describe('GrowthChart privacy masking (S2a)', () => {
         // checked on its own. Decision D8 keeps the sign outside the mask, so the sign is
         // asserted here, not merely tolerated: a mask that swallowed it fails here.
         setPrivacyEnabled(true);
-        const {getByTestId} = render(GrowthChart, {props: {history: MONEY_HISTORY, pnlCandles: MONEY_CANDLES, baseCurrency: BASE_CURRENCY}});
+        const {getByTestId} = render(GrowthChart, {props: withMwrr({history: MONEY_HISTORY, pnlCandles: MONEY_CANDLES, baseCurrency: BASE_CURRENCY})});
 
         const absOption = await waitForFrame(FRAME.abs);
         expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-eur']);
@@ -1167,7 +1196,7 @@ describe('GrowthChart privacy masking (S2a)', () => {
         // Precondition: the fixture really carries a negative zero, as the component parses it.
         expect(Object.is(Number(MONEY_CANDLES.points[0].open.amount), -0)).toBe(true);
 
-        const {getByTestId} = render(GrowthChart, {props: {history: MONEY_HISTORY, pnlCandles: MONEY_CANDLES, baseCurrency: BASE_CURRENCY}});
+        const {getByTestId} = render(GrowthChart, {props: withMwrr({history: MONEY_HISTORY, pnlCandles: MONEY_CANDLES, baseCurrency: BASE_CURRENCY})});
         const absOption = await waitForFrame(FRAME.abs);
 
         // The axis labels format their number through the locale (S7b), so their literals are
@@ -1209,7 +1238,7 @@ describe('GrowthChart privacy masking (S2a)', () => {
         // the labels on screen would stay as they were. Catches the render effect losing its
         // dependency on the flag, or the full-rebuild condition losing its `masked` term. In
         // that case the redraw would be a partial update, which carries no formatter at all.
-        render(GrowthChart, {props: {history: HISTORY}});
+        render(GrowthChart, {props: withMwrr({history: HISTORY})});
         const clear = await waitForFrame(FRAME.abs);
         expect(clear.yAxis.axisLabel.formatter(20_000)).toBe('20k');
 
@@ -1536,7 +1565,7 @@ describe('GrowthChart mode persistence (S5)', () => {
         // only after the first frame, or not at all.
         storage.set(MODE_KEY, 'pnl');
         storage.set(SUBMODE_KEY, 'income');
-        render(GrowthChart, {props: {history: HISTORY}});
+        render(GrowthChart, {props: withMwrr({history: HISTORY})});
 
         await waitFor(() => expect(setOptionCount()).toBeGreaterThan(0), {timeout: 5_000});
         const [first] = chartInstances[0].setOptionCalls;
@@ -1554,7 +1583,7 @@ describe('GrowthChart mode persistence (S5)', () => {
         // readStoredSubmode.
         storage.set(MODE_KEY, 'garbage');
         storage.set(SUBMODE_KEY, 'garbage');
-        const {getByTestId} = render(GrowthChart, {props: {history: HISTORY}});
+        const {getByTestId} = render(GrowthChart, {props: withMwrr({history: HISTORY})});
 
         // The drawn frame and the pressed button must agree: both say Abs.
         await waitForFrame(FRAME.abs);
@@ -1572,13 +1601,13 @@ describe('GrowthChart mode persistence (S5)', () => {
         // Catches the fallback being dropped, or being done through selectMode, which
         // persists.
         storage.set(MODE_KEY, 'pct');
-        const {getByTestId, rerender} = render(GrowthChart, {props: {history: [], loading: true}});
+        const {getByTestId, rerender} = render(GrowthChart, {props: withMwrr({history: [], loading: true})});
         // Barrier: the stored % really was restored. Otherwise "Abs after the load" would be
         // the default, not a fallback.
         expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-pct']);
 
         // The Dashboard's own shape: `loading` clears together with the history arriving.
-        await rerender({history: NO_PCT_HISTORY, loading: false});
+        await rerender(withMwrr({history: NO_PCT_HISTORY, loading: false}));
         await waitForFrame(FRAME.abs);
         // Precondition: the component itself sees no % data in this history.
         expect(getByTestId('growth-toggle-pct')).toBeDisabled();
@@ -1592,13 +1621,13 @@ describe('GrowthChart mode persistence (S5)', () => {
         // already chosen by then must not be overruled by it. Catches selectMode no longer
         // disarming the pending check.
         storage.set(MODE_KEY, 'pct');
-        const {getByTestId, rerender} = render(GrowthChart, {props: {history: [], loading: true}});
+        const {getByTestId, rerender} = render(GrowthChart, {props: withMwrr({history: [], loading: true})});
         expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-pct']);
 
         await fireEvent.click(getByTestId('growth-toggle-pnl'));
         expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-pnl']);
 
-        await rerender({history: NO_PCT_HISTORY, loading: false});
+        await rerender(withMwrr({history: NO_PCT_HISTORY, loading: false}));
         await fullOptionAfter(0);
         expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-pnl']);
         expect(seriesTypes(latestFullOption())).toEqual(FRAME.pnlLine);
@@ -1610,7 +1639,7 @@ describe('GrowthChart mode persistence (S5)', () => {
         // Catches a renamed key (which silently drops every saved preference), persistence
         // moved into an effect (which writes on mount), or a click that no longer persists.
         storage.set(SUBMODE_KEY, 'income');
-        const {getByTestId} = render(GrowthChart, {props: {history: HISTORY}});
+        const {getByTestId} = render(GrowthChart, {props: withMwrr({history: HISTORY})});
 
         await waitForFrame(FRAME.abs);
         expect(persistedWrites()).toEqual([]);
@@ -1653,7 +1682,7 @@ describe('GrowthChart mode persistence (S5)', () => {
 describe('GrowthChart % view without % data, after every load (I-03)', {timeout: 30_000}, () => {
     /** Mounts over HISTORY, which has returns, and turns the % view on by a click: the user's own choice, persisted. */
     async function mountWithChosenPct() {
-        const view = render(GrowthChart, {props: {history: HISTORY}});
+        const view = render(GrowthChart, {props: withMwrr({history: HISTORY})});
         await waitForFrame(FRAME.abs);
         // Precondition: HISTORY carries returns, so the % view can be chosen.
         expect(view.getByTestId('growth-toggle-pct')).toBeEnabled();
@@ -1669,9 +1698,9 @@ describe('GrowthChart % view without % data, after every load (I-03)', {timeout:
      * that follows the load, not the one before it.
      */
     async function loadHistory(rerender: (props: {history: PortfolioHistoryPoint[]; loading: boolean}) => Promise<void>, history: PortfolioHistoryPoint[]): Promise<void> {
-        await rerender({history, loading: false});
+        await rerender(withMwrr({history, loading: false}));
         await tick();
-        const pctData = history.some((point) => point.mwrr_cumulative != null || point.twrr != null || point.roi != null);
+        const pctData = history.some((point) => point.twrr != null || point.roi != null);
         expect(screen.getByTestId('growth-toggle-pct').hasAttribute('disabled'), `barrier: the % button is ${pctData ? 'enabled' : 'disabled'} for the history just loaded`).toBe(!pctData);
     }
 
@@ -1725,7 +1754,7 @@ describe('GrowthChart % view without % data, after every load (I-03)', {timeout:
         // WHY: S5 pins the restored view's fallback; the return is the same rule, whoever chose %.
         // Catches the one-shot check that is disarmed for good after the first completed load.
         storage.set(MODE_KEY, 'pct');
-        const {rerender} = render(GrowthChart, {props: {history: [], loading: true}});
+        const {rerender} = render(GrowthChart, {props: withMwrr({history: [], loading: true})});
         // Barrier: the stored % really was restored.
         expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-pct']);
         await loadHistory(rerender, NO_PCT_HISTORY);
@@ -1743,7 +1772,7 @@ describe('GrowthChart % view without % data, after every load (I-03)', {timeout:
         // load completes and flips the view in the middle of every reload.
         const {rerender} = await mountWithChosenPct();
 
-        await rerender({history: [], loading: true});
+        await rerender(withMwrr({history: [], loading: true}));
         // Barrier: the chart holds the empty history, which leaves the % button nothing to enable it.
         expect(screen.getByTestId('growth-toggle-pct')).toBeDisabled();
         expect(pressedAmong(MODE_TOGGLES), 'no load has completed: the mode does not flip').toEqual(['growth-toggle-pct']);
@@ -1771,7 +1800,7 @@ describe('GrowthChart synthetic-candle caption (S9)', () => {
         // An unresolved key comes back as the key itself, and two copies of it would match.
         expect(expected).not.toBe('dashboard.pnlCandlesHypotheticalShort');
 
-        const {getByTestId, queryAllByTestId} = render(GrowthChart, {props: {history: HISTORY, pnlCandles: PNL_CANDLES}});
+        const {getByTestId, queryAllByTestId} = render(GrowthChart, {props: withMwrr({history: HISTORY, pnlCandles: PNL_CANDLES})});
         await waitForFrame(FRAME.abs);
 
         await fireEvent.click(getByTestId('growth-toggle-pnl'));
@@ -1816,7 +1845,7 @@ describe('GrowthChart grid left inset (developer review, 2026-09-29)', () => {
         // on the left of the chart. Catches a px constant put back into `grid.left` (the old 52
         // can never be '3%'), or `containLabel` dropped, which would squeeze the labels into the
         // 3% and clip them. Right, top and bottom are not part of that decision: not asserted.
-        const {getByTestId} = render(GrowthChart, {props: {history: HISTORY}});
+        const {getByTestId} = render(GrowthChart, {props: withMwrr({history: HISTORY})});
         expectLeftInset(await waitForFrame(FRAME.abs), 'Abs');
 
         // The view the review was made on.
@@ -1849,7 +1878,7 @@ describe('GrowthChart grid right inset for the last time label (plan 52, C1)', (
         // WHY: the user-visible defect. jsdom's 0 px width is a phone (compact, and '4%' of it is 0 px), where the last label
         // spilled past the chart. The bound comes from the formatter ECharts is handed, not from the helper's own list, and
         // the fake measure is FAKE_TEXT_PX_PER_CHAR px a character.
-        render(GrowthChart, {props: {history: HISTORY}});
+        render(GrowthChart, {props: withMwrr({history: HISTORY})});
         const option = (await waitForFrame(FRAME.abs)) as WithTimeAxis;
         const right = option.grid?.right;
         const formatter = option.xAxis?.axisLabel?.formatter;
@@ -1872,7 +1901,7 @@ describe('GrowthChart grid right inset for the last time label (plan 52, C1)', (
     it('keeps grid.right at 4% in P&L Candles, whose ladder category axis the time inset does not concern (D2)', async () => {
         // WHY: a guard. The ladder submodes are not affected by the defect, and their full rebuild must not inherit an inset
         // sized for time labels.
-        const {getByTestId} = render(GrowthChart, {props: {history: HISTORY, pnlCandles: PNL_CANDLES}});
+        const {getByTestId} = render(GrowthChart, {props: withMwrr({history: HISTORY, pnlCandles: PNL_CANDLES})});
         await waitForFrame(FRAME.abs);
 
         await fireEvent.click(getByTestId('growth-toggle-pnl'));
@@ -2063,7 +2092,7 @@ describe('GrowthChart ladder x axis (S7)', {timeout: 30_000}, () => {
     /** Pins today, mounts on `fixture` and walks into a ladder submode (Abs, then P&L, then the submode). WHY: the path a user takes, one full frame at a time, on a stated day. */
     async function enterLadderView(fixture: LadderFixture, submode: Submode, today = lastDayOf(fixture)) {
         pinToday(today);
-        const view = render(GrowthChart, {props: ladderProps(fixture)});
+        const view = render(GrowthChart, {props: withMwrr(ladderProps(fixture))});
         await waitForFrame(FRAME.abs);
         await fireEvent.click(view.getByTestId('growth-toggle-pnl'));
         await fireEvent.click(view.getByTestId(`growth-pnl-submode-${submode}`));
@@ -2422,7 +2451,7 @@ describe('GrowthChart ladder x axis (S7)', {timeout: 30_000}, () => {
 
         // One deferred render per effect run: wait for it before pressing, so the press acts on the 93 days.
         const since = setOptionCount();
-        await view.rerender(ladderProps(FIXTURE_93));
+        await view.rerender(withMwrr(ladderProps(FIXTURE_93)));
         await waitFor(() => expect(chartInstances[0].setOptionCalls.slice(since).some((call) => Array.isArray(call.option.series))).toBe(true), {timeout: 5_000});
         await pressRung('1m');
         await waitForBuckets(4);
@@ -2928,7 +2957,7 @@ describe('GrowthChart ladder x axis (S7)', {timeout: 30_000}, () => {
     it('B11 Income, 730 days, 1M on [18..23]: a re-fetch of the same period keeps the window', async () => {
         // WHY: defect 6, a sync hands a NEW history array with the same dates: the period (first|last date) is unchanged, so the window must be too.
         const view = await openMonthWindow('income');
-        await expectWindowKeptAcross(() => view.rerender({history: FIXTURE_730.history.map((point) => ({...point}))}));
+        await expectWindowKeptAcross(() => view.rerender(withMwrr({history: FIXTURE_730.history.map((point) => ({...point}))})));
     });
 
     it('B11 Income, 730 days, 1M on [18..23]: a locale change keeps the window', async () => {
@@ -2949,7 +2978,7 @@ describe('GrowthChart ladder x axis (S7)', {timeout: 30_000}, () => {
         // WHY: gives the three B11 cases their teeth: a new period must NOT keep the old window, so "kept" cannot come from a component that never resets.
         const view = await openMonthWindow('income');
         const since = setOptionCount();
-        await view.rerender({history: FIXTURE_730.history.slice(30)});
+        await view.rerender(withMwrr({history: FIXTURE_730.history.slice(30)}));
         const zoom = await firstZoomAfter(since);
         expect({start: zoom?.start, end: zoom?.end}).toEqual({start: 0, end: 100});
     });
@@ -3004,7 +3033,7 @@ describe('GrowthChart ladder x axis (S7)', {timeout: 30_000}, () => {
         storage.set(MODE_KEY, 'pnl');
         storage.set(SUBMODE_KEY, 'income');
         pinToday(lastDayOf(FIXTURE_40));
-        render(GrowthChart, {props: ladderProps(FIXTURE_40)});
+        render(GrowthChart, {props: withMwrr(ladderProps(FIXTURE_40))});
         await waitForFrame(FRAME.income);
         expect(pressedAmong(SUBMODE_TOGGLES)).toEqual(['growth-pnl-submode-income']);
         await expectOnRung('1m', MONTH_BUCKETS_40);
@@ -3086,7 +3115,7 @@ describe('GrowthChart ladder x axis (S7)', {timeout: 30_000}, () => {
         await expectOnRung('2w', PAIR_BUCKETS_40);
 
         const beforeRefetch = setOptionCount();
-        await view.rerender({history: FIXTURE_40.history.map((point) => ({...point}))});
+        await view.rerender(withMwrr({history: FIXTURE_40.history.map((point) => ({...point}))}));
         await waitFor(() => expect(chartInstances[0].setOptionCalls.slice(beforeRefetch).some((call) => Array.isArray(call.option.series))).toBe(true), {timeout: 5_000});
         await expectOnRung('2w', PAIR_BUCKETS_40);
     });
@@ -3335,7 +3364,7 @@ describe('GrowthChart money axis ticks (S7b: D18, D23, D25)', {timeout: 30_000},
         // rebuild: one sequence proves it hands ECharts the same money formatter, not an older
         // one.
         expect(isPrivacyEnabled()).toBe(false);
-        const {getByTestId} = render(GrowthChart, {props: {history: HISTORY}});
+        const {getByTestId} = render(GrowthChart, {props: withMwrr({history: HISTORY})});
 
         const absOption = await waitForFrame(FRAME.abs);
         expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-eur']);
@@ -3356,7 +3385,7 @@ describe('GrowthChart money axis ticks (S7b: D18, D23, D25)', {timeout: 30_000},
         // zero line. Catches `toFixed(1)` kept on the millions, a fixed minimum of decimals, and
         // a zero test that lets `-0` through to `toLocaleString`.
         expect(isPrivacyEnabled()).toBe(false);
-        render(GrowthChart, {props: {history: HISTORY}});
+        render(GrowthChart, {props: withMwrr({history: HISTORY})});
         const axis = (await waitForFrame(FRAME.abs)).yAxis.axisLabel.formatter;
 
         const singles = readInEnUs(() => [2_000, 20_000, 1_000_000, 1_300_000, 900, -5_000, 0, -0].map((value) => `${show(value)} → ${axis(value)}`));
@@ -3377,7 +3406,7 @@ describe('GrowthChart money axis ticks (S7b: D18, D23, D25)', {timeout: 30_000},
         // locale would fall back in silence and the check would prove nothing.
         expect(leadingSign(axisNumber(-5, SWEDISH))).toBe('\u2212');
         expect(isPrivacyEnabled()).toBe(false);
-        render(GrowthChart, {props: {history: HISTORY}});
+        render(GrowthChart, {props: withMwrr({history: HISTORY})});
         const clearAxis = (await waitForFrame(FRAME.abs)).yAxis.axisLabel.formatter;
         const clear = [-5_000, -1_500, 1_500, -0].map((value) => clearAxis(value));
 
@@ -3401,7 +3430,7 @@ describe('GrowthChart money axis ticks (S7b: D18, D23, D25)', {timeout: 30_000},
         // catches a condition that hides the label in some views only. Income, the one view whose
         // edge goes, is the next case.
         expect(isPrivacyEnabled()).toBe(false);
-        const {getByTestId} = render(GrowthChart, {props: ladderProps(FIXTURE_40)});
+        const {getByTestId} = render(GrowthChart, {props: withMwrr(ladderProps(FIXTURE_40))});
 
         const abs = lowerEdgeOf(await waitForFrame(FRAME.abs));
         expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-eur']);
@@ -3438,7 +3467,7 @@ describe('GrowthChart money axis ticks (S7b: D18, D23, D25)', {timeout: 30_000},
         // Income from the line, the path where the merge leaks, then returns to the line, which
         // must get its callback and hidden label back.
         expect(isPrivacyEnabled()).toBe(false);
-        const {getByTestId} = render(GrowthChart, {props: ladderProps(FIXTURE_40)});
+        const {getByTestId} = render(GrowthChart, {props: withMwrr(ladderProps(FIXTURE_40))});
         await waitForFrame(FRAME.abs);
 
         await fireEvent.click(getByTestId('growth-toggle-pnl'));
@@ -3480,7 +3509,7 @@ describe('GrowthChart money axis ticks (S7b: D18, D23, D25)', {timeout: 30_000},
      * so the privacy flag set before the mount is the one every formatter is built under.
      */
     async function edgeFormatters(): Promise<Array<{view: string; format: AxisFormatter}>> {
-        const {getByTestId} = render(GrowthChart, {props: ladderProps(FIXTURE_40)});
+        const {getByTestId} = render(GrowthChart, {props: withMwrr(ladderProps(FIXTURE_40))});
         const views: Array<{view: string; format: AxisFormatter}> = [];
         const take = (view: string, option: FullOption) => {
             // Barrier: this view's axis has the computed edge, the one whose label is the subject.
@@ -3540,7 +3569,7 @@ describe('GrowthChart money axis ticks (S7b: D18, D23, D25)', {timeout: 30_000},
         // WHY: Income has no computed edge (D25): its lowest tick is a round value — zero, or the deepest cost
         // bar — and a reader needs it. Catches the blank applied to every view.
         setPrivacyEnabled(masked);
-        const {getByTestId} = render(GrowthChart, {props: ladderProps(FIXTURE_40)});
+        const {getByTestId} = render(GrowthChart, {props: withMwrr(ladderProps(FIXTURE_40))});
         await waitForFrame(FRAME.abs);
         await fireEvent.click(getByTestId('growth-toggle-pnl'));
         await waitForFrame(FRAME.pnlLine);
@@ -3678,7 +3707,7 @@ describe('GrowthChart Income purchase value (S8: R11, D26)', {timeout: 30_000}, 
         // full rebuild. Catches that path still naming the halves apart, so the bars would carry
         // names the legend does not list. The funding arrives after Income is drawn, as the
         // dashboard's lazy fetch delivers it, which is what makes the update partial.
-        const {getByTestId, rerender} = render(GrowthChart, {props: {history: HISTORY}});
+        const {getByTestId, rerender} = render(GrowthChart, {props: withMwrr({history: HISTORY})});
         await waitFor(() => expect(chartInstances).toHaveLength(1), {timeout: 5_000});
         await fireEvent.click(getByTestId('growth-toggle-pnl'));
         await fireEvent.click(getByTestId('growth-pnl-submode-income'));
@@ -3691,7 +3720,7 @@ describe('GrowthChart Income purchase value (S8: R11, D26)', {timeout: 30_000}, 
 
         // Sampled BEFORE the arrival, so the update read below is one recorded after it.
         const before = setOptionCount();
-        await rerender({acquisitionFunding: ACQUISITION_FUNDING});
+        await rerender(withMwrr({acquisitionFunding: ACQUISITION_FUNDING}));
         let update: SeriesUpdate[] = [];
         await waitFor(
             () => {
@@ -3867,7 +3896,7 @@ describe('GrowthChart broker set changes under the P&L line (plan 47, C2)', {tim
         return {
             broker_id: 31 + brokerIndex,
             broker_name: name,
-            points: DATES.map((date, index) => ({date, total_pnl: eur(300 + brokerIndex * 150 + index * 10 + offset)})),
+            points: DATES.map((date, index) => ({date, through: date, total_pnl: eur(300 + brokerIndex * 150 + index * 10 + offset)})),
         };
     }
 
@@ -3946,7 +3975,7 @@ describe('GrowthChart broker set changes under the P&L line (plan 47, C2)', {tim
      * rebuild draws exactly those brokers, with the line submode pressed.
      */
     async function openPnlLineWith(names: readonly SwapBrokerName[]) {
-        const {getByTestId, rerender} = render(GrowthChart, {props: {history: HISTORY, brokerPnlHistory: names.map((name) => brokerPnl(name)), baseCurrency: BASE_CURRENCY}});
+        const {getByTestId, rerender} = render(GrowthChart, {props: withMwrr({history: HISTORY, brokerPnlHistory: names.map((name) => brokerPnl(name)), baseCurrency: BASE_CURRENCY})});
         await waitFor(() => expect(chartInstances).toHaveLength(1), {timeout: 5_000});
         await fireEvent.click(getByTestId('growth-toggle-pnl'));
         await waitForPnlLineWithBrokers(names);
@@ -3974,7 +4003,7 @@ describe('GrowthChart broker set changes under the P&L line (plan 47, C2)', {tim
 
         // Sampled BEFORE the change, so the call read below is one recorded after it.
         const before = setOptionCount();
-        await rerender({brokerPnlHistory: next.map((name) => brokerPnl(name))});
+        await rerender(withMwrr({brokerPnlHistory: next.map((name) => brokerPnl(name))}));
 
         // One assertion for the mechanism and the behaviour together, so a red case shows both.
         const inScope = [...next].sort();
@@ -3999,7 +4028,7 @@ describe('GrowthChart broker set changes under the P&L line (plan 47, C2)', {tim
 
         const before = setOptionCount();
         const refreshed = [BROKER_A, BROKER_B].map((name) => brokerPnl(name, REFRESH_OFFSET));
-        await rerender({brokerPnlHistory: refreshed});
+        await rerender(withMwrr({brokerPnlHistory: refreshed}));
 
         // Presence barrier: broker A's refreshed first day reached ECharts. Only then can "no rebuild" mean anything.
         const refreshedFirstDay = Number(refreshed[0].points[0].total_pnl.amount);
@@ -4122,7 +4151,7 @@ describe('GrowthChart figures in the interface language (M-18)', {timeout: 30_00
     it.each(LANGUAGES)('$lang UI on an en-US browser: the money ticks and the tooltip amounts of the Abs view, in $locale', async ({lang, locale: interfaceTag}) => {
         await switchLanguage(lang);
         expect(uiLocale(), 'control: the interface locale').toBe(interfaceTag);
-        render(GrowthChart, {props: {history: MONEY_HISTORY, baseCurrency: BASE_CURRENCY}});
+        render(GrowthChart, {props: withMwrr({history: MONEY_HISTORY, baseCurrency: BASE_CURRENCY})});
         const option = await waitForFrame(FRAME.abs);
         expect(pressedAmong(MODE_TOGGLES)).toEqual(['growth-toggle-eur']);
 
@@ -4138,7 +4167,7 @@ describe('GrowthChart figures in the interface language (M-18)', {timeout: 30_00
     it.each(LANGUAGES)('$lang UI on an en-US browser: the % ticks and the % tooltip rows, in $locale', async ({lang, locale: interfaceTag}) => {
         await switchLanguage(lang);
         expect(uiLocale(), 'control: the interface locale').toBe(interfaceTag);
-        const {getByTestId} = render(GrowthChart, {props: {history: HISTORY}});
+        const {getByTestId} = render(GrowthChart, {props: withMwrr({history: HISTORY})});
         await waitForFrame(FRAME.abs);
 
         // Precondition: HISTORY carries return series, so the % view can be reached.
@@ -4274,7 +4303,7 @@ describe('GrowthChart — the tooltip header writes its dates in the interface l
 
     /** Mounts `fixture` and opens the view `toggle` names, proved pressed. WHY one route: every case reaches its view the same way. */
     async function openView(fixture: LadderFixture, toggle: 'growth-toggle-eur' | 'growth-toggle-pct'): Promise<void> {
-        render(GrowthChart, {props: ladderProps(fixture)});
+        render(GrowthChart, {props: withMwrr(ladderProps(fixture))});
         await waitForFrame(FRAME.abs);
         if (toggle === 'growth-toggle-pct') {
             // Precondition: the fixture carries return series, so the % view can be reached.
@@ -4537,7 +4566,7 @@ describe('GrowthChart — the running period sits on its last day with data (pla
 
     /** Mounts `fixture` and opens `view` the way a user does, proved pressed. WHY: every case reaches its view by one route, and the P&L submode is pressed, never assumed. */
     async function openView(fixture: LadderFixture, view: ViewName): Promise<void> {
-        render(GrowthChart, {props: ladderProps(fixture)});
+        render(GrowthChart, {props: withMwrr(ladderProps(fixture))});
         await waitForFrame(FRAME.abs);
         if (view === '%') {
             // Precondition: the fixture carries return series, so the % view can be reached.
@@ -4756,7 +4785,7 @@ describe('GrowthChart broker lines follow a Designer Lab edit (C4, TD-1b)', {tim
         const editedRef = refs[1];
         expect(new Set([...table, EDITED]).size, 'control: the lines and the edit, all distinct colours').toBe(table.length + 1);
 
-        const {getByTestId} = render(GrowthChart, {props: {history: HISTORY, brokerPnlHistory: BROKER_PNL_HISTORY, baseCurrency: BASE_CURRENCY}});
+        const {getByTestId} = render(GrowthChart, {props: withMwrr({history: HISTORY, brokerPnlHistory: BROKER_PNL_HISTORY, baseCurrency: BASE_CURRENCY})});
         await waitFor(() => expect(chartInstances).toHaveLength(1), {timeout: 5_000});
         await fireEvent.click(getByTestId('growth-toggle-pnl'));
         const drawn = await waitForPnlLineWithBrokers(BROKER_NAMES);

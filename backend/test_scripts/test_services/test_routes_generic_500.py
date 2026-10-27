@@ -13,8 +13,8 @@ The cure's contract, pinned here:
    ``logger.exception(...)`` in the ``except`` block (``error``/``critical`` with ``exc_info`` count too). The shape
    ``prices.py`` and ``fx/currencies.py``'s ``delete_rates_endpoint`` already have («Internal error while …»).
 2. Guards, what the cure keeps: the authored refusals answer as they do — the probe's 400 with the error's message; the
-   409 ``{"error_code", "message", "params"}`` of ``assign_providers_bulk``, ``remove_providers_bulk`` and
-   ``wipe_market_data``; an upsert's coded status (``_REFUSAL_STATUS``, here ``EVENT_IN_USE``); ``wipe_market_data``'s 404
+   409 ``{"error_code", "message", "params"}`` of ``assign_providers_bulk`` and ``remove_providers_bulk`` (N68 removed
+   ``wipe_market_data``'s: the wipe keeps the SPLITs and no longer refuses); an upsert's coded status (``_REFUSAL_STATUS``, here ``EVENT_IN_USE``); ``wipe_market_data``'s 404
    ``ASSET_NOT_FOUND`` with the error's text; the FX sync's 502 «Failed to sync rates: …».
 3. One more leak, through a 400: ``merge_assets``. ``AssetCRUDService.merge_assets`` rolls back whatever stops a merge,
    logs it with its exception on the service module's ``logger`` and re-raises it as
@@ -458,11 +458,13 @@ def _wipe_refusal() -> AssetSourceError:
 
 
 def _removal_refusal() -> AssetSourceError:
-    """X-R62, as ``_reject_removals_of_linked_events`` raises it."""
+    """X-R69, as the removal raises it: a SPLIT among the events that go with the assignment has linked incoming adjustments
+    without a purchase cost, X-R49's code (``PROVIDER_REMOVAL_LINKED_TRANSACTIONS`` no longer exists; the removal's other 409,
+    ``PROVIDER_REMOVAL_CONFLICT``, is the race of a link made meanwhile). The dry run has no 409."""
     return AssetSourceError(
-        "PROVIDER_REMOVAL_LINKED_TRANSACTIONS: removing the provider would delete 1 event(s) it generated, linked to 2 transaction(s); unlink them first",
-        "PROVIDER_REMOVAL_LINKED_TRANSACTIONS",
-        {"asset_id": 2, "item_index": 1, "events": [{"event_id": 52, "date": "2025-06-03", "type": "DIVIDEND", "transaction_ids": [18], "hidden_transactions_count": 1}]},
+        "PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST: removing the provider would delete 1 split(s) it generated, with 2 linked adjustment(s) without a purchase cost; give them a cost first",
+        "PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST",
+        {"asset_id": 2, "item_index": 1, "splits": [{"event_id": 52, "date": "2025-06-03", "transaction_ids": [18], "hidden_transactions_count": 1}]},
     )
 
 
@@ -478,15 +480,6 @@ def _event_in_use() -> AssetSourceError:
 def _asset_not_found() -> AssetSourceError:
     """``wipe_market_data_for_currency_change``'s refusal of an asset that does not exist."""
     return AssetSourceError("Asset 1 not found", "ASSET_NOT_FOUND")
-
-
-def _market_data_refusal() -> AssetSourceError:
-    """X-R48, as ``wipe_market_data_for_currency_change`` raises it."""
-    return AssetSourceError(
-        "MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST: 1 split(s) of this asset have 2 linked adjustment(s) without a purchase cost; give them a cost before deleting the asset's events",
-        "MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST",
-        {"splits": [{"event_id": 41, "date": "2025-06-02", "transaction_ids": [17], "hidden_transactions_count": 1}]},
-    )
 
 
 def _provider_failure() -> FXServiceError:
@@ -518,7 +511,6 @@ GUARDS = [
     pytest.param(REMOVE, _removal_refusal, 409, _coded, id="assets_providers-remove_providers_bulk-409"),
     pytest.param(UPSERT_EVENTS, _event_in_use, 409, _coded, id="assets_events-upsert_events_bulk-409"),
     pytest.param(WIPE, _asset_not_found, 404, _its_text, id="assets_market_data-wipe_market_data-404"),
-    pytest.param(WIPE, _market_data_refusal, 409, _coded, id="assets_market_data-wipe_market_data-409"),
     pytest.param(SYNC, _provider_failure, 502, _sync_failed, id="fx_currencies-sync_rates-502"),
 ]
 
@@ -544,3 +536,27 @@ async def test_xr74_guard_an_authored_refusal_answers_as_before(monkeypatch, sit
     assert isinstance(outcome, HTTPException), outcome
     assert (outcome.status_code, outcome.detail) == (status, answered(error))
     print_success(f"{outcome.status_code} {outcome.detail!r}")
+
+
+@pytest.mark.asyncio
+async def test_n68_the_wipe_route_has_no_409_branch_any_more(monkeypatch):
+    """N68: ``wipe_market_data`` has no 409 for ``MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST`` any more (the wipe keeps the
+    SPLITs; the code, the service's guard and the route's branch are gone). An ``AssetSourceError`` of that code, were
+    the service to raise it, is any other service error to the route: 400, the error's text as a string detail.
+
+    Red today (X-R48): the route answers it 409 with ``{"error_code", "message", "params"}``.
+    """
+    error = AssetSourceError(
+        "MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST: 1 split(s) of this asset have 2 linked adjustment(s) without a purchase cost",
+        "MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST",
+        {"splits": [{"event_id": 41, "date": "2025-06-02", "transaction_ids": [17], "hidden_transactions_count": 1}]},
+    )
+    print_section("N68: the wipe route has no 409 branch")
+    failing = _Failing(error)
+    session = _install(monkeypatch, WIPE, failing)
+
+    outcome = await _outcome(lambda: WIPE.call(session))
+
+    assert failing.calls, f"barrier: {WIPE.failing_call} was never called, the route stopped before it ({_shown(outcome)})"
+    assert isinstance(outcome, HTTPException), outcome
+    assert (outcome.status_code, outcome.detail) == (400, str(error)), f"the wipe route answers {outcome.status_code} {outcome.detail!r}: expected the generic 400 with the error's text, no 409 branch (N68)"

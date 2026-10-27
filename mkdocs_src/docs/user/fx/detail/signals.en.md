@@ -19,6 +19,8 @@ chart. LibreFolio computes the indicators from the pair's stored rates.
 
 The signals you add are kept with this pair's [chart settings](../chart-settings.md).
 
+In the chart's [Rolling Return](chart.md#rolling-return) mode the panel offers only the **FX Pair** comparisons, each drawing its own rolling return; your other signals stay saved and return with **Prices**.
+
 ---
 
 ## 🧮 Technical indicators — 9 for FX
@@ -52,7 +54,7 @@ a search box on top: type to filter every family at once. The arrow keys and `En
 
 - 💱 **FX Pair** — another of your pairs, e.g. GBP/USD next to EUR/USD. In the list, 👑 marks this
   page's pair and 📌 a pair already used by another signal.
-- ↔️ **Asset Comparison** — an asset's price next to the rate.
+- ↔️ **Asset Comparison** — an asset's price next to the rate, picked in the same panel as the risk comparison's (search, **Type** and **Currency** filters, benchmarks first). One already used by another comparison carries a warning mark but can still be chosen.
 
 A comparison card has buttons to sync the compared pair or asset and to open its page. In % view
 both curves start at 0 %, so their moves compare directly.

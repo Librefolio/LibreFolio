@@ -95,7 +95,15 @@
       "eventCreateAmountRequired": "Amount is required",
       "eventCreateDateRequired": "Date is required",
       "fxDatesHint": "The 'From' and 'To' dates usually match: they differ when the broker credits the new currency on another day.",
-      "eventEditTitle": "Edit event for {asset}"
+      "eventEditTitle": "Edit event for {asset}",
+      "entryModeAmount": "Total amount",
+      "entryModeUnitPrice": "Unit price",
+      "unitPriceCalculated": "calculated",
+      "unitPriceHint": "The amount is calculated from the unit price and the quantity; you can still edit it.",
+      "preFloorDate": {
+        "message": "The date {date} is before 1 January 1900. Check that the year is right: it is often a typo.",
+        "confirm": "Yes, the date is right"
+      }
     },
     "bulk": {
       "resetRow": "Reset row",
@@ -129,7 +137,27 @@
       "issueRowsHidden": "The affected rows are hidden by the table filters.",
       "unseenSuggestionsTitle": "Suggestions you have not looked at",
       "unseenSuggestionsMessage": "{n, plural, one {# suggestion to merge two transactions has} other {# suggestions to merge two transactions have}} not been looked at yet. Merging the two halves of a transfer keeps them from counting as a separate deposit and withdrawal. Save anyway?",
-      "unseenSuggestionsReview": "Show the suggestions"
+      "unseenSuggestionsReview": "Show the suggestions",
+      "possibleSplit": {
+        "title": "{n, plural, one {# row may be a stock split} other {# rows may be stock splits}}",
+        "explain": "These shares came in at no cost. If it is a split, link a SPLIT event so the cost is spread over all your shares. If not, the average cost of your position goes down.",
+        "create": "Create the SPLIT event and link",
+        "link": "Link to an existing event",
+        "goto": "Go to row",
+        "assetNeeded": "Choose the asset of this row first.",
+        "quantityAdded": "+{quantity} shares",
+        "ratioLabel": "Split ratio (new shares per old share)",
+        "ratioHint": "Type 3 for a 3-for-1 split, 0.25 for a 1-for-4 reverse split. The shares you hold are multiplied by this number.",
+        "ratio": "Ratio {ratio} (from your holding of {held})",
+        "rounding": "The broker rounded the quantity: with ratio {ratio} this row differs by {delta} shares from your holding times the ratio. Lots and the Dashboard can show a small gap."
+      },
+      "preFloorDate": {
+        "message": "{n} rows are dated before 1 January 1900. Check the year: it is often a typo.",
+        "row": "Row {row}: {date}",
+        "confirmTitle": "Save dates before 1900?",
+        "confirmMessage": "{n} rows are dated before 1 January 1900. Save them as they are?",
+        "confirmProceed": "Yes, the dates are right"
+      }
     },
     "commit": {
       "serverError": "Save failed — server error"
@@ -201,7 +229,8 @@
       "issuesHeader": "Validation errors were found",
       "balanceIssuesHeader": "This configuration causes data inconsistencies",
       "autoOff": "Auto-validate is OFF ({n} rows > {threshold}) — press ⚡️ Validate now before commit",
-      "contextualIssuesHeader": "With the other pending changes, this row causes the following issues:"
+      "contextualIssuesHeader": "With the other pending changes, this row causes the following issues:",
+      "checkSummary": "{n, plural, one {# field needs} other {# fields need}} fixing"
     },
     "errors": {
       "idRequired": "Transaction ID is required and must be > 0",
@@ -248,7 +277,7 @@
       "decimalPlacesExceeded": "At most {max} decimal places",
       "significantDigitsExceeded": "At most {max} significant digits",
       "integerDigitsExceeded": "At most {max} digits before the decimal point",
-      "dateOutOfRange": "Between {min} and {max}",
+      "dateOutOfRange": "Not after {max}",
       "autoCostUnreadable": "Automatic cost unavailable: {count, plural, one {# transaction used} other {# transactions used}} for this asset's average cost {count, plural, one {holds} other {hold}} a value that is not a number. Enter the cost by hand.",
       "autoCostEmptyPool": "Automatic cost unavailable: no units of this asset were held on that date to average. Choose Manual and enter what these units cost you; if you received them as a gift, enter 0.",
       "autoCostUnknownPool": "Automatic cost unavailable: the units of this asset held on that date have no known cost to average. Choose Manual and enter what these units cost you.",
@@ -256,7 +285,8 @@
       "costBasisNotAllowed": "❌ {type} takes no cost basis here: remove it. Only units that come in through an Adjustment or an Asset Transfer carry one.",
       "costBasisModeIncompatible": "❌ {type} takes no cost basis here, so no Auto or Manual mode: remove it.",
       "costBasisNegative": "The cost basis can't be negative: enter 0 or more.",
-      "pairAdjustmentNotAllowed": "Two Adjustments cannot be linked: use an Asset Transfer to move units between brokers."
+      "pairAdjustmentNotAllowed": "Two Adjustments cannot be linked: use an Asset Transfer to move units between brokers.",
+      "pairArrivalBeforeDeparture": "The arrival ({arrivalDate}) is dated before the departure ({departureDate}). It was saved as entered: check the two dates."
     },
     "pydantic": {
       "greaterThan": "Value must be greater than {gt}",
@@ -318,6 +348,22 @@
       "spread": "Spread",
       "stale": "stale {days}d",
       "marketNotAvailable": "Market rate not available"
+    },
+    "reconcile": {
+      "button": "Relink events",
+      "buttonTitle": "Link dividends, interest and adjustments to the asset event of the same day",
+      "title": "Relink events",
+      "intro": "Dividends, interest and adjustments that have no asset event. An event is proposed only when it is of the same asset, on the same day and of the matching type: a dividend credited a few days after the event is not proposed, and you link it by hand in the transaction.",
+      "loading": "Looking for transactions without an event…",
+      "loadError": "Could not read the transactions without an event.",
+      "empty": "Every transaction that can have an asset event has one.",
+      "statusUnique": "One event that day",
+      "statusNone": "No event that day",
+      "statusSeveral": "{n} events that day: choose it in the transaction",
+      "link": "Link",
+      "linkAll": "Link every row with one event",
+      "linkError": "Nothing was linked: the server refused the change.",
+      "close": "Close"
     }
   }
 }

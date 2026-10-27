@@ -2,7 +2,7 @@
 An unreadable restore state serves no data, through the API (LibreFolio 1.3, workstream H, lot B-33, the start's part).
 Developer decision (22/10, via the coordinator): while the state of the restore cannot be read, the instance serves no
 data; the web app shows «the restore stopped half way: call the administrator», and the administrator chooses with
-``./dev.py backup pending --recover`` (workstream B). D7 (developer, contract L3 §10 option A), the last lot of wave
+``./dev.py backup pending --recover previous`` (workstream B). D7 (developer, contract L3 §10 option A), the last lot of wave
 4: ``panel/status`` says it (200, ``restore.state == "unreadable"`` with its reason, instead of Q7's 500), and the
 panel's backup does not start in this state.
 
@@ -48,6 +48,7 @@ import secrets
 from datetime import UTC, datetime
 from types import ModuleType
 from typing import Any
+from uuid import uuid4
 
 import pytest
 from sqlalchemy import func, select
@@ -378,6 +379,29 @@ async def test_while_interrupted_the_panel_status_without_a_restore_answers_200(
     assert response.status_code == 200, f"the panel's status is allowed while interrupted: {shown(response)}"
     body = response.json()
     assert (body.get("mode"), body.get("restore")) == ("normal", None), f"mode normal, no restore: {body}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("accounts", "limit", "over"), [pytest.param(0, None, False, id="no-limit"), pytest.param(3, "2", True, id="over-the-limit")])
+async def test_while_interrupted_the_panel_status_says_whether_the_instance_is_over_its_limit(instance, accounts, limit, over):
+    """RI-030c (H5-8): interrupted, ``GET /panel/status`` with its token → 200 carrying ``users_over_limit``, true with three
+    active accounts against ``LIBREFOLIO_MAX_USERS=2``, false with no limit, as on any instance; the nine keys, mode normal.
+    Barrier: the accounts are in the database the request reads (``users_used``)."""
+    async with AsyncSession(instance.engine) as session:
+        for index in range(accounts):
+            username = f"h58_{uuid4().hex[:10]}_{index}"
+            session.add(User(username=username, email=f"{username}@example.com", hashed_password="not-a-password-hash", is_active=True))
+        await session.commit()
+    instance.monkeypatch.delenv("LIBREFOLIO_MAX_USERS", raising=False)
+    if limit is not None:
+        instance.monkeypatch.setenv("LIBREFOLIO_MAX_USERS", limit)
+    interrupt(instance)
+    response = await panel_status(instance)
+
+    assert response.status_code == 200, f"the panel's status is allowed while interrupted: {shown(response)}"
+    body = response.json()
+    assert (body.get("mode"), body.get("users_used")) == ("normal", accounts), f"Barrier: mode normal, the {accounts} accounts counted: {body}"
+    assert set(body) == PANEL_STATUS_KEYS and body.get("users_over_limit") is over, f"H5-8: interrupted, {accounts} active accounts against {limit!r}: users_over_limit is {over!r}, nine keys: {body}"
 
 
 @pytest.mark.asyncio

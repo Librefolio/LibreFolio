@@ -151,7 +151,8 @@
         },
         "expires": "La copia comprobada se conserva hasta el {date}.",
         "drop": "Descartar este archivo",
-        "ownAccountMissing": "Tu cuenta no está entre los administradores de esta copia de seguridad: después del reinicio no podrás iniciar sesión con ella."
+        "ownAccountMissing": "Tu cuenta no está entre los administradores de esta copia de seguridad: después del reinicio no podrás iniciar sesión con ella.",
+        "usersOverLimit": "Esta copia tiene {active} cuentas activas, pero esta instancia admite {limit}. La restauración continúa; cuando un administrador inicie sesión, elegirá quién conserva el acceso, y las demás cuentas se desactivarán, no se eliminarán."
       },
       "confirm": {
         "word": "restaurar",
@@ -212,7 +213,7 @@
         "post_migration_failed": "Una corrección de la copia falló: el registro del servidor tiene la causa.",
         "restore_interrupted": "La comprobación se interrumpió: vuelve a comprobar el archivo.",
         "restore_stage_expired": "La comprobación es demasiado antigua: vuelve a comprobar el archivo.",
-        "restore_stage_outdated": "LibreFolio se actualizó después de la comprobación: vuelve a comprobar el archivo.",
+        "restore_stage_outdated": "LibreFolio se actualizó, o la dirección del titular cambió, después de la comprobación: vuelve a comprobar el archivo.",
         "restore_not_restorable": "Este archivo no se puede restaurar.",
         "restore_already_pending": "Otra restauración ya espera el próximo inicio.",
         "restore_not_pending": "Ninguna restauración espera el próximo inicio.",
@@ -228,7 +229,11 @@
         "envelope_damaged": "La copia segura está dañada o fue modificada: no se puede abrir.",
         "envelope_unsupported": "La copia segura viene de un LibreFolio más reciente: actualiza primero LibreFolio.",
         "proxy_too_large": "Un proxy delante de LibreFolio rechazó un archivo tan grande: pide a quien lo gestiona que acepte subidas más grandes, o restaura desde la línea de comandos.",
-        "sealed_backup_needs_key": "Esta es una copia de seguridad sellada de un panel de alojamiento: su contraseña está cifrada para la clave del proveedor. Extrae backup.lfbk, abre password.age con age y luego restaura backup.lfbk con esa contraseña."
+        "sealed_backup_needs_key": "Esta es una copia de seguridad sellada de un panel de alojamiento: su contraseña está cifrada para la clave del proveedor. Extrae backup.lfbk, abre password.age con age y luego restaura backup.lfbk con esa contraseña.",
+        "owner_choice_required": "Elige la cuenta que pasa a ser del titular antes de confirmar.",
+        "owner_choice_invalid": "La cuenta elegida no puede pasar a ser del titular: elige una de las propuestas.",
+        "owner_email_not_set": "LIBREFOLIO_ADMIN_EMAIL no está configurada: no se puede elegir la cuenta del titular. Pregunta al proveedor del alojamiento.",
+        "owner_conflict": "La copia contiene dos cuentas con la misma dirección o el mismo nombre, la dirección del titular como nombre de otra cuenta, o un administrador que aún espera su enlace de configuración: no se puede restaurar aquí."
       },
       "password": {
         "intro": "Una copia segura: escribe la contraseña con la que se hizo.",
@@ -263,6 +268,18 @@
         "invalid": "LIBREFOLIO_BACKUP_RECIPIENTS no se puede usar ({reason}): uno o dos destinatarios age1…, separados por comas. Las copias de seguridad del panel del proveedor responden 503 hasta que se corrija.",
         "missingManaged": "LIBREFOLIO_BACKUP_RECIPIENTS no está definida: una instancia gestionada nunca entrega una copia de seguridad sin cifrar al panel del proveedor, cuyas copias responden 503 hasta que se defina."
       }
+    },
+    "ownerChoice": {
+      "title": "¿Quién es el titular de esta instancia?",
+      "intro": "Elige qué usuario de esta copia pasa a ser el administrador que paga la instancia.",
+      "notice": "A este usuario se le pondrá el correo del titular ({email}) y será administrador protegido. Su contraseña se restablecerá: se envía a esa dirección un enlace para elegir una nueva. Si el correo no puede enviarse, el enlace se escribe en el registro de la instancia, para que quien la gestiona se lo entregue al titular.",
+      "locked": "Un usuario de esta copia ya tiene el correo del titular: es el titular.",
+      "adminBadge": "Administrador",
+      "inactiveBadge": "Desactivado",
+      "ownerBadge": "Correo del titular",
+      "empty": "Esta copia no tiene usuarios entre los que elegir.",
+      "confirm": "Confirmar y restaurar",
+      "cancel": "Cancelar"
     }
   }
 }

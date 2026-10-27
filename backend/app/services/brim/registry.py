@@ -21,7 +21,7 @@ class BRIMProviderRegistry(AbstractProviderRegistry):
 
     @classmethod
     def settings_family(cls) -> str | None:
-        """The plugin settings family of the import plugins (W-BS): prepared, no real plugin declares a field yet."""
+        """The plugin settings family of the import plugins (W-BS): the generic CSV declares ``date_order`` (W5-8)."""
         return "brim"
 
     @classmethod

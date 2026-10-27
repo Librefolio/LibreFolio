@@ -7,8 +7,11 @@ search it by name or ticker.
 
 - **Current price**: the latest price Yahoo reports for the ticker — on some exchanges it is
   delayed.
-- **History**: daily open, high, low, close and volume, as far back as Yahoo goes.
-- **Dividends and splits**: recorded as asset events.
+- **History**: daily open, high, low, close and volume, as far back as Yahoo goes. The closes are saved as
+  the exchange gives them, without the adjustment for the dividends paid since (a split is already in
+  Yahoo's closes, and is recorded as an event).
+- **Dividends and splits**: recorded as asset events. For a London line quoted in pence, the dividend is
+  saved in pounds (1.95 pence is 0.0195 GBP).
 - **Search**: by name or ticker.
 - **Details**: type, currency, description, sector, ticker and, when Yahoo has it, the ISIN.
 - **Fund details**: for an ETF or a fund, the sector breakdown (a stock gets its single sector), the
@@ -44,6 +47,16 @@ and **Ask Provider** proposes it if the field says otherwise
 
 - **ISIN** also works as **Identifier Type**, but only when Yahoo can match it to a ticker: prefer
   the ticker.
+- **Data saved before this behaviour stay as they were.** If you have a Yahoo asset whose closes were
+  saved earlier, they still carry the dividend adjustment of the day they were read, and the dividends
+  of a pence line are still in pence. Nothing rewrites them on its own: run the **full Sync** of the asset
+  again (the dialog warns before it overwrites) and the history is read afresh. This does not change the
+  split behaviour below.
+- **Known limitation: splits.** After a stock split Yahoo rewrites the past closes (and dividends) to the
+  new number of shares. For Apple's 4:1 split of 31 August 2020, the close of 28 August 2020 is given as
+  124.81 instead of the 499 it really was. So the value of a position on the days before a split can come
+  out divided by the split ratio (10 shares × 124.81 = 1,248 instead of 4,990), and the return jumps on
+  the day of the split. A correction is planned after 1.3.
 - Yahoo may throttle frequent requests: LibreFolio then pauses it for a while and keeps showing the
   last saved prices. Some tickers have missing days.
 

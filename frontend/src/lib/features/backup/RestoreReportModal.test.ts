@@ -47,7 +47,7 @@ import {readable, writable} from 'svelte/store';
 import type {Component} from 'svelte';
 import type {z} from 'zod';
 import type {schemas} from '$lib/api';
-import {cleanup, fireEvent, render, screen, within} from '$test/component';
+import {cleanup, fireEvent, render, screen, waitFor, within} from '$test/component';
 
 const i18n = vi.hoisted(() => ({
     /** Every key the translator was asked, in order. */
@@ -102,7 +102,7 @@ vi.mock('$lib/api', () => {
 
 type GeneratedStageReport = z.infer<typeof schemas.RestoreStageReport>;
 /** L3: the two warnings of the accounts, written out until the client is generated again. */
-type Warning = GeneratedStageReport['warnings'][number] | 'credentials_from_backup' | 'confirming_account_not_in_backup';
+type Warning = GeneratedStageReport['warnings'][number] | 'credentials_from_backup' | 'confirming_account_not_in_backup' | 'users_over_limit';
 type RestoreStageReport = Omit<GeneratedStageReport, 'warnings'> & {warnings: Warning[]};
 type Difference = RestoreStageReport['control_totals_differences'][number];
 
@@ -613,5 +613,367 @@ describe('L3 — RestoreReportModal: the warnings of the accounts', () => {
         await fireEvent.click(confirmButton());
 
         expect(onConfirm).toHaveBeenCalledTimes(1);
+    });
+});
+
+// =====================================================================================================================
+// B5-1b — the owner's choice when confirming a restore (interface B-b51 §8; written red first)
+// =====================================================================================================================
+
+/*
+ * The contract: `onConfirm: (ownerUserId: number | null) => void`.
+ *   - `report.owner_choice` null or absent: as today, the word typed then `restore-confirm` → `onConfirm(null)`, and no
+ *     `owner-choice-modal`;
+ *   - present: `restore-confirm` (same word rule) does not call `onConfirm`: it opens `OwnerChoiceModal`
+ *     (`owner-choice-modal`) with `ownerEmail = owner_choice.owner_email` and as `users` only the candidate whose
+ *     `user_id === forced_user_id` when that is not null, otherwise the candidates with `administrator === true`, each
+ *     mapped `{id: user_id, username, email: email ?? '', is_superuser, is_active}`; `busy` passed through. Its confirm
+ *     closes it and calls `onConfirm(id)` once; its cancel closes it, confirms nothing, and leaves the report open with
+ *     the word typed.
+ *
+ * OwnerChoiceModal.svelte is workstream A's (its real component since the merge): it is driven only through
+ * A's handles — `owner-choice-option` with `data-user-id` and `data-selected` (a click selects), `owner-choice-confirm`,
+ * `owner-choice-cancel`, and `data-locked` on `owner-choice-modal` (the owner's address is one of the users': only that
+ * one can be chosen). `ownerEmail` and the mapped `email` are seen through `data-locked`, which A's modal derives from
+ * them; nothing reads its text or its classes.
+ *
+ * Choice of this file where §8 is silent: the users keep the order of `owner_choice.candidates`. A candidate that is
+ * neither an administrator nor the owner's address cannot come from the server (the check selects only those), but one
+ * is in the fixture to pin the filter `administrator === true` on its own.
+ *
+ * Red today: the modal calls `onConfirm()` with no argument and knows no `owner_choice`, so no owner modal ever opens.
+ * The guards (green today): a report the word does not unlock opens nothing.
+ */
+
+/** The generated type also admits an array (an artefact of the OpenAPI union): the object is the contract. */
+type OwnerChoice = Exclude<NonNullable<GeneratedStageReport['owner_choice']>, unknown[]>;
+type OwnerCandidate = OwnerChoice['candidates'][number];
+
+const OWNER_EMAIL = 'owner@example.org';
+
+const ADMIN_GIULIA: OwnerCandidate = {user_id: 3, username: 'giulia.bianchi', email: 'giulia@example.org', owner_email: false, administrator: true, is_superuser: true, is_active: true};
+/** An administrator without an address: mapped with `email: ''`. */
+const ADMIN_NO_EMAIL: OwnerCandidate = {user_id: 7, username: 'operator7', email: null, owner_email: false, administrator: true, is_superuser: true, is_active: true};
+/** Neither an administrator nor the owner's address (see the docblock): never offered. */
+const NOT_OFFERED: OwnerCandidate = {user_id: 5, username: 'former.admin', email: 'former@example.org', owner_email: false, administrator: false, is_superuser: true, is_active: false};
+/** The account whose address is the owner's, in another case: the forced choice. */
+const OWNER_ACCOUNT: OwnerCandidate = {user_id: 9, username: 'owner.mailbox', email: 'Owner@Example.org', owner_email: true, administrator: false, is_superuser: false, is_active: true};
+
+function ownerChoice(overrides: Partial<OwnerChoice> = {}): OwnerChoice {
+    return {required: true, owner_email: OWNER_EMAIL, forced_user_id: null, candidates: [ADMIN_GIULIA, NOT_OFFERED, ADMIN_NO_EMAIL], ...overrides};
+}
+
+const forcedChoice = () => ownerChoice({forced_user_id: OWNER_ACCOUNT.user_id, candidates: [ADMIN_GIULIA, OWNER_ACCOUNT, ADMIN_NO_EMAIL]});
+
+const ownerModal = () => screen.getByTestId('owner-choice-modal');
+const offered = () =>
+    within(ownerModal())
+        .getAllByTestId('owner-choice-option')
+        .map((option) => Number(option.getAttribute('data-user-id')));
+const option = (userId: number) => {
+    const found = within(ownerModal())
+        .getAllByTestId('owner-choice-option')
+        .filter((element) => element.getAttribute('data-user-id') === String(userId));
+    expect(found, `no owner-choice-option for the user ${userId}`).toHaveLength(1);
+    return found[0];
+};
+
+/** The word typed and `restore-confirm` clicked. */
+async function typeAndConfirm(): Promise<void> {
+    await type('violet');
+    expect(confirmButton(), 'precondition: the word unlocks the confirmation').toBeEnabled();
+    await fireEvent.click(confirmButton());
+}
+
+/** The report of `choice`, the word typed and confirmed: the owner modal open. */
+async function ownerModalOpen(choice: OwnerChoice = ownerChoice(), props: Record<string, unknown> = {}) {
+    const view = mount(report({owner_choice: choice}), props);
+    await typeAndConfirm();
+    expect(screen.getByTestId('owner-choice-modal'), 'precondition: the owner modal is open').toBeInTheDocument();
+    return view;
+}
+
+describe('B5-1b — RestoreReportModal: no owner to choose (self-hosted)', () => {
+    it.each<[string, Partial<RestoreStageReport>]>([
+        ['owner_choice absent', {}],
+        ['owner_choice null', {owner_choice: null}],
+    ])('%s: the word typed, restore-confirm → onConfirm(null) once, and no owner modal', async (_case, overrides) => {
+        const {onConfirm} = mount(report(overrides));
+
+        await typeAndConfirm();
+
+        expect(onConfirm).toHaveBeenCalledTimes(1);
+        expect(onConfirm, 'a confirmation without an owner names none: null').toHaveBeenCalledWith(null);
+        expect(screen.queryByTestId('owner-choice-modal')).toBeNull();
+    });
+
+    it('owner_choice absent: Enter in the field confirms with onConfirm(null)', async () => {
+        const {onConfirm} = mount();
+        await type('violet');
+
+        await fireEvent.keyDown(field(), {key: 'Enter'});
+
+        expect(onConfirm).toHaveBeenCalledTimes(1);
+        expect(onConfirm).toHaveBeenCalledWith(null);
+    });
+});
+
+describe('B5-1b — RestoreReportModal: the owner to choose (managed)', () => {
+    it('restore-confirm with the word typed does not confirm: it opens owner-choice-modal', async () => {
+        const {onConfirm} = mount(report({owner_choice: ownerChoice()}));
+
+        await typeAndConfirm();
+
+        expect(onConfirm, 'the restore was confirmed before the owner was chosen').not.toHaveBeenCalled();
+        expect(screen.getByTestId('owner-choice-modal')).toBeInTheDocument();
+        expect(screen.getByTestId('restore-report'), 'the report stays under the owner modal').toBeInTheDocument();
+    });
+
+    it('Enter in the field does not confirm either: it opens owner-choice-modal', async () => {
+        const {onConfirm} = mount(report({owner_choice: ownerChoice()}));
+        await type('violet');
+
+        await fireEvent.keyDown(field(), {key: 'Enter'});
+
+        expect(onConfirm).not.toHaveBeenCalled();
+        expect(screen.getByTestId('owner-choice-modal')).toBeInTheDocument();
+    });
+
+    it.each<[string, Partial<RestoreStageReport & ReportB4Fields>, string]>([
+        ['nothing typed', {}, ''],
+        ['another word typed', {}, 'garden'],
+        ['an archive that cannot be restored', {restorable: false}, 'violet'],
+    ])('the word rule still holds — %s: restore-confirm disabled, no owner modal (green today: the guard)', async (_case, overrides, typed) => {
+        const {onConfirm} = mount(report({owner_choice: ownerChoice(), ...overrides}));
+        await type(typed);
+
+        expect(confirmButton()).toBeDisabled();
+        await fireEvent.click(confirmButton());
+        await fireEvent.keyDown(field(), {key: 'Enter'});
+
+        expect(screen.queryByTestId('owner-choice-modal')).toBeNull();
+        expect(onConfirm).not.toHaveBeenCalled();
+    });
+
+    it.each<[string, () => OwnerChoice]>([
+        ['an owner to choose among administrators', () => ownerChoice()],
+        ['the owner account forced (a plain user holding the owner address, no active administrator)', () => forcedChoice()],
+    ])('the blocker no_administrator with an owner choice (%s): the blocker is shown, the word cannot be typed, nothing confirms and no owner modal opens (B5-1g: green today, a guard)', async (_case, choice) => {
+        const {onConfirm} = mount(report({blockers: ['no_administrator'], administrators: [], restorable: false, owner_choice: choice()}));
+
+        expect(section('restore-report-blocker')).toBeInTheDocument();
+        expect(field(), 'the field is closed while the archive cannot be restored').toBeDisabled();
+        await type('violet');
+        expect(confirmButton()).toBeDisabled();
+        await fireEvent.click(confirmButton());
+        await fireEvent.keyDown(field(), {key: 'Enter'});
+
+        expect(screen.queryByTestId('owner-choice-modal'), 'the owner is never asked for an archive that cannot be restored').toBeNull();
+        expect(onConfirm).not.toHaveBeenCalled();
+    });
+
+    it('forced_user_id null: the users are the administrators among the candidates, in their order — nothing locked', async () => {
+        await ownerModalOpen();
+
+        expect(offered(), 'the users offered as the owner').toEqual([ADMIN_GIULIA.user_id, ADMIN_NO_EMAIL.user_id]);
+        expect(ownerModal(), 'no user has the owner address: nothing is forced').toHaveAttribute('data-locked', 'false');
+    });
+
+    it('forced_user_id set: only that candidate, mapped with its address — locked on it, selected', async () => {
+        await ownerModalOpen(forcedChoice());
+
+        expect(offered(), 'a forced owner leaves no other choice').toEqual([OWNER_ACCOUNT.user_id]);
+        expect(ownerModal(), 'ownerEmail and the candidate email reached the modal: it locks on the owner address').toHaveAttribute('data-locked', 'true');
+        expect(option(OWNER_ACCOUNT.user_id)).toHaveAttribute('data-selected', 'true');
+    });
+
+    it('an administrator chosen, then owner-choice-confirm: the owner modal closes and onConfirm(id) is called once', async () => {
+        const {onConfirm} = await ownerModalOpen();
+
+        await fireEvent.click(option(ADMIN_NO_EMAIL.user_id));
+        expect(option(ADMIN_NO_EMAIL.user_id), 'precondition: the click selected it').toHaveAttribute('data-selected', 'true');
+        await fireEvent.click(within(ownerModal()).getByTestId('owner-choice-confirm'));
+
+        expect(onConfirm).toHaveBeenCalledTimes(1);
+        expect(onConfirm).toHaveBeenCalledWith(ADMIN_NO_EMAIL.user_id);
+        await waitFor(() => expect(screen.queryByTestId('owner-choice-modal')).toBeNull());
+    });
+
+    it('the forced owner, owner-choice-confirm: onConfirm(forced_user_id) once', async () => {
+        const {onConfirm} = await ownerModalOpen(forcedChoice());
+
+        await fireEvent.click(within(ownerModal()).getByTestId('owner-choice-confirm'));
+
+        expect(onConfirm).toHaveBeenCalledTimes(1);
+        expect(onConfirm).toHaveBeenCalledWith(OWNER_ACCOUNT.user_id);
+        await waitFor(() => expect(screen.queryByTestId('owner-choice-modal')).toBeNull());
+    });
+
+    it('owner-choice-cancel: the owner modal closes, nothing confirmed, the report still open with the word typed — and confirm opens it again', async () => {
+        const {onConfirm, onClose} = await ownerModalOpen();
+
+        await fireEvent.click(within(ownerModal()).getByTestId('owner-choice-cancel'));
+
+        await waitFor(() => expect(screen.queryByTestId('owner-choice-modal')).toBeNull());
+        expect(onConfirm).not.toHaveBeenCalled();
+        expect(onClose, 'cancelling the owner closed the report').not.toHaveBeenCalled();
+        expect(screen.getByTestId('restore-report')).toBeInTheDocument();
+        expect(field(), 'the word typed was lost').toHaveValue('violet');
+        expect(confirmButton()).toBeEnabled();
+
+        await fireEvent.click(confirmButton());
+
+        expect(screen.getByTestId('owner-choice-modal'), 'confirm again: the owner modal again').toBeInTheDocument();
+        expect(onConfirm).not.toHaveBeenCalled();
+    });
+
+    it('busy is passed through: while the confirmation is out, owner-choice-confirm is disabled', async () => {
+        const view = await ownerModalOpen(forcedChoice());
+        const answer = report({owner_choice: forcedChoice()});
+        expect(within(ownerModal()).getByTestId('owner-choice-confirm'), 'precondition: the forced owner can be confirmed').toBeEnabled();
+
+        await view.rerender({open: true, report: answer, busy: true, random: view.random, onConfirm: view.onConfirm, onDrop: view.onDrop, onClose: view.onClose});
+
+        expect(within(ownerModal()).getByTestId('owner-choice-confirm')).toBeDisabled();
+    });
+});
+
+// =====================================================================================================================
+// B5-1k2 — a backup with more active accounts than the instance accepts: a notice before the confirmation, no refusal
+// =====================================================================================================================
+
+/*
+ * The contract (`B-5-1k2-contratto.md`, «Frontend»):
+ *   - `RestoreReportModal` draws a notice of its own, `restore-users-over-limit`, when `report.users_over_limit > 0`, worded by
+ *     `backup.restore.report.usersOverLimit` with the values `{active, limit}` (from `users_active` and `users_limit`). Absent
+ *     otherwise: the fields missing (a report of before the client was generated), 0, or no limit;
+ *   - the code `users_over_limit` of `warnings` is not a line of the warnings box (`WARNINGS_SHOWN_APART`);
+ *   - the confirmation does not change: the word typed → the owner's choice, if the report has one → `onConfirm(ownerUserId)`.
+ *     No step more, no second argument.
+ *
+ * The translator of this file renders a key as itself followed by its values as JSON, so the values are read, never a
+ * sentence. Red today: the notice does not exist, and the code, unknown to `WARNINGS_SHOWN_APART`, is drawn as a line of
+ * the warnings box under the unknown fallback.
+ */
+
+type UsersFields = {users_active: number; users_limit: number | null; users_over_limit: number};
+
+const OVER_LIMIT: UsersFields = {users_active: 5, users_limit: 3, users_over_limit: 2};
+const USERS_OVER_LIMIT = 'users_over_limit';
+const USERS_KEY = 'backup.restore.report.usersOverLimit';
+
+const noticeOf = () => screen.queryByTestId('restore-users-over-limit');
+
+/** The values the translator was given for the notice: `key {json}` → the json. */
+function noticeValues(): unknown {
+    const notice = screen.getByTestId('restore-users-over-limit');
+    const text = (notice.textContent ?? '').trim();
+    expect(text, 'the notice is worded by backup.restore.report.usersOverLimit').toContain(USERS_KEY);
+    return JSON.parse(text.slice(text.indexOf('{', text.indexOf(USERS_KEY))));
+}
+
+const overLimit = (extra: Partial<RestoreStageReport & ReportB4Fields> = {}, fields: Partial<UsersFields> = {}) => report({...OVER_LIMIT, ...fields, warnings: [USERS_OVER_LIMIT, CREDENTIALS], ...extra} as Partial<RestoreStageReport & ReportB4Fields>);
+
+describe('B5-1k2 — RestoreReportModal: the notice of too many accounts', () => {
+    it('users_over_limit > 0: restore-users-over-limit, worded by backup.restore.report.usersOverLimit with {active, limit}', () => {
+        mount(overLimit());
+
+        expect(noticeOf(), 'the notice is not drawn').toBeInTheDocument();
+        expect(noticeValues()).toEqual({active: 5, limit: 3});
+        expect(i18n.asked).toContain(USERS_KEY);
+    });
+
+    it('the values follow the report: users_active and users_limit, not users_over_limit', () => {
+        mount(overLimit({}, {users_active: 12, users_limit: 10, users_over_limit: 2}));
+
+        expect(noticeValues()).toEqual({active: 12, limit: 10});
+    });
+
+    it.each<[string, () => RestoreStageReport]>([
+        ['the fields absent (a report of before)', () => report()],
+        ['users_over_limit 0 (at the limit)', () => report({users_active: 3, users_limit: 3, users_over_limit: 0} as Partial<RestoreStageReport & ReportB4Fields>)],
+        ['no limit (null)', () => report({users_active: 9, users_limit: null, users_over_limit: 0} as Partial<RestoreStageReport & ReportB4Fields>)],
+    ])('%s: no notice', (_case, answer) => {
+        // The presence barrier: the same modal does draw the notice over the limit.
+        const control = mount(overLimit());
+        expect(noticeOf(), 'barrier: the notice is drawn over the limit').toBeInTheDocument();
+        control.unmount();
+        i18n.asked.length = 0; // the barrier asked the key; only what the next mount asks counts
+
+        mount(answer());
+
+        expect(noticeOf()).toBeNull();
+        expect(i18n.asked, 'a key asked for a notice that is not drawn').not.toContain(USERS_KEY);
+    });
+
+    it('the code is not a line of the warnings box: alone it draws no box; with another warning the box lists the other only', () => {
+        const alone = mount(overLimit());
+        expect(noticeOf(), 'barrier: the notice is drawn').toBeInTheDocument();
+        expect(within(screen.getByTestId('restore-report')).queryByTestId('restore-report-warnings'), 'a box for a warning drawn apart').toBeNull();
+        alone.unmount();
+
+        mount(overLimit({warnings: ['rows_changed', USERS_OVER_LIMIT, CREDENTIALS]}));
+
+        const box = within(screen.getByTestId('restore-report')).getByTestId('restore-report-warnings');
+        expect(
+            within(box)
+                .getAllByTestId('restore-report-warning')
+                .map((line) => line.getAttribute('data-warning')),
+        ).toEqual(['rows_changed']);
+        expect(screen.getByTestId('restore-report').querySelector(`[data-warning="${USERS_OVER_LIMIT}"]`)).toBeNull();
+        expect(i18n.asked, 'the code was drawn as the unknown warning').not.toContain('backup.restore.report.warning.unknown');
+    });
+});
+
+describe('B5-1k2 — RestoreReportModal: the confirmation is the one of before', () => {
+    it('no owner to choose: the word typed, restore-confirm → onConfirm(null) once, with no argument more, and no step in between', async () => {
+        const {onConfirm} = mount(overLimit());
+        expect(noticeOf(), 'barrier: the notice is drawn').toBeInTheDocument();
+
+        await typeAndConfirm();
+
+        expect(onConfirm).toHaveBeenCalledTimes(1);
+        expect(onConfirm).toHaveBeenCalledWith(null);
+        expect(screen.queryByTestId('owner-choice-modal')).toBeNull();
+        expect(screen.queryByTestId('restore-trim-modal')).toBeNull();
+    });
+
+    it('Enter in the field confirms as before', async () => {
+        const {onConfirm} = mount(overLimit());
+        await type('violet');
+        expect(noticeOf(), 'barrier: the notice is drawn').toBeInTheDocument();
+
+        await fireEvent.keyDown(field(), {key: 'Enter'});
+
+        expect(onConfirm).toHaveBeenCalledTimes(1);
+        expect(onConfirm).toHaveBeenCalledWith(null);
+    });
+
+    it('the word rule is untouched: nothing typed, or another word, keeps restore-confirm disabled whatever the notice says', async () => {
+        const {onConfirm} = mount(overLimit());
+        expect(noticeOf(), 'barrier: the notice is drawn').toBeInTheDocument();
+
+        expect(confirmButton()).toBeDisabled();
+        await type('garden');
+        expect(confirmButton()).toBeDisabled();
+        await fireEvent.click(confirmButton());
+
+        expect(onConfirm).not.toHaveBeenCalled();
+    });
+
+    it('with an owner to choose (managed): the word typed opens the owner modal, its confirm calls onConfirm(id) once', async () => {
+        const {onConfirm} = mount(overLimit({owner_choice: ownerChoice()}));
+        expect(noticeOf(), 'barrier: the notice is drawn').toBeInTheDocument();
+
+        await typeAndConfirm();
+
+        expect(onConfirm, 'confirmed before the owner was chosen').not.toHaveBeenCalled();
+        expect(screen.getByTestId('owner-choice-modal')).toBeInTheDocument();
+        expect(screen.queryByTestId('restore-trim-modal')).toBeNull();
+        await fireEvent.click(option(ADMIN_NO_EMAIL.user_id));
+        await fireEvent.click(within(ownerModal()).getByTestId('owner-choice-confirm'));
+
+        expect(onConfirm).toHaveBeenCalledTimes(1);
+        expect(onConfirm).toHaveBeenCalledWith(ADMIN_NO_EMAIL.user_id);
     });
 });

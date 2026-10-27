@@ -152,7 +152,8 @@ interface RestoreRequests {
     startRestoreCheck: (uploadId: string) => Promise<RestoreStage>;
     getRestoreCheck: (stageId: string) => Promise<RestoreStage>;
     deleteRestoreCheck: (stageId: string) => Promise<void>;
-    confirmRestore: (stageId: string) => Promise<RestoreStatus>;
+    /** B5-1b: `ownerUserId`, the owner's account chosen in the report (managed only), `null` when none. */
+    confirmRestore: (stageId: string, ownerUserId?: number | null) => Promise<RestoreStatus>;
     cancelPendingRestore: () => Promise<void>;
     requestRestart: () => Promise<RestoreRestartAccepted>;
     probeServer: () => Promise<'up' | 'down'>;
@@ -684,7 +685,8 @@ describe('RestoreCard — the report and the confirmation (§0.1)', () => {
 
         await typeAndConfirm();
 
-        expect(api.confirmRestore).toHaveBeenCalledWith(STAGE_ID);
+        // B5-1b (interface §8): no owner to choose → the confirmation names none, `null`.
+        expect(api.confirmRestore).toHaveBeenCalledWith(STAGE_ID, null);
         expect(card()).toHaveAttribute('data-state', 'confirming');
         expect(card()).toHaveAttribute('data-busy', 'true');
         notOffered('restore-confirm', 'while the confirmation is out');
@@ -1312,5 +1314,134 @@ describe('B-32 — RestoreCard: a refused cancel of a pending restore', () => {
         expect(failed).toHaveLength(1);
         expect(failed[0].detail).toEqual({code: 'restore_cancel_failed', what: 'cancel'});
         expect(failed[0].toast?.variant).toBe('error');
+    });
+});
+
+// =====================================================================================================================
+// B5-1b — the owner's choice when confirming a restore (interface B-b51 §8; written red first)
+// =====================================================================================================================
+
+/*
+ * The contract: the card wires `RestoreReportModal`'s `onConfirm(ownerUserId)` to `controller.confirm(ownerUserId)`, so
+ * the owner chosen in A's `OwnerChoiceModal` reaches `confirmRestore(stage_id, ownerUserId)`. A report with no
+ * `owner_choice` confirms with `null` (the case above). The four refusals of the owner's choice are the card's
+ * `restore-error` with their code, worded by `backup.restore.errors.<code>`: `owner_choice_required`,
+ * `owner_choice_invalid`, `owner_email_not_set` keep the check (`restore-retry` brings the report back),
+ * `owner_conflict` forgets it (`restore-retry` → idle).
+ *
+ * OwnerChoiceModal is workstream A's (its real component since the merge): driven only through `owner-choice-option`
+ * (`data-user-id`), `owner-choice-confirm` and `owner-choice-cancel`.
+ *
+ * Red today: the report modal confirms at once with no owner modal, and the card drops the argument.
+ */
+
+/** The generated type also admits an array (an artefact of the OpenAPI union): the object is the contract. */
+type OwnerChoice = Exclude<NonNullable<RestoreStageReport['owner_choice']>, unknown[]>;
+
+const CHOSEN_OWNER = 7;
+
+function ownerChoice(): OwnerChoice {
+    return {
+        required: true,
+        owner_email: 'owner@example.org',
+        forced_user_id: null,
+        candidates: [
+            {user_id: 3, username: 'giulia.bianchi', email: 'giulia@example.org', owner_email: false, administrator: true, is_superuser: true, is_active: true},
+            {user_id: CHOSEN_OWNER, username: 'operator7', email: null, owner_email: false, administrator: true, is_superuser: true, is_active: true},
+        ],
+    };
+}
+
+const ownerModal = () => screen.getByTestId('owner-choice-modal');
+
+/** The report of a managed instance, the word typed and confirmed: the owner modal open, nothing sent. */
+async function ownerModalCard() {
+    const view = await reportCard(report({owner_choice: ownerChoice()}));
+    await typeAndConfirm();
+    expect(screen.getByTestId('owner-choice-modal'), 'precondition: the owner modal is open').toBeInTheDocument();
+    expect(api.confirmRestore, 'confirmed before the owner was chosen').not.toHaveBeenCalled();
+    return view;
+}
+
+/** The owner `CHOSEN_OWNER` picked and confirmed in the owner modal. */
+async function chooseOwner(): Promise<void> {
+    const options = within(ownerModal())
+        .getAllByTestId('owner-choice-option')
+        .filter((option) => option.getAttribute('data-user-id') === String(CHOSEN_OWNER));
+    expect(options, `precondition: the user ${CHOSEN_OWNER} is offered`).toHaveLength(1);
+    await fireEvent.click(options[0]);
+    await fireEvent.click(within(ownerModal()).getByTestId('owner-choice-confirm'));
+    await settle();
+}
+
+describe('B5-1b — RestoreCard: the owner chosen goes with the confirmation', () => {
+    it('an administrator chosen: confirmRestore(stage_id, id) once, then the restart at once — the overlay waiting, no modal left', async () => {
+        await ownerModalCard();
+        api.confirmRestore.mockResolvedValueOnce(pending());
+        api.requestRestart.mockResolvedValueOnce(accepted());
+        serve('down');
+
+        await chooseOwner();
+
+        expect(api.confirmRestore).toHaveBeenCalledTimes(1);
+        expect(api.confirmRestore).toHaveBeenCalledWith(STAGE_ID, CHOSEN_OWNER);
+        expect(api.requestRestart).toHaveBeenCalledTimes(1);
+        expect(card()).toHaveAttribute('data-state', 'restarting');
+        expect(screen.getByTestId('restart-overlay')).toHaveAttribute('data-outcome', 'waiting');
+        expect(screen.queryByTestId('owner-choice-modal')).toBeNull();
+        expect(screen.queryByTestId('restore-report')).toBeNull();
+    });
+
+    it('owner-choice-cancel: nothing sent, the card still on its report', async () => {
+        await ownerModalCard();
+
+        await fireEvent.click(within(ownerModal()).getByTestId('owner-choice-cancel'));
+        await settle();
+
+        expect(screen.queryByTestId('owner-choice-modal')).toBeNull();
+        expect(api.confirmRestore).not.toHaveBeenCalled();
+        expect(card()).toHaveAttribute('data-state', 'report');
+        expect(screen.getByTestId('restore-report')).toBeInTheDocument();
+    });
+
+    it.each(['owner_choice_required', 'owner_choice_invalid', 'owner_email_not_set'])('409 %s: restore-error with the code, worded by backup.restore.errors.<code>; restore-retry brings the report back', async (code) => {
+        await ownerModalCard();
+        api.confirmRestore.mockRejectedValueOnce(refusal(409, code));
+
+        await chooseOwner();
+
+        expect(card()).toHaveAttribute('data-state', 'failed');
+        expect(screen.getByTestId('restore-error')).toHaveAttribute('data-error-code', code);
+        expect(api.requestRestart).not.toHaveBeenCalled();
+        expect(i18n.asked, 'the refusal is not worded by its own sentence').toContain(`backup.restore.errors.${code}`);
+        expect(sessionStorage.getItem(KEY), 'the check is kept for another choice').toBe(STAGE_ID);
+
+        api.getRestoreStatus.mockResolvedValueOnce(none());
+        api.getRestoreCheck.mockResolvedValueOnce(doneStage(report({owner_choice: ownerChoice()})));
+        await fireEvent.click(screen.getByTestId('restore-retry'));
+        await settle();
+
+        expect(card()).toHaveAttribute('data-state', 'report');
+        expect(screen.getByTestId('restore-report')).toBeInTheDocument();
+    });
+
+    it('409 owner_conflict: restore-error with the code, worded by backup.restore.errors.owner_conflict, the check forgotten; restore-retry → idle', async () => {
+        await ownerModalCard();
+        api.confirmRestore.mockRejectedValueOnce(refusal(409, 'owner_conflict'));
+
+        await chooseOwner();
+
+        expect(card()).toHaveAttribute('data-state', 'failed');
+        expect(screen.getByTestId('restore-error')).toHaveAttribute('data-error-code', 'owner_conflict');
+        expect(i18n.asked).toContain('backup.restore.errors.owner_conflict');
+        expect(sessionStorage.getItem(KEY), 'a check that cannot be confirmed is still remembered').toBeNull();
+
+        const readsBefore = api.getRestoreCheck.mock.calls.length;
+        api.getRestoreStatus.mockResolvedValueOnce(none());
+        await fireEvent.click(screen.getByTestId('restore-retry'));
+        await settle();
+
+        expect(api.getRestoreCheck.mock.calls.length, 'the forgotten check was read again').toBe(readsBefore);
+        expect(card()).toHaveAttribute('data-state', 'idle');
     });
 });

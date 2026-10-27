@@ -243,11 +243,11 @@ The conversions go to the FX service in two calls:
   currency (`_unit_windows()`) give the same rates as a request a day, kept as the days a stored rate
   changes. `NativeCash.unit_rates` is a view on them (`financial_math/fx_rates.AskedDayRates`): a key
   answers on an asked day only, as the day-by-day map did, and `_rate_at()` and the calendar of the days a
-  rate changes read the steps, never every day. The days start on `EARLIEST_RANGE_START`
-  (1 January 1900, `utils/datetime_utils.py`) when the first movement is earlier: a
-  movement stored centuries back would otherwise ask one rate per day since
-  (R13-SEC8). Before the floor only the movements' own days are asked, so a balance
-  counted there still has a rate on or before every later day.
+  rate changes read the steps, never every day. The days start on the currency's first
+  movement, even when it is centuries back (`_unit_windows()`): the rates are read as steps,
+  so the cost follows the stored rate rows, not the calendar days. Before D-P4 (lot MF-PAV-L1)
+  the days started no earlier than 1 January 1900, a floor against a movement stored
+  centuries back asking one rate per day (R13-SEC8); it is gone.
 
 When every non-zero amount is already in T, no call is made and `session` is not
 used: cash held only in the report currency never needs a rate.
@@ -276,6 +276,7 @@ Windows are `(date_from, date_to]`; `None` leaves that side open.
 | `value_at(day)` | Each broker's cash on `day` in T, every foreign balance at that day's rate. Only brokers with a counted movement on or before `day` appear |
 | `balances(as_of=None)` | Each broker's balance in each currency, in that currency; zero and unconverted movements included |
 | `flows(date_from, date_to)` | `CashFlows`, the window's movements at their own dates: `signed_by_type`, `absolute_by_type`, `income_by_position` and `costs_by_position` keyed `(broker_id, asset_id)`, `unallocated_income` and `unallocated_costs` by broker. Income (DIVIDEND, INTEREST) keeps its sign, costs (FEE, TAX) are absolute |
+| `position_flow_steps(date_from, date_to)` | Each position's income and costs of the window as running totals, `(broker_id, asset_id)` → `[(day, income, costs)]`, one entry per day with such a movement, by the rules of `flows()`: one pass where a daily series would call `flows()` every day (#48). With the movements in date order, as the engine loads them, each entry equals `flows(date_from, day)` for the position exactly |
 | `sums_by_date(date_from, date_to, transaction_types)` | Counted movements summed by date and type, dates ascending |
 | `missing_conversions(date_from, date_to, transaction_types)` | One `MissingCashConversion` per pair |
 | `exchange_results(date_from, date_to)` | Each foreign-cash broker's exchange result on cash, ascending by broker, zeros included; `{}` for an empty window |
@@ -309,10 +310,10 @@ result leaves out anything smaller.
 |--------|-----|
 | `PortfolioCalculationEngine.calculate()` (`financial_math/portfolio/engine.py`, step 10c) | Builds it once per run from the classified transactions dated up to the run's end, each at its broker's `effective_share()`, with `rates_until` = the run's end; hands it to `DailyStateBuilder(native_cash=...)` and exposes it as `PortfolioCalculationResult.native_cash` |
 | `DailyStateBuilder._revalue_foreign_cash()` (`financial_math/portfolio/daily_state.py`) | On every `rate_change_days()` day of the replay, those before `date_from` included, after the day's cash movements and before its transactions: books `value_at(day)` minus the replayed cash of each `foreign_cash_broker_ids` broker into that broker's cash and `R_b` (a negative `R_b` drains into `K_b`, like a FEE), never into the capital baseline → [Portfolio Engine — §6 Three-Pool Cash Model](../../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/index.md#6-three-pool-cash-model-per-broker-k_b-r_b-w) |
-| `DailyStateBuilder._valuation_rate_change_days()` (`financial_math/portfolio/daily_state.py`) | `change_days()` with `_read_rate()`, the exact day's rate in `fx_rate_map`: for the non-report currencies of the assets and their quotes on every replayed day, and for the departure currency of cash in transit on the days of its transit. The days it returns are dirty days of the replay, like the `rate_change_days()` days → [The Days the Engine Recomputes](../financial_math.md#recomputed-days) |
+| `DailyStateBuilder._valuation_rate_change_days()` (`financial_math/portfolio/daily_state.py`) | `change_days()` with `_read_rate()`, the exact day's rate in `fx_rate_map`: for the non-report currencies of the assets and their quotes from the replay's first day, and for the departure currency of cash in transit on the days of its transit — read only on the days a rate can change and the day before each (`_reading_calendar()`: on the `AskedDayRates` view its steps and window bounds, `reading_change_days()`), which finds the same changes as every calendar day. The days it returns are dirty days of the replay, like the `rate_change_days()` days → [The Days the Engine Recomputes](../financial_math.md#recomputed-days) |
 | `PortfolioService.get_summary()` | Reads the engine's: broker card cash = `value_at(end)`, per-currency chips = `balances(end)`, summed over the cards for the headline chips; period and lifetime deposits, withdrawals, income, fees and taxes = `flows()`; missing pairs = `missing_conversions(None, end)`. The headline cash is the engine's, revalued on the same days, so it matches the sum of the cards |
 | `PortfolioService._signed_transaction_sums_by_date()`, behind `get_income_history()`, `get_cost_history()` and `get_deposit_history()` | `sums_by_date()` and `missing_conversions()`; the report passes the engine's native cash, a standalone call builds its own with `rates_until` = `date_to`, or today |
-| `PortfolioService.get_positions_contribution()` | Reads the engine's: period income and costs by position and broker = `flows()`. When the period's Other can be computed, one **FX on cash** row per broker = `exchange_results(date_from, end)`, in broker access order, and the reconciliation residual drops by the same amount. With foreign cash in scope, neither a row nor the residual is shown below `CONVERSION_DUST`; a scope with cash only in T shows any non-zero residual |
+| `PortfolioService.get_positions_contribution()` | Reads the engine's: period income and costs by position and broker = `flows()`. When the period's Other can be computed, one **FX on cash** row per broker = `exchange_results(date_from, end)`, in broker access order, and the reconciliation residual drops by the same amount. After them, one **Transfers at market value** row per broker = `period.market_value_transfer_results(engine_result.market_value_transfers, date_from, end)` (`financial_math/portfolio/period.py`), in the same access order, hidden below `CONVERSION_DUST`, with the residual reduced by the same amount. With foreign cash in scope, neither a row nor the residual is shown below `CONVERSION_DUST`; a scope with cash only in T shows any non-zero residual |
 
 The tests are in
 `backend/test_scripts/test_services/test_financial_math/test_native_cash.py`, run
@@ -410,7 +411,7 @@ page explains how both reach the Dashboard.
 
 ### 📊 PortfolioService
 
-- **Realized of the period.** `_period_realized_sales()` keeps the engine's
+- **Realized of the period.** `period.period_realized_sales()` (`financial_math/portfolio/period.py`) keeps the engine's
   `realized_sales` — SELLs and outgoing `ADJUSTMENT`s — dated in
   `(date_from, date_to]` whose proceeds and cost are both known; realized =
   Σ (proceeds − cost). A disposal left out is reported instead (its pair, or the
@@ -605,23 +606,30 @@ unknown cost therefore comes from:
   [Split-linked adjustment skip](#split-linked-adjustment-skip)), so without the
   split its units would have an unknown cost. Since P-10 the app refuses to take
   the split away while such a row has no cost: the retype answers 409
-  `EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST`, the market-data wipe of a currency change
-  409 `MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST`, and new parameters for a
+  `EVENT_SPLIT_ADJUSTMENTS_WITHOUT_COST`, and new parameters for a
   Scheduled Investment plan, or leaving the plan for another provider, 409
   `PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST` when the split is one the plan
   generated (see
   [Parametric Provider Change](../assets/events.md#parametric-provider-change));
-  once the row has a cost, 0 included, all three go through
+  once the row has a cost, 0 included, both go through
   (`test_forward_split_whose_adjustment_has_no_cost_is_retyped_only_once_the_adjustment_has_one`
   in `backend/test_scripts/test_api/test_portfolio_wac.py` for the retype;
-  `test_market_data_wipe_split_guard.py` and `test_provider_wipe_split_guard.py` in
-  `backend/test_scripts/test_services/` for the two wipes). Removing the provider
-  altogether never takes such a split away either: **No Provider**
-  (`DELETE /api/v1/assets/provider`) answers 409
-  `PROVIDER_REMOVAL_LINKED_TRANSACTIONS` while any transaction is linked to an
-  event the provider generated, whether or not the transaction has a cost (see
+  `test_provider_wipe_split_guard.py` in `backend/test_scripts/test_services/` for
+  the provider change). The market-data wipe of a currency change needs no such
+  refusal since N68: it never deletes a `SPLIT`, so the adjustments keep their link
+  and their cost whatever it was (`test_market_data_wipe_keeps_splits.py`, same
+  folder; see [Market-Data Wipe](../assets/events.md#market-data-wipe)). Removing the provider
+  altogether never takes such a split away: **No Provider**
+  (`DELETE /api/v1/assets/provider`) answers the same 409
+  `PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST` while a split the provider
+  generated has such an adjustment (see
   [Provider Removal](../assets/events.md#provider-removal);
-  `test_provider_removal_link_guard.py`, in the same folder).
+  `test_provider_removal_link_guard.py`, in the same folder). Any other
+  transaction linked to an event the provider generated is only disconnected
+  (`asset_event_id` to `NULL`) and kept; the earlier refusal for every linked
+  transaction (X-R62) is gone. The asset form counts what a change or removal
+  deletes before it is sent, with the dry run
+  [`POST /assets/provider/impact`](../assets/events.md#provider-change-impact).
 
 **An explicit `null` in an update** (decision P5, coordinator reading B, 16/10).
 An update that leaves out `cost_basis_override` changes nothing. One that sends it

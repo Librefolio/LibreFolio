@@ -428,11 +428,11 @@ What each plugin sends there (`plugin_version` is the one that introduced it; ch
 | Scalable (both accounts) | 1.1.0 | a `status` not known | an empty `status` | `pending`, `cancelled`, `canceled`, `expired`, `rejected` |
 | Fineco | 1.5.0 | a `Descrizione` the plugin does not map (also a `compravendita` with another `Segno`) | too few cells, no readable date, an empty `Descrizione` | — |
 | Directa | 1.1.0 | a type not known | too few columns, an unreadable date, a missing type | — |
-| Revolut (Invest layout) | 1.2.0 | `Stock split` | — | `Transfer` |
-| Trading 212 | 1.1.0 | `stock split`, `stock distribution`, `currency conversion` | — | `transfer` |
-| eToro | 1.2.0 | `overnight fee`, `overnight refund`, `sdrt` | — | — |
+| Revolut (Invest layout) | 1.3.0 | a `Stock split` with no readable positive `Quantity` (a reverse split), or with no ticker | — | `Transfer` |
+| Trading 212 | 1.2.0 | `stock distribution`, `currency conversion`; a `stock split close`/`open` that is a reverse split (fewer shares after), has equal shares, or has no partner | — | `transfer` |
+| eToro | 1.4.0 | — (no type goes to the shared notice) | — | — |
 | Trade Republic | 1.1.0 | an unknown type; a row whose `Kosten` or `Belasting` is not zero (the row is imported, the fee and tax are not) | an unreadable date or amount, a missing ISIN | — |
-| Swissquote | 1.1.0 | forex credit and debit legs, an unknown transaction | an unreadable date, a missing or zero net amount, a missing currency, a missing ISIN and symbol, a quantity not positive on a trade | — |
+| Swissquote | 1.2.0 | a forex leg without its partner, with costs, or in an order of more than two legs; an unknown transaction | an unreadable date, a missing or zero net amount, a missing currency, a missing ISIN and symbol, a quantity not positive on a trade | — |
 | Interactive Brokers | 1.1.0 | an unknown direction, a trade without an ISIN (a currency trade) | an unreadable date | — |
 
 Danske Bank has its own cure for the same rule (`excluded_status`, [Finnish notices](danske_bank.md#finnish-notices)).
@@ -470,13 +470,14 @@ plugin's notices and refusals (`importWizard.brimNotice.<code>`, `importWizard.b
 How to write the folder and its keys: [BRIM Plugin Guide → Auto-Discovery](../../architecture/patterns/brim_plugin_guide.md#auto-discovery)
 and [Register the name and description](../../architecture/patterns/brim_plugin_guide.md#plugin-name-i18n).
 
-### 🎛️ Settings (prepared, not used yet) {: #brim-settings }
+### 🎛️ Settings {: #brim-settings }
 
 The import plugins belong to the `brim` family of the [plugin settings](../../architecture/patterns/plugin_settings.md),
 with the same rules as the price sources: personal (`user`) and instance-wide (`system`) fields, and
-secrets of both scopes, encrypted with the instance key. **This is a preparation: no real plugin
-declares a field**, so nothing changes for users today. When one does, its card appears by itself
-in **Settings › Plugins**, under **Broker imports**, and a secret never comes back in clear.
+secrets of both scopes, encrypted with the instance key. A plugin that declares a field gets its card by
+itself in **Settings › Plugins**, under **Broker imports**, and a secret never comes back in clear. The first
+real field is `date_order` of the generic CSV plugin ([the contract](#brim-field-contract)); every other plugin
+declares none, so nothing changes for its users.
 
 What is in place:
 
@@ -510,13 +511,108 @@ A plugin reads its values as `self.settings.get("key")` and `self.settings.secre
 field (`PluginSettingField`, scopes, defaults, translations, environment variables) is in
 [Plugin Settings → Declaring Fields](../../architecture/patterns/plugin_settings.md#declaring-fields).
 
-**Not connected yet** (to do with the first real field): the places that create a plugin without
+**Not connected** (`date_order` does not need it): the places that create a plugin without
 the values, `BRIMProviderRegistry.auto_detect_plugin()`, `get_compatible_plugins()` and
 `list_plugin_info()` (plugin detection), the report sets (`brim_report_sets.py`) and the gap fix
 (`brim_gap_fix.py`), each of which calls `get_provider_instance()`. A plugin that needs a value in
-`can_parse()`, `combine()` or the gap fix would find it unset today. The
+`can_parse()`, `combine()` or the gap fix would find it unset. The
 [i18n ownership gate](../../architecture/patterns/registry_pattern.md#plugin-i18n-gate) reads the
 settings texts of asset and FX plugins only, so the keys of a BRIM field are not checked by it yet.
+
+#### A field in a BRIM plugin: the contract {: #brim-field-contract }
+
+The first real field is `date_order`, the order of the day and the month in the generic CSV plugin (CP12). This is
+what any field of a BRIM plugin follows; `test_brim_field_contract.py` (`./dev.py test services brim-field-contract`) runs
+this very example.
+
+**1. Declare it** with the same `PluginSettingField` as every family ([Declaring
+Fields](../../architecture/patterns/plugin_settings.md#declaring-fields)), as a class attribute of the plugin:
+
+```python
+# backend/app/services/brim_providers/broker_generic_csv/plugin.py
+from backend.app.services.plugin_settings.fields import PluginSettingField, SettingOption, SettingScope, SettingType
+
+class GenericCSVProvider(BRIMProvider):
+    settings_fields = (
+        PluginSettingField(
+            key="date_order",
+            type=SettingType.SELECT,
+            scope=SettingScope.USER,  # each user imports files of their own country's format
+            label="Order of day and month",
+            description="How a date such as 03/04/2025 is read: the day first (3 April) or the month first (4 March).",
+            default="day_first",      # the behaviour before the field existed
+            options=(SettingOption("day_first", "Day first"), SettingOption("month_first", "Month first")),
+        ),
+    )
+```
+
+The declaration is checked when the plugin registers; the family `brim` takes personal and instance fields and
+secrets, as the price sources do. The card appears by itself in **Settings › Plugins › Broker imports**. The
+translations go in the plugin's own fragment, `brim_providers/<plugin>/i18n/<lang>.json` (absolute keys, the four
+languages), under `pluginSettings.brim.<code>.label.<key>`, `.description.<key>` and `.option.<key>.<value>`
+([Labels and Translations](../../architecture/patterns/plugin_settings.md#translations)); add them with
+`./dev.py i18n add … --into brim_providers/<plugin>` (skill `devpy-i18n`). The i18n ownership gate does not read the
+keys of a BRIM field yet, so check them by hand.
+
+**2. The default is the old behaviour.** A field added to a plugin that already imports files must not change what
+they give: its default reproduces the behaviour before the field, so an instance nobody configured, a user who chose
+nothing, and every place that creates the plugin without values (detection, report sets, gap fix: [only the parse
+delivers settings](#brim-settings)) see exactly what the plugin always did.
+
+**3. Read it inside `parse()`**, never in `__init__`, as `self.settings.get("date_order")`. A field must not change
+what `can_parse()` answers, nor `combine()`: those run without the values.
+
+**4. A parse becomes stale when a setting changes.** The result of a parse is kept with the file (`last_parse_result`),
+and `parse_is_stale` already says «parsed by an older version of the plugin». A setting that changes the output must
+say the same, or the user re-reads yesterday's dates. The rule is one function,
+`settings_changed_since(saved_fingerprint, current, fields)` (`plugin_settings/resolver.py`), and these are its terms:
+
+| Input | Meaning |
+|-------|---------|
+| `saved_fingerprint` | `BoundSettings.fingerprint` of the values the parse received, saved with its result |
+| `current` | the `BoundSettings` a parse would receive **now, for the user who looks at the file** (`bound_settings_for(BRIMProviderRegistry, plugin_code, user_id=…)`), or `None` when the plugin declares no field |
+| nothing saved | a parse drawn before the field existed: compared with `default_settings_fingerprint(fields)`, so it is stale only once a value moves away from the default |
+
+```mermaid
+flowchart TD
+    A["Parse: the route has the bound values"] -->|"saves bound.fingerprint in the file's metadata"| B[("file metadata:<br/>parsed_settings_fingerprint")]
+    C["Listing / file info, for the signed-in user"] --> D{"plugin declares fields?"}
+    D -->|"no: current is None"| E["not stale for settings"]
+    D -->|"yes: bound_settings_for(…, user_id)"| F{"settings_changed_since(saved, current, fields)"}
+    B -->|"saved"| F
+    F -->|"fingerprints differ"| G["parse_is_stale = true"]
+    F -->|"same, or nothing saved and still the defaults"| E
+```
+
+The fingerprint is a hash of the plain values, and for a secret an HMAC under the instance key: it never shows a
+value, and a token set after the parse makes the file stale too.
+
+**How it is wired.** The rule is applied in these places, one file each:
+
+- `backend/app/services/brim_providers/broker_generic_csv/plugin.py`: the field `date_order`
+  (`DAY_FIRST` by default, `MONTH_FIRST`), read in `parse()` as `self.settings.get("date_order", DAY_FIRST)` and
+  passed to `parse_date(value, order)`. `day_first` tries `DATE_FORMATS` in their order (`%d/%m/%Y` then `%m/%d/%Y`;
+  dash and dot are day-first only), exactly as before the field. `month_first` uses `MONTH_FIRST_DATE_FORMATS`: month
+  first for slash, dash and dot, the day order as the fallback (25/12/2025 is always 25 December); ISO, compact and
+  text dates never move. There is no «auto» value.
+- `backend/app/services/brim/brim_parse_pool.py`: `parse_file_offloaded(..., bound=...)`. A caller that resolved the
+  values itself passes them and the database is not read again; `None` means «no settings».
+- `backend/app/api/v1/brokers.py`, the parse route: resolves `bound = bound_settings_for(...)` once, hands it to
+  `parse_file_offloaded` and saves `bound.fingerprint` with the result.
+- `backend/app/services/brim/brim_provider.py`, `save_parse_result(..., settings_fingerprint=...)`: stores it in
+  the file's metadata as `parsed_settings_fingerprint`; `None` (a plugin without fields) removes the one a previous
+  parse left.
+- `backend/app/schemas/brim.py`, `BRIMFileInfo.parsed_settings_fingerprint`: filled from the metadata, with
+  `exclude=True`, so it is compared in memory and never serialised in the API.
+- `backend/app/services/brim/brim_file_settings.py`, `apply_settings_staleness(files, user_id)`: called by
+  `GET /brokers/import/files` and `GET /brokers/import/files/{file_id}` in `brokers.py`, in the async route, for the
+  signed-in user. It resolves `current` once per plugin and sets `parse_is_stale = True` through
+  `settings_changed_since(...)`; a file that is not `PARSED`, a plugin without fields and a file already stale are
+  left alone. The existing stale banner already tells the user to parse again.
+
+The setting is personal (scope `user`): each user changes it in **Settings › Plugins › Broker imports**. After a
+change, a file already parsed shows the banner; a parse drawn before the field existed is not stale until the value
+moves away from the default.
 
 **The test plugin.** The family is exercised by a plugin that lives in a test module,
 `backend/test_scripts/test_services/_brim_settings_lab.py`, never under `brim_providers/`: the
@@ -602,9 +698,12 @@ eToro itself downloads the statement as XLS.
 - **Type**, by lower-cased substring: `open position` → `BUY`, `position closed` → `SELL`,
   `dividend` → `DIVIDEND`, `interest payment` → `INTEREST`, `withdraw request` → `WITHDRAWAL`,
   `deposit` → `DEPOSIT`. `withdraw fee`, `withdrawal conversion fee` and `conversion fee` are a
-  `FEE` when the amount is not zero and skipped silently when it is; `overnight fee`,
-  `overnight refund` and `sdrt` are not imported yet and go to the shared notice `rows_not_recognized`
-  (`NOT_IMPORTED_TYPES`, version 1.2.0: [Rows left out](#brim-row-skips)); any other type → warning.
+  `FEE` when the amount is not zero and skipped silently when it is, and so is `overnight fee`
+  (version 1.3.0); `sdrt` (UK stamp duty reserve tax) is a `TAX` on the row's asset. `overnight refund`
+  (money given back for an overnight fee, version 1.4.0, developer decision of 24/10/2026) is an `INTEREST`
+  with no asset: a `FEE` or `TAX` is a cost and a `DEPOSIT` is capital, so income is the honest type. Its cash is
+  the absolute amount whatever sign the file gives, and its description keeps the type (`overnight refund: daily`).
+  No eToro row goes to the shared notice `rows_not_recognized` any more; any other type → warning.
 - **Asset and currency** come from `Details` (`SYMBOL/CCY`, such as `NKE/USD`): the symbol is the
   fake asset's `extracted_symbol` (no ISIN, no name), and the three letters after the slash are the
   currency of the row's `Amount`. Without that shape, the whole text is the symbol and the currency

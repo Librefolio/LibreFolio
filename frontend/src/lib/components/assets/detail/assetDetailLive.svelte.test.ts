@@ -1332,12 +1332,13 @@ describe('the change over the range (X-R59)', () => {
             expect(live.rangeDelta).toEqual(DELTA_TO_99);
         });
 
-        it('raises a range start before 1900 to 1900-01-01, the first day the backend values', async () => {
+        // X5-6 (D-P4 L4): the backend values any day, so the true range start goes out, not 1900-01-01.
+        it('sends a range start before 1900 as it is', async () => {
             mount({rangeStart: '1850-06-01'});
             quoteNext('99', {range_change: CHANGE_TO_99});
             await poll();
 
-            expect(pricesEndpoint.mock.calls).toStrictEqual([[[ASSET_ID], {queries: {range_start: '1900-01-01'}}]]);
+            expect(pricesEndpoint.mock.calls).toStrictEqual([[[ASSET_ID], {queries: {range_start: '1850-06-01'}}]]);
         });
 
         it('sends a range start on today: a range of one day', async () => {

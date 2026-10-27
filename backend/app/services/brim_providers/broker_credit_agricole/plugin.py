@@ -891,9 +891,9 @@ class CreditAgricoleBrokerProvider(BRIMProvider):
         try:
             rows = io.read_rows(file_path)
         except FileNotFoundError:
-            raise BRIMParseError(f"File not found: {file_path}") from None
+            raise BRIMParseError(f"File not found: {file_path}", details={"code": "file_not_found", "context": {"file": file_path.name}}) from None
         except Exception as exc:
-            raise BRIMParseError(f"Error reading file: {exc}") from exc
+            raise BRIMParseError(f"Error reading file: {exc}", details={"code": "file_unreadable", "context": {"error": str(exc)}}) from exc
 
         # This single plugin reads two Crédit Agricole layouts; the header row
         # decides which. Securities "Deposito Titoli" movements carry positions
@@ -903,12 +903,12 @@ class CreditAgricoleBrokerProvider(BRIMProvider):
             return self._parse_securities(rows, broker_id)
         if io.find_header_row(rows, ["Data Op.", "Descrizione", "Importo"]) is not None:
             return self._parse_account_movements(rows, broker_id)
-        raise BRIMParseError("Crédit Agricole header row not found (neither securities 'Deposito " "Titoli' nor account 'Lista Movimenti Conto' layout)")
+        raise BRIMParseError("Crédit Agricole header row not found (neither securities 'Deposito " "Titoli' nor account 'Lista Movimenti Conto' layout)", details={"code": "header_row_not_found"})
 
     def _parse_securities(self, rows: List[List], broker_id: int) -> BRIMParseOutput:  # noqa: C901 — flat causale dispatch with per-arm field mapping; maturity arm nests par-model fallback
         header_idx = io.find_header_row(rows, ["Data operazione", "Causale", "Quantità"])
         if header_idx is None:
-            raise BRIMParseError("Crédit Agricole securities header row not found")
+            raise BRIMParseError("Crédit Agricole securities header row not found", details={"code": "header_row_not_found", "context": {"layout": "securities"}})
 
         col = io.build_col_index(
             rows[header_idx],
@@ -1327,7 +1327,7 @@ class CreditAgricoleBrokerProvider(BRIMProvider):
         """
         header_idx = io.find_header_row(rows, ["Data Op.", "Descrizione", "Importo"])
         if header_idx is None:
-            raise BRIMParseError("Crédit Agricole account-movements header row not found")
+            raise BRIMParseError("Crédit Agricole account-movements header row not found", details={"code": "header_row_not_found", "context": {"layout": "account"}})
         col = io.build_col_index(
             rows[header_idx],
             {

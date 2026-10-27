@@ -508,8 +508,8 @@ def api_prices_currency_coherence(verbose: bool = False, test_names: list = None
 
 def api_asset_currency_change(verbose: bool = False, test_names: list = None) -> bool:
     """Run asset currency-change flow tests."""
-    print_section("Asset Currency Change (I.3 + I-bis #7) API Tests")
-    print_info("Testing PATCH /assets currency change: 409 when blocked, wipe + retry happy path")
+    print_section("Asset Currency Change (N68) API Tests")
+    print_info("Testing PATCH /assets currency change: never blocked, prices + non-split events removed, SPLITs and their transactions kept, mixed batch partial")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_asset_currency_change.py", test_names)
     return run_command(cmd, "Asset currency change tests", verbose=verbose)
@@ -536,10 +536,20 @@ def api_prices_sync_delta(verbose: bool = False, test_names: list = None) -> boo
 def api_market_data_wipe(verbose: bool = False, test_names: list = None) -> bool:
     """Run market-data wipe endpoint tests."""
     print_section("Market-Data Wipe (R3-3) API Tests")
-    print_info("Testing GET /assets/{id}/market-data/summary + POST /wipe (Policy D)")
+    print_info("Testing GET /assets/{id}/market-data/summary + POST /wipe (N68: SPLITs survive, splits_kept)")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_market_data_wipe.py", test_names)
     return run_command(cmd, "Market-data wipe tests", verbose=verbose)
+
+
+def api_event_reconciliation(verbose: bool = False, test_names: list = None) -> bool:
+    """Run GET /transactions/event-reconciliation tests (N68)."""
+    print_section("Event Reconciliation (N68) API Tests")
+    print_info("Testing GET /transactions/event-reconciliation: unique/none/several candidates, roles, filters, order, read-only, link flow")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_event_reconciliation_api.py", test_names)
+    return run_command(cmd, "Event reconciliation tests", verbose=verbose)
 
 
 def api_backup_export_extras(verbose: bool = False, test_names: list = None) -> bool:
@@ -593,6 +603,17 @@ def api_brim_scalable(verbose: bool = False, test_names: list = None) -> bool:
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_brim_scalable_api.py", test_names)
     return run_command(cmd, "BRIM Scalable API tests", verbose=verbose)
+
+
+def api_brim_date_order(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the generic CSV date_order API flow tests."""
+    print_section("BRIM Date Order API Tests")
+    print_info("Testing the user's own date_order end to end: plugin settings catalogue, parse, parse_is_stale")
+    print_info("Tests: the card is offered, a file parsed over the defaults is current, a changed value makes it stale until parsed again, no fingerprint served")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_brim_date_order_api.py", test_names)
+    return run_command(cmd, "BRIM date order API tests", verbose=verbose)
 
 
 def search2prices_test(verbose: bool = False, test_names: list = None) -> bool:
@@ -859,6 +880,46 @@ def api_panel_restore(verbose: bool = False, test_names: list[str] | None = None
     return run_command(cmd, "Hosting panel restore API tests", verbose=verbose)
 
 
+def api_backup_users_limit(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Test a backup with more active accounts than LIBREFOLIO_MAX_USERS through the API: the report warns, the confirmation never refuses (lot B5-1k2)."""
+    print_section("Backup API: users limit")
+    print_info("Testing: GET /backup/restore/stage/{id} (users_active, users_limit, users_over_limit, the warning), POST .../confirm (202, body unchanged), the hosting panel's view (the warning, no numbers), OpenAPI")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_users_limit_api.py", test_names)
+    return run_command(cmd, "Backup API users limit tests", verbose=verbose)
+
+
+def api_backup_users_limit_panel(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Test the hosting panel's side of a backup with more active accounts than LIBREFOLIO_MAX_USERS (lot B5-1k2)."""
+    print_section("Backup API: users limit, hosting panel")
+    print_info("Testing: the panel's stage report carries the warning users_over_limit and no number, its confirmation is accepted (panel_restore.py, H's, untouched)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_users_limit_panel_api.py", test_names)
+    return run_command(cmd, "Backup API users limit panel tests", verbose=verbose)
+
+
+def api_backup_owner_channels(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the tests of the owner of a restore confirmed by the hosting panel or from the command line (B5-1j)."""
+    print_section("Restore Owner, Panel and Command Line API")
+    print_info("Testing: the panel's confirmation on a managed instance picks the account holding the owner's address (nobody found: 202, outcome none), 409 owner_conflict with advice, 409 restore_stage_outdated, self-hosted unchanged; the real restore guard for a restore of the command line or panel (423 owner_assignment while pending, served once recorded, an error keeps refusing, reset allowed)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_owner_channels_api.py", test_names)
+    return run_command(cmd, "Restore owner, panel and command line API tests", verbose=verbose)
+
+
+def api_backup_owner_kept(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the tests of the hosting panel's confirmation that keeps the owner's password and sessions (B5-1l)."""
+    print_section("Restore Owner Kept, Hosting Panel API")
+    print_info("Testing: the panel's confirmation on a managed instance where the backup marks exactly one account as its instance owner (an active administrator holding LIBREFOLIO_ADMIN_EMAIL): 202 with PanelRestoreStatus unchanged and restore.json recording that account and owner_outcome kept; the panel's status view says nothing of it; a second mark or an unmarked holder is B5-1j's pick without outcome; owner_conflict is still 409 first")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_owner_kept_api.py", test_names)
+    return run_command(cmd, "Restore owner kept, hosting panel API tests", verbose=verbose)
+
+
+def api_backup_owner_kept_app(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the tests of the administrators' route next to the restore that keeps the owner (B5-1l): the app never keeps."""
+    print_section("Restore Owner Kept, Administrators' API")
+    print_info("Testing: the check through the administrators' route counts the one marked account (owner_marks); the same copy confirmed with the owner chosen is 202 with no outcome (never kept) and the status view names nothing of the owner")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_backup_owner_kept_app_api.py", test_names)
+    return run_command(cmd, "Restore owner kept, administrators' API tests", verbose=verbose)
+
+
 def api_await_restore_mode(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run the «awaiting restore» mode's API tests: refuse_when_awaiting_restore, its allowed set, ready/instance/wake/panel status (H-62, §6)."""
     print_section("Awaiting Restore Mode API")
@@ -873,6 +934,22 @@ def api_restore_interrupted(verbose: bool = False, test_names: list[str] | None 
     print_info("Testing: 423 instance_restore_interrupted for anyone outside the allowed set (the mode's), the third router dependency, restore_interrupted in /system/instance, wake-sync restore_interrupted, GET /panel/status restore unreadable (D7), the panel's backup start 409 backup_restore_interrupted")
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_restore_interrupted_api.py", test_names)
     return run_command(cmd, "Restore interrupted API tests", verbose=verbose)
+
+
+def api_instance_key_check(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the instance key check's API tests: the panel's status, its backup start, wake-sync, the Security list, the way back (H5-7, H)."""
+    print_section("Instance Key Check API")
+    print_info("Testing: GET /panel/status instance_key ok|mismatch (nine keys since H5-8), POST /backup/panel/jobs 409 backup_instance_key_mismatch after the credential, wake-sync instance_key_mismatch, the instance keeps serving, /security/checks platform.instance_key_check, the state read at every request, the way back on real files")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_instance_key_check_api.py", test_names)
+    return run_command(cmd, "Instance key check API tests", verbose=verbose)
+
+
+def api_restore_owner_guard(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the owner guard's API tests: 423 while the restored owner has no account, its recheck, the reason in /system/instance (H5-3, H)."""
+    print_section("Restore Owner Guard API")
+    print_info("Testing: 423 instance_restore_interrupted while the owner has no account (pending or a code), the allowed set, the recheck of a pending state through the dependency, restore_interrupted_reason in /system/instance, the panel's backup 409, wake-sync restore_interrupted")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_restore_owner_guard_api.py", test_names)
+    return run_command(cmd, "Restore owner guard API tests", verbose=verbose)
 
 
 def api_panel_status(verbose: bool = False, test_names: list[str] | None = None) -> bool:
@@ -945,6 +1022,16 @@ def api_email_verification(verbose: bool = False, test_names: list[str] | None =
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_email_verification_api.py", test_names)
     return run_command(cmd, "Email verification API tests", verbose=verbose)
+
+
+def api_owner_email_change(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the API tests of the owner's email-change confirmation: POST /email/email-change/confirm, in-process."""
+    print_section("Owner Email Change API Tests")
+    print_info("Testing POST /email/email-change/confirm (anonymous: 200 {username}, the address moved and verified, sessions ended, notice to the old address scheduled; 400 TOKEN_INVALID with the token's status; revoked when the variable changed again, the address was taken, the profile is not managed or the account is not the owner; 422)")
+    print_info("In-process: the real auth and email routers on a private SQLite, profile and variables by monkeypatch; the lane's backend is never called")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_owner_email_change_api.py", test_names)
+    return run_command(cmd, "Owner email change API tests", verbose=verbose)
 
 
 def api_email_verification_hooks(verbose: bool = False, test_names: list[str] | None = None) -> bool:
@@ -1063,6 +1150,24 @@ def e2e_backup_roundtrip_l3(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Backup round trip L3 E2E tests", verbose=verbose)
 
 
+def e2e_backup_roundtrip_owner(verbose: bool = False, test_names: list = None) -> bool:
+    """Test a backup restored from the app on a managed instance with the owner's choice: real servers on Unix sockets (B5-1f)."""
+    print_section("E2E: Backup Restored on a Managed Instance, the Owner's Choice (B5-1f)")
+    print_info("Testing: the restore from the app on LIBREFOLIO_PROFILE=managed across pending-restore, restore-commit, restore-owner, owner-sync")
+    print_info("Tests: owner_choice required → restart → owner assigned, link only in the log, spent once; at most once; fail closed and recovered; no owner chosen clears the flag")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_e2e/test_backup_roundtrip_owner.py", test_names)
+    return run_command(cmd, "Backup round trip owner E2E tests", verbose=verbose)
+
+
+def e2e_backup_roundtrip_over_limit(verbose: bool = False, test_names: list = None) -> bool:
+    """Test a backup with more active accounts than LIBREFOLIO_MAX_USERS restored and then met by the over-limit state: real servers on Unix sockets (B5-1k2)."""
+    print_section("E2E: Backup With More Accounts Than the Plan Holds (B5-1k2)")
+    print_info("Testing: the check's numbers and warning users_over_limit, the confirmation never refused, the restore of every account, then A5-7's over-limit state (423 user_limit_exceeded, GET /users/over-limit, POST /users/over-limit/resolve)")
+    print_info("Tests: self-hosted app, managed app (the owner protected), self-hosted command line: nothing is removed, the others are deactivated by the administrator's choice")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_e2e/test_backup_roundtrip_over_limit.py", test_names)
+    return run_command(cmd, "Backup round trip over-limit E2E tests", verbose=verbose)
+
+
 def e2e_test(verbose: bool = False) -> bool:
     """Run all E2E tests."""
     if _common.nothing_left_to_run("e2e"):
@@ -1117,7 +1222,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "fx-convert-sampling", api_fx_convert_sampling, name="FX Convert Sampling", desc="Z-29fx: max_points, resolution and sample_like on POST /fx/currencies/convert: the step from the fill's first day, the bucket results, samples with resolution and sample_bounds, request_index, sample_reference 422s, signals reduced and aligned (O1), the calendar rolling return in the FX domain, the day budget", isolation="pure")
     add_test(api, "assets-price", api_assets_price, name="Assets Price API", desc="Bulk upsert, delete, query, sync; X-R65 422 date_out_of_range; X-R71 422 price_currency_mismatch")
     # Write-scoped (the category default): own user, own asset (deleted), rates only on AWG/TMT, a pair no other test uses.
-    add_test(api, "period-changes", api_period_changes, name="Period Changes API", desc="MF-P2: login, base == quote 422, answer shape, and the Assets/FX pages' numbers from the price query and the conversions; MF-P2b: list caps, ≤ 5 distinct as_of, as_of ≥ 1900")
+    add_test(api, "period-changes", api_period_changes, name="Period Changes API", desc="MF-P2: login, base == quote 422, answer shape, and the Assets/FX pages' numbers from the price query and the conversions; MF-P2b: list caps, ≤ 5 distinct as_of; X5-6: no 1900 floor")
     add_test(api, "signal-catalogs", api_signal_catalogs, name="Signal Catalogs", desc="Static authenticated Asset/FX signal definitions")
     add_test(api, "asset-signals", api_asset_signals, name="Asset Signals", desc="Price-query legacy, signal-only, annotations and isolation")
     add_test(api, "fx-signals", api_fx_signals, name="FX Signals", desc="Combined conversion, grouped signals, identity/rates and legacy output")
@@ -1159,7 +1264,7 @@ Tests for REST API endpoints (server auto-started):
         name="Utilities API: Currency Suggestion (E-19b1)",
         desc="GET /utilities/currencies/suggest: canonical, the one ISO code a stored value stands for (978, EURO -> EUR), the candidates of an ambiguous one (VED, VES), none for a subunit; public; value of 1 to 200 characters, else 422",
     )
-    add_test(api, "system", api_system, name="System API", desc="parse_pipfile, deps, info (public or full), connection, instance, ready, route order")
+    add_test(api, "system", api_system, name="System API", desc="parse_pipfile, deps, info (public or full), connection, instance, ready (codes, database_revision, mode, app_version: required string last, the public info's, in the 200 and the 503, no session), route order")
     # Read-only on the lane (one anonymous GET); every case with a variable runs in-process on a private database.
     add_test(api, "instance-legal", api_instance_config_legal, name="Instance Configuration: Legal Links (A9)", desc="GET /system/instance legal {terms_url, privacy_url}: valid, unset, invalid (null, still 200), no secret; the schema and the OpenAPI document; live on the lane: both null")
     add_test(
@@ -1247,7 +1352,7 @@ Tests for REST API endpoints (server auto-started):
         "backup-restore-apply",
         api_backup_restore_apply,
         name="Backup API Restore Confirmation",
-        desc="The restore confirmed through /backup/restore (lot B3): POST /stage/{id}/confirm → 202 pending, .restore/restore.json 0600 with the report's backup and action, confirmed_by the administrator, the copy kept; every refusal (404 restore_stage_not_found, 409 restore_stage_running / restore_not_restorable / restore_stage_outdated / restore_already_pending, 410 restore_stage_expired, 500 restore_folder_unusable for a .restore link or file; checks/ or stage/ a link → 404), nothing written; GET /status none (nothing created), each phase, links never followed; DELETE /pending 204 or 404 restore_not_pending without creating the lock; POST /restart 202 then one SIGTERM to the server's root process through restart.send_signal after the answer, 409 without a pending restore; the copy of an active restore: DELETE /stage 409 restore_pending, prune keeps it however old (the CLI's unrecorded copy too); administrators only (403); none of the routes allowed when blocked; OpenAPI; lot B5c: the restart's one-time ticket (43 characters, only its hash on disk, 0600, no-store, replaced by a second restart, none on a 409), GET /outcome without a session, the ticket in X-Restore-Ticket only, every invalid ticket the same 404 restore_outcome_not_found, the outcome's three fields, read again until it expires, a final outcome included (decision N53), never logged, answered on a blocked instance (H's allow-list entry); B-17: DELETE /pending drops the copy and its check record, and the ticket; B-32: a state the file system cannot read (os.open refusing restore.json alone with EACCES or EIO, or its mode 000 unless root): GET /status, DELETE /pending, POST /restart and the confirmation of a fresh check 500 restore_state_unreadable, the reader's error logged, no path or system words in the answer, nothing written (state, copy, check record, ticket untouched; no ticket issued, no restart), the restore still pending once readable; GET /outcome still the one 404, its ticket kept (guard); OpenAPI names restore_state_unreadable in the four 500s; B-41: a ticket that does not open the outcome never makes it open the state file nor log that it cannot (every case of (i) the ticket alone decides, the state made unreadable)",
+        desc="The restore confirmed through /backup/restore (lot B3): POST /stage/{id}/confirm → 202 pending, .restore/restore.json 0600 with the report's backup and action, confirmed_by the administrator, the copy kept; every refusal (404 restore_stage_not_found, 409 restore_stage_running / restore_not_restorable / restore_stage_outdated / restore_already_pending, 410 restore_stage_expired, 500 restore_folder_unusable for a .restore link or file; checks/ or stage/ a link → 404), nothing written; GET /status none (nothing created), each phase, links never followed; DELETE /pending 204 or 404 restore_not_pending without creating the lock; POST /restart 202 then one SIGTERM to the server's root process through restart.send_signal after the answer, 409 without a pending restore; the copy of an active restore: DELETE /stage 409 restore_pending, prune keeps it however old (the CLI's unrecorded copy too); administrators only (403); none of the routes allowed when blocked; OpenAPI; lot B5c: the restart's one-time ticket (43 characters, only its hash on disk, 0600, no-store, replaced by a second restart, none on a 409), GET /outcome without a session, the ticket in X-Restore-Ticket only, every invalid ticket the same 404 restore_outcome_not_found, the outcome's three fields, read again until it expires, a final outcome included (decision N53), never logged, answered on a blocked instance (H's allow-list entry); B-17: DELETE /pending drops the copy and its check record, and the ticket; B-32: a state the file system cannot read (os.open refusing restore.json alone with EACCES or EIO, or its mode 000 unless root): GET /status, DELETE /pending, POST /restart and the confirmation of a fresh check 500 restore_state_unreadable, the reader's error logged, no path or system words in the answer, nothing written (state, copy, check record, ticket untouched; no ticket issued, no restart), the restore still pending once readable; GET /outcome still the one 404, its ticket kept (guard); OpenAPI names restore_state_unreadable in the four 500s; B-41: a ticket that does not open the outcome never makes it open the state file nor log that it cannot (every case of (i) the ticket alone decides, the state made unreadable); B5-1g: a backup with a pending administrator (inactive, an unused admin_setup link) and nobody holding the owner's address is 409 owner_conflict whatever the choice, 202 when another account holds the address; a backup with no active administrator (nobody holds the address; the only account a plain user or a disabled administrator holding it) is 409 restore_not_restorable on a managed instance whatever owner it names or none, the blocker named",
         # PURE: an app of the test holds backup_router under /api/v1 (get_current_user overridden), the data directory
         # of restore.py, restore_jobs.py and apply.py is under tmp_path and the process's own one is a folder of the
         # test that must stay absent; restart.send_signal and os.kill as restart sees them record and never signal;
@@ -1266,14 +1371,28 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "ohlc-sentinel", api_ohlc_sentinel, name="OHLC Sentinel", desc="F.4 merge on POST /assets/prices (N92): null or absent keeps the stored value, 'clear' empties it, a number writes it; -1, any other text and a close not above 0 refused with 422, nothing written")
     add_test(api, "current-price-persistence", api_current_price_persistence, name="Current Price Persistence", desc="/current endpoint OHLC upsert")
     add_test(api, "prices-currency-coherence", api_prices_currency_coherence, name="Prices Currency Coherence", desc="Hard reject on currency mismatch; X-R71: 422 price_currency_mismatch (items per asset at fault, count), the whole upload refused, no asset written; an unknown asset still reported")
-    add_test(api, "asset-currency-change", api_asset_currency_change, name="Asset Currency Change", desc="409 blocked, wipe + retry")
+    add_test(
+        api,
+        "asset-currency-change",
+        api_asset_currency_change,
+        name="Asset Currency Change",
+        desc="N68 policy A: the currency PATCH is never blocked; prices and non-split events go, their transactions are unlinked, SPLITs and their transactions stay; same currency and nothing-to-lose unchanged; mixed batch 200 partial",
+    )
     add_test(api, "asset-prices-export", api_asset_prices_export, name="Asset Prices Export", desc="CSV/JSON export + round-trip")
     add_test(api, "prices-sync-delta", api_prices_sync_delta, name="Prices Sync Delta", desc="changed_points payload")
-    add_test(api, "market-data-wipe", api_market_data_wipe, name="Market Data Wipe", desc="Summary + wipe (Policy D)")
+    add_test(api, "market-data-wipe", api_market_data_wipe, name="Market Data Wipe", desc="Summary + wipe; N68: SPLITs survive, summary/wipe keys include splits_kept, never a 409")
+    add_test(
+        api,
+        "event-reconciliation",
+        api_event_reconciliation,
+        name="Event Reconciliation",
+        desc="N68: GET /transactions/event-reconciliation lists the caller's unlinked DIVIDEND/INTEREST/ADJUSTMENT on brokers where it is EDITOR+ with same-day candidates (unique/none/several), filters, newest first, read-only; link via commit updates",
+    )
     add_test(api, "backup-export-extras", api_backup_export_extras, name="Backup Export Extras", desc="Events + FX rates export")
     add_test(api, "uploads-serve-file", api_uploads_serve_file, name="Uploads Serve File", desc="Preview, download, MIME")
     add_test(api, "brokers", api_brokers, name="Brokers API", desc="CRUD broker endpoints")
     add_test(api, "brim", api_brim, name="BRIM API", desc="Upload, parse, import flow")
+    add_test(api, "brim-date-order", api_brim_date_order, name="BRIM Date Order API", desc="W5-8 (CP12): the user's own date_order reaches the generic CSV parse, a change makes the file stale until parsed again, the fingerprint is never served")
     add_test(api, "brim-scalable", api_brim_scalable, name="BRIM Scalable API", desc="Scalable broker + overnight account: transfers merged and re-imported as duplicates, one-broker cash")
     add_test(api, "auth", api_auth, name="Auth API", desc="Register, login, logout, me", exclusive_because="rewrites global_settings.registration_mode, one row shared by every user: a concurrent unit would register against whatever value this one left behind")
     # Write-scoped, no exclusive_because: every case that needs another registration mode, an accounts variable or a
@@ -1394,7 +1513,7 @@ Tests for REST API endpoints (server auto-started):
         "panel-status",
         api_panel_status,
         name="Hosting Panel Status API",
-        desc="H-61 R1: GET /panel/status off 404 without a token, panel_status_unauthorized, the four states of the initial administrator's setup with the expiry of a pending one only, no personal data, answered on a blocked instance, its OpenAPI schema",
+        desc="H-61 R1: GET /panel/status off 404 without a token, panel_status_unauthorized, the four states of the initial administrator's setup with the expiry of a pending one only, no personal data, answered on a blocked instance, its OpenAPI schema; the places taken and the limit, owner_email_change, instance_key (nine keys in all); H5-8 users_over_limit: true only while the ACTIVE accounts outnumber LIBREFOLIO_MAX_USERS (invitations and waiting accounts do not count, a deactivated one neither), recomputed at each request, never who, on a blocked, awaiting-restore or unreadable-restore instance, a required boolean right after instance_key in the OpenAPI",
         isolation="pure",
     )
     add_test(
@@ -1407,6 +1526,65 @@ Tests for REST API endpoints (server auto-started):
         # directory under tmp_path, the database session a stand-in that fails if reached, restart recorded, fake
         # threads; the archives from test_backup_staging.py's alembic databases under tmp_path: no lane server, DB or
         # network is reached (the api category still starts the lane's backend around it).
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "backup-users-limit",
+        api_backup_users_limit,
+        name="Backup Users Limit API",
+        desc="Lot B5-1k2, a backup with more active accounts than LIBREFOLIO_MAX_USERS through the routes: the administrators' stage report (RestoreStageReport) carries users_active, users_limit, users_over_limit (exact keys) and the warning users_over_limit before credentials_from_backup, nothing about who; the confirmation is 202 with the body unchanged ({owner_user_id}), for a regular and a managed instance; the hosting panel's view (PanelRestoreStageReport, its twenty fields) carries the warning code and no number, and its confirmation is accepted; OpenAPI documents the three fields and the code in the warnings, and no new field in the confirmation's body",
+        tests="Report users_* + warning → confirm 202 → panel view (code only) and confirm → OpenAPI",
+        # PURE: an app of the test holds backup_router (get_current_user overridden) / the app of main.py for the panel, data
+        # directories under tmp_path, real archives from the staging tests' alembic database; no lane server, DB or network is
+        # reached (the api category still starts the lane's backend around it).
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "backup-users-limit-panel",
+        api_backup_users_limit_panel,
+        name="Backup Users Limit, Hosting Panel",
+        desc="Lot B5-1k2: the hosting panel (H's panel_restore.py and PanelRestoreStageReport, untouched) and a sealed backup with more active accounts than LIBREFOLIO_MAX_USERS: the panel's stage report carries the warning users_over_limit in warnings (before credentials_from_backup) and NO number or account (its twenty fields are the same, users_active, users_limit and users_over_limit are not among them), its confirmation is 202 pending via the panel, also when the limit changed after the check (not restore_stage_outdated)",
+        tests="Panel check of a backup over the limit → report: the code, no number → confirm 202",
+        # PURE: the app of main.py in this process (ASGI), the panel's fixtures of test_panel_restore_api.py, data directories
+        # under tmp_path; no lane server, DB or network is reached.
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "backup-owner-channels",
+        api_backup_owner_channels,
+        name="Restore Owner, Panel and CLI",
+        desc="Lot B5-1j: the owner of a restore confirmed by the hosting panel (or the command line) on a managed instance with LIBREFOLIO_ADMIN_EMAIL set. Through the panel's confirm route (H's, untouched): a real check, then 202 with the state recording the account that holds the owner's address (the answer names no account or address); nobody found is still 202 with owner_outcome none; owner conflicts are 409 owner_conflict whose message says to make a new backup, nothing pending; a check made with another address is 409 restore_stage_outdated; self-hosted reads neither. The restore guard with the REAL hook and a state of the command line or panel: 423 while the owner is pending, served once the outcome is recorded, an error keeps refusing and the reset (backup pending --recover owner) is allowed; a restore where nobody was picked never keeps the instance from serving",
+        tests="Panel confirm → owner picked / outcome none; 409 owner_conflict; 409 outdated; guard 423 for cli/panel",
+        # PURE: the app of main.py in this process (ASGI) on a private database / the panel's fixtures of test_panel_restore_api.py,
+        # data directories under tmp_path, real archives from the staging tests' alembic databases; no lane server, DB or network
+        # is reached (the api category still starts the lane's backend around it).
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "backup-owner-kept",
+        api_backup_owner_kept,
+        name="Restore Owner Kept, Hosting Panel",
+        desc="Lot B5-1l: the hosting panel's confirmation (H's route, untouched) on a managed instance with LIBREFOLIO_ADMIN_EMAIL set, for a backup that marks exactly ONE account as its instance owner (StagingReport.owner_marks 1) that is an active administrator holding the owner's address: 202 with PanelRestoreStatus exactly as ever (eleven fields, no account, no address, no word about an owner) and restore.json recording that account and owner_outcome kept; the panel's status view afterwards names nothing of it; GUARDS: a second mark, an unmarked holder or nobody marked is B5-1j's pick (the holder as the owner, no outcome, 202); owner_conflict is still 409 first",
+        tests="Panel confirm of the copy the rule keeps → 202, kept in restore.json → status view silent; condition missing → B5-1j; owner_conflict 409",
+        # PURE: the app of main.py in this process (ASGI), the panel's fixtures of test_panel_restore_api.py and the helpers of
+        # test_backup_owner_channels_api.py, data directories under tmp_path, real archives from the staging tests' alembic
+        # databases; no lane server, DB or network is reached (the api category still starts the lane's backend around it).
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "backup-owner-kept-app",
+        api_backup_owner_kept_app,
+        name="Restore Owner Kept, Administrators",
+        desc="Lot B5-1l: the administrators' route (the app) next to the restore that keeps the owner: a real check of a backup with one marked administrator holding the owner's address counts the mark (owner_marks 1, the candidate marked); GUARD: the same copy confirmed with {owner_user_id: that account} is 202, a plain RestoreStatus (twelve fields), restore.json records the account chosen and NO outcome (never kept), and neither the confirmation nor the status view says a word of the owner, the outcome, an address or an id",
+        tests="Real check counts the mark → app confirm with the owner chosen: 202, no outcome → status view silent",
+        # PURE: an app of the test holds backup_router (get_current_user overridden), data directories under tmp_path, real
+        # archives from the staging tests' alembic database; no lane server, DB or network is reached (the api category still
+        # starts the lane's backend around it).
         isolation="pure",
     )
     add_test(
@@ -1430,6 +1608,26 @@ Tests for REST API endpoints (server auto-started):
         # tmp_path, the interruption and the switches by monkeypatch: the lane's backend and DB are never reached.
         isolation="pure",
     )
+    add_test(
+        api,
+        "instance-key-check",
+        api_instance_key_check,
+        name="Instance Key Check API",
+        desc="H5-7 (H, D6): GET /panel/status holds instance_key ok|mismatch (eight keys, required, never the value) on a blocked, awaiting and interrupted instance too, from the check file or R1; POST /backup/panel/jobs on a mismatch is 409 backup_instance_key_mismatch with no job, after the credential, not over an awaiting restore, the poll/download/delete untouched, the dependency right after the credential; wake-sync answers instance_key_mismatch and runs nothing; users are still served and /system/instance is unchanged; /security/checks lists platform.instance_key_check; the state is read at every request; the way back: key A, B (409), A again (ok, 202, nothing stored) and the accept path",
+        # PURE: the app of main.py in this process (ASGI), every request's session on a private SQLite file under tmp_path, real
+        # check files in the data directory there, the keys by monkeypatch: the lane's backend and DB are never reached.
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "restore-owner-guard",
+        api_restore_owner_guard,
+        name="Restore Owner Guard API",
+        desc="H5-3 (H): while restore_guard has an owner problem (pending, or the code of A's refusal) every /api/v1 route but the allowed set answers 423 instance_restore_interrupted to anyone, the panel's backup start 409 backup_restore_interrupted after its credential; refuse_when_restore_interrupted first awaits refresh_restore_state: a pending state asked again after OWNER_RECHECK_SECONDS (patched clock, fake hook) heals and serves, a code never does, nothing is asked when not due; on a real restore.json (H5-5) pending at the start then sent is served by the next request, pending then error:<CODE> keeps refusing; GET /system/instance restore_interrupted_reason (restore_state wins, owner_assignment, null); wake-sync restore_interrupted",
+        # PURE: the app of main.py in this process (ASGI), every request's session on a private SQLite file under
+        # tmp_path, the guard's variables, clock and B's hook by monkeypatch: the lane's backend and DB are never reached.
+        isolation="pure",
+    )
     add_test(api, "broker-multiuser", api_broker_multiuser, name="Broker Multi-User", desc="Role-based permissions")
     add_test(api, "users-search", api_users_search, name="User Search API", desc="User search, share validation")
     add_test(api, "portfolio", api_portfolio, name="Portfolio API", desc="Summary, history, asset-history, FIFO lots endpoints")
@@ -1443,6 +1641,16 @@ Tests for REST API endpoints (server auto-started):
         # PURE: the real auth and email routers and the instance route run in-process on a private SQLite file under tmp_path, the
         # SMTP and LIBREFOLIO_PUBLIC_URL variables are set with monkeypatch in this process, the limiters are private on a fake clock
         # and the fake SMTP server listens on 127.0.0.1: the lane's backend is never called.
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "owner-email-change",
+        api_owner_email_change,
+        name="Owner Email Change API",
+        desc="POST /email/email-change/confirm (anonymous, no cookie set: 200 {username}, the owner's address moved and verified, its sessions ended (the cookie of before refused), the old address no longer signs in and the new one does with the same password, its other change links and reset links revoked, the notice to the old address scheduled, the owner protected by flag and address; 400 TOKEN_INVALID with expired/consumed/revoked/unknown, another purpose's token unknown and untouched, revoked when the host changed the variable again / another account took the address / not managed / not the owner / no address; 422 body); the whole flow from the startup sync's email to the click; no token or address in the logs; route name and models agreed with the web app",
+        # PURE: the real auth and email routers run in-process on a private SQLite file under tmp_path; profile and variables
+        # set with monkeypatch; email_changed_work replaced by a recorder; the lane's backend is never called.
         isolation="pure",
     )
     add_test(
@@ -1523,6 +1731,30 @@ Complete workflow tests via REST API:
         name="Backup Round Trip L3",
         desc="Contract L3 (lot B5): a populated instance served with LIBREFOLIO_BACKUP_RECIPIENTS makes a sealed backup for the hosting panel (a backup ticket): a .tar without the instance key, its download the job's SHA-256, read with read_sealed, its password opened by the test identity and checked against the envelope; an empty instance in LIBREFOLIO_AWAIT_RESTORE (the source's instance key) answers mode awaiting_restore, 423 instance_awaiting_restore, 409 backup_awaiting_restore; the panel uploads the envelope, checks it (R1: no administrators, differences or tables), confirms, restarts; a new process commits it; out of the mode the target has the source's rows, files, ledger totals and reports, and its administrator signs in; a backup ticket never opens the restore routes, and out of the mode they answer 409 restore_mode_required. RED until H-62",
         tests="Sealed backup → Await restore → Upload, Stage, Confirm, Restart → Committed → Same totals",
+        # PURE: every data directory and archive under tmp_path, every server a child uvicorn of the test on a Unix socket
+        # under /tmp (never a TCP port), in test mode on its own data directory; the lane's data directory, database and
+        # server are never read nor written.
+        isolation="pure",
+    )
+    add_test(
+        e2e,
+        "backup-roundtrip-owner",
+        e2e_backup_roundtrip_owner,
+        name="Backup Round Trip Owner",
+        desc="Lot B5-1f: a backup uploaded and restored from the app on a managed instance (LIBREFOLIO_PROFILE=managed, LIBREFOLIO_ADMIN_EMAIL, no SMTP), real uvicorn children on Unix sockets across pending-restore, admin-bootstrap, restore-commit, restore-owner, owner-sync: the check offers owner_choice, a confirmation without an owner is 409 owner_choice_required, with the backup's administrator 202; the restart exits and a new process commits; the chosen account has the owner's address, is an active administrator and the only owner, its old password and a session of before are refused, the owner's link is only in the child's log (not in the status, the state file or the data directory), is spent once and the owner signs in; another start calls nothing again; an address change that A refuses (EMAIL_TAKEN) serves no data until backup pending --recover owner; B5-1j, the real CLI restore on the same managed instance picks the owner itself: Anna, the only flagged active administrator with an old address, holds LIBREFOLIO_ADMIN_EMAIL after the restart and is the only flagged account, her old password and old session are refused, her password-reset link is only in the child's log and spends once, and the CLI names her by username and prints no address; with a flag on an ordinary account, or two flagged administrators, nobody is picked: outcome none, the CLI gives ./dev.py user reassign-owner <username>, the instance serves, nobody is flagged, no account is closed and the warning names nobody",
+        tests="Managed target → Upload, check, confirm (owner), restart → Committed → Owner link in the log → Spent once; restart: nothing again; fail closed → recover; CLI restore: Anna picked, link only in the log; nobody picked: outcome none",
+        # PURE: every data directory and archive under tmp_path, every server a child uvicorn of the test on a Unix socket
+        # under /tmp (never a TCP port), in test mode on its own data directory; the lane's data directory, database and
+        # server are never read nor written.
+        isolation="pure",
+    )
+    add_test(
+        e2e,
+        "backup-roundtrip-over-limit",
+        e2e_backup_roundtrip_over_limit,
+        name="Backup Round Trip Over Limit",
+        desc="Lot B5-1k2, last piece: a backup of five active accounts (and a disabled one, eight brokers, twenty transactions) restored on an instance that accepts LIBREFOLIO_MAX_USERS=3, real uvicorn children on Unix sockets across pending-restore, restore-commit (and, managed, restore-owner): the check says users_active 5, users_limit 3, users_over_limit 2 and carries the warning users_over_limit before credentials_from_backup; the confirmation (no account in the body) is 202, never refused; after the start every account, broker, access and transaction is there and the ledger's control totals are the source's; then workstream A's over-limit state (A5-7): an administrator and a plain user sign in and a data route answers 423 user_limit_exceeded, GET /users/over-limit lists the five active accounts (numbers, brokers owned alone, protected) for the administrator only, the full backup's routes answer the administrator; POST /users/over-limit/resolve keeping three accounts is 200 and the others are deactivated (ACCOUNT_DISABLED) with nothing deleted and the same totals; on a managed instance the owner's password is closed (link_only), the owner is protected in the choice, a choice without the owner is 422 PROTECTED_MISSING and one with her works; the real CLI restore --yes of the same backup exits 0, leaves the restore pending with ONE warning line (5 active accounts, 3 accepted) that names nobody, and the next start commits all six accounts",
+        tests="Self-hosted app: check 5/3/2 + warning → confirm 202 → restart → all data → 423 → choice → resolve; managed app: owner link_only, protected, PROTECTED_MISSING, resolve; CLI: confirmed with one warning line, committed with every account",
         # PURE: every data directory and archive under tmp_path, every server a child uvicorn of the test on a Unix socket
         # under /tmp (never a TCP port), in test mode on its own data directory; the lane's data directory, database and
         # server are never read nor written.

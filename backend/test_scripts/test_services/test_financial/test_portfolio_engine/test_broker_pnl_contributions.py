@@ -22,7 +22,7 @@ mirroring the conventions in test_cash_decomposition.py / test_daily_state_build
 / test_scope_classifier.py in this directory.
 """
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from unittest.mock import MagicMock
 
@@ -33,6 +33,7 @@ from backend.app.services.financial_math.portfolio.daily_state import DailyState
 from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder
 from backend.app.services.financial_math.portfolio.models import BrokerDailyContribution, ClassifiedTransaction, DailyPortfolioState, PortfolioCalculationResult
 from backend.app.services.financial_math.price_marks import build_asset_price_series
+from backend.app.services.financial_math.series_steps import value_at
 from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
 from backend.test_scripts.test_services._engine_native_cash import engine_native_cash
 
@@ -476,8 +477,9 @@ class TestEngineEndStatePerBroker:
 
 
 class TestBrokerPnlHistory:
-    """Per-broker additive P&L history: broker_id -> [{date, total_pnl}, ...],
-    derived from DailyPortfolioState.broker_contributions.
+    """Per-broker additive P&L history in steps (D-P4): broker_id -> [{date, through, total_pnl}, ...], each step holding
+    from its ``date`` to its ``through`` and maximal for that broker, derived from DailyPortfolioState.broker_contributions.
+    A day's value is ``value_at(points, day)``.
     """
 
     def test_shape_and_sum_reproduces_aggregate_every_day(self):
@@ -486,18 +488,25 @@ class TestBrokerPnlHistory:
         history = DerivedViewsBuilder(states, "EUR").build_broker_pnl_history()
 
         assert set(history.keys()) == {10, 20}
+        first_day, last_day = states[0].date, states[-1].date
         for points in history.values():
-            assert len(points) == len(states)
             for point in points:
-                assert set(point.keys()) == {"date", "total_pnl"}
+                assert set(point.keys()) == {"date", "through", "total_pnl"}
                 assert isinstance(point["total_pnl"], CurrencySchema)
                 assert point["total_pnl"].code == "EUR"
+                assert first_day <= point["date"] <= point["through"] <= last_day
+            for before, after in zip(points, points[1:], strict=False):
+                assert before["through"] < after["date"], f"steps overlap or are out of order: {before['date']}..{before['through']}, {after['date']}"
+                if before["through"] + timedelta(days=1) == after["date"]:
+                    assert before["total_pnl"].amount.as_tuple() != after["total_pnl"].amount.as_tuple(), f"two consecutive steps of one broker hold the same P&L ({before['total_pnl'].amount}): not maximal"
 
+        # Both brokers exist on every day of this scenario: a step holds each state's day.
         # Sum across brokers reproduces the aggregate DailyPortfolioState.total_pnl,
-        # for EVERY date — not just the last one.
-        points_by_broker_date = {bid: {p["date"]: p["total_pnl"].amount for p in points} for bid, points in history.items()}
+        # for EVERY date — not just the last one (each day read from its step).
         for s in states:
-            total = sum(points_by_broker_date[bid][s.date] for bid in history)
+            steps = {bid: value_at(points, s.date) for bid, points in history.items()}
+            assert all(step is not None for step in steps.values()), f"{s.date}: a broker has no step holding the day"
+            total = sum(step["total_pnl"].amount for step in steps.values())
             assert total == s.total_pnl, f"{s.date}: sum(broker total_pnl)={total} != aggregate total_pnl={s.total_pnl}"
 
     def test_final_day_matches_golden_numbers(self):
@@ -506,8 +515,8 @@ class TestBrokerPnlHistory:
         history = DerivedViewsBuilder(states, "EUR").build_broker_pnl_history()
         last_date = states[-1].date
 
-        final_10 = next(p["total_pnl"].amount for p in history[10] if p["date"] == last_date)
-        final_20 = next(p["total_pnl"].amount for p in history[20] if p["date"] == last_date)
+        final_10 = value_at(history[10], last_date)["total_pnl"].amount
+        final_20 = value_at(history[20], last_date)["total_pnl"].amount
 
         assert final_10 == Decimal("1450")
         assert final_20 == Decimal("600")

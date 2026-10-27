@@ -58,6 +58,13 @@ export interface GrowthSeriesContext {
     /** The % series with data; see `pctSeries` in `GrowthChart.svelte`. */
     pctSeries: PctSeriesSpec[];
     aggregationInputs: AggregationInputs;
+    /**
+     * The entry is the steps themselves (the daily resolution of a report that gives one point per stretch without news):
+     * its lines hold their value to the next date (`step: 'end'`) instead of joining two points with a slope, and the
+     * P&L halves change sign at the next date instead of at an interpolated crossing. The MWRR line is the exception: it
+     * is a line of true values and stays joined.
+     */
+    stepped?: boolean;
 }
 
 /** The data of one series, as the partial update sends it. */
@@ -174,7 +181,7 @@ export function clipToSign(point: SeriesPoint, keepPositive: boolean): SeriesPoi
  * `updateChartData`'s by-index partial merge depends on. Only the number of points
  * inside them changes, and that is per-series data, not series identity.
  */
-export function splitBySign(points: SeriesPoint[]): {positive: SeriesPoint[]; negative: SeriesPoint[]} {
+export function splitBySign(points: SeriesPoint[], stepped = false): {positive: SeriesPoint[]; negative: SeriesPoint[]} {
     const positive: SeriesPoint[] = [];
     const negative: SeriesPoint[] = [];
 
@@ -187,6 +194,15 @@ export function splitBySign(points: SeriesPoint[]): {positive: SeriesPoint[]; ne
         const next = points[i + 1]?.value[1];
         if (current == null || next == null || current === 0 || next === 0) continue;
         if (current > 0 === next > 0) continue;
+
+        // A stepped line holds `current` until the next date and then jumps: the sign changes AT the next date, so
+        // both halves meet the axis there and no day of the hold is filled or emptied.
+        if (stepped) {
+            const crossing: SeriesPoint = {...points[i + 1], value: [points[i + 1].value[0], 0]};
+            positive.push(crossing);
+            negative.push(crossing);
+            continue;
+        }
 
         // Linear crossing between the two x positions. `value[0]` is a DATE STRING,
         // not a number — so it is parsed to millis, interpolated, and formatted back.
@@ -259,7 +275,7 @@ export function buildGrowthUpdateSeries(context: GrowthSeriesContext, entry: Agg
         // what updateChartData's partial by-index series merge depends on across
         // zoom/pan; splitBySign adds POINTS inside two of them (the interpolated zero
         // crossings) and leaves the slot count alone, so the merge stays valid.
-        const signSplit = splitBySign(entry.pnl.total.points);
+        const signSplit = splitBySign(entry.pnl.total.points, context.stepped === true);
         const referenceValue = findReferenceTotalPnl(entry, referenceDate, aggregationInputs);
         const referencePoints: SeriesPoint[] = entry.pnl.total.points.map((p) => ({...p, value: [p.value[0], referenceValue]}));
         return [{name: pnlLabels.total, data: signSplit.positive}, {name: pnlLabels.total, data: signSplit.negative}, {name: PNL_REFERENCE_SERIES_NAME, data: referencePoints}, ...entry.pnl.brokers.map((broker) => ({name: broker.brokerName, data: broker.metric.points}))];
@@ -310,6 +326,13 @@ export function buildGrowthUpdateSeries(context: GrowthSeriesContext, entry: Agg
 
 /** Every series of the view on screen, with its style, around the data `buildGrowthUpdateSeries` built. */
 export function buildGrowthFullSeries(context: GrowthSeriesContext, isDark: boolean, seriesData: GrowthSeriesData[]): echarts.SeriesOption[] {
+    const series = buildSeries(context, isDark, seriesData);
+    if (!context.stepped) return series;
+    // A line that does not say otherwise holds its value to the next date. The MWRR says `step: false`.
+    return series.map((entry) => (entry.type === 'line' && (entry as {step?: unknown}).step === undefined ? ({...entry, step: 'end'} as echarts.SeriesOption) : entry));
+}
+
+function buildSeries(context: GrowthSeriesContext, isDark: boolean, seriesData: GrowthSeriesData[]): echarts.SeriesOption[] {
     const {viewMode, pnlSubmode, eurLabels, pnlLabels, pctSeries} = context;
     if (viewMode === 'eur') {
         const cc = (key: keyof typeof COLORS) => COLORS[key][isDark ? 'dark' : 'light'];
@@ -475,7 +498,9 @@ export function buildGrowthFullSeries(context: GrowthSeriesContext, isDark: bool
         type: 'line' as const,
         data: seriesData[index].data,
         smooth: false,
-        connectNulls: false,
+        // The history's MWRR has a true value only on a few days (`mwrr_line`): the line joins them, and does not stop at the days between.
+        connectNulls: series.key === 'mwrrCum',
+        ...(series.key === 'mwrrCum' ? {step: false as const} : {}),
         symbol: 'none',
         lineStyle: {color: COLORS[series.colorKey][isDark ? 'dark' : 'light'], width: 2, type: series.lineStyle},
         itemStyle: {color: COLORS[series.colorKey][isDark ? 'dark' : 'light']},

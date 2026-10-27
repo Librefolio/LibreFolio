@@ -95,7 +95,15 @@
       "eventCreateAmountRequired": "El importe es obligatorio",
       "eventCreateDateRequired": "La fecha es obligatoria",
       "fxDatesHint": "Las fechas 'De' y 'A' suelen coincidir: difieren cuando el bróker abona la nueva divisa otro día.",
-      "eventEditTitle": "Editar evento para {asset}"
+      "eventEditTitle": "Editar evento para {asset}",
+      "entryModeAmount": "Importe total",
+      "entryModeUnitPrice": "Precio unitario",
+      "unitPriceCalculated": "calculado",
+      "unitPriceHint": "El importe se calcula a partir del precio unitario y la cantidad; aún puedes editarlo.",
+      "preFloorDate": {
+        "message": "La fecha {date} es anterior al 1 de enero de 1900. Comprueba que el año sea correcto: suele ser un error de escritura.",
+        "confirm": "Sí, la fecha es correcta"
+      }
     },
     "bulk": {
       "resetRow": "Restablecer fila",
@@ -129,7 +137,27 @@
       "issueRowsHidden": "Las filas afectadas están ocultas por los filtros de la tabla.",
       "unseenSuggestionsTitle": "Sugerencias aún sin revisar",
       "unseenSuggestionsMessage": "{n, plural, one {# sugerencia de unión aún no se ha revisado} other {# sugerencias de unión aún no se han revisado}}. Unir las dos mitades de una transferencia evita que cuenten como un depósito y una retirada por separado. ¿Guardar de todos modos?",
-      "unseenSuggestionsReview": "Mostrar las sugerencias"
+      "unseenSuggestionsReview": "Mostrar las sugerencias",
+      "possibleSplit": {
+        "title": "{n, plural, one {# fila podría ser un split} other {# filas podrían ser splits}}",
+        "explain": "Estas acciones entraron a coste cero. Si es un split, vincula un evento SPLIT: el coste se reparte entre todas tus acciones. Si no, el coste medio de la posición baja.",
+        "create": "Crear el evento SPLIT y vincular",
+        "link": "Vincular a un evento existente",
+        "goto": "Ir a la fila",
+        "assetNeeded": "Elige primero el activo de esta fila.",
+        "quantityAdded": "+{quantity} acciones",
+        "ratioLabel": "Proporción del split (acciones nuevas por acción antigua)",
+        "ratioHint": "Escribe 3 para un split 3 por 1, 0.25 para un split inverso 1 por 4. Las acciones que tienes se multiplican por este número.",
+        "ratio": "Proporción {ratio} (según tus {held} acciones)",
+        "rounding": "El bróker redondeó la cantidad: con la proporción {ratio} esta fila difiere en {delta} acciones de tu posición por la proporción. Lotes y Panel pueden mostrar una pequeña diferencia."
+      },
+      "preFloorDate": {
+        "message": "{n} filas tienen una fecha anterior al 1 de enero de 1900. Comprueba el año: suele ser un error de escritura.",
+        "row": "Fila {row}: {date}",
+        "confirmTitle": "¿Guardar fechas anteriores a 1900?",
+        "confirmMessage": "{n} filas tienen una fecha anterior al 1 de enero de 1900. ¿Guardarlas tal cual?",
+        "confirmProceed": "Sí, las fechas son correctas"
+      }
     },
     "commit": {
       "serverError": "Guardado imposible — error del servidor"
@@ -201,7 +229,8 @@
       "issuesHeader": "Se han encontrado errores de validación",
       "balanceIssuesHeader": "Esta configuración genera datos inconsistentes",
       "autoOff": "Auto-validación OFF ({n} filas > {threshold}) — pulsa ⚡️Validar ahora antes del commit",
-      "contextualIssuesHeader": "Con los demás cambios pendientes, esta fila causa los siguientes problemas:"
+      "contextualIssuesHeader": "Con los demás cambios pendientes, esta fila causa los siguientes problemas:",
+      "checkSummary": "{n, plural, one {# campo por corregir} other {# campos por corregir}}"
     },
     "errors": {
       "idRequired": "El ID de transacción es obligatorio y debe ser > 0",
@@ -248,7 +277,7 @@
       "decimalPlacesExceeded": "Como máximo {max} decimales",
       "significantDigitsExceeded": "Como máximo {max} cifras significativas",
       "integerDigitsExceeded": "Como máximo {max} cifras en la parte entera",
-      "dateOutOfRange": "Entre {min} y {max}",
+      "dateOutOfRange": "No posterior al {max}",
       "autoCostUnreadable": "Coste automático no disponible: {count, plural, one {# transacción usada} other {# transacciones usadas}} para el coste medio de este activo {count, plural, one {contiene} other {contienen}} un valor que no es un número. Introduce el coste a mano.",
       "autoCostEmptyPool": "Coste automático no disponible: en esa fecha no había unidades de este activo que promediar. Elige Manual e introduce lo que te costaron estas unidades; si las recibiste como regalo, escribe 0.",
       "autoCostUnknownPool": "Coste automático no disponible: las unidades de este activo que había en esa fecha no tienen un coste conocido que promediar. Elige Manual e introduce lo que te costaron.",
@@ -256,7 +285,8 @@
       "costBasisNotAllowed": "❌ {type} no lleva coste base aquí: quítelo. Solo lo llevan las unidades que entran con un Ajuste o una Transferencia de Activos.",
       "costBasisModeIncompatible": "❌ {type} no lleva coste base aquí, así que ningún modo Auto o Manual: quítelo.",
       "costBasisNegative": "El coste base no puede ser negativo: escribe 0 o más.",
-      "pairAdjustmentNotAllowed": "Dos Ajustes no se pueden enlazar: para mover activos entre brókeres usa una Transferencia de Activos."
+      "pairAdjustmentNotAllowed": "Dos Ajustes no se pueden enlazar: para mover activos entre brókeres usa una Transferencia de Activos.",
+      "pairArrivalBeforeDeparture": "La llegada ({arrivalDate}) tiene fecha anterior a la salida ({departureDate}). Se guardó tal como se introdujo: revisa las dos fechas."
     },
     "pydantic": {
       "greaterThan": "El valor debe ser mayor que {gt}",
@@ -318,6 +348,22 @@
       "spread": "Spread",
       "stale": "obsoleto {days}d",
       "marketNotAvailable": "Tipo de cambio de mercado no disponible"
+    },
+    "reconcile": {
+      "button": "Reenlazar eventos",
+      "buttonTitle": "Vincular dividendos, intereses y ajustes al evento del activo del mismo día",
+      "title": "Reenlazar eventos",
+      "intro": "Dividendos, intereses y ajustes sin evento del activo. Solo se propone un evento si es del mismo activo, del mismo día y del tipo correspondiente: un dividendo abonado unos días después del evento no se propone, y lo vinculas a mano en la transacción.",
+      "loading": "Buscando transacciones sin evento…",
+      "loadError": "No se pudieron leer las transacciones sin evento.",
+      "empty": "Cada transacción que puede tener un evento del activo lo tiene.",
+      "statusUnique": "Un evento ese día",
+      "statusNone": "Ningún evento ese día",
+      "statusSeveral": "{n} eventos ese día: elige en la transacción",
+      "link": "Vincular",
+      "linkAll": "Vincular todas las filas con un solo evento",
+      "linkError": "No se vinculó nada: el servidor rechazó el cambio.",
+      "close": "Cerrar"
     }
   }
 }

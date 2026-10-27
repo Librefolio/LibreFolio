@@ -287,6 +287,11 @@ const CODE_LISTS: Array<[string, string[]]> = [
             'restore_state_unreadable',
             // B-35: the restore limit of the instance cannot be read, so no check starts.
             'backup_restore_unavailable',
+            // B5-1b: the owner's choice refused at the confirmation, on a managed instance.
+            'owner_choice_required',
+            'owner_choice_invalid',
+            'owner_email_not_set',
+            'owner_conflict',
             'network',
             'unexpected',
         ],
@@ -539,6 +544,31 @@ describe('L3 — a sealed nightly backup; the warnings of the accounts', () => {
 
         const carrying = schemas.RestoreStageReport.safeParse(stageReport(['rows_changed', 'confirming_account_not_in_backup', 'credentials_from_backup']));
         expect(carrying.success, `the generated client refuses the warnings of the accounts: run ./dev.py api sync — ${carrying.success ? '' : carrying.error.message}`).toBe(true);
+    });
+});
+
+// =====================================================================================================================
+// B5-1k2 — the notice «the backup holds more active accounts than the instance accepts» (written red first)
+// =====================================================================================================================
+
+/*
+ * `RestoreReportModal.svelte` words the notice `restore-users-over-limit` by `backup.restore.report.usersOverLimit`, naming
+ * exactly the placeholders `{active}` and `{limit}` in each language: a message of the four catalogues. The key is added to
+ * the catalogues by `./dev.py i18n`; until then this case is red.
+ */
+describe('B5-1k2 — the words of the notice of too many accounts', () => {
+    const KEY = 'backup.restore.report.usersOverLimit';
+
+    it('backup.restore.report.usersOverLimit is a message of the four catalogues, naming {active} and {limit} and nothing else', () => {
+        expectMessage(KEY);
+
+        for (const language of LANGUAGES) {
+            expect(placeholdersOf(messageOf(CATALOGUES[language], KEY) as string), `${language}: ${KEY}`).toEqual(['active', 'limit']);
+        }
+    });
+
+    it('positive control: the scan finds backup.restore.report.usersOverLimit in RestoreReportModal.svelte (a key it forgot is a sentence nobody sees)', () => {
+        expect(namedKeys(source('RestoreReportModal.svelte')).keys).toContain(KEY);
     });
 });
 

@@ -8,14 +8,14 @@ so the rows of the breakdown add up to the period's change exactly.
 from __future__ import annotations
 
 import bisect
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
 
 from backend.app.services.financial_math.native_cash import CONVERSION_DUST
-from backend.app.services.financial_math.portfolio.models import DailyPortfolioState
+from backend.app.services.financial_math.portfolio.models import DailyPortfolioState, DailyStates, MarketValueTransfer, RealizedSale
 from backend.app.services.financial_math.returns import change_ratio
 
 
@@ -25,6 +25,8 @@ def state_as_of(daily_states: Sequence[DailyPortfolioState], as_of: date_type) -
     ``daily_states`` are sorted by date. The engine's states should already end at the requested date;
     looking the end up by date guards against a cached result that reaches further.
     """
+    if isinstance(daily_states, DailyStates):
+        return daily_states.state_as_of(as_of)
     if not daily_states:
         return None
     dates = [state.date for state in daily_states]
@@ -32,6 +34,16 @@ def state_as_of(daily_states: Sequence[DailyPortfolioState], as_of: date_type) -
     if index < 0:
         return None
     return daily_states[index]
+
+
+def period_realized_sales(sales: Sequence[RealizedSale], date_from: date_type | None, date_to: date_type | None) -> list[RealizedSale]:
+    """The engine's realized SELLs in ``(date_from, date_to]`` whose proceeds and cost are both known.
+
+    A sale whose proceeds could not be converted, or taken from a pool that already lacked part of its cost, is left out:
+    its pair, or the cost it lacks, is reported in the data quality. The one reader of the period's sales: the Performance
+    table, the summary and the daily series of a position (``position_series``) all take them from here.
+    """
+    return [sale for sale in sales if (date_from is None or sale.date > date_from) and (date_to is None or sale.date <= date_to) and sale.proceeds is not None and sale.cost_complete]
 
 
 @dataclass(frozen=True)
@@ -79,10 +91,7 @@ def period_boundaries(daily_states: Sequence[DailyPortfolioState], date_from: da
     end = state_as_of(daily_states, as_of)
     if end is None:
         return None
-    start = None
-    if date_from:
-        pre_states = [state for state in daily_states if state.date <= date_from]
-        start = pre_states[-1] if pre_states else None
+    start = state_as_of(daily_states, date_from) if date_from else None
     return PeriodBoundaries(start=start, end=end)
 
 
@@ -143,6 +152,21 @@ def period_other_result(pnl: Decimal, ugl_delta: Decimal, realized: Decimal, inc
     ``pnl = ugl_delta + realized + income − fees_taxes + other_result``.
     """
     return pnl - ugl_delta - realized - income + fees_taxes
+
+
+def market_value_transfer_results(transfers: Iterable[MarketValueTransfer], date_from: date_type | None, end: date_type) -> dict[int, Decimal]:
+    """By broker, the gain accrued elsewhere by the securities that crossed the scope's boundary in ``(date_from, end]`` (B5).
+
+    A leg is in-kind capital at market value while its position's cost moves with it, so the period's other result holds
+    cost − capital for it: + (market value − cost) for securities sent, − for securities received. Each broker with a
+    leg in the window gets the sum of its legs (0 included); without ``date_from`` every leg up to ``end`` counts.
+    """
+    results: dict[int, Decimal] = {}
+    for transfer in transfers:
+        if (date_from is not None and transfer.date <= date_from) or transfer.date > end:
+            continue
+        results[transfer.broker_id] = results.get(transfer.broker_id, Decimal("0")) + (transfer.cost - transfer.capital)
+    return results
 
 
 def period_identity_residual(pnl: Decimal, ugl_delta: Decimal, realized: Decimal, income: Decimal, fees_taxes: Decimal, other_result: Decimal) -> Decimal:

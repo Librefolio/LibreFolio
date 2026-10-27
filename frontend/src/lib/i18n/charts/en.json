@@ -136,7 +136,9 @@
       "resultMissing": "No backend result was returned for this signal. Retry the signal request.",
       "partialResult": "This signal is only partially available with the current data.",
       "unavailable": "This signal cannot be calculated with the available data.",
-      "partialContiguousSegment": "Signal calculated on the complete contiguous segment {start}–{end}. {excluded} loaded points were excluded because required dates or fields were incomplete. Complete input: {available}/{requested} ({coverage}%, including warm-up). Longest missing streak: {consecutive} points."
+      "partialContiguousSegment": "Signal calculated on the complete contiguous segment {start}–{end}. {excluded} loaded points were excluded because required dates or fields were incomplete. Complete input: {available}/{requested} ({coverage}%, including warm-up). Longest missing streak: {consecutive} points.",
+      "undefinedWindowPartial": "{count} points of this return cannot be calculated, from {start} to {end}, because a price they need is missing or unusable. Sync the prices of this asset from {resyncStart} to {resyncEnd} and try again.",
+      "undefinedWindowUnavailable": "This return cannot be calculated: the {count} points, from {start} to {end}, have no usable price. Sync the prices of this asset from {resyncStart} to {resyncEnd} and try again."
     },
     "axes": {
       "exchangeRate": "Exchange-rate axis ({pair})",
@@ -216,7 +218,10 @@
     },
     "comparisonAsset": {
       "placeholder": "Select comparison asset",
-      "loadError": "Assets could not be loaded."
+      "loadError": "Assets could not be loaded.",
+      "blocked": "Not available",
+      "isMainAsset": "This is the asset of the chart",
+      "alreadyCompared": "Already compared in another signal"
     }
   }
 }

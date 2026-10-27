@@ -12,6 +12,10 @@ for 72 hours, and ``./dev.py user setup-link`` issues a new one. An instance tha
 the variables. With more than one worker only one creates the account and delivers its link: the creation takes
 SQLite's write lock before it looks at the accounts, so the other worker finds the account waiting.
 
+On a managed instance (``LIBREFOLIO_PROFILE=managed``) the account it creates is also recorded as the instance owner
+(``users.is_instance_owner``): ``instance_owner.py`` (startup step ``owner-sync``) takes over once the account is active.
+While it waits, a change of the variables follows the logic above, not the owner's confirmation link.
+
 ``admin_setup_status`` tells a hosting panel where the setup stands (H-61): none, pending until when, done, expired.
 """
 
@@ -28,6 +32,7 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
+from backend.app.config import get_settings
 from backend.app.config.accounts import ADMIN_BOOTSTRAP_TOKEN_VARIABLE, AdminBootstrapConfig, admin_bootstrap_config
 from backend.app.db.models import AccountToken, AccountTokenPurpose, GlobalSetting, User
 from backend.app.db.session import get_async_engine
@@ -172,6 +177,11 @@ async def _create_pending_admin(session: AsyncSession, config: AdminBootstrapCon
         await session.rollback()
         logger.error("The initial administrator could not be created", error=error)
         return None
+    if get_settings().LIBREFOLIO_PROFILE == "managed":
+        # The account the hoster pays for is the instance owner (A5-1b): recorded from the start, so a later change of the
+        # variable's address cannot lose who it is. Never in another profile.
+        user.is_instance_owner = True
+        session.add(user)
     given = config.token
     if given is not None and await _token_known(session, given):
         # A token is stored once: one already used (an earlier setup of an instance emptied since) is not handed out again.

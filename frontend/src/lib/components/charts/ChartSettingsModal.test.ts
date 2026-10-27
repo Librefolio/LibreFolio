@@ -486,3 +486,104 @@ describe('ChartSettingsModal preview — the overlay lines it draws (Y-41)', () 
         expect(screen.getByTestId('chart-settings-preview')).toHaveAttribute('data-overlay-count', '1');
     });
 });
+
+// ---------------------------------------------------------------------------
+// Y5-F2 — the signals list follows the rolling-return view
+// ---------------------------------------------------------------------------
+
+/**
+ * Y5-F2 — while the preview is the rolling return, the signals section lists only the comparison signals that view draws
+ * (as the detail page does with `allowedSignalTypes`): for `axisDomain='asset'` the asset comparison, for
+ * `axisDomain='fx'` the FX pair. The other saved signals (a technical indicator, a benchmark, and in FX the asset
+ * comparison) are hidden from the list but stay saved: Apply keeps every one of them. Back in the percentage or the
+ * absolute view, the list shows them all again.
+ *
+ * Cards are found by `signal-card-<id>` (the section's own test id). `sma` needs the backend: it has no registered local
+ * definition here, and its card is drawn all the same, from the saved config.
+ *
+ * Red today: the list shows every saved signal in every view.
+ */
+describe('ChartSettingsModal — the signals list in the rolling-return view (Y5-F2)', () => {
+    const SMA: SignalConfig = {id: 'y5f2-sma', signalType: 'sma', params: {window: 20}, style: {...STYLE, color: '#ec4899'}};
+    const BENCHMARK: SignalConfig = {id: 'y5f2-linear', signalType: 'linear', params: {annualRate: 2, offset: 0}, style: STYLE};
+    const COMPARISON: SignalConfig = {id: 'y5f2-asset', signalType: 'asset-comparison', params: {assetId: 42}, style: {...STYLE, color: '#f59e0b'}};
+    const PAIR: SignalConfig = {id: 'y5f2-pair', signalType: 'fx-pair', params: {pairSlug: 'EUR-GBP'}, style: {...STYLE, color: '#10b981'}};
+
+    const card = (id: string) => screen.queryByTestId(`signal-card-${id}`);
+    const flush = async () => {
+        for (let turn = 0; turn < 5; turn++) await tick();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        await tick();
+    };
+
+    async function open(axisDomain: 'asset' | 'fx', signals: SignalConfig[], primaryView: 'percentage' | 'calendar-return') {
+        const settings: ChartSettings = {...(JSON.parse(JSON.stringify(DEFAULT_CHART_SETTINGS)) as ChartSettings), primaryView, signals: JSON.parse(JSON.stringify(signals)) as SignalConfig[]};
+        const onsave = vi.fn();
+        const calendarPreviewResolver = vi.fn(async () => ({points: [], overlays: []}));
+        render(ChartSettingsModal, {open: true, settings, mode: 'pair', pairData: PAIR_DATA, axisDomain, onsave, calendarPreviewResolver, signalSources: signalSources()} as unknown as ComponentProps<typeof ChartSettingsModal>);
+        await tick();
+        await flush();
+        return {onsave};
+    }
+
+    it('asset domain: the rolling return hides a technical indicator and a benchmark, and lists the comparison', async () => {
+        await open('asset', [SMA, BENCHMARK, COMPARISON], 'calendar-return');
+
+        expect(card(COMPARISON.id), 'the comparison is what the rolling return draws: it is listed').not.toBeNull();
+        expect(card(SMA.id), 'the technical indicator is not drawn by the rolling return: it is not listed').toBeNull();
+        expect(card(BENCHMARK.id), 'the benchmark is not drawn by the rolling return: it is not listed').toBeNull();
+    });
+
+    it('fx domain: the rolling return hides a technical indicator and an asset comparison, and lists the FX pair', async () => {
+        await open('fx', [SMA, COMPARISON, PAIR], 'calendar-return');
+
+        expect(card(PAIR.id), 'the FX pair is what the FX rolling return draws: it is listed').not.toBeNull();
+        expect(card(SMA.id), 'the technical indicator is not listed').toBeNull();
+        expect(card(COMPARISON.id), 'the asset comparison is not listed in FX').toBeNull();
+    });
+
+    it.each([
+        {axisDomain: 'asset', signals: [SMA, BENCHMARK, COMPARISON], hidden: [SMA.id, BENCHMARK.id], shown: [COMPARISON.id], back: 'percentage'},
+        {axisDomain: 'fx', signals: [SMA, COMPARISON, PAIR], hidden: [SMA.id, COMPARISON.id], shown: [PAIR.id], back: 'absolute'},
+    ] as const)('$axisDomain domain: switching the preview to $back lists every saved signal again, and back to the rolling return hides them again', async ({axisDomain, signals, hidden, shown, back}) => {
+        await open(axisDomain, [...signals], 'calendar-return');
+        for (const id of hidden) expect(card(id), `premise: ${id} is hidden in the rolling return`).toBeNull();
+
+        await fireEvent.click(screen.getByTestId(`chart-settings-preview-view-${back}`));
+        await flush();
+        for (const id of [...shown, ...hidden]) expect(card(id), `${id} is listed again in the ${back} view`).not.toBeNull();
+
+        await fireEvent.click(screen.getByTestId('chart-settings-preview-view-calendar-return'));
+        await flush();
+        for (const id of hidden) expect(card(id), `${id} is hidden again in the rolling return`).toBeNull();
+        for (const id of shown) expect(card(id)).not.toBeNull();
+    });
+
+    it('guard: in the percentage view every saved signal is listed from the start', async () => {
+        await open('asset', [SMA, BENCHMARK, COMPARISON], 'percentage');
+
+        for (const signal of [SMA, BENCHMARK, COMPARISON]) expect(card(signal.id), `${signal.id} is listed`).not.toBeNull();
+    });
+
+    it.each([
+        {axisDomain: 'asset', signals: [SMA, BENCHMARK, COMPARISON]},
+        {axisDomain: 'fx', signals: [SMA, COMPARISON, PAIR]},
+    ] as const)('$axisDomain domain: Apply from the rolling-return view still saves every signal, the hidden ones untouched', async ({axisDomain, signals}) => {
+        const {onsave} = await open(axisDomain, [...signals], 'calendar-return');
+
+        await fireEvent.click(screen.getByTestId('chart-settings-apply'));
+
+        expect(onsave).toHaveBeenCalledTimes(1);
+        const saved = (onsave.mock.calls[0][0] as ChartSettings).signals;
+        expect(
+            saved.map((signal) => signal.id),
+            'the hidden signals stay saved, in their order',
+        ).toEqual(signals.map((signal) => signal.id));
+        for (const signal of signals)
+            expect(
+                saved.find((entry) => entry.id === signal.id),
+                `${signal.id} is saved as it was`,
+            ).toEqual(signal);
+        expect((onsave.mock.calls[0][0] as ChartSettings).primaryView).toBe('calendar-return');
+    });
+});

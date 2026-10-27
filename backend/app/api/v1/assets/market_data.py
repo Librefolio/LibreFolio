@@ -1,7 +1,6 @@
-"""Market-data endpoints of one asset (``/assets/{asset_id}/market-data``): summary and wipe after a currency change."""
+"""Market-data endpoints of one asset (``/assets/{asset_id}/market-data``): summary and wipe of what a currency change deletes."""
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.encoders import jsonable_encoder
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.v1.auth import get_current_user
@@ -50,36 +49,20 @@ async def wipe_market_data(
     session: AsyncSession = Depends(get_session_generator),
     _current_user: User = Depends(get_current_user),
 ):
-    """Wipe all market data (prices + events) and disconnect linked transactions.
+    """Wipe the market data a currency change deletes and disconnect the transactions linked to it.
 
-    Part of the Policy D currency-change flow. After this returns 200 the
-    caller should:
-
-    1. ``PATCH /assets`` with the new currency (will now succeed — no
-       residual market data blocks the change).
-    2. Re-sync from the provider (optional) via
-       ``POST /assets/prices/sync`` to repopulate the price history in the
-       new currency.
+    The prices and every event that is not a SPLIT go; the SPLIT events stay, with the transactions linked to them
+    (N68). `PATCH /assets` does the same work, in the same call, when it changes a currency, so this endpoint is only
+    for a caller who wants to wipe on its own.
 
     Response body matches the summary endpoint:
-    ``{prices, events_manual, events_provider, linked_tx, oldest, newest,
-    dry_run}`` (``dry_run`` is always ``false`` here). Transactions are
-    **preserved** — only their ``asset_event_id`` FK is set to ``NULL``
-    so they stop referencing the now-deleted events; the user is free to
-    re-associate them manually after re-inserting replacement events.
-
-    Refused, nothing written: 409 ``detail = {"error_code", "message",
-    "params"}`` with ``MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST`` (X-R48) when a
-    SPLIT of the asset has linked incoming adjustments without a purchase cost:
-    deleting it would make them acquisitions of unknown cost. ``params.splits``
-    lists each such SPLIT by date (``event_id``, ``date``, ``transaction_ids`` —
-    only those the caller can see — and ``hidden_transactions_count``).
+    ``{prices, events_manual, events_provider, splits_kept, linked_tx, oldest, newest, dry_run}``
+    (``dry_run`` is always ``false`` here). Transactions are **preserved** — only their ``asset_event_id`` FK is set to
+    ``NULL`` for the deleted events; the user can link them again with ``GET /transactions/event-reconciliation``.
     """
     try:
-        return await AssetSourceManager.wipe_market_data_for_currency_change(asset_id=asset_id, session=session, dry_run=False, current_user_id=_current_user.id)
+        return await AssetSourceManager.wipe_market_data_for_currency_change(asset_id=asset_id, session=session, dry_run=False)
     except AssetSourceError as e:
-        if e.error_code == "MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST":
-            raise HTTPException(status_code=409, detail={"error_code": e.error_code, "message": e.message, "params": jsonable_encoder(e.details)}) from e
         status = 404 if e.error_code == "ASSET_NOT_FOUND" else 400
         raise HTTPException(status_code=status, detail=str(e)) from e
     except Exception as e:

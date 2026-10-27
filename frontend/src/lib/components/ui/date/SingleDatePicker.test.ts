@@ -503,3 +503,102 @@ describe('SingleDatePicker — onvaliditychange, the refusal reported to the for
         expect(onvaliditychange).toHaveBeenLastCalledWith({valid: true});
     });
 });
+
+/**
+ * D-P4 (W5-10): the picker takes a date before 1900. The warning and the confirmation belong to the forms; the picker
+ * must not refuse or clamp such a date, or the user could never reach the warning.
+ */
+describe('SingleDatePicker — a date before 1900 is accepted (D-P4)', () => {
+    it.each(['1850-05-01', '1899-12-31', '0950-01-01'])('commits a typed %s as it is on blur, and does not flag it', async (typed) => {
+        const {input, root, onchange} = setup();
+        await type(input, typed);
+        await fireEvent.blur(input);
+
+        expect(onchange).toHaveBeenCalledExactlyOnceWith(typed);
+        expect(root).toHaveAttribute('data-invalid', 'false');
+        expect(input.value).toBe(typed);
+    });
+
+    it('commits a day-first 01/05/1850 as 1850-05-01', async () => {
+        const {input, root, onchange} = setup();
+        await type(input, '01/05/1850');
+        await fireEvent.blur(input);
+
+        expect(onchange).toHaveBeenCalledExactlyOnceWith('1850-05-01');
+        expect(root).toHaveAttribute('data-invalid', 'false');
+    });
+
+    it('shows a stored date before 1900 as it is', () => {
+        const {input, root} = setup({value: '1850-05-01'});
+        expect(input.value).toBe('1850-05-01');
+        expect(root).toHaveAttribute('data-invalid', 'false');
+    });
+});
+
+/**
+ * W5-11: Date.UTC reads a year 0..99 as 1900..1999. A date typed with a short year (`0024-03-01` for `2024-03-01`, the
+ * typo the forms warn about) must be committed as it is, flagged as nothing, and stepped by the arrows one day at a time.
+ */
+describe('SingleDatePicker — a date in a year below 100 (W5-11)', () => {
+    it.each(['0024-03-01', '0001-01-01', '0099-12-31'])('commits a typed %s as it is on blur, and does not flag it', async (typed) => {
+        const {input, root, onchange} = setup();
+        await type(input, typed);
+        await fireEvent.blur(input);
+
+        expect(onchange).toHaveBeenCalledExactlyOnceWith(typed);
+        expect(root).toHaveAttribute('data-invalid', 'false');
+        expect(input.value).toBe(typed);
+    });
+
+    it('commits a typed 0024-03-01 on Enter', async () => {
+        const {input, root, onchange} = setup();
+        // Enter commits only while the calendar is open (a closed one is asked back by it): focus opens it.
+        await fireEvent.focus(input);
+        await type(input, '0024-03-01');
+        await fireEvent.keyDown(input, {key: 'Enter'});
+
+        expect(onchange).toHaveBeenCalledExactlyOnceWith('0024-03-01');
+        expect(root).toHaveAttribute('data-invalid', 'false');
+    });
+
+    it('commits a day-first 1/3/0024 as 0024-03-01', async () => {
+        const {input, root, onchange} = setup();
+        await type(input, '1/3/0024');
+        await fireEvent.blur(input);
+
+        expect(onchange).toHaveBeenCalledExactlyOnceWith('0024-03-01');
+        expect(root).toHaveAttribute('data-invalid', 'false');
+    });
+
+    it('shows a stored 0024-03-01 as it is, and opens the calendar on year 24', async () => {
+        const {input, root} = setup({value: '0024-03-01'});
+        expect(input.value).toBe('0024-03-01');
+        expect(root).toHaveAttribute('data-invalid', 'false');
+
+        await fireEvent.focus(input);
+        expect(screen.getByTestId('calendar-month')).toHaveAttribute('data-year', '24');
+        expect(screen.getByTestId('calendar-month')).toHaveAttribute('data-month', '2');
+    });
+
+    it('ArrowUp and ArrowDown from 0024-03-01 move a day, not a century', async () => {
+        const {input} = setup({value: '0024-03-01'});
+        await fireEvent.keyDown(input, {key: 'ArrowUp'});
+        await fireEvent.keyUp(input, {key: 'ArrowUp'});
+        expect(input.value).toBe('0024-03-02');
+
+        await fireEvent.keyDown(input, {key: 'ArrowDown'});
+        await fireEvent.keyUp(input, {key: 'ArrowDown'});
+        expect(input.value).toBe('0024-03-01');
+
+        await fireEvent.keyDown(input, {key: 'ArrowDown'});
+        await fireEvent.keyUp(input, {key: 'ArrowDown'});
+        expect(input.value).toBe('0024-02-29');
+    });
+
+    it('ArrowDown on 0001-01-01 stays on it', async () => {
+        const {input} = setup({value: '0001-01-01'});
+        await fireEvent.keyDown(input, {key: 'ArrowDown'});
+        await fireEvent.keyUp(input, {key: 'ArrowDown'});
+        expect(input.value).toBe('0001-01-01');
+    });
+});

@@ -23,6 +23,8 @@ Usage:
     ./dev.py backup inspect|restore|decrypt ARCHIVE.tar --identity-file F
                                                A sealed backup, its password opened with the private key in F
     ./dev.py backup pending [--cancel]         The restore waiting for the next start, or the last one; --cancel drops it
+    ./dev.py backup pending --json             The same as one JSON line, for a machine (exit 0)
+    ./dev.py backup pending --recover CHOICE   Act on it without asking: previous, cancel, owner (exit 0, 3, 4 or 5)
     ./dev.py backup --test-db create           Use the test data directory
 
 A relative PATH or ARCHIVE starts from the project root, like every path given to dev.py. The password of a secure
@@ -38,6 +40,8 @@ from __future__ import annotations
 import argparse
 import contextlib
 import getpass
+import json
+import logging
 import os
 import shutil
 import stat
@@ -556,10 +560,11 @@ _STAGE_WARNINGS = {
     "non_iso_currencies": "Some currency codes in the backup are not ISO 4217 codes, names or numbers an earlier version saved: an edit of their rows is refused until they are corrected (./dev.py db currencies lists them after the restore)",
     "credentials_from_backup": "After a restore you sign in with the backup's credentials; every session open now ends",
     "confirming_account_not_in_backup": "Your account is not among the administrators of this backup: after the restart you cannot sign in with it",
+    "users_over_limit": "The backup holds more active accounts than this instance accepts (said above, with the numbers)",
 }
 #: Said apart, never as a ⚠️ line (L3): the first is the sentence under the administrators; the second comes only from
 #: the API, for the administrator who reads the report.
-_STAGE_WARNINGS_SAID_APART = frozenset({"credentials_from_backup", "confirming_account_not_in_backup"})
+_STAGE_WARNINGS_SAID_APART = frozenset({"credentials_from_backup", "confirming_account_not_in_backup", "users_over_limit"})
 _STAGE_BLOCKERS = {
     "no_administrator": "The backup has no active administrator: after a restore nobody could manage the instance",
 }
@@ -646,11 +651,45 @@ def _print_stage_report(report, *, instance_key_given: bool = False) -> None:
         print(f"   Administrators: {', '.join(_safe(name) for name in report.administrators)}")
         print("   After a restore you sign in with one of them, with the password of then; every session open now ends.")
         print("   Invitations and links sent before the restore will have expired: send them again if needed.")
+    for line in [*_owner_lines(report), *_users_lines(report)]:
+        print(line)
     for code in report.warnings:
         if code not in _STAGE_WARNINGS_SAID_APART:
             print(f"⚠️  {_STAGE_WARNINGS.get(code, code)}")
     for code in report.blockers:
         print(f"❌ {_STAGE_BLOCKERS.get(code, code)}")
+
+
+#: What to do after a restore that found nobody for the owner (B5-1j): ``user reassign-owner`` names one.
+_NO_OWNER_LINE = "⚠️  No owner: no account of the backup can be taken for it. The restore goes on; name one afterwards with ./dev.py user reassign-owner <username>"
+
+
+_NO_OWNER_PENDING_LINE = "⚠️  No owner was assigned at the restore: no account of the backup could be taken for it. Name one with ./dev.py user reassign-owner <username>"
+
+
+def _users_lines(report) -> list[str]:
+    """A backup with more active accounts than ``LIBREFOLIO_MAX_USERS`` allows (B5-1k2): said, never refused. No name or
+    address. Nothing when it fits."""
+    if report.users_over_limit <= 0:
+        return []
+    return [f"⚠️  The backup holds {report.users_active} active accounts; this instance accepts {report.users_limit} (LIBREFOLIO_MAX_USERS): at the first sign-in the administrator chooses who keeps access, the others are deactivated (not deleted)"]
+
+
+def _owner_lines(report) -> list[str]:
+    """What a restore confirmed here does about the owner of a managed instance with ``LIBREFOLIO_ADMIN_EMAIL`` set
+    (B5-1j): the account it gives the owner, by username (it comes from the archive: ``_safe``), or that there is none; or
+    that the backup cannot be restored as it is. Nothing elsewhere. Never an address: the owner's link goes to the
+    owner's own, which is not printed."""
+    from backend.app.services.platform.instance_backup.apply import owner_plan  # noqa: PLC0415 — keep dev.py's start light
+
+    plan = owner_plan(report)
+    if plan is None:
+        return []
+    if report.owner_conflicts:
+        return ["❌ The backup cannot give the owner their account: remove the duplicate account or free the address in the instance the backup comes from, make a new backup, and check it again"]
+    if plan.user_id is None:
+        return [_NO_OWNER_LINE]
+    return [f"👤 The owner's account will be {_safe(plan.username)}: its password is closed at the restore, and a link to choose a new one goes to the owner's address (or the owner uses Forgot password?)"]
 
 
 _ROLLBACK_REASONS = {
@@ -714,10 +753,23 @@ def _confirm(args, stage_id: str, data_dir: Path) -> bool:
         return False
     print("✅ The restore waits for the next start of the server: restart LibreFolio to apply it.")
     print("   That start replaces the database and the files, and ends every session: sign in with an administrator of the backup.")
+    _print_owner_of_confirmed(stage_id, data_dir)
     print("   ./dev.py backup pending shows it; ./dev.py backup pending --cancel drops it.")
     if _instance_blocked():
         print("⚠️  The hosting provider blocked this instance: the restore waits until it is unblocked (instance_blocked)")
     return True
+
+
+def _print_owner_of_confirmed(stage_id: str, data_dir: Path) -> None:
+    """The owner line again, once the restore is confirmed (``_owner_lines`` of the checked copy, still there)."""
+    from backend.app.services.platform.instance_backup.staging import read_report  # noqa: PLC0415 — keep dev.py's start light
+
+    try:
+        report = read_report(data_dir, stage_id)
+    except (FileNotFoundError, OSError):
+        return
+    for line in _owner_lines(report):
+        print(line)
 
 
 def _restore_already_active(data_dir: Path) -> bool:
@@ -919,11 +971,37 @@ def _print_restore_state(state) -> None:
             print("⚠️  The hosting provider blocked this instance: the restore waits until it is unblocked (instance_blocked)")
     elif state.status == "committed":
         print(f"✅ The last restore was applied on {_when(state.finished_at)}: {backup}")
+        _print_owner_outcome(state)
     elif state.status == "rolled_back":
         reason = _ROLLBACK_REASONS.get(state.reason or "", "for a reason this LibreFolio does not know")
         print(f"⚠️  The last restore was rolled back on {_when(state.finished_at)}, the data is as it was before: {reason} ({state.reason})")
     else:
         print("⏳ A restore is being applied by the server")
+
+
+#: What the first start did with the account the owner chose (B5-1), as ``dev.py backup pending`` says it.
+_OWNER_OUTCOMES = {
+    "sent": "✉️  The owner's account is set: a link to choose its password went to the owner's address",
+    "kept": "🔑 The owner's account kept its password and its open sessions (restore from the hosting panel)",
+}
+
+
+def _print_owner_outcome(state) -> None:
+    """The owner's account of a restore on a managed instance (B5-1, B5-1j); and, where nobody could be picked, the way to
+    name one. Nothing for any other."""
+    if getattr(state, "owner_user_id", None) is None:
+        if getattr(state, "owner_outcome", None) == "none":
+            print(_NO_OWNER_PENDING_LINE)
+        return
+    outcome = state.owner_outcome
+    if outcome is None:
+        print("⏳ The owner's account is set at the next start of the server")
+    elif outcome in _OWNER_OUTCOMES:
+        print(_OWNER_OUTCOMES[outcome])
+    elif outcome == "link_only":
+        print("⚠️  The owner's account is set, but no email could be sent: the link to choose its password is in the log of the instance; give it only to the owner")
+    else:
+        print(f"❌ The owner's account could not be set ({_safe(outcome.removeprefix('error:'))}): the server log has the cause; ./dev.py backup pending --recover owner tries again")
 
 
 def cmd_decrypt(args) -> int:
@@ -1184,17 +1262,41 @@ def cmd_keygen(args) -> int:
     return 0
 
 
+class _StoreTrueNotWith(argparse.Action):
+    """``store_true`` that argparse refuses beside another flag, whatever their order: the message is argparse's own
+    («argument --json: not allowed with argument --cancel», exit 2). A flag cannot sit in two exclusive groups."""
+
+    def __init__(self, option_strings, dest, not_with: str, **kwargs):
+        super().__init__(option_strings, dest, nargs=0, default=False, **kwargs)
+        self.not_with = not_with
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        if getattr(namespace, self.not_with, False):
+            parser.error(f"argument {option_string}: not allowed with argument --{self.not_with}")
+        setattr(namespace, self.dest, True)
+
+
+#: The exit codes of ``backup pending --recover`` and ``--json`` (the cloud's request of 23/10): fixed, documented in
+#: ``cli_tools``. 2 is also argparse's own usage error.
+EXIT_DONE, EXIT_USAGE, EXIT_NOTHING_TO_RECOVER, EXIT_CHOICE_NOT_VALID, EXIT_FAILED = 0, 2, 3, 4, 5
+#: The choices ``--recover`` knows, and the ones each state offers (``_pending_snapshot``).
+RECOVER_CHOICES = ("previous", "cancel", "owner")
+
+
 def cmd_pending(args) -> int:
-    """Show the restore waiting for the next start, or the last one; ``--cancel`` drops the one waiting."""
+    """Show the restore waiting for the next start, or the last one; ``--cancel`` drops the one waiting; ``--recover``
+    acts on it without asking; ``--json`` says it as one line for a machine."""
     from backend.app.services.platform.instance_backup.apply import RestoreStateUnreadableError, read_restore  # noqa: PLC0415
 
+    as_json = getattr(args, "json", False)
+    choice = getattr(args, "recover", None)
+    if as_json or choice is not None:
+        return _pending_for_machines(args, choice, as_json)
     data_dir = _data_dir_for(args, need_database=False)
     if data_dir is None:
         return 1
     if args.cancel:
         return _cancel_pending(data_dir)
-    if getattr(args, "recover", False):
-        return _recover_pending(data_dir)
     try:
         state = read_restore(data_dir)
     except RestoreStateUnreadableError as exc:
@@ -1202,6 +1304,172 @@ def cmd_pending(args) -> int:
         return 1
     _print_restore_state(state)
     return 0
+
+
+# =============================================================================
+# For machines: ``backup pending --json`` and ``--recover CHOICE`` (the cloud's ``lfc istanza recupera``, B5-2)
+# =============================================================================
+
+
+def _iso_z(moment) -> str | None:
+    """A moment as ``2026-10-23T03:00:12Z`` (UTC, whole seconds); ``None`` for none."""
+    from datetime import UTC  # noqa: PLC0415
+
+    return moment.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ") if moment is not None else None
+
+
+def _safety_copy(data_dir: Path, state) -> dict:
+    """The data of before a swap, kept in ``.restore/previous/`` until the first start on the restored data completes:
+    whether it is there, and since when (the state's ``applied_at``, else when the folder last changed)."""
+    from datetime import UTC, datetime  # noqa: PLC0415
+
+    from backend.app.services.platform.instance_backup.paths import SWAPPED_FOLDERS, is_plain_dir, previous_dir  # noqa: PLC0415
+
+    previous = previous_dir(data_dir)
+    try:
+        if not is_plain_dir(previous) or not any(os.path.lexists(previous / name) for name in SWAPPED_FOLDERS):
+            return {"present": False, "at": None}
+        at = state.applied_at if state is not None and state.applied_at is not None else datetime.fromtimestamp(os.stat(previous).st_mtime, UTC)
+    except OSError:
+        return {"present": False, "at": None}
+    return {"present": True, "at": _iso_z(at)}
+
+
+def _pending_snapshot(data_dir: Path) -> dict:
+    """What a machine may know of the restore: its state, why, when its backup was made, the data of before, and the
+    choices ``--recover`` accepts now. Never a name, an email, a path or an id."""
+    from backend.app.services.platform.instance_backup.apply import RestoreStateUnreadableError, read_restore  # noqa: PLC0415
+
+    state = problem = None
+    try:
+        state = read_restore(data_dir)
+    except RestoreStateUnreadableError as exc:
+        problem = exc
+    if problem is not None:
+        name, reason, choices = "unreadable", problem.reason, ["previous"]
+    elif state is None:
+        name, reason, choices = "none", None, []
+    elif state.status == "pending":
+        name, reason, choices = "pending", None, ["cancel"]
+    elif state.status == "committed":
+        name, reason, choices = "committed", None, []
+        # B5-1b: the owner's assignment failed for good (a recorded error): the way out is --recover owner.
+        if state.owner_user_id is not None and (state.owner_outcome or "").startswith("error:"):
+            reason, choices = "owner_assignment", ["owner"]
+    elif state.status == "rolled_back":
+        name, reason, choices = "rolled_back", state.reason, []
+    else:
+        name, reason, choices = "in_progress", None, []
+    return {
+        "state": name,
+        "reason": reason,
+        "waiting": state.waiting if state is not None else None,
+        "backup_created_at": _iso_z(state.backup_created_at) if state is not None else None,
+        "safety_copy": _safety_copy(data_dir, state),
+        "choices": choices,
+    }
+
+
+@contextlib.contextmanager
+def _text_to_stderr(enabled: bool):
+    """With ``enabled``, everything printed meanwhile goes to stderr, the log lines of the modules called too: stdout is
+    left for the one JSON line. Yields the real stdout."""
+    real = sys.stdout
+    if not enabled:
+        yield real
+        return
+    moved = [handler for handler in logging.root.handlers if isinstance(handler, logging.StreamHandler) and getattr(handler, "stream", None) is real]
+    for handler in moved:
+        handler.setStream(sys.stderr)
+    try:
+        with contextlib.redirect_stdout(sys.stderr):
+            yield real
+    finally:
+        for handler in moved:
+            handler.setStream(real)
+
+
+def _pending_for_machines(args, choice: str | None, as_json: bool) -> int:
+    """``backup pending --json`` and/or ``--recover CHOICE``: fixed exit codes, one JSON line with ``--json``."""
+    with _text_to_stderr(as_json) as real_stdout:
+        data_dir = _data_dir_for(args, need_database=False)
+        if data_dir is None:
+            return EXIT_FAILED
+        code, error = EXIT_DONE, None
+        if choice is not None:
+            code, error = _recover_choice(data_dir, choice)
+        snapshot = _pending_snapshot(data_dir)
+    if as_json:
+        line = dict(snapshot)
+        if choice is not None:
+            line["recover"] = {"choice": choice, "done": code == EXIT_DONE}
+        if error is not None:
+            line["error"] = error
+        print(json.dumps(line, separators=(",", ":")), file=real_stdout, flush=True)
+    return code
+
+
+def _recover_choice(data_dir: Path, choice: str) -> tuple[int, str | None]:
+    """Do what ``--recover CHOICE`` asks, if the state allows it: the exit code and the word that says why not. Nothing
+    changes for a word this command does not know or one the state does not offer."""
+    snapshot = _pending_snapshot(data_dir)
+    if choice not in RECOVER_CHOICES:
+        print(f"❌ {choice!r} is not a choice: use {' or '.join(RECOVER_CHOICES)} (choice_not_valid)")
+        return EXIT_CHOICE_NOT_VALID, "choice_not_valid"
+    if snapshot["state"] == "none":
+        print("❌ Nothing to recover: the state of the restore can be read, or there is none. ./dev.py backup pending shows it (restore_nothing_to_recover)")
+        return EXIT_NOTHING_TO_RECOVER, "nothing_to_recover"
+    if choice not in snapshot["choices"]:
+        offered = ", ".join(snapshot["choices"]) or "none"
+        print(f"❌ {choice!r} is not valid while the restore is {snapshot['state']}: valid here: {offered} (choice_not_valid)")
+        return EXIT_CHOICE_NOT_VALID, "choice_not_valid"
+    if choice == "previous":
+        return _recover_previous(data_dir)
+    if choice == "owner":
+        return _recover_owner(data_dir)
+    if _cancel_pending(data_dir) == 0:
+        return EXIT_DONE, None
+    # Dropped by someone meanwhile: nothing left to do; anything else failed.
+    return (EXIT_NOTHING_TO_RECOVER, "nothing_to_recover") if _pending_snapshot(data_dir)["state"] == "none" else (EXIT_FAILED, "failed")
+
+
+def _recover_owner(data_dir: Path) -> tuple[int, str | None]:
+    """``backup pending --recover owner`` (B5-1b): clear the error recorded for the owner's account, and, when no server
+    serves the data directory, try again at once; a running server tries at its next start. The exit code and, when it
+    is not ``EXIT_DONE``, the stable word that says why. Idempotent: a second run finds nothing to clear."""
+    import asyncio  # noqa: PLC0415
+
+    from backend.app.services.platform.instance_backup.apply import RestoreInUseError, RestoreOwnerNotFailedError, RestoreStateUnreadableError, read_restore, reset_owner_assignment  # noqa: PLC0415
+    from backend.app.services.platform.instance_backup.owner import assign_restored_owner  # noqa: PLC0415
+    from backend.app.services.platform.instance_backup.paths import BackupPathError  # noqa: PLC0415
+
+    try:
+        served = reset_owner_assignment(data_dir)
+    except RestoreOwnerNotFailedError:
+        print("❌ Nothing to try again: the owner's account has no failed assignment (restore_nothing_to_recover)")
+        return EXIT_NOTHING_TO_RECOVER, "nothing_to_recover"
+    except RestoreInUseError:
+        print("❌ The owner's account is being set right now: run the command again in a moment (restore_in_use)")
+        return EXIT_FAILED, "restore_in_use"
+    except (RestoreStateUnreadableError, OSError, BackupPathError) as exc:
+        print(f"❌ The owner's account could not be tried again: {getattr(exc, 'strerror', None) or type(exc).__name__}")
+        return EXIT_FAILED, "failed"
+    if served:
+        print("✅ The failed assignment was cleared: the owner's account is set when LibreFolio starts again")
+        return EXIT_DONE, None
+    asyncio.run(assign_restored_owner(data_dir))
+    try:
+        state = read_restore(data_dir)
+    except RestoreStateUnreadableError:
+        state = None
+    outcome = getattr(state, "owner_outcome", None)
+    if state is None:
+        print("⏳ The owner's account is set at the next start of the server")
+        return EXIT_DONE, None
+    _print_owner_outcome(state)
+    if outcome is not None and outcome.startswith("error:"):
+        return EXIT_FAILED, "owner_assignment_failed"
+    return EXIT_DONE, None
 
 
 def _print_unreadable_state(data_dir: Path, exc) -> None:
@@ -1222,28 +1490,30 @@ def _print_unreadable_state(data_dir: Path, exc) -> None:
         else:
             print("   No data of before is kept in .restore/previous/: no folder was swapped, or the restore was committed")
         print(f"   Checked copies kept: {copies} (none is removed while the state cannot be read)")
-    print("👉 Stop LibreFolio, then run ./dev.py backup pending --recover: it puts the data of before back.")
+    print("👉 Stop LibreFolio, then run ./dev.py backup pending --recover previous: it puts the data of before back.")
     print("   Then start LibreFolio as it was, or restore a backup with ./dev.py backup restore ARCHIVE.")
 
 
-def _recover_pending(data_dir: Path) -> int:
-    """``backup pending --recover``: with an unreadable state, put the data of before back (B-33)."""
+def _recover_previous(data_dir: Path) -> tuple[int, str | None]:
+    """``backup pending --recover previous``: with an unreadable state, put the data of before back (B-33). The exit
+    code and, when it is not ``EXIT_DONE``, the stable word that says why. A second run finds no unreadable state and
+    changes nothing: ``EXIT_NOTHING_TO_RECOVER``."""
     from backend.app.services.platform.instance_backup.apply import RestoreApplyError, RestoreInUseError, RestoreNothingToRecoverError, recover_unreadable_restore  # noqa: PLC0415
 
     try:
         recovered = recover_unreadable_restore(data_dir)
     except RestoreNothingToRecoverError:
         print("❌ Nothing to recover: the state of the restore can be read, or there is none. ./dev.py backup pending shows it (restore_nothing_to_recover)")
-        return 1
+        return EXIT_NOTHING_TO_RECOVER, "nothing_to_recover"
     except RestoreInUseError:
         print("❌ LibreFolio is running on this data directory: stop it first, then run the command again (restore_in_use)")
-        return 1
+        return EXIT_FAILED, "restore_in_use"
     except RestoreApplyError as exc:
         print(f"❌ {exc} ({exc.code}): the log above says which folder; do not start LibreFolio before it is fixed")
-        return 1
+        return EXIT_FAILED, "restore_apply_failed"
     except OSError as exc:
         print(f"❌ The restore could not be recovered: {exc.strerror or type(exc).__name__}")
-        return 1
+        return EXIT_FAILED, "failed"
     if recovered.moved_back:
         print(f"✅ The data of before is back: {', '.join(recovered.moved_back)}")
     else:
@@ -1252,7 +1522,7 @@ def _recover_pending(data_dir: Path) -> int:
         print(f"   The restored folders were set aside in .restore/failed/: {', '.join(recovered.set_aside)}")
     print(f"   The unreadable state is kept as .restore/{recovered.state_kept_as}, for a look; it is never read again")
     print("👉 Start LibreFolio, or restore a backup with ./dev.py backup restore ARCHIVE.")
-    return 0
+    return EXIT_DONE, None
 
 
 def _cancel_pending(data_dir: Path) -> int:
@@ -1373,8 +1643,13 @@ A relative path starts from the project root, like every path given to dev.py. A
 
     pending = commands.add_parser("pending", help="Show the restore waiting for the next start of the server, or the last one")
     pending_actions = pending.add_mutually_exclusive_group()
-    pending_actions.add_argument("--cancel", action="store_true", help="Drop the restore waiting for the next start, and its checked copy")
-    pending_actions.add_argument("--recover", action="store_true", help="When the state of the restore cannot be read: put the data of before back (stop LibreFolio first)")
+    pending_actions.add_argument("--cancel", action=_StoreTrueNotWith, not_with="json", help="Drop the restore waiting for the next start, and its checked copy (not with --json: use --recover cancel)")
+    pending_actions.add_argument(
+        "--recover",
+        metavar="CHOICE",
+        help="Act on the restore without asking. previous: when its state cannot be read, put the data of before back (stop LibreFolio first); cancel: drop the restore waiting; owner: when the owner's account could not be set, clear the error and try again. Exit 0 done, 3 nothing to recover, 4 not valid in this state, 5 failed",
+    )
+    pending.add_argument("--json", action=_StoreTrueNotWith, not_with="cancel", help="Say the state as one JSON line on stdout (nothing else there; the text goes to stderr), for a machine")
     pending.set_defaults(backup_func=cmd_pending)
 
     parser.set_defaults(func=_dispatch)

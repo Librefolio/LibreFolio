@@ -166,10 +166,16 @@ def test_every_type_declares_cleanly_for_the_asset_family():
 
 
 def test_the_family_rules_are_the_documented_ones():
-    """1: assets and BRIM take user fields and secrets; FX takes secrets but no user field; no other family is open yet.
+    """1: assets and BRIM take user fields and secrets; FX takes secrets but no user field; a Tool takes user fields and no
+    secret (a call is made for a user, and a Tool calls no external source); no other family is open yet.
 
-    Red today (W-BS): ``brim`` has no rules, so a BRIM plugin cannot declare a setting."""
-    assert FAMILY_RULES == {"asset": FamilyRules(user_scope=True, secrets=True), "fx": FamilyRules(user_scope=False, secrets=True), "brim": FamilyRules(user_scope=True, secrets=True)}
+    Red today (CP12, X5-4b): ``tool`` has no rules, so a Tool plugin cannot declare a setting."""
+    assert FAMILY_RULES == {
+        "asset": FamilyRules(user_scope=True, secrets=True),
+        "fx": FamilyRules(user_scope=False, secrets=True),
+        "brim": FamilyRules(user_scope=True, secrets=True),
+        "tool": FamilyRules(user_scope=True, secrets=False),
+    }
 
 
 def test_an_fx_plugin_declares_system_fields_and_secrets_but_no_user_field():
@@ -1217,15 +1223,15 @@ def test_the_brim_base_inherits_the_settings_mixin_with_no_field_and_not_test_on
 
 
 def test_every_real_brim_plugin_declares_nothing_and_sees_the_unbound_defaults():
-    """6: no real BRIM plugin declares a field (so none is ever in the catalogue); each one's ``settings`` is the
-    unbound view: no value, no secret, nothing missing, an empty fingerprint."""
+    """6: the only real BRIM plugin that declares a field is ``broker_generic_csv`` (``date_order``, W5-8); every other one's
+    ``settings`` is the unbound view: no value, no secret, nothing missing, an empty fingerprint."""
     BRIMProviderRegistry.auto_discover()
     codes = BRIMProviderRegistry.list_plugin_codes()
     assert codes, "barrier: the BRIM registry holds plugins"
 
     declaring = {code: BRIMProviderRegistry.get_plugin(code).settings_fields for code in codes if BRIMProviderRegistry.get_plugin(code).settings_fields}
-    assert declaring == {}, f"a real BRIM plugin declares settings: no concrete field is declared in this lot: {sorted(declaring)}"
-    for code in codes:
+    assert {code: [field.key for field in fields] for code, fields in declaring.items()} == {"broker_generic_csv": ["date_order"]}, f"the BRIM plugins that declare settings: {sorted(declaring)}"
+    for code in set(codes) - set(declaring):
         unbound = BRIMProviderRegistry.get_provider_instance(code).settings
         assert (unbound.plain_values(), unbound.secret_values(), unbound.missing, unbound.fingerprint) == ({}, frozenset(), (), ""), code
 

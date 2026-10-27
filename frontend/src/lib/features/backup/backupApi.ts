@@ -152,8 +152,9 @@ export async function deleteRestoreCheck(stageId: string): Promise<void> {
     await zodiosApi.delete_restore_check_api_v1_backup_restore_stage__stage_id__delete(undefined, {params: {stage_id: stageId}});
 }
 
-export function confirmRestore(stageId: string): Promise<RestoreStatus> {
-    return zodiosApi.confirm_restore_check_api_v1_backup_restore_stage__stage_id__confirm_post(undefined, {params: {stage_id: stageId}});
+/** `ownerUserId`: the account of the backup that becomes the owner's, required on a managed instance (B5-1). */
+export function confirmRestore(stageId: string, ownerUserId: number | null = null): Promise<RestoreStatus> {
+    return zodiosApi.confirm_restore_check_api_v1_backup_restore_stage__stage_id__confirm_post({owner_user_id: ownerUserId}, {params: {stage_id: stageId}});
 }
 
 export async function cancelPendingRestore(): Promise<void> {

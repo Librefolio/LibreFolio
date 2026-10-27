@@ -14,11 +14,12 @@
      * Svelte 5 runes throughout.
      */
     import {onDestroy, onMount, tick} from 'svelte';
+    import {onPricesCaughtUp} from '$lib/features/price-refresh/onPricesCaughtUp';
     import {goto} from '$app/navigation';
     import {page} from '$app/stores';
     import {_ as t} from '$lib/i18n';
     import {zodiosApi, axiosInstance} from '$lib/api';
-    import {BarChart3, CalendarSync, Check, Network, Plus, RefreshCw, RotateCw, Search, Settings, Trash2, X} from 'lucide-svelte';
+    import {BarChart3, CalendarSync, ChartLine, Check, Network, Plus, RefreshCw, RotateCw, Search, Settings, Trash2, X} from 'lucide-svelte';
     import AssetCard from '$lib/components/assets/AssetCard.svelte';
     import type {AssetRow} from '$lib/components/assets/AssetTable.svelte';
     import AssetTable from '$lib/components/assets/AssetTable.svelte';
@@ -97,6 +98,8 @@
         asset_type?: string | null;
         provider_code?: string | null;
         active: boolean;
+        /** Eligible as a comparison benchmark: the comparison picker lists these first (Y5-F4). */
+        is_benchmark?: boolean;
         quote_base_quantity?: number | null;
         tx_count?: number;
         /** A positive quantity is held **now** in a broker the user owns (Risk, `FAinfoResponse`). */
@@ -614,6 +617,7 @@
                 currency: item.currency,
                 icon_url: item.icon_url ?? null,
                 asset_type: item.asset_type ?? null,
+                is_benchmark: item.is_benchmark === true,
                 quote_base_quantity: item.quote_base_quantity ?? 1,
                 provider_code: item.provider_code ?? null,
                 active: item.active ?? true,
@@ -692,17 +696,26 @@
      * signals' retry and a settings change ask only the prices and signals (`fetchPriceSeries`): the Δ columns depend
      * on neither (X-R60).
      */
-    async function fetchAllPriceData() {
+    async function fetchAllPriceData(silent = false) {
         if (assets.length === 0) return;
-        await Promise.all([fetchPriceSeries(), loadPeriodChanges()]);
+        await Promise.all([fetchPriceSeries(undefined, silent), loadPeriodChanges(silent)]);
     }
 
+    // A price catch-up (the bus's `{kind: 'prices'}`, Y5-1, Z-14b): the cards' prices, signals and Δ, and the compared pairs' rates, are asked again
+    // in silence — the cards keep their lines, nothing says the page is busy — and outside `pageBusy`: it is not the user's Refresh.
+    onMount(() =>
+        onPricesCaughtUp(async () => {
+            if (fxPairSlugs.length > 0) void loadFxRateData();
+            await fetchAllPriceData(true);
+        }),
+    );
+
     /** The Δ columns of every listed asset up to the end of the range, and each card's Δ over the range, from the backend (X-R53, X-R59). */
-    async function loadPeriodChanges() {
+    async function loadPeriodChanges(silent = false) {
         const ticket = periodChangesLedger.begin(dateEnd, true);
         const rangeStart = dateStart;
         const rangeTicket = rangeDeltaLedger.begin(rangeKey(rangeStart, ticket.asOf), true);
-        periodChangesLoading = periodChangesLedger.busy || rangeDeltaLedger.busy;
+        if (!silent) periodChangesLoading = periodChangesLedger.busy || rangeDeltaLedger.busy;
         try {
             const result = await fetchAssetPeriodChanges(
                 assets.map((asset) => asset.id),
@@ -798,7 +811,7 @@
      * for another step or stale, is asked; the answers go to the cache and the cards draw them as they are. `only` limits it
      * to some cards: a settings change reloads its own card, a width that changes the step its own.
      */
-    async function fetchPriceSeries(only?: ReadonlySet<number>) {
+    async function fetchPriceSeries(only?: ReadonlySet<number>, silent = false) {
         if (assets.length === 0) return;
         void getSettingsVersion();
 
@@ -871,7 +884,7 @@
         for (const asset of wanted) {
             const previous = nextCalendar.get(asset.id);
             if (!calendarCards.has(asset.id)) nextCalendar.delete(asset.id);
-            else nextCalendar.set(asset.id, {own: {...(previous?.own ?? emptyCalendarReturnView()), state: 'loading'}, targets: previous?.targets ?? new Map()});
+            else nextCalendar.set(asset.id, {own: {...(previous?.own ?? emptyCalendarReturnView()), state: silent && previous ? previous.own.state : 'loading'}, targets: previous?.targets ?? new Map()});
         }
         calendarByCard = nextCalendar;
 
@@ -899,7 +912,9 @@
 
         refreshing = true;
         signalRequestFailed = false;
-        assets = assets.map((a) => (wantedIds.has(a.id) ? {...a, loadingPrices: needFetchIds.has(a.id)} : a));
+        // A silent reload (a catch-up) leaves the cards as they are: the page does not say it is busy. Otherwise a card whose cached series a
+        // catch-up marked stale shows it at once, and the read goes on in background with no skeleton (Y5-1, D3); the others load as before.
+        if (!silent) assets = assets.map((a) => (wantedIds.has(a.id) ? (needFetchIds.has(a.id) && (cached.get(a.id)?.derived.chartData.length ?? 0) > 0 ? assetWithEntry(a, cached.get(a.id)!) : {...a, loadingPrices: needFetchIds.has(a.id)}) : a));
 
         try {
             // One request for the cards with something to ask while it stays under the backend's caps: the backend then runs
@@ -1918,11 +1933,14 @@
                     <div class="flex rounded-lg border border-lf-subtle overflow-hidden" data-testid="assets-global-view" data-view={globalPrimaryView}>
                         <button
                             type="button"
-                            class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalPrimaryView === 'absolute' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+                            class="flex-1 inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalPrimaryView === 'absolute' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
                             data-testid="assets-global-view-absolute"
                             aria-pressed={globalPrimaryView === 'absolute'}
+                            aria-label={$t('chart.showAbsolute')}
+                            title={$t('chart.showAbsolute')}
                             onclick={() => handleListPrimaryView('absolute')}
-                            >Abs
+                        >
+                            <ChartLine size={14} />
                         </button>
                         <button
                             type="button"
@@ -1945,37 +1963,55 @@
                         </button>
                     </div>
                 {/if}
-                <!-- Settings -->
-                <button class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors" onclick={handleGlobalSettings} data-testid="assets-chart-settings-button">
-                    <Settings size={14} />
-                    {#if showActionLabels}<span>{$t('sharedResource.settings')}</span>{/if}
-                </button>
+                <!-- Settings. The three buttons say what they do in a delayed tooltip (Y5-F1); a click is theirs, so
+                     it stops before the tooltip's own click, which would pin the hint over the window it opens. -->
+                <Tooltip text={$t('sharedResource.settingsHint')} position="bottom" interactiveChild testId="assets-chart-settings-tooltip">
+                    <button
+                        class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors"
+                        onclick={(event) => {
+                            event.stopPropagation();
+                            handleGlobalSettings();
+                        }}
+                        data-testid="assets-chart-settings-button"
+                    >
+                        <Settings size={14} />
+                        {#if showActionLabels}<span>{$t('sharedResource.settings')}</span>{/if}
+                    </button>
+                </Tooltip>
                 <!-- Sync All -->
-                <button
-                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors"
-                    onclick={handleSyncAllAssets}
-                    data-testid="assets-sync-all-button"
-                    use:guideAnchor={'asset.page.sync'}
-                >
-                    <RotateCw size={14} />
-                    {#if showActionLabels}<span>{$t('sharedResource.syncAll')}</span>{/if}
-                </button>
+                <Tooltip text={$t('sharedResource.syncAllHint')} position="bottom" interactiveChild testId="assets-sync-all-tooltip">
+                    <button
+                        class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors"
+                        onclick={(event) => {
+                            event.stopPropagation();
+                            handleSyncAllAssets();
+                        }}
+                        data-testid="assets-sync-all-button"
+                        use:guideAnchor={'asset.page.sync'}
+                    >
+                        <RotateCw size={14} />
+                        {#if showActionLabels}<span>{$t('sharedResource.syncAll')}</span>{/if}
+                    </button>
+                </Tooltip>
                 <!-- Refresh All -->
-                <button
-                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors disabled:opacity-50"
-                    data-testid="assets-refresh-button"
-                    data-busy={pageBusy.busy ? 'true' : 'false'}
-                    disabled={pageBusy.busy}
-                    onclick={() => {
-                        for (const a of assets) invalidateAssetPrices(a.id);
-                        rearmMaxPendingBeforeReload();
-                        void pageBusy.track('assets-refresh', () => fetchAllPriceData());
-                        refreshLivePricesNow();
-                    }}
-                >
-                    <RefreshCw class={pageBusy.busy ? 'animate-spin' : ''} size={14} />
-                    {#if showActionLabels}<span>{$t('sharedResource.refreshAll')}</span>{/if}
-                </button>
+                <Tooltip text={$t('sharedResource.refreshAllHint')} position="bottom" interactiveChild testId="assets-refresh-tooltip">
+                    <button
+                        class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors disabled:opacity-50"
+                        data-testid="assets-refresh-button"
+                        data-busy={pageBusy.busy ? 'true' : 'false'}
+                        disabled={pageBusy.busy}
+                        onclick={(event) => {
+                            event.stopPropagation();
+                            for (const a of assets) invalidateAssetPrices(a.id);
+                            rearmMaxPendingBeforeReload();
+                            void pageBusy.track('assets-refresh', () => fetchAllPriceData());
+                            refreshLivePricesNow();
+                        }}
+                    >
+                        <RefreshCw class={pageBusy.busy ? 'animate-spin' : ''} size={14} />
+                        {#if showActionLabels}<span>{$t('sharedResource.refreshAll')}</span>{/if}
+                    </button>
+                </Tooltip>
             {/if}
         {/snippet}
     </PageToolbar>
@@ -2082,6 +2118,7 @@
                                     renderSignals={(chartData, vm) => getRenderedSignals(asset.id, chartData, vm)}
                                     chartData={asset.chartData}
                                     baseValue={asset.base?.value ?? null}
+                                    resolution={asset.resolution}
                                     onplotwidth={handlePlotWidth}
                                     loading={asset.loadingPrices}
                                     syncing={syncingAssetIds.has(asset.id)}
@@ -2158,7 +2195,7 @@
     settings={settingsForModal}
     pairData={settingsTargetId ? assets.find((a) => a.id === Number(settingsTargetId))?.chartData : undefined}
     availablePairs={fxPairSlugs}
-    availableAssets={assets.map((a) => ({id: a.id, display_name: a.display_name, icon_url: a.icon_url, asset_type: a.asset_type}))}
+    availableAssets={assets.map((a) => ({id: a.id, display_name: a.display_name, icon_url: a.icon_url, asset_type: a.asset_type, currency: a.currency, is_benchmark: a.is_benchmark}))}
     signalSources={settingsSignalSources}
     calendarRangeDays={calendarReturnRangeDays(dateStart, dateEnd)}
     calendarPreviewResolver={resolveCalendarPreview}

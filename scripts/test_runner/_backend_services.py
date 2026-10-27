@@ -250,6 +250,37 @@ def services_price_query_sampling(verbose: bool = False, test_names: list = None
     return run_command(cmd, "Price query sampling tests", verbose=verbose)
 
 
+def services_price_query_observations(verbose: bool = False, test_names: list = None) -> bool:
+    """X-Q1/Q2/S1 («formule veloci»): the price query reads a series by observation and converts once for each stretch of unchanged price row and rate row."""
+    print_section("Services: Price Query Observations (X-Q1, X-Q2)")
+    print_info("Testing: observed_prices (observe, series_points, ObservedPrices), PriceQueryOperations.observed_prices, get_prices_bulk")
+    print_info("Parity: the public points and conversion errors equal the 1fd80c481 pipeline's (a copy in the test), on 18 asset/target/window cases and 7 signal cases (EMA, calendar rolling return, drawdown)")
+    print_info("Count: convert_bulk is handed one conversion for each stretch of unchanged price row and rate row, not one for each day")
+    print_info("Object: first_point_date, observation_dates and point_on(day), the point the public series has on that day (J's R1)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_price_query_observations.py", test_names)
+    return run_command(cmd, "Price query observation tests", verbose=verbose)
+
+
+def services_fx_stretch_conversion(verbose: bool = False, test_names: list = None) -> bool:
+    """X-Q3: POST /fx/currencies/convert converts once for each stretch of days on which the rate row is the same."""
+    print_section("Services: FX Stretch Conversion (X-Q3)")
+    print_info("Testing: convert_by_stretch (services/fx/stretch_conversion.py), convert_currency_bulk")
+    print_info("Parity: item for item, convert_bulk's results and error texts (direct, inverse, identity, no rate, rate gap, exponent of the amount); the handler's answer with every day converted")
+    print_info("Count: convert is handed one conversion for each distinct (amount, pair, rate row)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_fx_stretch_conversion.py", test_names)
+    return run_command(cmd, "FX stretch conversion tests", verbose=verbose)
+
+
+def services_ai_export_performance_steps(verbose: bool = False, test_names: list = None) -> bool:
+    """MF-P4b: the AI Export performance buckets and the average NAV read the portfolio history as steps (date, through)."""
+    print_section("Services: AI Export Performance Steps (MF-P4b)")
+    print_info("Testing: build_performance_bucket_rows (payloads/portfolio_broker.py), broker_cost_efficiency._average_nav")
+    print_info("Parity: the rows built from steps equal the day-by-day function's (a frozen copy in the test) on the history expanded to days: extremes and their days, previous close, flow, P&L, return, index")
+    print_info("Average NAV: the mean of every day weighted by the step's length, the count in days, the period from the first date to the last through")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_ai_export_performance_steps.py", test_names)
+    return run_command(cmd, "AI Export performance steps tests", verbose=verbose)
+
+
 def services_provider_registry(verbose: bool = False, test_names: list = None) -> bool:
     """Test registry dei provider (asset & fx)."""
     print_section("Services: Provider Registry")
@@ -534,6 +565,16 @@ def services_linked_adjustment_pair(verbose: bool = False, test_names: list = No
     return run_command(cmd, "Linked adjustment pair tests", verbose=verbose)
 
 
+def services_transfer_pair_order(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that a linked TRANSFER / CASH_TRANSFER arriving before it departs is saved as sent and warned (pairArrivalBeforeDeparture)."""
+    print_section("Services: Transfer Pair Order")
+    print_info("Testing: backend/app/services/transactions/batch_creates.py (resolve_create_links) + batch_edits.py (validate_updated_pairs) + TXBatchResponse.warnings")
+    print_info("Tests: arrival dated before departure on create and on a date edit gives a non-blocking warning; equal/normal order, FX_CONVERSION, ADJUSTMENT, unlinked rows and untouched stored pairs give none; the data is saved as sent; the message in 4 languages")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_transfer_pair_order.py", test_names)
+    return run_command(cmd, "Transfer pair order tests", verbose=verbose)
+
+
 def services_transaction_decimal_places(verbose: bool = False, test_names: list = None) -> bool:
     """Test how many decimal places a transaction keeps, where a batch refuses more, and the balances summed exactly (C-97a)."""
     print_section("Services: Transaction Decimal Places")
@@ -626,6 +667,50 @@ def services_admin_bootstrap(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Initial administrator tests", verbose=verbose)
 
 
+def services_owner_email_change(verbose: bool = False, test_names: list = None) -> bool:
+    """Test A5-1b part 2: the instance owner's flag, the startup sync and the confirmation link of its new address."""
+    print_section("Services: Instance Owner Email Change (A5-1b)")
+    print_info("Testing: services/accounts/instance_owner.py (run_owner_sync, deliver_owner_change_link, startup_owner_sync, owner_change_status), user_service.account_protection, bootstrap_admin_service, email messages, the owner-sync startup step")
+    print_info("Tests: the owner flag and the protection rule, each branch of the sync (heal, same, conflict, live link, new link by email, link in the log), the status, the four-language email, the step order")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_owner_email_change.py", test_names)
+    return run_command(cmd, "Instance owner email change tests", verbose=verbose)
+
+
+def services_owner_assignment(verbose: bool = False, test_names: list = None) -> bool:
+    """Test A5-2: a restore on a managed instance gives the instance to the owner the administrator chose."""
+    print_section("Services: Owner Assignment after a Restore (A5-2)")
+    print_info("Testing: services/accounts/instance_owner.py assign_owner_and_send_reset, auth_service.unusable_password_hash, user_service.create_password_reset(email=)")
+    print_info(
+        "Tests: the four precondition codes, the owner flag moved, an unusable password and ended sessions, the planted tokens of a backup neutralised (the four attacks), one new reset link (sent; link_only with the link in the instance's log, never in the result), a second call starting again, two calls at once"
+    )
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_owner_assignment.py", test_names)
+    return run_command(cmd, "Owner assignment tests", verbose=verbose)
+
+
+def services_user_limit(verbose: bool = False, test_names: list = None) -> bool:
+    """Test A5-7: the accounts over LIBREFOLIO_MAX_USERS, and the administrator's choice of who keeps the access."""
+    print_section("Services: Over the User Limit (A5-7)")
+    print_info("Testing: services/accounts/user_limit_service.py over_limit_state, list_for_choice, resolve")
+    print_info("Tests: the state only when active > limit (never for a limit that cannot be read), the protected accounts, the example of 5 accounts and a limit of 3, nothing deleted, the refusals, the invitations revoked only as far as needed, one commit")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_user_limit.py", test_names)
+    return run_command(cmd, "User limit tests", verbose=verbose)
+
+
+def services_user_limit_api(verbose: bool = False, test_names: list = None) -> bool:
+    """Test A5-7: the guard and the two routes of the state over the user limit, on the app in process."""
+    print_section("Services: Over the User Limit on the API (A5-7)")
+    print_info("Testing: api/v1/user_limit.py refuse_when_over_limit and its lists, GET /users/over-limit, POST /users/over-limit/resolve")
+    print_info(
+        "Tests: 423 user_limit_exceeded for an ordinary user, the allowed routes, the administrator's choice and backup, the order of the guards, an instance not over the limit or with an unreadable limit changes no answer, the lists pinned, exact keys, the refusals with their codes, the example through the API"
+    )
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_user_limit_api.py", test_names)
+    return run_command(cmd, "User limit API tests", verbose=verbose)
+
+
 def services_email_case(verbose: bool = False, test_names: list = None) -> bool:
     """Test P18: email addresses unique regardless of A–Z case, in the rule, the index, the lookups and the writes."""
     print_section("Services: Email Addresses Regardless of Case (P18)")
@@ -644,6 +729,16 @@ def services_username_rules(verbose: bool = False, test_names: list = None) -> b
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_username_rules.py", test_names)
     return run_command(cmd, "Username rules tests", verbose=verbose)
+
+
+def services_account_protection(verbose: bool = False, test_names: list = None) -> bool:
+    """Test A5-1: on a managed instance the account of LIBREFOLIO_ADMIN_EMAIL is protected; the command line is not bound by it."""
+    print_section("Services: Account Protection (A5-1)")
+    print_info("Testing: config/accounts.py owner_admin_email, user_service.account_protection, scripts/user_cli.py deactivate and demote")
+    print_info("Tests: the reader never raises, the managed profile protects the address of the variable in any A-Z case, any other profile or an unusable variable protects nobody, the command line and the deleting service stay above the protection")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_account_protection.py", test_names)
+    return run_command(cmd, "Account protection tests", verbose=verbose)
 
 
 def services_username_lookup(verbose: bool = False, test_names: list = None) -> bool:
@@ -961,6 +1056,46 @@ def services_brim_parse_settings(verbose: bool = False, test_names: list = None)
     return run_command(cmd, "BRIM parse settings tests", verbose=verbose)
 
 
+def services_brim_parse_failure_detail(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the 400 of a failed BRIM parse: an object the wizard translates, not an English sentence (W5-5, C-70b)."""
+    print_section("Services: BRIM Parse Failure Detail")
+    print_info("Testing: backend/app/api/v1/brokers.py (parse_file), brim_parse_pool.parse_file_offloaded, brim_provider guard")
+    print_info("Tests: BRIMParseError with/without a code, the guard's coded and silent refusals, unknown plugin stays a string, 404 unchanged")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_parse_failure_detail.py", test_names)
+    return run_command(cmd, "BRIM parse failure detail tests", verbose=verbose)
+
+
+def services_brim_parse_error_codes(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that every BRIMParseError of a BRIM plugin carries a code the wizard translates (W5-6, E-21)."""
+    print_section("Services: BRIM Parse Error Codes")
+    print_info("Testing: backend/app/services/brim_providers/** (static ast scan), frontend/src/lib/i18n/importWizard/{en,it,fr,es}.json")
+    print_info("Tests: every raise coded, not swallowed by a broad except, text in the four catalogues, placeholders agree, generic CSV and DEGIRO codes")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_parse_error_codes.py", test_names)
+    return run_command(cmd, "BRIM parse error codes tests", verbose=verbose)
+
+
+def services_brim_field_contract(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the contract of a field in a BRIM plugin: declaration, default = old behaviour, per-user value, stale parse."""
+    print_section("Services: BRIM Field Contract")
+    print_info("Testing: plugin_settings/resolver.py (default_settings_fingerprint, settings_changed_since), the worked example of the BRIM plugin guide")
+    print_info("Tests: a BRIM plugin declares a field and registers, the default is the old behaviour, the parse sees the importing user's value, a parse is stale exactly when the values a re-parse would receive differ")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_field_contract.py", test_names)
+    return run_command(cmd, "BRIM field contract tests", verbose=verbose)
+
+
+def services_brim_file_settings(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the wiring of a BRIM plugin's settings: the value reaches the pool worker, the fingerprint is stored, a changed setting makes a parse stale."""
+    print_section("Services: BRIM File Settings")
+    print_info("Testing: brim_parse_pool.parse_file_offloaded (bound), brim_provider.save_parse_result (settings_fingerprint), services/brim/brim_file_settings.py (apply_settings_staleness)")
+    print_info("Tests: the value reaches the subprocess, the fingerprint is stored and never served, stale by the user's own value")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_file_settings.py", test_names)
+    return run_command(cmd, "BRIM file settings tests", verbose=verbose)
+
+
 def services_settings(verbose: bool = False, test_names: list = None) -> bool:
     """Test settings service: user settings CRUD, get_effective_base_currency."""
     print_section("Services: Settings Service")
@@ -1056,6 +1191,16 @@ def services_orphan_transfer_numbers(verbose: bool = False, test_names: list = N
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial/test_orphan_transfer_after_broker_delete.py", test_names)
     return run_command(cmd, "Orphan transfer numbers tests", verbose=verbose)
+
+
+def services_split_adjustment_ledger(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Lots and the Dashboard numbers of the incoming ADJUSTMENT a broker's split row becomes (W5-2b)."""
+    print_section("Services: Split Adjustment Ledger (W5-2b numbers)")
+    print_info("Testing: LotsAnalysisService (FIFO lots, average-cost lines) and PortfolioService.get_summary over a SPLIT event and its linked incoming ADJUSTMENT rows")
+    print_info("Tests: a row at cost 0 against a row without cost, a rounded row (FIFO follows the ratio, the average cost the row), a sale before the split, an unlinked row, two brokers, two splits on one day")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial/test_split_adjustment_ledger.py", test_names)
+    return run_command(cmd, "Split adjustment ledger tests", verbose=verbose)
 
 
 def services_lone_transfer_legs(verbose: bool = False, test_names: list = None) -> bool:
@@ -1209,13 +1354,13 @@ def services_test_only_providers(verbose: bool = False, test_names: list = None)
     return run_command(cmd, "Test-only provider tests", verbose=verbose)
 
 
-def services_market_data_wipe_split_guard(verbose: bool = False, test_names: list = None) -> bool:
-    """Run X-R48: the market-data wipe refuses while a SPLIT of the asset has incoming adjustments without a purchase cost."""
-    print_section("Services: Market Data Wipe Split Guard")
-    print_info("Testing: backend/app/services/assets/currency_change.py (wipe_market_data_for_currency_change), backend/app/api/v1/assets/market_data.py")
-    print_info("Tests: the wipe refused with MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST (HTTP 409) naming each such split by date and only the caller's adjustments, nothing written; with a cost, an outgoing row, no link or a dry run the wipe is as before")
-    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_market_data_wipe_split_guard.py", test_names)
-    return run_command(cmd, "Market data wipe split guard tests", verbose=verbose)
+def services_market_data_wipe_keeps_splits(verbose: bool = False, test_names: list = None) -> bool:
+    """Run N68: the market-data wipe and the currency change keep the SPLIT events."""
+    print_section("Services: Market Data Wipe Keeps Splits")
+    print_info("Testing: backend/app/services/assets/currency_change.py (wipe_market_data_for_currency_change), backend/app/services/assets/crud.py (patch_assets_bulk), backend/app/api/v1/assets/market_data.py")
+    print_info("Tests: the wipe and the currency PATCH delete the prices and the non-split events, unlink their transactions and keep every SPLIT with the transactions linked to it, never refusing; summary keys incl. splits_kept")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_market_data_wipe_keeps_splits.py", test_names)
+    return run_command(cmd, "Market data wipe keeps splits tests", verbose=verbose)
 
 
 def services_routes_generic_500(verbose: bool = False, test_names: list = None) -> bool:
@@ -1237,12 +1382,23 @@ def services_provider_wipe_split_guard(verbose: bool = False, test_names: list =
 
 
 def services_provider_removal_link_guard(verbose: bool = False, test_names: list = None) -> bool:
-    """Run X-R62: removing a provider refuses while a transaction is linked to an event it generated."""
+    """Run X-R69 (was X-R62): removing a provider unlinks the transactions linked to the events it generated; only a SPLIT with costless adjustments refuses."""
     print_section("Services: Provider Removal Link Guard")
-    print_info("Testing: backend/app/services/assets/provider_management.py (bulk_remove_providers), backend/app/services/assets/event_links.py, backend/app/api/v1/assets/providers.py")
-    print_info("Tests: a removal refused with PROVIDER_REMOVAL_LINKED_TRANSACTIONS (HTTP 409) while a generated event has a linked transaction, only the caller's transactions named, nothing written; a link the check missed is PROVIDER_REMOVAL_CONFLICT (409, no SQL); else the removal is as before")
+    print_info("Testing: backend/app/services/assets/provider_management.py (bulk_remove_providers), backend/app/services/assets/event_links.py, backend/app/services/assets/split_guard.py, backend/app/api/v1/assets/providers.py")
+    print_info(
+        "Tests: a removal unlinks (asset_event_id NULL) every transaction linked to an event of the assignment and deletes the assignment with its events; a SPLIT with costless adjustments is refused with PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST (HTTP 409), only the caller's transactions named, nothing written; a link made meanwhile is PROVIDER_REMOVAL_CONFLICT (409, no SQL); else the removal is as before"
+    )
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_removal_link_guard.py", test_names)
     return run_command(cmd, "Provider removal link guard tests", verbose=verbose)
+
+
+def services_provider_change_impact(verbose: bool = False, test_names: list = None) -> bool:
+    """Run X-R69 / C-65a: the dry run of a provider change or removal (POST /assets/provider/impact) tells what would be deleted and unlinked, and writes nothing."""
+    print_section("Services: Provider Change Impact")
+    print_info("Testing: backend/app/services/assets/provider_management.py (provider_change_impact), backend/app/schemas/provider.py (FAProviderImpact*), backend/app/api/v1/assets/providers.py (POST /provider/impact)")
+    print_info("Tests: per assignment or removal, the reason (none, params_changed, provider_changed, provider_removed) and the prices, events and transactions that would go, the blocking SPLITs as the caller may see them; parity with the real operation; route 200, 401, 422")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_provider_change_impact.py", test_names)
+    return run_command(cmd, "Provider change impact tests", verbose=verbose)
 
 
 def services_event_split_ratio(verbose: bool = False, test_names: list = None) -> bool:
@@ -1527,7 +1683,7 @@ def services_hosting_panel_access_tickets(verbose: bool = False, test_names: lis
 def services_hosting_panel_vectors(verbose: bool = False, test_names: list = None) -> bool:
     """Test the hosting panel's ticket test vectors in the admin guide (H-61, L2): the key, the ticket and every verdict, checked against the code."""
     print_section("Services: Hosting Panel Ticket Test Vectors")
-    print_info("Testing: mkdocs_src/docs/admin/hosting_providers.en.md (#panel-api-test-vectors) against backend/app/services/platform/hosting_panel/tickets.py")
+    print_info("Testing: mkdocs_src/docs/admin/hosting_panel_api.en.md (#panel-api-test-vectors) against backend/app/services/platform/hosting_panel/tickets.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_hosting_panel_vectors.py", test_names)
     return run_command(cmd, "Hosting panel ticket vector tests", verbose=verbose)
 
@@ -1597,7 +1753,7 @@ def services_plugin_settings_guards(verbose: bool = False, test_names: list = No
 
 
 def services_platform_readiness(verbose: bool = False, test_names: list = None) -> bool:
-    """Test the readiness checks: database and migration codes, the head read once, no detail in the response."""
+    """Test the readiness checks: database and migration codes (behind, ahead), the database revision, the head read once, no other detail in the response."""
     print_section("Services: Instance Readiness")
     print_info("Testing: backend/app/services/platform/readiness.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_platform_readiness.py", test_names)
@@ -1618,6 +1774,22 @@ def services_restore_guard(verbose: bool = False, test_names: list = None) -> bo
     print_info("Testing: services/platform/restore_guard.py (probe_restore_state, restore_interrupted), app_lifespan.STARTUP_STEPS restore-state and the eight skipped steps")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_restore_guard.py", test_names)
     return run_command(cmd, "Restore guard tests", verbose=verbose)
+
+
+def services_instance_key_check(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the instance key check: the check value, the state (file, then stored secrets), the start's four paths, the step (H5-7, H)."""
+    print_section("Services: Instance Key Check")
+    print_info("Testing: backend/app/services/platform/instance_key_check.py (key_check_value, instance_key_state, check_instance_key_at_start, check_instance_key), instance_key_accept, the step instance-key-check")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_instance_key_check.py", test_names)
+    return run_command(cmd, "Instance key check tests", verbose=verbose)
+
+
+def services_restore_owner_guard(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the guard's owner part: a restored instance serves no data until the owner has an account (H5-3, H)."""
+    print_section("Services: Restore Owner Guard")
+    print_info("Testing: restore_guard probe_owner_assignment, refresh_restore_state, restore_interrupted_reason, app_lifespan restore-owner step and the five steps skipped while the owner has no account, two-worker healing")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_restore_owner_guard.py", test_names)
+    return run_command(cmd, "Restore owner guard tests", verbose=verbose)
 
 
 def services_app_lifecycle(verbose: bool = False, test_names: list = None) -> bool:
@@ -1722,6 +1894,38 @@ def services_backup_sealed(verbose: bool = False, test_names: list = None) -> bo
     print_info("Testing: backend/app/services/platform/instance_backup/sealed.py, envelope.py (unlock_header), fixtures/backup_l3/")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_sealed.py", test_names)
     return run_command(cmd, "Sealed backup tests", verbose=verbose)
+
+
+def services_backup_owner(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the owner's account after a restore in the managed profile (lot B5-1): the step after the commit."""
+    print_section("Services: Restore Owner")
+    print_info("Testing: backend/app/services/platform/instance_backup/owner.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_owner.py", test_names)
+    return run_command(cmd, "Restore owner tests", verbose=verbose)
+
+
+def services_backup_owner_real(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the owner's account after a restore with workstream A's real function (lot B5-1e): only the mail is played."""
+    print_section("Services: Restore Owner, the real call")
+    print_info("Testing: backend/app/services/platform/instance_backup/owner.py with backend/app/services/accounts/instance_owner.py")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_owner_real.py", test_names)
+    return run_command(cmd, "Restore owner (real) tests", verbose=verbose)
+
+
+def services_backup_owner_kept(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that a restore from the hosting panel on a managed instance keeps the owner's password and sessions (lot B5-1l)."""
+    print_section("Services: Restore Owner kept")
+    print_info("Testing: instance_backup/staging.py (_owner_marks, StagingReport.owner_marks), apply.py (keeps_owner, OWNER_OUTCOME_KEPT, confirm_restore, finish_pending_restore, _close_the_way_in), owner.assign_restored_owner")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_owner_kept.py", test_names)
+    return run_command(cmd, "Restore owner kept tests", verbose=verbose)
+
+
+def services_backup_users_limit(verbose: bool = False, test_names: list = None) -> bool:
+    """Test a backup with more active accounts than LIBREFOLIO_MAX_USERS: the check only warns, the confirmation never refuses (lot B5-1k2)."""
+    print_section("Backup users limit: the report warns, the confirmation never refuses")
+    print_info("Testing: instance_backup/staging.py (users_active, users_limit, users_over_limit, the warning users_over_limit), apply.py (confirm_restore accepts, the state gains nothing)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_backup_users_limit.py", test_names)
+    return run_command(cmd, "Backup users limit tests", verbose=verbose)
 
 
 def services_backup_secure_rules(verbose: bool = False, test_names: list = None) -> bool:
@@ -1981,6 +2185,33 @@ def services_tools_lifecycle(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Tool lifecycle tests", verbose=verbose)
 
 
+def services_tool_settings_contract(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the settings of the Tool family: rules, quarantine, tool-code keys, worker binding, refusal of an unconfigured Tool."""
+    print_section("Services: Tool Settings Contract")
+    print_info("Testing: plugin_settings/fields.py (FAMILY_RULES['tool']), tools/base.py, registry.py, worker.py (settings), executor.py (settings), api/v1/tools.py (compute_tools)")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_tool_settings_contract.py", test_names)
+    return run_command(cmd, "Tool settings contract tests", verbose=verbose)
+
+
+def services_tool_settings_runtime(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the values of a Tool on a private database: configure_instance, bound_settings_for_batch, the catalogue and the writes."""
+    print_section("Services: Tool Settings Resolution and Catalogue")
+    print_info("Testing: plugin_settings/runtime.py (plugin_code), tools/settings.py (bound_settings_for_batch), plugin_settings/service.py (family tool)")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_tool_settings_runtime.py", test_names)
+    return run_command(cmd, "Tool settings runtime tests", verbose=verbose)
+
+
+def services_tool_settings_lifecycle(verbose: bool = False, test_names: list = None) -> bool:
+    """Test a Tool's settings through the real executor and the real spawn worker."""
+    print_section("Services: Tool Settings Lifecycle")
+    print_info("Testing: real POSIX spawn workers receive the values the parent resolved (ToolWorkerJob.settings), per tool code and per caller")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_tool_settings_lifecycle.py", test_names)
+    return run_command(cmd, "Tool settings lifecycle tests", verbose=verbose)
+
+
 def services_all(verbose: bool = False) -> bool:
     """Run all backend service tests."""
     if _common.nothing_left_to_run("services"):
@@ -2151,6 +2382,33 @@ Note: No backend server required.
         # case table is a file of the repository, read only.
         isolation="pure",
     )
+    add_test(
+        cat,
+        "price-query-observations",
+        services_price_query_observations,
+        name="Price Query Observations",
+        desc="X-Q1/Q2/S1: get_prices_bulk reads a series by observation and converts once for each stretch of unchanged price row and rate row; the public points and conversion errors equal the 1fd80c481 pipeline's (18 cases, 7 with signals); convert_bulk handed the stretches, not the days; ObservedPrices (first_point_date, observation_dates, point_on) for the risk",
+        # PURE: a private SQLite file under tmp_path built with create_all; the market holiday table replaced by monkeypatch; no lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "fx-stretch-conversion",
+        services_fx_stretch_conversion,
+        name="FX Stretch Conversion",
+        desc="X-Q3: convert_by_stretch answers item for item what convert_bulk answers (direct, inverse, identity, no rate, gap, amount exponent) and hands convert one conversion per (amount, pair, rate row); convert_currency_bulk answers what it answered with every day converted, signals and samples included",
+        # PURE: a private SQLite file under tmp_path built with create_all; no lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "ai-export-performance-steps",
+        services_ai_export_performance_steps,
+        name="AI Export Performance Steps",
+        desc="MF-P4b: build_performance_bucket_rows and _average_nav read the portfolio history as steps (date, through) and answer what they answered with one point a day: every bucket field (extremes and the day each is reached, previous close day, flow, P&L, returns) on five bucket plans and seven histories (covering, late start, early end, one step, one day, empty), a NAV tie between steps apart, and the average NAV weighted by the step's length with the count in days",
+        # PURE: the history is built in the test; no database, no server, no network.
+        isolation="pure",
+    )
     add_test(cat, "provider-registry", services_provider_registry, name="Provider Registry", desc="Registration, lookup, priority, fallback")
     add_test(cat, "quantlib-runtime", services_quantlib_runtime, name="QuantLib Runtime", desc="Pinned version, required APIs and seeded path reproducibility")
     add_test(cat, "risk-simulation", services_risk_simulation, name="Risk Simulation", desc="Serializable contracts, sampling, moments, chunking and cache")
@@ -2223,6 +2481,13 @@ Note: No backend server required.
         services_linked_adjustment_pair,
         name="Linked Adjustment Pair",
         desc="Two ADJUSTMENTs under one link_uuid are refused on the first create (pairAdjustmentNotAllowed, commit and validate); a TRANSFER pair, the Bulk promote, unlinked ADJUSTMENTs and a stored pair are not touched; the message exists in EN/IT/FR/ES",
+    )
+    add_test(
+        cat,
+        "transfer-pair-order",
+        services_transfer_pair_order,
+        name="Transfer Pair Order",
+        desc="W5-3: a linked TRANSFER / CASH_TRANSFER arriving before it departs is saved as sent (create and date edit) and the batch carries a non-blocking pairArrivalBeforeDeparture warning; none for equal or normal dates, FX_CONVERSION, ADJUSTMENT, unlinked rows or an untouched stored pair; the message exists in EN/IT/FR/ES",
     )
     add_test(
         cat,
@@ -2301,6 +2566,56 @@ Note: No backend server required.
         desc="No @ in a new username (user create, LIBREFOLIO_ADMIN_USERNAME), spaces, accents and punctuation still taken, legacy names left as they are; no address equal to another account's username, A–Z case aside (register_user, user set-email, user create)",
         # PURE: every database is a private file under tmp_path built with create_all; the command line runs in this
         # process on that file, get_async_engine a tripwire; variables removed with monkeypatch. No lane DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "owner-email-change",
+        services_owner_email_change,
+        name="Instance Owner Email Change (A5-1b)",
+        desc="users.is_instance_owner and the protection rule (the click not made: the owner stays protected; a stranger holding the new address is not), the startup sync owner-sync (pending administrator untouched, heal, same address, conflict blocked, live link not resent, new link emailed to the NEW address, link in the log only when the email did not go, expired and changed-again links, two workers), owner_change_status, build_email_change_confirmation in four languages, the step after admin-bootstrap",
+        # PURE: every database is a private file under tmp_path built with create_all; profile and variables set with
+        # monkeypatch; the email faked in this process (outbox); no lane DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "owner-assignment",
+        services_owner_assignment,
+        name="Owner Assignment after a Restore (A5-2)",
+        desc="assign_owner_and_send_reset: nothing in a restored database is trusted, so every call gives the full treatment: the account the owner chose gets the address of LIBREFOLIO_ADMIN_EMAIL, becomes an active administrator and the one instance owner (the flag of the others cleared), its password becomes an unusable bcrypt hash, its sessions end, its password_reset rows are deleted (planted consumed/revoked/expired/live/future-dated ones included) and its other live tokens revoked, one new reset link is emailed or, if the email cannot go, written in the instance log (link_only; never in the result or its repr); NOT_MANAGED / OWNER_EMAIL_NOT_SET / USER_NOT_FOUND / EMAIL_TAKEN change nothing; a second call kills the first link; two calls at once leave one live link; A5-4: `user reassign-owner <username>` runs the same treatment from the command line (managed only; ✅ and one link emailed, or link_only with the link in the log and never printed; refusals for not managed / no variable / unknown user / address taken change nothing; registered in both parsers and the dispatch) and a new address in update_profile also revokes the account's live email_change links",
+        # PURE: every database is a private file under tmp_path built with create_all; profile and variables set with
+        # monkeypatch; the email faked in this process (outbox); no lane DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "user-limit",
+        services_user_limit,
+        name="Over the User Limit (A5-7)",
+        desc="The state «over the limit» is read from the accounts, never stored: active > LIBREFOLIO_MAX_USERS strictly (no limit, active = limit, and a limit that cannot be read never trigger it; inactive accounts do not count; live invitations and accounts waiting for their verification take places), the list for the choice (the managed owner protected, else the administrator who chooses; the brokers an account owns alone), the resolution (5 accounts and a limit of 3: the others are deactivated with their sessions ended, nothing deleted, the kept ones unchanged; UNKNOWN_USER / TOO_MANY_KEPT / PROTECTED_MISSING / NO_ADMIN_KEPT / NOT_OVER_LIMIT change nothing; live invitations revoked only as far as the kept accounts need their places; one commit; the log without names)",
+        # PURE: every database is a private file under tmp_path built with create_all; variables set with monkeypatch;
+        # no lane DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "user-limit-api",
+        services_user_limit_api,
+        name="Over the User Limit, API (A5-7)",
+        desc="refuse_when_over_limit on the app in process and a private database: 423 user_limit_exceeded for a signed-in ordinary user on every route but the allowed list (login, logout, me, the public configuration, the probes, links, the own account's deletion, the panel's routes, the restore outcome); the administrator also reaches the choice and the full backup; the 401 of any caller without a session; an instance not over the limit, or with a limit that cannot be read, changes no answer; the order of the guards (block, restore interrupted, then this one); the two lists pinned against the block's list; GET /users/over-limit and POST /users/over-limit/resolve with exact keys, their refusals (409 NOT_OVER_LIMIT; 422 UNKNOWN_USER, TOO_MANY_KEPT, PROTECTED_MISSING) and the example of 5 accounts and a limit of 3",
+        # PURE: the app of the server in process, its session dependency overridden with a private file under tmp_path;
+        # no lane DB, no server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "account-protection",
+        services_account_protection,
+        name="Account Protection (A5-1)",
+        desc="The paying administrator of a managed instance (LIBREFOLIO_ADMIN_EMAIL, any A-Z case) is protected, no one in another profile or with an unusable variable, the reader never raises; the command line and the deleting service stay above it",
+        # PURE: users built in memory, the command line on a private file under tmp_path, get_settings() read from the
+        # environment with monkeypatch. No lane DB, no server.
         isolation="pure",
     )
     add_test(
@@ -2501,7 +2816,7 @@ Note: No backend server required.
         "sleep-wake-suspend",
         services_sleep_wake_suspend,
         name="Sleep and Wake Suspend",
-        desc="config.sleep_wake: LIBREFOLIO_IDLE_SUSPEND_MODE (unset/blank none; none or fly in any case, spaces around; else IDLE_SUSPEND_MODE_INVALID) and LIBREFOLIO_IDLE_SUSPEND_MINUTES (unset/blank 5; ASCII digits 1-1440; else IDLE_SUSPEND_MINUTES_INVALID), read at every call; FlySuspender: transport_factory (the one given, else httpx.AsyncHTTPTransport(uds=/.fly/api)), FLY_APP_NAME/FLY_MACHINE_ID read at each call (environ or os.environ), one POST http://flaps/v1/apps/<app>/machines/<id>/suspend without body or Authorization, the timeout on every phase, 2xx None, else SuspendError http_<status>, an httpx.HTTPError connection, a variable missing or blank not_on_fly before any request; IdleMonitor.check: waiting while the backoff runs (nothing touched), busy_reasons off the loop thread and any reason busy, active under minutes*60, else suspend (INFO Idle suspend requested), a failure backoff 30 doubling to 600 (bounds read at the call), one WARNING Idle suspend failed per streak, a success starts a new streak, any other exception reason error, never raising; exactly N*60 s suspends, N*60-1 does not; run: a check at once, sleep(IDLE_CHECK_SECONDS) after busy/active/waiting, at least RESUME_GRACE_SECONDS after suspended/failed, the stop (during a wait, during a check, before the start), a check that raises logged and the loop goes on; request_check: ends a wait early, from any thread, requests during a check make one check; start_idle_monitor returns None (none mode, an invalid one logged once: nothing; fly: FlySuspender(), busy checks tools and backup on current_activity(), a task, Idle monitor started; invalid minutes logged once, 5 used), globals read at the call, stop_idle_monitor returns the task, request_idle_check forwards from any thread, a fresh interpreter has none; never suspended while busy; wake.py calls request_idle_check(2.0) in the run's task after Wake-up run finished; app_lifespan: idle-monitor right after scheduler at startup, first at shutdown, late-bound, the startup step completes while the monitor runs",
+        desc="config.sleep_wake: LIBREFOLIO_IDLE_SUSPEND_MODE (unset/blank none; none or fly in any case, spaces around; else IDLE_SUSPEND_MODE_INVALID) and LIBREFOLIO_IDLE_SUSPEND_MINUTES (unset/blank 5; ASCII digits 1-1440; else IDLE_SUSPEND_MINUTES_INVALID), read at every call; FlySuspender: transport_factory (the one given, else httpx.AsyncHTTPTransport(uds=/.fly/api)), FLY_APP_NAME/FLY_MACHINE_ID read at each call (environ or os.environ), one POST http://flaps/v1/apps/<app>/machines/<id>/suspend without body or Authorization, the timeout on every phase, 2xx None, else SuspendError http_<status>, an httpx.HTTPError connection, a variable missing or blank not_on_fly before any request; IdleMonitor.check: waiting while the backoff runs (nothing touched), busy_reasons off the loop thread and any reason busy, active under minutes*60, else suspend (INFO Idle suspend requested), a failure backoff 30 doubling to 600 (bounds read at the call), one WARNING Idle suspend failed per streak, a success starts a new streak, any other exception reason error, never raising; exactly N*60 s suspends, N*60-1 does not; run: a check at once, sleep(IDLE_CHECK_SECONDS) after busy/active/waiting, at least RESUME_GRACE_SECONDS after suspended/failed, the stop (during a wait, during a check, before the start), a check that raises logged and the loop goes on; request_check: ends a wait early, from any thread, requests during a check make one check, but a check requested before a suspension (timer armed or fired, 0 s or still armed) never cuts the resume grace short after suspended or failed while one made after it still does (SWS-047); start_idle_monitor returns None (none mode, an invalid one logged once: nothing; fly: FlySuspender(), busy checks tools and backup on current_activity(), a task, Idle monitor started; invalid minutes logged once, 5 used), globals read at the call, stop_idle_monitor returns the task, request_idle_check forwards from any thread, a fresh interpreter has none; never suspended while busy; wake.py calls request_idle_check(2.0) in the run's task after Wake-up run finished; app_lifespan: idle-monitor right after scheduler at startup, first at shutdown, late-bound, the startup step completes while the monitor runs",
         # PURE: no DB, no server, no lane port, no network. The Fly Machines API is an httpx.MockTransport, the socket's
         # transport class replaced on httpx by a recorder; every Activity is the test's own on a fake clock, the process's
         # ACTIVITY replaced through monkeypatch; the monitor runs on fake clocks with an injected sleep, its collaborators
@@ -2586,6 +2901,37 @@ Note: No backend server required.
         desc="Plugin settings on the BRIM parse: no field = called as before, fields = BoundSettings resolved in the parent and bound in the child, secrets masked in errors and logs, the endpoint passes the user",
         isolation="pure",
     )
+    add_test(
+        cat,
+        "brim-parse-failure-detail",
+        services_brim_parse_failure_detail,
+        name="BRIM Parse Failure Detail",
+        desc="W5-5 (C-70b): a failed BRIM parse answers 400 with a parse_failed object (plugin, English message, coded reason) the wizard translates; the guard's refusal carries the plugin's BRIMRefusal; an unknown plugin keeps a string, 404 unchanged",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "brim-parse-error-codes",
+        services_brim_parse_error_codes,
+        name="BRIM Parse Error Codes",
+        desc="W5-6 (E-21): every BRIMParseError raised by a BRIM plugin carries details code/context (static ast scan), is not swallowed by a broad except, and has its importWizard.parseRefusal text with agreeing placeholders in en/it/fr/es; generic CSV and DEGIRO raise the expected codes",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "brim-field-contract",
+        services_brim_field_contract,
+        name="BRIM Field Contract",
+        desc="A field in a BRIM plugin (CP12): declaration, default = the behaviour before the field, the importing user's value, and the stale-parse rule (settings_changed_since)",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "brim-file-settings",
+        services_brim_file_settings,
+        name="BRIM File Settings",
+        desc="W5-8 (CP12): parse_file_offloaded(bound=) reaches the real pool worker, save_parse_result stores parsed_settings_fingerprint (never served), apply_settings_staleness marks a PARSED file stale when the looking user's values moved",
+    )
     add_test(cat, "settings", services_settings, name="Settings Service", desc="User settings CRUD, get_effective_base_currency")
     add_test(cat, "current-price-bootstrap", services_current_price_bootstrap, name="Current Price Bootstrap", desc="OHLC widening helper (F.2/F.3)")
     add_test(cat, "scheduled-investment-param-change", services_scheduled_investment_param_change, name="Scheduled Investment Param Change", desc="Symmetric wipe on provider_params change")
@@ -2624,6 +2970,17 @@ Note: No backend server required.
         # The file sits in test_financial/, which roi-fifo-utils runs whole: the derived "all"
         # skips this action so that the file runs once there.
         in_all=False,
+    )
+    add_test(
+        cat,
+        "split-adjustment-ledger",
+        services_split_adjustment_ledger,
+        name="Split Adjustment Ledger",
+        desc="W5-2b: a SPLIT event with its linked incoming ADJUSTMENT row read by Lots (FIFO lots, average-cost lines) and the Dashboard: a row at cost 0 reads as a row without cost (20 shares, cost 1000, average 50), a row rounded off the ratio makes FIFO and the average cost differ by the rounding, a split after a sale, a row not linked, two brokers on one event, two splits on one day",
+        # The file sits in test_financial/, which roi-fifo-utils runs whole: the derived "all"
+        # skips this action so that the file runs once there.
+        in_all=False,
+        # Write-scoped (the category default): a user, brokers and an asset under a unique marker, every reading by their ids, the session rolled back.
     )
     add_test(
         cat,
@@ -2693,7 +3050,7 @@ Note: No backend server required.
         "current-prices-bulk",
         services_current_prices_bulk,
         name="Current Prices Bulk (R13-SEC9)",
-        desc="POST /prices/current: one fetch and one write-back per distinct id, the 2-min cache re-read after the provider slot, 1 000 ids, range_start (1900…tomorrow) and target_currency bounded by their parameters, the range change once per distinct id and in the target currency, the quotes standing when it fails; POST /prices/query and /current 500s never echo their error; MF-SEC9c: the DB fallbacks read after the live quotes, one grouped read (an unreadable latest close looked up alone), never two statements in flight on the session",
+        desc="POST /prices/current: one fetch and one write-back per distinct id, the 2-min cache re-read after the provider slot, 1 000 ids, range_start (any day up to tomorrow, no floor: X5-6) and target_currency bounded by their parameters, the range change once per distinct id and in the target currency, the quotes standing when it fails; POST /prices/query and /current 500s never echo their error; MF-SEC9c: the DB fallbacks read after the live quotes, one grouped read (an unreadable latest close looked up alone), never two statements in flight on the session",
         # PURE: the service on a private in-memory SQLite (create_all), the provider a double behind core.configured_provider,
         # a private current-value cache, the route called directly or through a fresh in-process app (httpx.ASGITransport),
         # its service and live_range_changes replaced by recorders, all by monkeypatch.
@@ -2789,10 +3146,10 @@ Note: No backend server required.
     )
     add_test(
         cat,
-        "market-data-wipe-split-guard",
-        services_market_data_wipe_split_guard,
-        name="Market Data Wipe Split Guard",
-        desc="X-R48: POST /assets/{id}/market-data/wipe refused before any write with MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST (409) while a SPLIT of the asset, manual or provider, has linked incoming ADJUSTMENTs without a purchase cost; details list every such SPLIT by date then id with the caller's visible transaction_ids and hidden_transactions_count (none named without a caller); a cost of 0, an outgoing row, a SPLIT without links, another asset's SPLIT and the dry run leave the wipe as before",
+        "market-data-wipe-keeps-splits",
+        services_market_data_wipe_keeps_splits,
+        name="Market Data Wipe Keeps Splits",
+        desc="N68 (X5-3, policy A): the market-data wipe (POST /assets/{id}/market-data/wipe) and the currency PATCH delete the prices and every NON-SPLIT event (manual and provider), set asset_event_id to NULL on the transactions linked to those, and keep every SPLIT event, manual or provider, with the transactions linked to it (a costless incoming ADJUSTMENT stays linked and costless); never a refusal for it (X-R48's MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST and the token CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA are gone). Answer and summary keys: prices, events_manual, events_provider (non-split), splits_kept, linked_tx, oldest, newest, dry_run",
         # WRITE-SCOPED, the category default: every row is this unit's own (assets, brokers, users and accesses under a
         # unique marker), wiped by asset and broker id; the route runs in process on an app of the call's own.
     )
@@ -2819,9 +3176,18 @@ Note: No backend server required.
         "provider-removal-link-guard",
         services_provider_removal_link_guard,
         name="Provider Removal Link Guard",
-        desc="X-R62: DELETE /assets/provider refused before any write with PROVIDER_REMOVAL_LINKED_TRANSACTIONS (409) while an event the removed assignment generated (deleted with it, CASCADE) has a linked transaction (RESTRICT); details name the asset (asset_id, item_index: its first position) and each such event (event_id, date, type) with the caller's visible transaction_ids and hidden_transactions_count (none named without a caller), the message the totals only; the assets before the blocked one are not removed either. A link the check missed is rolled back and answered PROVIDER_REMOVAL_CONFLICT (409, empty params, no SQL text). No linked transaction, a manual event, an asset without an assignment or an empty request: as before",
+        desc="X-R69 (was X-R62): DELETE /assets/provider unlinks (asset_event_id NULL) every transaction linked to an event the removed assignment generated, whoever owns the broker, then deletes the assignment with its events (CASCADE); prices and manual events (and their links) are kept. The one refusal left is X-R49's: PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST (409) while a generated SPLIT has linked incoming ADJUSTMENTs without a purchase cost; details name the asset (asset_id, item_index: its first position) and each such SPLIT with the caller's visible transaction_ids and hidden_transactions_count (none named without a caller), the message gives no id; the assets before the blocked one are not removed either. A link made between the unlinking and the delete is rolled back and answered PROVIDER_REMOVAL_CONFLICT (409, empty params, no SQL text). No linked transaction, a manual event, an asset without an assignment or an empty request: as before",
         # WRITE-SCOPED, the category default: three inactive assets (no lane scheduler refreshes them), two users and two
         # brokers under a unique marker, dated 1984; each test writes its own assignments and wipes by asset and broker id.
+    )
+    add_test(
+        cat,
+        "provider-change-impact",
+        services_provider_change_impact,
+        name="Provider Change Impact",
+        desc="X-R69 / C-65a: POST /assets/provider/impact (AssetSourceManager.provider_change_impact), the dry run of «cambia» and «togli», writes nothing. Per assignment item: reason none | params_changed | provider_changed exactly when the save would wipe (a parametric provider with other params, or leaving one), with prices_deleted (all the asset's), events_deleted (the stored assignment's, manual events excluded), transactions_unlinked (visible or hidden, counted, never named) and blocking_splits (costless-adjustment SPLITs as the caller may see them); none and zeros for a market -> market change, the same code and params or an asset without an assignment. Per removal: provider_removed (else none), prices_deleted 0, the rest as above. Results in order (assignments, then removals). Parity: the numbers equal what the real save or removal then deletes and unlinks, and a blocking SPLIT is the refusal it answers. Route: 200, 401 without a user, 422 for junk (unknown keys included), a missing list defaults to empty",
+        # WRITE-SCOPED, the category default: three inactive assets (no lane scheduler refreshes them), two users and two
+        # brokers under a unique marker, dated 1983; each test writes its own assignments and wipes by asset and broker id.
     )
     add_test(
         cat,
@@ -3080,7 +3446,14 @@ Note: No backend server required.
     add_test(cat, "plugin-settings-service", services_plugin_settings_service, name="Plugin Settings Service", desc="Catalogue and all-or-nothing writes on a private DB: scopes, LOCKED_BY_ENV, managed profile, item rules, log without values, key unavailable, MOCKFX writes", isolation="pure")
     add_test(cat, "secret-masking", services_secret_masking, name="Secret Masking", desc="mask_text with the URL forms, mask_exception through chains and groups, structlog processor and logging filter, the context variable across threads and tasks, the wiring in configure_logging", isolation="pure")
     add_test(cat, "plugin-settings-guards", services_plugin_settings_guards, name="Plugin Settings Guards", desc="Shipped system-field variables in .env.example, derived names unique, no alias read by the app itself, services/ai_export/ never imports the plugin settings", isolation="pure")
-    add_test(cat, "platform-readiness", services_platform_readiness, name="Instance Readiness", desc="Database and migration checks: ready, mismatch, unknown, unreachable; head read once, failure not kept; codes only in the response", isolation="pure")
+    add_test(
+        cat,
+        "platform-readiness",
+        services_platform_readiness,
+        name="Instance Readiness",
+        desc="Database and migration checks: ready, behind, ahead, unknown, unreachable; database_revision; head read once, failure not kept; no error text, path or head in the response; H5-8 app_version (get_git_version(), required, last) in every answer, awaiting restore included",
+        isolation="pure",
+    )
     add_test(cat, "app-lifecycle", services_app_lifecycle, name="App Lifecycle", desc="Step runner (order, awaits, deadline cuts, a failure never skips the shutdown, step in progress); app steps in relative order, late-bound; middleware outermost first; SPA catch-all last", isolation="pure")
     add_test(
         cat,
@@ -3098,6 +3471,27 @@ Note: No backend server required.
         desc="B-33 (H, 22/10): probe_restore_state asks apply.restore_state_problem (the given or the instance's data directory), keeps the answer, logs one error line with the reason and never the state's content; restore_interrupted() False in a process that never probed; restore-state right after pending-restore, never stops the start; while interrupted post-migration-fixes, lone-transfer-legs and the six steps of the mode call nothing, the kept steps carry no skip",
         # PURE: B's hook replaced by monkeypatch (or a state file under tmp_path), the steps run alone with their calls
         # recorded, one child interpreter that only imports the module. No DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "instance-key-check",
+        services_instance_key_check,
+        name="Instance Key Check",
+        desc="H5-7 (H, D6): a wrong instance key is told, not served around: key_check_value (64 lowercase hex, HMAC under a purpose key, never the key), instance_key_state (an unusable key or none is ok and creates nothing; the check file decides, malformed or unreadable is ok with one warning per process; no file: R1, mismatch only when every stored secret, system and user, is under another key; recomputed at every call, never raises), check_instance_key_at_start (accept writes and warns at every start; no file and mismatch is one error and nothing written; otherwise exclusive 0600 in 0700, one winner among workers; a file mismatch is one error and never rewritten; never raises; no key or value in a log), instance_key_accept (the values of awaiting_restore, an invalid value stops the start), the step instance-key-check right after plugin-secrets-check, check_instance_key for the Security tab",
+        # PURE: a private SQLite file with the real tables, the data directory and the key in tmp_path/environment by monkeypatch;
+        # the once-per-process warning in child interpreters. No lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "restore-owner-guard",
+        services_restore_owner_guard,
+        name="Restore Owner Guard",
+        desc="H5-3 (H): after a restore from the app the instance serves no data until the owner has an account (B's assign_restored_owner), on B-33's mechanism: restore_guard keeps _owner_problem, probe_owner_assignment (one error line with the value only), restore_interrupted() = _interrupted or an owner problem (pure), restore_interrupted_reason() (restore_state wins over owner_assignment), refresh_restore_state re-asks a pending answer in a thread every OWNER_RECHECK_SECONDS and never a code or None, never raises; the step restore-owner right after restore-commit awaits assign_restored_owner then probes; the five serving steps after it skip while an owner problem is set; two workers: the one stuck in pending heals once the other records the outcome in a real restore.json",
+        # PURE: B's hook replaced by monkeypatch, the guard's clock patched; the two-worker case uses a restore.json and a
+        # migrated database copy under tmp_path (the fixtures of test_backup_owner.py) and a fake of A's function. No lane
+        # DB, no server, no network.
         isolation="pure",
     )
     add_test(
@@ -3158,7 +3552,7 @@ Note: No backend server required.
         "backup-staging",
         services_backup_staging,
         name="Instance Backup Staging",
-        desc="restore --dry-run's check, on a copy in .restore/stage/<id>/: a backup at the head restored as it is (database and files byte for byte, 0700/0600, report.json read back equal, 24 h expiry), an older one upgraded for real by alembic in its own process (migrations after its revision, oldest first, as the migration files describe them; the copy at the head, its data converted; rows before/after); the active administrators named, none a blocker (no_administrator); every StagingError code (not a backup, unreadable or damaged zip, manifest codes, too many entries, duplicates even by case or Unicode form or as the folder of another, unexpected, folder/link/encrypted/bzip2/lzma entries, size or SHA-256 mismatch, missing entry, no space before or while writing, write failure, damaged database, manifest mismatch, revision missing, unknown (never downgraded) or unreadable head, upgrade failed, post-migration fix failed), each leaving no stage, the lock free, no path in its message, a refusal from the directory before any byte written; one check at a time (StagingBusyError, a caller's lock kept for it to release, the check's own released); .restore links refused, stages never written over, a linked stage unlinked, nothing removed while .restore or its stage folder is a link or a file; progress phases; warnings rows_changed, foreign_key_violations(_added); the live data directory (WAL database, files, secrets) byte-identical; B-28: a database holding a trigger, a view or a virtual table refused as database_foreign_objects (a schema SQLite refuses to read, database_damaged) before anything else opens the copy, its schema read by its SQL, read only, the warning without names; this LibreFolio's own schema only tables and indexes; trusted_schema=OFF first on every connection B opens on the copy; B-35 (m): stage_archive(max_unpacked=) checks an archive at or under the cap on its declared total, refuses one above it unpacked_too_large before the free space and before a byte is written (no data/, progress never past checking), a secure archive decrypted first, None unchanged; B-37 (l): the post-migration fixes' connection to the copy recorded too, trusted_schema=OFF first like every other; B-43 (n): a function the reader lacks in an index, a generated column or a CHECK ends the check with database_damaged (the CHECK past the read-only description, which finds it intact), never a raw sqlite3 error, the copy removed and the live data untouched, one warning with the error's class and sqlite_errorname, its name in no message nor log line; a CHECK on abs() checked as usual; B-43 part 1 (n): an index or a generated column calling regexp or floor, which the server's connections register (deterministic, never innocuous) with trusted_schema off, refused database_damaged where the copy's schema is first read with stand-ins, before describe_database opens the copy, the same one warning, no line naming the function; this LibreFolio's own lower(email) index read with the stand-ins, its backup checked as usual; B-49 (o): text that is not UTF-8 refused database_damaged before the upgrade, before anything writes in the copy (a TEXT column, a DATE column, a table LibreFolio does not have, a character split over two rows, rowids at both ends of int64, a VIRTUAL or STORED generated column table_info hides), one warning with the number of tables and no text, byte, name nor path; its read only mode=ro, trusted_schema=OFF first, by storage class; valid text beyond ASCII and the same bytes as a BLOB checked as usual",
+        desc="restore --dry-run's check, on a copy in .restore/stage/<id>/: a backup at the head restored as it is (database and files byte for byte, 0700/0600, report.json read back equal, 24 h expiry), an older one upgraded for real by alembic in its own process (migrations after its revision, oldest first, as the migration files describe them; the copy at the head, its data converted; rows before/after); the active administrators named, none a blocker (no_administrator); every StagingError code (not a backup, unreadable or damaged zip, manifest codes, too many entries, duplicates even by case or Unicode form or as the folder of another, unexpected, folder/link/encrypted/bzip2/lzma entries, size or SHA-256 mismatch, missing entry, no space before or while writing, write failure, damaged database, manifest mismatch, revision missing, unknown (never downgraded) or unreadable head, upgrade failed, post-migration fix failed), each leaving no stage, the lock free, no path in its message, a refusal from the directory before any byte written; one check at a time (StagingBusyError, a caller's lock kept for it to release, the check's own released); .restore links refused, stages never written over, a linked stage unlinked, nothing removed while .restore or its stage folder is a link or a file; progress phases; warnings rows_changed, foreign_key_violations(_added); the live data directory (WAL database, files, secrets) byte-identical; B-28: a database holding a trigger, a view or a virtual table refused as database_foreign_objects (a schema SQLite refuses to read, database_damaged) before anything else opens the copy, its schema read by its SQL, read only, the warning without names; this LibreFolio's own schema only tables and indexes; trusted_schema=OFF first on every connection B opens on the copy; B-35 (m): stage_archive(max_unpacked=) checks an archive at or under the cap on its declared total, refuses one above it unpacked_too_large before the free space and before a byte is written (no data/, progress never past checking), a secure archive decrypted first, None unchanged; B-37 (l): the post-migration fixes' connection to the copy recorded too, trusted_schema=OFF first like every other; B-43 (n): a function the reader lacks in an index, a generated column or a CHECK ends the check with database_damaged (the CHECK past the read-only description, which finds it intact), never a raw sqlite3 error, the copy removed and the live data untouched, one warning with the error's class and sqlite_errorname, its name in no message nor log line; a CHECK on abs() checked as usual; B-43 part 1 (n): an index or a generated column calling regexp or floor, which the server's connections register (deterministic, never innocuous) with trusted_schema off, refused database_damaged where the copy's schema is first read with stand-ins, before describe_database opens the copy, the same one warning, no line naming the function; this LibreFolio's own lower(email) index read with the stand-ins, its backup checked as usual; B-49 (o): text that is not UTF-8 refused database_damaged before the upgrade, before anything writes in the copy (a TEXT column, a DATE column, a table LibreFolio does not have, a character split over two rows, rowids at both ends of int64, a VIRTUAL or STORED generated column table_info hides), one warning with the number of tables and no text, byte, name nor path; its read only mode=ro, trusted_schema=OFF first, by storage class; valid text beyond ASCII and the same bytes as a BLOB checked as usual; B5-1g (r): owner_conflicts names pending_administrator (the owner's address set, an inactive account with an admin_setup link none of whose admin_setup links was used, and no account holding the address, A-Z case aside), not when another account or the pending one itself holds it, the link was used, the account is active, the links are of another purpose, or the address is not set; sorted and unique with the other codes; B5-1j (q): a candidate says whether the copy marks it as the instance's owner (is_instance_owner, False for a copy without the column and for a report written before), the candidate set unchanged",
         # PURE: every data directory, database and archive under tmp_path; two alembic processes make the module's
         # databases and two more are the product's upgrade of a copy, all on tmp_path files, with a production data
         # directory of the test configured (which must stay absent). No lane DB, no server, no network.
@@ -3179,7 +3573,7 @@ Note: No backend server required.
         "backup-apply",
         services_backup_apply,
         name="Instance Backup Restore",
-        desc="The restore of a checked copy (lot B3): paths (.restore/restore.json, apply.lock, previous/, failed/, SWAPPED_FOLDERS, stage_data_dir); the errors and their codes, frozen models; boots (server_pid and the creation time, a reused pid another boot); read_restore and protected_stage (an ordinary start creates nothing; links, files, unreadable states never followed); confirm_restore (refusals in order: .restore not a folder, copy missing, blockers, expired at expires_at, head moved, already active; pending written atomically 0600, leftovers removed); cancel_restore; apply_pending_restore: the four folders in every live/staged layout with their modes, the journal before the first rename, the same boot, another live one, a dead or reused one (first_start_failed), killed after any rename of the swap or of the undo, a rename failing (swap_failed; RestoreApplyError, finished at the next start), waiting (another data directory, a backup running), stage_missing, a live link or file, two workers of one server making one swap; finish_pending_restore (committed, every account at max(R, A + 1, B + 1), leftovers removed, idempotent; rolled back cleaned; anything else untouched); the sessions in-process (the clock ahead or behind, a restore on a restore, then a password change + 1); the startup steps in place and off the loop; restart (SIGTERM to the server through send_signal); B2 then B3 with real archives at the head and at an older revision; after the security review (§10): the boot read once per process, fail closed with restore_in_use, the serving lock (shared from data-directories, exclusive while the folders move, server_running), the strict state; P7 (§11): no restore applied while LIBREFOLIO_BLOCKED (instance_blocked, after other_data_directory and before server_running and backup_running; an unreadable value counts as blocked), the undo and the commit unchanged; B5c (n): the outcome ticket dropped by a confirmation and by a cancel, kept by their refusals, the swap, the commit and a rollback, read again until it expires (N53), prepare_restart issuing it under the restore's lock and writing nothing without a pending restore; B-32 (o): a state the file system cannot read (its opening failing EACCES or EIO, its mode 000, a .restore/ without search) makes read_restore, cancel_restore, prepare_restart and confirm_restore raise restore_state_unreadable (its reason the strerror, no path; the state, the copy and the ticket byte for byte, no ticket, the state never written over), while the startup steps and protected_stage keep None with an error logged; a state that is a folder reads as none",
+        desc="The restore of a checked copy (lot B3): paths (.restore/restore.json, apply.lock, previous/, failed/, SWAPPED_FOLDERS, stage_data_dir); the errors and their codes, frozen models; boots (server_pid and the creation time, a reused pid another boot); read_restore and protected_stage (an ordinary start creates nothing; links, files, unreadable states never followed); confirm_restore (refusals in order: .restore not a folder, copy missing, blockers, expired at expires_at, head moved, already active; pending written atomically 0600, leftovers removed); cancel_restore; apply_pending_restore: the four folders in every live/staged layout with their modes, the journal before the first rename, the same boot, another live one, a dead or reused one (first_start_failed), killed after any rename of the swap or of the undo, a rename failing (swap_failed; RestoreApplyError, finished at the next start), waiting (another data directory, a backup running), stage_missing, a live link or file, two workers of one server making one swap; finish_pending_restore (committed, every account at max(R, A + 1, B + 1), leftovers removed, idempotent; rolled back cleaned; anything else untouched); the sessions in-process (the clock ahead or behind, a restore on a restore, then a password change + 1); the startup steps in place and off the loop; restart (SIGTERM to the server through send_signal); B2 then B3 with real archives at the head and at an older revision; after the security review (§10): the boot read once per process, fail closed with restore_in_use, the serving lock (shared from data-directories, exclusive while the folders move, server_running), the strict state; P7 (§11): no restore applied while LIBREFOLIO_BLOCKED (instance_blocked, after other_data_directory and before server_running and backup_running; an unreadable value counts as blocked), the undo and the commit unchanged; B5c (n): the outcome ticket dropped by a confirmation and by a cancel, kept by their refusals, the swap, the commit and a rollback, read again until it expires (N53), prepare_restart issuing it under the restore's lock and writing nothing without a pending restore; B-32 (o): a state the file system cannot read (its opening failing EACCES or EIO, its mode 000, a .restore/ without search) makes read_restore, cancel_restore, prepare_restart and confirm_restore raise restore_state_unreadable (its reason the strerror, no path; the state, the copy and the ticket byte for byte, no ticket, the state never written over), while the startup steps and protected_stage keep None with an error logged; a state that is a folder reads as none; B5-1d: the swap records token_watermark (the largest account_tokens id of the swapped database, 0 without table or tokens, None when unreadable) and the commit revokes only the live tokens with id <= watermark (a link the same start issues after the swap, such as admin-bootstrap's /setup link on a restore without accounts, survives whatever its created_at says; no watermark revokes every live token); B5-1g (u): the commit clears is_instance_owner of every account and sets it only on the chosen account when it was assigned (no owner named, an address another account holds, an address no longer set, an account the database lacks: nobody flagged), a database without the column commits as before; the commit's read-write connection runs trusted_schema=OFF first; B5-1h (u): so does the read-only connection of _largest_session_version on the previous/ database (before its SELECT; the value pinned: the largest session_version, 0 for a missing file or a folder); a pending administrator in the copy makes the confirmation owner_conflict, whatever the choice; B5-1j (v): apply.pick_owner(candidates, owner_email) -> OwnerPick(user_id, username, how) (frozen): the account holding the owner's address (A-Z fold only, any role) is holds_address, else the ONE marked active administrator is marked, else none (nobody marked, two or more marked, a marked disabled or ordinary account; never the first by id); a managed cli/panel confirmation with LIBREFOLIO_ADMIN_EMAIL set records the pick in owner_user_id, records owner_outcome none (and a warning without name or address) when nobody can be picked, is restore_stage_outdated for a report checked with another address and owner_conflict (advice: make a new backup) for owner conflicts, still owner_choice_not_applicable when a caller names one, and changes nothing self-hosted or without the address; the commit closes the picked account whatever the channel (unusable bcrypt hash, the owner's address, active administrator, the only flag, every session version the restore's, owner pending for the guard and the startup step) and with nobody picked clears every flag and touches no password",
         # PURE: every data directory, database and archive under tmp_path, with a production data directory of the test
         # configured (which must stay absent); two alembic processes make the module's databases, two spawn children
         # play two workers on a tmp_path instance; send_signal and os.kill replaced: no signal. No lane DB, no server,
@@ -3214,6 +3608,48 @@ Note: No backend server required.
         desc="The sealed nightly backup (lot L3, contract §3 and §9): every case of fixtures/backup_l3/vectors.json through read_sealed, open_password, check_password, extract_envelope and the envelope's decryption with its expected outcome; write_sealed rebuilding the good .tar byte for byte (0600, no .part, no overwrite); build_manifest's bytes; new_password; seal_password binary age and open_password (sealed_no_identity, sealed_password_invalid); read_sealed refusals (PAX, GNU, directory, link, members, small members over 4096, not LFBK v1, truncated; manifest UTF-8 JSON object, duplicate, unknown or missing keys, types, format, version, recipients, size and hash, password_member); read_identities and identity_file_text; is_sealed; the cloud derivation rows; interop with the age binary when installed (skipped visibly otherwise); envelope.unlock_header",
         # PURE: committed vectors read only, files under tmp_path; the optional age binary run on tmp_path files. No DB,
         # no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-owner",
+        services_backup_owner,
+        name="Restore Owner",
+        desc="The owner's account after a restore in the managed profile (lot B5-1): owner_choice_required() reads the profile; assign_restored_owner() calls A's instance_owner.assign_owner_and_send_reset(session, user_id) once, with nothing else (looked up through owner._assign_owner(), faked here with A's signature) for a committed restore confirmed via admin with an owner chosen and no outcome yet, on an AsyncSession of the data directory's database; records sent, link_only or error:<CODE> and never a link (the state has no owner_reset_path: a stray reset_path on A's result is read by nothing, and a stale key in an old state file is dropped); an unexpected failure or A not merged (ImportError) leaves the owner pending, nothing raised, and the next start calls A again and records what it answers; anything else left alone byte for byte; record_owner_outcome(data_dir, stage_id, outcome); reset_owner_assignment clears the outcome only; no email, username or link in the log; B5-1g: a database that is locked for a moment (OperationalError, wrapped or bare) is waited for, A called again up to _ATTEMPTS times (3 or more) with the pause _RETRY_PAUSE_SECONDS, the outcome recorded when a try gets through; a lock that never frees ends after exactly _ATTEMPTS calls with nothing recorded (the next start tries again); any other failure and A's own refusal never retried; the session handed to A waits at least 5000 ms for a lock; B5-1j (g): the filters on confirmed_via are gone: assign_restored_owner, owner_pending, owner_assignment_problem and reset_owner_assignment hold for a restore confirmed via cli or panel as for the app's, and leave alone a restore where nobody was picked (owner_outcome none, no owner)",
+        # PURE: every data directory under tmp_path, a migrated copy of the staging tests' database (alembic in a process
+        # of its own), this process in test mode on that folder; A's function a fake. No lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-owner-real",
+        services_backup_owner_real,
+        name="Restore Owner, real call",
+        desc="The owner's account after a restore with A's real instance_owner.assign_owner_and_send_reset (lot B5-1e), nothing played but the mail (instance_owner.send_email an outbox, the SMTP transport a tripwire): a real backup at the migration head confirmed from the app in the managed profile, applied and committed, then owner.assign_restored_owner. The chosen account gets the owner's address, administrator, active, is_instance_owner (no other account marked), its password opens nothing; ONE live password-reset link (a planted one dated in the future is gone), one email to the owner, outcome sent; the token is in no restore.json, read_restore, backup pending (with and without --json) or log line; email failing or SMTP off gives link_only with the link in A's instance-log line only; another account holding the address gives error:EMAIL_TAKEN, owner_assignment_problem EMAIL_TAKEN, the database unchanged, and after the administrator frees it backup pending --recover owner (nobody serving) assigns the owner; a crash between the call and the record makes the next start call A again (old link dead, one live link, a second email, outcome recorded); A receives the chosen id only, on a fresh session (no since, no now)",
+        # PURE: the data directory under tmp_path, the restore real, a migrated copy of the staging tests' database (alembic in
+        # a process of its own); only the mail is fake. No lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-owner-kept",
+        services_backup_owner_kept,
+        name="Restore Owner, kept",
+        desc="Lot B5-1l: a restore confirmed by the hosting panel on a managed instance (LIBREFOLIO_ADMIN_EMAIL set) keeps the owner's password and sessions when the backup marks exactly ONE account as its instance's owner (StagingReport.owner_marks, counted over every account by staging._owner_marks; absent column or report written before: 0) and that account is an ACTIVE administrator holding the owner's address (apply.keeps_owner(candidates, owner_marks, owner_email), same_email: A-Z only; the truth table). confirm_restore records owner_user_id and owner_outcome kept (apply.OWNER_OUTCOME_KEPT) for the panel only; each missing condition falls back to B5-1j's pick (outcome None or none) and the command line, the app (owner chosen) and the same copy never keep; self-hosted, no address, owner_conflict and restore_stage_outdated as before. The commit (finish_pending_restore, _close_the_way_in(kept_owner_user_id=)) on a real restored database leaves the owner's hashed_password, session_version, address, role and is_instance_owner as the backup held them, ends every other session, clears the other flags, revokes the one-time links (the owner's too), logs one warning (stage and account only, no address); when the account no longer fits at the commit (not an administrator, disabled, another address, a second marked account, address unset) B5-1j applies and the outcome goes back to None; the command line and the app revoke the owner anyway. assign_restored_owner does nothing for kept and the guard lets the data go; the whole round (confirm, apply, commit, startup step): the owner's old password and cookie stand, another account's old cookie is refused",
+        tests="StagingReport.owner_marks, keeps_owner truth table → confirm kept / fallback / cli / admin → commit keeps the owner, re-check fails → startup step → real round",
+        # PURE: every data directory under tmp_path, real databases at the head made once by alembic in a process of their
+        # own (the staging tests' fixtures), real bcrypt hashes at cost 4; A's function a fake. No lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "backup-users-limit",
+        services_backup_users_limit,
+        name="Backup Users Limit",
+        desc="Lot B5-1k2, a backup with more active accounts than LIBREFOLIO_MAX_USERS: the check only warns. The report carries users_active (the copy's active accounts, plus the inactive holder of LIBREFOLIO_ADMIN_EMAIL on a managed instance, which the restore activates; always computed), users_limit (None when unset, blank or invalid: an invalid value never fires the warning) and users_over_limit (max(0, active - limit)), and the warning users_over_limit before credentials_from_backup, which stays last; no warning when not over, at the limit or without a limit; report.json gains those three numbers and nothing that names an account; a report written before reads the defaults. The confirmation never refuses: the example (5 active accounts, limit 3) is accepted through the app, the command line and the hosting panel, self-hosted and managed with an owner, with the state's fields unchanged, and a limit that changed after the check is not restore_stage_outdated",
+        tests="Report users_* + warning order → limits, holder, report.json → confirm accepted on every channel, state unchanged, moved limit",
+        # PURE: every data directory and database under tmp_path (the staging tests' migrated database, the apply tests' instance);
+        # no lane DB, no server, no network.
         isolation="pure",
     )
     add_test(
@@ -3358,6 +3794,30 @@ Note: No backend server required.
         name="Tool Lifecycle",
         desc="Owned spawn workers, quotas, ready/ACK, cancellation, PID identity and full-tree cleanup",
         exclusive_because=("owns native POSIX process groups and exercises forceful teardown and executor quarantine; " "requires an explicitly leased lifecycle run rather than concurrent shared-backend manual review"),
+    )
+    add_test(
+        cat,
+        "tool-settings-contract",
+        services_tool_settings_contract,
+        name="Tool Settings Contract",
+        desc="CP12 X5-4b: FAMILY_RULES['tool'] (personal ok, secret refused), ToolPlugin inherits the settings mixin, the registry validates the declaration when it builds the definition (invalid_settings quarantine, siblings untouched, claims per tool code, test_only withheld outside test mode), the default is the old behaviour, ToolWorkerJob.settings pickles and the worker binds it, an unconfigured Tool is service_unavailable without a worker, compute_tools resolves bound_settings_for_batch for the caller",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "tool-settings-runtime",
+        services_tool_settings_runtime,
+        name="Tool Settings Resolution",
+        desc="CP12 X5-4b on a private DB: configure_instance(plugin_code), bound_settings_for a tool code, bound_settings_for_batch (instance and user values, per tool code, no read for a Tool without fields), the catalogue lists Tools by tool code, writes with family=tool (scopes, bounds, env lock, all or nothing)",
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "tool-settings-lifecycle",
+        services_tool_settings_lifecycle,
+        name="Tool Settings Lifecycle",
+        desc="CP12 X5-4b with real spawn workers: the plugin sees the value the parent delivered, the defaults when none, the values of its own tool code, never another caller's; an unconfigured Tool starts no worker while its sibling runs",
+        exclusive_because=("starts real multiprocessing spawn workers that own native POSIX process sessions and the executor's process-wide pool, " "like tools-lifecycle; run it in the same leased resource slot, never beside other process-owning units"),
     )
     add_test(cat, "all", services_all, test_names=False, name="All Services Tests", desc="Run all service tests")
     registry["services"] = cat

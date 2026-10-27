@@ -1,7 +1,7 @@
 {
   "brimPlugins": {
     "broker_swissquote": {
-      "description": "Importa gli export CSV di Swissquote: compravendite, dividendi, movimenti di cassa, commissioni, imposte e interessi. Le gambe di cambio valuta vengono saltate.",
+      "description": "Importa gli export CSV di Swissquote: compravendite, dividendi, movimenti di cassa, commissioni, imposte, interessi e cambi di valuta.",
       "name": "Swissquote"
     }
   }

@@ -16,6 +16,7 @@
     import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
+    import {utcMs} from '$lib/utils/dateOnly';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {translateOr} from '$lib/utils/core/translateOr';
     import {parseDisplayDate} from '$lib/utils/core/formatAxisDate';
@@ -56,6 +57,9 @@
         type AggregatedValuePoint,
         type LotValueSeriesPoint,
     } from './lotComparisonChartHelpers';
+    import {expandAtDays, lotWitnessDays, withBucketEnds} from './lotStepRows';
+    import {paramsAtDay} from '$lib/components/charts/stepTooltip';
+    import {dayOfAxisValue} from '$lib/utils/stepSeries';
     import {isPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {themed} from '$lib/theme/themePair';
@@ -80,8 +84,11 @@
 
     interface Props {
         selectedLots: ReadonlyArray<LotSummarySchema>;
+        /** The value history as steps: each point holds from its `date` to its `through` (D-P4). */
         valueHistory: ReadonlyArray<LotValueHistoryPoint>;
         returnHistory: ReadonlyArray<LotReturnHistoryPoint>;
+        /** The days the histories cover (the analysis' `range`); null: what the steps span. */
+        range?: {start: string; end: string} | null;
         brokers: ReadonlyArray<BrokerLike>;
         currency: string;
         xAxisRange: {min: string; max: string} | null;
@@ -161,7 +168,19 @@
     const LOT_INCOME_MARKER_SERIES_ID = 'lot-income-markers';
     const AGGREGATE_RETURN_SERIES_ID = 'return-aggregate';
 
-    let {selectedLots = [], valueHistory = [], returnHistory = [], brokers = [], currency, xAxisRange = null, incomeEvents = []}: Props = $props();
+    let {selectedLots = [], valueHistory: valueSteps = [], returnHistory: returnSteps = [], range = null, brokers = [], currency, xAxisRange = null, incomeEvents = []}: Props = $props();
+
+    /**
+     * The histories are steps; the chart reads points with one date each, summed and grouped by date. So they become the points of their
+     * witness days (`lotStepRows.ts`): the first day of every step of every lot, the last day each lot holds, the ends of the range and of its
+     * weeks and months. A lot has a point on a witness day only while it exists.
+     */
+    const witnessDays = $derived(lotWitnessDays<LotValueHistoryPoint | LotReturnHistoryPoint>([valueSteps, returnSteps], (point) => point.lot_id, range, withBucketEnds(range)));
+    const valueHistory = $derived(expandAtDays(valueSteps, (point) => point.lot_id, witnessDays));
+    const returnHistory = $derived(expandAtDays(returnSteps, (point) => point.lot_id, witnessDays));
+
+    /** The day the pointer is on, kept from ECharts' `updateAxisPointer`: the tooltip of a step line reads it. */
+    let pointedDay: string | null = null;
 
     let mode = $state<ChartMode>('value');
     let valueYFromZero = $state(false);
@@ -399,7 +418,7 @@
             month: 'long',
             year: 'numeric',
             timeZone: 'UTC',
-        }).format(new Date(Date.UTC(year, month - 1, 1)));
+        }).format(new Date(utcMs(year, month - 1, 1)));
     }
 
     function buildTooltipBucketHeader(params: any[], fallbackDate: number | string, theme: ReturnType<typeof buildTooltipTheme>): string {
@@ -1044,7 +1063,13 @@
         return attachIncomeMarkers(series);
     }
 
-    const plottedBaseSeries = $derived.by(() => ensureAxisTriggerAnchor(mode === 'value' ? buildValueSeries() : buildReturnSeries()));
+    /** The lines hold each value to the next date while the chart draws the steps themselves (the daily resolution); a coarser one joins its buckets. */
+    function withStepLines(series: echarts.SeriesOption[]): echarts.SeriesOption[] {
+        if (currentResolution !== 'daily') return series;
+        return series.map((entry) => (entry.type === 'line' && (entry as {step?: unknown}).step === undefined ? ({...entry, step: 'end'} as echarts.SeriesOption) : entry));
+    }
+
+    const plottedBaseSeries = $derived.by(() => ensureAxisTriggerAnchor(withStepLines(mode === 'value' ? buildValueSeries() : buildReturnSeries())));
 
     const autoYAxisRange = $derived.by(() => computeAutoYAxisRange(plottedBaseSeries));
 
@@ -1093,6 +1118,7 @@
         const xInfo = axesInfo.find((info: any) => info?.axisDim === 'x');
         const rawValue = xInfo?.value;
         const axisValueMs = typeof rawValue === 'number' ? rawValue : parseTimeMs(rawValue);
+        pointedDay = axisValueMs === null || !Number.isFinite(axisValueMs) ? null : dayOfAxisValue(axisValueMs);
         updateHoverDots(axisValueMs);
     }
 
@@ -1161,13 +1187,16 @@
                     lineStyle: {color: gridColors.gridColor, width: 1},
                 },
                 formatter: (params: any) => {
-                    const items = Array.isArray(params) ? params : [params];
+                    // The steps themselves: each line says what it says on the pointed day, not at the drawn point nearest to it.
+                    const items = Array.isArray(params) ? paramsAtDay(params, currentResolution === 'daily' ? pointedDay : null, baseSeries as Array<{id?: unknown; data?: unknown}>) : [params];
                     if (mode === 'value') return buildValueTooltip(items);
                     return buildReturnTooltip(items);
                 },
             },
             xAxis: {
                 type: 'time',
+                // The pointer's own day, which the tooltip of a step line reads (`pointedDay`).
+                axisPointer: {snap: false},
                 ...(xAxisRange ? {min: xAxisRange.min, max: xAxisRange.max} : {}),
                 ...(xAxisPolicy.compact ? {splitNumber: xAxisPolicy.splitNumber} : {}),
                 axisLine: {lineStyle: {color: gridColors.gridColor}},

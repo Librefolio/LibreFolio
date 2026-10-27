@@ -41,6 +41,10 @@ def front_asset_unit(verbose: bool = False, ui: bool = False, headed: bool = Fal
         "src/lib/features/dashboard/allocationTypeEmoji.test.ts",
         "src/lib/features/dashboard/growthLadderAxis.test.ts",
         "src/lib/features/dashboard/growthLadderBuckets.test.ts",
+        "src/lib/features/dashboard/growthStepInputs.test.ts",
+        "src/lib/features/dashboard/growthChartSeries.stepped.test.ts",
+        "src/lib/features/dashboard/growthChartTooltip.stepped.test.ts",
+        "src/lib/components/charts/__tests__/timeSeriesAggregationEarlyYears.test.ts",
     ]
     print(f"\n{Colors.BLUE}Running: Asset Vitest unit tests{Colors.NC}")
     result = subprocess.run(cmd, cwd="frontend", capture_output=not verbose)
@@ -147,6 +151,15 @@ def front_asset_merge(verbose: bool = False, ui: bool = False, headed: bool = Fa
     return _run_playwright("assets/asset-merge.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_asset_currency_change(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run Asset currency change E2E tests (N68: no longer blocked)."""
+    print_section("Frontend Asset Currency Change Tests")
+    if not _ensure_frontend_build(): return False
+    if not _ensure_db_populated(): return False
+    if not _ensure_test_users(): return False
+    return _run_playwright("assets/asset-currency-change.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_asset_event_delete(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run Asset event delete E2E tests."""
     print_section("Frontend Asset Event Delete Tests")
@@ -244,6 +257,7 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "asset-modal", front_asset_modal, name="Asset Modal", desc="Create/edit modal, provider, distributions", tests="assets/asset-modal.spec.ts")
     add_test(cat, "asset-data-editor", front_asset_data_editor, name="Asset Data Editor", desc="Prices/Events tabs, CSV import", tests="assets/asset-data-editor.spec.ts")
     add_test(cat, "asset-classification", front_asset_classification, name="Asset Classification", desc="Distribution editors round-trip (geo, sector)", tests="assets/asset-classification.spec.ts")
+    add_test(cat, "asset-currency-change", front_asset_currency_change, name="Asset Currency Change", desc="N68: changing the currency asks the dry run, cancel changes nothing, confirm is one PATCH that keeps the split and its adjustment", tests="assets/asset-currency-change.spec.ts")
     add_test(cat, "asset-event-delete", front_asset_event_delete, name="Asset Event Delete", desc="Delete asset events flow", tests="assets/asset-event-delete.spec.ts")
     add_test(
         cat,

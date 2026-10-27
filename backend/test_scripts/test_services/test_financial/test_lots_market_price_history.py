@@ -2,7 +2,7 @@
 
 Workstream Y, release 1.3: the service-level reds of the series, through ``lots_analysis_service.get_lots_analysis``. The
 FAILED half (the series stays when the replay fails, its rate gaps stay in the data quality) is beside J-12's contract in
-``test_lots_failed_analysis_withholding.py``; the pure builder and the 1900 floor in ``test_lots_analysis_pure.py``; the
+``test_lots_failed_analysis_withholding.py``; the pure builder and the window of a long-opened lot in ``test_lots_analysis_pure.py``; the
 endpoint in ``test_api/test_portfolio_api.py``.
 
 WHY. The price/WAC chart drew its price line from ``PRICE_HISTORY``, which is per lot: a point for each day of each
@@ -14,7 +14,7 @@ THE CONTRACT.
 - ``LotAnalysisType.MARKET_PRICE_HISTORY`` asks for ``LotsAnalysisResponse.market_price_history``, a list of
   ``MarketPriceHistoryPoint`` (``date``, ``market_price``, ``currency`` = the target currency, ``estimated``): the
   per-lot point without ``lot_id``. None unless requested.
-- One point per day of the computed window — from the first transaction of the scope (never before 1900-01-01) to
+- One point per day of the computed window — from the first transaction of the scope (whatever its year, L2) to
   ``date_to`` — trimmed to ``[date_from or that first day, date_to]`` like the other histories, on each day that has a
   mark convertible to the target currency. The mark is the unified price resolver's (``financial_math/price_marks.py``):
   a market quote, exact or carried forward, is not estimated; else the last BUY or SELL, estimated. A day with no
@@ -54,6 +54,7 @@ from backend.app.db.models import Asset, AssetType, Broker, FxConversionRoute, F
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.portfolio import LotAnalysisType, LotsAnalysisResponse
 from backend.app.services.lots_analysis_service import get_lots_analysis
+from backend.test_scripts.test_services._lots_steps import daily_points, gap_days
 from backend.test_scripts.test_services._scope_boundary_books import add_prices, asset_row, new_asset, new_broker, new_user
 
 D = Decimal
@@ -260,8 +261,9 @@ async def _analysis(
 
 
 def _points(points) -> list[tuple]:
-    """A price line, readably: (day, price, currency, estimated) in the answer's order."""
-    return [(point.date, point.market_price, point.currency, point.estimated) for point in points]
+    """A price line, readably: (day, price, currency, estimated) in the answer's order, one entry a day (J5-5: the answer's
+    steps repeated over their days — these tests are about the price of a day, not about how the days are grouped)."""
+    return [(point.date, point.market_price, point.currency, point.estimated) for point in daily_points(points)]
 
 
 def _expected(line, *, currency: str = "EUR") -> list[tuple]:
@@ -273,7 +275,7 @@ def _issue_codes(result: LotsAnalysisResponse) -> list[str]:
 
 
 def _missing_fx(result: LotsAnalysisResponse) -> dict[str, list[date]]:
-    return {item.pair: list(item.dates) for item in result.data_quality.missing_fx_pairs}
+    return {item.pair: gap_days(item) for item in result.data_quality.missing_fx_pairs}
 
 
 def _market_issue_pairs(result: LotsAnalysisResponse) -> list[list[str]]:
@@ -297,10 +299,10 @@ async def test_market_price_guard_the_per_lot_price_history_stops_with_its_lots(
     assert result.calculation_status == "COMPLETE", _issue_codes(result)
     first_lot, second_lot = book.rows["buy"].id, book.rows["rebuy"].id
     assert sorted(lot.lot_id for lot in result.lots) == [first_lot, second_lot]
-    by_lot = {lot_id: [(point.date, point.market_price, point.estimated) for point in result.price_history if point.lot_id == lot_id] for lot_id in (first_lot, second_lot)}
+    by_lot = {lot_id: [(point.date, point.market_price, point.estimated) for point in daily_points(result.price_history) if point.lot_id == lot_id] for lot_id in (first_lot, second_lot)}
     marks = {day: (day, D(price), estimated) for day, price, estimated in LIFE_LINE}
     assert by_lot == {first_lot: [marks[day] for day in LOT_1_DAYS], second_lot: [marks[day] for day in LOT_2_DAYS]}
-    assert {point.date for point in result.price_history} & set(NO_LOT_DAYS) == set()
+    assert {point.date for point in daily_points(result.price_history)} & set(NO_LOT_DAYS) == set()
 
 
 @pytest.mark.asyncio
@@ -319,8 +321,8 @@ async def test_market_price_history_has_a_point_on_every_marked_day_whatever_lot
     assert result.calculation_status == "COMPLETE", _issue_codes(result)
     assert _points(result.market_price_history) == _expected(LIFE_LINE)
     # The control, in the same answer: the per-lot line stops with its lots; the market line covers the days between.
-    assert sorted({point.date for point in result.price_history}) == [*LOT_1_DAYS, *LOT_2_DAYS]
-    assert set(NO_LOT_DAYS) <= {point.date for point in result.market_price_history}
+    assert sorted({point.date for point in daily_points(result.price_history)}) == [*LOT_1_DAYS, *LOT_2_DAYS]
+    assert set(NO_LOT_DAYS) <= {point.date for point in daily_points(result.market_price_history)}
 
 
 # --------------------------------------------------------------------------- #
@@ -345,7 +347,7 @@ async def test_market_price_history_ignores_selected_lot_ids(session):
     whole = await _analysis(session, book, [LotAnalysisType.PRICE_HISTORY, MARKET_PRICE_HISTORY], date_to=LIFE_DATE_TO)
     narrowed = await _analysis(session, book, [LotAnalysisType.PRICE_HISTORY, MARKET_PRICE_HISTORY], date_to=LIFE_DATE_TO, selected_lot_ids=[first_lot])
 
-    assert ({point.lot_id for point in narrowed.price_history}, sorted({point.date for point in narrowed.price_history})) == ({first_lot}, LOT_1_DAYS)
+    assert ({point.lot_id for point in daily_points(narrowed.price_history)}, sorted({point.date for point in daily_points(narrowed.price_history)})) == ({first_lot}, LOT_1_DAYS)
     assert _points(narrowed.market_price_history) == _points(whole.market_price_history) == _expected(LIFE_LINE)
 
 
@@ -373,7 +375,7 @@ async def test_market_price_history_estimated_only_on_a_trade_mark_and_no_point_
     result = await _analysis(session, book, [MARKET_PRICE_HISTORY], date_to=EST_DATE_TO)
 
     assert _points(result.market_price_history) == _expected(EST_LINE)
-    assert min(point.date for point in result.market_price_history) == EST_BUY_DAY
+    assert min(point.date for point in daily_points(result.market_price_history)) == EST_BUY_DAY
 
 
 # --------------------------------------------------------------------------- #
@@ -396,7 +398,7 @@ async def test_market_price_history_is_trimmed_to_date_from_and_date_to(session)
 
     assert result.calculation_metadata.computed_date_from == LIFE_FIRST_BUY
     assert _points(result.market_price_history) == _expected([(day, price, estimated) for day, price, estimated in LIFE_LINE if date_from <= day <= date_to])
-    dates = [point.date for point in result.market_price_history]
+    dates = [point.date for point in daily_points(result.market_price_history)]
     assert (min(dates), max(dates)) == (date_from, date_to)
 
 

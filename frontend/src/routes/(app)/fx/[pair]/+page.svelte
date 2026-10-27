@@ -13,6 +13,7 @@
      * Uses Svelte 5 runes. Replaces old FxEditSection with FxDataEditorSection.
      */
     import {onMount, tick, untrack} from 'svelte';
+    import {onPricesCaughtUp} from '$lib/features/price-refresh/onPricesCaughtUp';
     import {goto} from '$app/navigation';
     import {page} from '$app/stores';
     import {_ as t} from '$lib/i18n';
@@ -53,7 +54,7 @@
         type SignalDefinition,
         type SignalInstanceResult,
     } from '$lib/charts/signals';
-    import {DEFAULT_AXIS_SCALE, getSettingsForPair, normalizeAxisScaleSettings, setPairSettings, type AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
+    import {DEFAULT_AXIS_SCALE, effectiveCalendarReturnWindow, getSettingsForPair, normalizeAxisScaleSettings, setPairSettings, type AxisScaleSettings, type ChartPrimaryView} from '$lib/stores/chartSettingsStore.svelte';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {currentLanguage} from '$lib/stores/app/language';
     import {defaultDisplayCurrency} from '$lib/stores/app/settings';
@@ -72,7 +73,13 @@
     import {ensureSignalFxPairs, fxPairSlugsOf} from '$lib/charts/comparisonSeries';
     import {applyComparisonAssetsData, clearComparisonAssetsData, COMPARISON_ASSET_RUNTIME_PARAM_KEYS, comparisonAnswerGenerations, comparisonAnswerIsCacheable, comparisonAnswerKey, loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
     import {detailPageSignalSources} from '$lib/charts/chartPageSignals';
-    import {fxPointToLineDataPoint, renderBackendResults, renderLocalSignals, type SignalDataSources} from '$lib/charts/chartSignalRendering';
+    import {fxPointToLineDataPoint, renderBackendResults, renderCalendarPairComparisons, renderLocalSignals, type SignalDataSources} from '$lib/charts/chartSignalRendering';
+    import {buildFxDetailCalendarQuery, fxDetailCalendarViews} from '$lib/charts/fxDetailCalendar';
+    import AssetChartModeToggle, {type AssetChartPrimaryMode} from '$lib/components/assets/detail/AssetChartModeToggle.svelte';
+    import AssetCalendarWindowControls from '$lib/components/assets/detail/AssetCalendarWindowControls.svelte';
+    import {formatSignalProblem} from '$lib/components/charts/chartSignalsHelpers';
+    import {emptyCalendarReturnView, type CalendarReturnView} from '$lib/components/charts/priceChartHelpers';
+    import {CALENDAR_RETURN_PRESETS, DEFAULT_CALENDAR_RETURN_WINDOW, calendarReturnRangeDays, calendarReturnWindowDays, type CalendarReturnPresetKey, type CalendarReturnWindowSelection, type CalendarReturnWindowUnit} from '$lib/components/charts/calendarReturnWindow';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
     import {COLORS} from '$lib/components/charts/lineChartHelpers';
@@ -170,6 +177,20 @@
     // View mode is parent-owned so chart, signals, tooltips, and measures stay aligned.
     let viewMode: ViewMode = $state('percentage');
 
+    // X5-F1 — the rolling return of the pair: a second primary mode of the chart, saved with the pair's chart settings
+    // (`primaryView: 'calendar-return'`), asked of `POST /fx/currencies/convert` when the page is in it. Prices stay in the
+    // FX store, so going back to them asks nothing.
+    let primaryMode: AssetChartPrimaryMode = $state('price');
+    let calendarReturnView: CalendarReturnView = $state(emptyCalendarReturnView());
+    let calendarTargetViews: Map<string, CalendarReturnView> = $state(new Map());
+    let calendarRequestGeneration = 0;
+    let calendarCustomAmount = $state(DEFAULT_CALENDAR_RETURN_WINDOW.customAmount);
+    let calendarCustomUnit: CalendarReturnWindowUnit = $state(DEFAULT_CALENDAR_RETURN_WINDOW.customUnit);
+    let calendarCustomEditing = $state(false);
+    let calendarWindowHydratedFor: string | null = null;
+    /** The price view the pair had before the rolling return (what the list card shows again when the user comes back to prices). */
+    let priceViewBeforeCalendar: ChartPrimaryView = 'absolute';
+
     // Provider config
     let providers: Array<{providerCode: string; priority: number; chainSteps?: Array<{from: string; to: string; provider: string}>}> = $state([]);
 
@@ -196,6 +217,10 @@
     // Chart settings (from store) — keyed by canonical slug (not URL direction)
     let settings = $derived(getSettingsForPair(data.canonicalSlug, 'fx'));
     let signals = $derived<SignalConfig[]>([...settings.signals]);
+    let calendarRangeDays = $derived(calendarReturnRangeDays(dateStart, dateEnd));
+    /** The window in force: the one chosen for this pair, else the largest preset that fits the period on screen (Y-40). */
+    let calendarWindowSelection: CalendarReturnWindowSelection = $derived(effectiveCalendarReturnWindow(settings, calendarRangeDays));
+    let calendarWindowDays = $derived(calendarReturnWindowDays(calendarWindowSelection) ?? 30);
     let signalDefinitions = $state<SignalDefinition[]>([]);
     let signalInstanceResults = $state<SignalInstanceResult[]>([]);
     let signalCatalogFailed = $state(false);
@@ -219,7 +244,7 @@
     let allConfiguredSlugs: string[] = $state([]);
 
     // All assets (for asset comparison signals in ChartSignalsSection)
-    let allAssets: Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null; currency?: string}> = $state([]);
+    let allAssets: Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null; currency?: string; is_benchmark?: boolean}> = $state([]);
 
     // Comparison events (asset-comparison signals)
     let comparisonEvents = $state<Map<number, any[]>>(new Map());
@@ -383,6 +408,35 @@
 
     /** Combined overlay signals: computed from settings + measure signals */
     let allOverlaySignals: RenderedSignal[] = $derived([...overlaySignals, ...measureSignals, ...(pendingPreviewSignal ? [pendingPreviewSignal] : [])]);
+
+    // X5-F1 — what the chart draws in the rolling-return mode: the pair's return and the compared pairs' lines
+    let calendarOverlaySignals: RenderedSignal[] = $derived(renderCalendarPairComparisons(signals, calendarTargetViews));
+    /** The state of the rolling return as the page shows it: before the first answer it is loading, not idle. */
+    let calendarChartState = $derived(calendarReturnView.state === 'idle' ? 'loading' : calendarReturnView.state);
+    /** The `fx-pair` signals by the state of their rolling return (config ids). */
+    let calendarComparisonState = $derived.by(() => {
+        const byState: Record<'ready' | 'partial' | 'unavailable' | 'error', string[]> = {ready: [], partial: [], unavailable: [], error: []};
+        for (const target of pairTargetsOf(signals)) {
+            if (target.pairSlug === data.canonicalSlug) continue;
+            const state = calendarTargetViews.get(target.configId)?.state;
+            if (state === 'ready' || state === 'partial' || state === 'unavailable' || state === 'error') byState[state].push(target.configId);
+        }
+        return byState;
+    });
+    let calendarProblemMessage = $derived(
+        calendarReturnView.problem
+            ? formatSignalProblem(
+                  calendarReturnView.problem,
+                  (key, values) => (values ? $t(key, {values}) : $t(key)),
+                  (field) => $t(`signals.dataFields.${field}`),
+              )
+            : null,
+    );
+    let chartSeriesState = $derived.by(() => {
+        if (primaryMode === 'calendar-return') return calendarChartState;
+        if (loading) return 'loading';
+        return lineData.length > 0 ? 'ready' : error ? 'error' : 'unavailable';
+    });
     let activePrimaryAxisKind = $derived<'absolute' | 'percentage'>(viewMode === 'percentage' ? 'percentage' : 'absolute');
     let activePrimaryAxisScale = $derived(settings.axisScales[activePrimaryAxisKind]);
     let activeSecondaryAxes = $derived(collectConfigurableSecondaryAxes(allOverlaySignals));
@@ -418,6 +472,7 @@
     });
 
     let overlaySignalInfoMap = $derived(buildOverlaySignalInfoMap(overlaySignals));
+    let calendarOverlaySignalInfoMap = $derived(buildOverlaySignalInfoMap(calendarOverlaySignals));
 
     // Event markers for the chart (comparison asset events — FX pairs don't have own events)
     let chartEventMarkers: EventMarker[] = $derived.by(() => {
@@ -630,6 +685,10 @@
         try {
             // Persist URL inversion so FxCard reflects it on back-navigation.
             setCardInverted(data.canonicalSlug, data.inverted);
+            // X5-F1: the pair opens in the mode saved with its settings (a card of the list in the rolling return opens it).
+            primaryMode = openingMode();
+            calendarReturnView = emptyCalendarReturnView();
+            calendarTargetViews = new Map();
             void loadFxAiExportCompatibility();
 
             await (initialSignalDefinitions ??= loadFxSignalDefinitions());
@@ -646,6 +705,7 @@
             flagVersion++;
             await maybeLoadComparison();
             await loadSignalFxPairs();
+            await loadCalendarReturn();
         } catch (initializationError) {
             if (!current() || initialLoadVersion !== chartLoadVersion) return;
             console.error('Failed to initialize FX detail:', initializationError);
@@ -674,6 +734,7 @@
                             await loadChartData();
                             await maybeLoadComparison();
                             await loadSignalFxPairs();
+                            await loadCalendarReturn();
                         })
                         .then(() => {
                             if (pageMounted) onboardingGuide.maybeStartContextual('fx_detail_guide');
@@ -692,6 +753,18 @@
             unsubscribeSession();
         };
     });
+
+    // A price catch-up (the bus's `{kind: 'prices'}`, Y5-1, Z-14b): the chart on screen is asked again, in silence — the stale points stay up,
+    // nothing says the page is busy — and outside `pageBusy`: it is not the user's Refresh. The comparisons and the compared pairs follow it.
+    onMount(() =>
+        onPricesCaughtUp(async () => {
+            if (!pageMounted) return;
+            await loadChartData(signals, false, true);
+            if (!pageMounted) return;
+            await maybeLoadComparison(signals, true);
+            await loadSignalFxPairs();
+        }),
+    );
 
     let previousDisplayOrientation = $state('');
     $effect(() => {
@@ -748,7 +821,11 @@
         displayDateStart = 'min';
     }
 
-    async function loadChartData(requestedSignalConfigs: SignalConfig[] = signals, propagateError = false) {
+    /**
+     * `silent`: the reload after a price catch-up (Y5-1) — the chart and the signals on screen stay as they are and nothing says
+     * the page is busy (no `loading`, no `signalsLoading`): it is not a load the user asked for.
+     */
+    async function loadChartData(requestedSignalConfigs: SignalConfig[] = signals, propagateError = false, silent = false) {
         lastChartLoadAskedServer = false;
         if (!pageMounted) return;
         const slug = data.canonicalSlug;
@@ -771,6 +848,10 @@
         const store = getFxStore(slug);
         const gaps = store.getMissingIntervals(start, end);
         const hasCachedRange = gaps.length === 0;
+        // A store a catch-up marked stale that still holds points for the range (Y5-1, D3): they go on screen at once and the rates
+        // are asked in background, with no loading state.
+        const staleHeld = !hasCachedRange && store.isStale ? store.getRange(start, end).data : [];
+        const staleShown = staleHeld.length > 0;
         const requestPlan = buildBackendSignalRequestPlan(requestedSignalConfigs, signalDefinitions);
         const requestVersion = signalResultState.beginRequest();
         const withSignals = requestPlan.requests.length > 0;
@@ -779,6 +860,9 @@
             chartData = store.getRange(start, end).data;
             if (chartData.length === 0) error = '_i18n:fxDetail.noData';
             resolveMaxStartFromChartData();
+        } else if (staleShown && (!silent || chartData.length === 0)) {
+            // A silent reload of the range already on screen leaves the chart alone; a return to the page, or another range, shows them.
+            chartData = staleHeld;
         }
 
         if (!withSignals && hasCachedRange) {
@@ -811,9 +895,9 @@
             return;
         }
 
-        loading = !hasCachedRange;
+        if (!silent) loading = !hasCachedRange && !staleShown;
         signalRequestFailed = false;
-        signalsLoading = withSignals;
+        signalsLoading = !silent && withSignals;
         lastChartLoadAskedServer = true;
         try {
             const response = await convertBulkWithSignalIsolation(requestBody);
@@ -919,6 +1003,8 @@
                 asset_type: a.asset_type ?? null,
                 // N64b: a comparison series is cached over the peer's price store, named by the asset's own currency.
                 currency: a.currency ?? undefined,
+                // The comparison picker lists the benchmarks first (Y5-F4, X5-F4b).
+                is_benchmark: a.is_benchmark === true,
             }));
         } catch (e) {
             console.error('Failed to load asset list:', e);
@@ -1036,13 +1122,118 @@
                 await chart;
                 await maybeLoadComparison();
                 await loadSignalFxPairs();
+                await loadCalendarReturn();
             });
             return;
         }
         await chart;
         await trackComparisonLoad(label);
         await loadSignalFxPairs();
+        if (primaryMode === 'calendar-return') await trackCalendarLoad(label);
     }
+
+    // =========================================================================
+    // Rolling return (X5-F1)
+    // =========================================================================
+
+    /** The FX pairs the page's `fx-pair` signals compare, each the way its signal shows it. */
+    function pairTargetsOf(configs: readonly SignalConfig[]): Array<{configId: string; pairSlug: string; inverted: boolean}> {
+        return configs.filter((config) => config.signalType === 'fx-pair' && config.params.pairSlug).map((config) => ({configId: config.id, pairSlug: String(config.params.pairSlug), inverted: Boolean(config.params._inverted)}));
+    }
+
+    /**
+     * Ask the rolling return of the pair, and of the pairs its `fx-pair` signals compare, over the period on screen
+     * (`buildFxDetailCalendarQuery`: the daily return, one signal each); the view is `loading` (a spinner) until the answer lands. A request the page has moved past is dropped. Never throws: a failure is the `error` state of the view.
+     */
+    async function loadCalendarReturn(requestedSignalConfigs: SignalConfig[] = signals): Promise<void> {
+        if (!pageMounted || primaryMode !== 'calendar-return') return;
+        const slug = data.canonicalSlug;
+        const base = data.urlBase;
+        const quote = data.urlQuote;
+        const sessionGeneration = getClientSessionGeneration();
+        const requestVersion = ++calendarRequestGeneration;
+        const current = () => pageMounted && primaryMode === 'calendar-return' && requestVersion === calendarRequestGeneration && isClientSessionCurrent(sessionGeneration) && data.canonicalSlug === slug && data.urlBase === base && data.urlQuote === quote;
+        const entries = buildFxDetailCalendarQuery({ownSlug: slug, base, quote, start: dateStart, end: dateEnd, windowDays: calendarWindowDays, pairTargets: pairTargetsOf(requestedSignalConfigs)});
+        calendarReturnView = {...calendarReturnView, state: 'loading'};
+        try {
+            const response = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post(entries.map((entry) => entry.request));
+            if (!current()) return;
+            const views = fxDetailCalendarViews(response, entries);
+            calendarReturnView = views.own;
+            calendarTargetViews = views.targets;
+        } catch (error) {
+            if (!current()) return;
+            console.error('Failed to load the FX rolling return:', error);
+            calendarReturnView = emptyCalendarReturnView('error');
+            calendarTargetViews = new Map();
+        }
+    }
+
+    /** The rolling return under the page's busy token: it always asks the server. */
+    function trackCalendarLoad(label: string, requestedSignalConfigs: SignalConfig[] = signals): Promise<void> {
+        return pageBusy.track(label, () => loadCalendarReturn(requestedSignalConfigs));
+    }
+
+    /** The mode the pair opens in: the rolling return when its saved view is that one (from the list card too), else prices. */
+    function openingMode(): AssetChartPrimaryMode {
+        const view = getSettingsForPair(data.canonicalSlug, 'fx').primaryView;
+        if (view !== 'calendar-return') priceViewBeforeCalendar = view;
+        return view === 'calendar-return' ? 'calendar-return' : 'price';
+    }
+
+    /** The view the page saves with the pair's settings: the rolling return, or the price view the pair had. */
+    function persistPrimaryView(): void {
+        const view: ChartPrimaryView = primaryMode === 'calendar-return' ? 'calendar-return' : priceViewBeforeCalendar;
+        if (settings.primaryView === view) return;
+        setPairSettings(data.canonicalSlug, {...settings, primaryView: view, signals: [...signals]});
+    }
+
+    function setPrimaryMode(mode: AssetChartPrimaryMode): void {
+        if (mode === primaryMode) return;
+        measurePanel?.stopMeasureMode();
+        primaryMode = mode;
+        persistPrimaryView();
+        if (mode === 'calendar-return') {
+            void trackCalendarLoad('fx-detail-mode');
+        } else {
+            calendarCustomEditing = false;
+            calendarRequestGeneration += 1; // an answer still on its way is no longer wanted
+        }
+    }
+
+    function persistCalendarWindow(selection: CalendarReturnWindowSelection): void {
+        setPairSettings(data.canonicalSlug, {
+            ...settings,
+            calendarReturnWindow: {...selection},
+            // Y-40: a window picked here is chosen, no longer the automatic one — also when it equals the window saved before.
+            calendarReturnWindowAuto: false,
+            signals: [...signals],
+        });
+    }
+
+    function setCalendarPreset(preset: CalendarReturnPresetKey): void {
+        if (!CALENDAR_RETURN_PRESETS.some((candidate) => candidate.key === preset)) return;
+        if (calendarWindowSelection.kind === 'preset' && calendarWindowSelection.preset === preset) return;
+        calendarCustomEditing = false;
+        persistCalendarWindow({...calendarWindowSelection, kind: 'preset', preset});
+        if (primaryMode === 'calendar-return') void trackCalendarLoad('fx-detail-calendar-window');
+    }
+
+    function setCalendarCustom(customAmount: number, customUnit: CalendarReturnWindowUnit): void {
+        const selection: CalendarReturnWindowSelection = {...calendarWindowSelection, kind: 'custom', customAmount, customUnit};
+        if (calendarReturnWindowDays(selection) === null) return;
+        const changed = calendarWindowSelection.kind !== 'custom' || calendarWindowSelection.customAmount !== customAmount || calendarWindowSelection.customUnit !== customUnit;
+        persistCalendarWindow(selection);
+        if (changed && primaryMode === 'calendar-return') void trackCalendarLoad('fx-detail-calendar-window');
+    }
+
+    $effect(() => {
+        const scope = `${getClientSessionGeneration()}:${data.canonicalSlug}`;
+        if (calendarWindowHydratedFor === scope) return;
+        calendarCustomAmount = settings.calendarReturnWindow.customAmount;
+        calendarCustomUnit = settings.calendarReturnWindow.customUnit;
+        calendarWindowHydratedFor = scope;
+    });
 
     // =========================================================================
     // Actions
@@ -1090,6 +1281,7 @@
         }
         overlayDataVersion++;
         await maybeLoadComparison(requestedSignals, true);
+        await loadCalendarReturn(requestedSignals);
     }
 
     async function loadFxAiExportCompatibility() {
@@ -1191,6 +1383,16 @@
         const shouldLoadFxPairs = fxPairSlugsOf(signals, data.canonicalSlug).join() !== fxPairSlugsOf(newSignals, data.canonicalSlug).join();
         setPairSettings(data.canonicalSlug, {...settings, signals: JSON.parse(JSON.stringify(newSignals))});
         if (shouldLoadFxPairs) void loadSignalFxPairs(newSignals);
+        if (
+            primaryMode === 'calendar-return' &&
+            pairTargetsOf(signals)
+                .map((t) => `${t.configId}:${t.pairSlug}:${t.inverted}`)
+                .join() !==
+                pairTargetsOf(newSignals)
+                    .map((t) => `${t.configId}:${t.pairSlug}:${t.inverted}`)
+                    .join()
+        )
+            void trackCalendarLoad('fx-detail-calendar-pairs', newSignals);
         if (shouldReloadComparison) void trackComparisonLoad('fx-detail-comparison', newSignals);
         if (shouldReloadBackend) {
             void trackChartLoad('fx-detail-signals', newSignals);
@@ -1461,7 +1663,8 @@
                 <ChartSignalsSection
                     signals={signalPanelConfigs}
                     definitions={signalDefinitions}
-                    backendError={signalBackendError}
+                    allowedSignalTypes={primaryMode === 'calendar-return' ? ['fx-pair'] : undefined}
+                    backendError={primaryMode === 'price' ? signalBackendError : null}
                     {signalsLoading}
                     onretrybackend={retryBackendSignals}
                     availablePairs={allConfiguredSlugs}
@@ -1483,15 +1686,34 @@
     <!-- ======================================================================= -->
     <!-- Chart with left toolbar -->
     <!-- ======================================================================= -->
-    <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle p-4" data-testid="fx-detail-chart" data-view-mode={viewMode} use:guideAnchor={'fx.detail.chart'}>
-        {#if loading && lineData.length === 0}
+    <div
+        class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle p-4"
+        data-testid="fx-detail-chart"
+        data-view-mode={viewMode}
+        data-primary-mode={primaryMode}
+        data-window-days={primaryMode === 'calendar-return' ? calendarWindowDays : undefined}
+        data-series-state={chartSeriesState}
+        data-calendar-comparison-ready={primaryMode === 'calendar-return' ? calendarComparisonState.ready.join(',') : undefined}
+        data-calendar-comparison-partial={primaryMode === 'calendar-return' ? calendarComparisonState.partial.join(',') : undefined}
+        data-calendar-comparison-unavailable={primaryMode === 'calendar-return' ? calendarComparisonState.unavailable.join(',') : undefined}
+        data-calendar-comparison-error={primaryMode === 'calendar-return' ? calendarComparisonState.error.join(',') : undefined}
+        use:guideAnchor={'fx.detail.chart'}
+    >
+        {#if primaryMode === 'price' && loading && lineData.length === 0}
             <div class="h-96 flex items-center justify-center">
                 <div class="text-center">
                     <RefreshCw size={24} class="animate-spin text-lf-link mx-auto mb-2" />
                     <p class="text-sm text-lf-muted">{$t('fxDetail.loadingRates')}</p>
                 </div>
             </div>
-        {:else if lineData.length > 0}
+        {:else if (primaryMode === 'price' && lineData.length > 0) || primaryMode === 'calendar-return'}
+            <div class="mb-3 flex flex-wrap items-center justify-between gap-2" data-testid="fx-chart-primary-controls">
+                <AssetChartModeToggle {primaryMode} onselect={setPrimaryMode} idPrefix="fx" />
+                {#if primaryMode === 'calendar-return'}
+                    <AssetCalendarWindowControls selection={calendarWindowSelection} bind:customAmount={calendarCustomAmount} bind:customUnit={calendarCustomUnit} bind:customEditing={calendarCustomEditing} onpreset={setCalendarPreset} oncustom={setCalendarCustom} idPrefix="fx" />
+                {/if}
+            </div>
+
             <!-- Aesthetics panel (ABOVE chart, shown only when gear is active) -->
             {#if showAesthetics}
                 <div data-testid="fx-detail-aesthetics-panel" class="mb-3 pb-3 border-b border-lf-subtle relative">
@@ -1502,95 +1724,119 @@
                 </div>
             {/if}
 
-            <div class="relative">
-                <!-- Right toolbar -->
-                <div class="absolute top-0 right-0 z-10 flex items-center gap-1.5">
-                    <button
-                        data-testid="fx-detail-measure-btn"
-                        class="p-1.5 rounded-lg transition-colors {measureMode ? MEASURE_TOGGLE_ACTIVE_CLASS : TOOLBAR_TOGGLE_IDLE_CLASS}"
-                        onclick={async () => {
-                            if (measureMode) {
-                                measurePanel?.stopMeasureMode();
-                            } else {
-                                showMeasures = true;
-                                await tick();
-                                measurePanel?.startMeasureMode();
-                            }
-                        }}
-                        title={measureMode ? $t('common.exitMeasure') : $t('common.addMeasure')}
-                    >
-                        <Ruler size={16} />
-                    </button>
-                    <!-- colour: closest role, to review: the editor toggle's amber is the warning tint (as the editor panel it opens); no role for a toolbar accent -->
-                    <button
-                        data-testid="fx-detail-edit-btn"
-                        use:guideAnchor={'fx.detail.editor'}
-                        class="p-1.5 rounded-lg transition-colors {showDataEditor ? 'bg-lf-warning-soft text-lf-warning-on-soft ring-1 ring-lf-warning-line' : TOOLBAR_TOGGLE_IDLE_CLASS}"
-                        onclick={() => {
-                            if (showDataEditor) {
-                                showDataEditor = false;
-                                pendingPreviewSignal = null;
-                                if (savedPanelStates) {
-                                    showAesthetics = savedPanelStates.aesthetics;
-                                    showMeasures = savedPanelStates.measures;
-                                    showSignals = savedPanelStates.signals;
-                                    savedPanelStates = null;
-                                }
-                            } else {
-                                savedPanelStates = {aesthetics: showAesthetics, measures: showMeasures, signals: showSignals};
-                                showAesthetics = false;
-                                showMeasures = false;
-                                showSignals = false;
-                                showDataEditor = true;
-                            }
-                        }}
-                        title={showDataEditor ? $t('common.closeEditor') : $t('fxDetail.editRates')}
-                    >
-                        <Pencil size={16} />
-                    </button>
-                    <!-- colour: closest role, to review: the aesthetics toggle's emerald is an accent, not a state; success tint chosen, alternative bg-lf-selected text-lf-link -->
-                    <button
-                        data-testid="fx-detail-aesthetics-toggle"
-                        aria-expanded={showAesthetics}
-                        class="p-1.5 rounded-lg transition-colors {showAesthetics ? 'bg-lf-success-soft text-lf-success-on-soft ring-1 ring-lf-success-line' : TOOLBAR_TOGGLE_IDLE_CLASS}"
-                        onclick={() => (showAesthetics = !showAesthetics)}
-                        title={$t('common.aesthetics')}
-                    >
-                        <Settings size={16} />
-                    </button>
+            {#if primaryMode === 'calendar-return' && calendarChartState === 'loading'}
+                <div class="h-96 flex items-center justify-center" data-testid="fx-calendar-return-loading">
+                    <RefreshCw size={24} class="animate-spin text-lf-link" />
                 </div>
+            {:else if primaryMode === 'calendar-return' && calendarChartState === 'unavailable'}
+                <div class="h-96 flex items-center justify-center text-sm text-lf-muted" data-testid="fx-calendar-return-unavailable">
+                    <span data-testid="fx-calendar-primary-problem" data-problem-code={calendarReturnView.problem?.code} data-problem-status={calendarReturnView.problem?.status}>
+                        {calendarProblemMessage ?? $t('chartSettings.signalProblems.unavailable')}
+                    </span>
+                </div>
+            {:else if primaryMode === 'calendar-return' && calendarChartState === 'error'}
+                <div class="h-96 flex items-center justify-center text-sm text-lf-danger" data-testid="fx-calendar-return-error">
+                    <span data-testid="fx-calendar-primary-problem" data-problem-code={calendarReturnView.problem?.code} data-problem-status={calendarReturnView.problem?.status}>
+                        {calendarProblemMessage ?? $t('chartSettings.signalResultsUnavailable')}
+                    </span>
+                </div>
+            {:else}
+                <div class="relative">
+                    <!-- Right toolbar -->
+                    <div class="absolute top-0 right-0 z-10 flex items-center gap-1.5">
+                        {#if primaryMode === 'price'}
+                            <button
+                                data-testid="fx-detail-measure-btn"
+                                class="p-1.5 rounded-lg transition-colors {measureMode ? MEASURE_TOGGLE_ACTIVE_CLASS : TOOLBAR_TOGGLE_IDLE_CLASS}"
+                                onclick={async () => {
+                                    if (measureMode) {
+                                        measurePanel?.stopMeasureMode();
+                                    } else {
+                                        showMeasures = true;
+                                        await tick();
+                                        measurePanel?.startMeasureMode();
+                                    }
+                                }}
+                                title={measureMode ? $t('common.exitMeasure') : $t('common.addMeasure')}
+                            >
+                                <Ruler size={16} />
+                            </button>
+                            <!-- colour: closest role, to review: the editor toggle's amber is the warning tint (as the editor panel it opens); no role for a toolbar accent -->
+                            <button
+                                data-testid="fx-detail-edit-btn"
+                                use:guideAnchor={'fx.detail.editor'}
+                                class="p-1.5 rounded-lg transition-colors {showDataEditor ? 'bg-lf-warning-soft text-lf-warning-on-soft ring-1 ring-lf-warning-line' : TOOLBAR_TOGGLE_IDLE_CLASS}"
+                                onclick={() => {
+                                    if (showDataEditor) {
+                                        showDataEditor = false;
+                                        pendingPreviewSignal = null;
+                                        if (savedPanelStates) {
+                                            showAesthetics = savedPanelStates.aesthetics;
+                                            showMeasures = savedPanelStates.measures;
+                                            showSignals = savedPanelStates.signals;
+                                            savedPanelStates = null;
+                                        }
+                                    } else {
+                                        savedPanelStates = {aesthetics: showAesthetics, measures: showMeasures, signals: showSignals};
+                                        showAesthetics = false;
+                                        showMeasures = false;
+                                        showSignals = false;
+                                        showDataEditor = true;
+                                    }
+                                }}
+                                title={showDataEditor ? $t('common.closeEditor') : $t('fxDetail.editRates')}
+                            >
+                                <Pencil size={16} />
+                            </button>
+                        {/if}
+                        <!-- colour: closest role, to review: the aesthetics toggle's emerald is an accent, not a state; success tint chosen, alternative bg-lf-selected text-lf-link -->
+                        <button
+                            data-testid="fx-detail-aesthetics-toggle"
+                            aria-expanded={showAesthetics}
+                            class="p-1.5 rounded-lg transition-colors {showAesthetics ? 'bg-lf-success-soft text-lf-success-on-soft ring-1 ring-lf-success-line' : TOOLBAR_TOGGLE_IDLE_CLASS}"
+                            onclick={() => (showAesthetics = !showAesthetics)}
+                            title={$t('common.aesthetics')}
+                        >
+                            <Settings size={16} />
+                        </button>
+                    </div>
 
-                <PriceChartFull
-                    data={lineData}
-                    currency={displayQuote}
-                    mainSeriesLabel={`${baseFlag} ${displayBase} → ${quoteFlag} ${displayQuote}`}
-                    chartHeight="400px"
-                    overlaySignals={allOverlaySignals}
-                    eventMarkers={chartEventMarkers}
-                    {overlaySignalInfoMap}
-                    colorByBaseline={settings.colorByBaseline}
-                    areaFill={settings.areaFill}
-                    showGridLines={settings.gridLines}
-                    showGradient={settings.staleGradient}
-                    yAxisMode={activePrimaryAxisScale.mode}
-                    yAxisMin={activePrimaryAxisScale.min}
-                    yAxisMax={activePrimaryAxisScale.max}
-                    secondaryAxisScales={settings.axisScales.secondary}
-                    {measureMode}
-                    onMeasureClick={handleMeasureClick}
-                    onMeasureHover={(date, value) => measurePanel?.updatePendingEnd(date, value)}
-                    hideToolbar={true}
-                    disableCandlestick={true}
-                    externalViewMode={viewMode}
-                    onViewModeChange={(mode) => {
-                        viewMode = mode;
-                    }}
-                    editMode={showDataEditor}
-                    onPointClick={(date, _value) => fxDataEditorRef?.scrollToDate(date)}
-                    staleLabel={$t('chart.tooltip.stale')}
-                    fxStaleLabel={$t('chart.tooltip.fxStale')}
-                />
-            </div>
+                    <PriceChartFull
+                        data={primaryMode === 'price' ? lineData : calendarReturnView.points}
+                        currency={primaryMode === 'price' ? displayQuote : ''}
+                        mainSeriesLabel={primaryMode === 'price' ? `${baseFlag} ${displayBase} → ${quoteFlag} ${displayQuote}` : `${baseFlag} ${displayBase} → ${quoteFlag} ${displayQuote} · ${$t('signals.riskRollingReturn.name')}`}
+                        chartHeight="400px"
+                        overlaySignals={primaryMode === 'price' ? allOverlaySignals : calendarOverlaySignals}
+                        eventMarkers={primaryMode === 'price' ? chartEventMarkers : []}
+                        overlaySignalInfoMap={primaryMode === 'price' ? overlaySignalInfoMap : calendarOverlaySignalInfoMap}
+                        colorByBaseline={settings.colorByBaseline}
+                        areaFill={settings.areaFill}
+                        showGridLines={settings.gridLines}
+                        showGradient={settings.staleGradient}
+                        yAxisMode={activePrimaryAxisScale.mode}
+                        yAxisMin={activePrimaryAxisScale.min}
+                        yAxisMax={activePrimaryAxisScale.max}
+                        secondaryAxisScales={settings.axisScales.secondary}
+                        measureMode={primaryMode === 'price' && measureMode}
+                        onMeasureClick={handleMeasureClick}
+                        onMeasureHover={(date, value) => measurePanel?.updatePendingEnd(date, value)}
+                        hideToolbar={true}
+                        disableCandlestick={true}
+                        externalViewMode={primaryMode === 'price' ? viewMode : 'absolute'}
+                        onViewModeChange={(mode) => {
+                            viewMode = mode;
+                        }}
+                        editMode={primaryMode === 'price' && showDataEditor}
+                        valueUnit={primaryMode === 'calendar-return' ? 'percentage' : 'price'}
+                        hideViewModeToggle={primaryMode === 'calendar-return'}
+                        showMainDelta={primaryMode === 'price'}
+                        mainPointContext={primaryMode === 'calendar-return' ? calendarReturnView.contextByDate : undefined}
+                        onPointClick={(date, _value) => primaryMode === 'price' && fxDataEditorRef?.scrollToDate(date)}
+                        staleLabel={$t('chart.tooltip.stale')}
+                        fxStaleLabel={$t('chart.tooltip.fxStale')}
+                    />
+                </div>
+            {/if}
         {:else}
             <div class="h-96 flex items-center justify-center">
                 <div class="text-center">

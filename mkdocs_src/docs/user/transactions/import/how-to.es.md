@@ -285,9 +285,7 @@ a las filas listadas en rojo, y pregunta antes de guardar los valores listados e
 verificado (**Guardar de todos modos**). Una fila cuya cantidad tiene más de 10 decimales, cuyo importe tiene
 más de 6, o cuyo coste base por unidad tiene más de 12, se rechaza en **Guardar todo**, con el máximo en el
 mensaje (*Cantidad: Como máximo 10 decimales*): LibreFolio nunca la redondea.
-Las fechas de las transacciones van del 1 de enero de 1900 hasta mañana: una fila del informe con
-una fecha fuera de ese intervalo también se rechaza en **Guardar todo**, con el intervalo en el mensaje (*Fecha:
-Entre 1900-01-01 y 2026-10-18* si hoy es 17 de octubre de 2026).
+Las fechas de las transacciones pueden remontarse hasta el año 1 y llegar hasta mañana. Una fila fechada antes de 1900 se marca en ámbar en la revisión (una nota sobre la tabla las cuenta) y el espacio de trabajo bulk pide una sola vez confirmarlas, porque una fecha así suele ser un error de escritura; una vez confirmada se guarda como las demás. Una fila fechada después de mañana se rechaza en **Guardar todo**, con el último día permitido en el mensaje (*Fecha: No posterior al 2026-10-18* si hoy es 17 de octubre de 2026).
 
 ---
 

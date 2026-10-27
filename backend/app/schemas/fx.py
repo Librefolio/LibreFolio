@@ -51,7 +51,6 @@ from backend.app.schemas.common import (
     BaseListResponse,
     Currency,
     DateRangeModel,
-    PeriodChangesAsOf,
     SafeDecimal,
     StrictModel,
     iso_currency_code,
@@ -599,8 +598,8 @@ class FXPeriodChangesRequest(StrictModel):
 
     base: str = Field(..., min_length=3, max_length=3, description="Base currency (ISO 4217): the rate is quote per 1 base")
     quote: str = Field(..., min_length=3, max_length=3, description="Quote currency (ISO 4217)")
-    as_of: PeriodChangesAsOf = Field(..., description="Anchor day: the end of the range the table shows (1900-01-01 or later)")
-    range_start: Optional[PeriodChangesAsOf] = Field(None, description="First day of the range the page shows: asks its whole-range change (X-R59); on or before as_of")
+    as_of: date_type = Field(..., description="Anchor day: the end of the range the table shows (any day of the calendar; a period whose reference day falls before 0001-01-01 has a null change)")
+    range_start: Optional[date_type] = Field(None, description="First day of the range the page shows: asks its whole-range change (X-R59); on or before as_of")
 
     @field_validator("base", "quote", mode="before")
     @classmethod

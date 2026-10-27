@@ -937,9 +937,6 @@ const STUBBED_RANGE_CHANGE: FxRangeChange = {change_abs: '0.1234', change_ratio:
 /** A Δ over the range the backend could not compute: every field null, both ways. */
 const NO_RANGE_CHANGE: FxRangeChange = {change_abs: null, change_ratio: null, inverse_change_abs: null, inverse_change_ratio: null};
 
-/** The first day the backend values (`EARLIEST_RANGE_START`): it refuses an earlier `range_start`, and the whole request with it. */
-const EARLIEST_RANGE_START = '1900-01-01';
-
 /** What `routeFxRangeChanges` saw: every pair asked, what went wrong, how many requests it answered. */
 type FxRangeChangesLog = {asked: FxRangeChangesQuery[]; failures: string[]; answered: number};
 
@@ -998,7 +995,7 @@ function arrowedPercent(figure: string): RegExp {
  * The FX list shows each pair's Δ over the range on screen (X-R59, lot A) — the table's Δ Abs and Δ % columns, the
  * card's Δ: the change from the first to the last day of the range, which the backend computes both ways, the
  * `range_change` of `POST /fx/currencies/period-changes`, asked with the first day of the range (`range_start`) in every
- * item, raised to 1900-01-01, the first day the backend values, for a range that starts before it. A pair shown as
+ * item, as it is (the backend takes any day from the year 1, D-P4). A pair shown as
  * configured reads `change_abs` and `change_ratio`; swapped, `inverse_change_abs` and `inverse_change_ratio`; where the
  * backend has none, the table shows its empty marker and the card no Δ. The browser computes none, though it holds the
  * rates.
@@ -1007,7 +1004,7 @@ function arrowedPercent(figure: string): RegExp {
  * fetched and only their items are changed in it, with figures their rates do not give over these days; a swapped row
  * or card is this browser's state (`fxCardInversionStore`), never the database's. The range before 1900 has its rates
  * answered in the browser, empty, so no conversion is walked back over a century for every pair; its period changes
- * still reach the backend, which says whether it takes the first day asked.
+ * still reach the backend, which says whether it takes the first day asked, as it is.
  *
  * Red before the cure of lot A: the request asks no `range_start`, and the table and the card compute their Δ from the
  * rates they loaded.
@@ -1116,8 +1113,8 @@ test.describe('FX list — the Δ over the range is the backend’s, both ways (
         }
     });
 
-    test('a range that starts before 1900 asks every Δ from 1900-01-01, which the backend takes', async ({page}) => {
-        // A month before the first day the backend values: sent as is, the backend would refuse the whole request.
+    test('a range that starts before 1900 asks every Δ from its first day, as it is, which the backend takes', async ({page}) => {
+        // A month before 1900: the backend takes any day from the year 1 (D-P4), so the first day goes as it is.
         const range = {start: '1899-12-01', end: daysAgoIso(10)};
         try {
             // The rates answered in the browser, empty: no conversion is walked back over a century for every pair.
@@ -1128,9 +1125,9 @@ test.describe('FX list — the Δ over the range is the backend’s, both ways (
             const {row} = await openPairRow(page, range);
 
             await expect.poll(() => log.answered, {message: 'the FX list never asked POST /fx/currencies/period-changes', timeout: 10_000}).toBeGreaterThan(0);
-            expect(log.failures, 'the backend took every request: none asks a day before the first it values').toEqual([]);
-            expect(log.asked, `the pair asks its Δ from ${EARLIEST_RANGE_START} to the last day of the range`).toContainEqual(expect.objectContaining({...PAIR, as_of: range.end, range_start: EARLIEST_RANGE_START}));
-            expect([...new Set(log.asked.map((item) => item.range_start))], `every pair asks its Δ from ${EARLIEST_RANGE_START}, never from ${range.start}`).toEqual([EARLIEST_RANGE_START]);
+            expect(log.failures, 'the backend took every request: it takes any day from the year 1').toEqual([]);
+            expect(log.asked, `the pair asks its Δ from ${range.start} to the last day of the range`).toContainEqual(expect.objectContaining({...PAIR, as_of: range.end, range_start: range.start}));
+            expect([...new Set(log.asked.map((item) => item.range_start))], `every pair asks its Δ from ${range.start}, never raised`).toEqual([range.start]);
             await expect(rangeCells(row).pct, 'the Δ over the range still reaches the row').toHaveText(percentCell('+42.42'), {timeout: 10_000});
         } finally {
             await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
@@ -1378,5 +1375,99 @@ test.describe('FX list — a card draws its saved comparisons (Y-41)', () => {
 
         await expect(page.getByTestId('fx-card-EUR-USD')).toHaveAttribute('data-overlay-count', '1', {timeout: 15_000});
         expect(asked, 'no asset price is asked').toEqual([]);
+    });
+});
+
+/**
+ * FX list — the grid toolbar: an icon for the absolute view, a tooltip on settings, sync all and refresh all (Y5-F1).
+ *
+ * The first button of the cards' view group (`fx-global-view-absolute`) draws the price-line icon and no text, with an
+ * `aria-label`; the percentage one stays text. The three action buttons are each wrapped in the shared Tooltip (it opens
+ * after a rest of 500 ms of plain hover). Nothing here asserts the translated text: the tooltip must be non-empty and
+ * not a raw catalogue key. Sync all and refresh all are never clicked; nothing shared is written.
+ *
+ * Red today: the Absolute button is text, and the three buttons carry no tooltip wrapper.
+ */
+test.describe('FX list — the grid toolbar: the Absolute icon and the action tooltips (Y5-F1)', () => {
+    test.describe.configure({timeout: 60_000});
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    /** A key looks like `area.sub.name`: dotted, no space. A rendered sentence is never one. */
+    const looksLikeRawKey = (text: string) => /^[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)+$/.test(text.trim());
+
+    test('in the card view the Absolute button is an icon with an aria-label and no text, and still turns the view', async ({page}) => {
+        await goToFxPage(page);
+        await page.getByTestId('view-mode-grid').click();
+        await waitForSettled(page.getByTestId('fx-page'), 20_000);
+
+        const group = page.getByTestId('fx-global-view');
+        const absolute = page.getByTestId('fx-global-view-absolute');
+        const percentage = page.getByTestId('fx-global-view-percentage');
+        await expect(absolute).toBeVisible({timeout: 10_000});
+
+        await expect(absolute.locator('svg'), 'the Absolute button draws an icon').toHaveCount(1);
+        await expect(absolute, 'and no text').toHaveText(/^\s*$/);
+        const label = await absolute.getAttribute('aria-label');
+        expect(label?.trim() ?? '', 'an accessible name stands in for the text').not.toBe('');
+        expect(looksLikeRawKey(label ?? ''), `the aria-label is a rendered name, not the key "${label}"`).toBe(false);
+        await expect(percentage, 'the percentage button stays text').toHaveText('%');
+
+        // Click % first, then Absolute: whatever the page opened on, the end states are known.
+        await percentage.click();
+        await expect(group).toHaveAttribute('data-view', 'percentage');
+        await expect(percentage).toHaveAttribute('aria-pressed', 'true');
+        await absolute.click();
+        await expect(group).toHaveAttribute('data-view', 'absolute');
+        await expect(absolute).toHaveAttribute('aria-pressed', 'true');
+        await expect(percentage).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    for (const action of [
+        {name: 'settings', wrapper: 'fx-chart-settings-tooltip', button: 'fx-chart-settings-button'},
+        {name: 'sync all', wrapper: 'fx-sync-all-tooltip', button: 'fx-sync-all-button'},
+        {name: 'refresh all', wrapper: 'fx-refresh-tooltip', button: 'fx-refresh-all-button'},
+    ]) {
+        test(`the ${action.name} button is wrapped in a tooltip that opens on hover with a rendered text`, async ({page}) => {
+            await goToFxPage(page);
+            await page.getByTestId('view-mode-grid').click();
+            await waitForSettled(page.getByTestId('fx-page'), 20_000);
+
+            const wrapper = page.getByTestId(action.wrapper);
+            const button = wrapper.getByTestId(action.button);
+            await expect(button, `the ${action.name} button sits inside ${action.wrapper}`).toBeVisible({timeout: 10_000});
+
+            // No tooltip of another control is open when this one is hovered.
+            await page.mouse.move(0, 0);
+            await expect(page.getByRole('tooltip')).toHaveCount(0, {timeout: 5_000});
+
+            await button.hover();
+            const tooltip = page.getByRole('tooltip');
+            await expect(tooltip, 'a rest of the pointer opens the tooltip').toBeVisible({timeout: 3_000});
+            const text = ((await tooltip.textContent()) ?? '').trim();
+            expect(text, 'the tooltip says something').not.toBe('');
+            expect(text.startsWith('sharedResource.'), `the tooltip is a rendered text, not the key "${text}"`).toBe(false);
+            expect(looksLikeRawKey(text), `the tooltip is a rendered text, not the key "${text}"`).toBe(false);
+        });
+    }
+
+    test('a click on the settings button still opens the chart settings, and Escape closes them', async ({page}) => {
+        await goToFxPage(page);
+        await page.getByTestId('view-mode-grid').click();
+        await waitForSettled(page.getByTestId('fx-page'), 20_000);
+
+        const button = page.getByTestId('fx-chart-settings-tooltip').getByTestId('fx-chart-settings-button');
+        await expect(button).toBeVisible({timeout: 10_000});
+        await button.hover();
+        await button.click();
+
+        const modal = page.getByTestId('chart-settings-modal');
+        await expect(modal, 'the tooltip does not swallow the click').toBeVisible({timeout: 5_000});
+        await expect(modal.getByTestId('chart-settings-apply')).toBeEnabled();
+
+        await page.keyboard.press('Escape');
+        await expect(modal, 'the modal closes, nothing left over it').toBeHidden({timeout: 5_000});
     });
 });

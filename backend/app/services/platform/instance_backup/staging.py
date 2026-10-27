@@ -162,6 +162,23 @@ class StagedBackup(BaseModel):
     alembic_revision: str
 
 
+class OwnerCandidate(BaseModel):
+    """An account of the copy the owner may choose as theirs after the restore (B5-1): an active administrator, or the
+    account whose address is the owner's. Read from the copy, never trusted further: ``apply.confirm_restore`` checks the
+    choice against this list."""
+
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    user_id: int
+    username: str
+    email: str | None
+    is_superuser: bool
+    is_active: bool
+    #: Whether the copy marks it as its instance's owner (``users.is_instance_owner``). Written by whoever prepared the
+    #: backup: a hint for the restore of a managed instance that has nobody to ask (B5-1j), never a permission.
+    is_instance_owner: bool = False
+
+
 class StagingReport(BaseModel):
     """What a restore of the checked archive would do: the report a confirmation shows, kept beside the copy.
 
@@ -201,6 +218,25 @@ class StagingReport(BaseModel):
     secrets_rekeyed: int = Field(default=0, ge=0)
     secrets_unreadable: SecretCounts = SecretCounts()
     administrators: list[str]
+    #: B5-1: the accounts the owner may choose; a report written before reads none. The owner's address the check used
+    #: (the confirmation refuses a report whose address is not the current one), and what in the copy would let a
+    #: crafted backup defeat the owner's assignment: ``duplicate_email``, ``duplicate_username``,
+    #: ``address_is_a_username``, ``pending_administrator``.
+    owner_candidates: list[OwnerCandidate] = []
+    owner_email_checked: str | None = None
+    owner_conflicts: list[str] = []
+    #: B5-1k2: the accounts that will be active after the restore (the copy's active ones, plus the inactive account that
+    #: holds the owner's address on a managed instance, which the restore activates), ``LIBREFOLIO_MAX_USERS`` at the check
+    #: (``None``: no limit, or a value that is not valid, which never fires the warning) and how many accounts are over it.
+    #: Information only: a restore refuses nothing for too many users, the warning ``users_over_limit`` says that the
+    #: administrator chooses who keeps access at the first sign-in (workstream A, A5-7).
+    users_active: int = Field(default=0, ge=0)
+    users_limit: int | None = None
+    users_over_limit: int = Field(default=0, ge=0)
+    #: B5-1l: how many accounts of the copy are marked as the instance's owner (``users.is_instance_owner``), whatever their
+    #: role: the mark is written by whoever prepared the backup. A restore from the hosting panel keeps the owner's password
+    #: only when exactly one account is marked (``apply.keeps_owner``).
+    owner_marks: int = Field(default=0, ge=0)
     #: Defaults, so that a report written before lot B-13 still reads.
     control_totals: TotalsStatus = "absent"
     control_totals_differences: list[TotalsDifference] = []
@@ -351,6 +387,7 @@ def _stage(archive_path: Path, root: Path, stage_id: str, progress: StageProgres
             raise StagingError("upgrade_failed", "The copy of the backup's database did not reach this LibreFolio's revision")
         totals = compare_totals(manifest.database.control_totals, ledger_totals_of(database))
         administrators = _administrators(database)
+        owner_email_checked, owner_candidates, owner_conflicts = _owner_check(database)
     except sqlite3.ProgrammingError:
         raise
     except sqlite3.DatabaseError as exc:
@@ -363,6 +400,20 @@ def _stage(archive_path: Path, root: Path, stage_id: str, progress: StageProgres
     # Outside the wrap above: this read refuses nothing, so its failure must never become database_damaged (E-19b1)
     non_iso_currencies = _holds_non_iso_currencies(database, stage_id)
     report = _report(stage_id, manifest, before, after, action, migrations, head, fixes, administrators, totals, encrypted=encrypted, secrets_rekeyed=rekeyed, secrets_unreadable=unreadable, non_iso_currencies=non_iso_currencies)
+    users_active, users_limit, users_over_limit = _users_check(database, owner_email_checked, owner_candidates)
+    owner_marks = _owner_marks(database)
+    report = report.model_copy(
+        update={
+            "owner_candidates": owner_candidates,
+            "owner_email_checked": owner_email_checked,
+            "owner_conflicts": owner_conflicts,
+            "users_active": users_active,
+            "users_limit": users_limit,
+            "users_over_limit": users_over_limit,
+            "owner_marks": owner_marks,
+            "warnings": _with_users_warning(report.warnings, users_over_limit),
+        }
+    )
     _write_report(root, report)
     return report
 
@@ -804,6 +855,95 @@ def _administrators(database: Path) -> list[str]:
         conn.execute("PRAGMA trusted_schema=OFF")
         rows = conn.execute("SELECT username FROM users WHERE is_superuser = 1 AND is_active = 1 ORDER BY username").fetchall()
     return [str(row[0]) for row in rows]
+
+
+def _owner_check(database: Path) -> tuple[str | None, list[OwnerCandidate], list[str]]:
+    """What the owner's choice needs from the copy (B5-1): the owner's address this check used
+    (``LIBREFOLIO_ADMIN_EMAIL``); the accounts the owner may choose, its active administrators and the account whose
+    address is the owner's whatever its role; and what in the copy would defeat the owner's assignment. Addresses compare
+    as SQLite's ``lower()`` folds them, as the unique index does. Read-only, every value bound, never written into the
+    SQL; no address or name reaches a log. An account whose id is not an integer or whose name is missing: a copy no
+    LibreFolio wrote, ``database_damaged``."""
+    from backend.app.services.platform.instance_backup.owner import configured_owner_email  # noqa: PLC0415 — owner imports apply, which imports this module
+
+    owner_email = configured_owner_email()
+    with closing(sqlite3.connect(f"{database.resolve().as_uri()}?mode=ro", uri=True)) as conn:
+        conn.execute("PRAGMA trusted_schema=OFF")
+        if conn.execute("SELECT 1 FROM users WHERE typeof(id) != 'integer' OR username IS NULL LIMIT 1").fetchone():
+            raise StagingError("database_damaged", "The backup's accounts are not ones LibreFolio writes: it cannot be restored")
+        # The mark exists where A's migration ran (the copy is at the head here); a column that is not there marks nobody.
+        has_mark = "is_instance_owner" in {row[1] for row in conn.execute("PRAGMA table_info(users)")}
+        mark = "is_instance_owner" if has_mark else "0"
+        rows = conn.execute(
+            f"SELECT id, username, email, is_superuser, is_active, {mark} FROM users WHERE (is_superuser = 1 AND is_active = 1) OR (? IS NOT NULL AND lower(email) = lower(?)) ORDER BY username",  # noqa: S608 — `mark` is one of two constants
+            (owner_email, owner_email),
+        ).fetchall()
+        conflicts = []
+        # Two accounts on one address or one name: a copy without the unique indexes, where a sign-in may reach another
+        # account than the one the owner gets.
+        if conn.execute("SELECT 1 FROM users WHERE email IS NOT NULL GROUP BY lower(email) HAVING COUNT(*) > 1 LIMIT 1").fetchone():
+            conflicts.append("duplicate_email")
+        if conn.execute("SELECT 1 FROM users GROUP BY lower(username) HAVING COUNT(*) > 1 LIMIT 1").fetchone():
+            conflicts.append("duplicate_username")
+        # The owner's address as another account's name: no account may take it as its email (A-21a), so the owner's
+        # assignment would be refused after the swap.
+        if owner_email is not None and conn.execute("SELECT 1 FROM users WHERE lower(username) = lower(?) AND (email IS NULL OR lower(email) != lower(?)) LIMIT 1", (owner_email, owner_email)).fetchone():
+            conflicts.append("address_is_a_username")
+        # An inactive account with a setup link not yet used (the initial administrator waiting for it): the start's
+        # admin bootstrap runs before the restore is committed and gives it the owner's address, unless an account holds it
+        # already, so the owner's assignment would then be refused (EMAIL_TAKEN).
+        if (
+            owner_email is not None
+            and conn.execute(
+                "SELECT 1 FROM users u WHERE u.is_active = 0 AND EXISTS (SELECT 1 FROM account_tokens t WHERE t.user_id = u.id AND t.purpose = 'admin_setup')" " AND NOT EXISTS (SELECT 1 FROM account_tokens t WHERE t.user_id = u.id AND t.purpose = 'admin_setup' AND t.consumed_at IS NOT NULL) LIMIT 1"
+            ).fetchone()
+            and not conn.execute("SELECT 1 FROM users WHERE lower(email) = lower(?) LIMIT 1", (owner_email,)).fetchone()
+        ):
+            conflicts.append("pending_administrator")
+    candidates = []
+    for user_id, username, email, is_superuser, is_active, marked in rows:
+        if type(user_id) is not int or username is None:
+            raise StagingError("database_damaged", "The backup's accounts are not ones LibreFolio writes: it cannot be restored")
+        candidates.append(OwnerCandidate(user_id=user_id, username=str(username), email=None if email is None else str(email), is_superuser=bool(is_superuser), is_active=bool(is_active), is_instance_owner=marked == 1))
+    return owner_email, candidates, sorted(set(conflicts))
+
+
+def _owner_marks(database: Path) -> int:
+    """How many accounts of the copy are marked as the instance's owner (B5-1l), active or not, of any role; 0 where the
+    column does not exist. Read-only; nothing read but a count."""
+    with closing(sqlite3.connect(f"{database.resolve().as_uri()}?mode=ro", uri=True)) as conn:
+        conn.execute("PRAGMA trusted_schema=OFF")
+        if "is_instance_owner" not in {row[1] for row in conn.execute("PRAGMA table_info(users)")}:
+            return 0
+        return int(conn.execute("SELECT COUNT(*) FROM users WHERE is_instance_owner = 1").fetchone()[0])
+
+
+def _users_check(database: Path, owner_email: str | None, candidates: list[OwnerCandidate]) -> tuple[int, int | None, int]:
+    """The accounts against ``LIBREFOLIO_MAX_USERS`` (B5-1k2), for information: how many will be active after the restore,
+    the limit, and how many are over it. The inactive account that holds the owner's address counts when the instance is
+    managed: the restore activates it (A5-2). A limit that is not valid is no limit here, as for workstream A's «over the
+    limit» state: a typo never closes the instance. Read-only; no name or address read."""
+    from backend.app.config.accounts import max_users  # noqa: PLC0415
+    from backend.app.services.accounts.user_service import same_email  # noqa: PLC0415
+    from backend.app.services.platform.instance_backup.owner import owner_choice_required  # noqa: PLC0415 — owner imports apply, which imports this module
+
+    try:
+        limit = max_users()
+    except ValueError:
+        limit = None
+    with closing(sqlite3.connect(f"{database.resolve().as_uri()}?mode=ro", uri=True)) as conn:
+        conn.execute("PRAGMA trusted_schema=OFF")
+        active = int(conn.execute("SELECT COUNT(*) FROM users WHERE is_active = 1").fetchone()[0])
+    if owner_choice_required() and owner_email is not None and any(not candidate.is_active and candidate.email is not None and same_email(candidate.email, owner_email) for candidate in candidates):
+        active += 1
+    return active, limit, max(0, active - limit) if limit is not None else 0
+
+
+def _with_users_warning(warnings: list[str], over: int) -> list[str]:
+    """``warnings`` with ``users_over_limit`` before ``credentials_from_backup``, which stays last, when some accounts are over."""
+    if over <= 0:
+        return warnings
+    return [*(code for code in warnings if code != "credentials_from_backup"), "users_over_limit", "credentials_from_backup"]
 
 
 def _holds_non_iso_currencies(database: Path, stage_id: str) -> bool:

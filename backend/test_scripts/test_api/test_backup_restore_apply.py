@@ -120,6 +120,23 @@ Under test: ``backend/app/api/v1/backup/restore.py`` (the routes), ``restore_job
     "message": …, "reason": …}``, the message (j)'s, ``reason`` the ``RestoreStateUnreadableError.reason``: ``io`` (the
     file system refuses the state file, EIO), ``not_a_file`` (a folder, a link), ``invalid`` (not JSON, ``format`` 2).
     The OpenAPI description of the status's 500 names ``reason``. Written RED: the detail has no ``reason`` yet.
+(o) Lot B5-1 (interface ``B-b51-interface.md`` §2, §3; written RED before it): the owner's choice. In ``managed``
+    (``LIBREFOLIO_PROFILE``), ``GET /stage/{id}`` of a finished check carries ``report.owner_choice``: ``required``
+    true, ``owner_email`` the configured one (``LIBREFOLIO_ADMIN_EMAIL`` as ``admin_bootstrap_config()`` reads it),
+    ``forced_user_id`` the candidate holding it (A–Z case aside) or null, and the ``candidates`` (``user_id``,
+    ``username``, ``email``, ``owner_email``, ``administrator``) by username; ``selfhosted``: ``owner_choice`` null. The
+    confirmation takes an optional body ``RestoreConfirmRequest`` ``{owner_user_id}`` (``extra="forbid"``: an unknown
+    key is 422): in ``managed`` the forced candidate is 202, its id in ``restore.json``; no body 409
+    ``owner_choice_required``; another administrator while one holds the owner's email 409 ``owner_choice_invalid``;
+    the owner's email unset 409 ``owner_email_not_set``; ``selfhosted`` with an owner id 400
+    ``owner_choice_not_applicable``; nothing written by a refusal. ``RestoreStatus`` is unchanged (in
+    ``STATUS_FIELDS``, so (a), (c) and the OpenAPI schema of (g) are red on it too), never the id nor the reset path.
+    OpenAPI documents the new 409 and 400 codes and the body. The archive of (o) is a backup whose accounts have
+    addresses of ``example.com`` (an address of ``.test`` is no email the configuration accepts), built once for the
+    module by ``test_backup_staging.backup_with_accounts``. Security addendum §7.2 (written RED before it): the owner's
+    address changed since the check (not only its case) is 409 ``restore_stage_outdated``; a check that found an owner
+    conflict (``BOB_USER`` beside ``bob_user``) is 409 ``owner_conflict`` whatever the choice; the 409's description
+    names ``owner_conflict``.
 
 Pure, as ``test_backup_restore.py`` (lot B2b), whose fixtures and helpers are imported: an app of each test holds
 ``backup_router``, ``get_current_user`` overridden; the data directory of the routes under ``tmp_path`` (``apply``'s
@@ -194,6 +211,8 @@ RESTART = f"{api.API}/restart"
 #: The administrator who confirms: ``confirmed_by`` must be its username, not a constant.
 B3_ADMIN = SimpleNamespace(id=7, username="b3-admin", is_superuser=True)
 #: Every field of ``RestoreStatus`` (``extra="forbid"``): an answer has these and no other.
+#: Lot B5-1 (o) keeps ``RestoreStatus`` as it was: what became of the owner's account is told by ``dev.py backup pending``
+#: on the server only (workstream H's panel status is built from this model, closed, so a field here would reach it).
 STATUS_FIELDS = {"state", "stage_id", "confirmed_at", "confirmed_by", "confirmed_via", "backup_created_at", "backup_app_version", "action", "finished_at", "reason", "waiting", "upload_limit_mb"}
 ACTIVE = ["pending", "applying", "applied", "rolling_back"]
 TERMINAL = ["committed", "rolled_back"]
@@ -2546,3 +2565,436 @@ def test_openapi_names_the_reason_of_a_state_that_cannot_be_read():
     described = document["paths"].get(STATUS, {}).get("get", {}).get("responses", {}).get("500", {}).get("description", "")
     assert "restore_state_unreadable" in described and "reason" in described, f"the status's 500 names restore_state_unreadable and reason: {described!r}"
     print_success("the status's 500 names reason")
+
+
+# =============================================================================
+# (o) Lot B5-1: the owner's choice
+# =============================================================================
+
+OWNER_EMAIL_VARIABLE = "LIBREFOLIO_ADMIN_EMAIL"
+OWNER_SIDE_VARIABLES = ("LIBREFOLIO_ADMIN_USERNAME", "LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN", "LIBREFOLIO_ADMIN_BOOTSTRAP_TOKEN_FILE")
+#: The candidates' fields as the administrators' view shows them.
+#: B5-1: is_superuser and is_active as the backup holds them, the labels of A's OwnerChoiceModal (its signature, 23/10).
+VIEW_CANDIDATE_FIELDS = {"user_id", "username", "email", "owner_email", "administrator", "is_superuser", "is_active"}
+#: The value of a stale ``owner_reset_path`` key in a state file of an older LibreFolio: never in an answer (R13: the
+#: state no longer has the field, the owner's link is in the instance log only).
+STALE_RESET_PATH = "/reset-password#token=b51-api-secret-never-in-an-answer-0123456789"
+
+
+@dataclass(frozen=True)
+class OwnerArchive:
+    """A backup at the head whose accounts are ``test_backup_staging.OWNER_ACCOUNTS`` (``owen_user`` holding the owner's
+    email in another case), and each account as the copy describes it, by username."""
+
+    archive: Any
+    accounts: dict[str, dict[str, Any]]
+
+
+@pytest.fixture(scope="module")
+def owner_archive(databases, tmp_path_factory) -> OwnerArchive:
+    root = tmp_path_factory.mktemp("b51-owner-archive")
+    with pytest.MonkeyPatch.context() as patch:
+        cases.configure(patch, root / "configured-data-dir")
+        try:
+            archive, described = cases.backup_with_accounts(root, databases, cases.OWNER_ACCOUNTS)
+        finally:
+            cases.get_git_version.cache_clear()
+    assert not (root / "configured-data-dir").exists(), "precondition: the archive was built without writing in the configured data directory"
+    return OwnerArchive(archive=archive, accounts=described)
+
+
+def owner_setting(monkeypatch: pytest.MonkeyPatch, profile: str, owner_email: str | None) -> None:
+    """The profile and the owner's email of this process, the other F02 variables unset."""
+    monkeypatch.setenv(api.PROFILE_VARIABLE, profile)
+    for name in OWNER_SIDE_VARIABLES:
+        monkeypatch.delenv(name, raising=False)
+    if owner_email is None:
+        monkeypatch.delenv(OWNER_EMAIL_VARIABLE, raising=False)
+    else:
+        monkeypatch.setenv(OWNER_EMAIL_VARIABLE, owner_email)
+
+
+def configured_owner_email() -> str:
+    """The owner's email as the configuration reads it (``admin_bootstrap_config()``)."""
+    from backend.app.config.accounts import admin_bootstrap_config  # noqa: PLC0415
+
+    config = admin_bootstrap_config()
+    assert config is not None, "precondition: the owner's email is set"
+    return config.email
+
+
+async def confirm_with(stage_id: str, body: Any) -> httpx.Response:
+    """The confirmation with a JSON body (``body`` as given)."""
+    return await api.call("POST", CONFIRM.format(stage_id=stage_id), user=B3_ADMIN, json=body)
+
+
+def owner_on_disk(root: Path) -> tuple[Any, Any]:
+    """The owner's keys of ``restore.json``: id, outcome. The file never holds an ``owner_reset_path`` key."""
+    record = json.loads(state_path(root).read_text(encoding="utf-8"))
+    assert "owner_reset_path" not in record, f"no owner_reset_path key in the state: {sorted(record)}"
+    return tuple(record.get(name, "<missing>") for name in ("owner_user_id", "owner_outcome"))
+
+
+@pytest.mark.asyncio
+async def test_the_managed_report_offers_the_owner_s_choice(instance, owner_archive, monkeypatch):
+    """(o) B5-1: ``managed``, the owner's email set: the report of a finished check carries ``owner_choice``, the owner's
+    email holder forced, the candidates by username with their emails, whether each holds the owner's email and is an
+    active administrator."""
+    print_section("(o) B5-1 the owner's choice in the report")
+    owner_setting(monkeypatch, "managed", cases.OWNER_EMAIL)
+    stage_id = await checked(owner_archive.archive)
+    response = await api.poll(stage_id, user=B3_ADMIN)
+    assert response.status_code == 200, api.shown(response)
+    report = response.json()["report"]
+    assert "owner_choice" in report, f"[new] B5-1: the report has no owner_choice yet: {sorted(report)}"
+    choice = report["owner_choice"]
+    accounts = owner_archive.accounts
+    expected_candidates = [
+        {"user_id": accounts[name]["user_id"], "username": name, "email": accounts[name]["email"], "owner_email": name == "owen_user", "administrator": name != "owen_user", "is_superuser": accounts[name]["is_superuser"], "is_active": accounts[name]["is_active"]}
+        for name in cases.CANDIDATES_WITH_OWNER
+    ]
+    expected = {"required": True, "owner_email": configured_owner_email(), "forced_user_id": accounts["owen_user"]["user_id"], "candidates": expected_candidates}
+    assert choice == expected, f"the owner's choice: {choice}"
+    print_success(f"forced {choice['forced_user_id']}, {len(choice['candidates'])} candidates")
+
+
+@pytest.mark.asyncio
+async def test_a_managed_report_without_an_owner_s_email_holder_forces_nobody(instance, head_archive, monkeypatch):
+    """(o) B5-1: ``managed``, nobody in the backup holding the owner's email: ``forced_user_id`` null, the candidates the
+    active administrators, none holding the owner's email."""
+    owner_setting(monkeypatch, "managed", "nobody.b51@example.com")
+    stage_id = await checked(head_archive)
+    report = (await api.poll(stage_id, user=B3_ADMIN)).json()["report"]
+    assert "owner_choice" in report, f"[new] B5-1: the report has no owner_choice yet: {sorted(report)}"
+    choice = report["owner_choice"]
+    assert (choice["required"], choice["forced_user_id"]) == (True, None), f"required, nobody forced: {choice}"
+    assert [(candidate["username"], candidate["owner_email"], candidate["administrator"]) for candidate in choice["candidates"]] == [(name, False, True) for name in cases.ADMINISTRATORS], f"the active administrators: {choice['candidates']}"
+    assert all(set(candidate) == VIEW_CANDIDATE_FIELDS for candidate in choice["candidates"]), f"each candidate has exactly {sorted(VIEW_CANDIDATE_FIELDS)}: {choice['candidates']}"
+    print_success("nobody forced")
+
+
+@pytest.mark.asyncio
+async def test_a_self_hosted_report_offers_no_owner_s_choice(instance, owner_archive, monkeypatch):
+    """(o) B5-1: ``selfhosted``, the owner's email set or not: ``owner_choice`` null."""
+    owner_setting(monkeypatch, "selfhosted", cases.OWNER_EMAIL)
+    stage_id = await checked(owner_archive.archive)
+    report = (await api.poll(stage_id, user=B3_ADMIN)).json()["report"]
+    assert "owner_choice" in report and report["owner_choice"] is None, f"self-hosted: owner_choice null: {report.get('owner_choice', '<missing>')}"
+    print_success("selfhosted: null")
+
+
+@pytest.mark.asyncio
+async def test_a_managed_confirmation_naming_the_forced_owner_is_accepted_and_recorded(instance, owner_archive, monkeypatch):
+    """(o) B5-1: ``managed``: the body ``{owner_user_id}`` naming the holder of the owner's email: 202, a
+    ``RestoreStatus``, nothing of the owner; ``restore.json`` records the id."""
+    print_section("(o) B5-1 the owner's choice confirmed")
+    owner_setting(monkeypatch, "managed", cases.OWNER_EMAIL)
+    stage_id = await checked(owner_archive.archive)
+    owen = owner_archive.accounts["owen_user"]["user_id"]
+    response = await confirm_with(stage_id, {"owner_user_id": owen})
+    assert response.status_code == 202, f"the forced owner is confirmed: {api.shown(response)}"
+    body = response.json()
+    assert set(body) == STATUS_FIELDS, f"a RestoreStatus, nothing of the owner: {body}"
+    assert owner_on_disk(instance.root) == (owen, None), f"restore.json records the owner: {owner_on_disk(instance.root)}"
+    print_success(f"202, owner {owen}")
+
+
+#: (the owner's email at the confirmation, the body, the code). ``None`` body: no body at all.
+MANAGED_REFUSALS = [
+    pytest.param(cases.OWNER_EMAIL, None, "owner_choice_required", id="no-body"),
+    pytest.param(cases.OWNER_EMAIL, {"owner_user_id": None}, "owner_choice_required", id="owner-null"),
+    pytest.param(cases.OWNER_EMAIL, {"owner_user_id": "ada_admin"}, "owner_choice_invalid", id="another-administrator-while-forced"),
+    pytest.param(cases.OWNER_EMAIL, {"owner_user_id": 999_999}, "owner_choice_invalid", id="not-a-candidate"),
+    pytest.param(None, {"owner_user_id": "ada_admin"}, "owner_email_not_set", id="owner-email-unset"),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("owner_email", "body", "code"), MANAGED_REFUSALS)
+async def test_a_managed_confirmation_without_a_valid_owner_choice_is_409_and_writes_nothing(instance, owner_archive, monkeypatch, owner_email, body, code):
+    """(o) B5-1: ``managed``: no choice, a choice the candidates do not allow, the owner's email unset (at the
+    confirmation): 409 with its code; no state written, the copy and its check as they were."""
+    owner_setting(monkeypatch, "managed", cases.OWNER_EMAIL)
+    stage_id = await checked(owner_archive.archive)
+    owner_setting(monkeypatch, "managed", owner_email)
+    if isinstance(body, dict) and isinstance(body.get("owner_user_id"), str):
+        body = {"owner_user_id": owner_archive.accounts[body["owner_user_id"]]["user_id"]}
+    copy_before = api.tree(stage_dir(instance.root, stage_id))
+    response = await (confirm(stage_id) if body is None else confirm_with(stage_id, body))
+    assert api.code(response) == (409, code), f"409 {code}: {api.shown(response)}"
+    assert not os.path.lexists(state_path(instance.root)), "nothing confirmed: no state written"
+    assert api.tree(stage_dir(instance.root, stage_id)) == copy_before and check_state_path(instance.root, stage_id).is_file(), "the copy and its check as they were"
+    status = (await restore_status()).json()
+    assert status["state"] == "none", f"no restore waits: {status}"
+    print_success(f"409 {code}, nothing written")
+
+
+@pytest.mark.asyncio
+async def test_a_self_hosted_confirmation_naming_an_owner_is_400_and_writes_nothing(instance, owner_archive, monkeypatch):
+    """(o) B5-1: ``selfhosted``: an owner id in the body is 400 ``owner_choice_not_applicable``, nothing written; the
+    same confirmation without it is 202, no owner recorded (a guard)."""
+    owner_setting(monkeypatch, "selfhosted", cases.OWNER_EMAIL)
+    stage_id = await checked(owner_archive.archive)
+    refused = await confirm_with(stage_id, {"owner_user_id": owner_archive.accounts["ada_admin"]["user_id"]})
+    assert api.code(refused) == (400, "owner_choice_not_applicable"), f"400 owner_choice_not_applicable: {api.shown(refused)}"
+    assert not os.path.lexists(state_path(instance.root)), "nothing confirmed: no state written"
+    accepted = await confirm(stage_id)
+    assert accepted.status_code == 202, f"without the owner, confirmed: {api.shown(accepted)}"
+    assert owner_on_disk(instance.root) == (None, None), f"no owner recorded: {owner_on_disk(instance.root)}"
+    print_success("selfhosted with an owner: 400; without: 202")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("profile", ["managed", "selfhosted"])
+async def test_a_confirmation_body_with_an_unknown_key_is_422(instance, owner_archive, monkeypatch, profile):
+    """(o) B5-1: ``RestoreConfirmRequest`` forbids any other key: 422, nothing written."""
+    owner_setting(monkeypatch, profile, cases.OWNER_EMAIL)
+    stage_id = await checked(owner_archive.archive)
+    owen = owner_archive.accounts["owen_user"]["user_id"]
+    response = await confirm_with(stage_id, {"owner_user_id": owen, "owner_email": "attacker.b51@example.com"})
+    assert response.status_code == 422, f"{profile}: an unknown key is 422: {api.shown(response)}"
+    assert not os.path.lexists(state_path(instance.root)), "nothing confirmed: no state written"
+    print_success(f"{profile}: 422")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("outcome", ["sent", "link_only", "error:EMAIL_TAKEN", None])
+async def test_the_status_says_the_owner_s_outcome_never_the_id_nor_the_path(instance, outcome):
+    """(o) B5-1: ``GET /status`` of a committed restore says nothing of the owner's account: neither its outcome (told on the
+    server by ``dev.py backup pending``), nor ``owner_user_id``, nor a reset path. The state file is written with a stale
+    ``owner_reset_path`` key (an older LibreFolio): it is ignored, the status is a 200 without it (R13)."""
+    root = instance.root
+    write_state(root, "committed", api.UNKNOWN_ID)
+    path = state_path(root)
+    record = json.loads(path.read_text(encoding="utf-8"))
+    path.write_text(json.dumps({**record, "confirmed_via": "admin", "owner_user_id": 42, "owner_outcome": outcome, "owner_reset_path": STALE_RESET_PATH}), encoding="utf-8")
+    response = await restore_status()
+    assert response.status_code == 200, api.shown(response)
+    body = response.json()
+    assert set(body) == STATUS_FIELDS, f"nothing of the owner with outcome {outcome!r}: {body}"
+    assert "owner_user_id" not in body and "owner_reset_path" not in body, f"never the id nor the path: {sorted(body)}"
+    assert "b51-api-secret" not in response.text and "reset-password" not in response.text, f"the reset path never in the answer: {response.text}"
+    print_success(f"owner_outcome {outcome!r}")
+
+
+def test_openapi_documents_the_owner_s_choice():
+    """(o) B5-1: the confirmation documents its body (``RestoreConfirmRequest``, optional, ``owner_user_id`` its only
+    property), its 409s ``owner_choice_required``, ``owner_choice_invalid``, ``owner_email_not_set`` and its 400
+    ``owner_choice_not_applicable``; ``RestoreStageReport`` has ``owner_choice``; ``RestoreStatus`` nothing of the owner."""
+    document = api.restore_app().openapi()
+    operation = document["paths"][CONFIRM]["post"]
+    responses = operation["responses"]
+    missing = {status: [name for name in names if name not in responses.get(status, {}).get("description", "")] for status, names in (("409", ["owner_choice_required", "owner_choice_invalid", "owner_email_not_set"]), ("400", ["owner_choice_not_applicable"]))}
+    assert missing == {"409": [], "400": []}, f"the confirmation documents the owner's refusals: missing {missing}"
+    body = operation.get("requestBody", {})
+    assert not body.get("required", False), f"the body is optional: {body}"
+    schemas = document["components"]["schemas"]
+    assert "RestoreConfirmRequest" in schemas and set(schemas["RestoreConfirmRequest"].get("properties", {})) == {"owner_user_id"}, f"RestoreConfirmRequest {{owner_user_id}}: {schemas.get('RestoreConfirmRequest')}"
+    assert schemas["RestoreConfirmRequest"].get("additionalProperties") is False, "RestoreConfirmRequest forbids other keys"
+    assert "owner_choice" in schemas["RestoreStageReport"]["properties"], f"RestoreStageReport has owner_choice: {sorted(schemas['RestoreStageReport']['properties'])}"
+    assert "owner_outcome" not in schemas["RestoreStatus"]["properties"], "RestoreStatus says nothing of the owner (H's panel status is built from it)"
+    print_success("OpenAPI: body, 409s, 400, owner_choice")
+
+
+# -----------------------------------------------------------------------------
+# (o) Lot B5-1, security addendum §7.2 at the route
+# -----------------------------------------------------------------------------
+
+#: A backup whose two accounts differ only by the case of their usernames: ``duplicate_username`` (§7.1).
+CONFLICTED_ACCOUNTS = (*cases.OWNER_ACCOUNTS, ("BOB_USER", "bob2.b51@example.com", 1, 0))
+
+
+@pytest.fixture(scope="module")
+def conflicted_archive(databases, tmp_path_factory) -> OwnerArchive:
+    """``owner_archive`` with one more account, ``BOB_USER``, beside ``bob_user``."""
+    root = tmp_path_factory.mktemp("b51-conflicted-archive")
+    with pytest.MonkeyPatch.context() as patch:
+        cases.configure(patch, root / "configured-data-dir")
+        try:
+            archive, described = cases.backup_with_accounts(root, databases, CONFLICTED_ACCOUNTS)
+        finally:
+            cases.get_git_version.cache_clear()
+    assert not (root / "configured-data-dir").exists(), "precondition: the archive was built without writing in the configured data directory"
+    return OwnerArchive(archive=archive, accounts=described)
+
+
+@pytest.mark.asyncio
+async def test_a_managed_confirmation_after_the_owner_s_address_changed_is_409_outdated(instance, owner_archive, monkeypatch):
+    """(o) B5-1 §7.2: the archive checked with the owner's address, the address changed before the confirmation: 409
+    ``restore_stage_outdated`` for the forced choice of the check; nothing written."""
+    print_section("(o) B5-1 §7.2 the owner's address changed since the check")
+    owner_setting(monkeypatch, "managed", cases.OWNER_EMAIL)
+    stage_id = await checked(owner_archive.archive)
+    owner_setting(monkeypatch, "managed", "someone.else.b51@example.com")
+    copy_before = api.tree(stage_dir(instance.root, stage_id))
+    response = await confirm_with(stage_id, {"owner_user_id": owner_archive.accounts["owen_user"]["user_id"]})
+    assert api.code(response) == (409, "restore_stage_outdated"), f"409 restore_stage_outdated: {api.shown(response)}"
+    assert not os.path.lexists(state_path(instance.root)), "nothing confirmed: no state written"
+    assert api.tree(stage_dir(instance.root, stage_id)) == copy_before, "the copy as it was"
+    print_success("409 restore_stage_outdated")
+
+
+@pytest.mark.asyncio
+async def test_a_managed_confirmation_after_a_case_only_change_of_the_owner_s_address_is_accepted(instance, owner_archive, monkeypatch):
+    """(o) B5-1 §7.2: the same address in another A–Z case is the same: 202, the owner recorded (a guard)."""
+    owner_setting(monkeypatch, "managed", cases.OWNER_EMAIL)
+    stage_id = await checked(owner_archive.archive)
+    owner_setting(monkeypatch, "managed", cases.OWNER_EMAIL.swapcase())
+    owen = owner_archive.accounts["owen_user"]["user_id"]
+    response = await confirm_with(stage_id, {"owner_user_id": owen})
+    assert response.status_code == 202, f"a case-only change: confirmed: {api.shown(response)}"
+    assert owner_on_disk(instance.root) == (owen, None), f"restore.json records the owner: {owner_on_disk(instance.root)}"
+    print_success("case only: 202")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("chosen", ["owen_user", "ada_admin", None], ids=["the-forced-user", "an-administrator", "no-body"])
+async def test_a_managed_confirmation_of_a_copy_with_owner_conflicts_is_409_owner_conflict(instance, conflicted_archive, monkeypatch, chosen):
+    """(o) B5-1 §7.2: a check that found a conflict (two usernames equal case aside): 409 ``owner_conflict`` whatever
+    the choice; nothing written."""
+    print_section("(o) B5-1 §7.2 owner_conflict")
+    owner_setting(monkeypatch, "managed", cases.OWNER_EMAIL)
+    stage_id = await checked(conflicted_archive.archive)
+    copy_before = api.tree(stage_dir(instance.root, stage_id))
+    response = await (confirm(stage_id) if chosen is None else confirm_with(stage_id, {"owner_user_id": conflicted_archive.accounts[chosen]["user_id"]}))
+    assert api.code(response) == (409, "owner_conflict"), f"{chosen}: 409 owner_conflict: {api.shown(response)}"
+    assert not os.path.lexists(state_path(instance.root)), "nothing confirmed: no state written"
+    assert api.tree(stage_dir(instance.root, stage_id)) == copy_before, "the copy as it was"
+    print_success(f"{chosen}: 409 owner_conflict")
+
+
+def test_openapi_documents_the_owner_conflict():
+    """(o) B5-1 §7.2: the confirmation's 409 names ``owner_conflict``."""
+    described = api.restore_app().openapi()["paths"][CONFIRM]["post"]["responses"].get("409", {}).get("description", "")
+    assert "owner_conflict" in described.replace("owner_conflicts", ""), f"the 409 names owner_conflict: {described!r}"
+    print_success("OpenAPI: owner_conflict")
+
+
+# -----------------------------------------------------------------------------
+# (o) Lot B5-1g: a pending administrator in the backup, and a backup with no active administrator
+# -----------------------------------------------------------------------------
+#
+# Admin-bootstrap runs before ``restore-commit`` at the first start: an inactive account with an admin-setup link nobody
+# used takes the owner's address unless some account holds it, and A's assignment then fails with EMAIL_TAKEN for good.
+# So the check names it (``pending_administrator``, in the owner's conflicts) and the confirmation is refused
+# ``owner_conflict``. And a backup with no ACTIVE administrator is not restorable at all (blocker ``no_administrator``):
+# the confirmation is refused ``restore_not_restorable`` on a managed instance whatever owner it names.
+
+ADA_ACCOUNT = ("ada_admin", "ada.b51@example.com", 1, 1)
+PENDING_ACCOUNT = ("pend_admin", "pend.b51@example.com", 0, 1)
+HOLDER_ACCOUNT = ("owen_user", cases.OWNER_EMAIL_STORED, 1, 0)
+SETUP_LINK = [("pend_admin", "admin_setup", False)]
+
+
+def built_archives(root: Path, databases: Any, recipes: dict[str, dict[str, Any]]) -> dict[str, OwnerArchive]:
+    """One archive per recipe, ``cases.crafted_backup``'s arguments, built without writing in the configured data
+    directory; each with its accounts by username as a candidate would describe them (ids 1, 2, … in the order given)."""
+    built: dict[str, OwnerArchive] = {}
+    for name, recipe in recipes.items():
+        with pytest.MonkeyPatch.context() as patch:
+            cases.configure(patch, root / f"configured-{name}")
+            try:
+                archive = cases.crafted_backup(root / name, databases, **recipe)
+            finally:
+                cases.get_git_version.cache_clear()
+        assert not (root / f"configured-{name}").exists(), "precondition: the archive was built without writing in the configured data directory"
+        built[name] = OwnerArchive(archive=archive, accounts={account[0]: {"user_id": number} for number, account in enumerate(recipe["accounts"], start=1)})
+    return built
+
+
+@pytest.fixture(scope="module")
+def pending_archives(databases, tmp_path_factory) -> dict[str, OwnerArchive]:
+    root = tmp_path_factory.mktemp("b51g-pending-archives")
+    return built_archives(
+        root,
+        databases,
+        {
+            "alone": {"accounts": (ADA_ACCOUNT, PENDING_ACCOUNT), "tokens": SETUP_LINK},
+            "address-held": {"accounts": (ADA_ACCOUNT, PENDING_ACCOUNT, HOLDER_ACCOUNT), "tokens": SETUP_LINK},
+        },
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("chosen", ["ada_admin", None], ids=["a-valid-choice", "no-body"])
+async def test_a_managed_confirmation_of_a_copy_with_a_pending_administrator_is_409_owner_conflict(instance, pending_archives, monkeypatch, chosen):
+    """(o) B5-1g: a backup holding an administrator that waits for its setup (inactive, an admin-setup link unused) while no
+    account holds the owner's address: the check ends restorable, and the confirmation is 409 ``owner_conflict``
+    whatever the choice; nothing written. Red before B5-1g: the check found no conflict and the confirmation was 202."""
+    print_section("(o) B5-1g pending administrator: 409 owner_conflict")
+    owner_setting(monkeypatch, "managed", cases.OWNER_EMAIL)
+    archive = pending_archives["alone"]
+    stage_id = await checked(archive.archive)
+    copy_before = api.tree(stage_dir(instance.root, stage_id))
+    response = await (confirm(stage_id) if chosen is None else confirm_with(stage_id, {"owner_user_id": archive.accounts[chosen]["user_id"]}))
+    assert api.code(response) == (409, "owner_conflict"), f"{chosen}: 409 owner_conflict: {api.shown(response)}"
+    assert not os.path.lexists(state_path(instance.root)), "nothing confirmed: no state written"
+    assert api.tree(stage_dir(instance.root, stage_id)) == copy_before, "the copy as it was"
+    print_success(f"{chosen}: 409 owner_conflict")
+
+
+@pytest.mark.asyncio
+async def test_a_pending_administrator_does_not_refuse_the_confirmation_when_another_account_holds_the_owner_s_address(instance, pending_archives, monkeypatch):
+    """(o) B5-1g, the guard: the same pending administrator, but another account of the backup holds the owner's address:
+    no conflict, the forced choice is 202 and recorded. Green before B5-1g, and it must stay so."""
+    owner_setting(monkeypatch, "managed", cases.OWNER_EMAIL)
+    archive = pending_archives["address-held"]
+    stage_id = await checked(archive.archive)
+    owen = archive.accounts["owen_user"]["user_id"]
+    response = await confirm_with(stage_id, {"owner_user_id": owen})
+    assert response.status_code == 202, f"another account holds the address: confirmed: {api.shown(response)}"
+    assert owner_on_disk(instance.root) == (owen, None), f"restore.json records the owner: {owner_on_disk(instance.root)}"
+    print_success("another holder: 202")
+
+
+#: (the accounts of the backup, the holder of the owner's address among them or None): none is an active administrator.
+NO_ADMINISTRATOR_RECIPES = {
+    "nobody-holds-the-address": {"accounts": (("bob_user", "bob.b51@example.com", 1, 0), ("olga_former_admin", "olga.b51@example.com", 0, 1))},
+    "the-only-account-is-a-plain-user-holding-the-address": {"accounts": (HOLDER_ACCOUNT,)},
+    "the-only-account-is-a-disabled-administrator-holding-the-address": {"accounts": (("owen_off_admin", cases.OWNER_EMAIL_STORED, 0, 1),)},
+    "a-plain-holder-and-a-disabled-administrator": {"accounts": (HOLDER_ACCOUNT, ("olga_former_admin", "olga.b51@example.com", 0, 1))},
+}
+#: The username that holds the owner's address in each recipe; ``None`` where nobody does.
+NO_ADMINISTRATOR_HOLDERS = {
+    "nobody-holds-the-address": None,
+    "the-only-account-is-a-plain-user-holding-the-address": "owen_user",
+    "the-only-account-is-a-disabled-administrator-holding-the-address": "owen_off_admin",
+    "a-plain-holder-and-a-disabled-administrator": "owen_user",
+}
+
+
+@pytest.fixture(scope="module")
+def no_administrator_archives(databases, tmp_path_factory) -> dict[str, OwnerArchive]:
+    return built_archives(tmp_path_factory.mktemp("b51g-no-administrator-archives"), databases, NO_ADMINISTRATOR_RECIPES)
+
+
+#: (the recipe, who the confirmation names): "the-holder" only where somebody holds the owner's address.
+NO_ADMINISTRATOR_CASES = [pytest.param(recipe, naming, id=f"{recipe}--{naming}") for recipe in NO_ADMINISTRATOR_RECIPES for naming in ("no-body", "the-holder", "an-account-of-the-backup", "an-id-that-is-no-account") if not (naming == "the-holder" and NO_ADMINISTRATOR_HOLDERS[recipe] is None)]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("recipe", "naming"), NO_ADMINISTRATOR_CASES)
+async def test_a_managed_confirmation_of_a_backup_with_no_active_administrator_is_409_not_restorable(instance, no_administrator_archives, monkeypatch, recipe, naming):
+    """(o) B5-1g: a backup with no ACTIVE administrator cannot be restored on a ``managed`` instance: the check ends with
+    the blocker ``no_administrator`` (not restorable, no administrators), and the confirmation is 409
+    ``restore_not_restorable`` — whatever owner it names, none, the holder of the owner's address, another account of the
+    backup or an id that is no account, and even when the only account of the backup holds the owner's address
+    without being an active administrator. The refusal names the blocker's code; nothing written, the copy as it was.
+    Pins: the blocker is checked before the owner."""
+    print_section(f"(o) B5-1g no active administrator: {recipe} / {naming}")
+    owner_setting(monkeypatch, "managed", cases.OWNER_EMAIL)
+    archive = no_administrator_archives[recipe]
+    state = await api.ended(archive.archive.path.read_bytes())
+    report = state["report"]
+    assert (state["status"], report["restorable"], report["blockers"], report["administrators"]) == ("done", False, ["no_administrator"], []), f"precondition: the check blocks the archive: {state['status']}, {report['restorable']}, {report['blockers']}, {report['administrators']}"
+    stage_id = state["stage_id"]
+    holder = NO_ADMINISTRATOR_HOLDERS[recipe]
+    ids = {"no-body": None, "the-holder": archive.accounts.get(holder, {}).get("user_id"), "an-account-of-the-backup": next(iter(archive.accounts.values()))["user_id"], "an-id-that-is-no-account": 999_999}
+    copy_before = api.tree(stage_dir(instance.root, stage_id))
+    owner_id = ids[naming]
+    response = await (confirm(stage_id) if naming == "no-body" else confirm_with(stage_id, {"owner_user_id": owner_id}))
+    assert api.code(response) == (409, "restore_not_restorable"), f"409 restore_not_restorable: {api.shown(response)}"
+    assert "no_administrator" in response.json()["detail"]["message"], f"the refusal names the blocker: {response.json()['detail']}"
+    assert not os.path.lexists(state_path(instance.root)), "nothing confirmed: no state written"
+    assert api.tree(stage_dir(instance.root, stage_id)) == copy_before, "the copy as it was"
+    print_success(f"{recipe} / {naming}: 409 restore_not_restorable")

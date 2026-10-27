@@ -23,6 +23,7 @@
     import AllocationPanel from '$lib/features/dashboard/AllocationPanel.svelte';
     import GrowthChart from '$lib/features/dashboard/GrowthChart.svelte';
     import PositionsPanel from '$lib/features/dashboard/PositionsPanel.svelte';
+    import {createPositionsSeriesController, type PositionsSeriesScope} from '$lib/features/dashboard/positionsSeriesController';
     import RiskLevelsPanel from '$lib/features/risk/levels/RiskLevelsPanel.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
@@ -44,6 +45,8 @@
         type PortfolioReport,
         type AllocationHistoryDimensions,
         type PortfolioHistoryPoint,
+        type PortfolioRange,
+        type PortfolioMwrrLinePoint,
         type PortfolioSummary,
         type PositionsContribution,
         type PortfolioIncomeHistorySeries,
@@ -87,6 +90,9 @@
 
     let portfolioSummary: PortfolioSummary | null = null;
     let portfolioHistory: PortfolioHistoryPoint[] = [];
+    /** The days the report's step series cover, and the history's MWRR as true points (D-P4). */
+    let reportRange: PortfolioRange | null = null;
+    let mwrrLine: PortfolioMwrrLinePoint[] = [];
     let incomeHistory: PortfolioIncomeHistorySeries | undefined = undefined;
     let costHistory: PortfolioCostHistorySeries | undefined = undefined;
     let depositHistory: PortfolioDepositHistorySeries | undefined = undefined;
@@ -103,15 +109,22 @@
     // once, without end, and the candles never again.
     const candlesRetry = createLazyReportRetry();
     const contributionRetry = createLazyReportRetry();
+    // The per-position return chart (Y5-2): the lines of the positions ticked, asked for this broker, period and currency,
+    // and asked again when one of them or `refreshVersion` moves.
+    const positionsSeriesCtl = createPositionsSeriesController();
     onDestroy(() => {
         candlesRetry.dispose();
         contributionRetry.dispose();
+        positionsSeriesCtl.dispose();
     });
     // The candles' loading flag must be a signal, as on the Dashboard: the loader's guard reads it inside GrowthChart's
     // effect, which has to wake when a request ends — to ask for the scope on screen once an old scope's answer was
     // dropped, or to wait for the retry after a failure (Y-24). The legacy compiler makes a `let` a signal only when a
     // reactive statement or the template reads it.
     $: void pnlCandlesLoading;
+    let positionsSeriesScope: PositionsSeriesScope;
+    $: positionsSeriesScope = {brokerIds: [data.brokerId], start: dateFrom || undefined, end: dateTo || undefined, currency: targetCurrency || baseCurrency, ready: broker !== null, version: refreshVersion};
+    $: positionsSeriesCtl.sync(positionsSeriesScope);
 
     /** The scope of a lazy report section: this broker, the period and the currency. An answer of another scope is not applied, and a failure counts for its own scope only (Y-24). */
     function reportScope(): string {
@@ -346,6 +359,8 @@
     function applyOverview(report: PortfolioReport | null) {
         portfolioSummary = (report?.summary as PortfolioSummary | null | undefined) ?? null;
         portfolioHistory = (report?.history as PortfolioHistoryPoint[] | null | undefined) ?? [];
+        reportRange = (report?.range as PortfolioRange | null | undefined) ?? null;
+        mwrrLine = (report?.mwrr_line as PortfolioMwrrLinePoint[] | null | undefined) ?? [];
         // Eager per plan §4.1's sparse-payload caller policy ("Dashboard/Broker overview true").
         incomeHistory = (report?.income_history as PortfolioIncomeHistorySeries | null | undefined) ?? undefined;
         costHistory = (report?.cost_history as PortfolioCostHistorySeries | null | undefined) ?? undefined;
@@ -709,6 +724,8 @@
                     <div class="lg:col-span-3">
                         <GrowthChart
                             history={portfolioHistory}
+                            range={reportRange}
+                            {mwrrLine}
                             {pnlCandles}
                             onRequestPnlCandles={() => void pageBusy.join('broker-pnl-candles', loadPnlCandles)}
                             {incomeHistory}
@@ -742,6 +759,11 @@
                     onRequestContribution={() => void pageBusy.join('broker-contribution', loadContribution)}
                     onAnalyze={openAssetPanel}
                     analyzedAssetId={activeAssetId}
+                    {portfolioHistory}
+                    positionsSeries={$positionsSeriesCtl.response}
+                    positionsSeriesLoading={$positionsSeriesCtl.loading}
+                    positionsSeriesFailed={$positionsSeriesCtl.failed}
+                    onRequestPositionsSeries={(keys) => positionsSeriesCtl.request(keys, positionsSeriesScope)}
                 />
                 <LotsAnalysisPanel open={activeAssetId != null} assetId={activeAssetId} brokerIds={[broker.id]} brokers={panelBrokers} currency={activeAsset?.currency ?? baseCurrency} assetName={activeAsset?.display_name ?? null} onClose={closeAssetPanel} {refreshVersion} />
             </div>

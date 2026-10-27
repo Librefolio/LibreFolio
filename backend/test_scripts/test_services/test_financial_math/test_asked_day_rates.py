@@ -42,7 +42,7 @@ What is tested (pure: no database, no server, no network; steps built by hand):
    destination are ignored, steps and windows (7); the view is a ``Mapping``, never a ``MutableMapping`` (8).
 2. ``TestStepSeries`` — ``step_series()`` is each pair's ``(days, values)``, the anchor step of every window included.
 3. ``TestTheNativeCashFromTheView`` — ``NativeCash(unit_rates=view)`` against ``NativeCash(unit_rates=<the dense dict of
-   the same asked days>)`` on a named book (movements before ``EARLIEST_RANGE_START`` on single-day windows, a stored rate
+   the same asked days>)`` on a named book (movements before 1900-01-01 on single-day windows, a stored rate
    strictly between two windows, a currency whose first rate comes after its first movement, a repeated rate, a zero
    movement, a report-currency movement) and on 30 seeded random books: same ``value_at`` on every day (or the same
    ``ValueError``), same ``rate_change_days`` (whole and on windows), same ``exchange_results``, ``converted``,
@@ -99,13 +99,13 @@ import pytest
 from backend.app.services.financial_math import fx_rates as fx_rates_module
 from backend.app.services.financial_math.native_cash import CashMovement, NativeCash
 from backend.app.services.fx.conversion import UnitRateSteps
-from backend.app.utils.datetime_utils import EARLIEST_RANGE_START
 from backend.test_scripts.test_utils import print_section, print_success
 
 Pair = tuple[str, str]
 Window = tuple[date, date]
 
-FLOOR = EARLIEST_RANGE_START
+#: 1 January 1900, the date of the oracle's floor: a literal of this book (the constant ``EARLIEST_RANGE_START`` is gone, D-P4 L5).
+FLOOR_1900 = date(1900, 1, 1)
 REPORT = "EUR"
 SEEDS = range(30)
 
@@ -153,7 +153,7 @@ def _dense_today(steps: Mapping[Pair, Any], windows: Mapping[Pair, Sequence[Wind
 
 def _unit_requests_today(foreign: Sequence[CashMovement], rates_until: date | None) -> list[tuple[str, date]]:
     """THE ORACLE of the native cash's asked days: HEAD 2f4ab1962's ``native_cash._unit_requests``, verbatim (the
-    floor read as ``EARLIEST_RANGE_START``)."""
+    floor read as the literal ``FLOOR_1900``: the constant ``EARLIEST_RANGE_START`` is gone, D-P4 L5)."""
     first: dict[str, date] = {}
     last: dict[str, date] = {}
     early: dict[str, set[date]] = {}
@@ -163,12 +163,12 @@ def _unit_requests_today(foreign: Sequence[CashMovement], rates_until: date | No
             first[currency] = movement.date
         if currency not in last or movement.date > last[currency]:
             last[currency] = movement.date
-        if movement.date < EARLIEST_RANGE_START:
+        if movement.date < FLOOR_1900:
             early.setdefault(currency, set()).add(movement.date)
     requests: list[tuple[str, date]] = []
     for currency in sorted(first):
         requests.extend((currency, day) for day in sorted(early.get(currency, ())))
-        day = max(first[currency], EARLIEST_RANGE_START)
+        day = max(first[currency], FLOOR_1900)
         end = last[currency] if rates_until is None else rates_until
         while day <= end:
             requests.append((currency, day))
@@ -185,8 +185,8 @@ def _native_windows(foreign: Sequence[CashMovement], rates_until: date | None) -
         by_currency.setdefault(movement.currency, []).append(movement)
     windows: dict[Pair, list[Window]] = {}
     for currency, rows in sorted(by_currency.items()):
-        asked = sorted({(row.date, row.date) for row in rows if row.date < FLOOR})
-        start = max(min(row.date for row in rows), FLOOR)
+        asked = sorted({(row.date, row.date) for row in rows if row.date < FLOOR_1900})
+        start = max(min(row.date for row in rows), FLOOR_1900)
         end = max(row.date for row in rows) if rates_until is None else rates_until
         if start <= end:
             asked.append((start, end))
@@ -440,7 +440,7 @@ class TestTheFixtures:
         currency, and a currency whose first rate comes after its first movement; its windows are the days of today."""
         print_section("P3 fixtures: the named native-cash book")
         book = _named_book()
-        assert any(movement.date < FLOOR for movement in book.movements if movement.currency != REPORT and movement.amount != 0), "no foreign movement before the floor"
+        assert any(movement.date < FLOOR_1900 for movement in book.movements if movement.currency != REPORT and movement.amount != 0), "no foreign movement before the floor"
         between = [(currency, day) for (currency, _report), pair_windows in book.windows.items() for (_first_a, last_a), (first_b, _last_b) in zip(sorted(pair_windows), sorted(pair_windows)[1:], strict=False) for day in book.rows[currency] if last_a < day < first_b]
         assert between, "no stored rate strictly between two windows of one currency"
         late = [currency for currency, rows in book.rows.items() if min(rows) > min(movement.date for movement in book.movements if movement.currency == currency)]
@@ -650,7 +650,7 @@ class TestStepSeries:
         view = _view(book.steps, book.windows, fixed_destination=REPORT)
         problems = _series_problems(view, book.steps)
         assert not problems, f"step_series() is not the steps of the named book:{_show(problems)}"
-        anchors = {("USD", date(1899, 11, 20)), ("USD", date(1899, 12, 25)), ("USD", FLOOR), ("CHF", date(1900, 1, 5))}
+        anchors = {("USD", date(1899, 11, 20)), ("USD", date(1899, 12, 25)), ("USD", FLOOR_1900), ("CHF", date(1900, 1, 5))}
         series = view.step_series()
         missing = sorted(anchor for anchor in anchors if anchor[1] not in tuple(series.get(anchor[0], ((), ()))[0]))
         assert not missing, f"step_series() drops the anchor steps {missing}"
@@ -788,7 +788,7 @@ def _reading_windows(frame: list[date]) -> list[tuple[date | None, date]]:
     """The ``(date_from, date_to)`` the parity reads ``rate_change_days`` and ``exchange_results`` on: the whole frame,
     open and closed, the days around the floor, and windows of a few lengths inside the frame."""
     last_index = len(frame) - 1
-    windows: list[tuple[date | None, date]] = [(None, frame[-1]), (frame[0], frame[-1]), (FLOOR - timedelta(days=1), FLOOR + timedelta(days=40))]
+    windows: list[tuple[date | None, date]] = [(None, frame[-1]), (frame[0], frame[-1]), (FLOOR_1900 - timedelta(days=1), FLOOR_1900 + timedelta(days=40))]
     windows += [(frame[min(index, last_index)], frame[min(index + step, last_index)]) for index, step in ((5, 17), (30, 9), (60, 45), (len(frame) // 2, 3))]
     return windows
 
@@ -817,7 +817,7 @@ def _native_cash_problems(book: _Book, label: str) -> list[str]:
     problems += _window_reading_problems(from_view, from_dict, frame, label)
     if [_bits(value) for value in from_view.converted] != [_bits(value) for value in from_dict.converted]:
         problems.append(f"{label} converted: view {from_view.converted}, dict {from_dict.converted}")
-    problems += [f"{label} balances({as_of}) differ" for as_of in (None, frame[0], FLOOR, frame[len(frame) // 2], frame[-1]) if _outcome(lambda as_of=as_of: from_view.balances(as_of)) != _outcome(lambda as_of=as_of: from_dict.balances(as_of))]
+    problems += [f"{label} balances({as_of}) differ" for as_of in (None, frame[0], FLOOR_1900, frame[len(frame) // 2], frame[-1]) if _outcome(lambda as_of=as_of: from_view.balances(as_of)) != _outcome(lambda as_of=as_of: from_dict.balances(as_of))]
     if from_view.foreign_cash_broker_ids != from_dict.foreign_cash_broker_ids:
         problems.append(f"{label} foreign_cash_broker_ids: view {sorted(from_view.foreign_cash_broker_ids)}, dict {sorted(from_dict.foreign_cash_broker_ids)}")
     return problems

@@ -231,7 +231,7 @@ class DeltaBrokerProvider(BRIMProvider):
             with self._open_text(file_path) as f:
                 reader = csv.DictReader(f, delimiter=detected_delim)
                 if not reader.fieldnames or not all(col in reader.fieldnames for col in REQUIRED_COLUMNS):
-                    raise BRIMParseError("Unexpected Delta header")
+                    raise BRIMParseError("Unexpected Delta header", details={"code": "header_mismatch"})
 
                 row_num = 1
                 for row in reader:
@@ -375,11 +375,11 @@ class DeltaBrokerProvider(BRIMProvider):
                         warnings.append(f"Row {row_num}: unknown way '{way}', skipping")
 
         except FileNotFoundError:
-            raise BRIMParseError(f"File not found: {file_path}") from None
+            raise BRIMParseError(f"File not found: {file_path}", details={"code": "file_not_found", "context": {"file": file_path.name}}) from None
         except BRIMParseError:
             raise
         except Exception as e:
-            raise BRIMParseError(f"Error parsing file: {e}") from e
+            raise BRIMParseError(f"Error parsing file: {e}", details={"code": "file_unreadable", "context": {"error": str(e)}}) from e
 
         if crypto_trade_adjustments:
             warnings.append(f"Summary: modeled {crypto_trade_adjustments} crypto-to-crypto BUY/SELL rows as ADJUSTMENT")

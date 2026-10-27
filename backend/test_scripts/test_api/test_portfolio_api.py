@@ -3,7 +3,7 @@
 import json
 import uuid
 from collections import defaultdict
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
@@ -35,6 +35,7 @@ from backend.app.services.pac_allocator.source.portfolio_allocation_source impor
 )
 from backend.test_scripts.test_db_config import get_test_db_path, verify_test_database
 from backend.test_scripts.test_server_helper import _TestingServerManager
+from backend.test_scripts.test_services._lots_steps import expand_steps
 from backend.test_scripts.test_utils import print_section, print_success
 
 settings = get_settings()
@@ -583,16 +584,19 @@ class TestPortfolioHistoryEndpoint:
 
 @pytest.mark.asyncio
 class TestPortfolioReportEndpoint:
-    async def test_report_response_has_exactly_twelve_sections(self, test_server):
-        """The report wire shape is exactly these twelve sections.
+    async def test_report_response_has_exactly_fourteen_sections(self, test_server):
+        """The report wire shape is exactly these fourteen sections: the twelve of before, plus ``range`` and
+        ``mwrr_line`` of the series in steps (D-P4, cure B).
 
         A section removed from the report must leave the wire, not linger as a null
         key. The API serializes every unrequested section as null, so the default
         request is enough to see the complete set of top-level keys.
         """
-        print_section("Portfolio Report: exactly twelve sections")
+        print_section("Portfolio Report: exactly fourteen sections")
         expected_sections = {
             "metadata",
+            "range",
+            "mwrr_line",
             "summary",
             "history",
             "allocation_history",
@@ -1288,9 +1292,13 @@ class TestLotsAnalysisEndpoint:
             assert resp.status_code == 200, resp.text
             data = resp.json()
 
+            # J5-5 (steps, contract MF-P4b §1.3): a row holds from `date` to `through`, and the answer carries the `range` the rows lie in.
+            # 10 Jan (ROI 0, no TWRR yet) and 11 Jan (ROI and TWRR 0.1) are different figures, so they are two steps of one day each.
+            assert data["range"] == {"start": "2026-01-10", "end": "2026-01-11"}
             assert data["performance_history"] is not None
             assert len(data["performance_history"]) == 2
-            assert set(data["performance_history"][0]) == {"date", "roi", "twrr"}
+            assert set(data["performance_history"][0]) == {"date", "through", "roi", "twrr"}
+            assert [(row["date"], row["through"]) for row in data["performance_history"]] == [("2026-01-10", "2026-01-10"), ("2026-01-11", "2026-01-11")]
             assert Decimal(data["performance_history"][0]["roi"]) == Decimal("0")
             assert data["performance_history"][0]["twrr"] is None
             assert Decimal(data["performance_history"][1]["roi"]) == Decimal("0.1")
@@ -1350,7 +1358,11 @@ class TestLotsAnalysisEndpoint:
                 data = resp.json()
 
                 assert isinstance(data["market_price_history"], list), data
-                line = [(point["date"], Decimal(point["market_price"]), point["currency"], point["estimated"]) for point in data["market_price_history"]]
+                # J5-5 (steps): the line is two steps, the BUY's mark held 10-14 Jan and the SELL's 15-20 Jan; the days a client reads
+                # from them (`expand_steps`: each step repeated from `date` to `through`) are the ones the test has always named.
+                assert data["range"] == {"start": "2026-01-10", "end": "2026-01-20"}
+                assert [(step["date"], step["through"], Decimal(step["market_price"])) for step in data["market_price_history"]] == [("2026-01-10", "2026-01-14", Decimal("100")), ("2026-01-15", "2026-01-20", Decimal("110"))]
+                line = [(point["date"], Decimal(point["market_price"]), point["currency"], point["estimated"]) for point in expand_steps(data["market_price_history"], None)]
                 expected = [(f"2026-01-{day:02d}", Decimal("100"), "EUR", True) for day in range(10, 15)] + [(f"2026-01-{day:02d}", Decimal("110"), "EUR", True) for day in range(15, 21)]
                 assert line == expected
                 assert (data["price_history"], data["lots"]) == (None, None)
@@ -1408,11 +1420,7 @@ class _WacApiSession:
         self.broker_id = broker_id
         self.accessible = accessible
         self.access_role = access_role
-        self.accessible_ids = (
-            list(accessible_ids)
-            if accessible_ids is not None
-            else ([broker_id] if accessible else [])
-        )
+        self.accessible_ids = list(accessible_ids) if accessible_ids is not None else ([broker_id] if accessible else [])
         self.assets = list(assets)
         self.statements = []
 
@@ -1424,6 +1432,92 @@ class _WacApiSession:
         if len(self.statements) == 2:
             return _ApiRows(self.assets)
         raise AssertionError("WAC endpoint performed an unexpected read")
+
+
+# ---------------------------------------------------------------------------
+# TestPositionsSeriesEndpoint — POST /portfolio/positions-series (J5-1, #48)
+# ---------------------------------------------------------------------------
+
+
+async def post_positions_series(client: httpx.AsyncClient, body: dict) -> httpx.Response:
+    return await client.post(f"{API_BASE}/portfolio/positions-series", json=body, timeout=TIMEOUT)
+
+
+@pytest.mark.asyncio
+class TestPositionsSeriesEndpoint:
+    async def test_unauthenticated(self, test_server):
+        """POST /portfolio/positions-series without auth -> 401."""
+        print_section("Positions series: unauthenticated")
+        async with httpx.AsyncClient() as client:
+            resp = await post_positions_series(client, {"positions": [{"asset_id": 1}]})
+        assert resp.status_code == 401
+
+    async def test_the_positions_asked_for_are_required_and_capped(self, test_server):
+        print_section("Positions series: validation")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            user_id = await get_current_user_id(client)
+            try:
+                empty = await post_positions_series(client, {"positions": []})
+                too_many = await post_positions_series(client, {"positions": [{"asset_id": index} for index in range(1, 52)]})
+                unknown_field = await post_positions_series(client, {"positions": [{"asset_id": 1}], "include_everything": True})
+            finally:
+                await delete_current_test_user(client, user_id)
+        assert (empty.status_code, too_many.status_code, unknown_field.status_code) == (422, 422, 422)
+
+    async def test_the_series_of_a_position_ends_where_the_reports_contribution_row_does(self, test_server):
+        """One position bought and sold out: the series is steps (``date``..``through``) contiguous from the window's first day to the day it
+        closed, the response carries the window as ``range``, and the last step's pnl is the report's ``period_pnl`` for the same position
+        and window. It owns and deletes its user, broker, asset, three transactions and
+        one price, broker first (as the report's date-aware test does)."""
+        print_section("Positions series: end to end")
+        async with httpx.AsyncClient() as client:
+            await create_test_user(client)
+            user_id = await get_current_user_id(client)
+            broker_id: int | None = None
+            asset_id: int | None = None
+            try:
+                broker_id = await create_broker(client)
+                asset_id = await create_asset(client)
+                await commit_batch(
+                    client,
+                    creates=[
+                        {"broker_id": broker_id, "type": "DEPOSIT", "date": "2025-01-01", "quantity": "0", "cash": {"code": "EUR", "amount": "1000"}},
+                        {"broker_id": broker_id, "asset_id": asset_id, "type": "BUY", "date": "2025-01-02", "quantity": "10", "cash": {"code": "EUR", "amount": "-1000"}},
+                        {"broker_id": broker_id, "asset_id": asset_id, "type": "SELL", "date": "2025-02-15", "quantity": "-10", "cash": {"code": "EUR", "amount": "1200"}},
+                    ],
+                )
+                price_resp = await client.post(f"{API_BASE}/assets/prices", json=[{"asset_id": asset_id, "prices": [{"date": "2025-01-31", "close": "110.00", "currency": "EUR"}]}], timeout=TIMEOUT)
+                assert price_resp.status_code == 200, price_resp.text
+                window = {"start": "2025-01-31", "end": "2025-02-28"}
+                series_resp = await post_positions_series(client, {"date_range": window, "positions": [{"asset_id": asset_id, "broker_id": broker_id}]})
+                report_resp = await post_portfolio_report(client, {"include_summary": False, "include_history": False, "include_allocation_history": False, "include_positions_contribution": True, "date_range": window})
+            finally:
+                if broker_id is not None:
+                    cleanup_broker = await client.delete(f"{API_BASE}/brokers", params={"ids": [broker_id], "force": True}, timeout=TIMEOUT)
+                    assert cleanup_broker.status_code == 200, cleanup_broker.text
+                if asset_id is not None:
+                    cleanup_asset = await client.delete(f"{API_BASE}/assets", params={"asset_ids": [asset_id]}, timeout=TIMEOUT)
+                    assert cleanup_asset.status_code == 200, cleanup_asset.text
+                await delete_current_test_user(client, user_id)
+
+        assert series_resp.status_code == 200, series_resp.text
+        body = series_resp.json()
+        assert (body["currency"], body["date_from"], body["date_to"]) == ("EUR", "2025-01-31", "2025-02-28")
+        assert body["range"] == {"start": "2025-01-31", "end": "2025-02-28"}
+        [series] = body["series"]
+        assert (series["first_date"], series["last_date"], series["closed_on"], series["held_at_start"], series["held_at_end"]) == ("2025-01-31", "2025-02-15", "2025-02-15", True, False)
+        points = series["points"]
+        # Contiguous steps from first_date to last_date (16 calendar days) with fewer steps than days; the last one is the day it closed.
+        assert (points[0]["date"], points[-1]["through"]) == ("2025-01-31", "2025-02-15")
+        for before, after in zip(points, points[1:], strict=False):
+            assert date.fromisoformat(after["date"]) == date.fromisoformat(before["through"]) + timedelta(days=1)
+        assert all(date.fromisoformat(point["date"]) <= date.fromisoformat(point["through"]) for point in points)
+        assert sum((date.fromisoformat(point["through"]) - date.fromisoformat(point["date"])).days + 1 for point in points) == 16
+        assert len(points) < 16
+        [row] = report_resp.json()["positions_contribution"]["positions"]
+        assert Decimal(points[-1]["pnl"]) == Decimal(row["period_pnl"])
+        assert (points[-1]["quantity"], points[-1]["market_value"]) == ("0", "0")
 
 
 def _focused_portfolio_app(
@@ -1445,9 +1539,7 @@ def _focused_portfolio_app(
     app.dependency_overrides[get_session_generator] = override_session
     app.dependency_overrides[get_current_user] = override_current_user
     if current_user is not None:
-        app.dependency_overrides[
-            portfolio_api._get_allocation_source_user
-        ] = override_current_user
+        app.dependency_overrides[portfolio_api._get_allocation_source_user] = override_current_user
     return app
 
 
@@ -1525,10 +1617,7 @@ async def test_allocation_source_post_returns_typed_uncached_response(
     builder.assert_awaited_once()
     assert builder.await_args.args == (session,)
     assert builder.await_args.kwargs["user_id"] == 41
-    assert (
-        builder.await_args.kwargs["request"].model_dump(mode="json")
-        == _planner_source_payload()
-    )
+    assert builder.await_args.kwargs["request"].model_dump(mode="json") == _planner_source_payload()
 
 
 @pytest.mark.asyncio
@@ -1594,9 +1683,7 @@ async def test_allocation_source_maps_focused_domain_errors(
 async def test_allocation_source_anonymous_is_401_before_service(
     monkeypatch,
 ):
-    builder = AsyncMock(
-        side_effect=AssertionError("Anonymous request reached source service")
-    )
+    builder = AsyncMock(side_effect=AssertionError("Anonymous request reached source service"))
     monkeypatch.setattr(
         portfolio_api,
         "build_portfolio_planner_source",
@@ -1625,9 +1712,7 @@ async def test_allocation_source_anonymous_is_401_before_service(
 async def test_allocation_source_superuser_has_no_implicit_broker_bypass(
     monkeypatch,
 ):
-    builder = AsyncMock(
-        side_effect=PortfolioPlannerSourceAccessError("forbidden")
-    )
+    builder = AsyncMock(side_effect=PortfolioPlannerSourceAccessError("forbidden"))
     monkeypatch.setattr(
         portfolio_api,
         "build_portfolio_planner_source",
@@ -1648,9 +1733,7 @@ async def test_allocation_source_superuser_has_no_implicit_broker_bypass(
         )
 
     assert response.status_code == 403
-    assert response.json()["detail"]["code"] == (
-        "portfolio_planner_source_broker_forbidden"
-    )
+    assert response.json()["detail"]["code"] == ("portfolio_planner_source_broker_forbidden")
     assert response.headers.get("cache-control") == "no-store"
     assert builder.await_args.kwargs["user_id"] == 91
 
@@ -1894,10 +1977,13 @@ async def test_legacy_wac_response_remains_byte_and_semantically_compatible(
 
     assert response.status_code == 200
     assert response.json() == expected
-    assert response.content == json.dumps(
-        expected,
-        separators=(",", ":"),
-    ).encode()
+    assert (
+        response.content
+        == json.dumps(
+            expected,
+            separators=(",", ":"),
+        ).encode()
+    )
     compute.assert_awaited_once_with(
         session=session,
         broker_id=broker_id,
@@ -2274,31 +2360,32 @@ class TestIssue32PurchaseCostInReportCurrency:
 
 
 # ---------------------------------------------------------------------------
-# MF-SEC8-2a — transactions dated before 1900 in the report's data quality
+# MF-PAV-L1 — transactions dated before 1900: no data-quality warning, the history starts on the first row
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-class TestTransactionsBeforeFloorDataQuality:
-    """POST /portfolio/report warns once about the scope's transactions dated before 1 January 1900 (MF-SEC8-2a).
+class TestRowsBefore1900StartTheHistory:
+    """POST /portfolio/report on a scope with transactions dated before 1 January 1900 (MF-PAV-L1; MF-SEC8-2a before it).
 
-    The engine replays such a row on its own date but emits no state before ``EARLIEST_RANGE_START`` (1900-01-01), so the
-    histories start there; ``data_quality`` says so with one WARNING ``TRANSACTIONS_BEFORE_FLOOR`` — ``count`` and
-    ``message_params`` ``{count, earliest}``, no CTA. Proven on the HTTP pass-through, both ways it is built: with the
-    summary (``get_summary``: ``summary.data_quality``, repeated as the top-level ``data_quality``) and without it
-    (``get_report`` builds the top-level ``data_quality`` itself).
+    The engine replays such a row on its own date and, since L1, starts the history on it: ``range.start`` and the first
+    ``history`` step are the earliest row's day, and ``data_quality`` holds no ``TRANSACTIONS_BEFORE_FLOOR`` warning (the
+    code is gone). Proven on the HTTP pass-through, both ways ``data_quality`` is built: with the summary (``get_summary``:
+    ``summary.data_quality``, repeated as the top-level ``data_quality``) and without it (``get_report`` builds the
+    top-level ``data_quality`` itself).
 
-    The rows before 1900 are seeded with the ORM, in the lane's test database only: since N74 (R13-SEC7-3) the API refuses
-    dates before 1900, so the warning exists for rows written before that rule.
+    The rows before 1900 are seeded with the ORM, in the lane's test database only: the API still refuses dates before
+    1900 (the write floor ``transaction_date_bounds``, until its own lot), so such rows exist only for books written
+    before that rule.
 
-    One new user, two new brokers, reported in EUR (the rows' currency: no rate is asked) on 1900 alone (the engine runs
-    from the floor to the range's end). ``floor``: a DEPOSIT on 1900-01-01 through the API, then two DEPOSITs seeded on
-    1899-12-15 and 1899-03-01 (the earliest written last). ``control``: only the API DEPOSIT on 1900-01-01 — the floor's
-    own day, not before it — and no such issue. Cleanup: the seeded rows by id with the ORM, then both brokers (force:
-    their API rows), then the user.
+    One new user, two new brokers, reported in EUR (the rows' currency: no rate is asked), whole history up to 1900-12-31.
+    ``floor``: a DEPOSIT on 1900-01-01 through the API, then two DEPOSITs seeded on 1899-12-15 and 1899-03-01 (the earliest
+    written last). ``control``: only the API DEPOSIT on 1900-01-01 — its history starts there. Cleanup: the seeded rows by
+    id with the ORM, then both brokers (force: their API rows), then the user.
 
-    Red before 871f75a38: ``IssueCode`` has no ``TRANSACTIONS_BEFORE_FLOOR``, so ``floor``'s three ``data_quality``
-    sections hold no such issue; the barriers and the control are green there too.
+    RED on HEAD 999f1899e: ``floor``'s ``range.start`` and first history step are 1900-01-01 (the engine's floor), not 1899-03-01,
+    and each of its three ``data_quality`` sections holds the ``TRANSACTIONS_BEFORE_FLOOR`` warning. GREEN on HEAD: the control
+    scope (no row before 1900: no warning, history from its first row).
     """
 
     FLOOR_DAY = "1900-01-01"
@@ -2348,50 +2435,54 @@ class TestTransactionsBeforeFloorDataQuality:
             if response.status_code != 200 or not all(row["success"] for row in response.json()["results"]):
                 cleanup_errors.append(f"brokers {broker_ids}: {response.status_code} {response.text}")
 
-    async def _data_quality(self, client: httpx.AsyncClient, broker_id: int) -> dict[str, dict | None]:
-        """The scope's ``data_quality`` sections, keyed as ``WHERE``: one report with the summary, one without."""
-        found: dict[str, dict | None] = {}
+    async def _report(self, client: httpx.AsyncClient, broker_id: int) -> dict[str, object]:
+        """The scope's whole-history report, both ways: the ``data_quality`` sections keyed as ``WHERE`` and the history's first
+        day (``range.start`` and ``history[0].date``), read on the report that has the summary."""
+        found: dict[str, object] = {}
         for include_summary in (True, False):
             response = await post_portfolio_report(
                 client,
                 {
                     "broker_ids": [broker_id],
                     "target_currency": "EUR",
-                    "date_range": {"start": self.FLOOR_DAY, "end": "1900-12-31"},
+                    "date_range": {"end": "1900-12-31"},
                     "include_summary": include_summary,
-                    "include_history": False,
+                    "include_history": True,
                     "include_allocation_history": False,
                 },
             )
             assert response.status_code == 200, response.text
             report = response.json()
-            # Presence barrier: the scope's rows were replayed, from the floor (a scope read empty has no first day).
-            assert report["metadata"]["computed_date_from"] == self.FLOOR_DAY, report["metadata"]
+            assert report["history"], "presence barrier: the scope's rows were replayed, the history has steps"
             if include_summary:
                 found["summary.data_quality"] = report["summary"]["data_quality"]
                 found["data_quality with the summary"] = report["data_quality"]
+                found["range.start"] = report["range"]["start"]
+                found["history[0].date"] = report["history"][0]["date"]
+                found["computed_date_from"] = report["metadata"]["computed_date_from"]
             else:
                 assert report["summary"] is None, "include_summary=False built a summary: the report's own data_quality path is not reached"
                 found["data_quality without the summary"] = report["data_quality"]
         return found
 
     @staticmethod
-    def _floor_issues(quality: dict | None) -> list[dict] | None:
-        """The ``TRANSACTIONS_BEFORE_FLOOR`` issues of a section, reduced to the contract's fields (None: no section)."""
+    def _floor_issues(quality: dict | None) -> list[str] | None:
+        """The ``TRANSACTIONS_BEFORE_FLOOR`` issues of a section, as their codes (None: no section)."""
         if quality is None:
             return None
-        return [{key: issue[key] for key in ("severity", "count", "message_params", "cta_action", "cta_target")} for issue in quality["issues"] if issue["code"] == "TRANSACTIONS_BEFORE_FLOOR"]
+        return [issue["code"] for issue in quality["issues"] if issue["code"] == "TRANSACTIONS_BEFORE_FLOOR"]
 
-    async def test_rows_before_1900_give_one_warning_on_the_summary_and_the_report(self, test_server):
-        """RED before 871f75a38: the floor scope gets one TRANSACTIONS_BEFORE_FLOOR (2 rows, earliest 1899-03-01) in each
-        section; the control scope, from 1900-01-01 on, none."""
-        print_section("Portfolio Report: transactions before 1900 (MF-SEC8-2a)")
-        marker = f"MF-SEC8-2a {uuid.uuid4().hex}"
+    async def test_rows_before_1900_start_the_history_and_raise_no_warning(self, test_server):
+        """RED on HEAD 999f1899e: the floor scope's history starts on 1900-01-01 and each ``data_quality`` section holds one
+        TRANSACTIONS_BEFORE_FLOOR. After L1: ``range.start``, ``history[0].date`` and ``metadata.computed_date_from`` are the
+        earliest row's day (1899-03-01), no section holds the warning; the control scope starts on 1900-01-01 and has none."""
+        print_section("Portfolio Report: transactions before 1900 (MF-PAV-L1)")
+        marker = f"MF-PAV-L1 {uuid.uuid4().hex}"
         cleanup_errors: list[str] = []
         broker_ids: list[int] = []
         seeded_ids: list[int] = []
-        floor_quality: dict[str, dict | None] = {}
-        control_quality: dict[str, dict | None] = {}
+        floor_report: dict[str, object] = {}
+        control_report: dict[str, object] = {}
         async with httpx.AsyncClient() as client:
             await create_test_user(client)
             user_id = await get_current_user_id(client)
@@ -2403,18 +2494,19 @@ class TestTransactionsBeforeFloorDataQuality:
                 await commit_batch(client, creates=[{"broker_id": broker_id, "type": "DEPOSIT", "date": self.FLOOR_DAY, "quantity": "0", "cash": {"code": "EUR", "amount": "1000"}} for broker_id in broker_ids])
                 seeded_ids = await self._seed_before_floor(floor_id, marker)
 
-                floor_quality = await self._data_quality(client, floor_id)
-                control_quality = await self._data_quality(client, control_id)
+                floor_report = await self._report(client, floor_id)
+                control_report = await self._report(client, control_id)
             finally:
                 await self._cleanup(client, seeded_ids, broker_ids, cleanup_errors)
                 await delete_current_test_user(client, user_id)
         assert cleanup_errors == [], f"cleanup left rows behind: {cleanup_errors}"
 
         earliest = min(day for day, _ in self.SEEDED).isoformat()
-        expected = {"severity": "warning", "count": len(self.SEEDED), "message_params": {"count": len(self.SEEDED), "earliest": earliest}, "cta_action": None, "cta_target": None}
-        assert {where: self._floor_issues(quality) for where, quality in floor_quality.items()} == {where: [expected] for where in self.WHERE}
-        assert {where: self._floor_issues(quality) for where, quality in control_quality.items()} == {where: [] for where in self.WHERE}
-        print_success(f"{len(self.SEEDED)} rows before 1900 (earliest {earliest}): one warning in every data_quality section; none from the floor on")
+        for name, report in (("floor", floor_report), ("control", control_report)):
+            assert {where: self._floor_issues(report[where]) for where in self.WHERE} == {where: [] for where in self.WHERE}, f"{name}: no data_quality section holds TRANSACTIONS_BEFORE_FLOOR"
+        assert {key: floor_report[key] for key in ("range.start", "history[0].date", "computed_date_from")} == dict.fromkeys(("range.start", "history[0].date", "computed_date_from"), earliest), "floor: the history starts on the earliest row, before 1900"
+        assert {key: control_report[key] for key in ("range.start", "history[0].date", "computed_date_from")} == dict.fromkeys(("range.start", "history[0].date", "computed_date_from"), self.FLOOR_DAY), "control: the history starts on its first row, 1900-01-01"
+        print_success(f"{len(self.SEEDED)} rows before 1900: history from {earliest}, no TRANSACTIONS_BEFORE_FLOOR in any data_quality section")
 
 
 # ---------------------------------------------------------------------------

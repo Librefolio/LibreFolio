@@ -27,6 +27,7 @@ from backend.app.services.financial_math.returns import cumulative_to_annualized
 from backend.app.services.lots_analysis_service import get_lots_analysis
 from backend.app.services.portfolio_service import PortfolioService
 from backend.app.utils.datetime_utils import utcnow
+from backend.test_scripts.test_services._lots_steps import daily_points
 from backend.test_scripts.test_services._range_bounds import lift_range_bound
 
 
@@ -53,11 +54,13 @@ async def _own_fx_rate(session, *, on: date, base: str, quote: str, rate: Decima
 
 
 def _points_by_date(points):
-    return {point.date: point for point in points}
+    """A history by day (J5-5: its steps repeated over their days — these tests are about the figures of a day, not about
+    how the days are grouped)."""
+    return {point.date: point for point in daily_points(points)}
 
 
 def _points_by_lot_date(points):
-    return {(point.lot_id, point.date): point for point in points}
+    return {(point.lot_id, point.date): point for point in daily_points(points)}
 
 
 def _assert_closed_lot_history_flat(result, lot_id: int, close_date: date, date_to: date) -> None:
@@ -677,7 +680,7 @@ async def test_short_lot_return_history_computes_total_return(session, test_user
     )
 
     assert result.return_history is not None
-    returns = {point.date: point.total_return for point in result.return_history if point.lot_id == sell.id}
+    returns = {point.date: point.total_return for point in daily_points(result.return_history) if point.lot_id == sell.id}
     twelve_places = Decimal("1E-12")
     observed = {day: None if value is None else value.quantize(twelve_places) for day, value in returns.items()}
     assert observed == {
@@ -739,7 +742,7 @@ async def test_performance_history_buy_only_tracks_roi_and_twrr(session, test_us
 
     assert result.performance_history is not None
     points = _points_by_date(result.performance_history)
-    assert [point.date for point in result.performance_history] == [date(2025, 1, 10), date(2025, 1, 11), date(2025, 1, 12)]
+    assert [point.date for point in daily_points(result.performance_history)] == [date(2025, 1, 10), date(2025, 1, 11), date(2025, 1, 12)]
     assert points[date(2025, 1, 10)].roi == Decimal("0")
     assert points[date(2025, 1, 10)].twrr is None
     assert points[date(2025, 1, 11)].roi == Decimal("0.1")
@@ -1306,7 +1309,7 @@ async def test_adjustment_only_asset_is_estimated_at_cost_not_priced_by_its_adju
     lot = result.lots[0]
     assert (lot.value_source, lot.original_cost, lot.open_value, lot.market_pnl) == ("ESTIMATED_AT_COST", Decimal("200"), Decimal("200"), Decimal("0"))
     assert result.value_history
-    off_cost = sorted((point.date, point.open_value) for point in result.value_history if point.open_value != Decimal("200"))
+    off_cost = sorted((point.date, point.open_value) for point in daily_points(result.value_history) if point.open_value != Decimal("200"))
     assert off_cost == [], f"days whose open value is not the 200 EUR cost: {off_cost}"
     assert not result.price_history, f"an adjustment-only asset has no price line, got {result.price_history}"
 
@@ -1906,7 +1909,7 @@ async def test_an_asset_without_a_rate_to_the_target_currency_is_degraded_never_
     lot = result.lots[0]
     assert (lot.opening_date, lot.original_quantity) == (buy_date, Decimal("100"))
     assert result.performance_history is not None
-    assert [point.date for point in result.performance_history] == window
+    assert [point.date for point in daily_points(result.performance_history)] == window
 
     # Reported: the status, the pair with the BUY date, the issue.
     assert result.calculation_status == "DEGRADED"
@@ -1920,10 +1923,10 @@ async def test_an_asset_without_a_rate_to_the_target_currency_is_degraded_never_
     # Never valued in VND as if it were EUR: no figure, no point, no performance.
     assert (lot.open_value, lot.pnl, lot.total_pnl) == (None, None, None)
     assert result.value_history is not None
-    assert [(point.date, point.open_value) for point in result.value_history if point.lot_id == lot.lot_id] == []
+    assert [(point.date, point.open_value) for point in daily_points(result.value_history) if point.lot_id == lot.lot_id] == []
     assert result.price_history is not None
-    assert [(point.date, point.market_price) for point in result.price_history if point.lot_id == lot.lot_id] == []
-    assert [(point.date, point.roi, point.twrr) for point in result.performance_history] == [(day, None, None) for day in window]
+    assert [(point.date, point.market_price) for point in daily_points(result.price_history) if point.lot_id == lot.lot_id] == []
+    assert [(point.date, point.roi, point.twrr) for point in daily_points(result.performance_history)] == [(day, None, None) for day in window]
 
 
 # --------------------------------------------------------------------------- #
@@ -2683,7 +2686,7 @@ def _at_cost_warning(asset: Asset, date_from: date, date_to: date) -> dict:
 def _value_points_of(result, lot_id: int) -> dict[date, tuple[Decimal, Decimal]]:
     """A lot's value history as {date: (open value, P&L)}, the lot found by its id."""
     assert result.value_history is not None
-    return {point.date: (point.open_value, point.pnl) for point in result.value_history if point.lot_id == lot_id}
+    return {point.date: (point.open_value, point.pnl) for point in daily_points(result.value_history) if point.lot_id == lot_id}
 
 
 async def _assert_never_quoted(session, asset: Asset) -> None:

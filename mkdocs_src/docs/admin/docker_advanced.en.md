@@ -62,10 +62,10 @@ In Docker, `.env` reaches the container through `env_file`, and the `environment
 
     The health check only tells Docker that the server answers. To know whether LibreFolio can actually serve requests, point a monitor such as **Uptime Kuma**, an orchestrator or a hosting panel at `GET /api/v1/system/ready`, for example `http://your-server:6040/api/v1/system/ready` (with your `PORT` if you changed it). It needs no sign-in, and the status code is all a monitor needs:
 
-    - **`200`**: ready. The database answers, and its structure matches this version of LibreFolio: `{"status": "ready", "checks": {"database": "ok", "migrations": "ok"}, "mode": "normal"}`.
-    - **`503`**: not ready. `status` is `not_ready`, and `checks` shows what is not `ok`: `database` is `unreachable` when the database does not answer; `migrations` is `mismatch` when the database is at another migration than this version of LibreFolio expects, and `unknown` when it cannot tell, for example while the database is `unreachable`.
+    - **`200`**: ready. The database answers, and its structure matches this version of LibreFolio: `{"status": "ready", "checks": {"database": "ok", "migrations": "ok"}, "database_revision": "…", "mode": "normal", "app_version": "…"}`. `database_revision` is the migration the database is at, and `app_version` is the version of LibreFolio that is running: the same text the public `GET /api/v1/system/info` gives without a sign-in, so a monitor or a hosting panel can check the version after an update with this probe alone.
+    - **`503`**: not ready. `status` is `not_ready`, and `checks` shows what is not `ok`: `database` is `unreachable` when the database does not answer; `migrations` is `behind` when the database is at an older migration that this version knows (a migration was not applied, or failed), `ahead` when it is at a migration this version does not know (the data comes from a newer LibreFolio: use that version or a newer one, see [Never Backwards](backup_moving.md#never-backwards)), and `unknown` when it cannot tell, for example while the database is `unreachable`.
 
-    The answer never includes error details: LibreFolio writes them to its log (`docker compose logs librefolio`) as `Instance not ready`, once each time the state changes. `db current` shows the migration the database is at ([Apply Migrations](cli_tools.md#apply-migrations)).
+    The answer never includes error details or a path: LibreFolio writes them to its log (`docker compose logs librefolio`) as `Instance not ready`, once each time the state changes. `db current` shows the migration the database is at ([Apply Migrations](cli_tools.md#apply-migrations)).
 
 ### 💾 Data Directory: `LibreFolio-data/`
 
@@ -220,7 +220,7 @@ docker compose exec librefolio sh -c 'exec gosu "${LIBREFOLIO_UID:-1000}:${LIBRE
 
 A plain `docker compose exec librefolio python dev.py <cmd>` runs the command as root instead: what it creates in `LibreFolio-data/` belongs to root until the container's next start, when the entrypoint hands the directory back to the image's user.
 
-In the image, `user`, `db`, `info` and `backup` work ([Back Up with Docker](cli_tools.md#backup-docker)). The development commands (`test`, `i18n`, `mkdocs translate` and `mkdocs translate-validate`) are listed too, but they only answer that they are *not available in this installation*: the image ships the application, not the development tree.
+In the image, `user`, `db`, `info` and `backup` work ([Back Up with Docker](cli_backup.md#backup-docker)). The development commands (`test`, `i18n`, `mkdocs translate` and `mkdocs translate-validate`) are listed too, but they only answer that they are *not available in this installation*: the image ships the application, not the development tree.
 
 The test-mode commands do not run in the container either; like `./dev.py mkdocs gallery`, they belong to a development checkout:
 
@@ -278,7 +278,7 @@ The most common changes:
 | (4) | All configuration | Edit `.env` file (copied from `.env.example`) |
 | (5) | Run another image tag | Set `LIBREFOLIO_IMAGE` in `.env`, for example `LIBREFOLIO_IMAGE=ghcr.io/librefolio/librefolio:1.1.0` |
 
-The first account created in the browser automatically becomes the administrator: no command needed. To have LibreFolio create the administrator at its first start instead, from `LIBREFOLIO_ADMIN_EMAIL`, see [The Initial Administrator](configuration.md#initial-admin).
+The first account created in the browser automatically becomes the administrator: no command needed. To have LibreFolio create the administrator at its first start instead, from `LIBREFOLIO_ADMIN_EMAIL`, see [The Initial Administrator](configuration_accounts.md#initial-admin).
 
 ??? example "📄 The repository's `docker-compose.yml`, annotated"
 
@@ -322,9 +322,9 @@ Expose LibreFolio securely through **Tailscale** (recommended, and the simplest 
 - **Tailscale (recommended)**: secure access with automatic HTTPS, without opening router ports or setting up public DNS records. See the detailed **[Tailscale Exposure Guide](service_exposure.md)**.
 - **Classic reverse proxy (Nginx/Traefik)**: useful if you already have a web infrastructure, or want to manage custom SSL/TLS certificates, serve several applications on one server, or add custom security headers and rate limiting.
 
-Once LibreFolio is exposed, [Checking Connection Security](connection_checks.md) shows how to verify that your users connect securely and, [behind a reverse proxy](connection_checks.md#reverse-proxy), that the session cookie is marked `Secure`.
+Once LibreFolio is exposed, [Checking Connection Security](connection_checks.md) shows how to verify that your users connect securely and, [behind a reverse proxy](connection_proxy.md#reverse-proxy), that the session cookie is marked `Secure`.
 
-Behind a classic reverse proxy, also tell LibreFolio which proxy to trust (`FORWARDED_ALLOW_IPS`) or which header holds the visitor's address (`LIBREFOLIO_CLIENT_IP_HEADER`): otherwise LibreFolio sees every visitor with the proxy's address, and warns about it in its log and in its security checks. See [The Visitor's Address](connection_checks.md#client-address).
+Behind a classic reverse proxy, also tell LibreFolio which proxy to trust (`FORWARDED_ALLOW_IPS`) or which header holds the visitor's address (`LIBREFOLIO_CLIENT_IP_HEADER`): otherwise LibreFolio sees every visitor with the proxy's address, and warns about it in its log and in its security checks. See [The Visitor's Address](connection_proxy.md#client-address).
 
 LibreFolio already gzip-compresses its responses (API JSON, the web app's JavaScript and CSS, documentation pages) and sends images and the live asset-search stream as they are: the proxy does not need to compress them again.
 
@@ -354,7 +354,7 @@ sqlite3 ./LibreFolio-data/sqlite/app.db ".backup '/path/to/backups/app.db-$(date
 
 SQLite's `.backup` command uses the online backup API, which is safe against a live WAL database.
 
-`backup create` needs neither a stop nor `sqlite3` on the host: `docker compose exec librefolio python dev.py backup create` puts a consistent copy of the database, the uploaded files, the broker reports and your own stress scenarios in one archive, in `LibreFolio-data/backups/`, while the server keeps running ([Back Up with Docker](cli_tools.md#backup-docker)). A clear archive leaves out `secrets/`, which holds the instance key: back that folder up as [What to Back Up](filesystem.md#what-to-back-up) explains. A [secure archive](backup_restore.md#secure), with `--encrypt`, carries the key LibreFolio generated, encrypted with your password.
+`backup create` needs neither a stop nor `sqlite3` on the host: `docker compose exec librefolio python dev.py backup create` puts a consistent copy of the database, the uploaded files, the broker reports and your own stress scenarios in one archive, in `LibreFolio-data/backups/`, while the server keeps running ([Back Up with Docker](cli_backup.md#backup-docker)). A clear archive leaves out `secrets/`, which holds the instance key: back that folder up as [What to Back Up](filesystem.md#what-to-back-up) explains. A [secure archive](backup_restore.md#secure), with `--encrypt`, carries the key LibreFolio generated, encrypted with your password.
 
 For the full list of what is worth backing up (uploaded files, original broker reports), see the [Filesystem Layout](filesystem.md) page.
 
@@ -368,3 +368,19 @@ Files you may find next to the database:
 All configuration is managed in the `.env` file (copied from `.env.example`); leave the Docker-specific overrides of the `environment:` block as they are. For every variable and its effect, see the **[Configuration Guide](configuration.md)**.
 
 🔐 **Keep users signed in across restarts**: set `JWT_SECRET` in `.env` to a long random string, for example the output of `openssl rand -hex 32`. Without it, LibreFolio generates a new key at every start, so each restart or update of the container signs every user out.
+
+### ✅ 5. Verify the Image You Pull {: #verify-image }
+
+Every image LibreFolio publishes on GHCR (`ghcr.io/librefolio/librefolio`, the full and the light variant) comes with a **build attestation**: a statement, signed by the release pipeline of the project's repository, that this exact image was built there from this code. It is signed without any key of ours to keep or lose (GitHub proves the identity of the run, and Sigstore records it), so anyone can check it.
+
+Take the digest of the image you pulled, then ask GitHub to verify it with the [GitHub CLI](https://cli.github.com/):
+
+```bash
+# The digest of a tag (the line "Digest: sha256:…")
+docker buildx imagetools inspect ghcr.io/librefolio/librefolio:1.3.0
+
+# Verify the attestation of that digest
+gh attestation verify oci://ghcr.io/librefolio/librefolio@sha256:<digest> --owner Librefolio
+```
+
+A verified image prints `✓ Verification succeeded!` with the repository and the workflow that built it. Nothing printed but an error means this digest was not built by LibreFolio's pipeline: do not run it. The attestation covers every tag that points to the same digest (`1.3.0`, `latest`...). Releases published before this check was added carry none.

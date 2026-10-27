@@ -8523,6 +8523,50 @@ poi, in V1 e V3, `assignments|reported_currency|VARCHAR(8)` (in V2 e V4 nessuna 
   - i dati veri del developer. **Consiglio**: prima su una copia di lavoro del suo DB (skill `real-data-copy`), per
     vedere davvero la sua impronta.
 
+#### Procedura manuale: un DB della nightly del treno 10 (005 senza il titolare) riparato (24/10, lotto A5-3)
+
+**Quando.** Una volta sola, per ogni DB stampato `005_release_1_3_0_schema` dalla nightly del treno 10: quella 005
+non aveva `users.is_instance_owner`, il suo indice parziale `ux_users_instance_owner` e lo scopo `email_change` nel CHECK
+di `account_tokens`. La migrazione `006_owner_email_change` è stata fusa nella 005 (decisione del developer, 24/10:
+«ogni release una migrazione»), quindi Alembic vede il DB al head e non esegue niente. Sintomo: il server si avvia ma
+l'account del titolare dà errore (`no such column: users.is_instance_owner`) oppure parte con la 005 vecchia.
+
+**Lo script**: [`repair_005_owner_columns.py`](repair_005_owner_columns.py), accanto a questo file. Solo libreria
+standard, **non** è codice dell'app, si lancia a mano contro il file del DB (percorso passato come argomento).
+
+1. **Fermare il server** (Mac: `./dev.py server` fermato; Docker: `docker compose stop librefolio`).
+2. **Vedere cosa manca, senza cambiare niente:**
+   ```bash
+   python3 LibreFolio_developer_journal/Release_2/Phase_1/01_platform/repair_005_owner_columns.py <db> --check
+   ```
+3. **Riparare:**
+   ```bash
+   python3 LibreFolio_developer_journal/Release_2/Phase_1/01_platform/repair_005_owner_columns.py <db>
+   ```
+4. **Riavviare.** Il titolare lo registra l'avvio (`owner-sync`, dall'indirizzo di `LIBREFOLIO_ADMIN_EMAIL`).
+
+`<db>` è `backend/data/prod/sqlite/app.db` sul Mac (dal checkout principale; **la porta 6040 libera**). Con Docker il file
+è quello della tabella della procedura «011/010 → 005» qui sopra (`/app/backend/data/prod-docker/sqlite/app.db` nel
+contenitore, dati in `./LibreFolio-data` sull'host): lo script va lanciato sul file dell'host a contenitore fermo.
+
+Cosa fa lo script, e solo se manca qualcosa (un DB già giusto non viene toccato e non ne nasce una copia):
+
+- rifiuta un DB non stampato `005_release_1_3_0_schema` e un file che non è un DB LibreFolio: non cambia niente;
+- **copia prima il file** (`<db>.before-owner-fix-<data>`, con l'API di backup di SQLite, WAL compreso);
+- in **una transazione** (`BEGIN IMMEDIATE`): aggiunge la colonna (tutti gli account a 0), crea l'indice, ricostruisce
+  `account_tokens` con il CHECK nuovo (righe e indici conservati; niente lo referenzia);
+- verifica `foreign_key_check` e `integrity_check`, e stampa `OK`. Rilanciarlo non fa nulla.
+
+**Provato** (24/10) su copie di un DB di test costruito dalle migrazioni di `dev_release2` (`94672e66c`, 005 senza
+colonne), con due account e due link: `--check` non cambia niente; la riparazione dà lo stesso schema di un DB nuovo alla
+005 di oggi (tutte le righe di `sqlite_master`, SQL con spazi compressi); righe dei link identiche; secondo lancio «Nothing
+to do» e nessuna seconda copia; un DB stampato 004, un file che non è un DB e un percorso inesistente sono rifiutati.
+**Non provato** sul DB vero del developer: farlo prima su una copia.
+
+La verifica della procedura «011/010 → 005» qui sopra riguarda la 005 di prima: l'impronta `objects 1.3` e le righe
+`users|…` non includono il titolare, e con la 005 di oggi cambiano (il CHECK di `account_tokens` ha `email_change`, `users`
+ha una colonna in più). Per un DB che passa da lì, dopo la procedura serve anche questo script.
+
 ### Lotto «H-57: le migrazioni della 1.3 in una sola `005_release_1_3_0_schema`, variante V4» (19/10, 12:27) — passi
 
 > Via del coordinatore, con le decisioni del developer (19/10, 12:27).
@@ -10566,3 +10610,212 @@ mescolare le righe del runner dei due lotti:
     > `restore-interrupted` 34, `panel-status` 20, `hosting-panel-routes` 40); frontend 5 → verdi (130).
    > **⚠️ Fuori pista**: `"scarfSettings"` messo e poi tolto da `package.json`, dopo il cambio di Q-C: il file coincide col
    > commit.
+
+---
+
+### Ondata 5 (23/10/2026, base `1fd80c481` = `dev_release2`, treni 9 e 10 dentro; sessione H su Sonnet)
+
+Brief: `salvataggi-worktrees-20261021/ondata5/kickoff-H.md`. Lotti: H5-1 (`users_used`/`users_limit`), H5-2 (X-R84),
+DOC-2 (ricerca per lingua), DOC-1 (riordino della guida admin, con le guide Tailscale).
+
+1. ✅ **H5-1 · `users_used` e `users_limit` in `GET /api/v1/panel/status`** (23/10, treno 11a; richiesta formale del cloud, C5).
+   > **Note implementazione**: `PanelStatusResponse` ha due chiavi in più: `users_used` (intero ≥ 0, da
+   > `registration_service.user_usage`: attivi + inviti vivi + inattivi in attesa di verifica o di setup, ognuno una volta)
+   > e `users_limit` (intero ≥ 1 da `LIBREFOLIO_MAX_USERS`, `null` senza limite). Solo conteggi: nessun nome, email o id
+   > (un test semina dei «canarini» e cerca nel corpo grezzo). La risposta ha ora sei chiavi: è un **cambio di contratto**
+   > con il cloud (chiavi nuove, quelle che il cloud ignora se non le conosce). Docs: `hosting_providers.en.md` (esempio, tabella,
+   > pulsante «istanza piena»), `api/index.md`, `security.md`. `api sync` ok.
+   > **Rossi → verdi** (test-author): 36 casi rossi (`panel-status` 28, `await-restore-mode` 8; `restore-interrupted` 3
+   > dalla stessa chiave) → `panel-status` 33, `await-restore-mode` 36, `restore-interrupted` 34, `hosting-panel-routes` 40,
+   > `panel-restore` 136, `system` 122, `registration` 102; `api all` verde; `front check` 0/0.
+   > **⚠️ Fuori pista**: lo schema documenta `users_limit` con `minimum` 1 (è il vincolo vero di `LIBREFOLIO_MAX_USERS`); la
+   > prima versione del test chiedeva `{"type":"integer"}` esatto, adattata. Debito di traduzione: `hosting_providers` it/fr/es
+   > non esistono (solo inglese).
+2. ✅ **H5-2 · X-R84, un chunk che non si carica ricarica la pagina una volta** (23/10, treno 11a).
+   > **Note implementazione**: `frontend/src/lib/utils/core/chunkReload.ts` (`isChunkLoadError`, `reloadOnceForChunkError`,
+   > `installChunkReload`) e `frontend/src/hooks.client.ts` (nuovo: `installChunkReload()` all'avvio + `handleError`).
+   > Riconosce i messaggi di Chrome, Firefox, Safari e di Vite; il guardiano è un tempo in `sessionStorage`
+   > (`lf-chunk-reload-at`, finestra 60 s, scritto prima del `reload`); senza storage non ricarica mai (nessun ciclo).
+   > `app.html` non toccato (anti-FOUC e colori intatti, nessun hash a mano). Niente spec E2E (decisione del coordinatore:
+   > i 70 Vitest coprono il riconoscimento e il guardiano).
+   > **Rossi → verdi** (test-author): 70 casi (import mancante) → 70/70; `check-orphans` pulito; `front check` 0/0.
+3. ✅ **DOC-2 · ricerca per lingua** (23/10, treno 11a; analisi `ondata5/H-DOC2-analisi.md`; strada B approvata dal coordinatore e
+   dal developer).
+   > **Note implementazione**: `mkdocs_src/hooks/search_language_split.py` (hook `on_post_build`, priorità -100) scrive,
+   > accanto a `search/search_index.json`, un indice per lingua `search_index.<en|it|fr|es>.json`: una pagina è della lingua con
+   > cui comincia il suo indirizzo (`it/`, `fr/`, `es/`), il resto è inglese; salta le sotto-build di `mkdocs-static-i18n`
+   > (flag `building` del suo plugin), che erano lavoro e righe di registro inutili. `docs/javascripts/search-language.js`
+   > (senza dipendenze, caricato da `<head>` in `overrides/main.html` PRIMA del bundle di Material) avvolge `fetch`: la
+   > richiesta dell'indice completo diventa quella della lingua della pagina, a meno che la preferenza `lf-docs-search-all-languages`
+   > (localStorage) dica «tutte»; una casella «Cerca anche nelle altre lingue» (4 lingue scritte da me) è il primo figlio
+   > dell'area dei risultati; cambiarla salva la preferenza, tiene la query in sessionStorage e ricarica riaprendo la ricerca;
+   > senza storage vale la lingua della pagina. Una riga in `hooks:` di `mkdocs.yml`; stile in `static/extra.css`.
+   > Misure sulla build: en 3911 voci 5,98 MB · it 1843 1,36 MB · fr 1840 1,44 MB · es 1844 1,38 MB · completo 10,58 MB (prima
+   > ogni visitatore scaricava 10,5 MB). Docs: `developer/docs/translation-pipeline.md`, sezione «Search by Language».
+   > **Rossi → verdi** (test-author): 79 pytest (`utils docs-search-split`; 11 sulla build erano rossi finché il sito non è
+   > stato ricostruito) + 173 Vitest (`core-unit`) tutti verdi; spec Playwright `frontend/e2e/docs/search-language.spec.ts`
+   > (SL-01…SL-07, runner `front-utility docs-search-language`): **7/7 verdi** nello slot (vedi sotto). Nota per chi la rilancia: il
+   > server di prova ricostruisce il sito solo se un `.md` è più nuovo, quindi dopo un cambio dello script o dell'hook va fatto
+   > prima `./dev.py mkdocs build`.
+   > **⚠️ Fuori pista (E2E, il difetto vero)**: il primo giro dell'E2E diede 1 verde e 6 rossi: Material 9.7.7 carica l'indice con
+   > **`XMLHttpRequest`** (il browser lo elenca come `xmlhttprequest`, non `fetch`), quindi il wrapper di `fetch` non scattava mai.
+   > Visto dal vivo nel browser sulla corsia (`initiatorType`); lo script ora avvolge **anche** `XMLHttpRequest.prototype.open`
+   > (`installXhrRewriter`), e `fetch` resta per un Material futuro. Il test-author ha aggiunto 42 casi di Vitest (11 mutanti su 12
+   > li fanno rossi, uno è equivalente), poi **E2E 7/7 verdi** (corsia 6181, `front-utility docs-search-language`, 22 s, sito
+   > ricostruito prima). I Vitest sul solo `fetch` non potevano vederlo: un test di integrazione col browser vero era necessario.
+   > **⚠️ Fuori pista**: il test-author ha scritto i test mentre io scrivevo il codice (li avevo lanciati insieme): sono
+   > scritti dal contratto, non dal codice, e verificati con 9 mutanti; nessun rosso vero da vedere. Il debito di traduzione
+   > è nullo (pagina `developer/`, solo inglese).
+3b. ✅ **`--recover previous`** (23/10, richiesta di B, B5-2): le citazioni del comando che sono di H (`restore_guard.py`
+   con il suo test, `instance_block.py`, `hosting_providers.en.md`, `security.md`, `api/index.md`, il testo `adminHint` nei 4
+   cataloghi, i commenti della pagina) dicono `--recover previous`. I file di B (`cli_tools.en.md`, `backup_cli.py`,
+   `backup_restore.en.md`) restano a B.
+4. ✅ **DOC-1 · riordino della guida admin** (albero e inventario: `ondata5/H-DOC1-inventario.md`, approvato dal developer;
+   pagine piatte, gerarchia nella navigazione, che il developer vuole **annidata**). Due giri, per non fare conflitti con i rami
+   di B e A che toccavano tre pagine.
+   - ✅ **Giro 1** (23/10): `configuration` → 4 pagine, `email` → 3, `service_exposure` → 2, `sleep_wake` → 2, `connection_checks` → 2
+     (le due guide Tailscale incluse). Uno script deterministico (fuori dall'albero: scratchpad `doc1_split.py`) divide per
+     sezione H2 e riscrive 88 + 73 link e 3 citazioni; poi il `docs-writer` ha rivisto titoli, introduzioni, riquadri «in più pagine»
+     e l'indice admin. La divisione è stata provata prima su una copia fuori dall'albero (build strict ok).
+     **Difetti trovati dal build strict e curati**: (1) ancore su elementi che non sono titoli (`{: #session-cookie-secure }` su
+     una riga di tabella): il link intra-pagina punta ora a `configuration.md`; (2) nelle copie di ripiego `/it/` `/fr/` `/es/` le
+     pagine nuove (solo inglese) linkavano con ancora pagine che hanno traduzioni (`settings.md#registration`, `configuration.md
+     #main-options`…): togliamo l'ancora dove una traduzione non la possiede (25 link). In più 17 link semplici che nominavano una
+     sezione spostata («Accounts and Sign-ups», «Startup Checks»…) puntano ora alla pagina giusta (users, plugins, security.md,
+     email.md del developer). Resta da fare nello script per il giro 2: contare come ancore anche gli `{: #id }` fuori dai titoli.
+   - **Riferimenti dell'app** (tutti miei): 11 voci di `checkGuides.json` spostate; `cspNotice` le segue dal JSON; le specifiche
+     E2E `security-tab` (ASEC-E-04) e `csp-collector` aggiornate. **Mappa dei reindirizzamenti**:
+     `mkdocs_src/docs/javascripts/moved-anchors.js` (generata dalla divisione, senza dipendenze; `extra_javascript` in `mkdocs.yml`).
+   - **Navigazione annidata** in `mkdocs.yml` (gruppi con sottovoci) e `nav_translations` it/fr/es per le 10 etichette nuove.
+   - **Test** (test-author): `utils docs-admin-references` 47 (scansione di ogni riferimento dell'app, completezza della mappa
+     contro le ancore congelate `backend/test_scripts/fixtures/docs_admin/old_anchors.json`, il sito costruito, la nav);
+     Vitest `movedAnchors` (75 casi, 7 mutanti su 7 uccisi); `checkGuides` (debito di traduzione 33 → 3: le pagine nuove sono
+     solo inglesi). **E2E** nello slot: `security-tab` ASEC-E-04 1/1 e `csp-collector` 23 verdi (1 saltato).
+   - ✅ **Giro 2** (24/10, sul ramo con A5-1/A5-1b/A5-2 dentro, `2d6c549dd`): `hosting_providers` → 4 pagine (`hosting_providers`,
+     `hosting_instances`, `hosting_panel_api`, `hosting_panel_backups`), `backup_restore` → 3 (`backup_sealed`, `backup_moving`),
+     `cli_tools` → 2 (`cli_backup`). Stesso script, rifatto sull'albero vero (la prova di prima non aveva la sezione di A):
+     le ancore di A5-2 (`restore-owner`, `owner-email-change` → `hosting_instances`; `restore-owner-pending` → `hosting_panel_backups`) sono
+     nella mappa dei reindirizzamenti. Mappa `moved-anchors.js` +74 ancore (39 + 20 + 15), `old_anchors.json` esteso alle 3 pagine
+     (46 + 37 + 34 ancore, da `2d6c549dd`), nav annidata e `nav_translations` it/fr/es per 6 etichette nuove.
+     Aggiornati: 6 voci di `checkGuides.json` (`panel-api`, `panel-token`, `restore-upload-limit` ×2, `recipients`, `owner_email_change`), il
+     link della pagina di ripristino interrotto (`cli_backup/#backup-pending-unreadable`) e i suoi test, `test_hosting_panel_vectors.py`
+     (ora legge `hosting_panel_api.en.md`) e il testo del runner.
+     > **⚠️ Fuori pista**: il link del motivo `owner_assignment` (H5-3) era a livello di pagina `admin/backup_restore/` perché `--recover owner`
+     > non era documentato lì; ora punta alla sezione che lo documenta, `admin/hosting_panel_backups/#restore-owner-pending` (la pagina non ha
+     > traduzioni, quindi l'ancora regge nelle tre lingue). Test della pagina e del gate aggiornati; nota in `security.md`.
+     > Verifiche: build strict, `check-links` (97), `utils docs-admin-references` 47, Vitest 905 (`features/instance`, `api`, `i18n`,
+     > `movedAnchors`, `cspNotice`, `SecurityTab`), `services hosting-panel-vectors`, `front check` 0/0, prettier, ruff, black. Nessun E2E.
+5. ✅ **H5-3 · lo step `restore-owner` e la guardia** (24/10). Dopo un ripristino dall'app su un'istanza `managed`, il primo
+   avvio dà al titolare il suo account (B: `assign_restored_owner`; A: `assign_owner_and_send_reset`, non ancora nel ramo, i test
+   usano un finto A). Finché non è fatto, l'istanza non serve dati, sullo stesso meccanismo di B-33.
+   > **Note implementazione**: `Step("restore-owner")` subito dopo `restore-commit`, senza `skip_when`: attende `assign_restored_owner()`
+   > e poi `probe_owner_assignment()`. `restore_guard` ha un secondo stato `_owner_problem` (`None | "pending" | "<CODE>"`, da
+   > `apply.owner_assignment_problem`); `restore_interrupted()` è vero per entrambe le cause, quindi skip dei passi dopo, 423, 409 del
+   > backup del pannello, `/system/instance` e wake seguono senza altro codice. `restore_interrupted_reason()` (`restore_state` vince su
+   > `owner_assignment`) è il nuovo campo `restore_interrupted_reason` di `/system/instance`. **Più worker**: ne assegna uno solo (lock
+   > `.restore/owner.lock`); un altro che ha trovato `pending` resterebbe chiuso per sempre, quindi la dipendenza del router attende
+   > `refresh_restore_state()`: solo per `pending`, al più ogni 2 s (`OWNER_RECHECK_SECONDS`), riesamina in un thread; un codice non si
+   > riesamina mai (rimedio: `./dev.py backup pending --recover owner` di B + riavvio). Pagina: prop `reason`; per `owner_assignment`
+   > titolo/messaggio/hint nuovi (3 chiavi × 4 lingue), cita il comando e linka `admin/backup_restore/` senza ancora (dal giro 2 di DOC-1: `admin/hosting_panel_backups/#restore-owner-pending`).
+   > Test (test-author, rossi prima): `services restore-owner-guard` 46, `api restore-owner-guard` 31, `restore-guard` 25, `await-restore-mode`
+   > 38, `api restore-interrupted` 34; Vitest 111 (pagina, gate, `instanceBlockState`). Il test-author ha provato 10 mutanti su un'implementazione
+   > di riferimento. Doc: `hosting_providers` (sezione `restore-owner-pending`), `security.md`, `overview.md` (passo 18, numerazione
+   > spostata), `api/index.md`.
+   > **⚠️ Fuori pista**: nessuno. Resta a B documentare `--recover owner` in `cli_tools`/`backup_restore` (il link della pagina è a livello di pagina, quindi regge anche al giro 2 di DOC-1).
+6. ✅ **H5-4 · le richieste di A sul cambio dell'email del titolare** (24/10, dopo il merge di A5-1/A5-1b, `d71efc0b1`).
+   > **Note implementazione**: `PanelStatusResponse.owner_email_change: "pending" | "blocked" | null` (la risposta ha ora sette chiavi), riempito
+   > da `instance_owner.owner_change_status(session)`; controllo `accounts.owner_email_change` in `accounts/checks.py` (`info` se `pending`,
+   > `warning` se `blocked`, `ok` altrimenti; legge `startup_change_state()` in memoria, import pigro di `instance_owner` per non creare un
+   > ciclo con `config_audit`; non solleva mai), in `ACCOUNTS_CONFIG_CHECKS` dopo `check_login_limit`; tre chiavi i18n `auth.checks.ownerEmailChange.*` × 4
+   > lingue (le ho scritte io, A aveva detto che le scriveva A: da riconciliare al merge); voce in `checkGuides.json`. Doc: `hosting_providers`
+   > (nota «State of a change», tabella e JSON del pannello, «sette chiavi»), `configuration_security` (due righe nella tabella dei controlli),
+   > `security.md`, `api/index.md`. La riga `email_change_confirmation` della tabella dei log di A è nella pagina divisa `email_troubleshooting`.
+   > Test (test-author, rossi prima): `accounts-checks` 93, `config-audit` 255, `api panel-status` 41, `await-restore-mode` 36, `login-throttle` 58,
+   > `security-checks` 4; Vitest 256.
+   > **⚠️ Fuori pista**: il test-author ha scoperto che `hosting_providers.{it,fr,es}.md` non esistono (la pagina inglese è pubblicata in ogni lingua): la
+   > voce nuova non entra in `TRANSLATION_DEBT`. Analisi (senza codice) del link `/setup` emesso da `admin-bootstrap` prima di `restore-commit` mandata
+   > al coordinatore: reale ma stretto, la cura è di B (B5-1d).
+7. ✅ **H5-5 · la guardia del titolare legge lo stato che cambia** (24/10, dalla revisione di sicurezza di A, punto 2). Verifica: la guardia non
+   memorizza la prima lettura. Il passo `restore-owner` sonda DOPO l'assegnazione (non prima), e un worker rimasto in `pending` rilegge lo stato
+   (`refresh_restore_state`, al più ogni `OWNER_RECHECK_SECONDS` = 2 s) finché non diventa `None` o un codice; un codice resta chiuso fino al riavvio.
+   > **Note implementazione**: nessuna modifica a `restore_guard.py`. Mancava solo la prova su file veri a livello API (i test esistenti usavano un
+   > finto `owner_assignment_problem` oppure stavano al livello del servizio): due test nuovi in `test_restore_owner_guard_api.py`, con un `restore.json`
+   > committato vero e la vera sonda: `pending` all'avvio → 423; `record_owner_outcome(..., "sent")` → la richiesta dopo l'intervallo passa (200);
+   > `pending` → `error:EMAIL_TAKEN` → continua a chiudere con il codice, e un `reset_owner_assignment` del solo file non la apre (serve il riavvio).
+   > Selettore `api restore-owner-guard`: 33 test (31 + 2). Descrizione del selettore aggiornata.
+   > **⚠️ Fuori pista**: nessuno. Resta un ritardo fino a 2 s tra la scrittura dell'esito e la prima richiesta servita su un worker che aspettava
+   > (la limitazione serve a non leggere il file a ogni richiesta); non lo tocco senza decisione. Il punto 1 di A (errore passeggero di B che lascia `pending`
+   > fino al riavvio) è di B.
+8. ✅ **H5-3b · le liste di chiavi di `/system/instance` dopo `restore_interrupted_reason`** (24/10). Il cancello del treno 11 trovò 27 rossi API:
+   H5-3 aveva aggiunto il campo alla configurazione pubblica senza aggiornare i test a chiavi esatte.
+   > **Note implementazione**: `restore_interrupted_reason` aggiunto agli insiemi dichiarati di `test_system_api.py` (`INSTANCE_KEYS`),
+   > `test_instance_config_legal_api.py` (`INSTANCE_KEYS`) e `test_registration_api.py` (`keys`, con il messaggio), e ai loro commenti (via il
+   > «red until B-33» ormai falso). Nessun cambiamento di prodotto. Cercate altre liste esatte nei test backend e nel frontend: nessuna (le
+   > fixture Vitest di `instanceConfig` non elencano le chiavi). Selettori su corsia 6197: `api instance-legal` 19, `api registration` 102,
+   > `api system` 122, `services restore-owner-guard` 46, `api restore-owner-guard` 33.
+   > **⚠️ Fuori pista**: nessuno. Lezione: un campo nuovo di una risposta pubblica va cercato per nome in tutti i `*_KEYS` e `set(body) ==` dei test.
+9. ✅ **H5-6 · `/system/ready` dice se il DB è indietro o avanti, e la sua revisione** (25/10). Dalla richiesta P-3 del coordinatore cloud, confermata dal
+   developer con una differenza: oltre ai codici, in risposta c'è anche la revisione del DB («non si sa mai che serve in futuro»). P-2 (un tag `X.Y.Z` non si ripubblica mai) è ora una regola scritta.
+   > **Note implementazione**: `ReadinessMigrationsState` è `ok | behind | ahead | unknown` (`mismatch` sparisce: si divide in due): `behind` = la revisione
+   > del DB è una che gli script conoscono ma non la testa (migrazione non applicata o fallita); `ahead` = non la conoscono (DB più nuovo dell'immagine, o di un altro
+   > LibreFolio, anche un DB a una revisione ritirata come la vecchia 006). Nuovo campo `ReadinessResponse.database_revision: str | None` (l'unica riga di `alembic_version`, `null`
+   > se non si legge); la testa degli script non esce mai. `readiness.py`: la lettura cacheata è ora `_read_alembic_scripts()` (testa + revisioni note, una sola
+   > `ScriptDirectory.from_config` per processo), `alembic_head_revision()` resta com'era. Doc: `docker_advanced` (le traduzioni non nominano `mismatch`),
+   > `service_exposure_funnel`, `curl-testing`, `security.md` (tabella dei codici, riga su `database_revision`), `api/index.md`; `release-pipeline.md`: avviso «A published tag is never
+   > republished» (P-2). Test (test-author): `services platform-readiness` 18 (`behind`/`ahead` anche su un albero di script a parte, `database_revision` in ogni caso), `api system` 125
+   > (corpo vivo con la revisione, parametri `behind`/`ahead`, OpenAPI con i quattro codici). `api sync` fatto (i file generati sono ignorati da git).
+   > Verifiche: `api instance-legal` 19, `api registration` 102, Vitest 1446 (`features/backup`, `features/instance`), `front check` 0/0, build strict, `check-links` 97, `docs-admin-references` 47, ruff/black.
+   > **⚠️ Fuori pista**: le liste di chiavi esatte di `/system/instance` non cambiano (il campo è di `/system/ready`): le ho solo rieseguite. La risposta pubblica
+   > ora dice a chiunque a che revisione sta il DB: l'`app_version` è già pubblico e la revisione ne dipende, quindi il guadagno per chi attacca è piccolo (scritto in `security.md`).
+   > `contratto-istanza.md` del cloud va aggiornato da loro (`mismatch` → `behind`/`ahead`, campo nuovo).
+10. ✅ **H5-7 · D6: `instance_key: ok|mismatch` in `panel/status`, i backup del pannello e `wake-sync` fermi con la chiave sbagliata** (26/10). Decisione del
+    developer: il campo con un valore di controllo; con la chiave sbagliata si fermano solo i backup del pannello e `wake-sync`, l'istanza resta aperta; il cambio voluto con
+    una variabile valida per un solo avvio.
+    > **Note implementazione**: nuovo `services/platform/instance_key_check.py`. Il riferimento (R2) è `secrets/instance.key.check`, 64 hex = HMAC di una frase fissa con la
+    > sottochiave `instance.key-check.v1`; la guardia della prima scrittura è R1 (segreti salvati: `mismatch` solo se ce n'è almeno uno e **tutti** sono sotto un'altra chiave; con
+    > `mismatch` per R1 non si scrive nulla, scriverlo sposerebbe la chiave sbagliata). `instance_key_state(session)` si ricalcola a **ogni** richiesta (nessuna memoria: la chiave
+    > giusta rimessa è `ok` alla richiesta dopo, e i backup riprendono da soli la prima notte); non solleva mai; senza chiave o con chiave inutilizzabile → `ok` (non genera la
+    > chiave); file illeggibile o non di 64 hex → `ok` più un solo avviso per processo (mai il contenuto). Scrittura: file temporaneo + `link` (vince il primo worker) o `replace`
+    > (accept), file `0600` in cartella `0700`. `LIBREFOLIO_INSTANCE_KEY_ACCEPT=1` (`config.platform.instance_key_accept()`, stessi valori di `awaiting_restore()`, valore non valido
+    > ferma l'avvio in `log_configuration_audit`) riscrive il valore a ogni avvio in cui è impostata, con un avviso nel log. Passo di avvio `instance-key-check` dopo
+    > `plugin-secrets-check` (non bloccante, senza `skip_when`). Cablaggio: `PanelStatusResponse.instance_key` (obbligatorio, dopo `owner_email_change`: otto chiavi, `users_over_limit` verrà con
+    > A5-7); `POST /backup/panel/jobs` → `409 backup_instance_key_mismatch` con una dipendenza dopo `PanelToken` (non quando l'istanza aspetta un ripristino), nessun job; `_wake_run`
+    > → `status: instance_key_mismatch` dopo `awaiting_restore` e `restore_interrupted`; `/security/checks` ha il controllo `platform.instance_key_check`. Frontend: `securityFindings.ts`,
+    > `checkGuides.json` (→ `admin/configuration_secrets/#instance-key-check`), chiave `instance.checks.instanceKey.mismatch` in 4 lingue. Doc: `configuration_secrets` (sezione e
+    > variabile), `hosting_panel_backups` (la guida per l'host: le tre strade d'uscita e la ripresa automatica), `hosting_panel_api`, `wake_sync`, `security.md`, `api/index.md`, `.env.example`.
+    > Test (test-author, rossi prima): `services instance-key-check` 91, `api instance-key-check` 30 (compresi i due del ritorno: chiave A → B (409) → A di nuovo (`ok`, 202, nulla
+    > di memorizzato) e il percorso accept), più le liste a otto chiavi in `api panel-status`, `await-restore-mode`, `restore-interrupted`, i controlli di sicurezza e le guide. `api sync` fatto.
+    > **⚠️ Fuori pista**: l'id del contratto `platform.instance_key` era già del controllo del file della chiave (`config_audit.check_instance_key`): il nuovo è `platform.instance_key_check`
+    > (la chiave del messaggio `ok` è condivisa). Un dizionario di sette chiavi in `test_panel_status_api.py` (riga 1068) era sfuggito al test-author: aggiornato a mano.
+    > Il limite vero, scritto nella doc: un'istanza 1.2 che passa alla 1.3 con la chiave già sbagliata e senza segreti salvati non si può scoprire. `contratto-istanza.md` del cloud va
+    > aggiornato da loro (`instance_key`, `instance_key_mismatch`, `backup_instance_key_mismatch`).
+11. ✅ **H5-8 · `app_version` in `/system/ready` e `users_over_limit` in `panel/status`** (26/10). Dal cloud (approvato): il controllo dopo un aggiornamento usa la sola sonda, e la
+    macchina non resta sveglia (una visita a `/system/info` o `/system/instance` conta come presenza, la sonda no). Più `users_over_limit` (R-2), dopo l'unione di A5-7.
+    > **Note implementazione**: `ReadinessResponse.app_version: str` (obbligatorio, ultimo campo), riempito da `check_readiness` con `get_git_version()` (la stessa che `/system/info` dà senza
+    > sessione: niente di nuovo esposto; letta in `asyncio.to_thread` perché la prima lettura può lanciare `git`); c'è anche nel corpo 503 e con `awaiting_restore`.
+    > `PanelStatusResponse.users_over_limit: bool` (obbligatorio, dopo `instance_key`: nove chiavi) = `await user_limit_service.over_limit_state(session) is not None` (solo gli attivi
+    > oltre il limite valido; inviti vivi e account in attesa non lo fanno scattare; senza limite mai; mai chi). Test (test-author, rossi prima): `services platform-readiness` (le
+    > liste esatte e la classe `TestReadinessAppVersion`), `api system`, `api panel-status` (R1-18…R1-26: soglia, inviti e attese, cambio alla richiesta dopo, sostituto di
+    > `over_limit_state`, nessun nome, istanza bloccata/in attesa/interrotta, OpenAPI, 401 invariato), `await-restore-mode`, `restore-interrupted`, `instance-key-check` a nove chiavi;
+    > fixture e2e `backup.spec.ts` con `app_version`. Doc: `docker_advanced`, `curl-testing`, `security.md` (corpo di `/system/ready`, riga `status` del pannello, frase sulle risposte
+    > anonime), `api/index.md`, `hosting_panel_api` (JSON, riga della tabella, «nine keys»), `hosting_instances`, `hosting_panel_backups`, `sleep_wake`. `api sync` fatto.
+    > **⚠️ Fuori pista**: un valore non valido di `LIBREFOLIO_MAX_USERS` non è coperto da un test sul pannello: il servizio lo tratta come «mai oltre il limite» e `users_limit` legge la stessa
+    > variabile, quindi la risposta del pannello segue la regola di A; nessuna scelta mia. `contratto-istanza.md` del cloud va aggiornato da loro (`app_version`, `users_over_limit`).
+12. ✅ **H5-9 · la documentazione del ripristino dal pannello dopo B5-1j/k2/l e A5-7** (26/10). Solo documentazione e descrizioni, dopo l'unione di B nel ramo (`6e3ddfd65`).
+    > **Note implementazione**: le frasi vecchie «names no owner» / «does none of this» erano in `hosting_panel_backups.en.md` (sezione `#restore-owner-pending`) e in `hosting_instances.en.md`
+    > (`#restore-owner`), non in `hosting_providers.en.md` (lì non c'era nessuna frase da correggere). Ora dicono che il ripristino dal pannello sceglie il titolare da solo
+    > ([Without Anyone to Ask](backup_restore.md#owner-pick)), che con nessuno da scegliere va avanti senza titolare, e che nel caso dello stesso istanza con titolare già all'indirizzo il titolare tiene
+    > password e sessioni e nessun link parte ([`#owner-kept`](backup_restore.md#owner-kept)). Tabella dei rifiuti del pannello: la riga `409` ha anche `owner_email_not_set` e `owner_conflict`. Rapporto del
+    > controllo: nuovo punto «A restore is never refused for too many accounts» (avviso `users_over_limit`, poi `panel/status` `users_over_limit: true` e la scelta dell'admin al primo accesso, link a
+    > `backup_restore.md#users-limit`). `panel_restore.py`: la descrizione del `409` della conferma dice `restore_stage_outdated` anche per l'indirizzo del titolare cambiato, e aggiunge `owner_email_not_set` e `owner_conflict`. `api sync` fatto.
+    > **⚠️ Fuori pista**: la riga del `409` di `POST /backup/restore/stage/{id}/confirm` in `security.md` (app, di B) non nomina i codici del titolare (`owner_*`): non l'ho toccata, è di B.
+13. ✅ **H5-10 · rosso d'integrazione del treno 11: l'ordine dei passi di avvio** (27/10). Il test `test_the_startup_step_stands_right_after_the_plugin_secrets_check_and_right_before_the_provider_prewarm` (E, `services stored-currencies`) voleva `stored-currencies` subito dopo `plugin-secrets-check`; `instance-key-check` (H5-7) stava in mezzo.
+    > **Triage**: `instance-key-check` non dipende da `plugin-secrets-check` (legge chiave, file di controllo e segreti salvati da solo; nulla del passo vicino). L'adiacenza di E è una scelta di E, già fissata dal coordinatore; la mia «subito dopo `plugin-secrets-check`» era solo una scelta di posto del mio test (e). Quindi sposto il mio passo, non cambio il test di E.
+    > **Note implementazione**: `app_lifespan.py`: `instance-key-check` ora sta subito PRIMA di `plugin-secrets-check` (commento che dice perché). Il mio test (e) in `test_instance_key_check.py` ora pretende «subito prima» (`index - 1`); `security.md` dice lo stesso. Nessun altro test fissa il posto.
+14. ⏳ **H5-11 · triage: la splash di `app.html` che non finisce dopo il login (treno 11, `d9278c779`)** (27/10). Verdetto provvisorio: **ambiente / lentezza, non riprodotto sul codice**; nessuna cura di prodotto, nessun test nuovo.
+    > **Note implementazione**: nessun file di prodotto toccato. Prove in `side-session-notes/…/H5-11-triage-splash-train11b.md`: `front-fx fx-list --workers 2` sul codice `d9278c779` (copia fuori dal repo) è 34/34 verde sia a macchina quieta sia sotto 32 processi che bruciano CPU; con traccia di console, richieste e `vite:preloadError` su ~90 test non si vede né l'evento né un reload (X-R84 non è la causa); A5-7 escluso per lettura (i suoi `reload()` partono solo da un click, e stanno dopo il boot). I rossi del gate sono a grappolo (test 18, 20–23, due worker insieme) e coincidono con Docker di un'altra sessione e swap già pieno.
+    > **⚠️ Fuori pista**: il log del backend non prova «nessuna chiamata API per 8–17 s»: i GET semplici non scrivono righe. Strumentazione temporanea tolta dal ramo.
+15. ✅ **H5-12 · i 18 rossi «unable to open database file» del gate backend, dai miei test del wake-up** (27/10). Solo test.
+    > **Note implementazione**: `wake.py` `_instance_key_mismatch()` apre la sua sessione sul motore del processo (`get_async_engine()`), non sulla dipendenza che la fixture `Instance` sostituisce. I due test del wake (`..._answers_instance_key_mismatch_and_runs_nothing`, `..._follows_the_file_at_the_next_request`, via `prepare_wake`) erano i primi a chiamarlo nel worker: il motore nasceva sul DB di `tmp_path`, pytest cancellava la cartella, e ogni test in-process dopo (`TestInstanceConfigInProcess`, ecc.) falliva. Cura in `prepare_wake` (`test_instance_key_check_api.py`): `monkeypatch.setattr(wake_module, "get_async_engine", lambda: target.engine)`, con il perché in commento.
+    > Prima/dopo (pytest con l'ambiente del worker, `LIBREFOLIO_TEST_MODE=1`, `DATABASE_URL` della corsia): wake poi `TestInstanceConfigInProcess` = 7 rossi, 2 verdi → 9 verdi; il file intero poi `TestInstanceConfigInProcess` = 37 verdi; ordine inverso verde prima e dopo. `api instance-key-check` 30, `services instance-key-check` 91, black e ruff puliti.
+    > Intento dei test: lo stato `mismatch` lo decide il file di controllo (il verdetto del file viene prima del DB, che serve solo se il file manca): con la cura il DB privato non cambia nulla; la barriera `reached != []` è verde. `wake.py` non cambia: il singleton è il modo di tutti gli altri passi del backend, e un task staccato non ha una dipendenza da usare.

@@ -60,6 +60,7 @@ from backend.app.services.ai_export.temporal.plan import Bucket, BucketPlan
 from backend.app.services.ai_export.temporal.uniform import uniform_calendar_buckets
 from backend.app.services.financial_math.lots.summary import residual_cost
 from backend.app.services.financial_math.returns import price_return
+from backend.app.services.financial_math.series_steps import points_between
 from backend.app.services.lots_analysis_service import LotsAnalysisService, analysis_failure_codes
 from backend.app.services.portfolio_service import PortfolioService
 
@@ -325,15 +326,22 @@ def build_performance_bucket_rows(
     *,
     currency_code: str,
 ) -> tuple[PerformanceBucketRow, ...]:
-    """Map engine history to flow-aware inter-bucket returns and P&L."""
+    """Map engine history to flow-aware inter-bucket returns and P&L.
+
+    ``history`` is in steps (D-P4): a point holds from its ``date`` to its ``through``. A bucket reads the steps that touch
+    it, clipped to it (``points_between``); every date a row reports is a DAY: the first day a value is reached inside the
+    bucket (``max(step.date, bucket.start_date)``, the earliest on a tie) and the last day of the bucket's data for the
+    close, never the ``date`` of a step.
+    """
     ordered_history = tuple(sorted(history, key=lambda point: point.date))
     previous_close: PortfolioHistoryPoint | None = None
+    previous_close_day: Date | None = None
     rows: list[PerformanceBucketRow] = []
 
     buckets = bucket_plan.buckets if isinstance(bucket_plan, BucketPlan) else tuple(bucket_plan)
     first_twrr_observation = next((point for point in ordered_history if point.twrr is not None), None)
     for bucket in buckets:
-        bucket_points = tuple(point for point in ordered_history if bucket.start_date <= point.date <= bucket.end_date)
+        bucket_points = points_between(ordered_history, bucket.start_date, bucket.end_date)
         if not bucket_points:
             rows.append(
                 PerformanceBucketRow(
@@ -347,8 +355,13 @@ def build_performance_bucket_rows(
 
         first_point = bucket_points[0]
         end_point = bucket_points[-1]
-        min_point = min(bucket_points, key=lambda point: point.nav_value.amount)
-        max_point = max(bucket_points, key=lambda point: point.nav_value.amount)
+        # The first step to reach the lowest and the highest NAV: strict comparisons keep the earliest on a tie.
+        min_point = max_point = first_point
+        for point in bucket_points[1:]:
+            if point.nav_value.amount < min_point.nav_value.amount:
+                min_point = point
+            if point.nav_value.amount > max_point.nav_value.amount:
+                max_point = point
 
         net_external_flow = None
         period_pnl = None
@@ -383,7 +396,7 @@ def build_performance_bucket_rows(
                 max_value=max_point.nav_value,
                 min_date=min_point.date,
                 max_date=max_point.date,
-                variation_start_date=(previous_close.date if previous_close is not None else None),
+                variation_start_date=previous_close_day,
                 variation_start_value=(previous_close.nav_value if previous_close is not None else None),
                 net_external_flow=net_external_flow,
                 period_pnl=period_pnl,
@@ -398,6 +411,7 @@ def build_performance_bucket_rows(
             )
         )
         previous_close = end_point
+        previous_close_day = end_point.through
 
     return tuple(rows)
 

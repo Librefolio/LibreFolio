@@ -8,14 +8,14 @@ Today (HEAD ``2f4ab1962``):
 - ``PortfolioCalculationEngine._preload_fx_rates`` collects ``(currency, day)`` needs — transaction amounts at their date,
   priced outgoing ADJUSTMENTs at their date (dropped from the oracle by N78-1: such a row has no value), external cash flows, price and asset currencies on every day of
   ``[date_from, date_to]``, TRANSFER legs before the range, in-transit cash on every day of the transit from
-  ``max(start, EARLIEST_RANGE_START)``, in-transit cost at the arrival — asks ``convert_bulk`` one unit of each, and
+  ``start`` (the 1900 floor, ``EARLIEST_RANGE_START``, is gone: D-P4, MF-PAV-L1), in-transit cost at the arrival — asks ``convert_bulk`` one unit of each, and
   returns ``fx_rate_map[(currency, target, day)]`` holding the answered needs. ``DailyStateBuilder`` reads it with
   ``.get`` at the exact day.
 - ``compute_native_cash`` asks ``convert_bulk`` for every foreign movement at its date plus one unit of each foreign
   currency on every day (``_unit_requests``), and builds ``NativeCash(unit_rates={(currency, day): rate})``.
 
 The cure (MF, written after these reds): the engine builds windows per currency (the range as one window, single days as
-``(d, d)``, the transit from ``max(start, floor)``), makes ONE ``unit_rate_steps`` call and NO ``convert_bulk`` call, and
+``(d, d)``, the transit from its start), makes ONE ``unit_rate_steps`` call and NO ``convert_bulk`` call, and
 returns ``AskedDayRates(steps, windows)`` (``{}`` when nothing is needed). The native cash keeps ``convert_bulk`` for the
 movements only, asks the same days as windows in one ``unit_rate_steps`` call, and its ``unit_rates`` is the view
 (``fixed_destination`` = the report currency).
@@ -33,8 +33,9 @@ The book of the direct calls (``_preload_fx_rates`` and ``compute_native_cash`` 
 - CHF/EUR, stored direct: rows on 02-01, 03-15, 04-10, a legacy inf on 04-01;
 - EUR/GBP, stored inverted: first row 03-20, after GBP's first need (03-08, 03-10); JPY has no row at all;
 - every rate has a long inverse (1 / 1.0837 = 0.9227646027498385161945187783): another arithmetic shows in ``as_tuple()``.
-The native cash's book sits around ``EARLIEST_RANGE_START`` (1900-01-01): movements before it (single-day windows), a
-stored rate strictly between two of its windows, GBP's first rate after its first movement, legacy rows.
+The native cash's book sits around 1900-01-01 (once the date of a floor, gone since D-P4 / MF-PAV-L1): USD movements
+before it, a stored rate strictly between two of them, GBP's first rate after its first movement, legacy rows; a currency
+asks one window from its first movement, whatever its date.
 
 The report's book (``PortfolioService.get_report`` on a private file, 8a's way): two brokers, a USD and a CHF stock,
 deposits in USD, CHF, EUR, GBP (one before GBP's first rate), a cash transfer in transit across the USD gap, trades,
@@ -46,18 +47,21 @@ What is tested:
    report as 8a's ``_Recorders`` do) equals, key for key and digit for digit, what ``convert_bulk`` answers for one unit
    on every need of today (``_fx_needs_today``, HEAD's collection copied verbatim); ``.get`` and ``in`` agree with it on
    every day from 2024-01-20 to 2024-05-15 of every currency (off the asked days: nothing). A cash transfer in transit
-   entirely before the floor asks no window there and raises nothing (a window ``(floor, end)`` with ``end < floor``
-   would make ``unit_rate_steps`` raise ``ValueError``).
+   entirely before 1900 asks its own window, from its start to its end, and raises nothing (the old floor clamp would
+   have made it a window ``(1900-01-01, end)`` with ``end < 1900-01-01``, on which ``unit_rate_steps`` raises
+   ``ValueError``).
 2. ``TestTheNativeCashIsConvertBulks`` — the ``NativeCash`` of ``compute_native_cash`` (called directly, and recorded
    during the report) against a ``NativeCash`` built from the dense ``convert_bulk`` dict of today's asked days
-   (``_unit_requests_today``, HEAD's copied verbatim): same ``converted``, same walk of ``unit_rates``, same ``value_at``
+   (``_unit_requests_today``, the dense days, no date floor): same ``converted``, same walk of ``unit_rates``, same ``value_at``
    on every day, same ``rate_change_days`` and ``exchange_results`` — with ``rates_until`` after the last movement, before
    a currency's first movement (no window for it: ``unit_rate_steps`` raises on a window that ends before it starts), and
    None.
 3. ``TestTheReportIsBitIdentical`` — the whole report (summary with breakdown, history, positions contribution, broker
    P&L history, P&L candles, income, cost, deposit histories, acquisition funding) computed by the product and computed
    with HEAD's dense readers (``_preload_fx_rates_today``, ``_compute_native_cash_today``, verbatim) patched in: every
-   field equal, every Decimal by ``as_tuple()``.
+   field equal, every Decimal by ``as_tuple()``. The one field left out is ``data_quality.stale_fx_pairs`` (D-P4 cure B,
+   new): it needs the date of the stored row behind each rate (``rate_days`` of the unit-rate steps), which today's dense
+   readers do not carry, so they cannot report it; the product's own list is checked to be there.
 4. ``TestTheCost`` — ``_preload_fx_rates`` hands ``convert_bulk`` nothing and calls ``unit_rate_steps`` once, with
    windows covering exactly today's needs; its work (``convert_bulk`` items + steps returned) does not grow when the range
    grows from 30 to 3000 days; ``compute_native_cash`` hands ``convert_bulk`` the foreign movements only, calls
@@ -79,17 +83,17 @@ named, and only on this file's own evidence:
 - windows not merged: both engine maps and the bit-identical report;
 - a range window starting a day late / ending a day early: both engine maps and the windows test (the early end also
   the report);
-- a transit window started before the floor: the pre-floor transit test (the other books have no row before the floor);
-- single days of transactions not asked: both engine maps, the windows test, the pre-floor transit, the report (the GBP
+- a transit window clamped at 1900 (the old floor): the pre-1900 transit test (the other books have no row before 1900);
+- single days of transactions not asked: both engine maps, the windows test, the pre-1900 transit, the report (the GBP
   fee of 2024-04-12 is asked by the transaction source alone);
 - the native calendar missing a currency's first step: both native-cash tests;
 - ``step_series`` dropping the anchor step: both native-cash tests and the report;
-- the native cash's early single days not asked: the floor book and the native windows test.
+- the native cash's window clamped at 1900, or split into single days before it: the 1900 book and the native windows test.
 
 Re-measured on MF's cure (2026-10-20, a scratch copy of HEAD 2f4ab1962 + the cure): green 15/15, and every mutant above
 turns red the same tests. Two more, of the callers' guards: the engine asking a transit window that ends before it
-starts (a transit wholly before the floor) — the pre-floor transit test, as ``unit_rate_steps`` raises; the native cash
-asking one for a currency whose first movement comes after ``rates_until`` — the floor book with ``rates_until``
+starts (a transit wholly before 1900, with the old floor) — the pre-1900 transit test, as ``unit_rate_steps`` raises; the native cash
+asking one for a currency whose first movement comes after ``rates_until`` — the 1900 book with ``rates_until``
 1900-01-04. A fill limit in either door of the FX service alone (``convert_bulk`` or ``unit_rate_steps``) turns 8 tests
 red: the oracle and the product no longer read one rule.
 
@@ -138,15 +142,17 @@ from backend.app.services.financial_math.portfolio.classifier import ScopeAwareT
 from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
 from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction, InTransitInterval
 from backend.app.services.fx import conversion as fx_conversion
+from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
 from backend.app.services.portfolio_service import PortfolioService
-from backend.app.utils.datetime_utils import EARLIEST_RANGE_START
 from backend.test_scripts.test_utils import print_section, print_success
 
 Pair = tuple[str, str]
 Window = tuple[date, date]
 
 EUR, USD, CHF, GBP, JPY = "EUR", "USD", "CHF", "GBP", "JPY"
-FLOOR = EARLIEST_RANGE_START
+#: 1 January 1900, once the date of a floor (``EARLIEST_RANGE_START``, no longer read by the engine: D-P4, MF-PAV-L1): a literal,
+#: to put the books' movements before and after it.
+FLOOR = date(1900, 1, 1)
 
 #: The real functions, taken before any patch: the recorders delegate to them, the oracles call them.
 REAL_CONVERT_BULK = fx_conversion.convert_bulk
@@ -186,10 +192,10 @@ MAIN_LEGACY: tuple[tuple[str, str, date, float], ...] = (
     (CHF, EUR, date(2024, 4, 1), float("inf")),
 )
 
-#: The native cash's book: around the floor.
+#: The native cash's book: around 1900-01-01 (no floor since D-P4, MF-PAV-L1).
 NATIVE_ROWS: tuple[tuple[str, str, date, str], ...] = (
     (EUR, USD, date(1899, 10, 15), "1.25"),
-    (EUR, USD, date(1899, 12, 20), "1.0837"),  # strictly between the two early windows (11-20 and 12-25)
+    (EUR, USD, date(1899, 12, 20), "1.0837"),  # strictly between the two early movements (11-20 and 12-25), inside the one window
     (EUR, USD, date(1900, 1, 10), "1.3333333333"),
     (EUR, USD, date(1900, 2, 1), "1.0912345678"),
     (EUR, USD, date(1900, 2, 2), "1.0912345678"),
@@ -239,6 +245,15 @@ def _deep_bits(value: object) -> object:
     if isinstance(value, (set, frozenset)):
         return sorted((_deep_bits(item) for item in value), key=repr)
     return value
+
+
+def _without(tree: object, field: str) -> object:
+    """A ``_deep_bits`` tree without every dict key named ``field`` (at any depth)."""
+    if isinstance(tree, dict):
+        return {key: _without(item, field) for key, item in tree.items() if key != field}
+    if isinstance(tree, list):
+        return [_without(item, field) for item in tree]
+    return tree
 
 
 def _differences(left: object, right: object, path: str = "report") -> list[str]:
@@ -317,7 +332,7 @@ def _fx_needs_today(  # noqa: C901 — HEAD's collection loops, copied as they a
     for interval in in_transit_intervals:
         dep = interval.departure_leg
         if interval.tx_type == "cash" and dep.currency and dep.currency != target_currency:
-            current = max(interval.start_date, EARLIEST_RANGE_START)
+            current = interval.start_date  # no date floor (D-P4, MF-PAV-L1)
             while current <= interval.end_date:
                 fx_needs.add((dep.currency, current))
                 current += timedelta(days=1)
@@ -327,22 +342,19 @@ def _fx_needs_today(  # noqa: C901 — HEAD's collection loops, copied as they a
 
 
 def _unit_requests_today(foreign: Sequence[CashMovement], rates_until: date | None) -> list[tuple[str, date]]:
-    """HEAD's ``native_cash._unit_requests``, verbatim."""
+    """Today's dense ``native_cash._unit_requests``, one request a day: every day from each currency's first movement to
+    ``rates_until`` (its last movement when None), no date floor (D-P4, MF-PAV-L1)."""
     first: dict[str, date] = {}
     last: dict[str, date] = {}
-    early: dict[str, set[date]] = {}
     for movement in foreign:
         currency = movement.currency
         if currency not in first or movement.date < first[currency]:
             first[currency] = movement.date
         if currency not in last or movement.date > last[currency]:
             last[currency] = movement.date
-        if movement.date < EARLIEST_RANGE_START:
-            early.setdefault(currency, set()).add(movement.date)
     requests: list[tuple[str, date]] = []
     for currency in sorted(first):
-        requests.extend((currency, day) for day in sorted(early.get(currency, ())))
-        day = max(first[currency], EARLIEST_RANGE_START)
+        day = first[currency]
         end = last[currency] if rates_until is None else rates_until
         while day <= end:
             requests.append((currency, day))
@@ -619,7 +631,7 @@ def _move(day: date, currency: str, amount: str, broker_id: int = 1, *, kind: st
 
 
 def _native_movements() -> list[CashMovement]:
-    """USD before the floor (1899-11-20, 1899-12-25: single-day windows, the 1899-12-20 row between them) and after it;
+    """USD before 1900 (1899-11-20, 1899-12-25: one window from the first, the 1899-12-20 row inside it) and after it;
     GBP before its first rate (1900-01-03, not converted) and after (1900-02-10); CHF; a zero USD fee; an EUR deposit."""
     return [
         _move(date(1899, 11, 1), USD, "0.00", kind="FEE"),
@@ -807,12 +819,13 @@ class TestTheEngineMapIsConvertBulks:
         print_success(f"✓ {len(expected)} rates, the same as convert_bulk's to the digit; nothing on an unasked day")
 
     @pytest.mark.asyncio
-    async def test_a_transit_before_the_floor_asks_nothing_there(self, tmp_path, monkeypatch):
-        """GUARD. A deposits 1000 USD on 1890-01-01; 400 USD leave A on 1890-01-02 and reach B on 1899-06-02: the transit
-        ends before the floor, so today asks only the movements' own days. The cure must not ask a window ``(floor,
-        1899-06-01)`` (``unit_rate_steps`` raises on a window that ends before it starts) nor any day before the floor but
-        those three; its map is ``convert_bulk``'s."""
-        print_section("P3: a cash transit entirely before the floor")
+    async def test_a_transit_before_1900_asks_its_own_window(self, tmp_path, monkeypatch):
+        """A deposits 1000 USD on 1890-01-01; 400 USD leave A on 1890-01-02 and reach B on 1899-06-02: the transit ends
+        before 1900. With no date floor (D-P4, MF-PAV-L1) it asks its own window, from its start to its end — every day
+        from 1890-01-01 to 1899-06-02 with the transactions' own days, nothing before 1890-01-01 and no window that ends
+        before it starts (``unit_rate_steps`` raises on one) — and its map is ``convert_bulk``'s, in the transit as before
+        and after it."""
+        print_section("P3: a cash transit entirely before 1900")
         old_rows = ((EUR, USD, date(1889, 12, 1), "1.2"), (EUR, USD, date(1899, 1, 1), "1.25"))
         txs = [
             _tx(1, TransactionType.DEPOSIT, date(1890, 1, 1), amount="1000", currency=USD),
@@ -838,10 +851,15 @@ class TestTheEngineMapIsConvertBulks:
             monkeypatch.undo()
             expected = await _units_by_convert_bulk(session, _fx_needs_today(**inputs), EUR)
         before_floor = sorted(day for days in calls.asked_days().values() for day in days if day < FLOOR)
-        assert before_floor in ([], [date(1890, 1, 1), date(1890, 1, 2), date(1899, 6, 2)]), f"days asked before the floor through unit_rate_steps: {before_floor}; only the movements' own days may be"
-        problems = _map_problems(fx_map, expected, _probe_keys((USD,), EUR, date(1889, 12, 25), date(1890, 1, 10)) + _probe_keys((USD,), EUR, date(1899, 5, 25), FLOOR + timedelta(days=12)))
-        assert not problems, f"the map of a pre-floor transit is not convert_bulk's on today's needs:{_show(problems)}"
-        print_success(f"✓ {sorted(day for _currency, _target, day in expected)} only")
+        assert before_floor == _days(date(1890, 1, 1), date(1899, 6, 2)), f"days asked before 1900 through unit_rate_steps: {len(before_floor)}, from {before_floor[:1]} to {before_floor[-1:]}: the transit's window and the transactions' days, none else"
+        assert sorted(day for _currency, _target, day in expected if day < FLOOR) == before_floor, "the oracle and the product ask the same days before 1900"
+        problems = _map_problems(
+            fx_map,
+            expected,
+            _probe_keys((USD,), EUR, date(1889, 12, 25), date(1890, 1, 10)) + _probe_keys((USD,), EUR, date(1895, 6, 1), date(1895, 6, 10)) + _probe_keys((USD,), EUR, date(1899, 5, 25), FLOOR + timedelta(days=12)),
+        )
+        assert not problems, f"the map of a pre-1900 transit is not convert_bulk's on today's needs:{_show(problems)}"
+        print_success(f"✓ {len(before_floor)} days asked before 1900, the transit's window and no other")
 
     @pytest.mark.asyncio
     async def test_the_map_the_engine_uses_in_a_report(self, tmp_path, monkeypatch):
@@ -880,10 +898,10 @@ class TestTheNativeCashIsConvertBulks:
         ],
     )
     async def test_compute_native_cash_around_the_floor(self, tmp_path, rates_until, currencies):
-        """``compute_native_cash`` on the native book (movements before the floor, a rate between two windows, GBP's first
+        """``compute_native_cash`` on the native book (movements before 1900, a rate between two of them, GBP's first
         rate after its first movement, legacy rows) against today's dense ``NativeCash``: every reading equal — with
         ``rates_until`` after the last movement, before a currency's first movement, and None."""
-        print_section(f"P3: compute_native_cash around the floor, rates until {rates_until}, against the dense convert_bulk dict")
+        print_section(f"P3: compute_native_cash around 1900, rates until {rates_until}, against the dense convert_bulk dict")
         movements = _native_movements()
         async with _rated_session(tmp_path, NATIVE_ROWS, NATIVE_LEGACY, "native") as session:
             cash = await REAL_COMPUTE_NATIVE_CASH(session, movements, report_currency=EUR, rates_until=rates_until)
@@ -934,7 +952,11 @@ class TestTheReportIsBitIdentical:
                 patch.setattr(portfolio_service_module, "compute_native_cash", _compute_native_cash_today)
                 today = _deep_bits(await _report(book))
         assert product["history"] and product["summary"], "precondition: the report has a history and a summary"
-        differences = _differences(product, today)
+        # The new stale-rate list is the product's alone (see the module docstring): present and well formed here, left out below.
+        stale = product["data_quality"]["stale_fx_pairs"]
+        assert stale, "precondition: the book has a rate older than the threshold, the product lists it in data_quality.stale_fx_pairs"
+        assert all(item["stale_days"] > STALE_PRICE_THRESHOLD_DAYS for item in stale), f"a listed pair is not stale: {stale}"
+        differences = _differences(_without(product, "stale_fx_pairs"), _without(today, "stale_fx_pairs"))
         assert not differences, f"the report differs from today's ({len(differences)} path(s)):{_show(differences)}"
         print_success(f"✓ {len(product['history'])} history points and every section equal, bit for bit")
 
@@ -1021,8 +1043,8 @@ class TestTheCost:
     async def test_compute_native_cash_hands_convert_bulk_the_movements_only(self, tmp_path, monkeypatch):
         """RED today (cost): ``compute_native_cash`` hands ``convert_bulk`` every foreign movement AND one unit per asked
         day. After the cure: the foreign non-zero movements only, in their order, and one ``unit_rate_steps`` call whose
-        windows cover exactly today's asked days (single days before the floor, every day from ``max(first, floor)`` to
-        ``rates_until``)."""
+        windows cover exactly today's asked days (every day from each currency's first movement to ``rates_until``, no
+        floor: D-P4, MF-PAV-L1)."""
         print_section("P3 cost: the native cash hands convert_bulk the movements only")
         movements = _native_movements()
         foreign = [movement for movement in movements if movement.currency != EUR and movement.amount != 0]
@@ -1073,14 +1095,14 @@ class TestTheCost:
 
 def test_the_oracles_are_copies_of_head():
     """GUARD of the oracles: ``_fx_needs_today`` and ``_unit_requests_today`` answer, on the books of this file, what the
-    product's own functions answered when the file was written (HEAD 2f4ab1962) — counted here so that a later edit of
-    an oracle shows. The native book asks 2 days before the floor and 90 from it for USD (1900 is not a leap year), 86 for CHF (from
-    1900-01-05), 88 for GBP (from 1900-01-03)."""
+    dense readers asked (HEAD 2f4ab1962, then without the 1900 floor: D-P4, MF-PAV-L1) — counted here so that a later edit
+    of an oracle shows. The native book asks every day from each currency's first movement to ``NATIVE_RATES_UNTIL``: 132
+    for USD (from 1899-11-20: 11 + 31 + 31 + 28 + 31), 86 for CHF (from 1900-01-05), 88 for GBP (from 1900-01-03)."""
     print_section("P3: the oracles of today")
     foreign = [movement for movement in _native_movements() if movement.currency != EUR and movement.amount != 0]
     asked = _needs_by_pair(_unit_requests_today(foreign, NATIVE_RATES_UNTIL), EUR)
-    assert {pair[0]: len(days) for pair, days in asked.items()} == {USD: 92, CHF: 86, GBP: 88}, {pair[0]: len(days) for pair, days in asked.items()}
+    assert {pair[0]: len(days) for pair, days in asked.items()} == {USD: 132, CHF: 86, GBP: 88}, {pair[0]: len(days) for pair, days in asked.items()}
     needs = _needs_by_pair(_fx_needs_today(**_main_inputs()), EUR)
     assert {pair[0] for pair in needs} == {USD, CHF, GBP, JPY}
     assert min(needs[(USD, EUR)]) == date(2024, 2, 20) and max(needs[(USD, EUR)]) == date(2024, 5, 9), (min(needs[(USD, EUR)]), max(needs[(USD, EUR)]))
-    print_success("✓ the oracles answer as HEAD did")
+    print_success("✓ the oracles answer as the dense readers did")

@@ -19,7 +19,7 @@ import bisect
 import math
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import NamedTuple
 
@@ -384,9 +384,23 @@ class FixedPeriodChange:
     inverse_change_ratio: Decimal | None
 
 
+def day_before(day: date, days: int) -> date | None:
+    """``day`` minus ``days`` calendar days; None when that day falls before 0001-01-01, the first day ``date`` has.
+
+    The reference day of a fixed period that would sit before the calendar's start does not exist, so the change over it is
+    "no data" (null, shown «—»), not an ``OverflowError``: a table anchored in the year 3 still has its 1D.
+    """
+    ordinal = day.toordinal() - days
+    return date.fromordinal(ordinal) if ordinal >= 1 else None
+
+
 def fixed_period_dates(as_of: date, periods: Sequence[tuple[str, int]] = FIXED_PERIODS) -> tuple[date, ...]:
-    """The days a fixed-period table values: ``as_of``, then ``as_of − days`` for each period (calendar days)."""
-    return (as_of, *(as_of - timedelta(days=days) for _key, days in periods))
+    """The days a fixed-period table values: ``as_of``, then ``as_of − days`` for each period (calendar days).
+
+    A period whose reference day would fall before 0001-01-01 has none (see :func:`day_before`): the days returned are the
+    ones that exist, so no caller ever asks for a day the calendar has not.
+    """
+    return (as_of, *(day for _key, days in periods if (day := day_before(as_of, days)) is not None))
 
 
 def fixed_period_changes(values: Mapping[date, Decimal | None], as_of: date, periods: Sequence[tuple[str, int]] = FIXED_PERIODS) -> tuple[FixedPeriodChange, ...]:
@@ -394,13 +408,15 @@ def fixed_period_changes(values: Mapping[date, Decimal | None], as_of: date, per
 
     ``values`` maps a day to the series' value on it — the caller's valuation of that day (the last stored price on or
     before it, a rate converted at it), None or absent when the day has none. The anchor is the value on ``as_of``, each
-    reference the value on ``as_of − days``. The rule of :func:`range_change`: never a number from a missing value, a
-    reference ≤ 0 or a negative anchor; an anchor of 0 is −100 %, without an inverse.
+    reference the value on ``as_of − days``; a period whose reference day is before 0001-01-01 has no reference, so its change
+    is None. The rule of :func:`range_change`: never a number from a missing value, a reference ≤ 0 or a negative anchor; an
+    anchor of 0 is −100 %, without an inverse.
     """
     anchor = values.get(as_of)
     changes = []
     for key, days in periods:
-        change = range_change(values.get(as_of - timedelta(days=days)), anchor)
+        reference_day = day_before(as_of, days)
+        change = range_change(values.get(reference_day) if reference_day is not None else None, anchor)
         changes.append(FixedPeriodChange(key=key, days=days, change_ratio=change.change_ratio, inverse_change_ratio=change.inverse_change_ratio))
     return tuple(changes)
 
@@ -709,9 +725,18 @@ def _solve_xirr(flows: Sequence[tuple[float, float]], x0: float) -> float | None
     solve the equation is never returned: the bare secant method used before could stop, after an overflow, on one of its
     own starting points and give it back as the rate.
     """
+    if _all_flows_zero(flows):
+        return None
     scale = _xirr_scale(flows)
     rate = _newton_xirr(flows, x0, scale)
     return rate if rate is not None else _bracketed_xirr(flows, x0, scale)
+
+
+def _all_flows_zero(flows: Sequence[tuple[float, float]]) -> bool:
+    """Whether every amount is zero (MF-P1d): the NPV is then zero at every rate, so no rate solves anything — Newton would
+    answer its own starting point. A period opening at 0 whose only deposit falls on its last day is one: the deposit
+    joins the final value."""
+    return all(amount == 0.0 for _years, amount in flows)
 
 
 def _xirr_scale(flows: Sequence[tuple[float, float]]) -> float:
@@ -720,7 +745,10 @@ def _xirr_scale(flows: Sequence[tuple[float, float]]) -> float:
 
 
 def _newton_xirr(flows: Sequence[tuple[float, float]], x0: float, scale: float) -> float | None:
-    """The first step of :func:`_solve_xirr`: Newton's method from ``x0``, its answer kept only when it is a root."""
+    """The first step of :func:`_solve_xirr`: Newton's method from ``x0``, its answer kept only when it is a root; never on
+    flows that are all zero, where every rate is a «root» (MF-P1d)."""
+    if _all_flows_zero(flows):
+        return None
     # Imported here: the module's other functions are plain arithmetic, and a schema importing one of them (MF-D3) does
     # not load scipy for it.
     from scipy.optimize import newton as scipy_newton  # noqa: PLC0415
@@ -753,7 +781,10 @@ def _bracketed_xirr(flows: Sequence[tuple[float, float]], x0: float, scale: floa
             previous_rate = previous_npv = None
             continue
         if npv == 0.0:
-            roots.append(rate)
+            # An exact zero is a root only where the NPV changes sign around it (P1c): far from t=0 every term of a
+            # period that opens at 0 underflows to 0.0, and the NPV is exactly 0.0 at rates that solve nothing
+            if _changes_sign_at(flows, rate):
+                roots.append(rate)
         elif previous_rate is not None and previous_npv is not None and _opposite_signs(previous_npv, npv, noise_floor):
             try:
                 roots.append(brentq(lambda r: _xirr_npv(flows, r), previous_rate, rate, xtol=1e-14, maxiter=200))
@@ -783,10 +814,11 @@ def _bracketed_xirr_at(flows: Sequence[tuple[float, float]], rate: float, scale:
         return None
     if not (math.isfinite(low_npv) and math.isfinite(high_npv)):
         return None
-    # The scan keeps a grid point whose NPV is exactly 0.0 as a root (a rate of exactly 0, a constant value)
+    # The scan keeps a grid point whose NPV is exactly 0.0 as a root (a rate of exactly 0, a constant value) when the
+    # NPV changes sign around it (P1c: not a point where every term underflowed)
     if high_npv == 0.0 or low_npv == 0.0:
         exact = high if high_npv == 0.0 else low
-        return exact if _is_xirr_root(flows, exact, scale) else None
+        return exact if _changes_sign_at(flows, exact) and _is_xirr_root(flows, exact, scale) else None
     if not _opposite_signs(low_npv, high_npv, _npv_noise_floor(flows)):
         return None
     try:

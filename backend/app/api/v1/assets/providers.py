@@ -22,6 +22,8 @@ from backend.app.schemas.provider import (
     FABulkRemoveResponse,
     FAProviderAssignmentItem,
     FAProviderAssignmentReadItem,
+    FAProviderImpactRequest,
+    FAProviderImpactResponse,
     FAProviderInfo,
     FAProviderParamField,
     FAProviderProbeRequest,
@@ -314,6 +316,27 @@ async def assign_providers_bulk(
         raise HTTPException(status_code=500, detail="Internal error while assigning providers") from e
 
 
+@provider_router.post("/impact", response_model=FAProviderImpactResponse)
+async def provider_change_impact(
+    request: FAProviderImpactRequest,
+    session: AsyncSession = Depends(get_session_generator),
+    _current_user: User = Depends(get_current_user),
+):
+    """Dry-run of ``POST /provider`` and ``DELETE /provider`` (X5-1): what saving these assignments and removing these
+    providers would delete, counted, nothing written.
+
+    One result per assignment, then one per removal: the prices and the provider-generated events deleted, the
+    transactions that lose the link to a deleted event (counted, never named), and ``blocking_splits`` — the SPLITs whose
+    adjustments have no purchase cost, which make the real operation refuse (409). ``reason`` is ``none`` when nothing is
+    lost: a change between market providers keeps the history.
+    """
+    try:
+        return await AssetSourceManager.provider_change_impact(request, session, current_user_id=_current_user.id)
+    except Exception as e:
+        logger.exception(f"Error in provider change impact: {e}")
+        raise HTTPException(status_code=500, detail="Internal error while measuring the provider change") from e
+
+
 @provider_router.delete("", response_model=FABulkRemoveResponse)
 async def remove_providers_bulk(
     asset_ids: List[int] = Query(..., description="List of asset IDs to remove providers from"),
@@ -322,17 +345,18 @@ async def remove_providers_bulk(
 ):
     """Bulk remove provider assignments (PRIMARY bulk endpoint).
 
-    Removing an assignment deletes the events its provider generated. Refused, nothing removed: 409
-    ``detail = {"error_code", "message", "params"}`` with ``PROVIDER_REMOVAL_LINKED_TRANSACTIONS`` (X-R62) when a
-    transaction is linked to one of those events; ``params`` holds ``asset_id``, ``item_index`` and ``events``
-    (``event_id``, ``date``, ``type``, ``transaction_ids`` — only those the caller can see — and
-    ``hidden_transactions_count``). ``PROVIDER_REMOVAL_CONFLICT`` when the delete still broke a reference (a link made
-    meanwhile); its ``params`` is empty.
+    Removing an assignment deletes the events its provider generated and disconnects the transactions linked to them
+    (``asset_event_id`` to NULL), as a change of provider does; the prices stay (X5-1: ``POST /provider/impact`` says
+    what it would delete first). Refused, nothing removed: 409 ``detail = {"error_code", "message", "params"}`` with
+    ``PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST`` (X-R49) when one of those events is a SPLIT with linked incoming
+    adjustments without a purchase cost; ``params`` holds ``asset_id``, ``item_index`` and ``splits`` (``event_id``,
+    ``date``, ``transaction_ids`` — only those the caller can see — and ``hidden_transactions_count``).
+    ``PROVIDER_REMOVAL_CONFLICT`` when the delete still broke a reference (a link made meanwhile); its ``params`` is empty.
     """
     try:
         return await AssetSourceManager.bulk_remove_providers(asset_ids, session, current_user_id=_current_user.id)
     except AssetSourceError as e:
-        if e.error_code in ("PROVIDER_REMOVAL_LINKED_TRANSACTIONS", "PROVIDER_REMOVAL_CONFLICT"):
+        if e.error_code in ("PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST", "PROVIDER_REMOVAL_CONFLICT"):
             raise HTTPException(status_code=409, detail={"error_code": e.error_code, "message": e.message, "params": jsonable_encoder(e.details)}) from e
         logger.exception(f"Error in bulk remove providers: {e}")
         raise HTTPException(status_code=500, detail="Internal error while removing providers") from e

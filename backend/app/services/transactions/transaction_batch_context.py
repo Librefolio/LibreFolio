@@ -69,6 +69,10 @@ class TransactionBatchContext:
     link_uuid_map: dict[str, list[tuple[int, Transaction]]] = field(default_factory=lambda: defaultdict(list))
     consumed_link_uuids: set[str] = field(default_factory=set)
     wac_results: list[WACPreviewResultItem] | None = None
+    # Non-blocking remarks (B2): they never refuse a commit and correct nothing.
+    warnings: list[TXValidationIssue] = field(default_factory=list)
+    # The date each preloaded row had before the batch touched it: an update is a date change only against it.
+    stored_dates: dict[int, date] = field(default_factory=dict)
 
     @classmethod
     def from_inputs(

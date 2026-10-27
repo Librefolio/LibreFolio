@@ -434,3 +434,73 @@ describe('C3: buildMergedTransactions — fakeRemapByFile, the remap of each fil
         expect(remap.get('err')?.size ?? 0).toBe(0);
     });
 });
+
+describe('D-P4 (W5-10): buildMergedTransactions — the warning todo for a date before 1900', () => {
+    const buy = (date: string | undefined, asset_id = 10) => ({type: 'BUY', date, quantity: 1, asset_id});
+    const isPreFloor = (todo: {field: string; reasonCode: string}) => todo.field === 'date' && todo.reasonCode === 'date_before_1900';
+
+    it('adds one warning todo on date, with the date in its context, to a row dated before 1900 only', () => {
+        const results = [src('f', 1, {transactions: [buy('2024-05-01'), buy('1850-05-01'), buy('1899-12-31')]})];
+        const {txArr} = buildMergedTransactions(results, [{id: 1}], []);
+
+        expect(txArr[0].todos).toEqual([]);
+        expect(txArr[1].todos).toHaveLength(1);
+        expect(txArr[1].todos[0]).toMatchObject({field: 'date', severity: 'warning', reasonCode: 'date_before_1900', context: {date: '1850-05-01'}});
+        expect(txArr[2].todos.filter(isPreFloor)).toHaveLength(1);
+        expect(txArr[2].todos[0].context).toEqual({date: '1899-12-31'});
+    });
+
+    it('does not flag 1900-01-01 itself, a missing date, nor an unreadable one', () => {
+        const results = [src('f', 1, {transactions: [buy('1900-01-01'), buy(undefined), buy('abc')]})];
+        const {txArr} = buildMergedTransactions(results, [{id: 1}], []);
+
+        expect(txArr.map((row) => row.todos)).toEqual([[], [], []]);
+    });
+
+    it("keeps the plugin's own todos of the row and adds this one after them, once", () => {
+        const results = [
+            src('f', 1, {
+                transactions: [buy('1850-05-01')],
+                field_todos: [{tx_index: 0, field: 'quantity', severity: 'warning', reason_code: 'corporate_action', message: 'plugin wording', context: {k: 1}}],
+            }),
+        ];
+        const {txArr} = buildMergedTransactions(results, [{id: 1}], []);
+
+        expect(txArr[0].todos.map((todo) => `${todo.field}:${todo.reasonCode}`)).toEqual(['quantity:corporate_action', 'date:date_before_1900']);
+        expect(txArr[0].todos[0].context).toEqual({k: 1});
+    });
+
+    it('does not duplicate it when the plugin already sent the same todo', () => {
+        const results = [
+            src('f', 1, {
+                transactions: [buy('1850-05-01')],
+                field_todos: [{tx_index: 0, field: 'date', severity: 'warning', reason_code: 'date_before_1900', message: 'plugin wording', context: {date: '1850-05-01'}}],
+            }),
+        ];
+        const {txArr} = buildMergedTransactions(results, [{id: 1}], []);
+
+        expect(txArr[0].todos.filter(isPreFloor)).toHaveLength(1);
+        expect(txArr[0].todos).toHaveLength(1);
+    });
+
+    it('a todo of the plugin on date with another reason does not stop it', () => {
+        const results = [src('f', 1, {transactions: [buy('1850-05-01')], field_todos: [{tx_index: 0, field: 'date', severity: 'warning', reason_code: 'date_guessed', message: 'guessed'}]})];
+        const {txArr} = buildMergedTransactions(results, [{id: 1}], []);
+
+        expect(txArr[0].todos.map((todo) => todo.reasonCode)).toEqual(['date_guessed', 'date_before_1900']);
+    });
+
+    it('the row is still selected: the warning asks at save, it does not drop the row', () => {
+        const results = [src('f', 1, {transactions: [buy('1850-05-01')]})];
+        const {txArr} = buildMergedTransactions(results, [{id: 1}], []);
+
+        expect(txArr[0].selected).toBe(true);
+    });
+
+    it('works per row across files, each row with its own date', () => {
+        const results = [src('a', 1, {transactions: [buy('1850-05-01')]}), src('b', 1, {transactions: [buy('2024-05-01')]})];
+        const {txArr} = buildMergedTransactions(results, [{id: 1}], []);
+
+        expect(txArr.map((row) => row.todos.some(isPreFloor))).toEqual([true, false]);
+    });
+});

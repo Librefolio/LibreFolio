@@ -7254,3 +7254,270 @@ caricatore divergerebbe dalla versione di Y. Riprendo dopo il commit di Y-40.
    lo spec cade sull'asserzione del disegno («the preview still draws what it drew before the comparison was picked»), non
    altrove. La pagina è stata ripristinata byte per byte (`git status` pulito su di lei) e la terza corsa, con la build
    rifatta, è verde. La fragilità temuta dell'impronta del canvas non si è vista in tre corse.
+
+## Ondata 5 (23/10/2026, base `1fd80c481` = `dev_release2`, treni 9 e 10)
+
+Due lotti: **Q1…Q3 + S1** («formule veloci» dei prezzi, treno 11b, blocca il tag, X rivede) e **Z5-F1** (l'avviso del
+rolling return tradotto, treno 11a). Kickoff: `salvataggi-worktrees-20261021/ondata5/kickoff-Z.md`. Sonnet.
+
+### Analisi di Q1…Q3 + S1 (23/10, sola lettura)
+
+**Dove si spende oggi un giorno di calendario** (`services/assets/price_query.py`, `api/v1/fx/currencies.py`):
+1. **Il riempimento** (`_build_backward_filled_series`, `:189`): un `FAPricePoint` (pydantic) per ogni giorno da
+   `max(inizio caricamento, primo prezzo)` (o dal seme) alla fine. L'inizio del caricamento è l'inizio visibile meno il
+   riscaldamento dei segnali (`plan.max_history_days_before_visible`, `:542-561`); per un segnale a storia completa
+   (`requires_full_history`, drawdown) è `EARLIEST_RANGE_START` (1900-01-01), cioè anni di punti densi per una finestra
+   visibile di un giorno. Lo stesso per i confronti di un segnale (`dependency_results`, `:741-760`).
+2. **La conversione** (`:775-880`): un elemento `(Currency, target, p.date)` per **ogni punto denso** con valuta diversa
+   dal bersaglio, in un solo `convert_bulk`: due oggetti `Currency` e una `bisect` per giorno; poi per ogni giorno un
+   `FAPricePoint` ricostruito (`original_*`, `backward_fill_info` con `fx_rate_date`/`fx_days_back`).
+3. **I segnali** (`:1040-1080`): `result.prices` intera (carico = finestra + riscaldamento), `mark_market_closed_carries`,
+   un `SignalPricePoint` per punto. I plugin «di seduta» (`computes_on_quote_days`) usano **solo i punti con prezzo
+   quotato quel giorno** (`signals/series.py:37-49` `is_quote_day`: `backward_fill_info` assente o `days_back == 0`); i
+   «di calendario» (il rolling return, `allows_sparse_input_dates`) leggono il prezzo di N giorni prima dal punto denso
+   (portato).
+4. **Il taglio** (`:1086-1090`): `result.prices` tagliata alla finestra visibile `[requested_start, requested_end]`.
+5. **Il budget** (`:630-646`, `_fill_span`): conta i punti del riempimento sul carico (finestra + riscaldamento).
+6. **Cambi** (`currencies.py:437-550`): un elemento di `convert_bulk` per giorno, **due volte** (blocco visibile e blocco
+   dei segnali: `signal_start .. end` comprende già la finestra), `amount` arbitrario (la `from_amount` del cliente) o 1.
+
+**Il modello nuovo («per osservazione»).**
+- *Internamente* una serie di prezzi è la lista delle **osservazioni** (le righe salvate nel carico + il seme) e la
+  regola di lettura **«ultimo prezzo ≤ d»**; la serie densa è una *vista* che si costruisce per una finestra
+  (`dense(finestra)` = l'attuale `_build_backward_filled_series` ristretto a quella finestra, stessa `_fill_point`).
+- La **conversione** si fa **solo nei giorni di cambiamento**: i giorni delle osservazioni ∪ i giorni in cui cambia la
+  riga di tasso usabile (da `unit_rate_steps`, già in dev, P3: `.days` della coppia sul carico) ∪ l'inizio della finestra.
+  In mezzo prezzo e tasso sono costanti, quindi il valore convertito è quello del giorno di cambiamento: si chiama
+  **lo stesso `convert_bulk`** su quei giorni (nessuna nuova aritmetica: stesso `_converted` con la riga grezza, anche
+  per le coppie inverse, dove «1 × tasso unitario» differirebbe all'ultima cifra), e per ogni giorno intermedio si
+  ricavano solo i campi che dipendono dal giorno (`date`, `backward_fill_info.days_back`, `fx_days_back`).
+- La **vista densa** si costruisce **solo per la finestra visibile** (l'API resta «un punto per giorno»). Ai segnali si dà
+  la serie nella forma che ciascun plugin legge: **di seduta → le sole osservazioni** del carico (stesse di
+  `is_quote_day`, già convertite al giorno di osservazione); **di calendario → la vista densa del carico** (finestra +
+  riscaldamento in giorni di calendario). I segnali **a storia completa** lavorano sulle osservazioni (S1), non sui
+  giorni dal 1900.
+- Il **budget** (`MAX_BULK_ITEM_DAYS`, i pavimenti 1900/100 anni) **non cambia in questo lotto** (è di MF, dopo): `_fill_span`
+  continua a contare i punti del riempimento, quindi `test_bulk_limits.py` e `test_range_ceiling.py` restano come sono.
+
+**Cosa resta identico per l'utente**: ogni `FAPricePoint` pubblico (data, OHLC convertiti, `original_*`,
+`backward_fill_info`), i `SignalResult` (valori, stato, avvisi, copertura), `sample_bounds`/`resolution`, gli errori di
+conversione (compresi «Conversion N: …» e il tetto «… and N more», che si ricostruiscono dai giorni senza tasso con lo
+stesso indice di oggi), l'ordine e il numero dei punti. **Cambia solo il costo**: meno conversioni e meno oggetti densi
+fuori dalla finestra.
+
+**Quanto si guadagna, onestamente.** Nella finestra visibile i punti restano uno al giorno (contratto). Il risparmio
+vero è in tre posti: (a) le conversioni: osservazioni ∪ cambi di tasso invece di ogni giorno (su un ETF in EUR su USD,
+10 anni: ~3 650 → ~2 600-3 000, **meno del 30 %** perché i tassi cambiano nei giorni feriali come le quotazioni); su un
+asset in valuta di base nulla da convertire; (b) i caricamenti oltre la finestra (riscaldamento, **storia completa**, i
+confronti), che oggi sono densi da 1900 o dal primo prezzo; (c) gli altri chiamanti di `get_prices_bulk` (rischio R1,
+AI Export, `scope.py:358`) che chiedono intervalli lunghi. Per il CHANGELOG: la riga «caricano più in fretta» va scritta
+**solo** con i numeri misurati (conteggio delle conversioni e tempo sul corpus); se un ETF «solo finestra visibile» non
+guadagna, «nessuna».
+
+**I 7 scenari di parità** (oracolo: una **copia dei costruttori di HEAD** dentro il test, `_build_backward_filled_series`
++ il blocco di conversione di oggi, confrontata campo per campo con la via nuova su più finestre; nuovo file
+`backend/test_scripts/test_services/test_price_query_observations.py`):
+1. *Data uguale per ogni punto a parità di finestra*: stesse date, stesso numero di punti, stesso ordine, su finestre che
+   cominciano prima/dentro/dopo la storia e finiscono prima/dopo l'ultimo prezzo.
+2. *Weekend e festivi*: prezzi solo nei giorni feriali; il portato ha `backward_fill_info.days_back` 1-3 e, per i
+   segnali di seduta, non è un giorno di quotazione.
+3. *Cambio che cambia a metà*: tasso con righe in giorni diversi dai prezzi; il valore convertito di un giorno portato
+   segue il **tasso del giorno** (`fx_days_back`, `original_close`).
+4. *Asset in valuta diversa dalla base*: diretta e **inversa** (coppia con ordine alfabetico opposto); cifra per cifra.
+5. *Finestra più corta della storia*: un giorno, una settimana; storia prima della finestra come seme; il seme è la
+   riga più recente `< inizio`.
+6. *Riempimenti*: nessuna riga prima della finestra (parte dal primo prezzo), nessun tasso prima del primo (errori
+   «No FX rate found…» con lo stesso indice e lo stesso tetto), tasso inutilizzabile saltato.
+7. *Segnali con riscaldamento*: EMA/MACD (seduta), il rolling return (calendario), il drawdown (storia completa),
+   un confronto: `SignalResult` identici dalla via densa e da quella per osservazioni.
+Più un test che **conta le conversioni** (`convert_bulk` sostituito da un doppio che le conta): N giorni densi → solo
+osservazioni ∪ cambi di tasso.
+
+**Il punto delicato per J (R1) — proposta da concordare per iscritto.** Dopo Q1, per ogni data richiesta `d` (le date
+comuni con un altro asset) il rischio deve leggere «l'ultimo prezzo ≤ d **convertito al tasso di d**». Proposta: Q1 espone
+un lettore interno **`ObservedPrices`** (in `price_query.py`, accanto a `get_prices_bulk`): `rows` (osservazioni ordinate,
+seme compreso), `unit_rate_steps` del carico e un metodo `point_at(d) -> FAPricePoint` che dà **esattamente** il punto che
+la serie densa ha oggi in `d` (stessa `_fill_point`, stessa conversione al tasso di `d`, `backward_fill_info`
+compreso), e `observation_dates` per chi vuole solo le quotazioni. `market_series.prepare_asset_series_set` e
+`risk/scope.py:358` leggono da lì invece di `get_prices_bulk(..., giorni)`. **Domanda a J**: gli basta `point_at(d)` +
+`observation_dates`, o vuole anche la vista densa di una finestra (`dense(window)`)? Finché non risponde non scrivo il
+codice di Q1.
+
+**File miei** (kickoff): `price_query.py`, `api/v1/fx/currencies.py`, `signals/planning.py`, `market_series.py`.
+**Solo letti**: `utils/date_range_limits.py`, `fx/conversion.py` (uso `unit_rate_steps` e `convert_bulk` così come sono).
+
+**Passi.** (1) rossi di parità + conteggio (test-author) · (2) Q1/Q2 in `price_query.py` · (3) Q3 `currencies.py` (le
+conversioni dei cambi su righe+gradini, il blocco dei segnali = lo stesso calcolo, non due) · (4) S1 `planning.py` (il
+carico dei segnali in punti di seduta e in giorni di calendario) · (5) parità 0 differenze + `services price-query`,
+`api assets-price`, `api fx`, `services signals` + doc per sviluppatori · (6) X rivede.
+
+**Rischi.** (a) i segnali di calendario leggono il portato: la vista densa del carico deve restare per loro, altrimenti
+il rolling return cambia; (b) `mark_market_closed_carries` e la copertura (`build_signal_coverage`) contano i giorni
+dello slot visibile: da non spostare; (c) gli errori di conversione portano l'indice del giorno denso; (d) i chiamanti
+(AI Export `asset_resources.py:268`, `technical_shared.py:404/583`, `risk/scope.py:358`) vedono la stessa risposta;
+(e) `api/v1/fx/currencies.py` ha il blocco dei segnali dentro `signal_start`: lo stesso calcolo, due viste.
+**Domande di prodotto**: nessuna.
+
+### Q1…Q3 + S1 — lavoro (23/10, ondata 5, treno 11b)
+
+> Concordato con J (via coordinatore): oggetto per asset `ObservedPrices` con `first_point_date`, `observation_dates`,
+> `point_on(d)`; nessuna vista densa di finestra; `market_series.py` non si tocca (J5-2 lo cambia dopo).
+
+1. ✅ 23/10 — Rossi. `test_price_query_observations.py` (nuovo): l'oracolo è una **copia** della catena di HEAD
+   `1fd80c481` (`head_dense` + `head_convert` + `head_signals`) dentro il test. OQ-01 parità, 18 casi
+   (asset × bersaglio × finestra: nativo, diretto, inverso, coppia senza tasso, tassi che cominciano tardi, storia corta,
+   chiusura 0, finestra di un giorno, prima della storia, dopo l'ultima riga, sopra il buco di tassi, festivi); OQ-02/03
+   errori e ordine; OQ-04 conteggio (le conversioni date a `convert_bulk` sono una per tratto di riga-prezzo e riga-tasso
+   invariate, non una per giorno); OQ-05 l'oggetto; OQ-06 sette casi di segnali (EMA, rolling return, drawdown, insieme
+   di tre). Verdi su HEAD per costruzione la parità (OQ-01…03, 06), **rossi OQ-04 (conteggio) e OQ-05 (l'oggetto non
+   esisteva)**, per la ragione giusta.
+2. ✅ 23/10 — Q1/Q2. `services/assets/observed_prices.py` (nuovo): `resolve_days` trova per ogni giorno la sua riga di
+   prezzo (cursore) e la sua riga di tasso (`unit_rate_steps`, le stesse righe usabili di `convert_bulk`), converte
+   **ogni coppia (riga-prezzo, riga-tasso) una volta** con lo stesso `convert_bulk` (nessuna moltiplicazione per il tasso
+   unitario: le coppie inverse dividono, la cifra finale sarebbe diversa), e costruisce il punto del giorno
+   (`point_of`). `price_query.py`: la serie densa, le dipendenze dei segnali di rischio e i campioni di Z-29 passano da
+   `observe`/`series_points`; il vecchio giro di conversione giorno per giorno (≈120 righe) è tolto; resta la
+   conversione degli eventi (E.8). `_build_backward_filled_series`/`_fill_point` restano (riferimento nativo; `_fill_point`
+   delega a `fill_point`). `PriceQueryOperations.observed_prices(request, session)` dà l'oggetto per J.
+   > **Note implementazione**: errori di conversione identici (stesso testo, stessa numerazione, stessi 10 + «… and N
+   > more»): i giorni senza tasso li scrive lo stesso `rate_not_found_error` (ora in `fx/stretch_conversion.py`), gli altri
+   > li dà `convert_bulk`. Un `close` a 0 resta nativo come oggi. Lo spia di `test_asset_signals.py` (`spy_load_starts`)
+   > ora guarda `observe` (è la funzione che riceve l'inizio del carico): i quattro test sul carico (400 giorni, storia
+   > completa, moltiplicatore del rischio, finestra di calendario) restano verdi.
+3. ✅ 23/10 — Q3. `services/fx/stretch_conversion.py` (nuovo): `convert_by_stretch(session, conversions, convert=…,
+   steps=…)` risponde a una lista come `convert_bulk(..., raise_on_error=False)` ma chiede a `convert` una sola
+   conversione per ogni (importo **come si stampa**, coppia, riga di tasso): `1` e `1.0` danno esponenti diversi, quindi
+   due conversioni. Identità e giorni senza tasso non passano da `convert`. `currencies.py` lo usa per il blocco dei
+   giorni visibili e per quello dei segnali. `test_fx_stretch_conversion.py` (nuovo, 28 test): parità elemento per elemento
+   su 12 liste, esponente, conteggio, risposta del gestore uguale a quella col giro «ogni giorno» (8 casi: segnali,
+   campionamento, importo 0, identità), conteggio del gestore (≈ giorni/2 su tre giorni della settimana).
+   > **⚠️ Fuori pista**: `test_bulk_limits.py` e `test_range_ceiling.py` chiamano il gestore con `session=None` e un
+   > convertitore finto che dà «un tasso ogni giorno»; col nuovo gestore serve anche un finto `unit_rate_steps` con lo
+   > stesso modello (un passo per giorno): aggiunto (`_every_day_a_step`, `_Converter.steps`). Un'asserzione cambia con
+   > ragione: 1 000 conversioni identiche di un giorno sono **una** conversione data (`len(handed) == 1`), 1 000 risultati.
+4. ✅ 23/10 — S1. Verificato, non c'è codice da cambiare in `planning.py`/`price_query.py`: il carico di un item con segnali
+   è già **finestra visibile − riscaldamento** (in giorni di calendario per i plugin di calendario, in sedute × 2 per quelli
+   di seduta), pinnato dallo spia di `asset-signals`. Fa eccezione solo un segnale a **storia completa** (drawdown): carica
+   dal 1900 e **resta denso**, perché Z-30/BL-L pinna che il drawdown riceva la serie dal 1900-01-01 e perché la serie
+   preparata (`market_series.prepare_asset_series_set`) la legge densa. Renderla solo-osservazioni è il lavoro di J5-2 su
+   `market_series.py`: dopo di lui la storia prima del riscaldamento può smettere di essere densa senza cambiare nulla qui.
+5. ✅ 23/10 — Misura (corpus: ETF in USD chiesto in EUR, 10 anni, 2 608 giorni feriali con prezzo e tasso): HEAD 3 650
+   conversioni, nuovo **2 608** (−29 %); punti **identici** (3 650 su 3 650, `model_dump` uguale); tempo **0,25 s contro
+   0,26 s**: nessun guadagno di velocità misurabile (il costo sta nel costruire i `FAPricePoint`, non nel `bisect`).
+   **CHANGELOG: nessuna** (nessun effetto visibile misurabile).
+6. ✅ 23/10 — Verdi. Nuovi: `services price-query-observations` 38, `services fx-stretch-conversion` 28. Vicini
+   (corsia 6186): `price-query-sampling`, `asset-signals` (30), `period-changes`, `signal-aggregation`,
+   `current-prices-bulk`, `fx-conversion`, `fx-rate-steps`, `series-preparation`, `signal-service`, `range-ceiling` (45),
+   `asset-source-guards` (55), `ai-export` (1 133); `api fx` (34), `fx-unit` (64), `fx-convert-sampling` (29),
+   `fx-signals` (8), `signal-request-validation` (2), `assets-price` (32); `test_bulk_limits.py` 29; `check-orphans`;
+   `mkdocs build` e `check-links` (97 link). Ruff e black puliti sui 14 file `.py` toccati.
+   > **⚠️ Fuori pista**: tre suite API con un convertitore finto (`fx-unit`, `fx-convert-sampling`, `fx-signals`) davano
+   > rosso come le due del passo 3: il gestore ora chiede anche `unit_rate_steps`. Doppio comune nuovo
+   > `backend/test_scripts/fx_steps_double.py` (`steps_double(rate_day_of)`); due asserzioni cambiano con ragione: il
+   > caso X-R41 con il giorno 2 riempito dal giorno 1 dà **una** conversione per importo (stesso tratto), e il test
+   > «una sola chiamata combinata» usa `EUR→USD` perché un'identità non passa più da `convert_bulk`.
+
+7. ✅ 23/10 — Revisione di X (una correzione, quattro note). (1) `test_price_query_sampling.py`: `_forbid_the_daily_fill` ora
+   blocca `price_query.observe` (la lettura giornaliera; `series_points` resta ammesso per i campioni), docstring aggiornati,
+   e un controllo nuovo (`PQS-Q11b`) dimostra che la guardia scatta: un item giornaliero solleva `_DailyFillBuilt`.
+   Prima passava per il motivo sbagliato (bloccava una funzione che la produzione non chiama più). Verdi: `price-query-sampling`
+   198. (2) `_build_backward_filled_series`: docstring «riferimento per i test», non tolto. (3) `observed_prices.py`: il
+   docstring dice «densa per giorno, convertita per tratto». (4) commento sulla numerazione degli errori di `convert_bulk`
+   (per posizione nell'elenco chiesto, non per punto). (5) `convert_by_stretch`: una risposta `None` senza spiegazione dà
+   comunque un errore per ogni giorno del tratto (`XQ3-06`, 29 test).
+
+### Z5-F1 — l'avviso del rolling return arriva tradotto (23/10, ondata 5, treno 11a)
+
+> Il backend aggiunge nei `details` dell'avviso `undefined_metric_window` dove sono i punti non definiti e il periodo da
+> risincronizzare; il frontend lo rende dal codice, nella lingua dell'app, dal catalogo.
+
+1. ✅ 23/10 — Rossi. Backend (`test_risk_signal_plugins.py`): i due test che fissavano `warning.details` per intero ora
+   chiedono anche `unavailable_start`, `unavailable_end`, `resync_start`, `resync_end`; un test nuovo per il caso «ogni punto
+   non definito», dove il plugin solleva `SignalUnavailableError` (stessi dettagli). 3 rossi per la ragione giusta (mancano le
+   quattro chiavi). Frontend: `signalProblem.test.ts` (4 casi: la lettura dal avviso di un risultato parziale e di uno non
+   disponibile, senza dettagli, con valori che non sono giorni né conteggi) e `chartSignalsHelpers.test.ts` (3 casi: la
+   chiave del catalogo con i valori per il parziale e per il non disponibile, e la regola di prima senza i giorni). 6 rossi.
+2. ✅ 23/10 — Cura. `calendar_rolling_return/plugin.py`: `_unavailable_span` dà `unavailable_start`/`unavailable_end` (il primo
+   e l'ultimo punto non definito) e `resync_start`/`resync_end` (dal riferimento più lontano che un punto non definito
+   chiedeva, all'ultimo punto non definito); sia nell'avviso del risultato parziale sia nell'errore di «tutto non definito».
+   `signalProblem.ts`: cinque campi nuovi in `SignalProblem` (`unavailablePoints`, `unavailableStart`, `unavailableEnd`,
+   `resyncStart`, `resyncEnd`), letti dall'avviso `undefined_metric_window`, null senza dettagli o con valori che non sono
+   giorni ISO o numeri. `chartSignalsHelpers.ts`: `partial_undefined_metric` e `undefined_metric` con i giorni usano le
+   chiavi `chartSettings.signalProblems.undefinedWindowPartial` / `undefinedWindowUnavailable` (aggiunte nelle 4 lingue
+   con `./dev.py i18n add`, sorgente `lib/i18n/charts/`); senza i giorni resta la regola di prima (il messaggio del backend,
+   o la frase generica): i segnali di rischio, che non portano questi dettagli, non cambiano.
+   > **Note implementazione**: nessun testo inglese scritto nei componenti; le date sono quelle ISO dei `details`, come per
+   > `partialContiguousSegment`. Tre fixture di test (`signalProblemSeverity`, `assetDetailFxRequirements`,
+   > `ChartSignalsSection`) costruivano un `SignalProblem` a mano: hanno ora i cinque campi a null.
+   > **⚠️ Fuori pista**: una corsa di 19 file Vitest l'avevo lanciata fuori dal `flock` (regola: più di 3 file nel
+   > lucchetto); rifatta dentro, vedi sotto.
+3. ✅ 23/10 — Verdi. Backend: `test_risk_signal_plugins.py` 46; `services asset-signals` 30, `signal-plugin-matrix` 91,
+   `signal-service` 69. Frontend (in `flock`, `LC_ALL=en_US.UTF-8`): Vitest `lib/charts/signals`, `lib/components/charts`,
+   `lib/components/assets/detail` 58 file / 2009 test; `front check` 0 errori 0 avvisi (dopo `api sync`); `i18n check` e
+   `i18n audit` puliti (0 chiavi mancanti, 0 inutilizzate). Prettier, ruff e black puliti.
+
+### MF-P4b lato AI Export — rossi (25/10, ondata 5)
+
+> Contratto `ondata5/CONTRATTO-P4b.md` §6 e revisione `REVISIONI-P4b.md`: la storia del report diventa a tratti
+> (`date`, `through`); l'AI Export la legge in `build_performance_bucket_rows` (`payloads/portfolio_broker.py:322`, usata da
+> `portfolio_financial` e `broker_financial`) e in `broker_cost_efficiency._average_nav` (`:563`).
+
+1. ✅ 25/10 — Rossi. `test_ai_export_performance_steps.py` (nuovo, 43 test, registrato come `services
+   ai-export-performance-steps`, PURE). L'oracolo è una **copia congelata** della funzione per giorno a `d96519b86` dentro il
+   test, applicata alla stessa storia espansa a un punto al giorno. APS-01 parità campo per campo su 7 storie (copre il
+   periodo, parte tardi, finisce presto, entrambi, un tratto, un giorno, vuota) × 5 piani di bucket (1, 4, 8, 16, 30); APS-02
+   il giorno di un estremo e della chiusura precedente è un giorno, mai la `date` di un tratto; APS-03 parità di NAV fra tratti
+   lontani, vince il giorno più vecchio; APS-04 la media è pesata per la lunghezza, il conteggio è in giorni, il periodo va dalla
+   prima `date` all'ultima `through`. **26 rossi per la ragione giusta** (un tratto conta come un giorno), 17 verdi (le storie
+   con un bucket solo, il giorno solo, la vuota: coincidono per costruzione).
+2. ✅ 25/10 — Cura (dopo il checkpoint piccolo di MF, `79468ddd2`). `build_performance_bucket_rows` legge i tratti con
+   `points_between` (taglio ai bordi): `min`/`max` per confronto stretto sui tratti (il primo a raggiungere il valore vince;
+   la data è quella del tratto tagliato, cioè `max(date, inizio bucket)`), la chiusura precedente è il **giorno** `through`
+   dell'ultimo tratto del bucket prima (`variation_start_date`). `_average_nav` pesa ogni tratto per la sua lunghezza
+   (`through - date + 1`), il conteggio è in giorni e il periodo va da `history[0].date` a `history[-1].through`. Verdi: i 43
+   rossi; `services ai-export` 1 133 (dopo l'adattamento delle fixture).
+   > **Note implementazione**: due file di test dell'AI Export (`..._portfolio_broker_financial`, `..._portfolio_broker_integration`)
+   > costruivano `PortfolioHistoryPoint` di un giorno senza `through`: 27 rossi, previsti. Il loro `_history_point` ora
+   > costruisce un `_StepHistoryPoint` (sottoclasse con `through`, un giorno se non dato) finché il modello non porta
+   > `through` (secondo checkpoint di MF): allora la sottoclasse si toglie.
+   > **⚠️ Fuori pista**: sul percorso vero (`load_portfolio_report`) il report è ancora giornaliero e senza `through`: i due
+   > lettori falliscono finché non arriva il report a tratti di MF. Non c'è ripiego, è voluto (nessun doppio percorso).
+3. ✅ 26/10 — Report a tratti di MF (unione `f6ca43fdc`): le due fixture tornano a `PortfolioHistoryPoint` (che ha `through`), via
+   `_StepHistoryPoint`. `services ai-export` 1 133 passati sul percorso vero.
+4. ✅ 26/10 — Probe di diff sulle 6 copie (`base`, `eur1900`, `usd1900`, `buy1900`, `typo1500`, `nocrypto`, quelle di MF in
+   `ondata5/MF-p4/corpora`): per ognuna `portfolio.overview_and_history` e `portfolio.asset_history` (tutti i broker) e
+   `broker.overview_and_history` per ogni broker dell'utente `e2e_test_user`, più `broker.asset_history` di un broker, a 3 livelli
+   di dettaglio e 2 periodi (3M, 1Y): 60 costruzioni per copia, 360 in tutto, HEAD (`MF-p4/head_tree`) contro il ramo, entrambe
+   da una copia fresca. Script in `ondata5/Z-probe/` (`dump.py`, `compare.py`, `run.sh`).
+   **0 differenze** in tutte le sezioni, tranne due motivi spiegati sotto.
+   > **⚠️ Fuori pista**: il probe ha trovato una differenza vera nel NAV medio, che i miei test non vedevano: nell'ultima cifra
+   > (`...342` contro `...351`, 18 costruzioni). Un NAV convertito ha più di 28 cifre significative e il contesto Decimal
+   > arrotonda ogni addizione, quindi `nav × giorni` non è la somma di `giorni` addizioni. `_average_nav` ora somma il NAV una
+   > volta per ogni giorno del tratto, in ordine (parità al bit); test nuovo `APS-05` (rosso prima, 44 verdi dopo). Il costo è
+   > un'addizione per giorno, nulla rispetto al resto.
+   > **Resta di J, non mio**: la sezione `portfolio.drawdown_summary` / `broker.drawdown_summary` (30 costruzioni su 60 per copia
+   > nel `base`) cambia `n_observations` (388 → 285) e `coverage_ratio` (1,0 → 0,73) perché `risk/results.py:80-82` conta i punti
+   > della storia come giorni; con essa cambiano le statistiche di dimensione. Il confronto finale le esclude
+   > (`Z_PROBE_IGNORE_RISK=1`), cosa dichiarata qui; senza l'esclusione le uniche differenze sono quelle.
+   > **Note implementazione**: i punti del test sono un dataclass con `date`/`through`/`nav_value`/`capital_baseline`/
+   > `total_pnl`/`twrr`, perché i lettori funzionano su ogni punto con `date` e `through` (contratto §6): quando arriva
+   > `StepSpan` basta cambiare il tipo, non le asserzioni.
+
+### Anno breve nei punti di Z (25/10, ondata 5, D-P4)
+
+> `Date.UTC(24, …)` legge l'anno 24 come 1924. Elenco di Y: `ondata5/Y-anno-breve-fuori-ambito.md`; cura: `utcMs` di
+> `utils/dateOnly.ts` (nel ramo con `ac26cfd97`).
+
+1. ✅ 25/10 — Rossi. 8 test in 3 file già registrati: `TimeSeriesStore.test.ts` (serie con `0024-03-01`, `0001-01-01` e a
+   cavallo del 100: i punti si trovano, nessun gap nel 19xx; l'invalidazione di un intervallo corto non tocca il 1924),
+   `aiExportOptions.test.ts` (periodo che finisce nell'anno 24 e nell'anno 1; indietro oltre l'anno 100 senza cadere nel 1999;
+   una data che non esiste continua a lanciare), `snapshotDataRenderer.test.ts` (`dateOrdinal` di `0024-03-01` = −710 702 e di
+   `0001-01-01` = −719 162).
+2. ✅ 25/10 — Cura. `TimeSeriesStore.parseDate` e `formatDate` (l'anno si scrive a quattro cifre), `aiExportOptions.parseIsoDate` e
+   `subtractMonths`, `snapshotDataRenderer.dateOrdinal` (esportata per il test): `utcMs` al posto di `Date.UTC`. Verdi: Vitest
+   `stores`, `features/ai-export`, `utils`, `components/charts` 135 file / 4 088 test; `front check` 0 errori 0 avvisi (dopo
+   `api sync`: il client generato era vecchio e dava 4 errori in `txTradeAmountApi.ts`, non miei); Prettier pulito.
+5. ✅ 26/10 — Probe rifatto dopo l'unione di J (`7c33de840`, J `968cff655`: il lettore del rischio a tratti), **senza**
+   `Z_PROBE_IGNORE_RISK`: stesse 6 copie, stesse 60 costruzioni per copia (360), HEAD contro il ramo. **0 differenze** su
+   tutte, comprese `portfolio.drawdown_summary` e `broker.drawdown_summary` (`n_observations`, `coverage_ratio`) e le
+   statistiche di dimensione. Log: `ondata5/Z-probe/out_full.log`.

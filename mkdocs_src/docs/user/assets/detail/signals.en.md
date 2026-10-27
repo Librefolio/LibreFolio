@@ -84,7 +84,7 @@ The **Underwater Drawdown** card has a **Full history** checkbox, on by default:
 
 The **Data Comparison** menu adds:
 
-- **Asset Comparison** — another asset on the same chart, such as a stock against its index ETF. In **%** view both lines start at 0 %.
+- **Asset Comparison** — another asset on the same chart, such as a stock against its index ETF. In **%** view both lines start at 0 %. The asset is picked in the same panel as the risk comparison's: a search box, **Type** and **Currency** filters, the benchmarks listed first, one click to choose. The chart's own asset is greyed out; one that another comparison already uses carries a warning mark but can still be chosen.
 - **FX Pair** — the rate of one of your currency pairs.
 
 **Sync** (🔄) on an Asset Comparison card downloads that asset's prices for the chart's dates, together with the exchange rates that convert it, for pairs that exist. When the pair is missing, an amber ⚠️ on the card creates it; when its rates are missing, an amber 🔄 syncs them.

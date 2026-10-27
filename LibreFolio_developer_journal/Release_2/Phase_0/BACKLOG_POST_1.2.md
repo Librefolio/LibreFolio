@@ -5526,6 +5526,23 @@ A-21b, A-31, A-41, A-49 e A-58 aspettano una decisione; A-4 e A-10 sono lavoro d
     `data-security-checks` (`off`/`pending`/`ready`/`error`) sulla riga dei controlli e la riga `desc` di
     `services admin-bootstrap`. Commit: del coordinatore. Dettagli: piano 02_accounts, «A62.1»…«A62.3».
 
+- **A-63 · Note della revisione di sicurezza di A5-1 (non bloccanti)** — basso; A, 23/10 (revisione Opus del diff).
+  - (a) `./dev.py user create` salva l'email grezza (`scripts/user_cli.py:91-105`): un titolare creato dalla CLI con una forma non normalizzata (punycode, NFD) non corrisponde alla variabile normalizzata e resta senza protezione, senza avviso. Cura possibile: normalizzare con lo stesso `EmailStr` prima di `same_email`, o validare nella CLI.
+  - (b) `LIBREFOLIO_PROFILE` si legge da ambiente o da `.env`; `LIBREFOLIO_ADMIN_EMAIL` solo dall'ambiente: con l'email solo in `.env` la protezione si spegne senza avviso (il bootstrap si comporta uguale). Da documentare nella guida admin.
+  - (c) `account_protection` chiama `get_settings()` per ogni riga di `GET /users` (rilegge `.env`): calcolare profilo e titolare una volta per richiesta.
+  - (d) Nel `managed` senza `LIBREFOLIO_ADMIN_EMAIL` nessuno è protetto e nessun controllo lo dice: un check `warning` in `config_audit` (di H).
+  - (e) La CLI non ha `user delete`: per eliminare il titolare l'hoster toglie la variabile o cambia il profilo; la guida dice solo deactivate e demote.
+  - (f) Il limite di accesso (10 errori in 15 minuti per identificatore) permette a chiunque di bloccare per poco il login con l'email del titolare; con lo username funziona. Indipendente da A5-1.
+
+- **A-64 · Note della revisione di sicurezza del cambio email del titolare (A5-1b)** — basso; A, 23/10 (revisione Opus).
+  - (a) Riservare l'indirizzo di `LIBREFOLIO_ADMIN_EMAIL` in `update_profile`, registrazione e inviti nel `managed`: oggi un utente può prendersi quell'indirizzo prima del clic e bloccare il cambio (DoS leggero: link revocato, poi `blocked`); chiuderebbe anche la guarigione per indirizzo.
+  - (b) Link perso: nessun comando CLI per riemettere il link di cambio (`dev.py user owner-email-link`: revoca e riemette); oggi il rimedio è documentato (variabile al vecchio indirizzo, riavvio, di nuovo il nuovo, riavvio).
+  - (c) Testo dedicato per l'avviso al vecchio indirizzo quando il cambio lo decide l'host (oggi il generico «se non sei stato tu…»).
+  - (d) La conferma non chiede la password attuale: se l'host sbaglia l'indirizzo o il dominio nuovo è compromesso, chi riceve il link conferma e con «password dimenticata» prende l'account. Difesa in profondità possibile: chiederla sulla pagina di conferma. Scelta di design (l'host è l'autorità).
+  - (e) Il fallback per indirizzo di `account_protection` prima della prima sync non è fail-closed (un processo che non ha ancora letto lo stato protegge per indirizzo, anche un utente comune): dopo la sync vale la regola stretta.
+  - (f) `admin-bootstrap` gira prima di `restore-commit`: un link `/setup` generato al primo avvio dopo un ripristino verrebbe revocato dallo stesso commit (visto sul link di cambio, che A ha spostato dopo). Da verificare con H e B.
+  - (g) Fondere la 006 nella 005 prima del rilascio (rimedio di `user set-email` per chi sale da 1.2; vedi il piano 02_accounts, «A5-1b parte 2»).
+
 ## X · Plugin, asset e ricerca (fase 01)
 
 Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md).
@@ -6481,6 +6498,10 @@ Piano: [`03_pluginsAssets`](../Phase_1/03_pluginsAssets/plan-phase01PluginsAsset
 - **X-50t · Tradurre la pagina utente di Yahoo (settori, TER, emittente dei fondi)** — minimo, documentazione; X, 22/10
   (#50). `yahoo-finance.en.md` ha la voce «Fund details»; mancano `.it/.fr/.es`, non timbrati. Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), sezione «Ondata 4».
 
+- **X-51t · Tradurre le pagine nuove del lotto X5-1 e di Yahoo** — minimo, documentazione; X, 23/10. `user/assets/create-edit.en.md`
+  (sezione «Changing or removing the provider») e `yahoo-finance.en.md` («Known limitation: splits») non hanno ancora `.it/.fr/.es`.
+  Dettagli: [piano 03](../Phase_1/03_pluginsAssets/plan-phase01PluginsAssets.prompt.md), «Ondata 5».
+
 ## W · Import e transazioni (fase 01)
 
 Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01ImportTransactions.prompt.md).
@@ -7348,6 +7369,12 @@ Piano: [`04_importTransactions`](../Phase_1/04_importTransactions/plan-phase01Im
   decidere: quale fonte vince fra un prezzo osservato e questa stima, come la si segna (prezzo stimato, non osservato), se vale anche
   per l'ADJUSTMENT in entrata. Dopo la 1.3.
   🌊 22/10: ondata 6 (proprietario MF): è diventata una buona idea (developer). La gamba che entra in un trasferimento si usa come stima del prezzo, come già si fa per BUY e SELL
+- **W-B95 · La pagina Files mostra ancora l'inglese per un'anteprima che non si può costruire** — minimo, lingua; W, 23/10 (trovato da W5-5 / C-70b).
+  Il 400 dell'anteprima di un file ora è `{code: "preview_unsupported" | "preview_unreadable", message}` (`file_preview.preview_failure_detail`); il wizard e
+  `BrokerImportFilesModal` lo traducono (`resolveParseFailureMessage`, `importWizard.previewFailed.*`). `routes/(app)/files/+page.svelte:722` usa ancora
+  `getFilePreviewError(error, 'Preview failed')` e mostra il `message` inglese (com'era prima, nessuna regressione). Cura: la stessa riga con `resolveParseFailureMessage(error, $_, …)`
+  (o `$t`); poi `getFilePreviewError` non ha più chiamanti e si toglie. **Proprietario da assegnare** (la pagina Files non è di W: la gira il coordinatore).
+  Dettagli: piano 04, «W5-5 · C-70b — esito».
 - **W-B76 · La riga aperta con `?highlight=<id>` non resta segnata** — minimo, test e chiarezza; Y-31 (Y), 17/10, via il
   coordinatore. `pulseElement` (`frontend/src/routes/(app)/transactions/+page.svelte:491-501`) dà alla riga la classe
   `tx-row-highlight` per 1,6 s e poi la toglie: finita l'animazione, né l'utente né un test sa quale riga si è aperta, e l'E2E di
@@ -8497,11 +8524,26 @@ J-10…J-12, CP-8, CP-9, CP-10 (con R11), U1, U10, CP-14, T-B7, T-B9 e B15. Dett
   «Ondata 3 (21/10 notte) — TC-23 poi L1b», passo A2.
   - ✅ 22/10 (ondata 4): `RiskPanelHeader` e `RiskAnalysisPanel` leggono `buildSyncTargets`. Unico effetto visibile: nella
     modale di sync di `RiskAnalysisPanel` gli asset stanno in ordine di id, non nell'ordine dell'ambito.
-- **R1 · Il rischio sulle osservazioni, dopo Q1 di X** — medio-basso, prestazioni; J, 22/10. **Ondata 5 della 1.3,
+- ✅ **R1 · Il rischio sulle osservazioni, dopo Q1 di X** — medio-basso, prestazioni; J, 22/10. **Ondata 5 della 1.3,
   dopo X-Q1** (correzione del coordinatore, 22/10: il developer tiene nella 1.3 le formule veloci, MF-FV e X-Q1; la prima
   stesura la diceva «dopo la 1.3»). Q1 non esiste ancora: `price_query._build_backward_filled_series` è ancora la
   serie densa. Nessun caso di test scritto; 7 scenari di parità descritti nel [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md),
   «Analisi breve di R1 e L1». Il pavimento SEC8-1b resta finché R1 non c'è. ~3 h più la parità.
+  ✅ 23/10 (ondata 5, J5-2): `prepare_asset_series` legge ogni asset con `observed_prices` (Q1 di Z) e
+  `market_series.prepare_asset_series_set_from_readings` costruisce i punti solo nei giorni che servono; 10 casi di parità
+  contro i prezzi densi (puri) e 4 sul DB con Q1 vero, tetto J-50 invariato. Il pavimento SEC8-1b (`bounded_range`) si toglie
+  adesso (MF).
+
+- **J5-4 · La serie dell'asset sommato non ha base per le quote in viaggio all'inizio del periodo** — basso, numeri
+  della serie delle posizioni (#48); J, 24/10 (nata dalla domanda 3 di MF su J5-1). Con `broker_id` None e un trasferimento
+  tra broker partito prima di `date_from` e arrivato dopo, le quote non sono di nessun broker all'inizio e non si
+  comprano dopo: il destinatario le tiene (pnl dal costo), ma la somma toglie dalla base ciò che il trasferimento «porta
+  dentro» (`brought_in`), quindi la base dell'asset è 0 e `pnl_percent` è None mentre il pnl c'è. Nelle serie per singolo
+  broker il caso è giusto (base = costo spostato, dopo J5-3). Cura da decidere: nella somma, non togliere `brought_in`
+  per i trasferimenti non contati (`counted_tract` falso), che sono capitale entrato prima dell'inizio. Prova: un caso
+  puro in `test_position_series.py` con date_from dopo la partenza e arrivo dopo. Collegata: in un trasferimento
+  parziale il mittente mostra un avvallo di qualche giorno in viaggio (limite dichiarato in J5-1). Dettagli:
+  [piano 05](../Phase_1/05_numbersAnalysis/plan-phase01NumbersAnalysis.prompt.md), passo 10 dell'ondata 5.
 
 ## Z · Sospensione e risveglio (fase 01)
 
@@ -10826,6 +10868,8 @@ punto di partenza, l'audit dello stesso giorno:
   0 differenze su tutto `get_report`), P4 (il motore a segmenti); poi i pavimenti. Dettagli:
   piano MF, «Piano «formule veloci»» e le voci P1, P2.
   🌊 22/10: ondata 5 (proprietario MF; P4 + pavimenti all'indietro)
+  📌 23/10: P4 pronto (checkpoint MF5-1: segmenti `DailyStates`, 202 casi di parità a 0 differenze, memoria 686 → 5 MB
+  sulla copia al 1500); restano i pavimenti (MF5-2). Dettagli: piano MF, «MF5-1 · P4 — rossi e cura».
 - ✅ **MF-P1b · Le due debolezze del MWRR già presenti** — piccolo, valori da dichiarare; MF, 19/10 (test di P1), via del
   developer il 19/10 come lotto a parte, dopo P2. (1) Il test del segno moltiplica i VAN e il prodotto va in underflow
   a zero; (2) `_is_xirr_root` scarta radici vere quando il VAN è mal condizionato (termini enormi che si annullano). P1
@@ -10841,3 +10885,29 @@ punto di partenza, l'audit dello stesso giorno:
   **Il developer sceglie A** il 20/10; codice e test pronti il 20/10 (`returns.flows_by_snapshot_date`; 22 rossi prima;
   Dashboard invariata su 4 copie), in attesa del checkpoint. Dettagli: piano MF, «MF-E2b».
   - ✅ 21/10 (riconciliazione): in `dev_release2` col treno 4 (`015094472`; commit `bf748bbc3`).
+- **MF-SPL1 · Le chiusure Yahoo rettificate per split sottostimano il valore prima di uno split** — medio, numeri,
+  preesistente (non introdotto da Z-35), **da decidere, developer**; MF, 23/10 (domanda di X su Z-35). Il motore legge
+  la quotazione «nelle unità del suo giorno» e cambia la quantità solo con la rettifica legata allo SPLIT; il `Close`
+  Yahoo è rettificato per split anche con `auto_adjust=False`: 10 AAPL al 28/08/2020 valgono 1 248 invece di 4 990, e il
+  31/08 il TWRR salta di +313 %. Grafici, segnali e rischio invece vogliono la serie rettificata. Dettagli:
+  [piano MF](../Phase_1/11_financialMath/plan-phase01FinancialMath.prompt.md), sezione «Revisione X5-2 (Z-35)».
+  📌 23/10 (developer): **C** per la 1.3: nessun codice sugli split; la voce di backlog e una nota nella doc per
+  sviluppatori (`transactions/price_resolver.md`, «Design contract», MF) e nella pagina utente di Yahoo (X).
+  **Obiettivo dopo la 1.3: A**: il plugin salva le chiusure come scambiate (× i rapporti degli split successivi, da
+  `ticker.splits`), insieme ai lettori che conoscono gli split (grafici, segnali, rischio applicano gli eventi SPLIT).
+- **MF-P1d · Il MWRR mostra 10 % nel giorno del versamento di un periodo che apre a zero** — piccolo, numeri (valore
+  falso mostrato), **da decidere**; test-author di MF, 23/10 (rossi di P1c). Con un'apertura a 0 e un punto della linea
+  nel giorno dell'unico versamento, il versamento si somma al valore finale e tutti i flussi sono 0: il VAN è 0 a ogni
+  tasso e Newton restituisce la sua partenza, 0,1 (verificato: apertura 0 il 1/1, versamento 1 000 il 1/3 → la linea
+  dice 0,100000 il 1/3). Capita anche su una storia corta, per esempio un conto svuotato e poi rifinanziato nella
+  finestra. Cura proposta: nessun tasso quando tutti i flussi sono zero. Dettagli: piano MF, «MF5-4 · P1c».
+
+## W2 · Il form delle transazioni (fase 01)
+
+Sessione nata il 23/10 (ondata 5), sul form (`TransactionFormModal.svelte`). Piano:
+[`Phase_1/04_importTransactions/plan-phase01Step2TransactionForm-W2.prompt.md`](../Phase_1/04_importTransactions/plan-phase01Step2TransactionForm-W2.prompt.md).
+
+- **W2-1 · Il selettore «Importo totale / Prezzo unitario» nella modifica multipla (Bulk)** — minimo, comodità; W2, 23/10
+  (decisione D4 del coordinatore sul #47: niente nel Bulk in questo giro, è di W, e prezzo × quantità può differire
+  dall'addebito reale). Il form di una singola BUY/SELL ha il selettore (`POST /transactions/trade-amount`); la griglia del Bulk
+  no. Se serve, il Bulk riusa lo stesso endpoint e `txTradeAmount.ts`. Dettagli: piano W2, «#47 — decisioni».

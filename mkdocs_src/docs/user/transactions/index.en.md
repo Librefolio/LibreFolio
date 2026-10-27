@@ -53,6 +53,30 @@ Both ask for confirmation, then save at once, without the workspace.
 
 ---
 
+## 🔁 Relink events {: #relink-events }
+
+A dividend, an interest payment or an adjustment can be linked to the asset's **event** (the dividend the provider announced, a split…). The link is lost when [changing an asset's currency](../assets/create-edit.md#changing-the-currency) deletes the events it pointed to, and a dividend you booked before its event was downloaded never had one. **Relink events**, in the toolbar above the table, finds those transactions and proposes the event to link.
+
+The window lists your **dividends, interest and adjustments** that have an asset and no event, on the brokers where you are at least an Editor, newest first. Each row shows the asset, the date, the type and what was found:
+
+| What you see | Meaning | What you can do |
+|--------------|---------|-----------------|
+| **One event that day** | Exactly one event of the same asset, on the same day, of the matching type | **Link** the row |
+| **No event that day** | The asset has no such event on that day | Nothing here: add the event, or link another one in the transaction |
+| **N events that day** | More than one candidate | Nothing here: LibreFolio never guesses. Choose the right one in the transaction |
+
+**Link every row with one event** links all the rows of the first kind at once, in a single save: if any is refused, none is linked. Nothing is linked unless you click.
+
+!!! info "The event must be on the same date"
+
+    A candidate is proposed only if it is **on the same day** as the transaction. It must be the same asset too, and of the matching type: a dividend with a dividend, an interest payment with an interest event, an adjustment with a price adjustment or a split.
+
+    For example, you booked a dividend on **12 March**. An event of the same asset dated **12 March** is proposed. An event dated **10 March** is **not**, even though it is the only one nearby: the row shows *No event that day*.
+
+    This is what happens when your broker credited the dividend a few days after the event. Open the transaction and pick the event yourself in **Linked Event** ([Transaction Form](form.md)).
+
+---
+
 ## 🧰 The bulk workspace {: #bulk-workspace }
 
 The workspace is a grid of draft rows — marked **new**, **edit** or **del** — where you prepare changes before writing them:
@@ -68,7 +92,9 @@ The workspace is a grid of draft rows — marked **new**, **edit** or **del** �
     After an import, banners above the grid list what to check before **Save All**:
 
     - **red** — rows the importer did not fully understand: **Save All** stays disabled until you complete them;
-    - **amber** — auto-derived fields to verify: **Save All** first asks you to **Review** them or **Save anyway**.
+    - **amber** — auto-derived fields to verify: **Save All** first asks you to **Review** them or **Save anyway**;
+    - **amber, dates** — rows dated before 1 January 1900, listed one by one (click a line to go to the row): **Save All** asks once for all of them (*Yes, the dates are right*). A date that early is usually a typo; once confirmed it is saved like any other.
+    - **amber** — rows that may be stock splits (Revolut and Trading212 imports): link a Split event to each, or create it from the banner; see [Revolut](import/revolut.md#stock-splits).
 
     Click a banner to unfold its list, then an entry: the grid turns to that row's page and highlights it. Balance problems list the rows that cause them (*Workspace rows: …*), and a click opens the first one in the current sort order. If your column filters hide the row, a message tells you so.
 

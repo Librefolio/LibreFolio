@@ -972,3 +972,146 @@ describe('ExposureTable — a quantity keeps its column’s decimals, a price it
         expect.soft(cellText('price'), 'the price, public').toMatch(numberToken('123.45'));
     });
 });
+
+describe('ExposureTable — row selection (Y5-2)', () => {
+    // Values are asset_id * 1000, so the table lists 33-2, 22-1, 11-1 (value descending): «table order».
+    const threeHoldings = () => [holding(11, 1, {yieldOnCost: noIncomeYieldOnCost()}), holding(22, 1, {yieldOnCost: noIncomeYieldOnCost()}), holding(33, 2, {yieldOnCost: noIncomeYieldOnCost()})];
+
+    type SelectedRow = {key: string; assetId: number; brokerId: number | null};
+
+    async function mountSelectable(options: {selectable?: boolean; selectedKeys?: string[]; holdings?: ReturnType<typeof threeHoldings>} = {}) {
+        const onSelectionChange = vi.fn<(rows: SelectedRow[]) => void>();
+        const onAnalyze = vi.fn<(assetId: number) => void>();
+        const holdings = options.holdings ?? threeHoldings();
+        const view = render(ExposureTable, {
+            holdings,
+            displayCurrency: 'EUR',
+            onSelectionChange,
+            onAnalyze,
+            ...(options.selectable === undefined ? {selectable: true} : {selectable: options.selectable}),
+            ...(options.selectedKeys === undefined ? {} : {selectedKeys: options.selectedKeys}),
+        });
+        // Barrier: every row rendered before any is addressed.
+        await waitFor(() => expect(document.querySelectorAll('tbody tr[data-row-id]')).toHaveLength(holdings.length));
+        return {view, onSelectionChange, onAnalyze};
+    }
+
+    const checkbox = (key: string) => screen.getByTestId(`dt-row-checkbox-${key}`);
+
+    it('without `selectable` there are no row checkboxes (today’s behaviour)', async () => {
+        await mountSelectable({selectable: false});
+        expect(document.querySelectorAll('[data-testid^="dt-row-checkbox-"]')).toHaveLength(0);
+        expect(document.querySelector('[data-testid="dt-select-all"]')).toBeNull();
+    });
+
+    it('with `selectable` every row has a checkbox, unchecked', async () => {
+        await mountSelectable();
+        for (const key of ['11-1', '22-1', '33-2']) {
+            expect(checkbox(key)).toHaveAttribute('data-state', 'unchecked');
+        }
+    });
+
+    it('checking a row calls onSelectionChange with that row: key, assetId, brokerId', async () => {
+        const {onSelectionChange} = await mountSelectable();
+        await fireEvent.click(checkbox('22-1'));
+
+        await waitFor(() => expect(onSelectionChange).toHaveBeenCalled());
+        expect(onSelectionChange).toHaveBeenLastCalledWith([{key: '22-1', assetId: 22, brokerId: 1}]);
+        expect(checkbox('22-1')).toHaveAttribute('data-state', 'checked');
+        expect(rowEl(22, 1)).toHaveAttribute('data-selected', 'true');
+    });
+
+    it('selecting through the checkbox does NOT call onAnalyze', async () => {
+        const {onSelectionChange, onAnalyze} = await mountSelectable();
+        await fireEvent.click(checkbox('22-1'));
+        await fireEvent.click(checkbox('11-1'));
+
+        await waitFor(() => expect(onSelectionChange).toHaveBeenCalledTimes(2));
+        expect(onAnalyze).not.toHaveBeenCalled();
+    });
+
+    it('several rows: the rows come in TABLE order (value descending), not in click order', async () => {
+        const {onSelectionChange} = await mountSelectable();
+        // Clicked lowest value first, highest second: the table lists 33-2 above 11-1.
+        await fireEvent.click(checkbox('11-1'));
+        await fireEvent.click(checkbox('33-2'));
+
+        await waitFor(() => expect(onSelectionChange).toHaveBeenCalledTimes(2));
+        expect(onSelectionChange).toHaveBeenLastCalledWith([
+            {key: '33-2', assetId: 33, brokerId: 2},
+            {key: '11-1', assetId: 11, brokerId: 1},
+        ]);
+    });
+
+    it('unchecking reports the rows that remain, and an empty list when none does', async () => {
+        const {onSelectionChange} = await mountSelectable();
+        await fireEvent.click(checkbox('22-1'));
+        await fireEvent.click(checkbox('33-2'));
+        await waitFor(() => expect(onSelectionChange).toHaveBeenCalledTimes(2));
+
+        await fireEvent.click(checkbox('33-2'));
+        await waitFor(() => expect(onSelectionChange).toHaveBeenCalledTimes(3));
+        expect(onSelectionChange).toHaveBeenLastCalledWith([{key: '22-1', assetId: 22, brokerId: 1}]);
+
+        await fireEvent.click(checkbox('22-1'));
+        await waitFor(() => expect(onSelectionChange).toHaveBeenCalledTimes(4));
+        expect(onSelectionChange).toHaveBeenLastCalledWith([]);
+    });
+
+    it('a holding without a broker is a row with brokerId null and the key «<asset>-0»', async () => {
+        const noBroker = {...holding(44, 1, {yieldOnCost: noIncomeYieldOnCost()}), broker_id: null, broker_name: null};
+        const {onSelectionChange} = await mountSelectable({holdings: [noBroker, holding(11, 1, {yieldOnCost: noIncomeYieldOnCost()})] as ReturnType<typeof threeHoldings>});
+        await fireEvent.click(checkbox('44-0'));
+
+        await waitFor(() => expect(onSelectionChange).toHaveBeenCalled());
+        expect(onSelectionChange).toHaveBeenLastCalledWith([{key: '44-0', assetId: 44, brokerId: null}]);
+    });
+
+    it('selectedKeys seeds the selection at mount, without announcing it back', async () => {
+        const {onSelectionChange} = await mountSelectable({selectedKeys: ['22-1', '11-1']});
+
+        expect(checkbox('22-1')).toHaveAttribute('data-state', 'checked');
+        expect(checkbox('11-1')).toHaveAttribute('data-state', 'checked');
+        expect(checkbox('33-2')).toHaveAttribute('data-state', 'unchecked');
+        expect(onSelectionChange, 'a seed is not a user change').not.toHaveBeenCalled();
+    });
+
+    it('selectedKeys follows the parent: a new list replaces the selection, without announcing it back', async () => {
+        const {view, onSelectionChange, onAnalyze} = await mountSelectable({selectedKeys: ['22-1']});
+        expect(checkbox('22-1')).toHaveAttribute('data-state', 'checked');
+
+        await view.rerender({holdings: threeHoldings(), displayCurrency: 'EUR', onSelectionChange, onAnalyze, selectable: true, selectedKeys: ['33-2', '11-1']});
+
+        await waitFor(() => expect(checkbox('33-2')).toHaveAttribute('data-state', 'checked'));
+        expect(checkbox('11-1')).toHaveAttribute('data-state', 'checked');
+        expect(checkbox('22-1')).toHaveAttribute('data-state', 'unchecked');
+        expect(onSelectionChange, 'a programmatic sync is not a user change (no feedback loop)').not.toHaveBeenCalled();
+    });
+
+    it('selectedKeys emptied by the parent clears the selection', async () => {
+        const {view, onSelectionChange, onAnalyze} = await mountSelectable({selectedKeys: ['22-1']});
+        await view.rerender({holdings: threeHoldings(), displayCurrency: 'EUR', onSelectionChange, onAnalyze, selectable: true, selectedKeys: []});
+
+        await waitFor(() => expect(checkbox('22-1')).toHaveAttribute('data-state', 'unchecked'));
+        expect(onSelectionChange).not.toHaveBeenCalled();
+    });
+
+    it('a seeded key that is not a row is ignored: no row appears, nothing is announced', async () => {
+        const {onSelectionChange} = await mountSelectable({selectedKeys: ['999-9', '22-1']});
+
+        expect(document.querySelector('tbody tr[data-row-id="999-9"]')).toBeNull();
+        expect(checkbox('22-1')).toHaveAttribute('data-state', 'checked');
+        expect(onSelectionChange).not.toHaveBeenCalled();
+    });
+
+    it('a user change after a seed reports seed and change together', async () => {
+        const {onSelectionChange} = await mountSelectable({selectedKeys: ['22-1']});
+        await fireEvent.click(checkbox('11-1'));
+
+        await waitFor(() => expect(onSelectionChange).toHaveBeenCalled());
+        expect(onSelectionChange).toHaveBeenLastCalledWith([
+            {key: '22-1', assetId: 22, brokerId: 1},
+            {key: '11-1', assetId: 11, brokerId: 1},
+        ]);
+    });
+});

@@ -52,6 +52,13 @@ every period with a positive reference gets −1 and an inverse None. Pinned by 
 ``test_non_positive_value_gives_no_change_either_way``) keeps only what is still refused. Red on HEAD f252acb4a: None where
 −1 is expected (every test of ``TestAnchorOfZero``).
 
+X5-6 (D-P4 L4, developer decision): the calendar's start is the only floor. A period whose reference day (``as_of − days``)
+would fall before 0001-01-01 has no reference: its ``change_ratio`` is None, as for a change with no data — never an
+``OverflowError`` (what ``fixed_period_dates`` and ``fixed_period_changes`` raised for ``as_of`` on or before 0005-12-30,
+the reason the services refused every day before 1900). The other periods of the same ``as_of`` are real. Pinned at the end,
+``TestBeforeYearOne``, by what is observable: ``fixed_period_changes``' results and the SET of days ``fixed_period_dates``
+returns (the days a service will ask a value for) — never a tuple shape beyond that. RED on HEAD 6b02bc7f6: OverflowError.
+
 Pure: no database, no server, no network.
 """
 
@@ -730,3 +737,130 @@ class TestAnchorOfZero:
         result = _range_change(reference, D("0"))
 
         assert (period.change_ratio, period.inverse_change_ratio) == (result.change_ratio, result.inverse_change_ratio) == (D("-1"), None), (period, result)
+
+
+# --- X5-6 (D-P4 L4): the calendar's start is the only floor ---------------------------------------------------------
+
+
+def _fits(as_of: date, days: int) -> bool:
+    """Whether ``as_of − days`` is a day the calendar has (on or after 0001-01-01), by the arithmetic of ordinals."""
+    return (as_of - date.min).days >= days
+
+
+def _reference_days(as_of: date) -> set[date]:
+    """The reference days that exist for ``as_of``, derived here from the calendar and ``timedelta``."""
+    return {as_of - timedelta(days=days) for _key, days in FIXED_PERIODS if _fits(as_of, days)}
+
+
+EARLY_ANCHORS = [
+    pytest.param(date(3, 6, 15), id="0003-06-15"),
+    pytest.param(date(5, 12, 30), id="0005-12-30"),
+    pytest.param(date(5, 12, 31), id="0005-12-31"),
+    pytest.param(date(6, 1, 1), id="0006-01-01"),
+    pytest.param(date(1, 1, 2), id="0001-01-02"),
+    pytest.param(date(1, 1, 1), id="0001-01-01"),
+    pytest.param(date(1850, 6, 15), id="1850-06-15"),
+    pytest.param(date(1899, 12, 31), id="1899-12-31"),
+]
+
+
+class TestBeforeYearOne:
+    """A reference before 0001-01-01 is «no data»: None for that period, an ordinary value for the others."""
+
+    @pytest.mark.parametrize("as_of", EARLY_ANCHORS)
+    def test_the_days_asked_are_the_ones_the_calendar_has(self, as_of: date) -> None:
+        """No ``OverflowError``; ``as_of`` is always asked; every reference that exists is asked and nothing else is — so no
+        service is ever handed a day before 0001-01-01 (there is none), and none is silently clamped onto ``date.min``."""
+        days = fixed_period_dates(as_of)
+
+        assert as_of in days
+        assert set(days) == {as_of} | _reference_days(as_of), sorted(set(days) ^ ({as_of} | _reference_days(as_of)))
+        assert all(isinstance(day, date) and date.min <= day <= as_of for day in days), days
+
+    @pytest.mark.parametrize("as_of", EARLY_ANCHORS)
+    def test_a_period_without_a_reference_is_none_the_others_are_computed(self, as_of: date) -> None:
+        """Every period keeps its row (key, days) in display order; those whose reference exists are
+        ``anchor / reference − 1`` and its inverse, those whose reference does not are None both ways."""
+        values = _priced(fixed_period_dates(as_of))
+
+        changes = fixed_period_changes(values, as_of)
+
+        assert [(change.key, change.days) for change in changes] == list(FIXED_PERIODS)
+        for change in changes:
+            if _fits(as_of, change.days):
+                reference = values[as_of - timedelta(days=change.days)]
+                assert change.change_ratio == values[as_of] / reference - 1, (as_of, change.key)
+                assert change.inverse_change_ratio == reference / values[as_of] - 1, (as_of, change.key)
+            else:
+                assert (change.change_ratio, change.inverse_change_ratio) == (None, None), (as_of, change.key)
+
+    def test_year_3_has_its_short_periods_and_two_years_but_not_three(self) -> None:
+        """0003-06-15 is 895 days after 0001-01-01: 1D … 2Y (730) have a reference, 3Y and 5Y do not."""
+        as_of = date(3, 6, 15)
+
+        changes = {change.key: change for change in fixed_period_changes(_priced(fixed_period_dates(as_of)), as_of)}
+
+        assert _valued(changes) == {"1D", "1W", "1M", "3M", "6M", "1Y", "2Y"}
+        assert (changes["3Y"].change_ratio, changes["5Y"].change_ratio) == (None, None)
+
+    def test_a_value_stored_on_the_first_day_never_stands_in_for_a_reference_before_it(self) -> None:
+        """A value on 0001-01-01 is the reference of nobody but a period that lands there: 3Y and 5Y of 0003-06-15 stay None
+        even when ``values`` holds that day (no clamping to ``date.min``)."""
+        as_of = date(3, 6, 15)
+        values: dict[date, Decimal | None] = {as_of: D("160"), date.min: D("200"), as_of - timedelta(days=1): D("125")}
+
+        changes = {change.key: change for change in fixed_period_changes(values, as_of)}
+
+        assert changes["1D"].change_ratio == D("0.28")
+        assert (changes["3Y"].change_ratio, changes["5Y"].change_ratio) == (None, None)
+
+    def test_the_first_day_has_no_reference_for_any_period(self) -> None:
+        """``as_of`` = 0001-01-01: every period is None both ways, no exception — whatever ``values`` holds."""
+        as_of = date.min
+
+        for values in ({}, {as_of: D("160")}, _priced([as_of, date.min + timedelta(days=1)])):
+            changes = fixed_period_changes(values, as_of)
+
+            assert [(change.key, change.days) for change in changes] == list(FIXED_PERIODS)
+            assert all(change.change_ratio is None and change.inverse_change_ratio is None for change in changes), values
+        assert fixed_period_dates(as_of) == (as_of,)
+
+    @pytest.mark.parametrize("days", [pytest.param(1, id="1D"), pytest.param(1825, id="5Y")])
+    def test_the_reference_exactly_on_the_first_day_exists(self, days: int) -> None:
+        """The edge: ``as_of − days`` = 0001-01-01 is a day, valued; one day earlier it is not."""
+        periods = (("P", days),)
+        on_the_edge, just_before = date.min + timedelta(days=days), date.min + timedelta(days=days - 1)
+
+        (edge,) = fixed_period_changes({on_the_edge: D("160"), date.min: D("200")}, on_the_edge, periods)
+        (before,) = fixed_period_changes({just_before: D("160"), date.min: D("200")}, just_before, periods)
+
+        assert edge.change_ratio == D("-0.2") and edge.inverse_change_ratio == D("0.25")
+        assert (before.change_ratio, before.inverse_change_ratio) == (None, None)
+        assert date.min in fixed_period_dates(on_the_edge, periods)
+        assert fixed_period_dates(just_before, periods) == (just_before,)
+
+    def test_every_five_year_reference_exists_in_1850(self) -> None:
+        """Nothing is lost for an ordinary old day: all nine references are days and all nine changes are numbers; the 5Y
+        reference is 1 825 calendar days back (not five calendar years: 1848 had a 29 February)."""
+        as_of = date(1850, 6, 15)
+        days = fixed_period_dates(as_of)
+        values = _priced(days)
+
+        changes = fixed_period_changes(values, as_of)
+
+        assert len(days) == 1 + len(FIXED_PERIODS) and days[-1] == as_of - timedelta(days=1825)
+        assert all(change.change_ratio is not None and change.inverse_change_ratio is not None for change in changes)
+        assert changes[-1].change_ratio == values[as_of] / values[as_of - timedelta(days=1825)] - 1
+
+    def test_custom_periods_follow_the_same_rule(self) -> None:
+        """The rule is the function's, not the default table's: any ``(key, days)`` list."""
+        as_of = date(1, 1, 6)
+        periods = (("10D", 10), ("5D", 5), ("2D", 2))
+        values = _priced([as_of, date.min, date.min + timedelta(days=3)])
+
+        changes = {change.key: change for change in fixed_period_changes(values, as_of, periods)}
+
+        assert changes["10D"].change_ratio is None
+        assert changes["5D"].change_ratio == values[as_of] / values[date.min] - 1
+        assert changes["2D"].change_ratio == values[as_of] / values[date.min + timedelta(days=3)] - 1
+        assert set(fixed_period_dates(as_of, periods)) == {as_of, date.min, date.min + timedelta(days=3)}

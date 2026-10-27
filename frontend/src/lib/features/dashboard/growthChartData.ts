@@ -8,7 +8,6 @@
 import {namedPoint} from '$lib/components/charts/echartsAnimationConfig';
 import {aggregateLineSeries, aggregateOHLCV, aggregateSumSeries, mapDateToBucket, type ChartResolution} from '$lib/components/charts/timeSeriesAggregation';
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
-import type {PortfolioBrokerPnlHistory, PortfolioHistoryPoint, PortfolioPnlCandleSeries} from '$lib/stores/portfolio/portfolioStore.svelte';
 import {daysBetween} from '$lib/utils/dateOnly';
 import {buildCalendarLadder, type CalendarPeriod, type LadderRung} from './growthLadderBuckets';
 
@@ -144,70 +143,13 @@ export interface AggregationInputs {
 }
 
 // =========================================================================
-// Inputs: the props, mapped to one value per day
+// Inputs: one value per date (`growthStepInputs.ts` builds them from the report's steps)
 // =========================================================================
 
 /** Helper to safely extract amount from an optional Currency field (handles union types). */
 export function amountOf(field: any): number | null {
     if (field != null && !Array.isArray(field) && typeof field === 'object' && 'amount' in field) return Number(field.amount);
     return null;
-}
-
-// EUR mode: Capital Baseline narrative
-// Stacked areas: book_asset_like + cash_from_contributed + cash_from_generated = book_value
-// Overlay: NAV line (solid) + Capital Baseline line (dashed)
-// P&L = NAV - Capital Baseline (visible as gap between NAV line and baseline line)
-//
-// Convention "returns consumed first":
-//   - Cash from contributed capital = undeployed external capital sitting in cash
-//   - Cash from generated returns = income/gains not yet reinvested
-//   - When buying, returns are consumed first → deposit residuals stay as capital cash
-export function mapEurStackedData(history: PortfolioHistoryPoint[]): EurStackedData {
-    return {
-        bookAssetLike: history.map((pt) => amountOf(pt.book_asset_like)),
-        cashContributed: history.map((pt) => amountOf(pt.cash_from_contributed_capital)),
-        cashGenerated: history.map((pt) => amountOf(pt.cash_from_generated_returns)),
-        nav: history.map((pt) => (pt.nav_value != null ? Number(pt.nav_value.amount) : null)),
-        capitalBaseline: history.map((pt) => amountOf(pt.capital_baseline)),
-        totalPnl: history.map((pt) => amountOf(pt.total_pnl)),
-    };
-}
-
-/** The % view's three returns, from fractions to percent. */
-export function mapPctValues(history: PortfolioHistoryPoint[]): PctValues {
-    return {
-        mwrrCum: history.map((pt) => (pt.mwrr_cumulative != null ? Number(pt.mwrr_cumulative) * 100 : null)),
-        twrr: history.map((pt) => (pt.twrr != null ? Number(pt.twrr) * 100 : null)),
-        roi: history.map((pt) => (pt.roi != null ? Number(pt.roi) * 100 : null)),
-    };
-}
-
-/**
- * P&L mode broker overlay (G1a): one aligned-to-`dates` values array per broker in
- * `brokerPnlHistory`, built via a date lookup (a broker's points may not cover every
- * date 1:1 with `history` — e.g. it joined the scope later). `total_pnl` here is the
- * SAME already-computed total the EUR mode reads — canonical, inception-based, never
- * rebased (plan §3.2). Only rendered when ≥2 brokers are present, matching "one
- * selected broker: total line only".
- */
-export function mapBrokerPnlSeries(brokerPnlHistory: PortfolioBrokerPnlHistory[], dates: string[]): BrokerPnlSeries[] {
-    return brokerPnlHistory.length >= 2
-        ? brokerPnlHistory.map((broker) => {
-              const byDate = new Map(broker.points.map((p) => [p.date, amountOf(p.total_pnl)]));
-              return {
-                  brokerId: broker.broker_id,
-                  brokerName: broker.broker_name,
-                  values: dates.map((d) => byDate.get(d) ?? null),
-              };
-          })
-        : [];
-}
-
-/** P&L candles submode (G1b): per-date OHLC lookup from the fetched series. A date
- *  absent from the map means that day's candle was unavailable (a resolved held-asset
- *  valuation was MISSING) — a genuine gap, never guessed. */
-export function mapCandlesByDate(pnlCandles: PortfolioPnlCandleSeries | null | undefined): Map<string, DailyCandle> {
-    return new Map((pnlCandles?.points ?? []).map((p) => [p.date, {open: Number(p.open.amount), high: Number(p.high.amount), low: Number(p.low.amount), close: Number(p.close.amount)}]));
 }
 
 /** A sparse flow series (signed DIVIDEND/INTEREST, G1c; costs, deposits and the BUY funding

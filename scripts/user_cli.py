@@ -43,7 +43,7 @@ from backend.app.config import set_test_mode
 from backend.app.config.accounts import public_url
 from backend.app.db.models import AccountTokenPurpose, OnboardingFlow
 from backend.app.db.session import get_async_engine
-from backend.app.services.accounts import bootstrap_admin_service, password_policy, registration_service, token_service, user_service
+from backend.app.services.accounts import bootstrap_admin_service, instance_owner, password_policy, registration_service, token_service, user_service
 from backend.app.services.accounts.onboarding_service import reset_onboarding_progress
 from backend.app.services.accounts.registration_service import RegistrationError
 from backend.app.services.accounts.settings_service import initialize_global_settings
@@ -213,6 +213,46 @@ async def cmd_set_email(username: str, address: str):
             return False
         print(f"✅ Email address of '{username}' changed")
         return True
+
+
+#: What the command line says for each reason ``assign_owner_and_send_reset`` refuses.
+_OWNER_REFUSALS = {
+    "NOT_MANAGED": "This instance is not managed (LIBREFOLIO_PROFILE): the command is for managed instances only",
+    "OWNER_EMAIL_NOT_SET": "LIBREFOLIO_ADMIN_EMAIL is not set: it holds the address the owner must have",
+    "USER_NOT_FOUND": "User not found",
+    "EMAIL_TAKEN": "Another account already has the address of LIBREFOLIO_ADMIN_EMAIL, or has it as its username: free it first with `user set-email`",
+}
+
+
+async def cmd_reassign_owner(username: str):
+    """Give a managed instance back to its owner: the account takes the address of ``LIBREFOLIO_ADMIN_EMAIL`` (A5-4).
+
+    For an owner address confirmed by mistake, or a managed instance taken over. It is the treatment a restore gives the
+    owner's account (``instance_owner.assign_owner_and_send_reset``): the account takes the address of the variable, is an
+    active administrator and the only owner, its password stops working, its sessions end, its links are cancelled, and ONE
+    password-reset link goes to that address. The command never prints the link itself: if the email cannot go, the link is
+    in the warning the treatment writes in the log, which the command line shows on its terminal, and ``user reset-link``
+    prints another.
+    """
+    engine = get_async_engine()
+
+    async with AsyncSession(engine) as session:
+        user = await user_service.get_user_by_username(session, username)
+        if user is None:
+            print(f"❌ User '{username}' not found")
+            return False
+        try:
+            result = await instance_owner.assign_owner_and_send_reset(session, user.id)
+        except instance_owner.OwnerAssignmentError as exc:
+            print(f"❌ {_OWNER_REFUSALS.get(exc.code, exc.code)}")
+            return False
+    print(f"✅ '{username}' is the owner of the instance, with the address of LIBREFOLIO_ADMIN_EMAIL; its password no longer works and its sessions ended")
+    if result.outcome == instance_owner.OwnerResetOutcome.SENT:
+        print("   One password-reset link was emailed to that address: the owner opens it and chooses a password")
+    else:
+        print("⚠️  The email could not go: the link is in the log line «Password-reset link for the instance owner» above, on this terminal only")
+        print(f"   Pass it to the owner, or print a link on its own with: ./dev.py user reset-link {username}")
+    return True
 
 
 async def cmd_reset_onboarding(username: str, flow: str | None):
@@ -397,6 +437,9 @@ def _add_link_commands(subparsers) -> None:
 
     subparsers.add_parser("setup-link", help="Create a new setup link for the initial administrator (LIBREFOLIO_ADMIN_EMAIL)")
 
+    p = subparsers.add_parser("reassign-owner", help="Give a managed instance back to its owner: the account takes the address of LIBREFOLIO_ADMIN_EMAIL, loses its password and gets one reset link")
+    p.add_argument("username", help="Username of the account that becomes the owner")
+
     p = subparsers.add_parser("reset-onboarding", help="Restart the onboarding of a user")
     p.add_argument("username", help="Username")
     p.add_argument("--flow", choices=[flow.value for flow in OnboardingFlow], default=None, help="Only this flow (default: every flow)")
@@ -423,6 +466,7 @@ def _dispatch_user_command(args):
         "reset-link": lambda: cmd_reset_link(args.username),
         "setup-link": cmd_setup_link,
         "set-email": lambda: cmd_set_email(args.username, args.email),
+        "reassign-owner": lambda: cmd_reassign_owner(args.username),
         "reset-onboarding": lambda: cmd_reset_onboarding(args.username, args.flow),
     }
     command = commands.get(args.command)

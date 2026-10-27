@@ -9,7 +9,7 @@ Transaction batch execution is split across these source modules, in `backend/ap
 | `backend/app/services/transactions/validation.py` | `TransactionValidationMixin`: asset event links, the rows that require a cost basis, linked-pair rules |
 | `backend/app/services/transactions/queries.py` | `TransactionQueryMixin`: the transaction query, partner brokers, rows by id |
 | `backend/app/services/transactions/balances.py` | `TransactionBalancesMixin`: the balance replay and the balances at a date |
-| `backend/app/services/transactions/event_suggestions.py` | `TransactionEventSuggestionsMixin`: asset events a transaction can link to |
+| `backend/app/services/transactions/event_suggestions.py` | `TransactionEventSuggestionsMixin`: asset events a transaction can link to (`suggest_events_bulk()`) and the list of transactions that have none (`event_reconciliation()`) |
 | `backend/app/services/transactions/promotion.py` | `TransactionPromotionMixin`: transfer promotion, the split and promote type maps, promote suggestions |
 | `backend/app/services/transactions/auto_cost.py` | `TransactionAutoCostMixin`: WAC dispatch for the Auto cost basis |
 | `backend/app/services/transactions/unreadable_rows.py` | `count_unreadable_rows()` and `UnreadableLedgerError`: the transactions whose stored value cannot be read, counted before the Auto cost's pool (W-B69) and a broker's balances (W-B74) |
@@ -60,7 +60,7 @@ Its order is contractual:
 
 | # | Stage call | Purpose |
 |---|------------|---------|
-| 1 | `parse_inputs()`, then `check_decimal_limits()`, `check_dates()` and `check_cost_basis_sign()` | Parse create, update, split, and promote rows independently; then refuse a quantity, cash amount, manual cost basis or the cost basis a promote resolves over its column's limit (C-97, see [Decimal limits](#decimal-limits)), a date outside 1900-01-01 … tomorrow by the server's calendar (N74, see [Transaction dates](#transaction-dates)), and either cost basis below 0 (J-60, see [Cost basis sign](#cost-basis-sign)) |
+| 1 | `parse_inputs()`, then `check_decimal_limits()`, `check_dates()` and `check_cost_basis_sign()` | Parse create, update, split, and promote rows independently; then refuse a quantity, cash amount, manual cost basis or the cost basis a promote resolves over its column's limit (C-97, see [Decimal limits](#decimal-limits)), a date after tomorrow by the server's calendar (N74, see [Transaction dates](#transaction-dates)), and either cost basis below 0 (J-60, see [Cost basis sign](#cost-basis-sign)) |
 | 2 | `preload_and_authorize()` | Load referenced rows, collect touched brokers, and require `EDITOR` access |
 | 3 | `apply_deletes()` | Stage valid deletions |
 | 4 | `apply_splits()` | Split linked pairs before any dependent update |
@@ -80,7 +80,7 @@ Its order is contractual:
 stores all state that must survive across stages. This includes:
 
 - parsed rows with their original per-operation indices;
-- `issues` and per-operation `results`;
+- `issues` (blocking), `warnings` (non-blocking) and per-operation `results`;
 - preloaded transactions and the touched-broker set;
 - the earliest affected date per broker;
 - every row `apply_creates()` flushed, by its create index (`created_by_index`):
@@ -281,12 +281,15 @@ D2). Tests: `./dev.py test services transaction-cost-basis-rule J60` (`TestJ60*`
 ### 📅 Transaction dates {: #transaction-dates }
 
 `check_dates()` (`transaction_batch_stages.py`; decision N74 of R13-SEC7-3) runs right
-after `check_decimal_limits()`. A transaction's date must lie between 1900-01-01
-(`EARLIEST_RANGE_START`, `utils/datetime_utils.py`: the floor every replay and history walk
-starts from too) and tomorrow by the server's calendar (`latest_range_end()`, same module:
-`server_today()`, the server's local date, plus one day). `transaction_date_bounds()`
-returns that pair. The last day is also the last one a price or a rate written by hand may
-carry (N83). The stage reads:
+after `check_decimal_limits()`. A transaction's date may be no later than tomorrow by the
+server's calendar (`latest_range_end()`, `utils/datetime_utils.py`: `server_today()`, the
+server's local date, plus one day); `latest_transaction_date()` returns it. There is **no
+first date** since decision D-P4 (26/10/2026): a transaction of 1850, or of the year 1, is
+written like any other, and the engine and the lots replay it from its own day (before, the
+floor was 1900-01-01). The protection against a typo in the year is
+in the interface: the form, the bulk editor and the import review ask for one confirmation
+before a date earlier than 1900 (`preFloorDate.ts`). The last day is also the last one a
+price or a rate written by hand may carry (N83). The stage reads:
 
 - the `date` of every parsed create;
 - the `date` of an update that sets one: an update that leaves an older row's date alone
@@ -295,11 +298,11 @@ carry (N83). The stage reads:
   no date, or an explicit `null`, is already refused at the parse (see
   [Request shape](split_promote.md#promote-request-shape)).
 
-Out of the range, the row gets one issue: code `dateOutOfRange`
+Past the ceiling, the row gets one issue: code `dateOutOfRange`
 (`TXValidationCode.DATE_OUT_OF_RANGE`, listed by `GET /transactions/types` →
-`validation_codes`), `field` `date`, `params` `{"min", "max"}` as ISO dates, and the
-English `error` *Date: between 1900-01-01 and 2026-10-20* on a server whose today is
-19 October 2026. A promote's issue has `operation` `promote` and the promote's index; an
+`validation_codes`), `field` `date`, `params` `{"max"}` as an ISO date, and the
+English `error` *Date: not after 2026-10-20* on a server whose today is
+19 October 2026. The code kept its name when the floor went; it had `{"min", "max"}` before D-P4. A promote's issue has `operation` `promote` and the promote's index; an
 update's has the row's id as `ref_id`.
 `check_dates()` then returns `True`, and `execute_batch()` stops right after
 `preload_and_authorize()`, as for the integer digits: the batch's usual 200, with
@@ -316,8 +319,8 @@ the [plugin guide](../../architecture/patterns/brim_plugin_guide.md#import-philo
 so a later date is a typing error. Lot N74 set the bound there; before, it was a year
 after today, for the settlement dates a broker's report puts ahead: under that rule, a
 plugin now leaves such a row out until it has settled. The frontend reads the code as
-`transactions.errors.dateOutOfRange`, *Between {min} and {max}*, behind the field label
-(`FIELD_PREFIXED_CODES`): *Date: Between 1900-01-01 and 2026-10-20*.
+`transactions.errors.dateOutOfRange`, *Not after {max}*, behind the field label
+(`FIELD_PREFIXED_CODES`): *Date: Not after 2026-10-20*.
 
 ---
 
@@ -339,7 +342,8 @@ response that `finalize_response()` builds.
 | Field | Meaning |
 |-------|---------|
 | `committed` | Whether the commit route is allowed to commit this batch |
-| `issues` | Structured `TXValidationIssue` entries |
+| `issues` | Structured `TXValidationIssue` entries: each one blocks the commit |
+| `warnings` | Structured `TXValidationIssue` entries that never block a commit and correct nothing (B2); `[]` when nothing warns. Present in every response, committed or not |
 | `results` | Per-operation `operation`, original `index`, affected `ids`, optional create `link_uuid`, and `status` |
 | `success_count` | Number of operations staged successfully; this is not proof that their rows persisted |
 | `wac_results` | Optional WAC output for create/update rows using `auto` or `auto-detail` |
@@ -411,6 +415,89 @@ broker arrives at the other, and no unit is created or lost. The first rule that
 fails is the group's only issue, on operation `create` at the first leg's index, and
 the two rows stay unlinked. Pair description and tags are checked separately by
 `_validate_pair_description_tags()`.
+
+**A pair in the wrong order is a warning, never an error (B2).** When the arrival leg of a
+linked `TRANSFER` or `CASH_TRANSFER` is dated before its departure leg, the pair is saved
+as sent and `warnings` carries `pairArrivalBeforeDeparture` (params `departureDate` and
+`arrivalDate`, ISO dates; the message is `transactions.errors.pairArrivalBeforeDeparture`).
+The departure is the leg with the negative quantity (the negative amount, for cash); equal
+dates are in order. It is judged at the two places a pair gets its dates: a create group
+(`resolve_create_links()`, on the first create of the group, `ref_id` null) and an update
+that really changes the `date` of a leg of a stored pair (`warn_inverted_updated_pairs()`,
+on the first update that changed one, `ref_id` its id), on the final dates of both legs: one
+warning per pair, none when both legs move to a normal order. A pair already stored in the
+wrong order is never judged again, and an update carrying the stored date changes nothing.
+
+---
+
+## 🔁 Event Reconciliation {: #event-reconciliation }
+
+A transaction of type `DIVIDEND`, `INTEREST` or `ADJUSTMENT` can point at an asset event
+(`asset_event_id`). It loses the pointer when a [currency change](../assets/events.md#market-data-wipe)
+deletes the events that are not `SPLIT`s (N68), and it never had one when the dividend was booked before the
+event was synced. `GET /api/v1/transactions/event-reconciliation` lists those transactions with the event
+each could take, so the user can link them again. It is the read half of the flow: **it writes nothing and
+never links by itself**.
+
+```mermaid
+sequenceDiagram
+    actor U as User
+    participant P as Transactions page (EventReconciliationModal)
+    participant API as Backend
+
+    U->>P: Relink events
+    P->>API: GET /transactions/event-reconciliation
+    API-->>P: rows: unique / none / several
+    U->>P: Link (one row) or Link every row with one event
+    P->>API: POST /transactions/commit  updates: [{id, asset_event_id}]
+    API-->>P: committed, or issues and nothing linked
+    P-->>U: linked rows leave the list; the page reloads
+```
+
+**Rows** (`TransactionEventSuggestionsMixin.event_reconciliation()`, `services/transactions/event_suggestions.py`):
+the caller's transactions with an `asset_id`, no `asset_event_id` and an event-compatible type
+(`event_compatible_types()` of `schemas/transactions/type_metadata.py`), on the brokers where the caller holds
+a `BrokerUserAccess` row of role `EDITOR` or `OWNER`: the ones they could link on, so a viewer's brokers never
+appear. Optional query parameters `broker_id` and `asset_id` (both above 0) narrow the list. Order: date
+descending, then id descending.
+
+**Candidates** reuse `suggest_events_bulk()` with `tolerance_days=0`: the same asset, the **same date**, and
+the event type that corresponds to the transaction type, with no window of dates:
+
+| Transaction type | Event types it can take |
+|------------------|-------------------------|
+| `DIVIDEND` | `DIVIDEND` |
+| `INTEREST` | `INTEREST` |
+| `ADJUSTMENT` | `PRICE_ADJUSTMENT`, `SPLIT` |
+
+The mixin asks once per distinct `(asset, date, type)`, so a day with several dividends of one asset costs one
+query. The answer is a list of `TXEventReconciliationItem` (`schemas/transactions/event_suggest.py`):
+`transaction_id`, `broker_id`, `asset_id`, `date`, `type`, `status` and `candidates` (the same
+`TXEventSuggestCandidate` the suggest endpoint returns: `id`, `date`, `type`, `value`, `currency`, `is_auto`,
+`distance_days`).
+
+| `status` | Candidates | What the interface does |
+|----------|------------|-------------------------|
+| `unique` | exactly one | Proposes it: **Link** on the row, and the row counts for **Link every row with one event** |
+| `none` | zero | Says no event exists that day |
+| `several` | two or more, all listed | Proposes nothing, never guesses: the user picks the event in the transaction form |
+
+The `tolerance_days=0` is deliberate: a dividend credited a few days after the event is not matched, and the
+user links it by hand. Automatic linking is not done; it is on the list of future work.
+
+**Frontend.** The **Relink events** button (`data-testid="tx-reconcile-events-button"`) of the Transactions
+page opens `EventReconciliationModal.svelte` (`frontend/src/lib/features/transactions/`). The module
+`eventReconciliation.ts` reads the list (`loadEventReconciliation()`), selects the rows that are safe to link
+(`uniqueRows()`: `status` `unique` **and** exactly one candidate, a double check of the server) and links them
+with `linkReconciliation()`, which sends **one** `POST /transactions/commit` with
+`updates: [{id, asset_event_id}]` (`commitTransactions()` of `txCommitApi.ts`). The commit is atomic like every
+batch: any issue and nothing is linked, and the rows are not retried with fewer. With nothing to link there is
+no request. On success the page reloads its transactions softly (`onlinked`).
+
+Tests: `backend/test_scripts/test_api/test_event_reconciliation_api.py`
+(`./dev.py test api event-reconciliation`); in the frontend `eventReconciliation.test.ts` and
+`EventReconciliationModal.test.ts` (`frontend/src/lib/features/transactions/`) and
+`e2e/transactions/tx-event-reconciliation.spec.ts`.
 
 ---
 

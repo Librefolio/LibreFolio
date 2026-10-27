@@ -136,7 +136,9 @@
       "resultMissing": "Il backend non ha restituito un risultato per questo segnale. Riprova la richiesta dei segnali.",
       "partialResult": "Questo segnale è disponibile solo parzialmente con i dati attuali.",
       "unavailable": "Questo segnale non può essere calcolato con i dati disponibili.",
-      "partialContiguousSegment": "Segnale calcolato sul segmento contiguo completo {start}–{end}. Esclusi {excluded} punti caricati perché date o campi richiesti erano incompleti. Input completo: {available}/{requested} ({coverage}%, warm-up incluso). Sequenza massima mancante: {consecutive} punti."
+      "partialContiguousSegment": "Segnale calcolato sul segmento contiguo completo {start}–{end}. Esclusi {excluded} punti caricati perché date o campi richiesti erano incompleti. Input completo: {available}/{requested} ({coverage}%, warm-up incluso). Sequenza massima mancante: {consecutive} punti.",
+      "undefinedWindowPartial": "{count} punti di questo rendimento non si possono calcolare, dal {start} al {end}, perché un prezzo necessario manca o non è utilizzabile. Risincronizza i prezzi di questo asset dal {resyncStart} al {resyncEnd} e riprova.",
+      "undefinedWindowUnavailable": "Questo rendimento non si può calcolare: i {count} punti, dal {start} al {end}, non hanno un prezzo utilizzabile. Risincronizza i prezzi di questo asset dal {resyncStart} al {resyncEnd} e riprova."
     },
     "axes": {
       "exchangeRate": "Asse del cambio ({pair})",
@@ -216,7 +218,10 @@
     },
     "comparisonAsset": {
       "placeholder": "Seleziona asset di confronto",
-      "loadError": "Impossibile caricare gli asset."
+      "loadError": "Impossibile caricare gli asset.",
+      "blocked": "Non disponibili",
+      "isMainAsset": "È l'asset del grafico",
+      "alreadyCompared": "Già confrontato in un altro segnale"
     }
   }
 }

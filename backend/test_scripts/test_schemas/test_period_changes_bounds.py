@@ -1,38 +1,34 @@
 """
-The ``as_of`` floor of a fixed-period changes item — R13-SEC8 (E's review of MF-P2), lot MF-P2b.
+The days of a fixed-period changes item: no floor but the calendar — R13-SEC8 (MF-P2b) withdrawn by X5-6 (D-P4 L4).
 
-Before: ``FAPeriodChangesQueryItem`` (``POST /assets/prices/period-changes``) and ``FXPeriodChangesRequest``
-(``POST /fx/currencies/period-changes``) took any ``as_of``. The services value ``fixed_period_dates(as_of)``, which is
-``as_of − days`` for every period up to 5Y (1825 days): on or before 0005-12-30 that subtraction overflows ``date``, an
-``OverflowError`` the route turns into a bare 500; and every day before 1900 is a day nothing is valued on.
+History. ``FAPeriodChangesQueryItem`` (``POST /assets/prices/period-changes``) and ``FXPeriodChangesRequest``
+(``POST /fx/currencies/period-changes``) value ``fixed_period_dates(as_of)``, which is ``as_of − days`` for every period
+up to 5Y (1825 days). R13-SEC8 stopped the ``OverflowError`` that subtraction raised on or before 0005-12-30 (a bare 500)
+by refusing every ``as_of`` before 1900-01-01 (``EARLIEST_RANGE_START``).
 
-Now: ``as_of`` is 1900-01-01 or later (``EARLIEST_RANGE_START``, the replay floor), a ``ValueError`` in the item's
-validation, so a pydantic ``ValidationError`` — a 422 on the routes. There is no upper bound: a future ``as_of`` costs
-what any other does.
+Now (developer decision, X5-6): ``as_of`` and ``range_start`` accept ANY day the calendar has — ``date.min``
+(0001-01-01) to ``date.max`` — and nothing else is refused about the day itself: no lower limit, and ``as_of`` has no
+upper one either (a future ``as_of`` costs what any other does). A day before year 1 is not a ``date`` at all: pydantic's
+own date parsing refuses ``0000-12-31`` on the field, which is the calendar and not a rule of this item. What a period
+does when its reference day would fall before year 1 is the services' (null change, never a 500 or a 422): see
+``test_financial_math/test_fixed_period_changes.py`` and ``test_api/test_period_changes_api.py``.
 
-The floor is written out here, not imported: it is the contract R13-SEC8 fixed, and a test that read it from the module
-would follow any change of it.
-
-Each refused item is otherwise valid (an asset id, two distinct ISO codes), so the only rule it can break is the floor:
-the error's ``loc`` names ``as_of`` and nothing else. A refusal never matches the message text. The days are given as ISO
-strings, as the routes receive them.
-
-"Red" tests fail on the code before the fix: it accepts what they expect refused. "Guard" tests pass before and after:
-the floor itself is accepted, and so is the last day ``date`` has.
-
-X-R59 (rule 10, decision N80) adds ``range_start``, optional on both items: the first day of the range whose change the
-Assets cards and the FX Δ Abs / Δ % show. Same floor as ``as_of`` (1900-01-01, the type ``PeriodChangesAsOf``), and not
-after the item's ``as_of``. On HEAD (a275ec8af, 46bbbb1e3) the field does not exist, and a ``StrictModel`` refuses it
-too — with an ``extra_forbidden`` error on ``range_start``. So each refusal below also asserts the error is the rule's
-(``value_error``), not that one: without it, «refused» would be green on HEAD for the wrong reason.
+``range_start``, optional on both items (X-R59, decision N80): the first day of the range whose change the Assets cards
+and the FX Δ Abs / Δ % show. It shares the type of ``as_of`` (``PeriodChangesAsOf``) and is not after the item's ``as_of``:
+that ordering guard stays, with its ``value_error``. On HEAD (a275ec8af, 46bbbb1e3) the field did not exist, and a
+``StrictModel`` refused it with an ``extra_forbidden`` error; each refusal below therefore also asserts the error is the
+rule's (``value_error``), not that one.
 
 The limits of a whole request — how many items, how many distinct days — are not the items': both routes refuse them
 through ``schemas/common.py::period_changes_request_refusal(items)`` (coordinator's decision, aligned with Z-25), the
 422 ``detail`` or None. It is tested here pure, on plain objects that only have ``as_of`` and ``range_start``: at most
 1 000 items (Z-25's ``MAX_BULK_ITEMS``) — ``{"code": "bulk_too_many_items", "message", "max_items", "items"}`` —, at most
 5 distinct ``as_of`` and 5 distinct ``range_start`` — ``{"code": "period_changes_too_many_days", "message", "field",
-"max_days", "days"}`` —, the items before the days. The message is never matched. RED on HEAD 46bbbb1e3: the function
-does not exist (looked up on the module when called). The routes' answers are ``test_api/test_period_changes_api.py``.
+"max_days", "days"}`` —, the items before the days. The message is never matched. The routes' answers are
+``test_api/test_period_changes_api.py``.
+
+"Red" tests of X5-6 fail on the code before it: it still refuses what they expect accepted. "Guard" tests pass before
+and after: the ordering of ``range_start`` and ``as_of``, the calendar's own edges, the limits of a request.
 
 Pure: no database, no server, no network. Nothing is computed, only validated.
 """
@@ -47,22 +43,31 @@ from backend.app.schemas import common as common_schemas
 from backend.app.schemas.fx import FXPeriodChangesRequest
 from backend.app.schemas.prices import FAPeriodChangesQueryItem
 
-# The R13-SEC8 contract, written out (see the module docstring).
+#: The old floor (R13-SEC8), kept only as a landmark: the days around it are accepted now.
 FLOOR = date(1900, 1, 1)
 
-#: Days before the floor: the day before it; the first day whose 5Y reference exists (``0001-01-01``) and the day before
-#: it, the last whose 5Y reference overflows ``date``; the first day.
-BEFORE_THE_FLOOR = [
+#: Days the old floor refused, and the edges of the calendar: the day before the floor; the last day whose 5Y reference
+#: overflowed ``date`` (``0005-12-30``) and the first whose does not; the first day ``date`` has (``date.min``).
+FORMERLY_REFUSED = [
     pytest.param(date(1899, 12, 31), id="1899-12-31"),
+    pytest.param(date(1850, 6, 15), id="1850-06-15"),
     pytest.param(date(5, 12, 31), id="0005-12-31"),
     pytest.param(date(5, 12, 30), id="0005-12-30"),
+    pytest.param(date(3, 6, 15), id="0003-06-15"),
+    pytest.param(date(1, 1, 2), id="0001-01-02"),
     pytest.param(date(1, 1, 1), id="0001-01-01"),
 ]
 
-#: Days on or after the floor: the floor itself and the last day ``date`` has (no upper bound).
+#: Days the old floor already accepted: the floor itself and the last day ``date`` has (no upper bound).
 FROM_THE_FLOOR = [
     pytest.param(FLOOR, id="1900-01-01"),
     pytest.param(date(9999, 12, 31), id="9999-12-31"),
+]
+
+#: Days no ``date`` can hold: the calendar's own refusal, on the field, whatever the rules of the item.
+NOT_A_DATE = [
+    pytest.param("0000-12-31", id="year-0"),
+    pytest.param("-001-06-15", id="negative-year"),
 ]
 
 
@@ -85,27 +90,39 @@ ITEMS = [
 ]
 
 
-@pytest.mark.parametrize("as_of", BEFORE_THE_FLOOR)
+@pytest.mark.parametrize("as_of", FORMERLY_REFUSED)
 @pytest.mark.parametrize("build", ITEMS)
-def test_item_refuses_as_of_before_1900(build, as_of):
-    """RED: an ``as_of`` before 1900-01-01 is refused, on ``as_of`` alone."""
-    with pytest.raises(ValidationError) as refused:
-        build(as_of)
-    assert [error["loc"] for error in refused.value.errors()] == [("as_of",)], refused.value.errors()
+def test_item_accepts_as_of_before_1900(build, as_of):
+    """RED (X5-6): an ``as_of`` before 1900-01-01 — down to ``date.min`` — is accepted and kept, no range involved."""
+    item = build(as_of)
+    assert (item.as_of, item.range_start) == (as_of, None)
 
 
 @pytest.mark.parametrize("as_of", FROM_THE_FLOOR)
 @pytest.mark.parametrize("build", ITEMS)
 def test_item_accepts_as_of_from_1900(build, as_of):
-    """Guard: the floor itself is accepted, and so is any later day."""
+    """Guard: the old floor itself is accepted, and so is any later day."""
     assert build(as_of).as_of == as_of
+
+
+@pytest.mark.parametrize("raw", NOT_A_DATE)
+@pytest.mark.parametrize("build", ITEMS)
+def test_item_still_refuses_what_is_not_a_date(build, raw):
+    """Guard: a day before year 1 does not exist; the refusal is the calendar's (a ``date…parsing`` error), on ``as_of``
+    alone — the withdrawn floor was never what made it a 422."""
+    payload = {"asset_id": 1, "as_of": raw} if build is _asset_item else {"base": "AWG", "quote": "TMT", "as_of": raw}
+    model = FAPeriodChangesQueryItem if build is _asset_item else FXPeriodChangesRequest
+    with pytest.raises(ValidationError) as refused:
+        model.model_validate(payload)
+    errors = refused.value.errors()
+    assert [error["loc"] for error in errors] == [("as_of",)] and errors[0]["type"].startswith("date") and errors[0]["type"].endswith("parsing"), errors
 
 
 # ============================================================================
 # X-R59: range_start
 # ============================================================================
 
-#: The ``as_of`` of the range tests: any day after the floor.
+#: The ``as_of`` of the range tests: any ordinary day.
 AS_OF = date(1987, 3, 15)
 
 #: Days after ``AS_OF``: a range that would end before it starts.
@@ -114,13 +131,20 @@ AFTER_AS_OF = [
     pytest.param(date(9999, 12, 31), id="9999-12-31"),
 ]
 
-#: ``(range_start, as_of)`` pairs inside the rules: from the floor, up to ``as_of`` included.
+#: ``(range_start, as_of)`` pairs inside the rules: any ``range_start`` up to ``as_of`` included. The first five are the
+#: ones the old floor accepted too; the rest are RED until X5-6.
 ACCEPTED_RANGES = [
     pytest.param(AS_OF, AS_OF, id="equal-to-as_of"),
     pytest.param(AS_OF - timedelta(days=1), AS_OF, id="the-day-before"),
     pytest.param(FLOOR, AS_OF, id="from-the-floor"),
     pytest.param(FLOOR, FLOOR, id="both-on-the-floor"),
     pytest.param(date(9999, 12, 31), date(9999, 12, 31), id="both-on-the-last-day"),
+    pytest.param(date(1899, 12, 31), FLOOR, id="the-day-before-the-old-floor"),
+    pytest.param(date(1, 1, 1), AS_OF, id="date-min-to-a-1987-as_of"),
+    pytest.param(date(1, 1, 1), date(1850, 6, 15), id="date-min-to-an-1850-as_of"),
+    pytest.param(date(1, 1, 1), date(3, 6, 15), id="date-min-to-a-0003-as_of"),
+    pytest.param(date(1, 1, 1), date(1, 1, 1), id="both-on-date-min"),
+    pytest.param(date(3, 6, 14), date(3, 6, 15), id="both-in-year-3"),
 ]
 
 
@@ -131,15 +155,13 @@ def _rule_errors(refused: ValidationError) -> list:
     return errors
 
 
-@pytest.mark.parametrize("range_start", BEFORE_THE_FLOOR)
+@pytest.mark.parametrize("range_start", FORMERLY_REFUSED)
 @pytest.mark.parametrize("build", ITEMS)
-def test_item_refuses_range_start_before_1900(build, range_start):
-    """RED: a ``range_start`` before 1900-01-01 is refused on ``range_start`` alone, by the floor ``as_of`` has — the
-    item's ``as_of`` is the floor itself, so the range is otherwise in order."""
-    with pytest.raises(ValidationError) as refused:
-        build(FLOOR, range_start)
-    errors = _rule_errors(refused.value)
-    assert [(error["loc"], error["type"]) for error in errors] == [(("range_start",), "value_error")], errors
+def test_item_accepts_range_start_before_1900(build, range_start):
+    """RED (X5-6): a ``range_start`` before 1900-01-01 — down to ``date.min`` — is accepted and kept; the item's ``as_of`` is
+    the old floor itself, so the range is in order (``range_start`` on or before ``as_of``) and nothing else is asked of it."""
+    item = build(FLOOR, range_start)
+    assert (item.range_start, item.as_of) == (range_start, FLOOR)
 
 
 @pytest.mark.parametrize("range_start", AFTER_AS_OF)
@@ -155,8 +177,9 @@ def test_item_refuses_range_start_after_as_of(build, range_start):
 
 @pytest.mark.parametrize(("range_start", "as_of"), ACCEPTED_RANGES)
 @pytest.mark.parametrize("build", ITEMS)
-def test_item_accepts_range_start_from_1900_up_to_as_of(build, range_start, as_of):
-    """RED: a ``range_start`` from the floor up to ``as_of`` included — equal to it too — is accepted and kept."""
+def test_item_accepts_range_start_up_to_as_of(build, range_start, as_of):
+    """A ``range_start`` up to ``as_of`` included — equal to it too, and from ``date.min`` — is accepted and kept (RED for the
+    cases before 1900, see ``ACCEPTED_RANGES``)."""
     item = build(as_of, range_start)
     assert (item.range_start, item.as_of) == (range_start, as_of)
 

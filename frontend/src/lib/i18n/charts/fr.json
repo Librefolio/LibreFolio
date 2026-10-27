@@ -136,7 +136,9 @@
       "resultMissing": "Le backend n'a renvoyé aucun résultat pour ce signal. Relancez la requête des signaux.",
       "partialResult": "Ce signal n'est que partiellement disponible avec les données actuelles.",
       "unavailable": "Ce signal ne peut pas être calculé avec les données disponibles.",
-      "partialContiguousSegment": "Signal calculé sur le segment contigu complet {start}–{end}. {excluded} points chargés ont été exclus car des dates ou champs requis étaient incomplets. Entrée complète : {available}/{requested} ({coverage} %, préchauffage inclus). Plus longue séquence manquante : {consecutive} points."
+      "partialContiguousSegment": "Signal calculé sur le segment contigu complet {start}–{end}. {excluded} points chargés ont été exclus car des dates ou champs requis étaient incomplets. Entrée complète : {available}/{requested} ({coverage} %, préchauffage inclus). Plus longue séquence manquante : {consecutive} points.",
+      "undefinedWindowPartial": "{count} points de ce rendement ne peuvent pas être calculés, du {start} au {end}, car un prix nécessaire est absent ou inutilisable. Resynchronisez les prix de cet actif du {resyncStart} au {resyncEnd} puis réessayez.",
+      "undefinedWindowUnavailable": "Ce rendement ne peut pas être calculé : les {count} points, du {start} au {end}, n'ont pas de prix utilisable. Resynchronisez les prix de cet actif du {resyncStart} au {resyncEnd} puis réessayez."
     },
     "axes": {
       "exchangeRate": "Axe du taux de change ({pair})",
@@ -216,7 +218,10 @@
     },
     "comparisonAsset": {
       "placeholder": "Sélectionner l’actif de comparaison",
-      "loadError": "Impossible de charger les actifs."
+      "loadError": "Impossible de charger les actifs.",
+      "blocked": "Non disponibles",
+      "isMainAsset": "C'est l'actif du graphique",
+      "alreadyCompared": "Déjà comparé dans un autre signal"
     }
   }
 }

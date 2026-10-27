@@ -1,4 +1,5 @@
 import {ArrowHold} from './arrowHold';
+import {utcMs} from '$lib/utils/dateOnly';
 
 /**
  * Arrow-key stepping for a date field, with hold-to-accelerate.
@@ -46,7 +47,18 @@ function toIso(year: number, month: number, day: number): string {
 }
 
 function daysInMonth(year: number, month: number): number {
-    return new Date(Date.UTC(year, month, 0)).getUTCDate();
+    return new Date(utcMs(year, month, 0)).getUTCDate();
+}
+
+/** The first and the last day a stored date may have (Python's `date.min` and `date.max`): the arrows stop there. */
+const FIRST_DAY = '0001-01-01';
+const LAST_DAY = '9999-12-31';
+
+/** The text of a year, a month and a day, held between the first and the last day. */
+function toBoundedIso(year: number, month: number, day: number): string {
+    if (year < 1) return FIRST_DAY;
+    if (year > 9999) return LAST_DAY;
+    return toIso(year, month, day);
 }
 
 /**
@@ -61,12 +73,13 @@ export function shiftIsoDate(iso: string, unit: 'day' | 'month' | 'year', amount
     const parts = toParts(iso);
     if (!parts) return iso;
     if (unit === 'day') {
-        const shifted = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + amount));
-        return toIso(shifted.getUTCFullYear(), shifted.getUTCMonth() + 1, shifted.getUTCDate());
+        const shifted = new Date(utcMs(parts.year, parts.month - 1, parts.day + amount));
+        return toBoundedIso(shifted.getUTCFullYear(), shifted.getUTCMonth() + 1, shifted.getUTCDate());
     }
     const monthIndex = parts.month - 1 + (unit === 'month' ? amount : 0);
     const year = parts.year + (unit === 'year' ? amount : 0) + Math.floor(monthIndex / 12);
     const month = (((monthIndex % 12) + 12) % 12) + 1;
+    if (year < 1 || year > 9999) return toBoundedIso(year, month, 1);
     return toIso(year, month, Math.min(parts.day, daysInMonth(year, month)));
 }
 

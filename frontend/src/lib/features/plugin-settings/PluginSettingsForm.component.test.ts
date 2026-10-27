@@ -1000,3 +1000,49 @@ describe('PluginSettingsForm — the plugin’s icon', () => {
         expect(fallbackIcon(), 'the neutral icon gives the place back').toBeNull();
     });
 });
+
+// =====================================================================================================================
+describe('PluginSettingsForm — a tool plugin (family tool, X5-4b)', () => {
+    const TOOL_USER = field({key: 'precision', type: 'integer', label: 'Precision', minimum: 0, maximum: 8, default: 2, value: 2, source: 'default'});
+    const TOOL_SYSTEM = field({key: 'workers', type: 'integer', scope: 'system', label: 'Workers', minimum: 1, maximum: 8, default: 2, value: 2, source: 'default'});
+    const tool = (fields: SettingField[]) => entry(fields, {family: 'tool', plugin_code: 'fx_converter', plugin_name: 'FX converter'});
+    const toolForm = () => screen.getByTestId('plugin-settings-form-fx_converter');
+
+    it('PSF-31: it publishes its family, shows the neutral icon (a tool has no icon_url), and a user field is editable by a non-admin', async () => {
+        mount(tool([TOOL_USER, field({...TOOL_SYSTEM, editable: false})]));
+
+        expect(toolForm()).toHaveAttribute('data-family', 'tool');
+        expect(within(toolForm()).getByTestId('plugin-settings-plugin-icon-fallback')).toBeInTheDocument();
+        expect(within(toolForm()).queryByTestId('plugin-settings-plugin-icon')).toBeNull();
+        expect(setting('precision')).toHaveAttribute('data-editable', 'true');
+        expect(setting('precision')).toHaveAttribute('data-scope', 'user');
+        expect(inSetting('precision', 'plugin-setting-input')).toBeEnabled();
+        expect(setting('workers'), 'a system field is the instance’s: read-only for a non-admin').toHaveAttribute('data-editable', 'false');
+        expect(notesOf('workers')).toEqual(['adminOnly']);
+        expect(EDIT_CONTROLS.filter((testId) => queryInSetting('workers', testId) !== null)).toEqual([]);
+        expect(queryInSetting('precision', 'plugin-setting-secret-input'), 'a tool field is never secret').toBeNull();
+    });
+
+    it('PSF-32: a system field is editable by an administrator, and the write names the family tool, each field with its own scope', async () => {
+        fake.save.mockResolvedValue({kind: 'saved'} satisfies SaveOutcome);
+        fake.fetchEntry.mockResolvedValue(tool([field({...TOOL_USER, value: 6, is_set: true, source: 'db'}), field({...TOOL_SYSTEM, value: 4, is_set: true, source: 'db'})]));
+        mount(tool([TOOL_USER, TOOL_SYSTEM]));
+
+        await typeIn('precision', '6');
+        await typeIn('workers', '4');
+        await pressSave();
+
+        await waitFor(() => expect(toolForm()).toHaveAttribute('data-busy', 'false'));
+        await waitFor(() => expect(fake.fetchEntry).toHaveBeenCalled());
+        expect(fake.save.mock.calls).toStrictEqual([
+            [
+                [
+                    {family: 'tool', plugin_code: 'fx_converter', field_key: 'precision', scope: 'user', value: 6},
+                    {family: 'tool', plugin_code: 'fx_converter', field_key: 'workers', scope: 'system', value: 4},
+                ],
+            ],
+        ]);
+        expect(fake.fetchEntry).toHaveBeenCalledWith('tool', 'fx_converter');
+        expect(notified('pluginSettings.saved')).toStrictEqual([{name: 'pluginSettings.saved', detail: {family: 'tool', plugin_code: 'fx_converter', fields: ['precision', 'workers']}}]);
+    });
+});

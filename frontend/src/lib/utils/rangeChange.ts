@@ -12,8 +12,7 @@
  * @module utils/rangeChange
  */
 
-/** The first day the backend values: an earlier `range_start` is refused (422), and the whole request with it. */
-export const EARLIEST_RANGE_START = '1900-01-01';
+import {utcMs} from './dateOnly';
 
 /** A change over the range as a page shows it: absolute (in the price's or the rate's unit) and percent; null where the backend has none. */
 export interface RangeDelta {
@@ -45,24 +44,24 @@ export function ratioToPercent(ratio: string | null | undefined): number | null 
     return value === 0 ? 0 : value;
 }
 
-/** True for a bare `YYYY-MM-DD` the calendar has: a UTC round trip, so a daylight-saving change never matters. */
+/** True for a bare `YYYY-MM-DD` the calendar has, from the year 1 (the backend's first): a UTC round trip, so a daylight-saving change never matters. */
 function isCalendarDay(iso: string): boolean {
     const match = ISO_DAY.exec(iso);
     if (!match) return false;
     const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
-    const back = new Date(Date.UTC(year, month - 1, day));
+    if (year < 1) return false;
+    const back = new Date(utcMs(year, month - 1, day));
     return back.getUTCFullYear() === year && back.getUTCMonth() === month - 1 && back.getUTCDate() === day;
 }
 
 /**
- * The `range_start` a request sends for the range `dateStart … asOf`: its first day, raised to 1900-01-01. Null — send
- * none — when either is not a day the calendar has, or when the raised start falls after `asOf`: the backend would refuse
- * the whole request, every Δ column with it.
+ * The `range_start` a request sends for the range `dateStart … asOf`: its first day, as it is (the backend takes any day
+ * from the year 1; D-P4). Null — send none — when either is not a day the calendar has, or when the start falls after
+ * `asOf`: the backend would refuse the whole request, every Δ column with it.
  */
 export function rangeStartFor(dateStart: string, asOf: string): string | null {
     if (!isCalendarDay(dateStart) || !isCalendarDay(asOf)) return null;
-    const start = dateStart < EARLIEST_RANGE_START ? EARLIEST_RANGE_START : dateStart;
-    return start > asOf ? null : start;
+    return dateStart > asOf ? null : dateStart;
 }
 
 /** A decimal string as a number (plain or with an exponent); anything else, a non-string included, is none. Never −0. */

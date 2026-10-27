@@ -181,6 +181,36 @@ class RestoreSecretCounts(BaseModel):
 # no_administrator. The copy is kept until expires_at. encrypted: a secure backup. secrets_rekeyed: the plugin secrets
 # re-encrypted with this instance's key (a secure backup carries its own); secrets_unreadable: those that stay
 # unreadable, to enter again after the restore (another instance's, without its key).
+# B5-1, a managed instance only: an account of the backup the owner may choose as theirs. owner_email: its address is
+# the owner's (LIBREFOLIO_ADMIN_EMAIL); administrator: an active administrator of the backup; is_superuser and is_active
+# as the backup holds them, labels only.
+class RestoreOwnerCandidate(BaseModel):
+    """An account of the backup the owner may choose as theirs."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    user_id: int
+    username: str
+    email: str | None
+    owner_email: bool
+    administrator: bool
+    is_superuser: bool
+    is_active: bool
+
+
+# B5-1: the choice a restore from the app of a managed instance asks for. forced_user_id: the account that already holds
+# the owner's address, the only one allowed then; null when the backup has none and any active administrator may be chosen.
+class RestoreOwnerChoice(BaseModel):
+    """Which account of the backup becomes the owner's: mandatory before the confirmation."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    required: bool
+    owner_email: str
+    forced_user_id: int | None
+    candidates: list[RestoreOwnerCandidate]
+
+
 class RestoreStageReport(BaseModel):
     """What a restore of the checked archive would do: what the confirmation shows."""
 
@@ -216,6 +246,7 @@ class RestoreStageReport(BaseModel):
             "non_iso_currencies",
             "credentials_from_backup",
             "confirming_account_not_in_backup",
+            "users_over_limit",
         ]
     ]
     blockers: list[Literal["no_administrator"]]
@@ -224,6 +255,23 @@ class RestoreStageReport(BaseModel):
     control_totals_differences_count: int = Field(ge=0)
     restorable: bool
     expires_at: datetime
+    owner_choice: RestoreOwnerChoice | None = None
+    # B5-1k2, information only (a restore refuses nothing for too many users): users_active: the accounts that will be
+    # active after the restore (the owner's, activated, included); users_limit: LIBREFOLIO_MAX_USERS when checked (null: no
+    # limit, or a value that is not valid); users_over_limit: how many accounts too many. The warning users_over_limit says
+    # that the administrator chooses who keeps access at the first sign-in.
+    users_active: int = Field(default=0, ge=0)
+    users_limit: int | None = None
+    users_over_limit: int = Field(default=0, ge=0)
+
+
+# B5-1: the account of the backup the owner chose; required on a managed instance, refused elsewhere.
+class RestoreConfirmRequest(BaseModel):
+    """The confirmation of a restore: the owner's account, on a managed instance."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    owner_user_id: int | None = None
 
 
 # done_bytes of total_bytes measure the unpacking; report comes with done, error_code with failed.

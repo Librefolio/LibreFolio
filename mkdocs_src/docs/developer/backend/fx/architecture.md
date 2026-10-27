@@ -48,8 +48,8 @@ included, passes. The provider sync has no floor either: in `sync_pairs_bulk()`,
 path, `_is_date_within_sync_range()` (`backend/app/services/fx/sync.py`) keeps the dates of the
 requested range and nothing else, so a provider's rate dated before 1900 inside it,
 `start: "min"` included, is kept like any other; its end stays the requested one, today at the
-latest. Before N83's revision it was false before `EARLIEST_RANGE_START` (1900-01-01), whatever
-the start.
+latest. Before N83's revision it was false for a day before 1 January 1900, whatever
+the start; that floor no longer exists.
 {: #stored-rate-dates }
 
 ## 🔢 Priority System
@@ -300,6 +300,50 @@ and the native cash:
 Tests: `./dev.py test services fx-rate-steps` (`backend/test_scripts/test_services/test_fx_rate_steps.py`, 63 cases,
 isolation `pure`) pins the match with an oracle against `convert_bulk()` on every day of every window.
 
+### 🧩 Converting once for each stretch {: #convert-by-stretch }
+
+A rate row stays in force until the next one is stored, so the days of a long range between two rows
+convert the same amount under the same rate. `convert_by_stretch()`
+(`backend/app/services/fx/stretch_conversion.py`, X-Q3) answers a list exactly as
+`convert_bulk(session, conversions, raise_on_error=False)` does (same results to the digit, same errors),
+but hands `convert` one conversion for each distinct (amount as printed, pair, rate row), on the first day
+it meets it, and copies the answer to the other days of the stretch.
+
+```mermaid
+flowchart LR
+    I["conversions<br/>(Currency, to, day)"] --> K{"item"}
+    K -- "same currency" --> A["answered:<br/>amount, dated as asked"]
+    K -- "no rate on or before day" --> E["answered: own error<br/>'Conversion N: No FX rate found…'"]
+    K -- "rate row R" --> G["group (amount, pair, R)"]
+    G -- "first day of each group" --> C["convert = convert_bulk"]
+    C --> X["copied to every day of the group<br/>backward-fill flag: rate date before day"]
+```
+
+- **The rate row** of each day comes from `unit_rate_steps()` ([above](#unit-rate-steps)), which reads the
+  same usable rows as `convert_bulk()`.
+- **Per item, as in `convert_bulk()`:** an identity (the amount, dated as asked, no backward fill); a day
+  with no usable rate (its own error, numbered by its position in the list, never asked of `convert`);
+  the backward-fill flag (`rate date < day`).
+- **The amount counts as printed.** `Decimal("1.0")` and `Decimal("1")` convert to different exponents,
+  so they are different groups.
+- **A failure of `convert`** for a group fails each of its days, each error numbered by its own item.
+- **The seams** are the keyword arguments `convert` (default `convert_bulk`) and `steps` (default
+  `unit_rate_steps`), so a test can stand in for either read.
+
+`POST /api/v1/fx/currencies/convert` (`convert_currency_bulk()` in `backend/app/api/v1/fx/currencies.py`)
+calls it for its daily and signal blocks, so the expansion into one item per day is unchanged while
+`convert_bulk()` receives fewer items. The [price query](../assets/architecture.md#price-query-observation)
+applies the same idea to a price series through `observed_prices.py`, which asks `convert_bulk()` itself for
+each (price row, rate row) pair. Measured on a 10-year USD asset asked in EUR (3,650 points, rates on every
+weekday): 2,608 conversions instead of 3,650 with identical points, in the same time (0.26 s against 0.25 s),
+so it saves conversions, not time.
+
+Tests: `./dev.py test services fx-stretch-conversion`
+(`backend/test_scripts/test_services/test_fx_stretch_conversion.py`, isolation `pure`): item-for-item parity
+with `convert_bulk()` (direct, inverse, identity, no rate, gap, amount exponent), `convert` handed stretches
+and not days, and the handler answering what it answered with every day converted, signals and samples
+included.
+
 ### 📅 Fixed-Period Changes {: #fixed-period-changes }
 
 `POST /api/v1/fx/currencies/period-changes` returns the fixed-period changes of the FX table: 1D, 1W, 1M, 3M, 6M,
@@ -308,8 +352,9 @@ isolation `pure`) pins the match with an oracle against `convert_bulk()` on ever
 `fixed_period_changes()` ([Financial Math Layer](../financial_math.md#fixed-period-changes)).
 
 - **Request**: a list of `{base, quote, as_of, range_start?}`. From the schema, 422 when `base` and `quote` are the
-  same, when `as_of` or `range_start` falls before `EARLIEST_RANGE_START` (1 January 1900; up to 0005-12-30 the 5Y
-  day fell before year 1, a 500), or when `range_start` is after `as_of`. The route then checks the request with
+  same, or when `range_start` is after `as_of`; `as_of` and `range_start` are any day of the calendar, with no first
+  day (D-P4, 26/10/2026; the schema once refused a day before 1 January 1900). A period whose reference day falls
+  before 0001-01-01 has none: its change is null (`day_before()` in `financial_math/returns.py`). The route then checks the request with
   `period_changes_request_refusal()` (`backend/app/schemas/common.py`), before any conversion (MF-P2b, finding
   R13-SEC8, aligned with Z-25):
     - more than `MAX_BULK_ITEMS` (1,000) pairs get the 422 `{"code": "bulk_too_many_items", "message", "max_items",
@@ -357,8 +402,8 @@ the FX pages (X-R59, decision N80); its limits are in the **Request** bullet abo
 The change is on this endpoint, not on `POST /api/v1/fx/currencies/convert`: the FX store composes a pair's series
 from the gaps it loads separately (`ensureFxRangeLoaded()`), so a change attached to a series response would not be
 the visible range's. The web app sends it: `fetchFxPeriodChanges(pairs, asOf, rangeStart)`
-(`frontend/src/lib/utils/periodChanges.ts`) gives each item the first day of the range on screen, raised
-to 1 January 1900 by `rangeStartFor()` (`frontend/src/lib/utils/rangeChange.ts`), none for a day the backend would
+(`frontend/src/lib/utils/periodChanges.ts`) gives each item the first day of the range on screen, as it is
+(`rangeStartFor()`, `frontend/src/lib/utils/rangeChange.ts`; no longer raised to 1 January 1900), none for a day the backend would
 refuse (after `as_of`, or not a calendar day), and reads `range_change` both ways with `fxRangeDeltas()`. The FX table's
 Δ Abs and Δ % columns, the FX card's Δ % and the pair page's summary show it, from the `inverse_*` fields for a pair
 shown the other way round; the browser no longer computes it (`displayFxDelta()` is gone). The FX list keeps those

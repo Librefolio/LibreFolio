@@ -26,11 +26,11 @@ from functools import lru_cache
 from typing import Annotated, Any, List, Literal, Optional, Union
 
 import pycountry
-from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, Field, ValidationInfo, field_validator, model_validator
+from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, Field, field_validator, model_validator
 from pydantic.functional_serializers import PlainSerializer
 
 from backend.app.utils.date_range_limits import MAX_BULK_ITEMS, bulk_too_many_items_detail
-from backend.app.utils.datetime_utils import EARLIEST_RANGE_START, parse_ISO_date
+from backend.app.utils.datetime_utils import parse_ISO_date
 
 # =============================================================================
 # SAFE DECIMAL — no scientific notation in JSON output
@@ -589,6 +589,33 @@ class FxBackwardFillInfo(BaseModel):
         return parse_ISO_date(v) if v is not None else v
 
 
+class DateSpan(StrictModel):
+    """Days from ``start`` to ``end``, both included (D-P4: the data-quality report's ranges instead of one date per day)."""
+
+    start: date_type = Field(..., description="First day, inclusive")
+    end: date_type = Field(..., description="Last day, inclusive")
+
+    @model_validator(mode="after")
+    def _end_not_before_start(self) -> DateSpan:
+        if self.end < self.start:
+            raise ValueError(f"end ({self.end}) must be on or after start ({self.start})")
+        return self
+
+
+class StepSpan(StrictModel):
+    """A point of a step series (D-P4, cure B): its value holds from ``date`` to ``through``, both included, during which
+    nothing changes. The base of every point of a series in steps; ``financial_math.series_steps.value_at`` reads a day."""
+
+    date: date_type = Field(..., description="First day the point holds")
+    through: date_type = Field(..., description="Last day the point holds, inclusive")
+
+    @model_validator(mode="after")
+    def _through_not_before_date(self) -> StepSpan:
+        if self.through < self.date:
+            raise ValueError(f"through ({self.through}) must be on or after date ({self.date})")
+        return self
+
+
 class DateRangeModel(BaseModel):
     """
     Reusable date range model for FA and FX operations.
@@ -740,21 +767,6 @@ def period_changes_request_refusal(items: Sequence[Any]) -> dict | None:
                 "days": days,
             }
     return None
-
-
-def period_changes_as_of(value: date_type, info: ValidationInfo) -> date_type:
-    """A day of a fixed-period changes item (``as_of``, ``range_start``): on or after ``EARLIEST_RANGE_START`` (1900-01-01).
-
-    Nothing is valued before it, and up to 0005-12-30 the five-year reference day (1 825 days back) would fall before
-    year 1: ``date`` would overflow, a 500.
-    """
-    if value < EARLIEST_RANGE_START:
-        raise ValueError(f"{info.field_name or 'as_of'} ({value}) must be on or after {EARLIEST_RANGE_START}")
-    return value
-
-
-#: The ``as_of`` field of a fixed-period changes item (see :func:`period_changes_as_of`).
-PeriodChangesAsOf = Annotated[date_type, AfterValidator(period_changes_as_of)]
 
 
 class BaseDeleteResult(BaseModel):

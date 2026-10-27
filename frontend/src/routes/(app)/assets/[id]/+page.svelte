@@ -13,6 +13,7 @@
      * Uses Svelte 5 runes. Reference: fx/[pair]/+page.svelte
      */
     import {onDestroy, onMount, tick, untrack} from 'svelte';
+    import {onPricesCaughtUp} from '$lib/features/price-refresh/onPricesCaughtUp';
     import {page} from '$app/stores';
     import {goto} from '$app/navigation';
     import {debug, isDebugEnabled} from '$lib/debug';
@@ -304,7 +305,7 @@
 
     // Cross-domain data for signals
     let allConfiguredFxSlugs: string[] = $state([]);
-    let allAssets: Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null; currency?: string}> = $state([]);
+    let allAssets: Array<{id: number; display_name: string; icon_url?: string | null; asset_type?: string | null; currency?: string; is_benchmark?: boolean}> = $state([]);
 
     // Classification data (loaded when has_metadata)
     let sectorDistribution: Record<string, number> | null = $state(null);
@@ -1121,6 +1122,16 @@
         if (assetInfo) onboardingGuide.maybeStartContextual('asset_detail_guide');
     });
 
+    // A price catch-up (the bus's `{kind: 'prices'}`, Y5-1, Z-14b): the chart on screen is asked again, in silence — the stale points stay up, nothing
+    // says the page is busy — and outside `pageBusy`: it is not the user's Refresh. The compared assets' prices follow the chart (they need its days).
+    onMount(() =>
+        onPricesCaughtUp(async () => {
+            if (!pageAlive || !assetInfo) return;
+            await loadChartData(false, signals, false, true);
+            if (pageAlive && primaryMode === 'price') await maybeLoadComparison(false, signals, true);
+        }),
+    );
+
     // Re-load everything when navigating to a different asset (same route pattern)
     $effect(() => {
         const newId = data.assetId;
@@ -1269,7 +1280,11 @@
         displayDateStart = 'min';
     }
 
-    async function loadChartData(force = false, requestedSignalConfigs: SignalConfig[] = signals, propagateError = false) {
+    /**
+     * `silent`: the reload after a price catch-up (Y5-1) — the chart and the signals on screen stay as they are, and nothing
+     * says the page is busy (no `loading`, no calendar `loading`, no `signalsLoading`): it is not a load the user asked for.
+     */
+    async function loadChartData(force = false, requestedSignalConfigs: SignalConfig[] = signals, propagateError = false, silent = false) {
         lastChartLoadAskedServer = false;
         const requestedAssetId = data.assetId;
         const sessionGeneration = getClientSessionGeneration();
@@ -1314,25 +1329,41 @@
               ]
             : [];
         let pricesFromCache = false;
+        // A store a catch-up marked stale that still holds points for the range (Y5-1, D3): they go on screen at once and the
+        // prices are asked in background, with no loading state.
+        let staleShown = false;
+        const chartPointsOf = (held: ReturnType<ReturnType<typeof getAssetPriceStore>['getRange']>['data']) =>
+            held.map((p) => ({
+                date: p.date,
+                close: p.close,
+                open: p.open,
+                high: p.high,
+                low: p.low,
+                volume: p.volume,
+                currency: p.currency,
+                original_close: p.originalClose,
+                backward_fill_info: p.backwardFillInfo ? {days_back: p.backwardFillInfo.daysBack} : null,
+            }));
 
         // Cache-first: check if the price store already covers this range
         if (!force && effectiveCurrency) {
             const store = getAssetPriceStore(data.assetId, effectiveCurrency);
             const gaps = store.getMissingIntervals(dateStart, dateEnd);
+            if (gaps.length > 0 && store.isStale) {
+                const held = store.getRange(dateStart, dateEnd).data;
+                if (held.length > 0) {
+                    staleShown = true;
+                    // A silent reload of the range already on screen leaves the chart alone; a return to the page, or another range, shows them.
+                    if (!silent || chartData.length === 0) {
+                        chartData = chartPointsOf(held);
+                        error = null;
+                    }
+                }
+            }
             if (gaps.length === 0) {
                 // Cache hit — update chart data without loading spinner
                 const cached = store.getRange(dateStart, dateEnd).data;
-                chartData = cached.map((p) => ({
-                    date: p.date,
-                    close: p.close,
-                    open: p.open,
-                    high: p.high,
-                    low: p.low,
-                    volume: p.volume,
-                    currency: p.currency,
-                    original_close: p.originalClose,
-                    backward_fill_info: p.backwardFillInfo ? {days_back: p.backwardFillInfo.daysBack} : null,
-                }));
+                chartData = chartPointsOf(cached);
                 if (chartData.length === 0 && !error) {
                     error = catalogueError('assetDetail.noData');
                 } else {
@@ -1375,17 +1406,19 @@
         const cachedAnswer = answerKey && pricesFromCache && !force ? assetChartAnswers.get(answerKey, answerGenerations) : null;
 
         // Cache miss fetches prices + signals; cache hit requests events (+ signals) only.
-        loading = !pricesFromCache;
+        if (!silent) loading = !pricesFromCache && !staleShown;
         error = null;
         signalRequestFailed = false;
-        signalsLoading = cachedAnswer === null && (requestPlan.requests.length > 0 || calendarComparisonAssetIds.length > 0);
+        signalsLoading = !silent && cachedAnswer === null && (requestPlan.requests.length > 0 || calendarComparisonAssetIds.length > 0);
         if (requestedCalendarFingerprint !== null) {
             calendarSnapshotFingerprint = requestedCalendarFingerprint;
             if (retainCurrentCalendarDiagnostics) {
-                calendarReturnView = {
-                    ...calendarReturnView,
-                    state: 'loading',
-                };
+                if (!silent) {
+                    calendarReturnView = {
+                        ...calendarReturnView,
+                        state: 'loading',
+                    };
+                }
             } else {
                 calendarReturnView = emptyCalendarReturnView('loading');
                 calendarComparisonViews = new Map();
@@ -1519,6 +1552,7 @@
                 icon_url: a.icon_url ?? null,
                 asset_type: a.asset_type ?? null,
                 currency: a.currency ?? undefined,
+                is_benchmark: a.is_benchmark === true,
             }));
         } catch (e) {
             console.error('Failed to load asset list:', e);

@@ -5,8 +5,10 @@
  * E1-002: explicit, offline Ask Provider distributions survive PATCH, GET and reopen;
  *         the quote base row it also proposes (Z-32 d) is cancelled, the stored base kept.
  * E1-003: clearing description preserves sector/geographic; whole classification can still be nulled.
- * E2-001: a real currency blocker is actionable above the inspector; cancel is inert,
- *         confirm wipes only the inspected asset's own market data.
+ * E2-001: a currency change with market data asks the server's dry run first (GET .../market-data/summary), then the
+ *         confirm modal is actionable above the inspector; nothing is written before the confirm, cancel is inert, and
+ *         confirm sends ONE PATCH (N68: the PATCH itself deletes the inspected asset's own prices and non-SPLIT events;
+ *         the interface no longer wipes).
  * E2-002: provider comparison is actionable above the inspector and saves the selection.
  *
  * Pre-E1/E2 baseline (independent U1 probe work may be present): FAinfoResponse
@@ -98,7 +100,7 @@ async function jsonFrom<T>(response: HttpResponse, purpose: string): Promise<T> 
 }
 
 /**
- * Intercepts no CRUD, assignment, parse, duplicate-check, backup, or wipe endpoint.
+ * Intercepts no CRUD, assignment, parse, duplicate-check, backup, summary, or wipe endpoint.
  * Unexpected provider calls fail closed, rather than escaping to a live provider.
  */
 async function installOfflineProviderIO(page: Page, owned: Owned, baseURL: string): Promise<void> {
@@ -668,7 +670,7 @@ test.describe('Group E — import asset inspector', () => {
         expectNoImplicitProviderIO(owned, 0);
     });
 
-    test('E2-001: currency blocker cancel preserves data; confirm wipes only the inspected asset', async ({page, owned}) => {
+    test('E2-001: currency change asks the dry run, cancel preserves data; confirm sends one PATCH that changes only the inspected asset', async ({page, owned}) => {
         const asset = await createAsset(page, owned, 'currency');
         const control = await createAsset(page, owned, 'unrelated control');
         const prices = [
@@ -693,22 +695,21 @@ test.describe('Group E — import asset inspector', () => {
         const inspector = await openWizardForExistingAsset(page, owned, asset);
         await openInspector(page, inspector, asset.name);
         const currencyModal = page.getByTestId('currency-change-modal');
-        const blockedSave = async () => {
+        const summaryPath = `${API}/assets/${asset.id}/market-data/summary`;
+        // N68: save asks the dry run (a GET, writes nothing) and opens the confirm modal; no PATCH leaves before the confirm.
+        const confirmOpened = async () => {
             await chooseCurrency(page, 'USD');
-            const [response] = await Promise.all([page.waitForResponse((candidate) => isPatchFor(candidate, asset.id), {timeout: UI_TIMEOUT}), page.getByTestId('asset-modal-save').click()]);
-            expect(response.status()).toBe(409);
-            expect(patchItem(response, asset.id)).toMatchObject({asset_id: asset.id, currency: 'USD'});
-            const body = (await response.json()) as {detail: {results: BulkResult[]}};
-            const result = body.detail.results.find((item) => item.asset_id === asset.id);
-            expect(result?.success).toBe(false);
-            expect(result?.message).toContain('CURRENCY_CHANGE_BLOCKED_BY_MARKET_DATA');
-            expect(result?.message).toContain(`|prices=${prices.length}|`);
-            expect(result?.message).toContain('|from=EUR|to=USD');
+            const before = owned.mutations.length;
+            const [summaryResponse] = await Promise.all([page.waitForResponse((candidate) => new URL(candidate.url()).pathname === summaryPath && candidate.request().method() === 'GET', {timeout: UI_TIMEOUT}), page.getByTestId('asset-modal-save').click()]);
+            const summary = await jsonFrom<{prices: number; dry_run: boolean}>(summaryResponse, 'the currency change dry run');
+            expect(summary.dry_run, 'the summary is the dry run').toBe(true);
+            expect(summary.prices, 'the dry run counts the owned prices').toBe(prices.length);
             await expect(currencyModal).toBeVisible({timeout: UI_TIMEOUT});
             await expect(currencyModal.getByTestId('currency-change-summary-prices')).toBeVisible();
             await expect(page.getByTestId('asset-modal-form')).toBeVisible();
+            expect(owned.mutations.slice(before), 'nothing is written before the confirm: no PATCH, no wipe').toEqual([]);
         };
-        await blockedSave();
+        await confirmOpened();
         await expectFrontmost(currencyModal.getByTestId('currency-change-cancel'), 'Currency cancel');
         await expectFrontmost(currencyModal.getByTestId('currency-change-confirm'), 'Currency confirm');
         const beforeCancel = owned.mutations.length;
@@ -717,27 +718,21 @@ test.describe('Group E — import asset inspector', () => {
         expectMetadata(await readMetadata(page, asset.id), asset);
         expect(await readStoredPrices(page, asset.id)).toEqual(prices);
         expect(await readStoredPrices(page, control.id)).toEqual(controlPrices);
-        expect(owned.mutations.slice(beforeCancel), 'cancel emits neither wipe nor another PATCH').toEqual([]);
+        expect(owned.mutations.slice(beforeCancel), 'cancel emits no mutation at all').toEqual([]);
 
-        await blockedSave();
+        await confirmOpened();
         await expectFrontmost(currencyModal.getByTestId('currency-change-confirm'), 'Currency confirm');
         const beforeConfirm = owned.mutations.length;
-        const wipePath = `${API}/assets/${asset.id}/market-data/wipe`;
-        const [wipeResponse, patchResponse] = await Promise.all([
-            page.waitForResponse((response) => new URL(response.url()).pathname === wipePath && response.request().method() === 'POST', {timeout: UI_TIMEOUT}),
-            page.waitForResponse((response) => isPatchFor(response, asset.id), {timeout: UI_TIMEOUT}),
-            currencyModal.getByTestId('currency-change-confirm').click(),
-        ]);
-        expect(wipeResponse.ok(), await wipeResponse.text()).toBeTruthy();
-        const patched = await jsonFrom<{results: BulkResult[]}>(patchResponse, 'post-wipe real currency PATCH');
+        const [patchResponse] = await Promise.all([page.waitForResponse((response) => isPatchFor(response, asset.id), {timeout: UI_TIMEOUT}), currencyModal.getByTestId('currency-change-confirm').click()]);
+        const patched = await jsonFrom<{results: BulkResult[]}>(patchResponse, 'real currency PATCH');
         expect(patched.results.find((item) => item.asset_id === asset.id)?.success).toBe(true);
         expect(patchItem(patchResponse, asset.id)).toMatchObject({asset_id: asset.id, currency: 'USD', quote_base_quantity: asset.quoteBase});
         await expect(currencyModal).toBeHidden({timeout: UI_TIMEOUT});
         await expect(page.getByTestId('asset-modal-form')).toBeHidden({timeout: UI_TIMEOUT});
-        expect(owned.mutations.slice(beforeConfirm).map(({method, path}) => ({method, path}))).toEqual([
-            {method: 'POST', path: wipePath},
-            {method: 'PATCH', path: `${API}/assets`},
-        ]);
+        expect(
+            owned.mutations.slice(beforeConfirm).map(({method, path}) => ({method, path})),
+            'the confirm is ONE PATCH: the interface no longer wipes first',
+        ).toEqual([{method: 'PATCH', path: `${API}/assets`}]);
         expectMetadata(await readMetadata(page, asset.id), asset, asset.name, 'USD');
         expect(await readStoredPrices(page, asset.id)).toEqual([]);
         expect(await readStoredPrices(page, control.id)).toEqual(controlPrices);
@@ -748,6 +743,7 @@ test.describe('Group E — import asset inspector', () => {
         await expect(currency).toHaveAttribute('aria-expanded', 'false');
         await expect(currency).toContainText('USD');
         await closeUnchangedInspector(page);
+        // No provider is assigned to the asset, so the confirm starts no price sync.
         expectNoImplicitProviderIO(owned, 0);
     });
 

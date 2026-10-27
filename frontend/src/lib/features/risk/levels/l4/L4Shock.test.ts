@@ -99,7 +99,7 @@ vi.mock('$lib/api', async (importOriginal) => {
     return {
         ...actual,
         zodiosApi: {
-            ...actual.zodiosApi,
+            ...(actual.zodiosApi as unknown as Record<string, unknown>),
             list_countries_api_v1_utilities_countries_get: reference.countries,
             list_sectors_api_v1_utilities_sectors_get: reference.sectors,
         },

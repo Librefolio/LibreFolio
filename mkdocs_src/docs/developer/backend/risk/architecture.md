@@ -56,7 +56,7 @@ described in [AI Export Composition](../../architecture/patterns/ai_export_compo
 | `backend/app/services/risk_plugins/` | The analytics, one folder each: the code in `<analytic_code>/plugin.py`, the `risk.analytics.*` name and description in its `i18n/` fragment. |
 | `backend/app/services/risk/registry.py` | `RiskAnalyticRegistry`. |
 | `backend/app/services/provider_registry.py` | The `register_plugin` decorator and the folder discovery shared by every plugin registry. |
-| `backend/app/services/market_series.py` | Joint calendar, target-currency conversion, carried points. The simple returns (`float_price_return()`) and the observed annualization factor (`observed_annualization()`) come from `financial_math/returns.py` ([Financial Math Layer](../financial_math.md#package-map)). |
+| `backend/app/services/market_series.py` | Joint calendar, target-currency conversion, carried points. `prepare_asset_series_set()` reads one point per calendar day; `prepare_asset_series_set_from_readings()` gives the same `PreparedAssetSeriesSet` from readings that hold only an asset's observations (`first_point_date`, `observation_dates`, `point_on(day)`), building points on the few days the preparation uses: the baseline day, the days some asset quotes, the first day of each asset's rate, and the stored rows with the day before each (J5-2, R1). The simple returns (`float_price_return()`) and the observed annualization factor (`observed_annualization()`) come from `financial_math/returns.py` ([Financial Math Layer](../financial_math.md#package-map)). |
 | `backend/app/services/assets/market_calendar.py` | The market holiday table and the rule that tells a stored carry from a quote. |
 | `backend/app/services/platform/data_quality_thresholds.py` | Thresholds shared with the portfolio's data-quality banner. |
 | `backend/app/config/__init__.py` | `RISK_SIMULATION_*` and `RISK_OPTIMIZATION_*` worker settings. |
@@ -752,6 +752,12 @@ panel; it has no markup.
   refresh of the very question on screen fails and the host passed `onrefreshfailed`, the figures
   stay and that callback runs; in every other case `loadError` is set, and the panels render it in
   place of the levels. `handleSynced()` marks answers stale instead of forgetting them.
+- **After a price catch-up.** The controller listens to the portfolio bus through
+  `onPricesCaughtUp()`: when a base wave is on screen it calls `loadBase(false, true)`, the
+  `silent` reload — the stale mark of `markRiskStale()` makes the store ask, `refreshing` stays
+  false, the figures stay until the new ones land, outside `pageBusy`. With nothing on screen it
+  does nothing, and the on-demand runs are not relaunched. Never `refreshVersion`: that is the
+  user's Refresh.
 - **Data quality.** `mergeQualityIssues()` merges the results' banner issues on
   `code + group_key`, so several controllers — the lab runs several — can feed one banner.
 

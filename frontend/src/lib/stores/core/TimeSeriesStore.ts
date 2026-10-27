@@ -21,6 +21,8 @@
  * @module stores/TimeSeriesStore
  */
 
+import {utcMs} from '../../utils/dateOnly';
+
 // ============================================================================
 // TYPES
 // ============================================================================
@@ -51,7 +53,7 @@ export interface RangeResult<T extends TimeSeriesPoint> {
 /** Parse ISO date string to Date object (midnight UTC) */
 function parseDate(iso: string): Date {
     const [y, m, d] = iso.split('-').map(Number);
-    return new Date(Date.UTC(y, m - 1, d));
+    return new Date(utcMs(y, m - 1, d)); // not Date.UTC: it reads the year 24 as 1924
 }
 
 /** Format Date to ISO YYYY-MM-DD string */
@@ -59,7 +61,7 @@ function formatDate(date: Date): string {
     const y = date.getUTCFullYear();
     const m = String(date.getUTCMonth() + 1).padStart(2, '0');
     const d = String(date.getUTCDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
+    return `${String(y).padStart(4, '0')}-${m}-${d}`;
 }
 
 /** Advance a date by N days (returns new Date) */
@@ -190,6 +192,15 @@ export class TimeSeriesStore<T extends TimeSeriesPoint> {
         this.fetchedRanges = [];
         this.stale = true;
         this.currentGeneration = nextGeneration();
+    }
+
+    /**
+     * Whether a price catch-up marked the store (`markStale()`) and nothing forgot its points since (`invalidateAll()`). A
+     * page whose range is missing from a stale store that still holds points for it shows them at once and asks in background
+     * (Y5-1). Read-only: a fetch covering the range clears the gaps, not this.
+     */
+    get isStale(): boolean {
+        return this.stale;
     }
 
     /** The parts of [start, end] that no fetch since the last markStale() covers, in date order. */

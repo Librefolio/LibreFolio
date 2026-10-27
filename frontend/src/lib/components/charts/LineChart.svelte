@@ -104,6 +104,8 @@
         pendingData?: LineDataPoint[];
         /** Called when a data point is clicked */
         onPointClick?: (date: string, value: number) => void;
+        /** Compact mode: told the static resolution chosen for the data it was given, each time it is drawn (Y5-F3) */
+        onresolution?: (resolution: ChartResolution) => void;
         /** View mode (for tooltip formatting and segment colors) */
         viewMode?: 'absolute' | 'percentage';
         /** Y-axis mode: 'auto' = fit to data, 'include0' = always show 0, 'custom' = user-defined min/max */
@@ -134,6 +136,7 @@
         pendingColor,
         pendingData = [],
         onPointClick,
+        onresolution,
         viewMode = 'absolute',
         yAxisMode = 'auto',
         yAxisMin,
@@ -426,6 +429,7 @@
 
             lastMeasuredWidthPx = plotWidthPx;
             lastChosenResolution = resolution;
+            onresolution?.(resolution);
             renderedData = getCompactAggregatedData(resolution);
 
             if (resolution !== 'daily') {

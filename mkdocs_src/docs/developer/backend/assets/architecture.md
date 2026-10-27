@@ -12,12 +12,12 @@ responsibility:
 | `base.py` | Provider contract: `AssetSourceProvider`, `AssetSourceError`, history start-date types, and the OHLC guard; `AssetRateLimitedError` and the helpers that recognise a refusal for too many requests (`rate_limited_from_response()`, `rate_limited_from_exception()`, `raise_if_rate_limited()`). |
 | `core.py` | Shared infrastructure: the five cache singletons; `configured_provider()`, a new provider instance with its [plugin settings](../../architecture/patterns/plugin_settings.md) bound; `call_provider()`, the single boundary of every provider call, which refuses a provider that is not configured with `NOT_CONFIGURED`, refuses a paused one with `RATE_LIMITED` and pauses one that refuses ([Provider Pauses](#provider-pauses)), masks its secrets in the call's log lines and errors (hiding an error's texts whole when the call carries a personal secret), and runs the call in a thread of its own (`_run_provider_in_thread`); `public_asset_url()`, which withholds an asset URL that shows one of the provider's secrets; `cooldown_scope_for()`, the part of a provider a pause covers, from the plugin's `cooldown_scope()` hook; `settings_cache_part()` and `settings_cache_part_for()`, the part of a cache key that depends on the provider's settings; `asset_cache_key()`, the one key of the history and current caches (provider, identifier, input type, parameter hash, settings), and `drop_asset_cache_entries()`, which drops both entries of an assignment; provider-parameter hashing; error sanitization. |
 | `registry.py` | `AssetProviderRegistry`, which discovers the pricing plugins in `backend/app/services/asset_source_providers/`. |
-| `provider_management.py` | Provider assignment, removal and lookup; parametric-provider data invalidation, refused, nothing of the request written, while a `SPLIT` it would delete has linked incoming adjustments without a cost ([Parametric Provider Change](events.md#parametric-provider-change)); the removal, refused, nothing removed, while a transaction is linked to an event the removed assignment generated ([Provider Removal](events.md#provider-removal)); and the non-persisting provider probe. |
+| `provider_management.py` | Provider assignment, removal and lookup; parametric-provider data invalidation and the removal, which unlink the transactions linked to the events they delete and are refused, nothing written, while a `SPLIT` they would delete has linked incoming adjustments without a cost ([Parametric Provider Change](events.md#parametric-provider-change), [Provider Removal](events.md#provider-removal)); the dry run of both, `provider_change_impact()` ([Provider Change Impact](events.md#provider-change-impact)); and the non-persisting provider probe. |
 | `metadata.py` | Explicit provider metadata refresh, metadata caching, and application of returned patches through `AssetCRUDService`. |
 | `price_store.py` | Price upserts/deletes, OHLC integrity checks, the digit limits of prices (a manual price or volume refused; a provider's truncated, and a provider's date with a value no column can keep skipped and reported), the [last storable date](#stored-date-bounds) of a stored price (a manual date after it refused, a provider's skipped and reported), the [currency](#price-currency-coherence) of a manual call's prices (refused before any write), and bounded write chunks. |
-| `currency_change.py` | Currency-change market-data wipes: every price and event of the asset, with the transactions linked to those events unlinked; refused, nothing written, while a `SPLIT` of the asset has linked incoming adjustments without a cost ([Market-Data Wipe](events.md#market-data-wipe)). |
-| `split_guard.py` | The `SPLIT`s among the events a wipe would delete that have linked incoming adjustments without a cost, named as the caller may see them (`splits_with_costless_adjustments()`, `adjustments_count()`): the refusal of the currency-change wipe and of the parametric provider change. |
-| `event_links.py` | The transactions linked to asset events, as a refusal names them for its caller: `visible_transaction_ids()`, the ids on a broker the caller holds an access to, none without a caller (the rule `split_guard.py` imports), and `events_with_linked_transactions()`, the events among those given that transactions are linked to, each with the caller's view: the refusal of the provider removal. |
+| `currency_change.py` | What a currency change deletes (N68): the asset's prices and every event except the `SPLIT`s, with `asset_event_id` set to `NULL` on the transactions linked to the deleted events; the helpers `PATCH /assets` calls and the counters behind the market-data summary and wipe endpoints; never refused ([Market-Data Wipe](events.md#market-data-wipe)). |
+| `split_guard.py` | The `SPLIT`s among the events a provider change would delete that have linked incoming adjustments without a cost, named as the caller may see them (`splits_with_costless_adjustments()`, `adjustments_count()`): the refusal of the parametric provider change and of the provider removal, and the provider dry run's `blocking_splits`. Not used by the currency change since N68, which keeps the splits. |
+| `event_links.py` | The transactions linked to asset events, as a refusal names them for its caller: `visible_transaction_ids()`, the ids on a broker the caller holds an access to, none without a caller (the rule `split_guard.py` imports), and `events_with_linked_transactions()`, the events among those given that transactions are linked to, each with the caller's view: the count of transactions the provider-change dry run reports. |
 | `event_store.py` | Event upserts (rows updated in place: a provider refresh commits them in the same bounded chunks as prices, the manual upsert once for the whole request, all or nothing, after deleting the events its items list in `delete_ids`) and deletes scoped to one asset, plus the event queries and reads by id behind `/assets/events`. |
 | `price_query.py` | DB-backed history/event queries, backward fill, FX and signal preparation, plus current-price lookup and today's OHLC write-back. |
 | `period_changes.py` | The fixed-period changes of the Assets table, and on request the whole-range change of the Assets cards: each asset's price on the days the change needs, read in grouped queries and converted at each day's rate ([Fixed-Period Changes](#fixed-period-changes)). |
@@ -281,10 +281,13 @@ so a date before 1900, 0001-01-01 included, is stored like any other. The helper
 `backend/app/utils/date_range_limits.py`, with `DateOutOfRangeError` and
 `date_out_of_range_detail()`, the builder of the 422 `detail`. The floor's reason was J's
 SEC8-1b: a price stored at 0001-01-01 made a backward fill or a risk replay walk about 740,000
-days per asset. The walks' own floors now carry that protection. `EARLIEST_RANGE_START`
-(1900-01-01) is the first day of every replay (R13-SEC8) and of every full history: since Z-30
-a full history reaches back no further, where an older row at most seeds the fill, and never
-cuts a point-derived warm-up that starts earlier ([bulk request limits](#bulk-request-limits)).
+days per asset. The walks' own limits now carry that protection. The per-day price fill of a
+full history loads from `FULL_HISTORY_LOAD_START` (1900-01-01, `price_query.py`), the start of
+every provider's history: since Z-30 it reaches back no further, where an older row at most
+seeds the fill, and never cuts a point-derived warm-up that starts earlier
+([bulk request limits](#bulk-request-limits)). The portfolio walks (the engine, the lots and the
+positions) have no such start: they read their stored dates as steps (D-P4, 26/10/2026; the
+constant `EARLIEST_RANGE_START`, once the first day of every replay (R13-SEC8), is gone).
 A risk range starts no earlier than `range_span_floor()`, 100 years before its end
 (`bounded_range()` in `backend/app/services/risk/scope.py`, R13-SEC8-1b).
 {: #stored-date-bounds }
@@ -304,7 +307,7 @@ A risk range starts no earlier than `range_span_floor()`, 100 years before its e
   point, before 1900 included, is stored and counted.
 
 The [FX rate writes](../fx/architecture.md#stored-rate-dates) keep to the same last date.
-Transactions keep their own floor, 1900-01-01 since N74, and the same last date
+Transactions have no first date since D-P4 (26/10/2026; the floor was 1900-01-01 since N74) and keep the same last date
 ([Transaction dates](../transactions/service.md#transaction-dates), where the code is
 `dateOutOfRange`). The web app's data editors tell these 422s in the interface language, naming
 the dates refused and the last day a date may carry (*N dates are after …*,
@@ -405,9 +408,9 @@ The remedy, for a user who asks: delete both events, then sync their dates again
 to a transaction is deleted only once unlinked (`EVENT_IN_USE`). A clean price history takes the
 [market-data wipe](events.md#market-data-wipe)
 (`POST /api/v1/assets/{asset_id}/market-data/wipe`), then a sync of the whole history. The wipe
-also deletes the asset's manual events and unlinks every transaction from its events, and is
-refused (409, X-R48) while a split of the asset has linked incoming `ADJUSTMENT` rows without a
-purchase cost.
+also deletes the asset's events that are not `SPLIT`s, manual ones included, and unlinks the
+transactions from them; the `SPLIT`s stay with their linked transactions, and the wipe is never
+refused since N68.
 
 **Unknown timezone** (Z-36). `_exchange_zone()`, private to the plugin, gives the name's
 `ZoneInfo`, or None. On a server whose timezone database lacks the name (Windows outside Docker
@@ -463,8 +466,9 @@ the events see the cut range; an item that starts after it gets an empty result 
 `POST /assets/prices/query`, the risk preparation and AI Export all read through this method, so a
 range of theirs that reaches past tomorrow stops there. Before, the last price was carried forward to
 the end, one point per day: about 2.9 million from a recent price to 9999-12-31, followed by a 500
-(`OverflowError`). Without a seed price (none stored before the range), `_build_backward_filled_series()`
-also starts its walk at the first stored price of the range instead of its start: the days before it
+(`OverflowError`). Without a seed price (none stored before the range), the series
+([read by observation](#price-query-observation)) also starts at the first stored price of the range
+instead of its start, as the native `_build_backward_filled_series()` does: the days before it
 cost nothing, and the points emitted are the same. X-R55's own module, `backend/app/utils/date_range_limits.py`,
 keeps the span limit: `RANGE_SPAN_LIMIT_DAYS` (36,525 days, 100 years) back from an end
 (`range_span_floor()`), which bounds the [history-cache walk](#history-cache-walk) of a sync and the
@@ -495,7 +499,7 @@ the builders of their 422 `detail`, `bulk_too_many_items_detail()` and
   500 with a fixed message, the error in the log.
 - **Item-days**: once the prices and the seeds are read, before the events query and the fills,
   `get_prices_bulk()` sums the points each item's backward fill will emit. `_fill_span()` mirrors
-  `_build_backward_filled_series()` without building anything: with a seed (a stored one, or a
+  the native builder `_build_backward_filled_series()` (the days `observe()` emits) without building anything: with a seed (a stored one, or a
   price of the map before the load start), one point per day of the load range; without one, one
   per day from the first stored price to the end; none when the fill emits nothing (no price, or a
   first price after the end). The comparison series of a signal that needs a prepared asset series
@@ -510,7 +514,7 @@ the builders of their 422 `detail`, `bulk_too_many_items_detail()` and
   and the route answers 422 `{"code": "bulk_too_many_days", "message", "max_item_days", "item_days"}`.
 
 The count follows the fill, not the requested range. A full-history signal (`RISK_DRAWDOWN`) loads
-from the earlier of `EARLIEST_RANGE_START` (1900-01-01) and the start of the item's point-derived
+from the earlier of `FULL_HISTORY_LOAD_START` (1900-01-01) and the start of the item's point-derived
 warm-up (Z-30): the full history can lengthen that warm-up, never shorten it, and adds nothing
 before a range that starts before 1900. The fill emits from the first stored price, or from the
 load start when a row dated before it (writes have no floor since N83) seeds the fill. So a full history over a
@@ -544,14 +548,68 @@ still loads its asset's full daily history, and 300 assets without signals still
 2.9 million points: the asset list does not ask for the [sampled series](#price-query-sampling)
 the query can return (backlog Z-29).
 
-With `target_currency`, the conversion pass converts every close not already in that currency
-through one `convert_bulk()` call per result, scales open, high and low by the same factor, keeps
-the native values in the `original_*` fields, and records the rate's date in
+With `target_currency`, every close not already in that currency is converted ([once for each stretch
+of days](#price-query-observation) on which the price row and the rate row are the same, through
+`convert_bulk()`), open, high and low are scaled by the same factor, the native values are kept in
+the `original_*` fields, and the rate's date is recorded in
 `backward_fill_info.fx_rate_date` / `fx_days_back`. A point whose rate cannot be resolved keeps its
 native price and currency, and the result's `errors` lists the failures, deduplicated and capped at
 ten plus one "… and N more" line. The query never registers an FX pair: the asset page reports
 the pair through its `requiredFxPairs` banners, and its comparison loader drops those points (see
 [Chart internals](../../frontend/components/charts.md#asset-detail-page-sync-and-comparison-sync)).
+
+### 👁️ Series Read by Observation {: #price-query-observation }
+
+The public series is still one point for every calendar day of the load range: the last stored row on
+or before the day, converted (with `target_currency`) at the rate of that day. What changed (X-Q1,
+X-Q2) is how `get_prices_bulk()` builds it. A row only changes on the days a price is stored, and a rate
+on the days a rate is stored, so converting every day repeated the same conversion. The module
+`backend/app/services/assets/observed_prices.py` resolves each day to its two rows, with no conversion,
+and converts each distinct pair once:
+
+```mermaid
+flowchart LR
+    R["Stored rows<br/>(+ seed before start)"] --> D["resolve_days()<br/>last row on or before each day"]
+    S["fx.conversion.unit_rate_steps()<br/>rate row of each day"] --> D
+    D -- "one (price row, rate row) pair,<br/>on its first day" --> C["fx.conversion.convert_bulk()"]
+    C --> P["point_of()<br/>copies the answer to every day of the stretch"]
+    D -- "no target, same currency,<br/>close 0" --> P
+    P --> O["ObservedPrices<br/>/ list of FAPricePoint"]
+```
+
+- **Entry points.** `observe()` returns an `ObservedPrices`; `series_points()` returns the points and the
+  conversion errors for a list of dates, which is how a [sampled series](#price-query-sampling)
+  (Z-29) converts its few dates. Both go through `resolve_days()` and `point_of()`, and `fill_point()`
+  (also reached by `PriceQueryOperations._fill_point()`) is the one rule for the point of a day.
+- **What stays per day.** Only the copy: each day keeps its own date, its `days_back`, its
+  `fx_rate_date` / `fx_days_back` and its `backward_fill_info`. A failed conversion keeps the native
+  price with the price staleness and no FX data; a close of 0 stays native; a day without a usable
+  rate on or before it gets the same error `convert_bulk()` writes, without asking it.
+- **Parity.** The public API is unchanged: one point per day, identical to the digit to what the
+  day-by-day pass gave, with the same `backward_fill_info`, `fx_rate_date`, `fx_days_back`, conversion
+  errors, cap of 10 errors and the final «… and N more FX conversion failures» line.
+  `_build_backward_filled_series()` is no longer the builder of the answers (they come from
+  `observe()`): it stays the native builder, the reference the parity tests compare against, and
+  `_fill_span()` mirrors it.
+- **`ObservedPrices`.** The object the risk engine (R1) reads. `first_point_date` is the range start
+  when a row precedes it, else the first row inside, `None` for no point at all; `observation_dates`
+  are the days a row is stored on inside the range; `point_on(day)` is the point the public series has
+  on that day, `None` before `first_point_date`, and `ValueError` after the range `end` (those rows
+  were not read). `PriceQueryOperations.observed_prices(request, session)` reads the rows and the seed
+  of one `FAPriceQueryItem` and returns it.
+- **Signals.** The load window is unchanged: the visible start minus the signal warm-up, and the
+  signals read the points `observe()` returns. Only a full-history
+  item (`RISK_DRAWDOWN`) loads back to `FULL_HISTORY_LOAD_START` (1900-01-01), and it stays dense because the prepared series
+  (`market_series.py`, not changed here) reads it.
+
+Measured on a 10-year USD asset asked in EUR (3,650 points, a rate on every weekday): 2,608 conversions
+handed to `convert_bulk()` instead of 3,650, with identical points. The time is unchanged (0.26 s against
+0.25 s): this saves conversions, not time.
+
+Tests: `./dev.py test services price-query-observations`
+(`backend/test_scripts/test_services/test_price_query_observations.py`, isolation `pure`): the public
+points and conversion errors against the previous day-by-day pipeline, `convert_bulk()` handed stretches
+and not days, `point_on()` against the public series, and the signal results.
 
 ### 🗜️ Sampled Price Series {: #price-query-sampling }
 
@@ -589,10 +647,10 @@ nothing to fill, no seed and no row in the range, gets an empty series whatever 
 **The points.** A weekly or monthly series holds the dates of `sample_dates()`: the last day of
 each ISO week (Monday to Sunday) or calendar month (`bucket_of()`) from F's bucket to the end's,
 the last bucket cut at the range end. Each point is the one the daily fill has on that date
-(`_fill_point()`, which `_build_backward_filled_series()` uses too): the last stored row on or
-before it, with its `backward_fill_info`. F is one of these dates only when it closes its bucket or
-is the end. With `target_currency`, the conversion pass converts the sample and the point on F like
-any series, each point on its own date.
+(`_fill_point()`, which `_build_backward_filled_series()` and the [observed series](#price-query-observation)
+use too): the last stored row on or before it, with its `backward_fill_info`. F is one of these dates only when it closes its bucket or
+is the end. With `target_currency`, `series_points()` converts the sample and the point on F like
+any series ([once for each stretch](#price-query-observation)), each point on its own date.
 
 **The answer.** `FAPriceQueryResult.resolution` is always present: the step of `prices`, `daily`
 by default. A weekly or monthly result also carries `sample_bounds` (`FAPriceSampleBounds`, two
@@ -766,9 +824,11 @@ until the FX half of Y-40.
 change itself is the house's `fixed_period_changes()`
 ([Financial Math Layer](../financial_math.md#fixed-period-changes)).
 
-- **Request**: a list of `{asset_id, as_of, target_currency?, range_start?}`. `as_of` and `range_start` are on or
-  after `EARLIEST_RANGE_START` (1 January 1900; up to 0005-12-30 the 5Y day fell before year 1, a 500), and
-  `range_start` is on or before `as_of`: 422 otherwise, from the schema. The route then checks the request with
+- **Request**: a list of `{asset_id, as_of, target_currency?, range_start?}`. `as_of` and `range_start` are any day
+  of the calendar, with no first day (D-P4, 26/10/2026; the schema once refused a day before 1 January 1900), and
+  `range_start` is on or before `as_of`: 422 otherwise, from the schema. A period whose reference day falls before
+  0001-01-01 has no reference: its change is null, shown «—» (`day_before()`, `fixed_period_dates()` in
+  `financial_math/returns.py`), so a table anchored in the year 3 still has its 1D. The route then checks the request with
   `period_changes_request_refusal()` (`backend/app/schemas/common.py`), before any read (MF-P2b, finding R13-SEC8,
   aligned with Z-25):
     - more than `MAX_BULK_ITEMS` (1,000) items get the 422 `{"code": "bulk_too_many_items", "message", "max_items",
@@ -815,7 +875,7 @@ range ends today the asset detail page shows the live quote, which may not be st
 that quote comes from `POST /assets/prices/current` with the same `range_start`
 ([Current Quotes and Today's OHLC](#current-quotes-range-change)). The Assets list sends it:
 `fetchAssetPeriodChanges(ids, asOf, rangeStart)` (`frontend/src/lib/utils/periodChanges.ts`) gives each item the first
-day of the range on screen, raised to 1 January 1900 by `rangeStartFor()` (`frontend/src/lib/utils/rangeChange.ts`),
+day of the range on screen, as it is (`rangeStartFor()`, `frontend/src/lib/utils/rangeChange.ts`; no longer raised to 1 January 1900),
 none for a day the backend would refuse (after `as_of`, or not a calendar day), and reads `range_change` with
 `assetRangeDelta()` for the cards' Δ. The browser no longer computes it: `computeDerivedPriceState()` returns no Δ. The
 page keeps the cards' Δ with a `PeriodChangesLedger` of its own, which marks each request with the whole range rather
@@ -953,11 +1013,11 @@ it. `live_range_changes()` (`services/assets/period_changes.py`) values it after
 - **A failure** while valuing the changes never costs the quotes: it is logged, and every `range_change` is left with
   every field null (unavailable, never a guess).
 
-A `range_start` outside 1 January 1900 … tomorrow (`latest_range_end()`) is refused by the parameter itself
+A `range_start` after tomorrow (`latest_range_end()`) is refused by the parameter itself (`_range_start_in_bounds()`; there is no first day since D-P4)
 (the standard 422, `loc` `["query", "range_start"]`), before any provider call (R13-SEC9-4); one after the price's day
 gives an empty `range_change`. The asset detail page sends it with its live poll (`AssetDetailLive`,
 `frontend/src/lib/components/assets/detail/assetDetailLive.svelte.ts`): while the range ends today, each request asks
-`range_start`, the range's first day raised to 1 January 1900 by `rangeStartFor()`, and `target_currency`, the display
+`range_start`, the range's first day as it is (`rangeStartFor()`), and `target_currency`, the display
 currency, only when the summary converts the live price (the display currency is not the asset's and the FX pair is
 configured). The answer's `range_change` becomes `rangeDelta`, the Δ the summary shows beside the live price: none
 beside a price left native because its conversion failed (the change is in the display currency), and none from the
@@ -1119,7 +1179,7 @@ What a caller returns while a provider is paused, or after it refused:
 
 Financial markets are closed on weekends and holidays. To provide a continuous price series for charts, LibreFolio uses a **backward-fill** strategy.
 
-If a price is requested for a date where no data exists (e.g., Sunday), the system looks back to find the most recent available price (e.g., Friday's close) and uses that. The `backward_fill_info` field in `FAPricePoint` indicates the actual date and staleness (`days_back`). The fill stops at tomorrow by the server's calendar (`datetime_utils.latest_range_end()`, the helper R13-SEC7-1 also uses), the query's [range ceiling](#price-query-range-ceiling).
+If a price is requested for a date where no data exists (e.g., Sunday), the system looks back to find the most recent available price (e.g., Friday's close) and uses that. The `backward_fill_info` field in `FAPricePoint` indicates the actual date and staleness (`days_back`). The points of a query are built by [observation](#price-query-observation); `_build_backward_filled_series()` is the native reference builder. The fill stops at tomorrow by the server's calendar (`datetime_utils.latest_range_end()`, the helper R13-SEC7-1 also uses), the query's [range ceiling](#price-query-range-ceiling).
 
 Backward fill reuses stored market prices only, and valuation adds no separate
 last-purchase-price fallback: the portfolio engine values each holding through the
@@ -1166,19 +1226,20 @@ cost unknown it stays `MISSING`.
 | Endpoint | Method | Description |
 |---|---|---|
 | `POST /api/v1/assets` | POST | Bulk create assets |
-| `PATCH /api/v1/assets` | PATCH | Bulk update assets |
+| `PATCH /api/v1/assets` | PATCH | Bulk update assets. An item that changes the currency deletes, in the same call and transaction, the asset's prices and non-`SPLIT` events and unlinks their transactions; never refused (N68) |
 | `GET /api/v1/assets` | GET | Bulk read by IDs (with metadata) |
 | `GET /api/v1/assets/all` | GET | All active assets |
 | `GET /api/v1/assets/query` | GET | Filtered list (search, type, currency, active) |
 | `DELETE /api/v1/assets` | DELETE | Bulk delete (cascade provider+prices) |
-| `GET /api/v1/assets/{asset_id}/market-data/summary` | GET | What the market-data wipe would delete and unlink (prices with their date range, manual and provider events, linked transactions), without writing |
-| `POST /api/v1/assets/{asset_id}/market-data/wipe` | POST | First step of a currency change: unlink the transactions from the asset's events, then delete every event and price of the asset. A 409 `MARKET_DATA_SPLIT_ADJUSTMENTS_WITHOUT_COST`, nothing written, while a `SPLIT` of the asset has linked incoming adjustments without a cost; `params.splits` names only the transactions the caller can see ([Market-Data Wipe](events.md#market-data-wipe)) |
+| `GET /api/v1/assets/{asset_id}/market-data/summary` | GET | Dry run of what a currency change deletes: `{prices, events_manual, events_provider, splits_kept, linked_tx, oldest, newest, dry_run}`; the `events_*` count the non-`SPLIT` events that go, `splits_kept` the `SPLIT`s that stay; without writing |
+| `POST /api/v1/assets/{asset_id}/market-data/wipe` | POST | The same deletion on its own, for a caller that wants it without a `PATCH`: prices and non-`SPLIT` events deleted, their transactions unlinked, `SPLIT`s and their transactions kept; same keys as the summary; never a 409 ([Market-Data Wipe](events.md#market-data-wipe)) |
 | `GET /api/v1/assets/provider` | GET | List providers (with `params_schema`) |
 | `GET /api/v1/assets/provider/search` | GET | Multi-provider parallel search |
 | `GET /api/v1/assets/provider/search/stream` | GET | SSE streaming search results |
 | `POST /api/v1/assets/provider/probe` | POST | Dry-run provider config test |
 | `POST /api/v1/assets/provider` | POST | Bulk assign providers. New `provider_params` for a parametric provider (Scheduled Investment), or leaving one, deletes every price of the asset and the events that assignment generated, their transactions unlinked; a 409 `PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST`, nothing of the request written, while a `SPLIT` among those events has linked incoming adjustments without a cost; `params` names the refused item (`asset_id`, `item_index`) and, in `splits`, only the transactions the caller can see ([Parametric Provider Change](events.md#parametric-provider-change)) |
-| `DELETE /api/v1/assets/provider` | DELETE | Bulk remove providers (`asset_ids` in the query): deletes each assignment and the events it generated, manual events staying; a 409 `PROVIDER_REMOVAL_LINKED_TRANSACTIONS`, nothing of the request removed, while a transaction is linked to one of those events, whatever its type; `params` names the refused asset (`asset_id`, `item_index`) and, in `events`, only the transactions the caller can see; a 409 `PROVIDER_REMOVAL_CONFLICT`, nothing removed and no SQL in the answer, when a link appears between the check and the delete ([Provider Removal](events.md#provider-removal)) |
+| `DELETE /api/v1/assets/provider` | DELETE | Bulk remove providers (`asset_ids` in the query): sets `asset_event_id` to `NULL` on the transactions linked to the events each assignment generated (the transactions stay), then deletes the assignment and, with it, those events; prices and manual events stay. A 409 `PROVIDER_WIPE_SPLIT_ADJUSTMENTS_WITHOUT_COST`, nothing of the request removed, while a `SPLIT` among those events has linked incoming adjustments without a cost; `params` names the refused asset (`asset_id`, `item_index`) and, in `splits`, only the transactions the caller can see; a 409 `PROVIDER_REMOVAL_CONFLICT`, nothing removed and no SQL in the answer, when a link appears between the check and the delete ([Provider Removal](events.md#provider-removal)) |
+| `POST /api/v1/assets/provider/impact` | POST | Dry run of the two rows above, writes nothing. Body `{assignments: [item of POST /provider], removals: [asset_id]}`; one result per assignment, then per removal: `reason` (`none`, `params_changed`, `provider_changed`, `provider_removed`), `prices_deleted`, `events_deleted`, `transactions_unlinked` (total, hidden ones included, never named) and `blocking_splits` (not empty: the real call is refused). Its numbers are what the operation then does ([Provider Change Impact](events.md#provider-change-impact)) |
 | `GET /api/v1/assets/provider/assignments` | GET | Read provider assignments |
 | `POST /api/v1/assets/provider/refresh` | POST | Refresh metadata from provider |
 | `POST /api/v1/assets/prices` | POST | Bulk upsert prices, each point an `FAPriceWritePoint` (N92): `open`, `high`, `low` and `volume` take a number of 0 or more, `"clear"` to empty the stored value, or `null` (or no field) to keep it, and `close` a number above 0; a negative number (`-1` included), a text that is neither `"clear"` nor a number, a value that is not finite or a boolean is a 422 on its field (see [the F.4 merge](#price-write-merge)); a manual price over 12 digits before the decimal point, 12 decimal places or 15 significant digits, or a volume over 24 digits before the point, refuses the whole call (400), and so does a date after tomorrow (422 `date_out_of_range`, see [the last storable date](#stored-date-bounds)), or a price in a currency other than its asset's, on any asset of the request (422 `price_currency_mismatch`, see [price currency](#price-currency-coherence)); every refusal comes before anything is written; a date left out of a written call is named, with its reason, in its asset's `results[].rejected` (see [dates left out](#rejected-price-dates)) |

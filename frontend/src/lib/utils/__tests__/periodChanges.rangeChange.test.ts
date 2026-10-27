@@ -128,7 +128,8 @@ describe('fetchAssetPeriodChanges with a range — the Assets list’s Δ over t
     });
 
     it.each([
-        {case: 'raises a start before 1900 to 1900-01-01, the first day the backend values', start: '1850-06-01', sent: '1900-01-01'},
+        // X5-6 (D-P4 L4): the backend values any day, so the true start goes out, not 1900-01-01.
+        {case: 'sends a start before 1900 as it is', start: '1850-03-01', sent: '1850-03-01'},
         {case: 'sends a start on as_of: a range of one day', start: AS_OF, sent: AS_OF},
     ])('$case', async ({start, sent}) => {
         post.mockResolvedValueOnce({items: [assetItem(7, assetChange(null, null, null))]});
@@ -217,7 +218,8 @@ describe('fetchFxPeriodChanges with a range — the FX list’s Δ over the rang
     });
 
     it.each([
-        {case: 'raises a start before 1900 to 1900-01-01, the first day the backend values', start: '0999-12-31', sent: '1900-01-01'},
+        // X5-6 (D-P4 L4): the backend values any day, so the true start goes out, not 1900-01-01.
+        {case: 'sends a start before 1900 as it is', start: '0999-12-31', sent: '0999-12-31'},
         {case: 'sends a start on as_of: a range of one day', start: AS_OF, sent: AS_OF},
     ])('$case', async ({start, sent}) => {
         post.mockResolvedValueOnce({items: [fxItem('EUR', 'USD', fxChange(null, null, null, null, null))]});

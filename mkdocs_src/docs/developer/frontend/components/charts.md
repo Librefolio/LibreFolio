@@ -240,8 +240,11 @@ For these charts, the UX pattern is: **keep old data visible until new data arri
 #### Asset detail: Prices and Rolling Return
 
 `routes/(app)/assets/[id]/+page.svelte` keeps the primary series in `primaryMode`, `'price'` or
-`'calendar-return'` (the **Prices** and **Rolling Return** buttons). It starts on `'price'` on every
-mount and is never persisted; `setPrimaryMode()` stops the measure mode of the panel it leaves.
+`'calendar-return'` (the **Prices** and **Rolling Return** buttons). It opens in the asset's saved
+view: `detailModesForPrimaryView(settings.primaryView)` gives the mode (and Abs or %) on every load of
+the asset, and `persistPrimaryView()` saves the change into the asset's chart settings
+(`primaryView`), where the asset's list card reads it too. `setPrimaryMode()` stops the measure mode of
+the panel it leaves.
 
 | | `'price'` | `'calendar-return'` |
 |---|---|---|
@@ -293,6 +296,51 @@ a point empty (`missing_reference`, `invalid_current_price`, `invalid_reference_
 estimating it and trims the leading empty points, so each line starts on its own first computable
 date. With some empty points the result is `partial` (`undefined_metric_window` warning); with no
 computable point it is `unavailable` (`undefined_metric`).
+
+#### FX detail: Prices and Rolling Return
+
+`routes/(app)/fx/[pair]/+page.svelte` has the same two modes (lot X5-F1), with the same
+`AssetChartPrimaryMode` type. Differences from the asset page:
+
+- **State and persistence.** `primaryMode` opens from `openingMode()`, which reads `primaryView` of the
+  pair's chart settings (`getSettingsForPair(canonicalSlug, 'fx')`): `'calendar-return'` opens the
+  rolling return, any other view opens prices and is remembered as `priceViewBeforeCalendar`.
+  `persistPrimaryView()` writes `calendar-return`, or that remembered price view, back with
+  `setPairSettings()`. The key is the *canonical* slug and the value is the one the pair's card in the
+  list reads, so a card in the rolling return opens the detail in it. The window is the shared
+  `calendarReturnWindow` / `calendarReturnWindowAuto` of the same settings
+  (`effectiveCalendarReturnWindow()`).
+- **Request builder.** `lib/charts/fxDetailCalendar.ts` (pure) builds the body of
+  `POST /api/v1/fx/currencies/convert`: `buildFxDetailCalendarQuery()` returns a conversion of 1 unit
+  of the page's base into its quote, in the direction the page shows (`data.urlBase` /
+  `data.urlQuote`), daily over `dateStart`..`dateEnd`, with one signal, the calendar rolling return
+  (`fxCalendarRequest(windowDays)`); then one more conversion per saved `fx-pair` signal, in that
+  signal's own direction (`_inverted`). A compared pair equal to the page's own is skipped. Unlike the
+  list cards (`utils/reducedFxQuery.ts`) it sets no `key`, `max_points` or `sample_like`.
+  `fxDetailCalendarViews()` reads `signal_results` by `request_index` into the page's
+  `CalendarReturnView` and a `Map` by `fx-pair` config id.
+- **When it is asked.** `loadCalendarReturn()` runs only in the rolling return, under a generation
+  counter that drops a stale answer, and never throws (a failure is the view's `error` state). It runs
+  on the first load, on a session change, with the chart load that follows a period change, on a
+  window change (`setCalendarPreset()` / `setCalendarCustom()`), on a change of the compared pairs
+  (`handleSignalsChange()`) and on Refresh. Going back to prices asks nothing: the rates are in the FX
+  store, and the mode switch only bumps the generation. The comparison lines come from
+  `renderCalendarPairComparisons()`.
+- **Shared components.** The page reuses `AssetChartModeToggle` and `AssetCalendarWindowControls` with
+  the new optional `idPrefix` prop (default `asset`, `fx` here), which prefixes their test ids:
+  `fx-chart-primary-price`, `fx-chart-primary-calendar-return`, `fx-calendar-window-*`,
+  `fx-calendar-return-docs`. The states use `fx-calendar-return-loading`, `-unavailable` and `-error`.
+  The chart card `fx-detail-chart` publishes `data-primary-mode` and, in the rolling return,
+  `data-window-days`, `data-series-state` and `data-calendar-comparison-ready` / `-partial` /
+  `-unavailable` / `-error` (the `fx-pair` config ids by state).
+- **Signals and buttons.** The Signals panel gets `allowedSignalTypes = ['fx-pair']` (the other
+  configs stay saved, hidden). `PriceChartFull` gets `valueUnit="percentage"` and
+  `hideViewModeToggle`; the measure and edit buttons are not rendered (`measureMode`, `editMode` are
+  forced off, `setPrimaryMode()` stops a running measure); the Measures panel itself stays on the page
+  (its data are the rates).
+
+Tests: `frontend/e2e/fx/fx-detail-rolling-return.spec.ts`, `charts/__tests__/fxDetailCalendar.test.ts`
+and `fxDetailRollingReturn.wiring.test.ts`.
 
 #### Asset detail: where the chart state lives
 

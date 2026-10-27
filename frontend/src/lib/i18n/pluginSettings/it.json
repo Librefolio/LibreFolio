@@ -10,7 +10,8 @@
     "families": {
       "asset": "Prezzi",
       "fx": "Tassi di cambio",
-      "brim": "Importazione dai broker"
+      "brim": "Importazione dai broker",
+      "tool": "Strumenti"
     },
     "status": {
       "configured": "Configurato",

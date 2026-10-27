@@ -57,6 +57,7 @@ const SERVER_ACTIONS: Record<string, FindingAction> = {
     'email.smtp_encryption': OPEN_EMAIL,
     'email.links': OPEN_EMAIL,
     'platform.plugin_secrets': OPEN_PLUGINS,
+    'platform.instance_key_check': OPEN_PLUGINS,
 };
 
 function fromCheck(check: SecurityCheck, severity: FindingSeverity, withAction: boolean): SecurityFinding {

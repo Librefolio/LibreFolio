@@ -61,6 +61,7 @@
         invalid_output_model: 'Invalid output model',
         invalid_schema: 'Schema cannot be published',
         invalid_operation_policy: 'Invalid operation policy',
+        invalid_settings: 'Invalid settings declaration',
     } satisfies Record<DiscoveryReason, string>;
 
     const numberFormat = $derived(new Intl.NumberFormat(uiLocale()));

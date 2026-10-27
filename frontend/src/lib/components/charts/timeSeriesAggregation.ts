@@ -9,7 +9,7 @@
  */
 
 import type {RenderedSignal} from '$lib/charts/signals';
-import {daysBetween} from '$lib/utils/dateOnly';
+import {daysBetween, utcMs} from '$lib/utils/dateOnly';
 
 import type {LineDataPoint} from './LineChart.svelte';
 
@@ -73,15 +73,23 @@ const DENSITY_THRESHOLDS: Record<ChartGrammar, {high: number; low: number}> = {
     candle: {high: 1 / CANDLE_MIN_SLOT_PX, low: (1 / CANDLE_MIN_SLOT_PX) * HYSTERESIS_RATIO},
 };
 
+/**
+ * A UTC midnight from a year, a month index and a day. `Date.UTC(24, 0, 1)` reads the year as 1924; setting the year on its
+ * own takes it as it is, so a date typed in the year 24 stays there.
+ */
+function utcMidnight(year: number, monthIndex: number, day: number): Date {
+    return new Date(utcMs(year, monthIndex, day));
+}
+
 /** Parse ISO YYYY-MM-DD into UTC Date at midnight. */
 function parseDate(iso: string): Date {
     const [year, month, day] = iso.split('-').map(Number);
-    return new Date(Date.UTC(year, month - 1, day));
+    return utcMidnight(year, month - 1, day);
 }
 
 /** Format UTC Date back to ISO YYYY-MM-DD. */
 function formatDate(date: Date): string {
-    const year = date.getUTCFullYear();
+    const year = String(date.getUTCFullYear()).padStart(4, '0');
     const month = String(date.getUTCMonth() + 1).padStart(2, '0');
     const day = String(date.getUTCDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
@@ -153,8 +161,8 @@ export function mapDateToBucket(date: string, resolution: ChartResolution): {buc
 
     const year = parsed.getUTCFullYear();
     const month = parsed.getUTCMonth();
-    const monthStart = new Date(Date.UTC(year, month, 1));
-    const monthEnd = new Date(Date.UTC(year, month + 1, 0));
+    const monthStart = utcMidnight(year, month, 1);
+    const monthEnd = utcMidnight(year, month + 1, 0);
 
     return {
         bucketStart: formatDate(monthStart),
@@ -514,9 +522,11 @@ export function compactMaxPoints(plotWidthPx: number): number {
 /** The first Monday on or before an ISO day (the start of its ISO week). */
 function isoWeekStart(isoDay: string): string {
     const [year, month, day] = isoDay.split('-').map(Number);
-    const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+    const weekday = utcMidnight(year, month - 1, day).getUTCDay();
     const sinceMonday = (weekday + 6) % 7;
-    return new Date(Date.UTC(year, month - 1, day - sinceMonday)).toISOString().slice(0, 10);
+    return utcMidnight(year, month - 1, day - sinceMonday)
+        .toISOString()
+        .slice(0, 10);
 }
 
 /** How many days, ISO weeks (Monday to Sunday) and calendar months a fill from `first` to `end` touches (`fill_counts()`). */

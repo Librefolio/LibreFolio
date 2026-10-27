@@ -147,6 +147,7 @@ MF) e la voce MF-SPL1 del backlog. Niente codice.
 
 **Idea di soluzione (da riparlarne)**: nel database i prezzi si salvano **veri**, nelle unità del loro giorno; la vista
 rettificata si calcola in lettura.
+
 - **Gli split sono eventi dell'asset** (fornitore o manuali), con data e rapporto: l'unica fonte.
 - **All'ingresso, un solo normalizzatore** in `financial_math/` (non nel plugin): ogni plugin dichiara nel contratto se
   consegna prezzi `raw` o `split_adjusted`; se rettificati, il nucleo li riporta al vero moltiplicando per i rapporti
@@ -444,13 +445,13 @@ questi") — è un complemento naturale di `risk_contribution` e **non richiede 
 La riorganizzazione Risk prevede di rilavorare la simulazione ai **livelli 1 e 3**
 della scaletta seguente, e di rinviare i livelli 2, 4 e 5:
 
-| # | Approccio | Stato |
-|---|---|---|
-| 1 | Block bootstrap (rimescolo a blocchi della storia reale) | ✅ in scope |
-| 2 | GJR-GARCH (cluster di volatilità + effetto leva) | 📋 **rinviato — non calibrabile da QuantLib** (D88) |
-| 3 | Preset di regime **prescritti** (ipotesi dichiarate, non stimate) | ✅ in scope |
-| 4 | Markov-switching / HMM **calibrato** | 📋 rinviato — questo TODO |
-| 5 | Heston / Bates / Merton (volatilità stocastica, salti) | 📋 rinviato — questo TODO |
+| #   | Approccio                                                         | Stato                                               |
+| --- | ----------------------------------------------------------------- | --------------------------------------------------- |
+| 1   | Block bootstrap (rimescolo a blocchi della storia reale)          | ✅ in scope                                          |
+| 2   | GJR-GARCH (cluster di volatilità + effetto leva)                  | 📋 **rinviato — non calibrabile da QuantLib** (D88) |
+| 3   | Preset di regime **prescritti** (ipotesi dichiarate, non stimate) | ✅ in scope                                          |
+| 4   | Markov-switching / HMM **calibrato**                              | 📋 rinviato — questo TODO                           |
+| 5   | Heston / Bates / Merton (volatilità stocastica, salti)            | 📋 rinviato — questo TODO                           |
 
 ### Livello 2 — GJR-GARCH: perché è uscito dalla v1
 
@@ -498,7 +499,6 @@ Nessuna delle due scorciatoie è accettabile:
 Precondizione per riprendere il livello 2: `arch` promossa a dipendenza diretta
 in `Pipfile` con lock rigenerato. Da lì il lavoro è contenuto — univariato
 sull'aggregato di portafoglio, innestato sul campionatore esistente.
-
 
 ### Preset di crisi — la forma preferita per il seguito
 
@@ -568,10 +568,12 @@ resta fuori scope in modo permanente.
 **Scope**: Backend (Servizi Matematici)
 
 ### Contesto
+
 Attualmente il sistema di calcolo FIFO in `fifo_utils.py` accetta in input esclusivamente operazioni di `BUY` e `SELL`. Nel mondo reale, avvengono frequentemente frazionamenti azionari (Stock Splits, es. Apple 1:4).
 A livello teorico uno Stock Split non altera i capitali investiti né crea o distrugge valore monetario, ma **altera retroattivamente i lotti**. Se non gestiti, un utente che tenta di vendere 4 azioni (nate da uno split 1:4 di 1 azione acquistata) manderà il FIFO in `ValueError` per "Oversell".
 
 ### Soluzione Proposta
+
 1. Aggiungere un nuovo `TransactionType.SPLIT` al modello dati backend.
 2. Modificare il motore FIFO: quando incontra cronologicamente un'operazione `SPLIT` con un determinato `ratio` (es. 4):
    - Mette in pausa il normale match BUY/SELL.
@@ -583,6 +585,7 @@ A livello teorico uno Stock Split non altera i capitali investiti né crea o dis
 4. Prevedere anche la gestione di Reverse Splits (ratio < 1).
 
 ### Verifica 17 Luglio 2026 — risolta la domanda gemella ("basta ADJUSTMENT?")
+
 Risposta: **no, serve SPLIT esplicito.** `ADJUSTMENT` esiste già ed è documentato anche per "splits, gifts, etc." (`models.py:221-225`), ma il motore FIFO (`fifo_utils.py`) filtra solo BUY/SELL — un ADJUSTMENT non tocca la coda dei lotti. Prova diretta nel codice: il messaggio d'errore di oversell dice letteralmente *"Possible unrecognized stock split or missing BUY transactions"* (`fifo_utils.py:103`) — il bug è reale e già "annunciato" dal sistema stesso. TODO confermato pienamente valido, non risolvibile con l'infrastruttura attuale.
 
 ---
@@ -616,8 +619,6 @@ Quando TanStack Table v9 sarà **rilasciato come stabile** con supporto ufficial
 
 ---
 
-
-
 ## 🔒 Ripensare struttura di accesso ai broker Utente-SuperUtente per essere GDPR compliant
 
 **Data aggiunta**: Gennaio 2026  
@@ -625,9 +626,11 @@ Quando TanStack Table v9 sarà **rilasciato come stabile** con supporto ufficial
 **Priorità**: Media
 
 ### Contesto
+
 La visibilità dei dati di altri utenti da parte del superuser deve essere ripensata per essere GDPR compliant.
 
 ### Possibili Approcci
+
 - Superuser non vede dati personali di altri utenti senza consenso esplicito
 - Log di accesso ai dati di altri utenti
 - Anonimizzazione dei dati visualizzati (solo statistiche aggregate)
@@ -644,12 +647,15 @@ La visibilità dei dati di altri utenti da parte del superuser deve essere ripen
 > **Cross-link**: stesso motore FIFO (`fifo_utils.py`) del TODO "BRIM: FEE/TAX non collegati all'asset" qui sopra — entrambi toccano come i lotti calcolano il proprio cost basis. Da coordinare se pianificati insieme.
 
 ### Contesto
+
 Diverse giurisdizioni usano metodi diversi per determinare quale lotto vendere in caso di vendita parziale:
+
 - **Italia**: Prezzo Medio di Carico (PMC)
 - **USA**: FIFO, LIFO, Select ID (scelta specifica dell'utente)
 - **Altre**: HIFO (Highest In First Out), etc.
 
 ### Requisiti
+
 1. **Impostazioni Broker**: Nella zona short/long del broker, selettore per il metodo di vendita supportato (FIFO, LIFO, PMC, Select ID)
 2. **Preferenze Utente**: Impostazioni di default per metodo di vendita
 3. **Impostazioni Admin**: Default globale per nuovi utenti
@@ -659,6 +665,7 @@ Diverse giurisdizioni usano metodi diversi per determinare quale lotto vendere i
    - PMC: nessun collegamento (calcolo on-the-fly)
 
 ### Note Tecniche
+
 - Analizzare le strade per lo split dei buy: slittare buy e connettere la parte residua, tabella di appoggio, lista di link
 - Deve essere possibile identificare transazioni già importate per evitare doppio import
 - Per PMC il problema del collegamento non sussiste, basta calcolare il valore on-the-fly
@@ -876,9 +883,11 @@ benchmark che dimostri un vantaggio misurabile di capacità, latenza o memoria.
 **Priorità**: Bassa (futuro)
 
 ### Contesto
+
 Creare un assistente AI basato su MCP server chiamato "QuarkAI".
 
 ### Funzionalità Future
+
 - Raccolta automatizzata notizie mercati azionari
 - Notifiche su Telegram (o simili) quando rileva eventi che richiedono attenzione
 - Recap giornaliero (es. alle 20:00) con sommario eventi rilevanti
@@ -1014,9 +1023,9 @@ contratto/consumatore.
 La piattaforma Tool modella l'assenza in **due modi opposti** ai suoi due
 estremi, e la differenza ha conseguenze UX visibili:
 
-| lato | meccanismo | effetto dell'assenza |
-|---|---|---|
-| backend | `ToolDescriptor.operations` ha `min_length=1` | un servizio **senza operazioni è irrappresentabile**: va rimosso del tutto, e il tool sparisce dal catalogo |
+| lato     | meccanismo                                         | effetto dell'assenza                                                                                                          |
+| -------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| backend  | `ToolDescriptor.operations` ha `min_length=1`      | un servizio **senza operazioni è irrappresentabile**: va rimosso del tutto, e il tool sparisce dal catalogo                   |
 | frontend | `ToolRendererUnavailableCode = 'renderer_missing'` | un tool **senza UI è rappresentato**, con messaggio tradotto in quattro lingue e la precisazione che nessun calcolo è partito |
 
 **Il backend vieta l'assenza, il frontend la descrive.**
@@ -1057,7 +1066,6 @@ mancante, obbligando a spedire UI e backend insieme.
 
 ---
 
-
 ## 🔍 BRIM Auto-Detect Broker via Account Code
 
 **Status**: ❌ SCARTATA (07/09/2026, decisione utente) — pochi broker rilasciano dati che
@@ -1073,6 +1081,7 @@ registrata qui solo perché l'idea non ritorni.
 ### Concetto
 
 Colonna `coupon_policy` su `FAInterestRatePeriod` con opzioni:
+
 - **FULL_RESET** (attuale): torna a `initial_value` dopo coupon
 - **CUSTOM_RATE**: tasso cedola diverso dal tasso di accumulo
 - **PARTIAL**: percentuale del valore accumulato
@@ -1150,7 +1159,6 @@ Spawning di un **processo cache dedicato** dal `lifespan()` di FastAPI, che usa 
 - `backend/app/utils/runtime/cache.py` (adattare `NamedCache`)
 - `backend/app/main.py` (spawn/shutdown cache process)
 
-
 ---
 
 ## 📅 Scheduled Investment — Frequenze disaccoppiate (prezzi vs cedola) + anchor day
@@ -1180,6 +1188,7 @@ da quando parte lo schedule.
 ### Cosa serve (design a alto livello)
 
 **Schema Pydantic** (`FAInterestRatePeriod`):
+
 - `price_frequency: MaturationFrequency` — granularità grafico (DAILY
   come default ragionevole).
 - `coupon_frequency: MaturationFrequency | None` — **solo se**
@@ -1195,6 +1204,7 @@ da quando parte lo schedule.
   `SPECIFIC_DATE` solo con ANNUAL/SEMIANNUAL).
 
 **Engine** (`_generate_schedule_values`):
+
 - Calcolare due set di date separati:
   `price_emission_dates` (dal `price_frequency`) e `coupon_dates`
   (dal `coupon_frequency + coupon_anchor`, se abilitati).
@@ -1206,6 +1216,7 @@ da quando parte lo schedule.
   ogni giorno ha un punto, solo il 1° del mese c'è anche il reset).
 
 **Frontend** (`ScheduledInvestmentEditor`):
+
 - Nuova riga per `price_frequency`.
 - Riga condizionale `coupon_frequency` (visibile solo se
   `generate_interest=true`).
@@ -1347,12 +1358,12 @@ Aggiungere la possibilità di creare "Portafogli" che dovrebbero essere gruppi d
 Fare delle pagine di dettaglio per analizzare i trade, le fee 
 Aggiungere un calcolatore FIRE non solo da oggi al futuro, ma anche fissando una data di inizio per aver modo di vedere la differenza tra andamento teorico e reale.
 
-
 ---
 
 ## Risk Analysis
 
 ### RQMC with explicit scrambling contract (low priority — 2026-07-28)
+
 - **What**: re-evaluate randomized quasi-Monte Carlo only when the QuantLib Python
   binding exposes a complete scrambling path suitable for production.
 - **Why deferred**: production now supports MC and QMC entirely in QuantLib. The
@@ -1366,6 +1377,7 @@ Aggiungere un calcolatore FIRE non solo da oggi al futuro, ma anche fissando una
   primitives or a separately approved production engine is adopted.
 
 ### Dynamic scenario catalog (future — 2026-07-29)
+
 - **What**: evolve the initial static, typed, startup-loaded built-in/host YAML
   catalog with file detection without restart, manual/hot reload, personal
   scenario CRUD, persistence of UI edits, YAML import/export, explicit built-in
@@ -1378,6 +1390,7 @@ Aggiungere un calcolatore FIRE non solo da oggi al futuro, ma anche fissando una
   `Phase_0/02_riskfolioIntegration/plan-phase01Step6RiskFrontendInformationArchitecture.prompt.md`.
 
 ### Persistent historical-replay proxies (future — 2026-07-29)
+
 - **What**: persist asset→proxy associations, optionally propose proxies only with
   explicit user confirmation, and reuse confirmed mappings in later replays.
 - **Why deferred**: G6 deliberately keeps proxy choice explicit and ephemeral;
@@ -1444,6 +1457,7 @@ e simulazione assistita. Nessuna generazione FX automatica autorizzata dai bug E
 Spostata il 18/10/2026 nella voce «🧬 Profilo dei dati dell'asset», in cima al file.
 
 ## Stimatori robusti di covarianza per la matrice di correlazione (Riskfolio)
+
 **Priorità:** 🔽 bassa — dopo che la pagina correlazioni avrà una direzione chiara.
 
 `riskfolio.src.ParamsEstimation.covar_matrix` espone quindici stimatori oltre a quello
@@ -1605,12 +1619,12 @@ verifica, non infilato dentro un pacchetto di superficie.
 
 **Misurato da N il 18 Set**, corsia 6151, finestra dichiarata.
 
-| asset | bersaglio | ottenuto | scarto |
-|---|---:|---:|---:|
-| Apple | 185,00 | 264,57 | **+43,0 %** |
-| Bitcoin | 45 000 | 25 889,81 | **−42,5 %** |
-| Ethereum | 2 650 | 1 290,41 | **−51,3 %** |
-| RE Loan Roma | 5 000 | 5 010,52 | +0,2 % |
+| asset        | bersaglio | ottenuto  | scarto      |
+| ------------ | ---------:| ---------:| -----------:|
+| Apple        | 185,00    | 264,57    | **+43,0 %** |
+| Bitcoin      | 45 000    | 25 889,81 | **−42,5 %** |
+| Ethereum     | 2 650     | 1 290,41  | **−51,3 %** |
+| RE Loan Roma | 5 000     | 5 010,52  | +0,2 %      |
 
 ### 🔴 La causa — e l'etichetta che le avevo dato era sbagliata
 
@@ -1620,11 +1634,11 @@ verifica, non infilato dentro un pacchetto di superficie.
 
 **I segni sono discordi**, e Jensen spingerebbe tutti dalla stessa parte:
 
-| asset | bersaglio | consegnato | scarto |
-|---|---:|---:|---:|
-| Apple | 185,00 | 264,57 | **+43,0 %** |
-| Microsoft | 390,00 | 322,03 | **−17,4 %** |
-| Bitcoin | 45 000 | 25 889,81 | **−42,5 %** |
+| asset     | bersaglio | consegnato | scarto      |
+| --------- | ---------:| ----------:| -----------:|
+| Apple     | 185,00    | 264,57     | **+43,0 %** |
+| Microsoft | 390,00    | 322,03     | **−17,4 %** |
+| Bitcoin   | 45 000    | 25 889,81  | **−42,5 %** |
 
 Le ampiezze sono **esattamente quelle che la volatilità configurata prevede**: rumore
 uniforme su ±2σ dà deviazione `2σ/√3` al giorno, che su 267 giorni fa **≈ 30 %** per le
@@ -1764,10 +1778,10 @@ prima di scegliere la forma della barra.
 
 **Stesso asset, stesso orizzonte, stesso giorno, stesso motore. Cambia solo la finestra:**
 
-| finestra | mediana a 365 giorni | probabilità di perdita |
-|---|---:|---:|
-| **95 giorni** | **+1 400,4 %** | **0,01 %** |
-| **365 giorni** | **−39,1 %** | **70,74 %** |
+| finestra       | mediana a 365 giorni | probabilità di perdita |
+| -------------- | --------------------:| ----------------------:|
+| **95 giorni**  | **+1 400,4 %**       | **0,01 %**             |
+| **365 giorni** | **−39,1 %**          | **70,74 %**            |
 
 > **Da +1 400 % a −39 %, e da «non puoi perdere» a «perdi sette volte su dieci», per una
 > tendina che l'utente legge come «quanta storia guardo».**
@@ -1779,13 +1793,13 @@ prima di scegliere la forma della barra.
 **Il motore estrapola fedelmente.** Confronto fra la mediana simulata e l'estrapolazione
 ingenua `(1 + r_finestra)^(365/n)` su **sei** finestre:
 
-| finestra | ripetizioni | ingenua | mediana | rapporto |
-|---|---:|---:|---:|---:|
-| 95 g | **3,92×** | +31,57 % | +33,22 % | **1,013** |
-| 140 g | 2,64× | +8,54 % | +10,28 % | 1,016 |
-| 190 g | 1,94× | +1,97 % | +2,92 % | 1,009 |
-| 250 g | 1,47× | +8,21 % | +9,49 % | 1,012 |
-| 365 g | 1,01× | +8,76 % | +9,93 % | 1,011 |
+| finestra | ripetizioni | ingenua  | mediana  | rapporto  |
+| -------- | -----------:| --------:| --------:| ---------:|
+| 95 g     | **3,92×**   | +31,57 % | +33,22 % | **1,013** |
+| 140 g    | 2,64×       | +8,54 %  | +10,28 % | 1,016     |
+| 190 g    | 1,94×       | +1,97 %  | +2,92 %  | 1,009     |
+| 250 g    | 1,47×       | +8,21 %  | +9,49 %  | 1,012     |
+| 365 g    | 1,01×       | +8,76 %  | +9,93 %  | 1,011     |
 
 **Le ripetizioni variano di quattro volte, il rapporto resta fra 1,009 e 1,016.** Il motore
 aggiunge l'1 %, sempre lo stesso.
@@ -1843,15 +1857,15 @@ forma sintattica, non una categoria**: `RiskUnavailableError` e `RiskScopeNotFou
 
 Ripartiti per **confine di conversione** (verificato per modulo, non stimato):
 
-| confine | come si verifica | n |
-|---|---|---:|
-| registrazione plugin = import time | `provider_registry.py:322,365` → `validate_definition()` | 9 |
-| avvio / YAML dell'operatore | `load_risk_scenario_catalog()` singleton | 8 |
-| costruzione del pool worker | `SpawnWorkerPool.__init__` | 5 |
-| `validate_params()` → `ValidationError` | **eseguendolo** | 28 |
-| richiesta motore dentro il `try` | `portfolio_optimization/plugin.py:170→221` | 8 |
-| sottoprocesso worker | `SpawnWorkerRemoteError` → `_remote_error_code` | 4 |
-| **il catch-all di `service.py`** | il resto | **110** |
+| confine                                 | come si verifica                                         | n       |
+| --------------------------------------- | -------------------------------------------------------- | -------:|
+| registrazione plugin = import time      | `provider_registry.py:322,365` → `validate_definition()` | 9       |
+| avvio / YAML dell'operatore             | `load_risk_scenario_catalog()` singleton                 | 8       |
+| costruzione del pool worker             | `SpawnWorkerPool.__init__`                               | 5       |
+| `validate_params()` → `ValidationError` | **eseguendolo**                                          | 28      |
+| richiesta motore dentro il `try`        | `portfolio_optimization/plugin.py:170→221`               | 8       |
+| sottoprocesso worker                    | `SpawnWorkerRemoteError` → `_remote_error_code`          | 4       |
+| **il catch-all di `service.py`**        | il resto                                                 | **110** |
 
 **9+8+5+28+8+4+110 = 172.** I 110 sono il lavoro che resta.
 
@@ -1873,11 +1887,11 @@ helper che un classificatore statico marca come «non in un validatore».
 **Il criterio corretto è strutturale.** `validate_params()` è funzione **pura dei parametri**:
 non vede storia, portafoglio, calendario.
 
-| classe | predicato | `validate_params` può decidere? | verdetto |
-|---|---|---|---|
-| **C1** | soli parametri | sì — **ma va eseguito per sapere se lo fa** | se accetta → causabile |
-| **C2** | **parametro × dato di runtime** | 🔴 **no, strutturalmente** | **causabile per costruzione** |
-| **C3** | soli argomenti interni | no, e non deve | invariante → deve esplodere |
+| classe | predicato                       | `validate_params` può decidere?             | verdetto                      |
+| ------ | ------------------------------- | ------------------------------------------- | ----------------------------- |
+| **C1** | soli parametri                  | sì — **ma va eseguito per sapere se lo fa** | se accetta → causabile        |
+| **C2** | **parametro × dato di runtime** | 🔴 **no, strutturalmente**                  | **causabile per costruzione** |
+| **C3** | soli argomenti interni          | no, e non deve                              | invariante → deve esplodere   |
 
 ⚠️ *«Sta in un plugin»* non distingue niente. *«Il validatore dei parametri non può vederne
 metà»* sì.
@@ -1921,10 +1935,10 @@ costruzione della richiesta, quindi converte anche le violazioni di invariante d
 «parametri non validi». **Un `try` allargato è un `except` che presume.** Fuori dal perimetro di
 B, non riparato, misurato.
 
-
 # Idea interessante presa da un utente:
+
 3. L'effetto del cambio sul rendimento (FX Impact)
-"Related to my previous feature is how much FX rates change the balance, again not really that import but just interesting to see."
+   "Related to my previous feature is how much FX rates change the balance, again not really that import but just interesting to see."
 
 Gli piacerebbe vedere (anche solo per curiosità) quanto del suo guadagno/perdita dipende dal titolo in sé e quanto dalle fluttuazioni del tasso di cambio (il classico spacchettamento tra capital gain e impatto valutario). Ma ribadisce che non è prioritario.
 Discorso originale qui: https://github.com/Librefolio/LibreFolio/discussions/24#discussioncomment-18584139
@@ -1942,12 +1956,14 @@ le migliorie e le funzioni nuove.
 **Data aggiunta**: 30 Settembre 2026 (appunto del 06/09) · **Status**: ⏳ IN ATTESA · **Priorità**: Bassa
 
 ### Contesto
+
 Oggi ogni utente ha una sua quota di possesso sul broker. L'idea è introdurre la **fetta
 condivisa**: due utenti possiedono al 100% lo stesso broker perché è la stessa fetta. Apre anche a
 scenari, rari, in cui la stessa quota n% appartiene a due utenti: la vedono entrambi con la stessa
 percentuale nella dashboard, e se la quota cambia la subiscono entrambi.
 
 ### Azione Futura
+
 Modellare la fetta come entità a sé (quota → insieme di utenti), con migrazione incrementale e
 compatibilità con le quote attuali. Da incrociare con la sezione GDPR sull'accesso ai broker.
 
@@ -1956,10 +1972,12 @@ compatibilità con le quote attuali. Da incrociare con la sezione GDPR sull'acce
 **Data aggiunta**: 30 Settembre 2026 (appunto del 06/09) · **Status**: ⏳ IN ATTESA · **Priorità**: Bassa
 
 ### Contesto
+
 Far evolvere LibreFolio verso le funzioni di HomeBank: categorie per versamenti e prelievi, i
 grafici relativi e le funzioni accessorie, come il calcolatore per l'auto.
 
 ### Azione Futura
+
 - Un plugin BRIM **OFX** generico, da usare quando manca un plugin specifico della banca.
 - Uno **script di migrazione** da un file HomeBank a LibreFolio, una tabella alla volta.
 - Categorie per le transazioni di cassa, con grafici dedicati.
@@ -1969,11 +1987,13 @@ grafici relativi e le funzioni accessorie, come il calcolatore per l'auto.
 **Data aggiunta**: 30 Settembre 2026 (appunto dell'11/09) · **Status**: ⏳ IN ATTESA · **Priorità**: Media
 
 ### Contesto
+
 Insieme alla sincronizzazione notturna, un task cerca le transazioni di tipo dividendo o interesse,
 più vecchie del periodo sincronizzato, **senza evento collegato**. Per ognuna cerca nell'asset un
 evento compatibile in un intervallo di date configurabile (7 giorni per default).
 
 ### Azione Futura
+
 - Se l'evento non c'è: crearlo (manuale o auto-assegnato, da decidere) e collegarlo, **oppure**
   produrre un report o una notifica che elenca le transazioni trovate con il suggerimento di
   correzione.
@@ -1984,7 +2004,9 @@ evento compatibile in un intervallo di date configurabile (7 giorni per default)
   (da P2-6)».
 
 ### Ricollegamento automatico dopo il sync (19/10/2026, decisione N68, punto 4) — 🔍 da analizzare
+
 Nella 1.3 arrivano i primi tre punti di N68:
+
 - il cambio di valuta di un asset non è più bloccato dagli split;
 - gli split sopravvivono al cambio di valuta;
 - un bottone **«Ricollega eventi»** in Transazioni elenca le transazioni senza evento, con l'evento candidato.
@@ -2001,10 +2023,12 @@ non serve e i primi 3 sono sufficienti»). Si lega al task notturno qui sopra: p
 **Data aggiunta**: 30 Settembre 2026 (appunto del 22/09) · **Status**: ⏳ IN ATTESA · **Priorità**: Bassa
 
 ### Contesto
+
 La pagina **Strumenti** esiste: è il posto naturale per un **calcolatore FIRE**. Se il motore
 matematico dei tool (quello del PAC) si presta, può servire anche ad altri calcolatori.
 
 ### Azione Futura
+
 Un plugin Tool nuovo (skill `tool-plugin`), con contratto Pydantic e UI compilata, come il PAC.
 
 ## 📥 BRIM — riconoscere all'import una posizione chiusa (Directa, CSV generico)
@@ -2012,10 +2036,12 @@ Un plugin Tool nuovo (skill `tool-plugin`), con contratto Pydantic e UI compilat
 **Data aggiunta**: 30 Settembre 2026 (appunto del 22/09) · **Status**: ⏳ IN ATTESA — da approfondire se ne vale la pena · **Priorità**: Bassa
 
 ### Contesto
+
 Il flag che fa comparire nel frontend il banner «posizione importata già chiusa: la ricerca potrebbe
 non dare risultati» esiste, ma oggi lo usa solo Crédit Agricole.
 
 ### Azione Futura
+
 - **Directa**: con ETF venduti completamente, verificare se dal solo messaggio si capisce che la
   posizione si è estinta, e in quel caso alzare il flag.
 - **CSV generico** (per esempio Recrowd importato in blocco): tenere traccia della quantità per
@@ -2026,10 +2052,12 @@ non dare risultati» esiste, ma oggi lo usa solo Crédit Agricole.
 **Data aggiunta**: 30 Settembre 2026 (appunto del 26/09) · **Status**: ⏳ IN ATTESA · **Priorità**: Media
 
 ### Contesto
+
 Le guide scritte dei segnali stanno oggi vicino alle schede che li mostrano. (Il pulsante che apre la
 guida del segnale e che su mobile sparisce è un difetto: è stato assegnato a K.)
 
 ### Azione Futura
+
 - Spostare le guide dei segnali in **Teoria finanziaria → Segnali**, con una **categoria nuova per i
   segnali di rischio**.
 - Nelle zone dove sono oggi, descrivere la scheda e mettere i link ai segnali.
@@ -2039,9 +2067,11 @@ guida del segnale e che su mobile sparisce è un difetto: è stato assegnato a K
 **Data aggiunta**: 27 Luglio 2026 (era `idee_per_grafici.md` nella radice, spostato qui il 14/10/2026) · **Status**: ⏳ IN ATTESA · **Priorità**: Bassa
 
 ### Contesto
+
 Usare come base i grafici mostrati in questo video: https://www.youtube.com/watch?v=B6mLq6UUTWw
 
 ### Azione Futura
+
 Analizzarli, poi implementarne alcuni o tutti.
 
 ## 📈 Scala logaritmica nei grafici
@@ -2049,9 +2079,11 @@ Analizzarli, poi implementarne alcuni o tutti.
 **Data aggiunta**: 30 Settembre 2026 (appunto del 26/09) · **Status**: ⏳ IN ATTESA · **Priorità**: Bassa
 
 ### Contesto
+
 Una modalità di visualizzazione **logaritmica**, soprattutto sulle percentuali.
 
 ### Azione Futura
+
 Sulle percentuali il logaritmo non si applica ai rendimenti negativi: va applicato al fattore di
 crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asset, confronto).
 
@@ -2061,6 +2093,7 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
 **Issue**: [#27](https://github.com/Librefolio/LibreFolio/issues/27)
 
 ### Contesto
+
 - Richiesta (Johan3F, 29/09): entrare in LibreFolio con il provider di identità del proprio homelab
   (Authelia, Authentik, Keycloak, Pocket ID…), senza un'altra password.
 - Oggi c'è solo il login locale: username o email e password. Il login emette un JWT senza stato nel
@@ -2086,6 +2119,7 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
     un'opzione, spenta o accesa dall'admin.
 
 ### Azione Futura
+
 - Configurazione da variabili d'ambiente: indirizzo del provider, client id e secret, scope, testo
   del pulsante. Un solo provider, ma l'identità salvata come coppia (issuer, `sub`), per non
   escluderne altri.
@@ -2118,6 +2152,7 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
 **Priorità**: Media (prima va misurata)
 
 ### Contesto
+
 - La PR [#30](https://github.com/Librefolio/LibreFolio/pull/30) di Martin Sova (msov19), che sostituisce la
   [#28](https://github.com/Librefolio/LibreFolio/pull/28), corregge `convert_bulk`.
   La query dei cambi aveva solo il limite superiore e a ogni chiamata caricava tutta la storia della
@@ -2145,6 +2180,7 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
   `convert_bulk` per i prezzi, ha già la finestra con minimo e massimo.
 
 ### Azione Futura
+
 - **Prima misurare**, su una copia dei dati reali: righe lette e tempo della query a `:312` rispetto
   al calcolo intero, con e senza `date_from`.
 - Se conviene:
@@ -2169,6 +2205,7 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
 **Priorità**: Bassa
 
 ### Contesto
+
 - Origine: la review del developer di L3° di Asset Global (scheda Correlazione), 01/10/2026. Il
   parere di F è nel suo diario di avanzamento di L3°
   (`LibreFolio_developer_journal/Release_2/Phase_0/02_riskfolioIntegration/implementation_2/progress/F-L3-rischio-rendimento.md`,
@@ -2179,6 +2216,7 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
   rischio/rendimento di sotto-periodi successivi, uniti nel tempo.
 
 ### ⚠️ Perché non a trimestri dentro un anno
+
 - **Asse orizzontale, la volatilità**: si stima bene già su ~63 sedute (errore relativo ≈ 1/√(2n),
   cioè 9–14% con le code grasse), e cambia davvero nel tempo, perché i mercati alternano fasi calme e
   agitate. Qui la traccia direbbe il vero.
@@ -2191,6 +2229,7 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
 - **La leggibilità**: N asset per 4 punti, più N linee che si incrociano.
 
 ### Azione Futura — la versione onesta, se un giorno la si vuole
+
 - Solo per l'asset selezionato: la selezione collegata fra tabella e grafico di L3° c'è già.
 - Segmenti di un anno solare: il rendimento davvero ottenuto in quell'anno, un fatto e non
   un'estrapolazione. Quindi solo per periodi di almeno 3 anni.
@@ -2206,6 +2245,7 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
 **Data aggiunta**: 6 Ottobre 2026 · **Status**: 📋 DA PIANIFICARE · **Priorità**: Media
 
 ### Contesto
+
 - Richiesta del developer del 06/10/2026, testuale: «In asset global, sarebbe utile far selezionare più asset e
   fare modifica, ma in questa modifica non modificare il grafico e i segnali, bensì l'asset, ad esempio selezionare i
   vari asset etf e renderli etf azionari, con una botta, o tutti benchmark e così via, ovviamente se si cambia un
@@ -2213,6 +2253,7 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
 - Oggi un asset si modifica solo uno alla volta, dalla sua modale.
 
 ### Obiettivo
+
 - Selezione multipla nella lista di Asset Global, sia nella griglia sia nella tabella.
 - Un'azione «Modifica selezionati» che apre una modale con i soli campi dell'asset, per esempio il tipo (con il menu a
   due livelli) e il flag benchmark. Niente grafico e niente segnali.
@@ -2221,6 +2262,7 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
 - Prima di salvare, un riepilogo: quanti asset cambiano e quali campi.
 
 ### Note per chi la pianifica
+
 - Riusare lo schema create/edit → bulk già deciso per le transazioni (decisione duplicate-mode del 07/09 in
   `LibreFolio_developer_journal/Release_2/Phase_0/09_feedbackJobs/01_ux_dashboard.md`) e la selezione di `DataTable`.
 - Backend: un aggiornamento per lista di id in una sola transazione, oppure le PATCH esistenti una per asset, con
@@ -2234,6 +2276,7 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
 **Data aggiunta**: 6 Ottobre 2026 · **Status**: ⏳ IN ATTESA · **Priorità**: Media
 
 ### Contesto
+
 - Review del developer del 06/10/2026 con A (Dashboard, livello L3 rischio/rendimento). Testuale: «mettiamolo nei todo
   futuri e anche in un todo nel codice per non dimenticarlo».
 - Oggi i rendimenti dell'analisi del rischio vengono dalle sole serie di prezzo: cedole e dividendi non entrano. Un asset
@@ -2245,6 +2288,7 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
 - Un TODO nel codice segna il punto, aggiunto dalla famiglia Risk nel giro in corso.
 
 ### Azione Futura
+
 - Backend (Risk): una serie di rendimento totale per asset, che aggiunga ai prezzi i flussi di cedole e dividendi.
   Prima di scriverla va deciso se i flussi si reinvestono nell'asset o si sommano come cassa.
 - Usarla nei calcoli di rischio/rendimento: livelli della Dashboard, pagina del broker, laboratorio di Asset Global.
@@ -2256,6 +2300,7 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
 **Priorità**: Alta, quando si apre il Rebalancer
 
 ### Contesto
+
 - Reperto della gallery (M, 09/10/2026) e analisi di D (opzione «e»): le decisioni di cambio sono una per rotta d'ordine
   × valuta del pool (`backend/app/services/pac_allocator/evaluation/bounds.py`, `constraints.py`), quindi il piano può contenere
   più conversioni separate della stessa coppia sullo stesso broker, che il report poi somma (`planner_report.py`).
@@ -2265,13 +2310,14 @@ crescita (1 + r). Decidere su quali grafici offrirla (Crescita, prezzo dell'asse
   probabilmente sarà più soggetto al bug rispetto il pac».
 
 ### Azione Futura
+
 - Una sola decisione di cambio per broker × coppia: variabili, vincoli, ledger e report del motore. È un rifacimento
   ampio.
 - Test di equivalenza sui piani esistenti e oracolo sui casi con vendite (Rebalancer), dove le conversioni in entrambi i
   versi sono più frequenti.
 
-
 ## Code reordering
+
 Data di aggiunta: 9 Ottobre 2026 · **Status**: ⏳ IN ATTESA — da fare con urgenza · **Priorità**: Media
 Il progetto è crescuto tantissimo, e sia il backend sia il frontend hanno file di centinaia di righe. La manutenzione è più difficile, e la leggibilità cala. Il developer propone di **riordinare i file** in più moduli,
 Ristrutturando la struttura delle cartelle, fattorizzando le funzioni comuni, e separando le classi e le funzioni in più file. Questo aiuta a trovare più facilmente il codice, a ridurre i conflitti di merge, e a migliorare la navigazione del progetto.
@@ -2280,3 +2326,15 @@ Un altro esempio è separare le funzioni di utilità in moduli dedicati, invece 
 La cartella utils è cresciuta tantissimo e vale la pena fare un analisi per capire se alcune funzioni possono essere spostate in moduli più specifici, o se abbia senso creare dei service layer in tal senso.
 
 Discorso simile da fare anche per il frontend, dove i componenti sono cresciuti e vanno raggruppati in cartelle più piccole e coerenti, con nomi chiari e significativi.
+
+
+
+
+
+## Approfondire protocollo Enable Banking europeo
+
+Ascoltando online ho trovato di https://enablebanking.com/ come protocollo open per accedere alle banche europee, sarebbe interessante approfondire e capire se si esce a usare per creare un importatore "automatico" delle transazioni nel sistema BRIM
+
+Priorità: Esplorativa
+
+Aggiunto: 26/10/26

@@ -136,6 +136,25 @@ describe('ratioToPercent — a backend ratio, as the tables show it', () => {
 describe('visiblePeriodColumns — the period columns of a range', () => {
     const keysOf = (columns: readonly PeriodSpec[]) => columns.map(({key}) => key);
 
+    // X5-5 (D-P4): a year before 100 is read as typed, not as 19xx (`Date.UTC(24, …)` is 1924). The days are counted on the
+    // proleptic Gregorian calendar and the keys follow the PERIODS days above: 1W 7, 1M 30, 3M 91, 6M 182, 1Y 365.
+    it.each([
+        // The year 24 is leap (divisible by 4): 1 March … 31 December is 305 days, so 6M (182) fits and 1Y (365) does not.
+        {case: 'the year 24, from 1 March to 31 December (305 days), holds 1W … 6M', start: '0024-03-01', end: '0024-12-31', keys: ['1W', '1M', '3M', '6M']},
+        // The year 1 is not leap: 1 January … 31 December is 364 days, one short of 1Y.
+        {case: 'the year 1, from 1 January to 31 December (364 days), holds 1W … 6M', start: '0001-01-01', end: '0001-12-31', keys: ['1W', '1M', '3M', '6M']},
+        // The year 99 is not leap: 1 January 0099 … 1 January 0100 is 365 days, across the century boundary, so 1Y fits.
+        {case: 'a range across the year 99 into the year 100 (365 days) holds 1W … 1Y', start: '0099-01-01', end: '0100-01-01', keys: ['1W', '1M', '3M', '6M', '1Y']},
+    ])('$case ($start … $end)', ({start, end, keys}) => {
+        expect(keysOf(visiblePeriodColumns(PERIODS, start, end))).toEqual(keys);
+    });
+
+    // X5-5 (D-P4): guards that stay empty, before and after the fix.
+    it('offers none for a start that is not a calendar day in the year 1, or an end before the start', () => {
+        expect(visiblePeriodColumns(PERIODS, '0001-02-29', '0001-12-31'), '29 February of the year 1, which is not leap').toEqual([]);
+        expect(visiblePeriodColumns(PERIODS, '0024-12-31', '0024-03-01'), 'the end before the start, in the year 24').toEqual([]);
+    });
+
     it('never offers 1D, the tables’ fixed column: five years hold every other period', () => {
         // 2021-10-16 … 2026-10-16: 1826 days, 29 February 2024 among them, so 5Y (1825) fits.
         expect(visiblePeriodColumns(PERIODS, '2021-10-16', '2026-10-16')).toEqual(PERIODS.filter(({key}) => key !== '1D'));

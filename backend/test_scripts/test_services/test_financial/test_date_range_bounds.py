@@ -225,6 +225,21 @@ def _history_dates(points) -> list[date]:
     return [point.date for point in points or []]
 
 
+def _last_day(steps) -> date:
+    """The last day a lots history covers: its last step's ``through`` (J5-5: a row holds from ``date`` to ``through``)."""
+    return max(step.through for step in steps)
+
+
+def _history_span(report) -> tuple[date, date]:
+    """The days the report's history holds, first to last: its steps (D-P4) run from the first step's ``date`` to the last
+    step's ``through`` (a step's ``date`` alone would hide a step that reaches past the bound), and they are the report's
+    ``range`` — the history has no gap inside it."""
+    assert report.history, "the report has no history at all"
+    first, last = report.history[0].date, report.history[-1].through
+    assert (report.range.start, report.range.end) == (first, last), f"the history spans {first}..{last}, the report's range is {report.range.start}..{report.range.end}"
+    return first, last
+
+
 # =============================================================================
 # ENGINE — PortfolioCalculationEngine.calculate
 # =============================================================================
@@ -331,7 +346,7 @@ class TestReportBoundsTheRange:
     @pytest.mark.asyncio
     async def test_report_history_stops_at_tomorrow_and_starts_at_first_transaction(self, session, book):
         """Red (R13-SEC7-1): the report asked for 3000 days before the first transaction to 400 days ahead has
-        no history point after tomorrow, and metadata.computed_date_to is tomorrow.
+        no history step reaching past tomorrow (the last step's ``through``), and metadata.computed_date_to is tomorrow.
 
         Before: the engine replayed every day to the requested end, so the history carried a point for each of
         the 400 future days and computed_date_to was the requested end (with 9999-12-30, the reported freeze).
@@ -341,11 +356,10 @@ class TestReportBoundsTheRange:
         report = await _report(session, book, start=book.first_tx - BEHIND, end=before + AHEAD)
         after = date.today()
 
-        dates = _history_dates(report.history)
-        assert dates, "the report has no history at all"
-        assert max(dates) <= after + ONE_DAY, f"the history runs to {max(dates)}, past tomorrow ({after + ONE_DAY})"
+        first, last = _history_span(report)
+        assert last <= after + ONE_DAY, f"the history runs to {last}, past tomorrow ({after + ONE_DAY})"
         assert report.metadata.computed_date_to in _tomorrows(before, after), f"computed_date_to is {report.metadata.computed_date_to}, expected tomorrow ({before + ONE_DAY})"
-        assert min(dates) == book.first_tx, f"the history starts on {min(dates)}, expected the first transaction ({book.first_tx})"
+        assert first == book.first_tx, f"the history starts on {first}, expected the first transaction ({book.first_tx})"
         assert report.metadata.computed_date_from == book.first_tx
 
 
@@ -353,15 +367,19 @@ class TestReportRangesWithinBoundsAreUnchanged:
     @pytest.mark.asyncio
     async def test_report_inside_the_history_is_unchanged(self, session, book):
         """Guard: a report from five days after the first transaction to today is the one it always was — its
-        history covers exactly that range, and the engine still runs from the first transaction."""
+        history (in steps) covers exactly that range, and the engine still runs from the first transaction."""
         today = date.today()
         start = book.first_tx + timedelta(days=5)
 
         report = await _report(session, book, start=start, end=today)
 
-        dates = _history_dates(report.history)
-        assert (dates[0], dates[-1]) == (start, today), f"history runs {dates[0]}..{dates[-1]}, expected {start}..{today}"
-        assert len(dates) == (today - start).days + 1, "one history point per day of the range"
+        # The history is in steps (D-P4): it spans the range from its first step's date to its last step's through, with no
+        # gap and no overlap, so the days the steps hold add up to the days of the range.
+        first, last = _history_span(report)
+        assert (first, last) == (start, today), f"history runs {first}..{last}, expected {start}..{today}"
+        held = [(step.date, step.through) for step in report.history]
+        assert all(before_end + ONE_DAY == after_start for (_, before_end), (after_start, _) in zip(held, held[1:], strict=False)), f"the steps leave a gap or overlap: {held}"
+        assert sum((through - first_day).days + 1 for first_day, through in held) == (today - start).days + 1, "the steps hold one day each of the range, no more"
         assert (report.metadata.computed_date_from, report.metadata.computed_date_to) == (book.first_tx, today)
 
 
@@ -384,11 +402,10 @@ class TestRiskPortfolioScopeBoundsTheRange:
 
         report = inputs.portfolio_report
         assert report is not None, "a portfolio scope must carry the report it was built from"
-        dates = _history_dates(report.history)
-        assert dates, "the scope's report has no history at all"
-        assert max(dates) <= after + ONE_DAY, f"the scope's report runs to {max(dates)}, past tomorrow ({after + ONE_DAY})"
+        first, last = _history_span(report)
+        assert last <= after + ONE_DAY, f"the scope's report runs to {last}, past tomorrow ({after + ONE_DAY})"
         assert report.metadata.computed_date_to in _tomorrows(before, after)
-        assert min(dates) == book.first_tx
+        assert first == book.first_tx
 
     @pytest.mark.asyncio
     async def test_risk_query_analyzed_range_stops_at_tomorrow(self, session, cash_book, monkeypatch):
@@ -445,11 +462,10 @@ class TestLotsBoundTheRange:
         result = await _lots(session, book, date_to=before + AHEAD)
         after = date.today()
 
-        values = _history_dates(result.value_history)
-        prices = _history_dates(result.price_history)
-        assert values and prices, "an open lot must have a value and a price history"
-        assert max(values) <= after + ONE_DAY, f"the value history runs to {max(values)}, past tomorrow ({after + ONE_DAY})"
-        assert max(prices) <= after + ONE_DAY, f"the price history runs to {max(prices)}, past tomorrow ({after + ONE_DAY})"
+        assert result.value_history and result.price_history, "an open lot must have a value and a price history"
+        last_value, last_price = _last_day(result.value_history), _last_day(result.price_history)
+        assert last_value <= after + ONE_DAY, f"the value history runs to {last_value}, past tomorrow ({after + ONE_DAY})"
+        assert last_price <= after + ONE_DAY, f"the price history runs to {last_price}, past tomorrow ({after + ONE_DAY})"
         assert result.calculation_metadata.computed_date_to in _tomorrows(before, after), f"computed_date_to is {result.calculation_metadata.computed_date_to}, expected tomorrow ({before + ONE_DAY})"
 
 
@@ -463,8 +479,8 @@ class TestLotsRangesWithinBoundsAreUnchanged:
 
         computed_to = result.calculation_metadata.computed_date_to
         assert computed_to in {before, after}, f"computed_date_to is {computed_to}, expected today ({before})"
-        assert max(_history_dates(result.value_history)) == computed_to
-        assert max(_history_dates(result.price_history)) == computed_to
+        assert _last_day(result.value_history) == computed_to
+        assert _last_day(result.price_history) == computed_to
 
     @pytest.mark.asyncio
     async def test_past_date_to_is_kept(self, session, book):
@@ -472,8 +488,8 @@ class TestLotsRangesWithinBoundsAreUnchanged:
         result = await _lots(session, book, date_to=book.last_quote)
 
         assert result.calculation_metadata.computed_date_to == book.last_quote
-        assert max(_history_dates(result.value_history)) == book.last_quote
-        assert max(_history_dates(result.price_history)) == book.last_quote
+        assert _last_day(result.value_history) == book.last_quote
+        assert _last_day(result.price_history) == book.last_quote
 
     @pytest.mark.asyncio
     async def test_date_to_tomorrow_is_kept(self, session, book):
@@ -484,7 +500,7 @@ class TestLotsRangesWithinBoundsAreUnchanged:
         result = await _lots(session, book, date_to=tomorrow)
 
         assert result.calculation_metadata.computed_date_to == tomorrow
-        assert max(_history_dates(result.value_history)) == tomorrow
+        assert _last_day(result.value_history) == tomorrow
 
 
 # =============================================================================
@@ -536,11 +552,12 @@ class TestExtremeRangesFinishQuickly:
         after = date.today()
 
         assert elapsed < QUICK_SECONDS, f"the report took {elapsed:.1f}s for {EXTREME_START}..{EXTREME_END}"
-        dates = _history_dates(report.history)
-        assert dates, "the report has no history at all"
-        assert min(dates) == book.first_tx, f"the history starts on {min(dates)}, expected the first transaction ({book.first_tx})"
-        assert max(dates) in _tomorrows(before, after), f"the history ends on {max(dates)}, expected tomorrow ({before + ONE_DAY})"
+        first, last = _history_span(report)
+        assert first == book.first_tx, f"the history starts on {first}, expected the first transaction ({book.first_tx})"
+        assert last in _tomorrows(before, after), f"the history ends on {last}, expected tomorrow ({before + ONE_DAY})"
         assert report.metadata.computed_date_to in _tomorrows(before, after)
+        # A few steps, not a point per day: the book has a handful of changes, whatever the window asked for.
+        assert len(report.history) < 100, f"{len(report.history)} history steps for the extreme window: one point per day was built"
 
     @pytest.mark.asyncio
     async def test_lots_with_end_9999_12_30(self, session, book):
@@ -554,7 +571,7 @@ class TestExtremeRangesFinishQuickly:
 
         assert elapsed < QUICK_SECONDS, f"the lots analysis took {elapsed:.1f}s for date_to={EXTREME_END}"
         assert result.calculation_metadata.computed_date_to in _tomorrows(before, after)
-        assert max(_history_dates(result.value_history)) <= after + ONE_DAY
+        assert _last_day(result.value_history) <= after + ONE_DAY
 
 
 # =============================================================================

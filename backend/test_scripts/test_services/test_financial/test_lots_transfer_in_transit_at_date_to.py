@@ -47,6 +47,7 @@ from backend.app.db.models import Asset, Transaction, User
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.portfolio import LotAnalysisType, LotsAnalysisResponse
 from backend.app.services.lots_analysis_service import get_lots_analysis
+from backend.test_scripts.test_services._lots_steps import daily_points
 from backend.test_scripts.test_services._scope_boundary_books import (
     L2_ARRIVAL_DAY,
     L2_BUY_DAY,
@@ -237,7 +238,7 @@ async def test_t3_a_receiving_leg_dated_before_the_giving_one_is_in_transit_from
 
 
 def _series(result: LotsAnalysisResponse) -> list[tuple]:
-    return [(point.date, point.roi, point.twrr) for point in result.performance_history or []]
+    return [(point.date, point.roi, point.twrr) for point in daily_points(result.performance_history)]
 
 
 @pytest.mark.asyncio
@@ -323,8 +324,8 @@ async def test_t6_guard_the_late_leg_never_reaches_the_wac_lines(session, late_l
 
     result = await _analysis(session, book.owner, book.asset, broker_ids=None, analyses=[BROKER_WAC, CUMULATIVE_WAC])
 
-    broker_points = result.broker_wac_history or []
-    cumulative_points = result.cumulative_wac_history or []
+    broker_points = daily_points(result.broker_wac_history)
+    cumulative_points = daily_points(result.cumulative_wac_history)
     assert {
         "A's first point": next(((point.date, point.wac, point.pool_qty) for point in broker_points if point.broker_id == a), None),
         "first cumulative point": next(((point.date, point.wac, point.pool_qty) for point in cumulative_points), None),

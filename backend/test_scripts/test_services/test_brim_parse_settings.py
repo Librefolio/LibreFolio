@@ -62,7 +62,8 @@ from backend.test_scripts.test_utils import print_section, print_success
 
 KEY_A = "LibreFolio-brim-parse-settings-test-key-0123456789"
 BRIM_CODE = brim_lab.CODE
-REAL_PLUGIN = "broker_generic_csv"
+#: A real plugin that declares no field (broker_generic_csv declares ``date_order`` since W5-8).
+REAL_PLUGIN = "broker_schwab"
 BROKER_ID = 5
 logger = get_logger(__name__)
 
@@ -358,8 +359,8 @@ class _Stop(BaseException):
 
 @pytest.mark.asyncio
 async def test_the_parse_endpoint_passes_the_calling_user_to_the_offloaded_parse(monkeypatch: pytest.MonkeyPatch):
-    """4: ``POST /brim/files/{file_id}/parse`` hands ``user_id=current_user.id`` to ``parse_file_offloaded``, after the three
-    arguments it always passed. The access checks and the report-set guard are put aside: they are not the subject."""
+    """4: ``POST /brim/files/{file_id}/parse`` hands ``user_id=current_user.id`` and the ``bound`` values it resolved (None for a
+    plugin without fields) to ``parse_file_offloaded``, after the three arguments it always passed. The access checks and the report-set guard are put aside: they are not the subject."""
     seen: dict[str, Any] = {}
 
     async def access(*_args: Any, **_kwargs: Any) -> object:
@@ -381,7 +382,7 @@ async def test_the_parse_endpoint_passes_the_calling_user_to_the_offloaded_parse
         await brokers_api.parse_file("a-file-id", BRIMParseRequest(plugin_code=REAL_PLUGIN, broker_id=BROKER_ID), SimpleNamespace(id=4242), None)
 
     assert seen["args"] == ("a-file-id", REAL_PLUGIN, BROKER_ID)
-    assert seen["kwargs"] == {"user_id": 4242}
+    assert seen["kwargs"] == {"user_id": 4242, "bound": None}, "the route resolves the values once and hands them over; a plugin without fields has none"
 
 
 # =============================================================================

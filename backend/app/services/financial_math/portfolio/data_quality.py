@@ -9,15 +9,17 @@ from datetime import date as date_type
 from sqlalchemy import select
 
 from backend.app.db.models import FxConversionRoute
-from backend.app.schemas.common import is_canonical_iso_currency, iso_currency_candidates, shown_currency_text, suggested_iso_currency
+from backend.app.schemas.common import DateSpan, is_canonical_iso_currency, iso_currency_candidates, shown_currency_text, suggested_iso_currency
 from backend.app.schemas.portfolio import (
     DataQualityIssue,
     DataQualityReport,
     IssueCode,
     IssueDomain,
     IssueSeverity,
+    StaleFxPair,
 )
-from backend.app.services.financial_math.portfolio.models import DailyPortfolioState, RowsBeforeFloor, ShareMismatch
+from backend.app.services.financial_math.portfolio.models import DailyPortfolioState, DailyStates, ShareMismatch
+from backend.app.services.financial_math.series_steps import merged_spans
 from backend.app.utils.currency_units import minor_unit_factor
 
 
@@ -81,7 +83,6 @@ def build_data_quality_report(  # noqa: C901 — flat sequential issue-section a
     invalid_split_assets: list[tuple[int, str]] | None = None,
     non_iso_currency_assets: list[tuple[int, str, str]] | None = None,
     report_currency: str | None = None,
-    rows_before_floor: RowsBeforeFloor | None = None,
     valued_at_cost_assets_dto: list | None = None,
     classifier_warnings: list[str] | None = None,
     share_mismatches: Sequence[ShareMismatch] | None = None,
@@ -107,9 +108,6 @@ def build_data_quality_report(  # noqa: C901 — flat sequential issue-section a
     code as stored (``978``, ``EURO``, ``eur``: what an earlier version saved as written). report_currency: the currency
     the report converts to. With the sides of the missing pairs, they make one NON_ISO_CURRENCY warning per stored value
     that is not canonical, and a missing pair with such a side is in no MISSING_FX_* issue: no FX pair can fix it.
-    rows_before_floor (MF-SEC8-2a): the scope's transactions dated before 1 January 1900 (``EARLIEST_RANGE_START``), which
-    an older version or a hand edit stored: they are replayed, but the histories start on the floor; one warning names
-    their number and the earliest date, so the user corrects them.
     If None, the report still populates date-level fields.
 
     share_mismatches (J-43): the engine's linked internal pairs between brokers owned at
@@ -130,15 +128,14 @@ def build_data_quality_report(  # noqa: C901 — flat sequential issue-section a
     genuinely invisible here. The day at ``period_from`` is kept: it is the
     opening state, and its NAV does move the period P&L.
     """
-    incomplete_nav: list[date_type] = []
-    for s in daily_states:
-        if s.nav_complete:
-            continue
-        if period_from is not None and s.date < period_from:
-            continue
-        if period_to is not None and s.date > period_to:
-            continue
-        incomplete_nav.append(s.date)
+    incomplete_spans: list[tuple[date_type, date_type]] = []
+    if isinstance(daily_states, DailyStates):
+        # Every day of a segment shares its state's completeness (P4): no state is built
+        incomplete_spans = [(segment.start, segment.end) for segment in daily_states.iter_segments(period_from, period_to) if not segment.state.nav_complete]
+    else:
+        incomplete_spans = [(s.date, s.date) for s in daily_states if not s.nav_complete and (period_from is None or s.date >= period_from) and (period_to is None or s.date <= period_to)]
+    incomplete_nav_ranges = merged_spans(incomplete_spans)
+    incomplete_nav_days = sum((last - first).days + 1 for first, last in incomplete_nav_ranges)
 
     # NON_ISO_CURRENCY (E-19b): the stored values that are no ISO 4217 code, from the missing pairs' sides, the held assets
     # and the report currency; a missing pair with such a side leaves the MISSING_FX_* issues, which no FX pair can fix
@@ -278,28 +275,16 @@ def build_data_quality_report(  # noqa: C901 — flat sequential issue-section a
     for value in sorted(non_iso_values):
         issues.append(_non_iso_currency_issue(value, report_currency, non_iso_assets_by_value.get(value, [])))
 
-    # TRANSACTIONS_BEFORE_FLOOR — warning (MF-SEC8-2a): rows dated before 1900, replayed, but the histories start on 1900
-    if rows_before_floor is not None and rows_before_floor.count > 0:
-        issues.append(
-            DataQualityIssue(
-                domain=IssueDomain.PORTFOLIO,
-                code=IssueCode.TRANSACTIONS_BEFORE_FLOOR,
-                severity=IssueSeverity.WARNING,
-                message_i18n_key="dataQuality.transactionsBeforeFloor",
-                message_params={"count": rows_before_floor.count, "earliest": rows_before_floor.earliest.isoformat()},
-                count=rows_before_floor.count,
-                group_key="transactions_before_floor",
-            )
-        )
-
     # MISSING_FX_MARKET / MISSING_FX_RATES — split missing route vs missing date data, among the pairs of ISO codes only
     if fixable_fx_pairs:
         configured_slugs = {normalize_fx_pair_slug(p) for p in (configured_fx_pairs or set())}
         real_provider_slugs = {normalize_fx_pair_slug(p) for p in (real_provider_fx_pairs or set())}
-        missing_by_slug: dict[str, set[date_type]] = defaultdict(set)
+        # The days each pair misses: the movements' dates and the valuation days' ranges (D-P4), as day spans
+        missing_by_slug: dict[str, list[tuple[date_type, date_type]]] = defaultdict(list)
         for item in fixable_fx_pairs:
             slug = normalize_fx_pair_slug(item.pair)
-            missing_by_slug[slug].update(getattr(item, "dates", []) or [])
+            missing_by_slug[slug].extend((day, day) for day in getattr(item, "dates", []) or [])
+            missing_by_slug[slug].extend((span.start, span.end) for span in getattr(item, "ranges", []) or [])
 
         not_configured_pairs: list[str] = []
         configured_real_pairs: list[str] = []
@@ -328,9 +313,10 @@ def build_data_quality_report(  # noqa: C901 — flat sequential issue-section a
             )
 
         if configured_real_pairs:
-            missing_dates = sorted({dt for slug in configured_real_pairs for dt in missing_by_slug[slug]})
-            date_from = missing_dates[0].isoformat() if missing_dates else ""
-            date_to = missing_dates[-1].isoformat() if missing_dates else ""
+            missing_spans = merged_spans(span for slug in configured_real_pairs for span in missing_by_slug[slug])
+            date_from = missing_spans[0][0].isoformat() if missing_spans else ""
+            date_to = missing_spans[-1][1].isoformat() if missing_spans else ""
+            missing_days = sum((last - first).days + 1 for first, last in missing_spans)
             issues.append(
                 DataQualityIssue(
                     domain=IssueDomain.PORTFOLIO,
@@ -341,7 +327,7 @@ def build_data_quality_report(  # noqa: C901 — flat sequential issue-section a
                         "count": len(configured_real_pairs),
                         "date_from": date_from,
                         "date_to": date_to,
-                        "dates_count": len(missing_dates),
+                        "dates_count": missing_days,
                     },
                     count=len(configured_real_pairs),
                     affected_fx_pairs=configured_real_pairs,
@@ -368,8 +354,7 @@ def build_data_quality_report(  # noqa: C901 — flat sequential issue-section a
             )
 
     # NAV_INCOMPLETE — info: some days had incomplete NAV
-    if incomplete_nav:
-        incomplete_nav_sorted = sorted(incomplete_nav)
+    if incomplete_nav_ranges:
         issues.append(
             DataQualityIssue(
                 domain=IssueDomain.PORTFOLIO,
@@ -377,11 +362,11 @@ def build_data_quality_report(  # noqa: C901 — flat sequential issue-section a
                 severity=IssueSeverity.INFO,
                 message_i18n_key="dataQuality.navIncomplete",
                 message_params={
-                    "count": len(incomplete_nav_sorted),
-                    "date_from": incomplete_nav_sorted[0].isoformat(),
-                    "date_to": incomplete_nav_sorted[-1].isoformat(),
+                    "count": incomplete_nav_days,
+                    "date_from": incomplete_nav_ranges[0][0].isoformat(),
+                    "date_to": incomplete_nav_ranges[-1][1].isoformat(),
                 },
-                count=len(incomplete_nav_sorted),
+                count=incomplete_nav_days,
                 group_key="nav_incomplete",
             )
         )
@@ -418,10 +403,29 @@ def build_data_quality_report(  # noqa: C901 — flat sequential issue-section a
         missing_price_assets=missing_price_assets_dto or [],
         missing_fx_pairs=missing_fx_pairs_dto or [],
         stale_prices=stale_prices_dto or [],
-        incomplete_nav_dates=incomplete_nav,
+        incomplete_nav_ranges=[DateSpan(start=first, end=last) for first, last in incomplete_nav_ranges],
+        stale_fx_pairs=_stale_fx_pairs(daily_states, period_to),
         share_mismatch_warnings=[_share_mismatch_text(mismatch) for mismatch in reported_mismatches],
         warnings=classifier_warnings or [],
     )
+
+
+def _stale_fx_pairs(daily_states: Sequence[DailyPortfolioState], period_to: date_type | None) -> list[StaleFxPair]:
+    """The FX pairs stale on the valuation day (``period_to``, else the last day): each with the date of the stored row it
+    reads and its age in days, oldest row first (D-P4, contract §3)."""
+    if not daily_states:
+        return []
+    if isinstance(daily_states, DailyStates):
+        day = daily_states.last_date if period_to is None else min(period_to, daily_states.last_date)
+        state = daily_states.segment_at(day).state if day >= daily_states.first_date else None
+    else:
+        state = next((s for s in reversed(daily_states) if period_to is None or s.date <= period_to), None)
+        day = state.date if state is not None else None
+    # A state built by hand, without the field, has no stale pair
+    stale = getattr(state, "stale_fx_pairs", None) if state is not None else None
+    if not isinstance(stale, Mapping) or day is None:
+        return []
+    return [StaleFxPair(pair=pair, last_rate_date=row_date, stale_days=(day - row_date).days) for pair, row_date in sorted(stale.items(), key=lambda item: (item[1], item[0]))]
 
 
 def _missing_pair_sides(pair: str, report_currency: str | None) -> tuple[str, ...]:
