@@ -937,9 +937,6 @@ const STUBBED_RANGE_CHANGE: FxRangeChange = {change_abs: '0.1234', change_ratio:
 /** A Δ over the range the backend could not compute: every field null, both ways. */
 const NO_RANGE_CHANGE: FxRangeChange = {change_abs: null, change_ratio: null, inverse_change_abs: null, inverse_change_ratio: null};
 
-/** The first day the backend values (`EARLIEST_RANGE_START`): it refuses an earlier `range_start`, and the whole request with it. */
-const EARLIEST_RANGE_START = '1900-01-01';
-
 /** What `routeFxRangeChanges` saw: every pair asked, what went wrong, how many requests it answered. */
 type FxRangeChangesLog = {asked: FxRangeChangesQuery[]; failures: string[]; answered: number};
 
@@ -998,7 +995,7 @@ function arrowedPercent(figure: string): RegExp {
  * The FX list shows each pair's Δ over the range on screen (X-R59, lot A) — the table's Δ Abs and Δ % columns, the
  * card's Δ: the change from the first to the last day of the range, which the backend computes both ways, the
  * `range_change` of `POST /fx/currencies/period-changes`, asked with the first day of the range (`range_start`) in every
- * item, raised to 1900-01-01, the first day the backend values, for a range that starts before it. A pair shown as
+ * item, as it is (the backend takes any day from the year 1, D-P4). A pair shown as
  * configured reads `change_abs` and `change_ratio`; swapped, `inverse_change_abs` and `inverse_change_ratio`; where the
  * backend has none, the table shows its empty marker and the card no Δ. The browser computes none, though it holds the
  * rates.
@@ -1007,7 +1004,7 @@ function arrowedPercent(figure: string): RegExp {
  * fetched and only their items are changed in it, with figures their rates do not give over these days; a swapped row
  * or card is this browser's state (`fxCardInversionStore`), never the database's. The range before 1900 has its rates
  * answered in the browser, empty, so no conversion is walked back over a century for every pair; its period changes
- * still reach the backend, which says whether it takes the first day asked.
+ * still reach the backend, which says whether it takes the first day asked, as it is.
  *
  * Red before the cure of lot A: the request asks no `range_start`, and the table and the card compute their Δ from the
  * rates they loaded.
@@ -1116,8 +1113,8 @@ test.describe('FX list — the Δ over the range is the backend’s, both ways (
         }
     });
 
-    test('a range that starts before 1900 asks every Δ from 1900-01-01, which the backend takes', async ({page}) => {
-        // A month before the first day the backend values: sent as is, the backend would refuse the whole request.
+    test('a range that starts before 1900 asks every Δ from its first day, as it is, which the backend takes', async ({page}) => {
+        // A month before 1900: the backend takes any day from the year 1 (D-P4), so the first day goes as it is.
         const range = {start: '1899-12-01', end: daysAgoIso(10)};
         try {
             // The rates answered in the browser, empty: no conversion is walked back over a century for every pair.
@@ -1128,9 +1125,9 @@ test.describe('FX list — the Δ over the range is the backend’s, both ways (
             const {row} = await openPairRow(page, range);
 
             await expect.poll(() => log.answered, {message: 'the FX list never asked POST /fx/currencies/period-changes', timeout: 10_000}).toBeGreaterThan(0);
-            expect(log.failures, 'the backend took every request: none asks a day before the first it values').toEqual([]);
-            expect(log.asked, `the pair asks its Δ from ${EARLIEST_RANGE_START} to the last day of the range`).toContainEqual(expect.objectContaining({...PAIR, as_of: range.end, range_start: EARLIEST_RANGE_START}));
-            expect([...new Set(log.asked.map((item) => item.range_start))], `every pair asks its Δ from ${EARLIEST_RANGE_START}, never from ${range.start}`).toEqual([EARLIEST_RANGE_START]);
+            expect(log.failures, 'the backend took every request: it takes any day from the year 1').toEqual([]);
+            expect(log.asked, `the pair asks its Δ from ${range.start} to the last day of the range`).toContainEqual(expect.objectContaining({...PAIR, as_of: range.end, range_start: range.start}));
+            expect([...new Set(log.asked.map((item) => item.range_start))], `every pair asks its Δ from ${range.start}, never raised`).toEqual([range.start]);
             await expect(rangeCells(row).pct, 'the Δ over the range still reaches the row').toHaveText(percentCell('+42.42'), {timeout: 10_000});
         } finally {
             await page.unrouteAll({behavior: 'ignoreErrors'}).catch(() => undefined);
