@@ -279,11 +279,13 @@ STARTUP_STEPS: tuple[Step, ...] = (
     # What runs killed outright left in clear: a check's decrypted archive, an inspect's folder, a backup's work files
     # (B-23, N66). Once the restore is settled; it never raises: after restore-commit, a step that raises stops every start
     Step("backup-leftovers", lambda: asyncio.to_thread(sweep_backup_leftovers)),
+    # The check value of the instance key: written on the first start, a mismatch said in the log, a deliberate change
+    # accepted by LIBREFOLIO_INSTANCE_KEY_ACCEPT (H5-7). Runs while awaiting a restore too; it never raises. Before
+    # plugin-secrets-check, which must stand right before the background starts (stored-currencies, E-19a); it reads the
+    # key and the check file, and the stored secrets by itself: nothing of plugin-secrets-check
+    Step("instance-key-check", lambda: run_instance_key_check_at_start()),
     # The stored plugin secrets the instance key can no longer read: an error in the log, with their count (H-15)
     Step("plugin-secrets-check", lambda: log_plugin_secrets_check()),
-    # The check value of the instance key: written on the first start, a mismatch said in the log, a deliberate change
-    # accepted by LIBREFOLIO_INSTANCE_KEY_ACCEPT (H5-7). Runs while awaiting a restore too; it never raises
-    Step("instance-key-check", lambda: run_instance_key_check_at_start()),
     # The audit of the stored currency codes, in background: one warning when some are not ISO 4217 codes (E-19a). After
     # both repairs and once the restore is settled, since it reports on the data (N57); read-only, never a stop or a wait
     Step("stored-currencies", lambda: _start_stored_currency_audit(), skip_when=_serving_no_data),

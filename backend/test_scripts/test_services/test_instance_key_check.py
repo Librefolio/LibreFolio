@@ -19,7 +19,7 @@ key. With a wrong key only the hosting panel's backup jobs and ``wake-sync`` sto
 (d) ``check_instance_key_at_start(session)``: accept writes (always, replacing, one warning each start); no file and ``mismatch`` is
     one error and NOTHING written; no file otherwise writes (exclusive, ``0600`` in ``0700``, one winner among workers); a file
     ``mismatch`` is one error and is not rewritten; a file ``ok`` is silent; never raises; never a key nor a value in a log.
-(e) ``app_lifespan``: the step ``instance-key-check`` right after ``plugin-secrets-check``, not blocking, no ``skip_when``, running (d).
+(e) ``app_lifespan``: the step ``instance-key-check`` right before ``plugin-secrets-check``, not blocking, no ``skip_when``, running (d).
 (f) ``check_instance_key(session)``: the ``ConfigCheck`` of the admin's Security tab.
 
 Every name of H5-7 is read by the test that needs it, so the file collects and each test reports its own red. Pure: a private
@@ -995,11 +995,11 @@ def _instance_key_step() -> Any:
     return matching[0]
 
 
-def test_the_step_stands_right_after_the_plugin_secrets_check_and_blocks_nothing():
-    """(e) ``instance-key-check`` is the step right after ``plugin-secrets-check``, with no ``skip_when`` (it runs while awaiting a restore too) and not blocking."""
+def test_the_step_stands_right_before_the_plugin_secrets_check_and_blocks_nothing():
+    """(e) ``instance-key-check`` is the step right before ``plugin-secrets-check`` (which stays right before ``stored-currencies``: that step pins its own neighbours), with no ``skip_when`` (it runs while awaiting a restore too) and not blocking."""
     step = _instance_key_step()
     names = [item.name for item in _steps()]
-    assert names.index("instance-key-check") == names.index("plugin-secrets-check") + 1, f"right after plugin-secrets-check: {names}"
+    assert names.index("instance-key-check") == names.index("plugin-secrets-check") - 1, f"right before plugin-secrets-check: {names}"
     assert step.skip_when is None, "no skip_when: the check runs on every start"
     assert step.blocking is False, "not blocking"
 
