@@ -845,7 +845,8 @@ its nightly backup pushes a good copy out of the ones it keeps (contract L3, D6;
   key, eight in all); `start_panel_backup` answers `409 backup_instance_key_mismatch` through a dependency declared
   after the panel's credential, so a caller without one learns nothing (`backup_awaiting_restore` keeps its own answer first);
   `_wake_run()` answers the status `instance_key_mismatch` and runs no job; `GET /security/checks` adds
-  `platform.instance_key` (`error`, `instance.checks.instanceKey.*`). **The instance keeps serving**: no 423, no page, nothing
+  `platform.instance_key_check` (`error`, `instance.checks.instanceKey.mismatch`; not the `platform.instance_key` check of
+  an unusable key or loose permissions). **The instance keeps serving**: no 423, no page, nothing
   in `GET /system/instance`. The panel's other backup routes and its restore are not stopped.
 
 Tests: `./dev.py test services instance-key-check` and `./dev.py test api instance-key-check`. The administrator's side is
