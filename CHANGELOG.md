@@ -228,6 +228,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixed
 
+- **A suspended instance no longer goes straight back to sleep when a request wakes it.** After a scheduled wake-up, a pending idle check could fire the moment the machine resumed and suspend it again before the request that woke it was counted, leaving that request frozen until the client gave up (30 s) and the instance asleep until the next night. The check now waits out the resume grace.
 - A date typed with a one- or two-digit year (`0024-03-01`) is no longer moved a century or refused: date fields, the calendar, the import preview, the charts, the lots, the risk levels and the AI Export read it as written.
 - **After a restore, the owner's reset email says the password was revoked for security** and points to «Forgot Password?» if the link expires (EN/IT/FR/ES).
 - **On a managed instance, an expired activation link says to contact support** if no new link arrived, with the instance's support link.
