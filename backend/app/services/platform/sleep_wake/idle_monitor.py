@@ -8,7 +8,8 @@ default; the probes and the scheduled wake-up do not count), it asks Fly to susp
 After the jobs of a scheduled wake-up a check comes at once (``request_idle_check``), so a machine woken with nobody
 around goes back to sleep. A suspension that fails is logged as a warning and tried again after a growing wait, up to
 ``FAILURE_BACKOFF_MAX_SECONDS`` (decision D-S3). After a suspension the next check waits ``RESUME_GRACE_SECONDS``: when
-the machine is resumed, the request that woke it must count first.
+the machine is resumed, the request that woke it must count first: a check requested before the suspension (its timer
+armed, or already fired while the machine slept) is forgotten with it, so that it cannot cut the grace short.
 
 The frontend stops polling in a hidden tab and after a few minutes without input (Z1), so an open tab nobody looks at
 does not keep the machine awake; the polling of a tab in use does, as the user's presence.
@@ -108,6 +109,8 @@ class IdleMonitor:
             except Exception:
                 logger.exception("Idle check failed")
                 outcome = "error"
+            if outcome in ("suspended", "failed"):
+                self._forget_requested_checks()
             await self._wait(stop, RESUME_GRACE_SECONDS if outcome in ("suspended", "failed") else IDLE_CHECK_SECONDS)
 
     async def _wait(self, stop: asyncio.Event, seconds: float) -> None:
@@ -119,6 +122,16 @@ class IdleMonitor:
             for waiter in waiters:
                 waiter.cancel()
             await asyncio.gather(*waiters, return_exceptions=True)
+
+    def _forget_requested_checks(self) -> None:
+        """Drop the checks requested before now: the timer still armed, and the wake-up it fired while a suspended machine
+        slept (the clock runs on across a suspension, so a timer armed before it expires, and fires first, on the resume).
+        What is requested after this point, by a scheduled wake-up that ended, still ends the grace."""
+        if self._check_timer is not None:
+            self._check_timer.cancel()
+            self._check_timer = None
+        if self._wakeup is not None:
+            self._wakeup.clear()
 
     def request_check(self, delay: float) -> None:
         """Run one check ``delay`` seconds from now, from any thread; requests before that check make one."""
