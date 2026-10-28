@@ -1453,6 +1453,49 @@ test.describe('FX list — the grid toolbar: the Absolute icon and the action to
         });
     }
 
+    // Y2 FB-8: the three view buttons say what they do on hover whether or not they are the selected one, in the design system's
+    // tooltip (never a `title`), and the toolbar's buttons fill their cells.
+    for (const view of ['absolute', 'percentage', 'calendar-return']) {
+        test(`the ${view} view button opens the design-system tooltip on hover, selected or not, and carries no title`, async ({page}) => {
+            await goToFxPage(page);
+            await page.getByTestId('view-mode-grid').click();
+            await waitForSettled(page.getByTestId('fx-page'), 20_000);
+
+            const wrapper = page.getByTestId('fx-global-view-' + view + '-tooltip');
+            const button = wrapper.getByTestId('fx-global-view-' + view);
+            await expect(button).toBeVisible({timeout: 10_000});
+            expect(await button.getAttribute('title'), 'a title attribute is a browser tooltip, not the design system').toBeNull();
+
+            // Make this button the NOT selected one: select another view first.
+            const other = view === 'absolute' ? 'percentage' : 'absolute';
+            await page.getByTestId('fx-global-view-' + other).click();
+            await expect(button).toHaveAttribute('aria-pressed', 'false');
+
+            await page.mouse.move(0, 0);
+            await expect(page.getByRole('tooltip')).toHaveCount(0, {timeout: 5_000});
+            await button.hover();
+            const tooltip = page.getByRole('tooltip');
+            await expect(tooltip, 'a rest of the pointer opens the tooltip on a button that is not selected').toBeVisible({timeout: 3_000});
+            const text = ((await tooltip.textContent()) ?? '').trim();
+            expect(text, 'the tooltip says something').not.toBe('');
+            expect(looksLikeRawKey(text), `the tooltip is a rendered text, not the key "${text}"`).toBe(false);
+        });
+    }
+
+    test('Sync All is as wide as the view buttons above it', async ({page}) => {
+        await goToFxPage(page);
+        await page.getByTestId('view-mode-grid').click();
+        await waitForSettled(page.getByTestId('fx-page'), 20_000);
+
+        const views = page.getByTestId('fx-global-view');
+        const sync = page.getByTestId('fx-sync-all-button');
+        await expect(sync).toBeVisible({timeout: 10_000});
+        const viewsBox = await views.boundingBox();
+        const syncBox = await sync.boundingBox();
+        expect(viewsBox && syncBox, 'both are drawn').toBeTruthy();
+        expect(Math.abs(syncBox!.width - viewsBox!.width), 'the button fills its cell like the group above').toBeLessThanOrEqual(1);
+    });
+
     test('a click on the settings button still opens the chart settings, and Escape closes them', async ({page}) => {
         await goToFxPage(page);
         await page.getByTestId('view-mode-grid').click();
