@@ -5,6 +5,25 @@ I TODO completati sono in `TODO_Completati.md`.
 
 ---
 
+## ⏳ Investimento programmato con mora: la cedola di scadenza (J-39, 28/10/2026)
+
+**Il difetto.** In un investimento programmato (provider Scheduled Investment) con **mora**, la cedola di scadenza è
+contata due volte e la mora parte dal valore di prima della cedola. La liquidazione senza mora è già curata
+(`69cc2faac`).
+
+**Cosa manca.** Decidere se, con la mora, la cedola di scadenza è pagata o no; poi correggere il calcolo (J, ~1 giorno).
+
+**Decisione del developer (28/10/2026):** non è una priorità della 1.3, resta qui.
+
+## ⚖️ Rebalancer del PAC (28/10/2026)
+
+**Cosa resta.** L'analisi del Rebalancer («riga 14»), gli E2E del PAC, il difetto 1 e l'opzione (e) del backlog di
+`LibreFolio_developer_journal/Release_2/Phase_0/13_pacAllocator/` (i difetti 2 e 5 e C-38 sono chiusi, `ca681b4f9`).
+
+**Decisione del developer (28/10/2026):** nella 1.4.
+
+---
+
 ## 🧬 Profilo dei dati dell'asset — composizione, costi, obbligazioni, esposizione e nuove fonti
 
 **Data aggiunta**: 18 Ottobre 2026 · **Status**: 📋 FUTURO — da progettare · **Priorità**: 🔼 Medio-alta
