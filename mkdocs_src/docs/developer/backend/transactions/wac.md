@@ -435,26 +435,16 @@ page explains how both reach the Dashboard.
 
 ### 🏦 Broker summary {: #broker-summary }
 
-`GET /brokers/{broker_id}/summary` (`BrokerService.get_summary()`):
+`GET /brokers/{broker_id}/summary` (`BrokerService.get_summary()`) answers the broker's
+cash balances, the caller's role and share, and nothing about positions: the holdings, their
+cost and value, and the pairs missing for that cost come from the portfolio report
+(`POST /portfolio/report`, scoped to the broker). Until release 1.3.0 the summary also listed
+`holdings` and `missing_fx_pairs`; both are gone (MF-L), and no page read them.
 
-- `as_of`, a query parameter, is the day the summary describes: the user's day,
-  which the broker page sends as `todayIso()`; when it is omitted, `date.today()`
-  on the server. Cash and quantities ([Balance Queries](service.md#balance-queries))
-  and the holdings' average cost (`_holding_average_costs()` filters
-  `date <= as_of`) count only the transactions dated up to `as_of`: one dated
-  later counts in none of them (W-B5). The price is not cut: it stays the latest
-  close in `price_history`.
-- `_holding_average_costs()` loads the broker's quantity-moving transactions of
-  the held assets, ordered by date then id, detects the split-linked adjustments,
-  and calls `compute_average_costs()` once per asset currency, with that currency
-  as report currency.
-- `BRAssetHolding.total_cost` is the historical cost of the quantity held, **in the
-  asset currency**: each purchase converted at its own date, sales removing their
-  share of the average. It is `None` when part of it is unknown (a missing rate, or
-  a transfer without cost basis); `average_cost_per_unit` and the unrealized P&L
-  are then `None` too.
-- `BRSummary.missing_fx_pairs` lists the pairs the holdings' cost needed, with the
-  purchase dates.
+`as_of`, a query parameter, is the day the summary describes: the user's day, which the broker
+page sends as `todayIso()`; when it is omitted, `date.today()` on the server. Cash
+([Balance Queries](service.md#balance-queries)) counts only the transactions dated up to
+`as_of`: one dated later counts in none of the balances (W-B5).
 
 ---
 
@@ -462,10 +452,10 @@ page explains how both reach the Dashboard.
 
 What each caller does when part of a cost is missing:
 
-| Gap | Engine and Dashboard | Facade | Lots analysis | Broker summary |
-|-----|----------------------|--------|---------------|----------------|
-| No rate on or before a purchase date | The position's `wac` and `unrealized_pnl` are `None`, the open cost basis keeps the known part; the pair and dates reach `summary.missing_fx_pairs` and a `MISSING_FX_MARKET` / `MISSING_FX_RATES` issue | `wac=None` and `wac_missing_pairs`; in a batch, a `wacFxUnavailable` issue | No point on the days the pool is incomplete; the pair reaches `data_quality`, status `DEGRADED` | `total_cost=None`; the pair is in `missing_fx_pairs` |
-| `TRANSFER` / `ADJUSTMENT` adding quantity without `cost_basis_override` | `MISSING_COST_BASIS` warning; the position's `wac` and `unrealized_pnl` are `None`; the units count at zero in the open cost basis | Counted at zero: an `add_zero_cost` row dilutes the WAC | No point while the pool is incomplete; `MISSING_COST_BASIS` for the analysed asset, status `DEGRADED` | `total_cost=None` |
+| Gap | Engine and Dashboard | Facade | Lots analysis |
+|-----|----------------------|--------|---------------|
+| No rate on or before a purchase date | The position's `wac` and `unrealized_pnl` are `None`, the open cost basis keeps the known part; the pair and dates reach `summary.missing_fx_pairs` and a `MISSING_FX_MARKET` / `MISSING_FX_RATES` issue | `wac=None` and `wac_missing_pairs`; in a batch, a `wacFxUnavailable` issue | No point on the days the pool is incomplete; the pair reaches `data_quality`, status `DEGRADED` |
+| `TRANSFER` / `ADJUSTMENT` adding quantity without `cost_basis_override` | `MISSING_COST_BASIS` warning; the position's `wac` and `unrealized_pnl` are `None`; the units count at zero in the open cost basis | Counted at zero: an `add_zero_cost` row dilutes the WAC | No point while the pool is incomplete; `MISSING_COST_BASIS` for the analysed asset, status `DEGRADED` |
 
 A reduction larger than the pool is clamped everywhere: the pool empties and the
 movement id is listed in `oversold_movement_ids`.

@@ -37,7 +37,6 @@ from backend.app.db.models import (
     BrokerUserAccess,
     FxConversionRoute,
     FxRate,
-    PriceHistory,
     Transaction,
     TransactionType,
     User,
@@ -45,7 +44,6 @@ from backend.app.db.models import (
 )
 from backend.app.db.session import get_async_engine
 from backend.app.schemas.brokers import (
-    BRAssetHolding,
     BRBulkDeleteResponse,
     BRCreateItem,
     BRDeleteItem,
@@ -496,12 +494,10 @@ class TestGetSummary:
         assert summary.cash_balances[0].amount == Decimal("1000")
 
     @pytest.mark.asyncio
-    async def test_get_summary_holdings(self, session, test_user, test_asset):
-        """BR-U-032: Summary includes holdings after BUYs."""
+    async def test_get_summary_has_no_holdings_and_no_holdings_cost_gaps(self, session, test_user, test_asset):
+        """BR-U-032 (MF-L): after a BUY the summary answers cash only — the positions, their cost and the gaps in it are the portfolio report's."""
         service = BrokerService(session)
         tx_service = TransactionService(session)
-
-        # Create broker with cash
         items = [
             BRCreateItem(
                 name=f"Holdings Broker {utcnow().timestamp()}",
@@ -510,8 +506,6 @@ class TestGetSummary:
         ]
         response = await service.create_bulk(items, user_id=test_user.id)
         broker_id = response.results[0].broker_id
-
-        # Buy some assets
         buy_items = [
             TXCreateItem(
                 broker_id=broker_id,
@@ -526,57 +520,17 @@ class TestGetSummary:
 
         summary = await service.get_summary(broker_id, user_id=test_user.id)
 
-        assert len(summary.holdings) == 1
-        assert summary.holdings[0].asset_id == test_asset.id
-        assert summary.holdings[0].quantity == Decimal("10")
+        assert summary is not None
+        assert {balance.code: balance.amount for balance in summary.cash_balances} == {"EUR": Decimal("9500")}
+        dumped = summary.model_dump()
+        assert "holdings" not in dumped
+        assert "missing_fx_pairs" not in dumped
+        assert "holdings" not in BRSummary.model_fields
+        assert "missing_fx_pairs" not in BRSummary.model_fields
 
     @pytest.mark.asyncio
-    async def test_get_summary_cost_basis(self, session, test_user, test_asset):
-        """BR-U-033: Summary includes cost basis calculation."""
-        service = BrokerService(session)
-        tx_service = TransactionService(session)
-
-        items = [
-            BRCreateItem(
-                name=f"Cost Basis Broker {utcnow().timestamp()}",
-                initial_balances=[Currency(code="EUR", amount=Decimal("10000"))],
-            )
-        ]
-        response = await service.create_bulk(items, user_id=test_user.id)
-        broker_id = response.results[0].broker_id
-
-        # Multiple buys
-        buy_items = [
-            TXCreateItem(
-                broker_id=broker_id,
-                asset_id=test_asset.id,
-                type=TransactionType.BUY,
-                date=date.today(),
-                quantity=Decimal("10"),
-                cash=Currency(code="EUR", amount=Decimal("-500")),
-            ),
-            TXCreateItem(
-                broker_id=broker_id,
-                asset_id=test_asset.id,
-                type=TransactionType.BUY,
-                date=date.today(),
-                quantity=Decimal("20"),
-                cash=Currency(code="EUR", amount=Decimal("-1200")),
-            ),
-        ]
-        await create_bulk(tx_service, buy_items)
-
-        summary = await service.get_summary(broker_id, user_id=test_user.id)
-
-        assert len(summary.holdings) == 1
-        holding = summary.holdings[0]
-        assert holding.quantity == Decimal("30")
-        assert holding.total_cost.amount == Decimal("1700")  # 500 + 1200
-        assert holding.average_cost_per_unit == Decimal("1700") / Decimal("30")
-
-    @pytest.mark.asyncio
-    async def test_get_summary_impersonated_user_with_price_metrics(self, session, test_user, test_asset):
-        """BR-U-034: Summary includes pricing metrics and impersonated access role."""
+    async def test_get_summary_impersonated_user_role_and_share(self, session, test_user, test_asset):
+        """BR-U-034: Summary of an impersonated user carries that user's role and share."""
         service = BrokerService(session)
         tx_service = TransactionService(session)
         other_user = User(
@@ -612,20 +566,6 @@ class TestGetSummary:
                 updated_at=utcnow(),
             )
         )
-        session.add(
-            PriceHistory(
-                asset_id=test_asset.id,
-                date=date.today(),
-                open=Decimal("100"),
-                high=Decimal("130"),
-                low=Decimal("90"),
-                close=Decimal("120"),
-                volume=Decimal("1"),
-                currency="EUR",
-                source_plugin_key="manual_test",
-                fetched_at=utcnow(),
-            )
-        )
         await session.flush()
 
         await create_bulk(
@@ -651,12 +591,6 @@ class TestGetSummary:
         assert summary is not None
         assert summary.user_role == UserRole.VIEWER.value
         assert summary.user_share_percentage == Decimal("0.40")
-        assert len(summary.holdings) == 1
-        holding = summary.holdings[0]
-        assert holding.current_price == Decimal("120")
-        assert holding.current_value.amount == Decimal("1200")
-        assert holding.unrealized_pnl.amount == Decimal("700")
-        assert holding.unrealized_pnl_percent == Decimal("140.00")
 
     @pytest.mark.asyncio
     async def test_get_summary_not_found(self, session, test_user):
@@ -726,189 +660,6 @@ async def _add(session: AsyncSession, *rows) -> None:
     await session.flush()
 
 
-def _price(asset: Asset, day: date, close: str) -> PriceHistory:
-    return PriceHistory(asset_id=asset.id, date=day, close=Decimal(close), currency=asset.currency, source_plugin_key="holding_cost_test")
-
-
-def _only_holding(summary: BRSummary | None, asset: Asset) -> BRAssetHolding:
-    """The holding of ``asset``; the broker belongs to the test, so it is the only one."""
-    assert summary is not None
-    assert [holding.asset_id for holding in summary.holdings] == [asset.id]
-    return summary.holdings[0]
-
-
-def _cost_view(holding: BRAssetHolding) -> dict:
-    return {
-        "quantity": holding.quantity,
-        "total_cost": holding.total_cost,
-        "average_cost_per_unit": holding.average_cost_per_unit,
-        "current_value": holding.current_value,
-        "unrealized_pnl": holding.unrealized_pnl,
-        "unrealized_pnl_percent": holding.unrealized_pnl_percent,
-    }
-
-
-class TestGetSummaryHoldingCost:
-    """Holding cost through financial_math.average_cost, in the asset currency."""
-
-    @pytest.mark.asyncio
-    async def test_get_summary_holding_cost_is_the_average_cost_of_the_quantity_held(self, session, test_user):
-        """BR-U-036: 10 @ 100 + 10 @ 200, 5 sold → 15 held at 150 = 2250 (the deleted sum of BUY amounts gave 3000)."""
-        broker_id = await _owned_broker(session, test_user, "Holding cost sale")
-        asset = await _own_asset(session, "EUR")
-        await _add(
-            session,
-            _row(broker_id, asset, TransactionType.BUY, date(2019, 4, 1), "10", "-1000", "EUR"),
-            _row(broker_id, asset, TransactionType.BUY, date(2019, 4, 8), "10", "-2000", "EUR"),
-            _row(broker_id, asset, TransactionType.SELL, date(2019, 4, 15), "-5", "1100", "EUR"),
-            _price(asset, date(2019, 4, 16), "180"),
-        )
-
-        summary = await BrokerService(session).get_summary(broker_id, user_id=test_user.id)
-
-        assert _cost_view(_only_holding(summary, asset)) == {
-            "quantity": Decimal("15"),
-            "total_cost": Currency(code="EUR", amount=Decimal("2250")),
-            "average_cost_per_unit": Decimal("150"),
-            "current_value": Currency(code="EUR", amount=Decimal("2700")),
-            "unrealized_pnl": Currency(code="EUR", amount=Decimal("450")),
-            "unrealized_pnl_percent": Decimal("20.00"),
-        }
-        assert summary.missing_fx_pairs == []
-
-    @pytest.mark.asyncio
-    async def test_get_summary_converts_a_purchase_paid_in_another_currency_at_its_own_date(self, session, test_user):
-        """BR-U-037: MUR asset; 10 bought for 100 EUR on 1 Feb (45 MUR that day, 40 the day before, 50 later) + 5 for 3000 MUR."""
-        await _assert_no_fx_data(session, "MUR")
-        broker_id = await _owned_broker(session, test_user, "Holding cost FX")
-        asset = await _own_asset(session, "MUR")
-        await _add(
-            session,
-            *(FxRate(date=day, base="EUR", quote="MUR", rate=Decimal(rate), source="TEST_HOLDING_COST") for day, rate in ((date(2019, 1, 31), "40"), (date(2019, 2, 1), "45"), (date(2019, 2, 5), "50"))),
-            _row(broker_id, asset, TransactionType.BUY, date(2019, 2, 1), "10", "-100", "EUR"),
-            _row(broker_id, asset, TransactionType.BUY, date(2019, 2, 4), "5", "-3000", "MUR"),
-            _price(asset, date(2019, 2, 5), "520"),
-        )
-
-        summary = await BrokerService(session).get_summary(broker_id, user_id=test_user.id)
-
-        # 100 EUR × 45 = 4500 MUR, + 3000 MUR = 7500 MUR for 15 units.
-        assert _cost_view(_only_holding(summary, asset)) == {
-            "quantity": Decimal("15"),
-            "total_cost": Currency(code="MUR", amount=Decimal("7500")),
-            "average_cost_per_unit": Decimal("500"),
-            "current_value": Currency(code="MUR", amount=Decimal("7800")),
-            "unrealized_pnl": Currency(code="MUR", amount=Decimal("300")),
-            "unrealized_pnl_percent": Decimal("4.00"),
-        }
-        assert summary.missing_fx_pairs == []
-
-    @pytest.mark.asyncio
-    async def test_get_summary_holding_cost_is_unknown_when_a_purchase_cannot_be_converted(self, session, test_user):
-        """BR-U-038: EUR asset; 10 bought for 100 EUR + 10 for 50000 PYG (no PYG rate anywhere) → no cost, no P&L, PYG/EUR listed."""
-        await _assert_no_fx_data(session, "PYG")
-        broker_id = await _owned_broker(session, test_user, "Holding cost missing FX")
-        asset = await _own_asset(session, "EUR")
-        await _add(
-            session,
-            _row(broker_id, asset, TransactionType.BUY, date(2019, 6, 3), "10", "-100", "EUR"),
-            _row(broker_id, asset, TransactionType.BUY, date(2019, 6, 10), "10", "-50000", "PYG"),
-            _price(asset, date(2019, 6, 11), "12"),
-        )
-
-        summary = await BrokerService(session).get_summary(broker_id, user_id=test_user.id)
-
-        assert _cost_view(_only_holding(summary, asset)) == {
-            "quantity": Decimal("20"),
-            "total_cost": None,
-            "average_cost_per_unit": None,
-            "current_value": Currency(code="EUR", amount=Decimal("240")),  # the valuation itself is complete
-            "unrealized_pnl": None,
-            "unrealized_pnl_percent": None,
-        }
-        assert summary.missing_fx_pairs == [WACMissingPairInfo(pair="PYG/EUR", dates=[date(2019, 6, 10)])]
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        ("in_type", "cbo", "expected_cost"),
-        [
-            pytest.param(TransactionType.TRANSFER, None, None, id="transfer-in-without-cost-basis"),
-            pytest.param(TransactionType.ADJUSTMENT, None, None, id="adjustment-in-without-cost-basis"),
-            pytest.param(TransactionType.ADJUSTMENT, "130", ("1650", "110", "150", "9.09"), id="control-adjustment-in-with-cost-basis"),
-        ],
-    )
-    async def test_get_summary_holding_cost_is_unknown_after_an_acquisition_without_cost_basis(self, session, test_user, in_type, cbo, expected_cost):
-        """BR-U-039: 10 bought for 1000 EUR, then 5 in without a cost basis → no cost, no P&L; with 130 EUR each → 1650."""
-        broker_id = await _owned_broker(session, test_user, "Holding cost unknown basis")
-        asset = await _own_asset(session, "EUR")
-        arrival = _row(broker_id, asset, in_type, date(2019, 7, 8), "5", cbo=cbo)
-        await _add(
-            session,
-            _row(broker_id, asset, TransactionType.BUY, date(2019, 7, 1), "10", "-1000", "EUR"),
-            arrival,
-            _price(asset, date(2019, 7, 9), "120"),
-        )
-        if in_type == TransactionType.TRANSFER:
-            # A real transfer: the 5 units leave another broker (not the user's), linked both ways.
-            source = Broker(name=f"Holding cost source {uuid4().hex[:12]}")
-            session.add(source)
-            await session.flush()
-            departure = _row(source.id, asset, TransactionType.TRANSFER, date(2019, 7, 8), "-5")
-            await _add(session, _row(source.id, asset, TransactionType.BUY, date(2019, 7, 1), "5", "-500", "EUR"), departure)
-            departure.related_transaction_id = arrival.id
-            arrival.related_transaction_id = departure.id
-            await session.flush()
-
-        summary = await BrokerService(session).get_summary(broker_id, user_id=test_user.id)
-
-        expected_view = {"quantity": Decimal("15"), "current_value": Currency(code="EUR", amount=Decimal("1800"))}
-        if expected_cost is None:
-            expected_view |= {"total_cost": None, "average_cost_per_unit": None, "unrealized_pnl": None, "unrealized_pnl_percent": None}
-        else:
-            total, average, pnl, percent = expected_cost
-            expected_view |= {
-                "total_cost": Currency(code="EUR", amount=Decimal(total)),
-                "average_cost_per_unit": Decimal(average),
-                "unrealized_pnl": Currency(code="EUR", amount=Decimal(pnl)),
-                "unrealized_pnl_percent": Decimal(percent),
-            }
-        assert _cost_view(_only_holding(summary, asset)) == expected_view
-        assert summary.missing_fx_pairs == [], "an unknown cost basis is not a missing rate"
-
-    @pytest.mark.asyncio
-    @pytest.mark.parametrize(
-        ("cost_per_unit", "expected"),
-        [
-            pytest.param("100", ("500", "100", "100", "20.00"), id="control-a-positive-cost"),
-            pytest.param("0", ("0", "0", "600", None), id="a-zero-cost-has-no-percent"),
-            pytest.param("-10", ("-50", "-10", "650", "-1300.00"), id="a-negative-cost-still-has-a-percent"),
-        ],
-    )
-    async def test_get_summary_unrealized_percent_divides_by_any_non_zero_cost(self, session, test_user, cost_per_unit, expected):
-        """BR-U-094 (pin, J-14): 5 X in by an ADJUSTMENT at ``cost_per_unit`` EUR a unit, quoted 120 → worth 600; (total cost, average, P&L, %).
-
-        unrealized_pnl_percent is the unrealized P&L over the total cost × 100, to the cent, on any cost but 0 — since J-14
-        through returns.gain_loss_ratio(positive_base=False), with the values of the division it replaced: 100 / 500 → 20.00;
-        on a cost of 0 the P&L is known, 600, and the percent is None; on a negative cost (no screen writes one) it is still a
-        percent, 650 / −50 → −1300.00. Green before J-14 and after.
-        """
-        broker_id = await _owned_broker(session, test_user, "Unrealized percent")
-        asset = await _own_asset(session, "EUR")
-        await _add(session, _row(broker_id, asset, TransactionType.ADJUSTMENT, date(2019, 9, 2), "5", cbo=cost_per_unit), _price(asset, date(2019, 9, 3), "120"))
-
-        summary = await BrokerService(session).get_summary(broker_id, user_id=test_user.id)
-
-        total, average, pnl, percent = expected
-        assert _cost_view(_only_holding(summary, asset)) == {
-            "quantity": Decimal("5"),
-            "total_cost": Currency(code="EUR", amount=Decimal(total)),
-            "average_cost_per_unit": Decimal(average),
-            "current_value": Currency(code="EUR", amount=Decimal("600")),
-            "unrealized_pnl": Currency(code="EUR", amount=Decimal(pnl)),
-            "unrealized_pnl_percent": None if percent is None else Decimal(percent),
-        }
-
-
 # ============================================================================
 # 4.4c GET_SUMMARY — AS OF A DAY (W-B5: B15, D-J16)
 # ============================================================================
@@ -916,7 +667,7 @@ class TestGetSummaryHoldingCost:
 # The broker summary is a picture as of one day: the caller's, passed as ``as_of``; when it is
 # omitted, the server's (``date.today()``, the Dashboard's default: portfolio_service.py,
 # ``date_to or today``). A transaction dated after that day counts in none of the cash balances,
-# the holdings' quantity, their average and total cost; one dated on that day counts.
+# the cash; one dated on that day counts.
 #
 # A currency whose only movement comes after that day is not listed. The summary lists a
 # currency for its history — even at 0, "as long as it has transaction history" (summary.py) —
@@ -936,12 +687,12 @@ AS_OF_DAYS = (
 )
 AS_OF_USD_DAY = 1  # +250 USD: the broker's only USD movement
 
-# What the summary shows when it counts the rows up to the offset given, inclusive.
+# The cash the summary shows when it counts the rows up to the offset given, inclusive.
 AS_OF_VIEWS = {
-    -1: {"cash": {"EUR": "4000"}, "quantity": "10", "total_cost": "1000", "average": "100"},  # 5000 − 1000
-    0: {"cash": {"EUR": "3000"}, "quantity": "20", "total_cost": "3000", "average": "150"},  # + 1000 − 2000; (1000 + 2000) / 20
-    1: {"cash": {"EUR": "1000", "USD": "250"}, "quantity": "30", "total_cost": "9000", "average": "300"},  # + 4000 − 6000; 9000 / 30
-    2: {"cash": {"EUR": "1500", "USD": "250"}, "quantity": "40", "total_cost": "19000", "average": "475"},  # + 10500 − 10000: every row, today's summary
+    -1: {"EUR": "4000"},  # 5000 − 1000
+    0: {"EUR": "3000"},  # + 1000 − 2000
+    1: {"EUR": "1000", "USD": "250"},  # + 4000 − 6000
+    2: {"EUR": "1500", "USD": "250"},  # + 10500 − 10000: every row, today's summary
 }
 
 
@@ -964,20 +715,13 @@ async def _seed_as_of(session: AsyncSession, user: User, anchor: date, *, last_d
     return broker_id, asset
 
 
-def _cash_and_holdings(summary: BRSummary | None) -> dict:
+def _cash_of(summary: BRSummary | None) -> dict:
     assert summary is not None
-    return {
-        "cash": {balance.code: balance.amount for balance in summary.cash_balances},
-        "holdings": [(holding.asset_id, holding.quantity, holding.total_cost, holding.average_cost_per_unit) for holding in summary.holdings],
-    }
+    return {balance.code: balance.amount for balance in summary.cash_balances}
 
 
-def _expected_as_of(asset: Asset, *, through: int) -> dict:
-    view = AS_OF_VIEWS[through]
-    return {
-        "cash": {code: Decimal(amount) for code, amount in view["cash"].items()},
-        "holdings": [(asset.id, Decimal(view["quantity"]), Currency(code="EUR", amount=Decimal(view["total_cost"])), Decimal(view["average"]))],
-    }
+def _expected_as_of(*, through: int) -> dict:
+    return {code: Decimal(amount) for code, amount in AS_OF_VIEWS[through].items()}
 
 
 def _assert_same_server_day(anchor: date) -> None:
@@ -992,13 +736,13 @@ class TestGetSummaryAsOf:
     async def test_get_summary_without_as_of_leaves_out_the_rows_dated_after_the_server_date(self, session, test_user):
         """BR-U-090 (RED, whatever the signature): rows from the server's yesterday to two days ahead, no ``as_of`` → yesterday's and today's count, nothing later."""
         anchor = date.today()
-        broker_id, asset = await _seed_as_of(session, test_user, anchor)
+        broker_id, _asset = await _seed_as_of(session, test_user, anchor)
 
         summary = await BrokerService(session).get_summary(broker_id, user_id=test_user.id)
 
         _assert_same_server_day(anchor)
         # Not the USD: its only deposit is tomorrow's.
-        assert _cash_and_holdings(summary) == _expected_as_of(asset, through=0)
+        assert _cash_of(summary) == _expected_as_of(through=0)
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(
@@ -1014,11 +758,11 @@ class TestGetSummaryAsOf:
     async def test_get_summary_as_of_counts_the_rows_up_to_that_day_inclusive(self, session, test_user, offset):
         """BR-U-091 (RED): the caller's day passed as ``as_of`` decides, not the server's date — its rows count, later ones do not."""
         anchor = date.today()
-        broker_id, asset = await _seed_as_of(session, test_user, anchor)
+        broker_id, _asset = await _seed_as_of(session, test_user, anchor)
 
         summary = await BrokerService(session).get_summary(broker_id, user_id=test_user.id, as_of=anchor + timedelta(days=offset))
 
-        assert _cash_and_holdings(summary) == _expected_as_of(asset, through=offset)
+        assert _cash_of(summary) == _expected_as_of(through=offset)
 
     @pytest.mark.asyncio
     async def test_get_summary_as_of_defaults_to_the_server_date(self, session, test_user):
@@ -1037,11 +781,11 @@ class TestGetSummaryAsOf:
     async def test_get_summary_without_future_rows_counts_every_row_today_included(self, session, test_user):
         """BR-U-093 (guard): rows of the server's yesterday and today only, no ``as_of`` → every row counts, today's included, as before."""
         anchor = date.today()
-        broker_id, asset = await _seed_as_of(session, test_user, anchor, last_day=0)
+        broker_id, _asset = await _seed_as_of(session, test_user, anchor, last_day=0)
 
         summary = await BrokerService(session).get_summary(broker_id, user_id=test_user.id)
 
-        assert _cash_and_holdings(summary) == _expected_as_of(asset, through=0)
+        assert _cash_of(summary) == _expected_as_of(through=0)
 
 
 # ============================================================================
@@ -1495,13 +1239,12 @@ _CROSS_PAIR_CASES = [
 # A stamp of the past for a row's updated_at: a conversion that stamps the row moves it forward, whatever the clock.
 _STAMPED_BEFORE = datetime(2019, 9, 4, 10, 0)
 
-# The surviving broker's summary, the same before and after the deletion: its cash per currency
-# and its holding of X as (quantity, total cost, average cost) — X is quoted in EUR, bought in EUR.
+# The surviving broker's cash per currency, the same before and after the deletion.
 _SURVIVOR_SUMMARIES = {
-    (TransactionType.TRANSFER, "sender"): ({"EUR": "10", "USD": "44"}, [("4", "80", "20")]),  # receiver: 50 − 40; the 4 X at their 20 EUR cost basis
-    (TransactionType.TRANSFER, "receiver"): ({"EUR": "700", "USD": "110"}, [("6", "120", "20")]),  # sender: 1000 − 200 − 100; 10 − 4 X at 20
-    (TransactionType.CASH_TRANSFER, "sender"): ({"EUR": "310", "USD": "44"}, []),  # receiver: 50 − 40 + 300
-    (TransactionType.CASH_TRANSFER, "receiver"): ({"EUR": "400", "USD": "110"}, [("10", "200", "20")]),  # sender: 1000 − 200 − 100 − 300; its 10 X
+    (TransactionType.TRANSFER, "sender"): {"EUR": "10", "USD": "44"},  # receiver: 50 − 40
+    (TransactionType.TRANSFER, "receiver"): {"EUR": "700", "USD": "110"},  # sender: 1000 − 200 − 100
+    (TransactionType.CASH_TRANSFER, "sender"): {"EUR": "310", "USD": "44"},  # receiver: 50 − 40 + 300
+    (TransactionType.CASH_TRANSFER, "receiver"): {"EUR": "400", "USD": "110"},  # sender: 1000 − 200 − 100 − 300
 }
 
 # Every column a deletion must leave as it was, except the two the conversion changes.
@@ -1588,12 +1331,8 @@ async def _delete_broker(session: AsyncSession, user: User, broker_id: int) -> N
     assert [(result.id, result.success, result.message) for result in response.results] == [(broker_id, True, None)]
 
 
-def _expected_survivor_summary(pair: CrossPair, kind: TransactionType, deleted: str) -> dict:
-    cash, holdings = _SURVIVOR_SUMMARIES[(kind, deleted)]
-    return {
-        "cash": {code: Decimal(amount) for code, amount in cash.items()},
-        "holdings": [(pair.asset.id, Decimal(quantity), Currency(code="EUR", amount=Decimal(total)), Decimal(average)) for quantity, total, average in holdings],
-    }
+def _expected_survivor_summary(kind: TransactionType, deleted: str) -> dict:
+    return {code: Decimal(amount) for code, amount in _SURVIVOR_SUMMARIES[(kind, deleted)].items()}
 
 
 # BR-U-077: the sender's purchases of X before the transfer and after it, (day, quantity, EUR amount).
@@ -1699,17 +1438,17 @@ class TestDeleteBulkCrossBrokerPair:
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize(("kind", "deleted"), _CROSS_PAIR_SIDES)
-    async def test_delete_bulk_leaves_the_cash_and_holdings_of_the_surviving_broker_unchanged(self, session, test_user, kind, deleted):
-        """BR-U-075 (guard): the surviving broker's summary — cash per currency, its holding's quantity and cost — reads the same before and after."""
+    async def test_delete_bulk_leaves_the_cash_of_the_surviving_broker_unchanged(self, session, test_user, kind, deleted):
+        """BR-U-075 (guard): the surviving broker's summary — cash per currency — reads the same before and after."""
         pair = await _seed_cross_pair(session, test_user, kind)
         survivor_broker = pair.brokers[CrossPair.survivor_of(deleted)]
         service = BrokerService(session)
-        before = _cash_and_holdings(await service.get_summary(survivor_broker, user_id=test_user.id))
+        before = _cash_of(await service.get_summary(survivor_broker, user_id=test_user.id))
 
         await _delete_broker(session, test_user, pair.brokers[deleted])
 
-        after = _cash_and_holdings(await service.get_summary(survivor_broker, user_id=test_user.id))
-        expected = _expected_survivor_summary(pair, kind, deleted)
+        after = _cash_of(await service.get_summary(survivor_broker, user_id=test_user.id))
+        expected = _expected_survivor_summary(kind, deleted)
         assert {"before": before, "after": after} == {"before": expected, "after": expected}
 
     @pytest.mark.asyncio
