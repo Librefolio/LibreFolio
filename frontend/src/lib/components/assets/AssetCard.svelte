@@ -336,6 +336,7 @@
             </button>
             <button
                 class="p-1.5 rounded-md transition-colors {!asset.provider_code ? 'text-lf-muted/50 cursor-not-allowed' : 'hover:bg-lf-neutral text-lf-muted hover:text-lf-warning'}"
+                data-testid="asset-card-sync-btn"
                 disabled={!asset.provider_code || syncing}
                 onclick={(e) => {
                     stop(e);

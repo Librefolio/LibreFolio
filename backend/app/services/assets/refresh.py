@@ -427,22 +427,23 @@ async def _count_actual_price_changes(
     session: AsyncSession,
     asset_id: int,
     price_items: list,
-) -> tuple[int, int, list]:
+) -> tuple[int, int, list, set]:
     """
     Compare fetched prices with existing DB prices.
 
     Returns
     -------
     tuple
-        ``(new_count, changed_count, changed_items)`` where
+        ``(new_count, changed_count, changed_items, new_dates)`` where
         ``changed_items`` is the subset of ``price_items`` whose dates
         correspond to true inserts or true updates (value changed vs
-        the stored row). Used by I-bis #24 to produce the
+        the stored row), ``new_dates`` the dates among them with no stored row
+        (X-R70 takes back those the upsert then refuses). Used by I-bis #24 to produce the
         ``changed_points`` delta in ``FARefreshResult`` so the
         frontend can refresh the chart without a full re-query.
     """
     if not price_items:
-        return 0, 0, []
+        return 0, 0, [], set()
 
     dates = [p.date for p in price_items]
 
@@ -454,10 +455,12 @@ async def _count_actual_price_changes(
     new_count = 0
     changed_count = 0
     changed_items: list = []
+    new_dates: set = set()
     for p in price_items:
         old_close = existing.get(p.date)
         if old_close is None:
             new_count += 1
+            new_dates.add(p.date)
             changed_items.append(p)
         else:
             # Truncate fetched value to DB precision before comparing
@@ -466,7 +469,7 @@ async def _count_actual_price_changes(
                 changed_count += 1
                 changed_items.append(p)
 
-    return new_count, changed_count, changed_items
+    return new_count, changed_count, changed_items, new_dates
 
 
 async def _persist_refresh_item(  # noqa: C901 — sequential guarded persist steps, per-step error mapping
@@ -610,9 +613,10 @@ async def _persist_refresh_item(  # noqa: C901 — sequential guarded persist st
                 latest = latest_stored_date()
                 kept_items = [p for p in price_items if _unstorable_provider_point(p) is None and p.date <= latest]
                 try:
-                    new_count, changed_count, changed_items_delta = await _count_actual_price_changes(persist_session, asset_id, kept_items)
+                    new_count, changed_count, changed_items_delta, new_dates = await _count_actual_price_changes(persist_session, asset_id, kept_items)
                 except Exception:
                     new_count, changed_count, changed_items_delta = len(kept_items), 0, list(kept_items)  # Fallback
+                    new_dates = {p.date for p in kept_items}
 
                 try:
                     # Pass the real provider_code so upserted rows are correctly
@@ -622,6 +626,13 @@ async def _persist_refresh_item(  # noqa: C901 — sequential guarded persist st
                     # silently defeating the portfolio engine's cache-invalidation
                     # fingerprint (COUNT + MAX(fetched_at)) for same-date revisions.
                     upsert_result = await PriceStoreOperations.bulk_upsert_prices([upsert_obj], persist_session, source_plugin_key=provider_code)
+                    # X-R70: a date the upsert refused for an impossible OHLC (a close outside its own [low, high]) was
+                    # never written: it is neither an insert nor an update, nor a changed point for the chart
+                    refused_days = {entry["date"] for r in upsert_result.get("results", []) for entry in r.get("rejected", [])}
+                    if refused_days:
+                        new_count -= sum(1 for p in changed_items_delta if p.date in refused_days and p.date in new_dates)
+                        changed_count -= sum(1 for p in changed_items_delta if p.date in refused_days and p.date not in new_dates)
+                        changed_items_delta = [p for p in changed_items_delta if p.date not in refused_days]
                     inserted_count = new_count
                     updated_count = changed_count
                     # Surface OHLC-integrity rejections (bad provider data,
