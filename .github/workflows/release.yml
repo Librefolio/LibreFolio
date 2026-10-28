@@ -305,6 +305,8 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Labels go to the image config; a multi-arch image is an index, and GHCR shows
+      # title, description and source only from the index annotations: both are written.
       # Tags (user guide, "Image Variants"): `latest` is the LIGHT variant; a release
       # publishes the full variant as `X.Y.Z` and the light one as `X.Y.Z-light`;
       # nightlies are `nightly` (full) and `nightly-light`. metadata-action adds
@@ -314,6 +316,8 @@ jobs:
       - name: Extract Docker Metadata (Version)
         id: meta
         uses: docker/metadata-action@v6
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
         with:
           images: ghcr.io/librefolio/librefolio
           flavor: |
@@ -335,6 +339,8 @@ jobs:
       - name: Extract Docker Metadata (Light Variant)
         id: meta-light
         uses: docker/metadata-action@v6
+        env:
+          DOCKER_METADATA_ANNOTATIONS_LEVELS: manifest,index
         with:
           images: ghcr.io/librefolio/librefolio
           flavor: |
@@ -376,6 +382,7 @@ jobs:
             DOCS_VARIANT=light
           tags: ${{ steps.meta-light.outputs.tags }}
           labels: ${{ steps.meta-light.outputs.labels }}
+          annotations: ${{ steps.meta-light.outputs.annotations }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -404,6 +411,7 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          annotations: ${{ steps.meta.outputs.annotations }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
