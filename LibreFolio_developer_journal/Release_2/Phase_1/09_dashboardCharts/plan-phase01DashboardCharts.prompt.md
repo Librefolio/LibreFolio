@@ -8700,3 +8700,24 @@ Base: `c0edda2af` (checkpoint 1 `a8c68dac4` + X6-1 di X).
 - ✅ (28/10) **W-B95**: la pagina Files traduce l'esito dell'anteprima con `resolveParseFailureMessage` (stessa funzione del wizard); `getFilePreviewError` non ha più chiamanti ed è tolta. `FilePreviewModal` pubblica `file-preview-error`. E2E `files.spec.ts` «a preview the server refuses with a code…»: rosso prima (il messaggio inglese del server compariva), verde dopo.
 - ✅ (28/10) **TC-6**: **già fatto** in A5b (`2b0715532`, 15/10): `currentLanguage.init()` segue `locale` finché nessuna lingua è scelta. `language.test.ts` 7/7 verde; nessun lavoro.
 - ✅ (28/10) **Prove del checkpoint 2**: Vitest `features/dashboard`, `charts/signals`, `features/files`, `utils/files`, `parseFailure`, `stores/app`: 68 file / 1839; `front check` 0/0; `front-utility files` 30/30; `front-portfolio dashboard` 33/33; `front-broker detail` 39/41 al primo giro con la macchina a carico 30–40 (un click della scheda che non apre la pagina in 10 s, un login oltre 30 s), poi i due da soli 2/2; `i18n check` stretto; `check-orphans` verde.
+
+## 28/10 · Ondata 6 · Y2 — sistema dei grafici (checkpoint 1: FB-1, FB-2, FB-9, FB-8, FB-5, FB-4)
+
+Fonte: i feedback del developer nella testlist del server (§1 e §2). Base `32674edb8`, corsia 6225.
+
+| Lotto | Cosa | Stato |
+|---|---|---|
+| FB-1 | giorno della settimana tra parentesi dopo la data nei tooltip (`formatDayWithWeekday`, un formattatore condiviso, lingua dell'interfaccia) | ✅ 28/10 |
+| FB-2 | il puntatore dei grafici a gradini si aggancia ai giorni (`attachDaySnap`, `snapToDay`) | ✅ 28/10 (GrowthChart: una riga da aggiungere, file di Y) |
+| FB-9 | segnaposto del selettore vuoto su una riga, troncato (`SearchSelect`) | ✅ 28/10 |
+| FB-8 | i tre pulsanti di vista di Assets e FX col tooltip del design system, sempre; pulsanti della barra a tutta larghezza | ✅ 28/10 (E2E: `fx-list` 38/38, `asset-list` 53/53) |
+| FB-5 | tooltip di «Return of the positions» tronca i nomi lunghi, mai più largo del grafico | ✅ 28/10 |
+| FB-4 | zoom (`dataZoom` inside, `filterMode: 'none'`) in «Return of the positions» | ✅ 28/10 |
+
+> **Note implementazione**: il giorno della settimana viene da `Intl` (`weekday: 'short'`): tradotto senza chiavi nuove. Una stringa che non è un giorno `YYYY-MM-DD` resta com'è (un conteggio o un anno nell'intestazione di `LineChart` non diventano giorni: lo ha mostrato il guard di `LineChart.test.ts`).
+> **Note implementazione**: l'aggancio ai giorni rilancia `updateAxisPointer` con il valore del giorno più vicino (mezzogiorno è il punto di svolta), all'altezza del mouse; il secondo evento porta una mezzanotte e chiude il giro. Il tooltip continua a leggere il giorno puntato (`pointedDay`).
+> **⚠️ Fuori pista**: il worktree era a `f4a5e6e0a`, non a `32674edb8` (l'app aveva tagliato dalla versione spinta); il coordinatore l'ha portato avanti.
+> **⚠️ Fuori pista**: FB-9 è risolto in `SearchSelect.svelte` (il segnaposto), non in `ChartSignalsSection.svelte`: nessun conflitto con FB-11 di X.
+> **Note implementazione**: `attachDaySnap` si può richiamare sulla stessa istanza (`AllocationHistoryChart` lo fa a ogni disegno): l'ascoltatore del mouse è uno solo, il gestore del puntatore viene sostituito, mai impilato (test dedicato). I tre test nuovi sono registrati in `scripts/test_runner/_frontend_utility.py` (`check-orphans` verde, 680 test).
+> **Note implementazione**: verificato a mano nel browser sul server di prova (porta 6225): col mouse a x=524 il tooltip dice «16 Sept 2026 (Wed)» e la linea del puntatore sta sul 16 settembre (x=527); la rotella zooma il grafico «Return of the positions». FB-5 verificato solo con Vitest (jsdom), non su un telefono.
+> **Da fare da altri**: `GrowthChart.svelte` (~riga 1124, file di Y) — dopo `zoomInstance.on('updateAxisPointer', onAxisPointer)` aggiungere `attachDaySnap(zoomInstance)` + l'import: oggi il grafico principale ha ancora il puntatore a metà fra due giorni.
