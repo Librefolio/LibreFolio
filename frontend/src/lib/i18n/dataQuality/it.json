@@ -22,7 +22,8 @@
       "navigate_fx": "Vedi FX",
       "add_fx_pair": "Aggiungi coppia FX",
       "sync_fx_pair": "Sincronizza tassi",
-      "sync_asset_prices": "Sincronizza prezzi"
+      "sync_asset_prices": "Sincronizza prezzi",
+      "sync_stale_fx": "Sincronizza tassi"
     },
     "referencePriceFallback": "Lotti aperti da una rettifica in un giorno senza quotazione di mercato: il loro rendimento aperto parte dall'ultimo prezzo fino a quel giorno, una quotazione precedente o il prezzo di un acquisto o di una vendita",
     "referencePriceUnavailable": "Lotti aperti da una rettifica prima di qualsiasi prezzo: il loro rendimento aperto parte dal loro costo d'acquisto unitario, e senza costo d'acquisto non è disponibile",
@@ -43,6 +44,7 @@
     "nonIsoCurrencyCandidates": "Importi in «{value}», che non è un codice valuta ISO (può stare per {candidates}) — le loro conversioni possono mancare, e le loro righe non si possono salvare di nuovo finché il codice non viene corretto",
     "nonIsoCurrencyUnknown": "Importi in «{value}», che non è un codice valuta ISO — le loro conversioni possono mancare, e le loro righe non si possono salvare di nuovo finché il codice non viene corretto",
     "nonIsoReportCurrency": "Questo rapporto converte in «{value}», che non è un codice valuta ISO (sta per {suggestion}) — scegli {suggestion} come «Valuta Predefinita» in Impostazioni › Preferenze",
-    "nonIsoReportCurrencyUnknown": "Questo rapporto converte in «{value}», che non è un codice valuta ISO — scegli di nuovo la «Valuta Predefinita» in Impostazioni › Preferenze"
+    "nonIsoReportCurrencyUnknown": "Questo rapporto converte in «{value}», che non è un codice valuta ISO — scegli di nuovo la «Valuta Predefinita» in Impostazioni › Preferenze",
+    "staleFx": "{count} tassi di cambio non aggiornati, il più vecchio da {days} giorni — sincronizza i tassi per aggiornare i totali"
   }
 }
