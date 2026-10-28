@@ -23,6 +23,7 @@
  * - Database populated with at least one asset with prices
  */
 
+import {readFileSync} from 'node:fs';
 import type {Route} from '@playwright/test';
 import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
@@ -246,6 +247,89 @@ test.describe('Asset Data Editor', () => {
         // Click close button
         await panel.getByTestId('asset-detail-editor-close').click();
         await expect(panel).not.toBeVisible();
+    });
+
+    // ========================================================================
+    // Export (FB-30): the editors' Export button downloads the series as CSV or JSON.
+    // Read-only: an export writes nothing, so nothing to restore.
+    // ========================================================================
+    /** The id of the asset whose detail page is open, read from the URL the page is on. */
+    function openAssetId(page: Page): number {
+        const match = /\/assets\/(\d+)/.exec(new URL(page.url()).pathname);
+        expect(match, `the page is on an asset detail URL, not ${page.url()}`).not.toBeNull();
+        return Number(match![1]);
+    }
+
+    /** Opens the Export dialog of the open editor, and checks it starts on CSV. */
+    async function openExportDialog(page: Page, panel: Locator): Promise<Locator> {
+        await panel.getByTestId('data-editor-export-btn').click();
+        const dialog = page.getByTestId('data-export-modal');
+        await expect(dialog).toBeVisible();
+        await expect(dialog.getByTestId('data-export-format-csv')).toBeChecked();
+        return dialog;
+    }
+
+    /** Chooses `format` (when not the default), confirms, and returns the file the browser received; the dialog is then closed. */
+    async function exportAs(page: Page, dialog: Locator, format: 'csv' | 'json') {
+        if (format === 'json') await dialog.getByTestId('data-export-format-json').check();
+        const downloading = page.waitForEvent('download', {timeout: 15_000});
+        await dialog.getByTestId('data-export-confirm').click();
+        const download = await downloading;
+        await expect(dialog).toBeHidden();
+        const path = await download.path();
+        expect(path, 'the download completed').not.toBeNull();
+        return {name: download.suggestedFilename(), text: readFileSync(path!, 'utf8')};
+    }
+
+    test('prices export downloads the series as JSON and as CSV', async ({page}) => {
+        await openDataEditor(page);
+        const assetId = openAssetId(page);
+        const panel = page.getByTestId('asset-detail-editor-panel');
+        await expect(panel.getByTestId('asset-editor-prices-tab')).toHaveAttribute('aria-selected', 'true');
+        await expect(panel.getByTestId('data-editor-export-btn')).toBeVisible();
+        // Days the editor lists: the stored prices (and the backward-filled gaps between them).
+        await expect(panel.locator('tbody tr[data-row-id]').first()).toBeVisible();
+        const shownDates = await priceRowIds(panel);
+        expect(shownDates.length, 'the editor lists stored prices of the asset').toBeGreaterThan(0);
+
+        // JSON: the envelope names the asset and holds its prices.
+        const json = await exportAs(page, await openExportDialog(page, panel), 'json');
+        expect(json.name.endsWith('.json')).toBe(true);
+        const envelope = JSON.parse(json.text) as {scope: string; entity: {type: string; id: number}; row_count: number; rows: Array<{date: string; close: string | null}>};
+        expect(envelope.scope).toBe('prices');
+        expect(envelope.entity.type).toBe('asset');
+        expect(envelope.entity.id).toBe(assetId);
+        expect(envelope.rows.length).toBeGreaterThan(0);
+        expect(envelope.row_count).toBe(envelope.rows.length);
+        const exportedDates = new Set(envelope.rows.map((row) => row.date));
+        // Not every listed day is stored: the editor also lists the days a gap is backward-filled over. At least one is a stored price.
+        expect(shownDates.filter((date) => exportedDates.has(date)).length, 'a stored price of the editor is in the export').toBeGreaterThan(0);
+
+        // CSV: reopening starts from CSV again (the default); the header is the export's fixed column list.
+        const csv = await exportAs(page, await openExportDialog(page, panel), 'csv');
+        expect(csv.name.endsWith('.csv')).toBe(true);
+        const lines = csv.text.split(/\r?\n/).filter((line) => line.length > 0);
+        const header = lines[0].split(';');
+        expect(header).toContain('date');
+        expect(header).toContain('close');
+        // Not equal to the JSON's count: the series is shared, and another test may have written to it between the two downloads.
+        expect(lines.length - 1, 'the CSV holds prices').toBeGreaterThan(0);
+    });
+
+    test('events tab has its own export button, which asks for the events', async ({page}) => {
+        await openDataEditor(page);
+        const assetId = openAssetId(page);
+        const panel = page.getByTestId('asset-detail-editor-panel');
+        await panel.getByTestId('asset-editor-events-tab').click();
+        await expect(panel.getByTestId('asset-editor-events-tab')).toHaveAttribute('aria-selected', 'true');
+        await expect(panel.getByTestId('data-editor-export-btn')).toBeVisible();
+
+        const dialog = await openExportDialog(page, panel);
+        const requested = page.waitForRequest((request) => new URL(request.url()).pathname === `${API_BASE}/backup/asset/${assetId}/events`, {timeout: 15_000});
+        const file = await exportAs(page, dialog, 'csv');
+        expect(new URL((await requested).url()).searchParams.get('format')).toBe('csv');
+        expect(file.name.endsWith('.csv')).toBe(true);
+        expect(file.text.split(/\r?\n/)[0].split(';')).toContain('type');
     });
 
     // ========================================================================

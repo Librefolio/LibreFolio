@@ -64,12 +64,26 @@ function triggerBrowserDownload(blob: Blob, filename: string) {
  * @throws AxiosError on HTTP failure (401 handled by interceptor).
  */
 export async function downloadAssetBackup(assetId: number, kind: BackupKind, format: BackupFormat): Promise<void> {
-    const response = await axiosInstance.get<Blob>(`/api/v1/backup/asset/${assetId}/${kind}`, {
+    await downloadBackup(`/api/v1/backup/asset/${assetId}/${kind}`, format, `${kind}_asset-${assetId}`);
+}
+
+/**
+ * Download an FX pair's rates snapshot (FB-30) and trigger the native browser "save as" flow. The pair is asked in the
+ * direction the page shows it; the server stores it in its own order and says so in the JSON envelope (`inverted`).
+ *
+ * @throws AxiosError on HTTP failure (401 handled by interceptor).
+ */
+export async function downloadFxRatesBackup(base: string, quote: string, format: BackupFormat): Promise<void> {
+    await downloadBackup(`/api/v1/backup/fx/${encodeURIComponent(base)}/${encodeURIComponent(quote)}/rates`, format, `rates_fx-${base}-${quote}`);
+}
+
+async function downloadBackup(url: string, format: BackupFormat, fallbackStem: string): Promise<void> {
+    const response = await axiosInstance.get<Blob>(url, {
         params: {format},
         responseType: 'blob',
     });
     const today = new Date().toISOString().slice(0, 10);
-    const fallback = `${kind}_asset-${assetId}_${today}.${format}`;
+    const fallback = `${fallbackStem}_${today}.${format}`;
     const filename = extractFilename(response.headers?.['content-disposition'] as string | undefined, fallback);
     triggerBrowserDownload(response.data, filename);
 }

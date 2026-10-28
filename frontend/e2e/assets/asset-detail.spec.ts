@@ -2832,7 +2832,8 @@ test.describe('Asset Detail Page', () => {
         await expect(signalsPanel.getByTestId('signals-benchmark-select-button')).toHaveCount(0);
         await comparisonSelectButton.click();
         await expect(signalsPanel.getByTestId('signal-tree-option-asset-comparison')).toBeVisible();
-        await expect(signalsPanel.getByTestId('signal-tree-option-fx-pair')).toHaveCount(0);
+        // FB-11: the rolling return compares an FX pair too (it used to offer assets alone)
+        await expect(signalsPanel.getByTestId('signal-tree-option-fx-pair')).toBeVisible();
         await comparisonSelectButton.press('Escape');
         await expect(comparisonSelectButton).toHaveAttribute('aria-expanded', 'false');
 
@@ -10212,5 +10213,143 @@ test.describe('Asset detail — a compared FX pair is drawn (Y-41)', () => {
         await waitForSettled(page.getByTestId('asset-detail-page'), 20_000);
 
         await expectPairLineReaches(page, CHART, PAIR, reachesWideStart(), `the ${PAIR} line reaches back into the part the longer period added`);
+    });
+
+    // FB-11: the rolling return compares FX pairs as well as assets. The pair's return is asked of the conversion endpoint,
+    // not of the asset's prices query, and told by the signal's id in `data-calendar-pair-comparison-*`.
+    test('FB-11 the rolling return offers the FX Pair type; a pair compared there is asked of the conversion endpoint and drawn', async ({page}) => {
+        const appleId = await assetIdByName(page, 'Apple Inc.');
+        const period = wide();
+        await goToAssetDetailPage(page, String(appleId), period);
+
+        const chart = page.getByTestId(CHART);
+        await expect(chart, 'the chart is drawn before its mode is chosen').toHaveAttribute('data-series-state', /^(ready|partial)$/, {timeout: 15_000});
+        await chart.getByTestId('asset-chart-primary-calendar-return').click();
+        await expect(chart).toHaveAttribute('data-primary-mode', 'calendar-return');
+        await expect(chart).toHaveAttribute('data-series-state', /^(ready|partial)$/, {timeout: 15_000});
+
+        const toggle = page.getByTestId('asset-detail-signals-toggle');
+        if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+        await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+        const panel = page.getByTestId('asset-detail-signals-panel');
+        await expect(panel).toBeVisible({timeout: 5_000});
+
+        // The menu offers both comparison types in this mode: the asset (as before) and, now, the FX pair.
+        const comparisonButton = panel.getByTestId('signals-comparison-select-button');
+        await expect(comparisonButton).toBeVisible({timeout: 15_000});
+        await comparisonButton.click();
+        await expect(panel.getByTestId('signal-tree-option-asset-comparison')).toBeVisible();
+        await expect(panel.getByTestId('signal-tree-option-fx-pair')).toBeVisible();
+        await panel.getByTestId('signal-tree-option-fx-pair').click();
+
+        // This context's settings start empty, so the card just added is the only FX pair one.
+        const card = panel.locator('[data-testid^="signal-card-"][data-signal-type="fx-pair"]');
+        await expect(card, 'the added FX pair has a card in the rolling return').toHaveCount(1);
+        const signalId = (await card.getAttribute('data-testid'))?.slice('signal-card-'.length);
+        if (!signalId) throw new Error('the new FX pair card carries no signal id');
+
+        // Choosing the pair asks the conversion endpoint for ITS rolling return: 1 unit of the base into the quote, the calendar signal.
+        const windowDays = Number(await chart.getAttribute('data-window-days'));
+        expect(Number.isInteger(windowDays) && windowDays > 0, 'the chart publishes the window in force').toBe(true);
+        const asked = page.waitForRequest(
+            (request) => {
+                if (request.method() !== 'POST' || new URL(request.url()).pathname !== '/api/v1/fx/currencies/convert') return false;
+                try {
+                    const body: unknown = request.postDataJSON();
+                    const [base, quote] = PAIR.split('-');
+                    return (
+                        Array.isArray(body) &&
+                        body.some((item: {from_amount?: {code?: string}; to?: string; signals?: Array<{signal_code?: string}>}) => item?.from_amount?.code === base && item.to === quote && (item.signals ?? []).some((signal) => signal.signal_code === 'ASSET_CALENDAR_ROLLING_RETURN'))
+                    );
+                } catch {
+                    return false;
+                }
+            },
+            {timeout: 15_000},
+        );
+        const trigger = panel.getByTestId(`signal-param-${signalId}-pairSlug-select-trigger`);
+        await optionsClosed(page);
+        await expect(async () => {
+            if ((await trigger.getAttribute('aria-expanded')) !== 'true') await trigger.press('ArrowDown');
+            expect(await trigger.getAttribute('aria-expanded')).toBe('true');
+        }).toPass({timeout: 3_000});
+        const option = page.getByTestId(`search-select-option-${PAIR}`);
+        await expect(option, `${PAIR} is a configured pair of the seeded data`).toBeVisible();
+        await option.click();
+        await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+        await optionsClosed(page);
+
+        const items = (await asked).postDataJSON() as Array<{from_amount?: {code?: string; amount?: string}; to?: string; date_range?: {start?: string; end?: string | null}; signals?: Array<{instance_id?: string; signal_code?: string; params?: {window_days?: number}}>}>;
+        const [base, quote] = PAIR.split('-');
+        const item = items.find((candidate) => candidate.from_amount?.code === base && candidate.to === quote);
+        expect(item?.from_amount?.amount, '1 unit of the base').toBe('1');
+        expect(item?.date_range).toEqual({start: period.start, end: period.end});
+        expect(item?.signals).toEqual([{instance_id: 'asset-calendar-return', signal_code: 'ASSET_CALENDAR_ROLLING_RETURN', params: {window_days: windowDays}}]);
+
+        // The pair's return is told by the id of its signal in the list of its state (ready, or partial when a day lacks its reference).
+        await expect
+            .poll(
+                async () => {
+                    const withReturn = [await chart.getAttribute('data-calendar-pair-comparison-ready'), await chart.getAttribute('data-calendar-pair-comparison-partial')];
+                    return withReturn.some((ids) => (ids ?? '').split(',').includes(signalId));
+                },
+                {message: `${signalId} is among the compared pairs with a return`, timeout: 20_000},
+            )
+            .toBe(true);
+        await expect(chart).toHaveAttribute('data-calendar-pair-comparison-unavailable', '');
+        await expect(chart).toHaveAttribute('data-calendar-pair-comparison-error', '');
+        await expect(card).toBeVisible();
+        await expect(chart).toHaveAttribute('data-series-state', /^(ready|partial)$/);
+        await waitForSettled(page.getByTestId('asset-detail-page'), 20_000);
+    });
+
+    test('FB-11 a saved FX pair comparison is asked of the conversion endpoint when the rolling return opens, and its return is drawn', async ({page}) => {
+        const appleId = await assetIdByName(page, 'Apple Inc.');
+        const comparisonId = 'e2e-fb11-asset-pair';
+        await seedChartComparisons(page, [[`asset-${appleId}`, [pairComparison(comparisonId, PAIR)]]]);
+        const period = wide();
+        await goToAssetDetailPage(page, String(appleId), period);
+
+        const chart = page.getByTestId(CHART);
+        await expect(chart, 'the chart is drawn before its mode is chosen').toHaveAttribute('data-series-state', /^(ready|partial)$/, {timeout: 15_000});
+        const [base, quote] = PAIR.split('-');
+        const asked = page.waitForRequest(
+            (request) => {
+                if (request.method() !== 'POST' || new URL(request.url()).pathname !== '/api/v1/fx/currencies/convert') return false;
+                try {
+                    const body: unknown = request.postDataJSON();
+                    return (
+                        Array.isArray(body) &&
+                        body.some((item: {from_amount?: {code?: string}; to?: string; signals?: Array<{signal_code?: string}>}) => item?.from_amount?.code === base && item.to === quote && (item.signals ?? []).some((signal) => signal.signal_code === 'ASSET_CALENDAR_ROLLING_RETURN'))
+                    );
+                } catch {
+                    return false;
+                }
+            },
+            {timeout: 15_000},
+        );
+        await chart.getByTestId('asset-chart-primary-calendar-return').click();
+        const items = (await asked).postDataJSON() as Array<{from_amount?: {code?: string; amount?: string}; to?: string; date_range?: {start?: string; end?: string | null}; signals?: Array<{instance_id?: string; signal_code?: string; params?: {window_days?: number}}>}>;
+        const item = items.find((candidate) => candidate.from_amount?.code === base && candidate.to === quote);
+        expect(item?.from_amount?.amount, '1 unit of the base').toBe('1');
+        expect(item?.date_range).toEqual({start: period.start, end: period.end});
+        await expect(chart).toHaveAttribute('data-primary-mode', 'calendar-return');
+        const windowDays = Number(await chart.getAttribute('data-window-days'));
+        expect(item?.signals).toEqual([{instance_id: 'asset-calendar-return', signal_code: 'ASSET_CALENDAR_ROLLING_RETURN', params: {window_days: windowDays}}]);
+
+        await expect
+            .poll(
+                async () => {
+                    const withReturn = [await chart.getAttribute('data-calendar-pair-comparison-ready'), await chart.getAttribute('data-calendar-pair-comparison-partial')];
+                    return withReturn.some((ids) => (ids ?? '').split(',').includes(comparisonId));
+                },
+                {message: `${comparisonId} is among the compared pairs with a return`, timeout: 20_000},
+            )
+            .toBe(true);
+        await expect(chart).toHaveAttribute('data-calendar-pair-comparison-unavailable', '');
+        await expect(chart).toHaveAttribute('data-calendar-pair-comparison-error', '');
+        await expect(chart).toHaveAttribute('data-series-state', /^(ready|partial)$/);
+        await expectPairLineDrawn(page, CHART, PAIR, `the ${PAIR} return is drawn beside the asset's`);
+        await waitForSettled(page.getByTestId('asset-detail-page'), 20_000);
     });
 });
