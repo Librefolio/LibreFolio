@@ -9301,3 +9301,60 @@ Corsia 6209, `/tmp/librefolio-r13-o6-x`. Brief: `salvataggi-worktrees-20261021/o
 > 4 chiavi nuove in 4 lingue (`assets.sync.confirm*`). Test: servizio `asset-source-guards` (conteggio per voce), API `assets-price` (2), E2E `asset-card-sync-confirm` (4, tutto mockato).
 > **⚠️ Fuori pista**: il servizio è stato scritto prima del suo test (nessun rosso vero: la funzione non esisteva). Non toccato: l'avviso di `SyncModalBase` («Sync all», selezione, pagina
 > dell'asset) conta ancora dai dati mostrati e non nomina i manuali; portarlo sull'endpoint è un seguito.
+
+> **Checkpoint 1** committato dal coordinatore: `4577ecb65` (28/10).
+
+### Checkpoint 2
+
+#### X6-3 · W-B16: l'import degli eventi legge la colonna `source` (28/10)
+
+> **Note implementazione** (✅ 28/10/2026): `EventDataImportModal.svelte` legge la colonna `source` (facoltativa). `AssetDataEditorSection.svelte` ha una prop `hasProvider` (la passa la pagina di
+> dettaglio, `providerAssignment?.provider_code`) e `withoutProviderEvents()`: con un fornitore sull'asset, le righe `PROVIDER` non entrano nell'editor e un solo avviso dice quante («sincronizza
+> l'asset per caricarle»); senza fornitore entrano come eventi manuali; `source` non arriva mai nelle righe. Chiave `dataEditor.importProviderEventsLeftOut` in 4 lingue.
+> **Rosso prima** (Vitest, `AssetDataEditorSection.test.ts`): la riga `PROVIDER` entrava (1 rosso su 2; la guardia «senza fornitore» verde prima e dopo).
+> **⚠️ Fuori pista**: il kickoff nomina `DataEditor.svelte` (`handleImport`); il filtro sta invece nella sezione dell'asset, che conosce il fornitore: `DataEditor.svelte` non è toccato, quindi Y6-3 non
+> aspetta più niente su quel file. L'«opzione» del backlog (importare comunque come manuali) non c'è: il caso per cui serviva (asset senza fornitore) è già coperto dalla regola; se il developer la vuole lo stesso, è una domanda di prodotto.
+
+#### X6-5 + X-R39 · documentazione, `dateLabel`, scrittura parziale (28/10)
+
+> **Note implementazione** (✅ 28/10/2026): doc in inglese: `provider_policy.py` nella tabella dei moduli di `developer/backend/assets/architecture.md` (con le righe di `price_store.py` aggiornate per X-R78 e
+> X-R29), «Maturity Settlement» nella tabella degli eventi di `user/assets/providers/scheduled-investment.en.md` (pagina con traduzioni: debito dichiarato), la guida dell'import degli eventi in
+> `user/assets/detail/data-editor.en.md` (righe `PROVIDER`). Codice: `AssetDataEditorSection.svelte` passa `(iso) => formatDay(iso)` a `eventSaveErrorMessage` e `saveErrorText` (le date degli errori degli
+> eventi non sono più ISO); i `counts` sono fuori dal `try`, e un salvataggio che si ferma dopo aver scritto o cancellato prezzi aggiunge «Già salvato: N prezzi scritti, M cancellati…»
+> (`dataEditor.savePartial`, 4 lingue; l'evento `assets.data.saveFailed` porta `pricesSaved` e `pricesDeleted`). W-B27: il prefisso «Save failed:» era già tradotto (`dataEditor.saveFailed`); restava il `dateLabel`.
+> **Rossi prima** (Vitest): messaggio parziale e `dateLabel` (2 rossi su 3; la guardia «nulla scritto, nessuna frase» verde).
+
+#### Tetto di span della query prezzi (28/10)
+
+> **Note implementazione** (✅ 28/10/2026): prova fatta, **già coperto, nessuna cura**. `get_prices_bulk` legge le righe salvate (un intervallo indicizzato: costa quello che l'asset salva, non lo span) e
+> conta i giorni di ogni riempimento con `_fill_span` prima di costruirli, quindi un intervallo di tutto il calendario non costa niente e due serie con una riga all'anno 1 sono rifiutate prima del fill
+> (422 `bulk_too_many_days`). Due test lo fissano (`test_bulk_limits.py`, BL-S01 e BL-S02, verdi su HEAD senza cure).
+
+> **Checkpoint 2** committato dal coordinatore: `1054b9111` (28/10).
+
+### Checkpoint 3
+
+#### FB-11 · asset ↔ coppia FX: la riproduzione (28/10, server di prova sulla 6209, utente `e2e_test_user`)
+
+> **Verdetto** (prima di cambiare codice):
+> - **Vista prezzi, dettaglio asset:** la coppia FX **si aggiunge** (scheda «FX Pair», 93 punti) **e si disegna**: dopo la ricarica della pagina la linea c'è (in modalità %; in Abs un tasso ~1,08 accanto a un prezzo di 345 $ sarebbe una riga piatta a fondo scala).
+> - **Rolling Return, dettaglio asset e dettaglio FX:** il menu «Data comparison» offre **solo il tipo della pagina** (`allowedSignalTypes`), e la scheda dell'altro tipo già salvata sparisce (`visibleSignals` la filtra). Il dato dell'altro tipo non viene nemmeno chiesto: l'asset chiede i rendimenti solo agli `asset-comparison` (`calendarComparisonAssetIds`), la pagina FX solo le conversioni dei `fx-pair` (`buildFxDetailCalendarQuery`).
+> - **Impostazioni delle card (liste Assets e FX):** nell'anteprima normale il menu offre i due tipi; nell'anteprima Rolling Return solo il tipo della lista (`ChartSettingsModal.svelte:243`, `signalTypesShown`). Le card della lista in Rolling Return disegnano solo il proprio tipo (`renderCalendarComparisons` in `assets/+page.svelte`, `renderCalendarPairComparisons` in `fx/+page.svelte`).
+> - **Card della lista Assets, vista prezzi:** nessuno carica i tassi di una coppia FX in confronto (`ensureSignalFxPairs` lo chiamano solo i dettagli, Y-41): da verificare con un E2E.
+
+#### FB-11 · asset ↔ coppia FX nel Rolling Return (28/10)
+
+> **Note implementazione** (✅ 28/10/2026): le due pagine di dettaglio ora accettano **i due tipi** nella vista Rolling Return e ne calcolano il rendimento a finestra.
+> - **Dettaglio asset** (`assets/[id]/+page.svelte`): `allowedSignalTypes` = `['asset-comparison','fx-pair']`; `loadCalendarPairComparisons` chiede le coppie a `POST /fx/currencies/convert` (1 unità, direzione del segnale, segnale `ASSET_CALENDAR_ROLLING_RETURN`); le linee passano per `renderCalendarPairComparisons`; il grafico porta `data-calendar-pair-comparison-ready|partial|unavailable|error` (id dei segnali).
+> - **Dettaglio FX** (`fx/[pair]/+page.svelte`): `['fx-pair','asset-comparison']`; `loadCalendarAssetComparisons` chiede gli asset a `POST /assets/prices/query` (`include_price:false`, `include_events:false`, nella valuta propria dell'asset); linee da `renderCalendarComparisons`; `data-calendar-asset-comparison-ready|partial|unavailable|error` (id degli asset).
+> - Moduli puri `charts/crossTypeCalendar.ts` (`buildFxPairComparisonQuery`, `fxPairComparisonViews`, `buildAssetComparisonQuery`). `ChartSignalsSection.svelte` **non è toccato**: la restrizione viveva nelle pagine.
+> - **Rossi prima**: Vitest `crossTypeCalendar.test.ts` (modulo mancante); E2E (test-author): un confronto aggiunto dal menu in Rolling Return non partiva su nessuna delle due pagine.
+> - **⚠️ Fuori pista**: il test-author ha trovato un **mio** errore: confrontavo le impronte dei bersagli *dopo* `setPairSettings`, che aggiorna `signals` subito, quindi un confronto aggiunto dal pannello non caricava mai (in FX valeva già per le coppie `fx-pair`, senza test). Ora il flag si calcola prima, come gli altri (`shouldReloadCalendarTargets`, `shouldReloadCalendarPairs`).
+> - **Non fatto (seguito)**: le **card delle liste** (`ChartSettingsModal.svelte:243`, `signalTypesShown`; `renderCalendarComparisons` in `assets/+page.svelte`, `renderCalendarPairComparisons` in `fx/+page.svelte`) restano del solo tipo della lista nel Rolling Return: servirebbe far chiedere alle liste anche l'altro tipo. In vista prezzi le card offrono già i due tipi.
+
+#### FB-30 · pulsante «Esporta» negli editor dei dati (28/10)
+
+> **Note implementazione** (✅ 28/10/2026, E2E dopo): `DataEditor.svelte` ha uno snippet `exportModal` e, con esso, un pulsante `data-editor-export-btn` accanto a «Importa CSV» (resta anche in sola lettura). Nuova `DataExportModal.svelte` (CSV di default o JSON; un download fallito tiene la finestra aperta con l'errore; il confirm non si preme due volte). `AssetDataEditorSection` la apre per **Prezzi** (`/backup/asset/{id}/prices`) e **Eventi** (`/events`) con `downloadAssetBackup`; `FxDataEditorSection` per i **tassi** (`/backup/fx/{base}/{quote}/rates`) con il nuovo `downloadFxRatesBackup`. 6 chiavi `dataEditor.export*` in 4 lingue. Rosso prima: `DataExportModal.test.ts` (componente mancante).
+> **⚠️ Fuori pista**: tocca `DataEditor.svelte`, che Y6-3 aspetta: va committato prima di Y6-3.
+
+> **Checkpoint 3, rifacimento** (28/10): il coordinatore ha trovato un rosso vero in `front-asset asset-detail` (`asset-detail.spec.ts:577`, `signal-tree-option-fx-pair` atteso assente). Era il test che **fissava la restrizione** che FB-11 toglie; corretto il test (ora l'opzione deve essere visibile), non il codice. Rifatti interi: `front-asset asset-detail` 58/58, `front-fx all` 157 E2E + 169 Vitest, tutti verdi.

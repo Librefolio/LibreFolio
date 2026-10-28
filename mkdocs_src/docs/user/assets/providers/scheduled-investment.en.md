@@ -64,6 +64,7 @@ Each event counts from its date onwards.
 |---|---|
 | **Interest** | An interest payout you received: the value drops by that amount |
 | **Price Adjustment** | A write-down (negative) or a write-up (positive) |
+| **Maturity Settlement** | The asset reaches maturity and pays back its capital; its value stops changing. **Generate Coupon** adds one on the last maturity date |
 
 ## 🧮 How the Value Is Calculated {: #how-value-is-calculated }
 
