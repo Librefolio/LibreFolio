@@ -5121,3 +5121,44 @@ Ambiente: `npm ci` e `api sync` fatti (nessuna differenza nei contratti); corsia
 6. ✅ **Porte** (`ondata6/MF6-g3-*.log`, `MF6-g2-api-portfolio.log`): `roi-fifo-utils` **2488**, `financial-math`
    **3833**, `portfolio-engine` **41**, `api portfolio` **58**, tutti verdi. CHECKPOINT READY inviato, FROZEN;
    `portfolio_service.py` passa ad AIX dopo il commit.
+   > **Note implementazione**: committato dal coordinatore come `01f1da513`. MF-A11 scartata coi numeri (ok del
+   > coordinatore); la base media nel tempo è registrata come seguito; la domanda su «ieri» va al developer, intanto
+   > resta l'ultima quotazione di mercato.
+
+#### MF-C2 → MF6-2 → change-days (28/10, base `01f1da513`)
+1. ✅ **MF-C2 (fette nulle)** (28/10) — la sola parte matematica avrebbe reso rosso `api portfolio`: la fetta Liquidità
+   c'è sempre, un portafoglio svuotato ha somma 0 e `AllocationItem.value` era obbligatorio. Domanda al coordinatore →
+   **(a)**: MF prende anche le righe del contratto nello stesso commit. Cura: `weights.slice_percents` → tutte None con
+   somma ≤ 0 (vuota → `{}`); `derived_views._cents`; `AllocationItem.value` facoltativo (anche nei punti della storia);
+   AI Export `AllocationSlice.percent` facoltativo e `broker_concentration_context._map_slices` ordina None come 0
+   (altrimenti `-None`). `api sync` + `front check` (0 errori).
+   > **Note implementazione**: rossi del test-author 39 (5 file; `test_weights` net-zero/negative-sum capovolti);
+   > verdi 326. Il frontend non si rompe ma legge null come 0 senza avviso: `AllocationPanel.svelte:67`
+   > (`parseFloat(value ?? '0')` → fetta scartata, torta vuota), `allocationHistorySteps.ts:53` (`Number(null)` = 0),
+   > `AllocationHistoryChart.svelte:415,423` (`?? 0`) → a Y/Y2. Bump v2 dell'AI Export: di AIX (treno 13, con T-U9).
+2. ✅ **MF6-2 (MF-A6)** (28/10) — `daily_state._is_held`: tenuta sopra `QUANTITY_DUST_THRESHOLD` nei tre punti (stato
+   del giorno, istantanea d'inizio, istantanea di fine). Esempio dei test: 10 a 100 000, vendute 9,99999 a 120 000 →
+   resta 0,00001 (vale 1,20, costa 1,00): prima NAV +1,20 e ΔUGL +0,20 che nessuna riga aveva; ora Σ righe = ΔUGL del
+   portafoglio, l'Altro prende −1,00 (il costo della polvere).
+   > **Note implementazione**: 13 test nuovi (12 rossi + 1 guardia sopra la soglia); riparati i 3 `dust-residual` di
+   > `test_broker_cards` (titolo 8220/220 → 8219,998/219,998, card A 5000/0 → 4999,998/−0,002) e `CONSUMERS` di
+   > `test_data_quality_thresholds`; nuova azione `services dust-threshold`.
+3. ✅ **change-days** (28/10) — `financial_math/change_days.py`: `reading_change_days` (il ripiego «mappa semplice» di
+   `daily_state._reading_calendar` e `FxRateResolver.rate_change_days` unito), `change_days` (spostata da
+   `native_cash`), `with_next_days` (i due «giorno dopo» di `lots/change_days.py`). Parità: nessun atteso toccato.
+   > **⚠️ Fuori pista — `merged_windows` resta**: `fx_rates.py` è una foglia per guardia
+   > (`test_fx_rates::test_the_house_of_the_orientation_imports_nothing_from_the_services`: serve `fx` e il PAC), quindi
+   > non può importare `series_steps.merged_spans`. Unirle chiede di spostare `merged_spans` in `utils/` (6 chiamanti,
+   > `portfolio_service.py` compreso, ora di AIX): non fatto, proposto come seguito.
+   > **⚠️ Fuori pista**: `with_next_days` senza il parametro `after` dell'inventario (serve solo «dopo»).
+4. ✅ **Funzione pura per W6-12** — `native_cash.first_negative_cash` / `NegativeCash` (contratto dell'inventario §6);
+   30 test (rossi per assenza, poi verdi). Nota per W2: `ondata6/MF-first_negative_cash-per-W6-12.md` (8 differenze
+   col validatore; solo la 1 — saldo iniziale negativo con `from_date` senza transazioni dopo — cambierebbe un esito:
+   domanda per il developer, intanto `if txs:` tiene il comportamento di oggi).
+5. ✅ **Test, docs, porte** (28/10) — test-author: `test_change_days_home.py` (187: le funzioni della casa e la parità
+   con le quattro formule in linea di `01f1da513` su 40 semi), import di `test_fx_only_days` alla casa nuova.
+   docs-writer: `portfolio-engine/{index,period-pnl,book-value}.en.md`, `user/dashboard/{charts,positions}.en.md`,
+   `developer/backend/financial_math.md`; build strict 0, check-links 97 (debito di traduzione su 5 pagine, nessuno
+   stamp). Porte (`ondata6/MF-o6b-g2-*.log`): `financial-math` **4080**, `portfolio-engine` **41**,
+   `lots-analysis-pure` **254**, `roi-fifo-utils` **2505**, `ai-export` **1139**, `ai-export-pure` **497**,
+   `api portfolio` **58**; `front check` 0 errori; ruff, black, `diff --check` puliti. CHECKPOINT READY (6–8).

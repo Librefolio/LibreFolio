@@ -1165,7 +1165,7 @@ def services_financial_math(verbose: bool = False, test_names: list = None) -> b
     """Test the financial_math layer: average cost, native cash, returns, periods, ledger control totals, and the boundaries of the whole layer."""
     print_section("Services: Financial Math (average cost, native cash, returns, periods, ledger totals, layer boundaries)")
     print_info("Testing: backend/app/services/financial_math/ (average_cost.py, native_cash.py, returns.py, portfolio/period.py, ledger_totals.py; imports and packages of every module)")
-    print_info("Tests: average costs and cost movements, native cash and cash movements, effective share, exchange results, rebasing and ratios, the verified MWRR root, periods and unit costs, control totals, layer boundaries")
+    print_info("Tests: average costs and cost movements, native cash and cash movements, the first negative cash day (first_negative_cash), effective share, exchange results, rebasing and ratios, the verified MWRR root, periods and unit costs, control totals, layer boundaries")
     print_info("Pure — convert_bulk is stubbed: no server, no shared DB (the ledger totals read private SQLite files under tmp_path)")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial_math/", test_names)
@@ -1201,6 +1201,16 @@ def services_split_adjustment_ledger(verbose: bool = False, test_names: list = N
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial/test_split_adjustment_ledger.py", test_names)
     return run_command(cmd, "Split adjustment ledger tests", verbose=verbose)
+
+
+def services_dust_threshold(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that the daily state holds a position only above QUANTITY_DUST_THRESHOLD (MF6-2, backlog MF-A6)."""
+    print_section("Services: Daily State Dust Threshold (MF6-2)")
+    print_info("Testing: backend/app/services/financial_math/portfolio/daily_state.py (DailyStateBuilder: valuation loop, start and end snapshots)")
+    print_info("Tests: a residual at the threshold counts nothing (market value, cost, NAV, allocation, broker contribution, frames, snapshots), an unpriced one is not MISSING, one just above is held")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial/test_portfolio_engine/test_daily_state_dust_threshold.py", test_names)
+    return run_command(cmd, "Daily state dust threshold tests", verbose=verbose)
 
 
 def services_lone_transfer_legs(verbose: bool = False, test_names: list = None) -> bool:
@@ -2953,7 +2963,7 @@ Note: No backend server required.
         "financial-math",
         services_financial_math,
         name="Financial Math",
-        desc="Average cost, native cash, returns and periods, the ledger control totals: movements, conversions through the FX service, diagnostics; boundaries of the whole layer, the day-count primitives' one home",
+        desc="Average cost, native cash and its first negative day, returns and periods, the ledger control totals: movements, conversions through the FX service, diagnostics; boundaries of the whole layer, the day-count primitives' one home",
         # PURE: each module's only I/O is convert_bulk, which every test replaces on its
         # module with a double; the session handed to it is None or a sentinel, or, for the
         # ledger control totals, one on a private SQLite file under tmp_path that no other
@@ -2981,6 +2991,18 @@ Note: No backend server required.
         # skips this action so that the file runs once there.
         in_all=False,
         # Write-scoped (the category default): a user, brokers and an asset under a unique marker, every reading by their ids, the session rolled back.
+    )
+    add_test(
+        cat,
+        "dust-threshold",
+        services_dust_threshold,
+        name="Daily State Dust Threshold",
+        desc="MF6-2: a residual at or below QUANTITY_DUST_THRESHOLD is not held by the daily state — no market value, cost, NAV, allocation, broker contribution, frame or snapshot entry, and no MISSING day when unpriced; 0.000011 is still held",
+        # The file sits in test_financial/, which roi-fifo-utils runs whole: the derived "all"
+        # skips this action so that the file runs once there.
+        in_all=False,
+        # PURE: DailyStateBuilder over mock transactions; no DB, no server, no network.
+        isolation="pure",
     )
     add_test(
         cat,

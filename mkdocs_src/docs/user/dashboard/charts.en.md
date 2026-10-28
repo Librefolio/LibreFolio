@@ -213,6 +213,14 @@ With no subtype at all, the donut keeps a single ring.
 
 Your cash is the **Liquidity** slice of **By Type**, **By Sector** and **By Asset**; the **Geographic** map leaves it out, as cash belongs to no country. With the broker filter on, the panel shows only the selected brokers' assets and cash.
 
+### ➖ Negative cash {: #allocation-negative-cash }
+
+Each slice's percentage is its amount divided by the sum of all the slices, cash included, so negative cash changes the shares:
+
+- **Cash below zero, assets above it** — for example €1,500 of stocks with cash at −€500 on an overdraft: the slices add up to €1,000, so **Liquidity** reads −50% and the stocks 150%. The percentages still add up to 100%.
+- **Nothing left to share** — when the slices add up to zero or less, no slice has a percentage: €500 of stocks bought on an overdraft of −€500, or a portfolio you emptied, whose only slice is **Liquidity** at zero. Each slice shows `—` instead of a percentage and keeps its amount, and the chart has nothing to draw and says so. In **History**, a day on which the slices add up to zero or less has no percentages either.
+- **A tiny leftover** of 0.00001 units or fewer, which a sale of almost every unit can leave, is not a holding: it has no slice.
+
 ---
 
 ## 🔗 Related
