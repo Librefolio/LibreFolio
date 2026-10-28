@@ -5056,3 +5056,27 @@ Via del coordinatore: la costante, i testi del pavimento, il testo unico del CHA
    (`git archive d2dc09a9a`, `ondata5/MF-L5-split-ledger-on-d2dc09a9a.log`): il test di W5-2b legge `wac_points[giorno]`
    per data, mentre la linea del costo medio è a gradini da J5-5 → serve `value_at`. Integrazione W × J, non L5.
    CHECKPOINT READY inviato, FROZEN.
+
+### Ondata 6 (kickoff 28/10/2026) — HEAD `f4a5e6e0a` (atteso `32674edb8`, vedi sotto)
+
+Kickoff: `salvataggi-worktrees-20261021/ondata6/kickoff-MF.md`. Corsia: porta 6205, `/tmp/librefolio-r13-o6-mf`.
+Treno 12 per MF6-1, K3, A3/A11; 13 per il resto (PIANO-ondata6 §4).
+
+> **⚠️ Fuori pista**: il worktree è a `f4a5e6e0a`, 7 commit **dietro** `32674edb8` (antenato diretto; come tutti i
+> worktree `o6-*`). I 7 commit sono solo documenti e `Pipfile` (`tzdata`, H6-4):
+> `git diff --stat f4a5e6e0a 32674edb8 -- backend/app frontend/src` è vuoto, quindi l'analisi del giorno 1 vale. Il
+> riallineamento della base è del coordinatore, prima di MF6-1.
+
+#### Giorno 1 — analisi in sola lettura (28/10)
+1. ✅ **T-U1** (28/10): [analisi-T-U1-convert_bulk-20261028.md](analisi-T-U1-convert_bulk-20261028.md).
+   > **Note implementazione**: 15 chiamate dirette di `convert_bulk` + 4 di `unit_rate_steps` + 1 via
+   > `convert_by_stretch`. La conversione è già una casa sola (P3); duplicato è solo il racconto del buco (5 forme, la
+   > chiusura `WACMissingPairInfo(… merged_spans …)` identica 4 volte) e dell'età (soglia 7 in 2 posti). Proposti
+   > T-U1a (casa: raccoglitore, predicato, lettore della provenienza; con change-days), T-U1b (in MF6-1), T-U1c (X/J).
+   > `STALE_FX`: il dato c'è (D-P4), il banner è di Y. MF-A13 ricontato: 3 divisioni vere, `asset_resources` non divide
+   > più; piano di misura scritto.
+2. ✅ **Inventario change-days** (28/10): [inventario-change-days-20261028.md](inventario-change-days-20261028.md).
+   > **Note implementazione**: una pila, non 4 copie. Duplicazioni vere: ripiego «mappa semplice» ×2 (solo test),
+   > «giorno accanto» ×2 nei lotti, `merged_windows`/`merged_spans`. Casa proposta `financial_math/change_days.py`;
+   > motore e lotti restano unioni separate. Firma della funzione pura per W6-12 (`first_negative_cash`) in §6.
+3. ✅ CHECKPOINT READY (solo documenti) inviato il 28/10 → FROZEN fino al commit e a MF-L di W2.
