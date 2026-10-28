@@ -168,7 +168,7 @@ async function installOfflineProviderIO(page: Page, owned: Owned, baseURL: strin
         await route.fulfill({status: 200, contentType: 'application/json', body: JSON.stringify(body)});
     });
 
-    await page.route('**/api/v1/assets/prices/current', async (route) => {
+    await page.route('**/api/v1/assets/prices/current*', async (route) => {
         const ids = route.request().postDataJSON() as number[];
         // /current can write today's OHLC. Suppress that unrelated writer, but do not
         // claim a quote exists: persistence assertions below use the REAL backup API.

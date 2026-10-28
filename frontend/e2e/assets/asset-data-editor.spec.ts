@@ -455,7 +455,7 @@ test.describe('Asset Data Editor', () => {
         });
         // The page polls POST /assets/prices/current, which may ask live providers and write
         // today's price into the shared database. Nothing here is about live prices.
-        await page.route('**/api/v1/assets/prices/current', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
+        await page.route('**/api/v1/assets/prices/current*', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
 
         const panel = await openOwnPricesEditor(page, asset.id, d0, d3);
         await expect.poll(() => priceRowIds(panel), {message: 'one editor row per calendar day of [D, D+3]', timeout: 10_000}).toEqual([d0, d1, d2, d3]);
@@ -531,7 +531,7 @@ test.describe('Asset Data Editor', () => {
         });
         // The page polls POST /assets/prices/current, which may ask live providers and write
         // today's price into the shared database. Nothing here is about live prices.
-        await page.route('**/api/v1/assets/prices/current', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
+        await page.route('**/api/v1/assets/prices/current*', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
 
         const panel = await openOwnPricesEditor(page, asset.id, d0, d1);
         await expect.poll(() => priceRowIds(panel), {message: 'the two stored closes', timeout: 10_000}).toEqual([d0, d1]);
@@ -648,7 +648,7 @@ test.describe('Asset Data Editor', () => {
             });
             // The page polls POST /assets/prices/current, which may ask live providers and write
             // today's price into the shared database. Nothing here is about live prices.
-            await page.route('**/api/v1/assets/prices/current', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
+            await page.route('**/api/v1/assets/prices/current*', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
             const panel = await openOwnPricesEditor(page, asset.id, d0, d1);
             await expect.poll(() => priceRowIds(panel), {message: 'the two stored closes', timeout: 10_000}).toEqual([d0, d1]);
 

@@ -69,12 +69,12 @@ function paused(assetId: number, retryAfter: unknown): Record<string, unknown> {
 
 /** A result as the service hands it to the page. */
 function result(overrides: Partial<LivePriceResult> = {}): LivePriceResult {
-    return {assetId: 1, value: 100, currency: 'EUR', source: 'provider:yfinance', error: null, errorCode: null, retryAfter: null, ...overrides};
+    return {assetId: 1, value: 100, currency: 'EUR', source: 'provider:yfinance', error: null, errorCode: null, retryAfter: null, asOfDate: null, rangeChange: null, ...overrides};
 }
 
 /** A result whose provider is paused. */
 function pausedResult(assetId: number, retryAfter: number | null): LivePriceResult {
-    return result({assetId, value: 98.32, source: 'db:last_known', errorCode: 'RATE_LIMITED', retryAfter});
+    return result({assetId, value: 98.32, source: 'db:last_known', errorCode: 'RATE_LIMITED', retryAfter, asOfDate: '2026-10-15'});
 }
 
 /** The config axios attaches to an error raised outside a request. */
@@ -139,7 +139,7 @@ function serverAnswersEach(refuse?: {request: number; status: number; headers: R
 
 /** The result of asset `n` as `serverAnswersEach` quotes it, once mapped. */
 function quotedResult(assetId: number): LivePriceResult {
-    return result({assetId, value: assetId + 0.5, currency: 'USD'});
+    return result({assetId, value: assetId + 0.5, currency: 'USD', asOfDate: '2026-10-16'});
 }
 
 /** The requests received, in order: each as `method url` and the number of ids it carried. */
@@ -168,20 +168,20 @@ afterEach(() => {
 // =====================================================================================================================
 describe('toLivePriceResult — one item of the API as the page reads it', () => {
     it('LPS-01: a price a provider answered — every field, the two of the pause null', () => {
-        expect(toLivePriceResult(quoted())).toStrictEqual({assetId: 7, value: 142.5, currency: 'USD', source: 'provider:yfinance', error: null, errorCode: null, retryAfter: null});
+        expect(toLivePriceResult(quoted())).toStrictEqual({assetId: 7, value: 142.5, currency: 'USD', source: 'provider:yfinance', error: null, errorCode: null, retryAfter: null, asOfDate: '2026-10-16', rangeChange: null});
     });
 
     it('LPS-02: a paused provider — the last stored price, RATE_LIMITED and the seconds of the pause', () => {
-        expect(toLivePriceResult(paused(3, 300))).toStrictEqual({assetId: 3, value: 98.32, currency: 'EUR', source: 'db:last_known', error: null, errorCode: 'RATE_LIMITED', retryAfter: 300});
+        expect(toLivePriceResult(paused(3, 300))).toStrictEqual({assetId: 3, value: 98.32, currency: 'EUR', source: 'db:last_known', error: null, errorCode: 'RATE_LIMITED', retryAfter: 300, asOfDate: '2026-10-15', rangeChange: null});
     });
 
     it('LPS-03: what an item leaves out — no value, no currency, no source, no error, no pause', () => {
-        expect(toLivePriceResult({asset_id: 9})).toStrictEqual({assetId: 9, value: null, currency: '', source: null, error: null, errorCode: null, retryAfter: null});
+        expect(toLivePriceResult({asset_id: 9})).toStrictEqual({assetId: 9, value: null, currency: '', source: null, error: null, errorCode: null, retryAfter: null, asOfDate: null, rangeChange: null});
     });
 
     it('LPS-04: what an item sends as null — a paused provider with no stored price', () => {
         const item = {asset_id: 9, value: null, currency: null, as_of_date: null, source: null, error: 'No price data available', error_code: 'RATE_LIMITED', retry_after: null};
-        expect(toLivePriceResult(item)).toStrictEqual({assetId: 9, value: null, currency: '', source: null, error: 'No price data available', errorCode: 'RATE_LIMITED', retryAfter: null});
+        expect(toLivePriceResult(item)).toStrictEqual({assetId: 9, value: null, currency: '', source: null, error: 'No price data available', errorCode: 'RATE_LIMITED', retryAfter: null, asOfDate: null, rangeChange: null});
     });
 
     it('LPS-05: a price of zero is a price', () => {
@@ -210,8 +210,8 @@ describe('fetchCurrentPrices — POST /api/v1/assets/prices/current through axio
         serverAnswers(200, {results: [quoted({asset_id: 4}), paused(2, 300)], success_count: 2, errors: []});
 
         await expect(fetchCurrentPrices([4, 2])).resolves.toStrictEqual([
-            {assetId: 4, value: 142.5, currency: 'USD', source: 'provider:yfinance', error: null, errorCode: null, retryAfter: null},
-            {assetId: 2, value: 98.32, currency: 'EUR', source: 'db:last_known', error: null, errorCode: 'RATE_LIMITED', retryAfter: 300},
+            {assetId: 4, value: 142.5, currency: 'USD', source: 'provider:yfinance', error: null, errorCode: null, retryAfter: null, asOfDate: '2026-10-16', rangeChange: null},
+            {assetId: 2, value: 98.32, currency: 'EUR', source: 'db:last_known', error: null, errorCode: 'RATE_LIMITED', retryAfter: 300, asOfDate: '2026-10-15', rangeChange: null},
         ]);
         expect(received.map(({method, url}) => `${method} ${url}`)).toEqual([`post ${PATH}`]);
         expect(JSON.parse(String(received[0].data))).toEqual([4, 2]);
@@ -260,6 +260,34 @@ describe('fetchCurrentPrices — POST /api/v1/assets/prices/current through axio
         await expect(fetchCurrentPrices(ids)).resolves.toStrictEqual(ids.map(quotedResult));
         expect(requestsReceived(), 'the endpoint takes 1,000 ids').toEqual([{request: `post ${PATH}`, ids: 1_000}]);
         expect(idsReceived()).toEqual(ids);
+    });
+
+    // Y6-1: the list's poll asks the Δ with the price, and reads the day of the quote.
+    it('LPS-17: asks the Δ over the range with each batch (range_start), and maps the day of the quote and the change', async () => {
+        const change = {reference_date: '2026-07-28', change_abs: '3.50', change_ratio: '0.0251'};
+        serverAnswers(200, {results: [quoted({asset_id: 4, range_change: change})], success_count: 1, errors: []});
+
+        const [first] = await fetchCurrentPrices([4], {rangeStart: '2026-07-28'});
+
+        expect(received[0].params).toEqual({range_start: '2026-07-28'});
+        expect(first.asOfDate).toBe('2026-10-16');
+        expect(first.rangeChange).toEqual(change);
+    });
+
+    it('LPS-18: without a range start asks nothing more than the ids (a range ending in the past has no live Δ)', async () => {
+        serverAnswers(200, {results: [quoted({asset_id: 4})], success_count: 1, errors: []});
+
+        await fetchCurrentPrices([4]);
+
+        expect(received[0].params).toBeUndefined();
+    });
+
+    it('LPS-19: every batch of a long list carries the range start', async () => {
+        serverAnswersEach();
+
+        await fetchCurrentPrices(assetIds(1_001), {rangeStart: '2026-07-28'});
+
+        expect(received.map((config) => config.params)).toEqual([{range_start: '2026-07-28'}, {range_start: '2026-07-28'}]);
     });
 
     it('LPS-16: a refusal of the second request — a 429 with Retry-After — reaches the caller unchanged: the first request went, none after it', async () => {

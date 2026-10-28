@@ -22,6 +22,7 @@
     import * as echarts from 'echarts';
     import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';
     import {chartInitOptions} from '$lib/components/charts/chartPixelRatio';
+    import {attachDaySnap} from '$lib/components/charts/dayPointerSnap';
     import {attachChartReady} from '$lib/utils/chartReady';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
     import {maskFormattedNumber, shouldMaskAmount} from '$lib/utils/privacy/maskable';
@@ -1125,6 +1126,8 @@
                 pointedDay = typeof value === 'number' && Number.isFinite(value) ? dayOfAxisValue(value) : null;
             };
             zoomInstance.on('updateAxisPointer', onAxisPointer);
+            // …and the pointer line rests on a day, never between two (Y2 FB-2).
+            attachDaySnap(zoomInstance);
             dataZoomCleanup = () => {
                 zoomInstance.off('dataZoom', onDataZoom);
                 zoomInstance.off('updateAxisPointer', onAxisPointer);
