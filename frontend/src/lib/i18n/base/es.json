@@ -220,7 +220,15 @@
       "appended": "{n, plural, one {# nuevo} other {# nuevos}}"
     },
     "staleShow": "{n, plural, one {Mostrar # fila obsoleta} other {Mostrar # filas obsoletas}}",
-    "staleHide": "{n, plural, one {Ocultar # fila obsoleta} other {Ocultar # filas obsoletas}}"
+    "staleHide": "{n, plural, one {Ocultar # fila obsoleta} other {Ocultar # filas obsoletas}}",
+    "importProviderEventsLeftOut": "{n, plural, one {# evento marcado PROVIDER se omitió} other {# eventos marcados PROVIDER se omitieron}}: sincroniza el activo para {n, plural, one {cargarlo} other {cargarlos}}.",
+    "savePartial": "Ya guardado: {saved, plural, one {# precio escrito} other {# precios escritos}}, {deleted, plural, one {# precio eliminado} other {# precios eliminados}}. Corrige la causa y guarda de nuevo para el resto.",
+    "exportCsv": "Exportar",
+    "exportChoose": "Elige el formato del archivo.",
+    "exportAction": "Exportar",
+    "exportPrices": "Exportar los precios",
+    "exportEvents": "Exportar los eventos",
+    "exportRates": "Exportar las tasas"
   },
   "datePicker": {
     "presets": {

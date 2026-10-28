@@ -13,6 +13,10 @@
  * - the mode is saved with the pair's chart settings (`primaryView`), so a reload, or a pair saved in the rolling return,
  *   opens in it.
  *
+ * - FB-11: the rolling return also compares ASSETS: the signals panel offers the Asset Comparison type there, the asset's return
+ *   is asked of `POST /api/v1/assets/prices/query` (an item with its id, the calendar signal and no prices, no events) and told by
+ *   `data-calendar-asset-comparison-ready` / `-partial` / `-unavailable` / `-error` (asset ids, comma-joined).
+ *
  * Every spec runs against the seeded EUR-USD (years of daily rates) and, for the comparison, EUR-GBP. Nothing shared is
  * written: the chart settings live in this browser context's localStorage, which Playwright gives each test of its own.
  *
@@ -26,12 +30,14 @@ import {expect, test} from '../fixtures/playwright';
 import {waitForSettled} from '../fixtures/app-events';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {expectChartCanvas} from '../fixtures/charts';
-import {pairComparison, type SavedComparison} from '../fixtures/chartComparisons';
+import {assetComparison, assetIdByName, pairComparison, type SavedComparison} from '../fixtures/chartComparisons';
 import {expectPairLineDrawn} from '../fixtures/pairLine';
+import {optionsClosed} from '../fixtures/probe';
 import {daysAgoIso} from '../fixtures/dates';
 import {TEST_USER} from '../fixtures/test-users';
 
 const CONVERT_PATH = '/api/v1/fx/currencies/convert';
+const PRICES_QUERY_PATH = '/api/v1/assets/prices/query';
 const CHART = 'fx-detail-chart';
 /** The page's pair (canonical, so the chart settings are keyed by it) and the pair its saved comparison draws. */
 const OWN = 'EUR-USD';
@@ -69,6 +75,29 @@ function convertItems(request: Request): ConvertItem[] {
 /** A convert request one of whose items asks the calendar rolling return over `windowDays` (any window when omitted). */
 function asksCalendarReturn(request: Request, windowDays?: number): boolean {
     return convertItems(request).some((item) => (item.signals ?? []).some((signal) => signal.signal_code === CALENDAR_SIGNAL_CODE && (windowDays === undefined || signal.params?.window_days === windowDays)));
+}
+
+type PriceQueryItem = {
+    asset_id?: number;
+    include_price?: boolean;
+    include_events?: boolean;
+    signals?: Array<{instance_id?: string; signal_code?: string; params?: {window_days?: number}}>;
+};
+
+/** The items of a `POST /assets/prices/query`, or none when the body is not a JSON array. */
+function priceQueryItems(request: Request): PriceQueryItem[] {
+    if (request.method() !== 'POST' || new URL(request.url()).pathname !== PRICES_QUERY_PATH) return [];
+    try {
+        const body: unknown = request.postDataJSON();
+        return Array.isArray(body) ? body.filter((item): item is PriceQueryItem => item !== null && typeof item === 'object') : [];
+    } catch {
+        return [];
+    }
+}
+
+/** A prices query one of whose items asks the calendar rolling return of asset `assetId`. */
+function asksAssetCalendarReturn(request: Request, assetId: number): boolean {
+    return priceQueryItems(request).some((item) => item.asset_id === assetId && (item.signals ?? []).some((signal) => signal.signal_code === CALENDAR_SIGNAL_CODE));
 }
 
 /** The settings key of the signed-in user: the chart settings live in `localStorage` under it. */
@@ -298,5 +327,103 @@ test.describe('X5-F1 FX detail: the rolling return', () => {
         await expect(page.getByTestId('fx-chart-primary-calendar-return')).toHaveAttribute('aria-pressed', 'true');
         await expect(page.getByTestId('fx-chart-primary-price')).toHaveAttribute('aria-pressed', 'false');
         await expect(page.getByTestId('fx-calendar-window-controls')).toBeVisible();
+    });
+    test('FB-11 (g) the rolling return offers the Asset Comparison type; an asset compared there is asked of the prices query and drawn', async ({page}) => {
+        // The compared asset: the seeded S&P 500 index (daily prices for years back, so the whole period has a return).
+        const peerId = await assetIdByName(page, 'S&P 500');
+        const {root, chart} = await openOwnPair(page);
+        await switchToRollingReturn(page);
+        await expect(chart).toHaveAttribute('data-primary-mode', 'calendar-return');
+        await expect(chart).toHaveAttribute('data-series-state', DATA_STATES, {timeout: 20_000});
+
+        const toggle = page.getByTestId('fx-detail-signals-toggle');
+        if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+        await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+        const panel = page.getByTestId('fx-detail-signals-panel');
+        await expect(panel).toBeVisible({timeout: 5_000});
+
+        // The menu offers both comparison types in this mode: the FX pair (as before) and, now, the asset.
+        const comparisonButton = panel.getByTestId('signals-comparison-select-button');
+        await expect(comparisonButton).toBeVisible({timeout: 15_000});
+        await comparisonButton.click();
+        await expect(panel.getByTestId('signal-tree-option-fx-pair')).toBeVisible();
+        await expect(panel.getByTestId('signal-tree-option-asset-comparison')).toBeVisible();
+        await panel.getByTestId('signal-tree-option-asset-comparison').click();
+
+        const card = panel.locator('[data-testid^="signal-card-"][data-signal-type="asset-comparison"]');
+        await expect(card, 'the added asset comparison has a card in the rolling return').toHaveCount(1);
+        const signalId = (await card.getAttribute('data-testid'))?.slice('signal-card-'.length);
+        if (!signalId) throw new Error('the new comparison card carries no signal id');
+
+        // Choosing the asset asks the prices query for ITS rolling return: no prices, no events, the calendar signal.
+        const assetPicker = card.getByTestId(`signal-param-${signalId}-assetId-select`);
+        const assetTrigger = assetPicker.getByTestId(`signal-param-${signalId}-assetId-select-trigger`);
+        await optionsClosed(page); // search-select-option-* names a kind of row: no other list may be open
+        await assetTrigger.click();
+        await expect(assetTrigger).toHaveAttribute('aria-expanded', 'true');
+        const option = assetPicker.getByTestId(`search-select-option-${peerId}`);
+        await expect(option, 'the seeded S&P 500 is offered as a comparison asset').toBeVisible({timeout: 5_000});
+        const asked = page.waitForRequest((request) => asksAssetCalendarReturn(request, peerId), {timeout: 15_000});
+        await option.click();
+        await expect(assetTrigger).toHaveAttribute('aria-expanded', 'false');
+        await optionsClosed(page);
+
+        const item = priceQueryItems(await asked).find((candidate) => candidate.asset_id === peerId);
+        expect(item?.include_price, 'the comparison asks no prices').toBe(false);
+        expect(item?.include_events, 'the comparison asks no events').toBe(false);
+        expect(item?.signals?.map((signal) => ({instance_id: signal.instance_id, signal_code: signal.signal_code, params: signal.params}))).toEqual([{instance_id: CALENDAR_INSTANCE_ID, signal_code: CALENDAR_SIGNAL_CODE, params: {window_days: DEFAULT_WINDOW_DAYS}}]);
+
+        // The asset's return is told by its id in the list of its state (ready, or partial when a day lacks its reference).
+        await expect
+            .poll(
+                async () => {
+                    const withReturn = [await chart.getAttribute('data-calendar-asset-comparison-ready'), await chart.getAttribute('data-calendar-asset-comparison-partial')];
+                    return withReturn.some((ids) => (ids ?? '').split(',').includes(String(peerId)));
+                },
+                {message: `asset ${peerId} is among the compared assets with a return`, timeout: 20_000},
+            )
+            .toBe(true);
+        await expect(chart).toHaveAttribute('data-calendar-asset-comparison-unavailable', '');
+        await expect(chart).toHaveAttribute('data-calendar-asset-comparison-error', '');
+        // The saved card stays in the panel: the rolling return used to hide the asset comparisons it could not draw.
+        await expect(card).toBeVisible();
+        await expect(card).toHaveAttribute('data-signal-type', 'asset-comparison');
+        await expect(chart).toHaveAttribute('data-series-state', DATA_STATES);
+        await waitForSettled(root, 20_000);
+    });
+
+    test('FB-11 (h) a saved asset comparison is asked of the prices query when the rolling return opens, and its return is drawn', async ({page}) => {
+        const peerId = await assetIdByName(page, 'S&P 500');
+        const comparisonId = 'e2e-fb11-asset';
+        await seedPairSettings(page, 'percentage', [assetComparison(comparisonId, peerId)]);
+        const {root, chart} = await openOwnPair(page);
+        await expect(chart).toHaveAttribute('data-primary-mode', 'price');
+
+        const asked = page.waitForRequest((request) => asksAssetCalendarReturn(request, peerId), {timeout: 15_000});
+        await switchToRollingReturn(page);
+        const item = priceQueryItems(await asked).find((candidate) => candidate.asset_id === peerId);
+        expect(item?.include_price, 'the comparison asks no prices').toBe(false);
+        expect(item?.include_events, 'the comparison asks no events').toBe(false);
+        expect(item?.signals?.map((signal) => ({instance_id: signal.instance_id, signal_code: signal.signal_code, params: signal.params}))).toEqual([{instance_id: CALENDAR_INSTANCE_ID, signal_code: CALENDAR_SIGNAL_CODE, params: {window_days: DEFAULT_WINDOW_DAYS}}]);
+
+        await expect(chart).toHaveAttribute('data-series-state', DATA_STATES, {timeout: 20_000});
+        await expect
+            .poll(
+                async () => {
+                    const withReturn = [await chart.getAttribute('data-calendar-asset-comparison-ready'), await chart.getAttribute('data-calendar-asset-comparison-partial')];
+                    return withReturn.some((ids) => (ids ?? '').split(',').includes(String(peerId)));
+                },
+                {message: `asset ${peerId} is among the compared assets with a return`, timeout: 20_000},
+            )
+            .toBe(true);
+        await expect(chart).toHaveAttribute('data-calendar-asset-comparison-unavailable', '');
+        await expect(chart).toHaveAttribute('data-calendar-asset-comparison-error', '');
+        await waitForSettled(root, 20_000);
+
+        // The saved asset comparison keeps its card in the rolling return: it used to be hidden there.
+        const toggle = page.getByTestId('fx-detail-signals-toggle');
+        if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+        await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+        await expect(page.getByTestId(`signal-card-${comparisonId}`)).toHaveAttribute('data-signal-type', 'asset-comparison');
     });
 });
