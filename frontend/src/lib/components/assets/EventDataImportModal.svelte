@@ -3,7 +3,7 @@
 
   Wraps DataImportModal with event-specific columns:
   - Required: type, amount (read from `value` when no `amount` column is present)
-  - Optional: currency, notes
+  - Optional: currency, notes, source (the events export's MANUAL / PROVIDER)
 
   Header slot shows an InfoBanner with valid event types and a link to docs.
   Uses Svelte 5 runes.
@@ -49,6 +49,9 @@
         {key: 'type', label: 'type', type: 'string', required: true, matchKey: true},
         {key: 'amount', label: 'amount', aliases: ['value'], type: 'number', required: true},
         {key: 'notes', label: 'notes', type: 'string', required: false, parse: unescapeFormulaText},
+        // The events export tells who wrote each event (MANUAL / PROVIDER): read so that the editor can leave out the
+        // provider's own events of an asset that has a provider (W-B16); never stored on a row
+        {key: 'source', label: 'source', type: 'string', required: false},
     ];
 
     function openDocs() {

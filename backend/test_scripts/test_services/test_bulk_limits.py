@@ -996,3 +996,42 @@ async def test_bll07_a_full_history_never_shortens_a_finite_warmup_beside_it(pri
     assert (status, reason, complete) == ("ok", None, True), said
     assert used >= 400 and first_input <= warmup_start, said
     assert _sma200_series(beside) == _sma200_series(alone)
+
+
+# =============================================================================
+# BL-S — THE SPAN OF A PLAIN QUERY (X6, 28/10): a calendar-wide range costs the rows it holds, and the fills it asks for are counted before
+# =============================================================================
+#
+# The question (lot X6, «tetto di span»): does a huge visible span get read before the budget checks it? The answer, pinned
+# here: the read is one indexed range over the stored rows, so it costs what the asset stores, not the span; a fill costs
+# its days, and ``_fill_span`` counts them from the dates alone, before ``_build_backward_filled_series`` runs. So no cap of
+# the span itself is needed. Both cases are GUARDS, green on HEAD 4577ecb65 (no cure).
+
+
+@pytest.mark.asyncio
+async def test_bls01_the_whole_calendar_over_a_small_history_builds_only_its_own_days(private_db, frozen_ceiling, no_market_holidays):
+    """BL-S01: one item from 0001-01-01 to 9999-12-31 over an asset with four closes in the last 30 days. The end is the
+    ceiling (X-R55); with no row before the start the fill begins at the first close: 31 points, 4 of them stored, and no
+    refusal. (The span of 3 million days is never walked.)"""
+    closes = [_day(-30), _day(-20), _day(-10), _day(0)]
+    asset_id = await _asset(private_db, prices_on=closes)
+
+    (result,) = await _query(private_db, _item(asset_id, YEAR_ONE, LAST_DAY))
+
+    days = [point.date for point in result.prices]
+    assert (days[0], days[-1], len(days)) == (_day(-30), CEILING, 32), f"{len(days)} points from {days[:1]} to {days[-1:]}: the fill should run from the first close to the ceiling"
+
+
+@pytest.mark.asyncio
+async def test_bls02_two_calendar_wide_items_seeded_from_year_one_are_refused_before_the_fill(private_db, monkeypatch, frozen_ceiling, no_market_holidays):
+    """BL-S02: two plain items from 0001-01-01 to the ceiling, over two assets each holding a row dated 0001-01-02 (an
+    older version stored one): each fill would emit about 739 000 days, 1.48 million in all, past the budget.
+    ``BulkTooManyDaysError`` with ``max_item_days`` 1 000 000 and an ``item_days`` over it, within ``GUARD_SECONDS``, the
+    fill never started (the fuse on ``price_query.timedelta`` stops a fill past ``FUSE_DAY_STEPS`` days)."""
+    first = await _asset(private_db, prices_on=[YEAR_ONE + timedelta(days=1)])
+    second = await _asset(private_db, prices_on=[YEAR_ONE + timedelta(days=1)])
+    _install_fuse(monkeypatch, price_query)
+
+    error = await _within_guard(lambda: _refused_for_days(lambda: _query(private_db, _item(first, YEAR_ONE, LAST_DAY), _item(second, YEAR_ONE, LAST_DAY))))
+
+    assert error.max_item_days == MAX_ITEM_DAYS and error.item_days > MAX_ITEM_DAYS, (error.item_days, error.max_item_days)
