@@ -2184,7 +2184,7 @@ class TestCacheKeys:
             (drop_image_export, (f"no step exports {IMAGE_OS}=$ImageOS",)),
             (move_image_export_after_first_cache, ("after the first actions/cache",)),
             (rewrite(exports_runner_image, re.escape("${ImageOS:-unknown}"), "linux"), (f"no step exports {IMAGE_OS}=$ImageOS",)),
-            (rewrite(_cache_keyed("pipenv"), re.escape("-${{ env.RUNNER_IMAGE_OS }}-pipenv-"), "-pipenv-", field="key"), ("(Cache Pipenv): key ${{ runner.os }}-pipenv-${{",)),
+            (rewrite(_cache_keyed("pipenv"), re.escape("-${{ env.RUNNER_IMAGE_OS }}-py"), "-py", field="key"), ("(Cache Pipenv): key ${{ runner.os }}-py${{",)),
             (rewrite(_cache_keyed("node"), re.escape("-${{ env.RUNNER_IMAGE_OS }}-node-"), "-node-", field="restore-keys"), ("(Cache NPM): restore-keys ${{ runner.os }}-node- lacks",)),
         ],
         ids=["export-dropped", "export-after-first-cache", "export-a-constant", "pipenv-key-without-image", "npm-restore-key-without-image"],
