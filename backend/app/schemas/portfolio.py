@@ -76,9 +76,9 @@ class AllocationItem(StrictModel):
     """Single allocation slice (by type, sector, geography, or asset)."""
 
     name: str = Field(..., description="Category name, e.g. 'ETF', 'Technology', 'US', 'Unknown'")
-    value: SafeDecimal = Field(
+    value: Optional[SafeDecimal] = Field(
         ...,
-        description="Percentage share of the total, rounded to 0.01: amount / sum of all slices × 100. The shares add up to 100; with negative cash the cash slice is below zero and the others can exceed 100.",
+        description="Percentage share of the total, rounded to 0.01: amount / sum of all slices × 100. The shares add up to 100; with negative cash the cash slice is below zero and the others can exceed 100. None for every slice when the sum of the slices is zero or negative (no meaningful share); the amounts stay.",
     )
     amount: SafeDecimal = Field(..., description="Absolute value in base currency")
     emoji: Optional[str] = Field(None, description="Display emoji for the category (sector/type/geo)")

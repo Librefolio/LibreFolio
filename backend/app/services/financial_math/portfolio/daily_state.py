@@ -18,8 +18,9 @@ from backend.app.services.financial_math.average_cost import (
     CostEffect,
     CostStep,
 )
+from backend.app.services.financial_math.change_days import change_days, reading_change_days
 from backend.app.services.financial_math.fx_rates import AskedDayRates
-from backend.app.services.financial_math.native_cash import NativeCash, change_days
+from backend.app.services.financial_math.native_cash import NativeCash
 from backend.app.services.financial_math.portfolio.classifier import _CASH_LINKED_TYPES, _LINKED_TYPES
 from backend.app.services.financial_math.portfolio.models import (
     AcquisitionFundingContribution,
@@ -45,9 +46,16 @@ from backend.app.services.financial_math.portfolio.models import (
 )
 from backend.app.services.financial_math.price_marks import AssetPriceSeries, ResolvedMark
 from backend.app.services.financial_math.valuation import compute_holding_value
-from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
+from backend.app.services.platform.data_quality_thresholds import QUANTITY_DUST_THRESHOLD, STALE_PRICE_THRESHOLD_DAYS
 
 logger = structlog.get_logger(__name__)
+
+
+def _is_held(qty: Decimal) -> bool:
+    """A position is held above the dust threshold (MF-A6): a residual of ``QUANTITY_DUST_THRESHOLD`` units or fewer
+    has no value, cost, slice, frame or snapshot of its own — as the Performance rows and the position series count it —
+    and its cost leaves the open cost basis, so it ends in the period's other effects."""
+    return qty > QUANTITY_DUST_THRESHOLD
 
 
 def _cumulative_split_ratio(history: SplitHistory, reference_date: date_type, valuation_date: date_type) -> tuple[Decimal, bool]:
@@ -557,7 +565,7 @@ class DailyStateBuilder:
             unrealized_parts: dict[str, list[Decimal]] = {}
 
             for (asset_id, position_broker_id), qty in cumulative_qty.items():
-                if qty <= 0:
+                if not _is_held(qty):
                     continue
                 valuation = self._value_held_position(asset_id, position_broker_id, qty, current, cost_pool, compute_ohlc=self.compute_candles)
                 if valuation.market_value is not None:
@@ -688,7 +696,7 @@ class DailyStateBuilder:
             # 4b2. Position state snapshot at the end of the period's start day
             if current == self.period_start:
                 for (aid, bid), qty in cumulative_qty.items():
-                    if qty <= 0:
+                    if not _is_held(qty):
                         continue
                     ps = self._build_position_state(aid, bid, qty, current, cost_pool)
                     position_states_start.append(ps)
@@ -739,7 +747,7 @@ class DailyStateBuilder:
 
         # End-of-frame position snapshot (t1)
         for (aid, bid), qty in cumulative_qty.items():
-            if qty <= 0:
+            if not _is_held(qty):
                 continue
             ps = self._build_position_state(aid, bid, qty, self.date_to, cost_pool)
             position_states_end.append(ps)
@@ -1126,18 +1134,9 @@ class DailyStateBuilder:
         they are its steps and window bounds (``reading_change_days``); on a plain map, each key's day and the day after.
         No day before ``date.min``: there a rate counts as a change, as on a calendar's first day.
         """
-        rates = self.fx_rate_map
         candidates: set[date_type] = set()
-        if isinstance(rates, AskedDayRates):
-            for currency in currencies:
-                candidates.update(rates.reading_change_days(currency, self.target_currency))
-        else:
-            for key in rates:
-                if len(key) == 3 and key[0] in currencies and key[1] == self.target_currency:
-                    day = key[2]
-                    candidates.add(day)
-                    if day < date_type.max:
-                        candidates.add(day + timedelta(days=1))
+        for currency in currencies:
+            candidates.update(reading_change_days(self.fx_rate_map, currency, self.target_currency))
         days: set[date_type] = {first - timedelta(days=1)} if first > date_type.min else set()
         for day in candidates:
             if first <= day <= last:

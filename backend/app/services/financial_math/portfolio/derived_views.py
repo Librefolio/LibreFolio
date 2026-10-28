@@ -99,6 +99,11 @@ def _amount_or_none(amount: Decimal) -> Decimal | None:
     return amount if amount else None
 
 
+def _cents(percent: Decimal | None) -> Decimal | None:
+    """An allocation slice's share rounded to 0.01; None stays None (a sum at or below zero, MF-C2)."""
+    return percent.quantize(Decimal("0.01")) if percent is not None else None
+
+
 #: The history point's money fields, each with the state's amount it shows (an optional one is None when zero)
 _HISTORY_AMOUNTS: tuple[tuple[str, Callable[[DailyPortfolioState], Decimal | None]], ...] = (
     ("cash_value", lambda s: s.cash_value),
@@ -452,7 +457,7 @@ class DerivedViewsBuilder:
             return [
                 {
                     "name": name,
-                    "value": percents[name].quantize(Decimal("0.01")),
+                    "value": _cents(percents[name]),
                     "amount": amt,
                     "emoji": sector_emoji(name) if use_sector_emoji else None,
                 }
@@ -472,7 +477,7 @@ class DerivedViewsBuilder:
         def components(state: DailyPortfolioState) -> list[dict]:
             d = getattr(state, attr, {})
             percents = slice_percents(d)
-            return [{"name": name, "value": percents[name].quantize(Decimal("0.01")), "amount": amt} for name, amt in sorted(d.items(), key=lambda x: -x[1])]
+            return [{"name": name, "value": _cents(percents[name]), "amount": amt} for name, amt in sorted(d.items(), key=lambda x: -x[1])]
 
         return self._component_steps(components, date_from)
 
@@ -498,7 +503,7 @@ class DerivedViewsBuilder:
             component = {
                 "name": "Liquidity" if asset_id is None else names.get(asset_id, f"Asset {asset_id}"),
                 "id": asset_id,
-                "value": percents[asset_id].quantize(Decimal("0.01")),
+                "value": _cents(percents[asset_id]),
                 "amount": amount,
             }
             if with_emoji:

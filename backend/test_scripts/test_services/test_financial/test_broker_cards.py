@@ -10,15 +10,16 @@ unchanged: the broker's native cash valued at the valuation date's rates.
 Before MF-B (HEAD 45ae068cc) the card summed it itself: the ``current_value`` of the broker's holdings — the end
 positions above ``QUANTITY_DUST_THRESHOLD`` (0.00001) only — plus its cash (``native_cash.value_at``) plus its value
 in transit (``in_transit_contribution``), and ``gain_loss`` = that − the broker's capital. Same numbers, but for one
-case: a dust position (0 < quantity ≤ 0.00001) that the headline counts and the card did not.
+case: a dust position (0 < quantity ≤ 0.00001) that the headline counted and the card did not. MF-B made the card add
+the dust's value, as the headline did; since MF6-2 (backlog MF-A6) the engine holds a position only above the threshold
+(``daily_state._is_held``), so the dust is not held: its value is in no card and not in the headline.
 
 Three checks per scenario:
 
 1. the cards add up to the headline: Σ ``net_worth`` == ``net_worth`` and Σ ``gain_loss`` == ``total_gain_loss``,
    exactly;
 2. each card is its holdings, its cash and what it has in flight: ``net_worth`` == Σ its holdings' ``current_value``
-   + its ``cash_total`` + its value in transit (on the sender's card) + the value of a dust position (never a
-   holding row), each in-transit and dust value computed by hand;
+   + its ``cash_total`` + its value in transit (on the sender's card), each in-transit value computed by hand;
 3. each card shows the figures computed by hand.
 
 Before any check, the scenario is proven to be the one intended (``_summary``): the headline, the holdings (one row
@@ -43,14 +44,16 @@ Scenarios (report currency EUR, every asset quoted in EUR):
   Headline 5500 / 200;
 - ``cash-in-transit`` — S: DEPOSIT 5000, BUY 10 X for 1000 (close 120), CASH_TRANSFER −1000 on 03-04 reaching R on
   03-10; valued on 03-06: S 1200 + cash 3000 + 1000 in flight = 5200, gain 200. R: DEPOSIT 300. Headline 5500 / 200;
-- ``dust-residual`` — A: DEPOSIT 5000, BUY 1 X for 1000, SELL 0.999998 for 999.998; X closes 1000: 0.000002 held,
-  worth 0.002, no holding row (at or below the dust threshold). A: cash 4999.998 + 0.002 = 5000, gain 0. B: DEPOSIT
-  3000, BUY 20 Z for 1000, close 61: 3220, gain 220. Headline 8220 / 220.
+- ``dust-residual`` — A: DEPOSIT 5000, BUY 1 X for 1000, SELL 0.999998 for 999.998; X closes 1000: 0.000002 left,
+  at or below the dust threshold, so not held (MF6-2): no holding row and no value. A: cash 5000 − 1000 + 999.998 =
+  4999.998, gain 4999.998 − 5000 = −0.002 (the dust's cost, 0.000002 × 1000, given up). B: DEPOSIT 3000, BUY 20 Z for
+  1000, close 61: 3220, gain 220. Headline 8219.998 / 219.998.
 
 Green on HEAD and after: every scenario but ``dust-residual``, for all three checks (parity pins).
 
-Red on HEAD, green after: ``dust-residual``, for all three checks — HEAD's card A was 4999.998 with a gain of −0.002:
-the cards added up to 8219.998 / 219.998 against a headline of 8220 / 220.
+``dust-residual`` (MF6-2): MF-B's version expected card A at 5000, gain 0 — the dust's 0.002 in the card, as the
+engine then put it in the headline (8220 / 220). Since MF6-2 the dust is not held: its 0.002 is in no card and not in
+the headline.
 
 Isolation: every test owns its user, brokers and assets (unique names) and writes only through a session that is
 rolled back: nothing is committed. Amounts are in EUR and read in EUR (``target_currency_override``) but for the USD
@@ -133,15 +136,13 @@ class _Book:
 
 @dataclass(frozen=True)
 class _Card:
-    """A card as computed by hand. ``in_transit`` and ``dust`` are the parts of ``net_worth`` that are neither a
-    holding row nor cash: the value this broker has in flight, and the value of its positions at or below the dust
-    threshold."""
+    """A card as computed by hand. ``in_transit`` is the part of ``net_worth`` that is neither a holding row nor
+    cash: the value this broker has in flight."""
 
     net_worth: str
     gain_loss: str
     cash_total: str
     in_transit: str = "0"
-    dust: str = "0"
 
 
 @dataclass(frozen=True)
@@ -339,9 +340,10 @@ async def _dust_residual(session: AsyncSession, keep_alive: list[object]) -> _Sc
         _close(book, "X", FRIDAY, "1000"),
         _close(book, "Z", FRIDAY, "61"),
     )
-    # A: no holding row (0.000002 X is dust), cash 5000 − 1000 + 999.998, and the dust's 0.000002 × 1000 = 0.002.
-    cards = {"A": _Card("5000", "0", "4999.998", dust="0.002"), "B": _Card("3220", "220", "2000")}
-    return _Scenario(book=book, valuation_date=FRIDAY, net_worth="8220", total_gain_loss="220", cards=cards, holdings={("B", "Z"): _Holding("MARKET_PRICE", "1220", FRIDAY)})
+    # A: no holding row and no value (0.000002 X is dust, not held — MF6-2): cash 5000 − 1000 + 999.998 = 4999.998,
+    # gain 4999.998 − 5000 = −0.002. Headline 4999.998 + 3220 = 8219.998, gain −0.002 + 220 = 219.998.
+    cards = {"A": _Card("4999.998", "-0.002", "4999.998"), "B": _Card("3220", "220", "2000")}
+    return _Scenario(book=book, valuation_date=FRIDAY, net_worth="8219.998", total_gain_loss="219.998", cards=cards, holdings={("B", "Z"): _Holding("MARKET_PRICE", "1220", FRIDAY)})
 
 
 SCENARIOS: dict[str, Callable[[AsyncSession, list[object]], Awaitable[_Scenario]]] = {
@@ -351,7 +353,7 @@ SCENARIOS: dict[str, Callable[[AsyncSession, list[object]], Awaitable[_Scenario]
     "held-at-cost": _held_at_cost,
     "security-in-transit": _security_in_transit,
     "cash-in-transit": _cash_in_transit,
-    # Red on HEAD: the card left the dust position out, the headline did not.
+    # MF6-2: the dust is not held — in no card and not in the headline.
     "dust-residual": _dust_residual,
 }
 
@@ -459,7 +461,7 @@ def _sum(cards: Mapping[str, BrokerBreakdown], read: Callable[[BrokerBreakdown],
 
 
 # =============================================================================
-# TESTS — green on HEAD and after, but dust-residual (red on HEAD)
+# TESTS — every scenario a parity pin; dust-residual follows MF6-2 (the dust is not held)
 # =============================================================================
 
 
@@ -487,8 +489,8 @@ class TestBrokerCards:
     @pytest.mark.asyncio
     @pytest.mark.parametrize("name", list(SCENARIOS))
     async def test_each_card_is_its_holdings_its_cash_and_what_it_has_in_flight(self, session, keep_alive, name):
-        """net_worth == Σ the broker's holdings' current_value + its cash_total + its value in transit + the value of
-        its dust positions (the last two computed by hand)."""
+        """net_worth == Σ the broker's holdings' current_value + its cash_total + its value in transit (computed by
+        hand)."""
         print_section(f"MF-B broker card composition: {name}")
         scenario = await SCENARIOS[name](session, keep_alive)
         summary = await _summary(session, scenario)
@@ -499,9 +501,9 @@ class TestBrokerCards:
             broker_id = scenario.book.brokers[label].id
             values = [holding.current_value for holding in summary.holdings if holding.broker_id == broker_id]
             assert None not in values, f"precondition: every holding of card {label} has a value"
-            parts = sum(values, ZERO) + cards[label].cash_total.amount + Decimal(expected.in_transit) + Decimal(expected.dust)
+            parts = sum(values, ZERO) + cards[label].cash_total.amount + Decimal(expected.in_transit)
             if cards[label].net_worth.amount != parts:
-                problems.append(f"card {label}: net_worth {cards[label].net_worth.amount} != holdings {sum(values, ZERO)} + cash {cards[label].cash_total.amount} + in transit {expected.in_transit} + dust {expected.dust} = {parts}")
+                problems.append(f"card {label}: net_worth {cards[label].net_worth.amount} != holdings {sum(values, ZERO)} + cash {cards[label].cash_total.amount} + in transit {expected.in_transit} = {parts}")
         assert not problems, "\n".join(problems)
         print_success("every card is its holdings, its cash and what it has in flight")
 
