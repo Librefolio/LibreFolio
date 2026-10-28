@@ -80,7 +80,7 @@ header to unlock it. Only administrators (superusers) have this tab.
 | 🔄 Update Job | **Scheduler Enabled** | On | Turns the automatic price and exchange-rate updates on or off: see [Market Data Scheduler](#market-data-scheduler). |
 | 🧠 Memory | **Max File Upload Size** | 10 MB | The largest file users can upload, broker reports included. Raise it if a large export is refused. |
 | 🌍 Defaults | **Default Currency** | `EUR` | The currency new users report in. |
-| 🌍 Defaults | **Default Language** | `en` | 🇬🇧 `en`, 🇮🇹 `it`, 🇫🇷 `fr` or 🇪🇸 `es`. |
+| 🌍 Defaults | **Default Language** | `en` | 🇬🇧 `en`, 🇮🇹 `it`, 🇫🇷 `fr` or 🇪🇸 `es`. It is also the language of the emails sent to people who have no account yet. Until you save it for the first time, `LIBREFOLIO_DEFAULT_LANGUAGE` in the `.env` file, if set, decides; from your first save, your value wins, even when it is English again ([Environment Variables](configuration_accounts.md#accounts)). |
 | 🌍 Defaults | **Default Theme** | `auto` | ☀️ `light`, 🌙 `dark`, or 🖥️ `auto`, which follows the device. |
 
 New users start from the three defaults: the [Welcome setup](../user/getting-started.md#welcome-setup)

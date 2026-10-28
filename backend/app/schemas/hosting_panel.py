@@ -35,12 +35,14 @@ _StatusWaiting = _STATUS["waiting"].annotation
 class PanelRestoreSummary(BaseModel):
     """The restore of the instance, in ``GET /panel/status``: its state and why it waits, without who confirmed it.
     ``unreadable`` (D7): the state of the restore cannot be read, ``reason`` then says why (``io``, ``not_a_file``,
-    ``invalid``), and the instance serves no data until its administrator recovers it."""
+    ``invalid``), and the instance serves no data until its administrator recovers it. ``committed`` with the reason
+    ``owner_assignment`` (CL-6): the restore is done, but the owner of the restored data has no account yet, and the
+    instance serves no data until it has one."""
 
     model_config = ConfigDict(extra="forbid")
 
     state: _StatusState | Literal["unreadable"]
-    reason: _StatusReason | Literal["io", "not_a_file", "invalid"] = None
+    reason: _StatusReason | Literal["io", "not_a_file", "invalid", "owner_assignment"] = None
     waiting: _StatusWaiting = None
     backup_created_at: datetime | None = None
     stage_id: str | None = None
@@ -78,6 +80,10 @@ class PanelStatusResponse(BaseModel):
     users_over_limit: bool = Field(
         ...,
         description="True while the active accounts outnumber the valid limit (LIBREFOLIO_MAX_USERS), for example after the move to a smaller plan: ordinary users are refused until an administrator chooses who keeps access. Invitations and accounts waiting for their verification take places (users_used) but never make it true; false without a limit. A yes or no, never who (H5-8)",
+    )
+    owner_language: Literal["en", "it", "fr", "es"] | None = Field(
+        None,
+        description="The language the instance's owner (the paying administrator) chose in their account settings, for the hosting provider's own messages to them; null when the instance has no owner, the owner has not chosen one yet, or it is not one of the four. Never anything else of the account (CL-9)",
     )
 
 

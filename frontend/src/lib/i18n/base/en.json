@@ -306,7 +306,11 @@
   "nav": {
     "dashboard": "Dashboard",
     "settings": "Settings",
-    "toggleMenu": "Toggle menu"
+    "toggleMenu": "Toggle menu",
+    "checkingAuthentication": "Checking your sign-in…",
+    "closeSidebar": "Close the menu",
+    "expandSidebar": "Expand the menu",
+    "collapseSidebar": "Collapse the menu"
   },
   "prices": {
     "sync": {
