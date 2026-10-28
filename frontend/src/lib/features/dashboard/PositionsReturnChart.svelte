@@ -30,7 +30,9 @@
     import {attachChartReady} from '$lib/utils/chartReady';
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {CHART_ANIMATION_CONFIG, CHART_SET_OPTION_OPTS, namedPoint} from '$lib/components/charts/echartsAnimationConfig';
-    import {buildTooltipHeader, buildTooltipRow, buildTooltipTheme, scheduleFirstRenderStabilityFix, tooltipPositionSide} from '$lib/components/charts/echartsTooltipHelpers';
+    import {buildFittedTooltipBlockRow, buildTooltipHeader, buildTooltipTheme, fitTooltipToWidth, scheduleFirstRenderStabilityFix, tooltipPositionSide} from '$lib/components/charts/echartsTooltipHelpers';
+    import {INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG} from '$lib/components/charts/chartCoreHelpers';
+    import {attachDataZoomTouchPan} from '$lib/components/charts/echartsDataZoomTouchPan';
     import {axisLabelMeasure, buildResponsiveXAxisPolicy, timeAxisGridRight} from '$lib/components/charts/responsiveXAxis';
     import {formatAxisCurrency} from '$lib/features/brokers/lots/lotComparisonChartHelpers';
     import {_} from '$lib/i18n';
@@ -40,9 +42,10 @@
     import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
-    import {formatDay} from '$lib/utils/core/formatAxisDate';
+    import {formatDay, formatDayWithWeekday} from '$lib/utils/core/formatAxisDate';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {dayOfAxisValue} from '$lib/utils/stepSeries';
+    import {attachDaySnap} from '$lib/components/charts/dayPointerSnap';
     import {lineOnDay, type PositionLine, type PositionsChartView} from './positionsSeries';
 
     interface Props {
@@ -76,6 +79,7 @@
 
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chart: echarts.ECharts | null = null;
+    let touchPanHandle: {dispose: () => void} | null = null;
     let lastWidth = 0;
     /** The day the pointer is on, kept from ECharts' `updateAxisPointer` (the tooltip of a step line reads it). */
     let pointedDay: string | null = null;
@@ -134,6 +138,8 @@
     });
 
     function disposeChart(): void {
+        touchPanHandle?.dispose();
+        touchPanHandle = null;
         chart?.dispose();
         chart = null;
     }
@@ -181,6 +187,12 @@
         // `value − 100` is a change of unit (base 100 → percent), the one `positionsSeries.ts` declares.
         const change = formatPercent(value - REFERENCE_LEVEL.percentage, {digits: 2});
         return `${escapeHtml(level)} <span style="color:${mutedColor};font-weight:400">(${escapeHtml(change)})</span>`;
+    }
+
+    /** No wider than the chart, minus ECharts' box padding and `tooltipPositionSide`'s margins: on a phone a long name gives way (ellipsis) instead of leaving the screen. */
+    function fitToChart(html: string): string {
+        const width = chart?.getWidth() ?? 0;
+        return width > 0 ? fitTooltipToWidth(html, width - 32) : html;
     }
 
     /** The points whose neighbours are both unknown: a line has nothing to join them to, so they get a symbol. */
@@ -273,8 +285,8 @@
                             .filter((row): row is {id: string; value: number} => row.value !== null)
                             .sort((left, right) => right.value - left.value);
                         if (onDay.length === 0) return '';
-                        const dayHeader = buildTooltipHeader(escapeHtml(formatDay(day)), box.mutedColor);
-                        return dayHeader + onDay.map((row) => buildTooltipRow(escapeHtml(labelById.get(row.id) ?? row.id), tooltipValue(row.value, box.mutedColor), colorOf(row.id))).join('');
+                        const dayHeader = buildTooltipHeader(escapeHtml(formatDayWithWeekday(day)), box.mutedColor);
+                        return fitToChart(dayHeader + onDay.map((row) => buildFittedTooltipBlockRow(escapeHtml(labelById.get(row.id) ?? row.id), tooltipValue(row.value, box.mutedColor), colorOf(row.id))).join(''));
                     }
                     const items = (Array.isArray(params) ? params : [params]) as TooltipItem[];
                     const rows = items
@@ -282,10 +294,13 @@
                         .filter((row): row is {id: string; value: number; date: string} => typeof row.id === 'string' && row.value !== null)
                         .sort((left, right) => right.value - left.value);
                     if (rows.length === 0) return '';
-                    const header = buildTooltipHeader(escapeHtml(formatDay(rows[0].date)), box.mutedColor);
-                    return header + rows.map((row) => buildTooltipRow(escapeHtml(labelById.get(row.id) ?? row.id), tooltipValue(row.value, box.mutedColor), colorOf(row.id))).join('');
+                    const header = buildTooltipHeader(escapeHtml(formatDayWithWeekday(rows[0].date)), box.mutedColor);
+                    return fitToChart(header + rows.map((row) => buildFittedTooltipBlockRow(escapeHtml(labelById.get(row.id) ?? row.id), tooltipValue(row.value, box.mutedColor), colorOf(row.id))).join(''));
                 },
             },
+            // Zoom and pan on the time axis. No window is named, so a redraw keeps the user's; `none` keeps every step line whole (a filter would
+            // start it at its first point inside the window, losing the step carried in).
+            dataZoom: [{type: 'inside', xAxisIndex: 0, filterMode: 'none', ...INSIDE_DATA_ZOOM_SCROLL_SAFE_CONFIG}],
             xAxis: {
                 type: 'time',
                 axisPointer: {snap: false},
@@ -326,6 +341,8 @@
                 const value = (event as {axesInfo?: Array<{value?: unknown}>}).axesInfo?.[0]?.value;
                 pointedDay = typeof value === 'number' && Number.isFinite(value) ? dayOfAxisValue(value) : null;
             });
+            attachDaySnap(chart);
+            touchPanHandle = attachDataZoomTouchPan(chart, container);
             scheduleFirstRenderStabilityFix(chart, container);
         }
         resizeWatcher.observe(container);

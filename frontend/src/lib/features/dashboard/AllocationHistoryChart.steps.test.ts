@@ -28,7 +28,7 @@ const {chartInstances, echartsModule} = vi.hoisted(() => {
         getWidth: () => number;
         getHeight: () => number;
         on: (event: string, handler: (event: unknown) => void) => void;
-        off: (event: string) => void;
+        off: (event: string, handler?: (event: unknown) => void) => void;
         dispatchAction: (action: unknown) => void;
         resize: () => void;
         isDisposed: () => boolean;
@@ -50,8 +50,14 @@ const {chartInstances, echartsModule} = vi.hoisted(() => {
             on: (event, handler) => {
                 chart.handlers.set(event, [...(chart.handlers.get(event) ?? []), handler]);
             },
-            off: (event) => {
-                chart.handlers.delete(event);
+            // Like ECharts: with a handler, only that one goes; without, every handler of the event.
+            off: (event, handler) => {
+                if (handler === undefined) chart.handlers.delete(event);
+                else
+                    chart.handlers.set(
+                        event,
+                        (chart.handlers.get(event) ?? []).filter((entry) => entry !== handler),
+                    );
             },
             dispatchAction: () => {},
             resize: () => {},
