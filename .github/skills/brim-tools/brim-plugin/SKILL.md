@@ -57,7 +57,8 @@ converter.
    asset-matching UI. They are never negative and never persisted.
 9. **The operation date, and only settled rows.** Record every transaction on its **operation
    date**, the day the operation was made (the trade date), never on the settlement or value
-   date (the developer's principle, 19/10/2026). Then decide from the columns the report has
+   date (the developer's principle, 19/10/2026): the movement is recorded when it happens, not when the systems process it: in between the money is already gone and cannot be used, so hiding it would be wrong (the developer, 28/10/2026). No exception for a subscription during a placement or an IPO: the order of 17/02 is dated 17/02 even when the issue and the cash debit come on 25/02; LibreFolio shows the position at cost and the cash already gone in between, which is what happened. Then decide from the columns the
+   report has
    whether the row is stable and booked:
    - a **status** column, when there is one, decides; what it says follows rule 10 (reserved,
      cancelled or pending are known; a word the plugin does not know is unknown);
@@ -91,10 +92,41 @@ converter.
       that carries `context.report_issue = True`. The wizard then shows the link «open an issue
       on GitHub» under the warning, on every instance, self-hosted or hosted: the users become
       the canaries of a broker whose export changes. Example: Danske Bank's `excluded_status`.
+      **Use the shared helper** `_brim_io.RowSkips` (W-B86): `skips = io.RowSkips(header_row)`,
+      `skips.unknown(line, row, reason)` for a type or status the plugin does not recognise (or does
+      not import yet), `skips.unreadable(line, row, reason)` for a date, amount or required field it
+      cannot read (a `csv.DictReader` row works too: `skips.set_headers(reader.fieldnames)` first),
+      then `warnings=[*warnings, *skips.notices()]`. It yields the two shared warnings
+      `rows_not_recognized` and `rows_unreadable` (`context = {count, report_issue: True}`, the rows
+      and a «Reason» column as evidence), already worded in the four languages
+      (`importWizard.brimNotice.<code>`, `importWizard.brimEvidence.<code>`). A plugin with its own
+      notice codes (DEGIRO, Crédit Agricole, Scalable, Danske) just adds `report_issue: True` to the
+      context of the ones that mean «unknown» or «unreadable». A plain `warnings.append("Row 5: …")`
+      cannot carry the link. `test_brim_row_skips.py` classifies every registered plugin: a new one
+      must be listed there, with how to build an unknown and an unreadable row.
     - **Never silently** leave out a row that may carry an economic effect (a split, a fee, a
       tax, a currency conversion) unless the plugin knows that is safe: a row it cannot import
       is unknown.
     - Rule 9's rows not settled yet are neither: they keep their info note.
+    - **Beta plugins.** While a plugin is in beta it may still write one plain string per skipped
+      row (a `legacy` warning, no link): with no reliable reports there is no way yet to tell the
+      safe rows from the unknown ones (decision of 19/10/2026, confirmed 22/10). That is a
+      **rule, not a lot**: **leaving the beta means adopting `RowSkips`** (or your own codes with
+      `report_issue`), in the same change that removes the Beta label. In
+      `test_brim_row_skips.py` take the plugin out of `ROW_SKIPS_PENDING` and list it in
+      `ROW_SKIPS_BY_PLUGIN` with an unknown and an unreadable row, and bump its
+      `plugin_version`. Fineco did it when it left the beta (W-B92, 1.5.0).
+
+## ⚙️ Settings (prepared, not used yet)
+
+The plugin settings of the foundation (`services/plugin_settings/`) have a family `brim`, with the same rules as the price
+sources: personal and instance-wide values, and secrets encrypted with the instance key. **No real plugin declares a field
+today** (W-BS): a plugin that does not declare `settings_fields` is untouched. The day one needs a value (a date format, a
+key), declare `settings_fields` on the class, as the asset and FX plugins do (skill `asset-plugin`); the card appears in the
+Plugins tab by itself and a secret never comes back in clear. Read `self.settings.get("key")` and `self.settings.secret("key")`
+**inside `parse`**, never in `__init__`: the parse runs in a worker process that re-creates the plugin, and the values are
+bound to it just before it parses. **Only the parse delivers settings**: detection, report sets and the gap fix create the plugin
+without values (defaults, no secret), so nothing they use may depend on a setting. Never log a secret nor put one in a notice.
 
 ## 🛠️ Rough shape of the work
 
