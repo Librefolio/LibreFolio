@@ -411,6 +411,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/transactions/form/TransactionFormModal.preFloor.test.ts",
             "src/lib/features/transactions/bulk/TransactionBulkModal.test.ts",
             "src/lib/features/transactions/TransactionsTable.privacy.test.ts",
+            "src/lib/features/transactions/TransactionsTable.actions.test.ts",
             "src/lib/features/transactions/wac/WacPreviewSection.test.ts",
             "src/lib/features/transactions/events/EventExistsPanel.test.ts",
             "src/lib/features/transactions/events/EventCreateMiniModal.test.ts",

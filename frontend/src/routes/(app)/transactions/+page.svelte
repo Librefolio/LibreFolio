@@ -36,6 +36,7 @@
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import {getBrokerRole} from '$lib/stores/reference/brokerStore';
     import {txStoreSetAll, txStoreGet, txStoreCanEdit} from '$lib/features/transactions/txStore.svelte';
+    import {guardEditableRows} from '$lib/features/transactions/bulk/selectionGuards';
     import {invalidate as invalidatePortfolioCache} from '$lib/stores/portfolio/portfolioStore.svelte';
     import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
     import {applyTransactionColumnFilters, buildTransactionsFiltersUrl, parseTransactionFilters, toTransactionColumnFilters, type TransactionFilterMap} from './filterState';
@@ -273,27 +274,9 @@
         selectedRows = [];
     }
 
-    /** Filter out rows on viewer-only brokers. Returns editable + skipped. */
-    function filterEditableRows(rows: TXReadItem[]): {editable: TXReadItem[]; skipped: TXReadItem[]} {
-        const editable: TXReadItem[] = [];
-        const skipped: TXReadItem[] = [];
-        for (const r of rows) {
-            (txStoreCanEdit(r.id) ? editable : skipped).push(r);
-        }
-        return {editable, skipped};
-    }
-
-    /** Show toast warning for skipped viewer-only rows. Returns false if all skipped. */
+    /** The rows of the selection the user can edit; `null` (with the reason shown) when there are none. The rule is shared with the broker page (`selectionGuards.ts`). */
     function guardViewerOnly(rows: TXReadItem[]): TXReadItem[] | null {
-        const {editable, skipped} = filterEditableRows(rows);
-        if (skipped.length > 0 && editable.length > 0) {
-            toasts.warning($_('transactions.bulk.skippedViewerOnly', {values: {n: skipped.length}}) || `${skipped.length} transactions excluded: Editor access required`);
-        }
-        if (editable.length === 0) {
-            toasts.error($_('transactions.bulk.allViewerOnly') || 'No editable transactions in selection');
-            return null;
-        }
-        return editable;
+        return guardEditableRows(rows, txStoreCanEdit, toasts, $_);
     }
 
     function onEditBulk() {
