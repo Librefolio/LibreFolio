@@ -194,7 +194,7 @@ mandatory for every new plugin:
 - **The operation date, and only settled rows.** Record every transaction on its
   **operation date**, the day the operation was made (the trade date), never on the
   settlement or value date (the developer's principle, 19/10/2026): a purchase made on the
-  27th is a `BUY` dated the 27th, whenever its cash moves. The report's other dates only
+  27th is a `BUY` dated the 27th, whenever its cash moves. Why: the movement is recorded when it happens, not when the systems process it: in between the money is already gone and cannot be used, so hiding it would be wrong (the developer, 28/10/2026). No exception for a subscription during a placement or an IPO: the order of 17/02 is dated 17/02 even when the issue and the cash debit come on 25/02; LibreFolio shows the position at cost and the cash already gone in between, which is what happened. The report's other dates only
   tell whether the row is stable and booked, read from the columns the report has:
     - a **status** column, when there is one, decides; what it says follows the next rule
       (reserved, cancelled or pending are known; a word the plugin does not know is
