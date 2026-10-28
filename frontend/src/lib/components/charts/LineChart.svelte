@@ -35,7 +35,7 @@
     import {formatFixed, formatPrice} from '$lib/utils/core/formatFixed';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {uiLocale} from '$lib/stores/app/uiLocale';
-    import {formatDay} from '$lib/utils/core/formatAxisDate';
+    import {formatDay, formatDayWithWeekday} from '$lib/utils/core/formatAxisDate';
     import {chartNeutrals, PRICE_SERIES} from '$lib/theme/chartTheme';
     import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
 
@@ -779,7 +779,7 @@
                           const items = Array.isArray(params) ? params : [params];
                           if (!items.length) return '';
                           const date = items[0].axisValue || items[0].name;
-                          let html = `<strong>${formatDay(String(date))}</strong>`;
+                          let html = `<strong>${formatDayWithWeekday(String(date))}</strong>`;
 
                           // Build a set of band helper series names to skip in tooltip
                           const bandHelperNames = new Set<string>();
