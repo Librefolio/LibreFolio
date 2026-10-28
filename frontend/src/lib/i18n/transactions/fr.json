@@ -78,10 +78,10 @@
       "costBasis": "Coût de revient (override)",
       "linkUuid": "TX Liée",
       "pairPartner": "Transaction liée",
-      "hintSignPositive": "doit être > 0",
-      "hintSignNegative": "saisir positif — inversé à l'enregistrement",
-      "hintSignZero": "doit être 0",
-      "hintSignNonzero": "doit être ≠ 0",
+      "hintSignPositive": "Saisissez une valeur supérieure à 0",
+      "hintSignNegative": "Saisissez une valeur positive",
+      "hintSignZero": "Saisissez 0",
+      "hintSignNonzero": "Saisissez une valeur différente de 0",
       "saveFailed": "Échec de l'enregistrement de la transaction",
       "fxTitle": "Change de Devises",
       "transferAssetTitle": "Transfert d'Actif",
@@ -96,14 +96,15 @@
       "eventCreateDateRequired": "La date est obligatoire",
       "fxDatesHint": "Les dates 'De' et 'À' coïncident généralement : elles diffèrent quand le courtier crédite la nouvelle devise un autre jour.",
       "eventEditTitle": "Modifier événement pour {asset}",
-      "entryModeAmount": "Montant total",
+      "entryModeAmount": "Total",
       "entryModeUnitPrice": "Prix unitaire",
-      "unitPriceCalculated": "calculé",
-      "unitPriceHint": "Le montant est calculé à partir du prix unitaire et de la quantité ; vous pouvez toujours le modifier.",
       "preFloorDate": {
         "message": "La date {date} est antérieure au 1er janvier 1900. Vérifiez que l'année est correcte : c'est souvent une faute de frappe.",
         "confirm": "Oui, la date est correcte"
-      }
+      },
+      "entryModeLabel": "Comment lire le nombre",
+      "entryDerivedTotal": "= {value} au total",
+      "entryDerivedUnit": "= {value} {base, plural, =1 {par unité} other {pour # unités}}"
     },
     "bulk": {
       "resetRow": "Réinitialiser la ligne",

@@ -78,10 +78,10 @@
       "costBasis": "Override del precio medio de compra",
       "linkUuid": "TX Vinculada",
       "pairPartner": "Transacción vinculada",
-      "hintSignPositive": "debe ser > 0",
-      "hintSignNegative": "introduce positivo — invertido al guardar",
-      "hintSignZero": "debe ser 0",
-      "hintSignNonzero": "debe ser ≠ 0",
+      "hintSignPositive": "Introduce un valor mayor que 0",
+      "hintSignNegative": "Introduce un valor positivo",
+      "hintSignZero": "Introduce 0",
+      "hintSignNonzero": "Introduce un valor distinto de 0",
       "saveFailed": "No se pudo guardar la transacción",
       "fxTitle": "Cambio de Divisas",
       "transferAssetTitle": "Transferencia de Activo",
@@ -96,14 +96,15 @@
       "eventCreateDateRequired": "La fecha es obligatoria",
       "fxDatesHint": "Las fechas 'De' y 'A' suelen coincidir: difieren cuando el bróker abona la nueva divisa otro día.",
       "eventEditTitle": "Editar evento para {asset}",
-      "entryModeAmount": "Importe total",
+      "entryModeAmount": "Total",
       "entryModeUnitPrice": "Precio unitario",
-      "unitPriceCalculated": "calculado",
-      "unitPriceHint": "El importe se calcula a partir del precio unitario y la cantidad; aún puedes editarlo.",
       "preFloorDate": {
         "message": "La fecha {date} es anterior al 1 de enero de 1900. Comprueba que el año sea correcto: suele ser un error de escritura.",
         "confirm": "Sí, la fecha es correcta"
-      }
+      },
+      "entryModeLabel": "Cómo leer el número",
+      "entryDerivedTotal": "= {value} en total",
+      "entryDerivedUnit": "= {value} {base, plural, =1 {por unidad} other {por # unidades}}"
     },
     "bulk": {
       "resetRow": "Restablecer fila",

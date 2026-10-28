@@ -72,7 +72,7 @@
     import {generateUUID} from '$lib/utils/core/uuid';
     import {normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
     import {preFloorDates} from '$lib/features/transactions/preFloorDate';
-    import {calculateTradeValue, driverAfterEdit, type TradeAmountDriver} from '$lib/features/transactions/form/txTradeAmount';
+    import {calculateTradeValue, type TradeAmountDriver} from '$lib/features/transactions/form/txTradeAmount';
     import {computeTxFormChecks, type TxFormCell, type TxFormCheckKind} from '$lib/features/transactions/form/txFormChecks';
     import {deduplicateIssues, signLabel, signHintKey} from '$lib/features/transactions/form/txFormFields';
     import {isBulkBalanceIssue} from '$lib/features/transactions/bulk/bulkDisplay';
@@ -370,7 +370,6 @@
             preFloorConfirmedKey = '';
             checksArmed = false;
             tradeEntryMode = 'amount';
-            tradeDriver = 'amount';
             unitPrice = '';
             formWacResult = null;
             wacCurrencyHint = null;
@@ -856,60 +855,80 @@
     let markedCount = $derived(Object.keys(markedCells).length);
 
     // =========================================================================
-    // «Total amount / Unit price» (#47): the user types one, the form calculates the other (W5-9, `txTradeAmount.ts`)
+    // «Total / Unit price» (#47, FB-16): the selector says how the number in the amount field is read
     // =========================================================================
 
-    /** The badge: which field the user types. It follows the driver after an edit, and the open form starts on the amount. */
+    /**
+     * How the number typed in the amount field is read: `amount` = the total, `unit_price` = the price per unit (per `quote_base_quantity`
+     * units). Only the reading changes: the form stays amount + currency, and the total is what is saved, always (FB-16, developer decision of
+     * 28/10/2026). The open form always starts on the total.
+     */
     let tradeEntryMode = $state<TradeAmountDriver>('amount');
-    /** The value written last; the other one is calculated from it (`driverAfterEdit`). Only a typed unit price makes it `unit_price`. */
-    let tradeDriver = $state<TradeAmountDriver>('amount');
-    /** The unit price as the field shows it (a comma stays a comma while typed; the calculation reads it normalised): calculated while the amount drives, typed while it does. Never part of the payload: only the amount is stored. */
+    /** The unit price: the text typed in the amount field while it is read as one (the total is then calculated into `draft.cash`), the calculated value while the amount is the total. Never part of the payload. */
     let unitPrice = $state('');
-    /** A BUY or SELL: the only types with a quantity and a cash amount both required. A pair has no unit price. Shown in view mode too, so a saved trade reads in both forms. */
+    /** A BUY or SELL and any single type with a quantity and a cash amount both: the only ones with a unit price. A pair has none. Shown in view mode too, so a saved trade reads in both forms. */
     let showTradePrice = $derived(!pairLayout && rule.quantityMode !== 'forbidden' && rule.cashField !== 'forbidden' && rule.assetField !== 'forbidden');
-    /** The badge that picks the field to type: only while the form can be edited. */
-    let showEntryMode = $derived(!isReadonly && showTradePrice);
     /** The asset's quote base, `null` while the asset is not in the store (the store's version makes this follow its loading). */
     let tradeQuoteBase = $derived.by<number | null>(() => {
         void $assetStoreVersion;
         const info = draft.asset_id != null ? getAssetInfo(draft.asset_id) : null;
         return info ? (info.quote_base_quantity ?? 1) : null;
     });
-    let tradeValue = $derived(showTradePrice ? calculateTradeValue({driver: tradeDriver, quoteBaseQuantity: tradeQuoteBase, quantity: draft.quantity, amount: draft.cash?.amount ?? '', unitPrice: normalizeDecimalInput(unitPrice)}) : null);
+    let tradeValue = $derived(showTradePrice ? calculateTradeValue({driver: tradeEntryMode, quoteBaseQuantity: tradeQuoteBase, quantity: draft.quantity, amount: draft.cash?.amount ?? '', unitPrice: normalizeDecimalInput(unitPrice)}) : null);
+    /** The other value, shown under the amount field in place of the sign hint: the total when the number is read as a unit price, the unit price when it is read as the total. `null` when there is nothing to calculate. */
+    let derivedCash = $derived<{mode: 'total' | 'unit_price'; value: string; base: number} | null>(tradeValue ? {mode: tradeEntryMode === 'unit_price' ? 'total' : 'unit_price', value: tradeValue.result, base: tradeQuoteBase ?? 1} : null);
+    /** What the amount field shows: the total, or the unit price while the number is read as one. */
+    let cashCellValue = $derived<{code: string; amount: string} | null>(showTradePrice && tradeEntryMode === 'unit_price' ? {code: draft.cash?.code ?? defaultCashCode(), amount: unitPrice} : draft.cash);
 
-    /** The calculated value lands in the one that does not drive: never in the one the user is typing. */
+    function defaultCashCode(): string {
+        return (draft.asset_id != null && getAssetInfo(draft.asset_id)?.currency) || 'EUR';
+    }
+
+    /** The calculated value lands in the one the user does not type: the unit price while the number is the total, the total while it is the unit price. */
     function applyTradeValue(mode: 'price_to_amount' | 'amount_to_price', result: string | null) {
         if (mode === 'amount_to_price') {
             unitPrice = result ?? '';
             return;
         }
         if (result === null || draft.cash?.amount === result) return;
-        const code = draft.cash?.code || (draft.asset_id != null && getAssetInfo(draft.asset_id)?.currency) || 'EUR';
-        draft = {...draft, cash: {code, amount: result}};
+        draft = {...draft, cash: {code: draft.cash?.code || defaultCashCode(), amount: result}};
     }
 
     $effect(() => {
         const value = tradeValue;
         untrack(() => {
             if (!value) {
-                // Nothing to calculate from: a calculated unit price has no source left; a typed one stays as the user left it.
-                if (tradeDriver === 'amount' && unitPrice !== '') unitPrice = '';
+                // Nothing to calculate from. Total: a calculated unit price has no source left. Unit price: the total has none either,
+                // and what is saved is the total, so the one calculated before is cleared, never left as a stale amount.
+                if (tradeEntryMode === 'amount' && unitPrice !== '') unitPrice = '';
+                if (tradeEntryMode === 'unit_price' && showTradePrice && draft.cash && draft.cash.amount !== '') draft = {...draft, cash: {...draft.cash, amount: ''}};
                 return;
             }
             applyTradeValue(value.mode, value.result);
         });
     });
 
+    /** Changing the reading keeps the number written and reads it the other way: 83.40 as the total, then as the unit price of 12 units, is a total of 1000.80. */
     function onEntryModeChange(mode: TradeAmountDriver) {
         if (mode === tradeEntryMode) return;
+        const typed = tradeEntryMode === 'unit_price' ? unitPrice : (draft.cash?.amount ?? '');
         tradeEntryMode = mode;
-        // The badge only changes which field the user types; the amount on screen stays what drives until a price is typed.
-        tradeDriver = 'amount';
+        if (mode === 'unit_price') {
+            unitPrice = typed;
+            return;
+        }
+        draft = {...draft, cash: typed === '' && draft.cash == null ? null : {code: draft.cash?.code || defaultCashCode(), amount: typed}};
     }
 
-    function onUnitPriceInput(value: string) {
-        unitPrice = value;
-        tradeDriver = driverAfterEdit(tradeDriver, 'unit_price');
+    /** The amount field's change, whichever way its number is read: the total goes to the draft, the unit price to its own text (the total follows from it). A currency change is the draft's in both. */
+    function onCashInput(next: {code: string; amount: string} | null) {
+        if (!(showTradePrice && tradeEntryMode === 'unit_price')) {
+            setCash(next);
+            return;
+        }
+        unitPrice = next?.amount ?? '';
+        if (next == null) draft = {...draft, cash: null};
+        else if (next.code !== (draft.cash?.code ?? '')) draft = {...draft, cash: {code: next.code, amount: draft.cash?.amount ?? ''}};
     }
 
     // =========================================================================
@@ -1313,11 +1332,6 @@
         draft = {...draft, quantity: v};
     }
     function setCash(v: {code: string; amount: string} | null) {
-        // #47: typing the amount hands the driver (and the badge) back to it; a currency change alone does not.
-        if (showEntryMode && (v?.amount ?? '') !== (draft.cash?.amount ?? '')) {
-            tradeDriver = driverAfterEdit(tradeDriver, 'amount');
-            tradeEntryMode = 'amount';
-        }
         draft = {...draft, cash: v};
     }
     function setCashTo(v: {code: string; amount: string} | null) {
@@ -1614,9 +1628,10 @@
                     {markedCells}
                     {showTradePrice}
                     entryMode={tradeEntryMode}
-                    {unitPrice}
+                    {cashCellValue}
+                    {derivedCash}
                     {onEntryModeChange}
-                    {onUnitPriceInput}
+                    {onCashInput}
                     {rule}
                     {showCostBasisField}
                     {typeImmutable}
