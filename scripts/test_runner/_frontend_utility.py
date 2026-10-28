@@ -471,6 +471,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/dashboard/ExposureTreemap.test.ts",
             "src/lib/features/dashboard/GrowthChart.tooltip.test.ts",
             "src/lib/features/dashboard/GrowthChart.steps.test.ts",
+            "src/lib/features/dashboard/GrowthChart.candlesLoading.test.ts",
             "src/lib/features/dashboard/ContributionTable.test.ts",
             "src/lib/features/dashboard/PerformanceChart.test.ts",
             "src/lib/features/dashboard/OtherPeriodEffectsTable.test.ts",
