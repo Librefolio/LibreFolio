@@ -238,6 +238,17 @@ def external_brim_danske_bank(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "BRIM Danske Bank tests", verbose=verbose)
 
 
+def external_brim_credit_agricole(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the Crédit Agricole report-set modules (rows, classes, rule M, pairs, balances)."""
+    print_section("External: BRIM Crédit Agricole Report-Set Tests")
+    print_info("Testing: broker_credit_agricole — rows, testata, classes, rule M, pairing, balances, truth points")
+    print_info("Tests: reading, roles, describe member/set, outcomes, holes and gaps, in-flight cash, opening positions, zones")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_external/test_brim_credit_agricole.py",
+                            test_names or None)
+    return run_command(cmd, "BRIM Crédit Agricole tests", verbose=verbose)
+
+
 def external_brim_degiro(verbose: bool = False, test_names: list = None) -> bool:
     """Test the DEGIRO plugin (Account Statement by position, any language)."""
     print_section("External: BRIM DEGIRO Tests")
@@ -349,6 +360,10 @@ These tests verify external API integrations:
     add_test(cat, "brim-danske-bank", external_brim_danske_bank, name="BRIM Danske Bank",
              desc="Test the Danske Bank report-set plugin", prereq="Sample files in test fixtures",
              tests="Roles, combine (zones, pairing, truth points), parse of the combined file")
+    add_test(cat, "brim-credit-agricole", external_brim_credit_agricole, name="BRIM Crédit Agricole",
+             desc="Test the Crédit Agricole report-set modules", prereq="None (synthetic files)",
+             tests="Rows and testata, roles, rule M, classes, pairing, balances, holes, truth points, in-flight cash",
+             isolation="pure")
     add_test(cat, "brim-degiro", external_brim_degiro, name="BRIM DEGIRO",
              desc="Test the DEGIRO plugin", prereq="Sample files in test fixtures",
              tests="Recognition, reading by position, types, FX pairs, numbers, messages, orders list")

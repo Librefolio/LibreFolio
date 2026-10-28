@@ -7,16 +7,35 @@
  * hints, per-asset advisories. CA is simply the one plugin that speaks all of them, so
  * its fixture is used as the message.
  *
- * The spec is self-contained: it creates its own broker and uploads
- * `credit_agricole-conti-contract.csv` through the API, so it neither depends on the
- * mock data nor shifts the broker indices other suites rely on. Every broker a test
- * creates is deleted in afterEach (force), and its files with it: a file left behind
- * would be inherited by the next broker that reuses the id.
+ * Since 2.0.0 Crédit Agricole is a REPORT-SET plugin: an export is no longer imported
+ * alone, the securities movements (role `securities`) and the account movements (role
+ * `account`) are uploaded together, in one batch, and the wizard shows them as ONE set
+ * (`report-set-card`) that is combined (`POST /sets/combine`) and then parsed as a single
+ * row. The channels below are the plugin's, not the set's, so they are proved on a set
+ * whose two members are:
  *
- * The corridor is the shared one (fixtures/import-wizard.ts): the uploaded file is
- * selected in step 2 by its id; whether the notices' confirmation must be read past is
- * decided by the parse response; the conditional steps are crossed when the stepper
- * lands on them.
+ *   account     `credit_agricole-conti-contract.csv`: the rows that raise every channel.
+ *               The account arm books a row on its own exactly as it did alone, so each
+ *               notice, todo, split hint and asset advisory the fixture raises is still
+ *               raised (the backend twin is test_brim_providers.py, TestPluginFrontendContract,
+ *               set `credit_agricole-account-only`).
+ *   securities  `credit_agricole-securities-contract.csv`: one transfer from another dossier
+ *               (a cashless ADJUSTMENT and an info notice). It is there because a set needs
+ *               both exports, and it is chosen to meet nothing: it pairs with no account row
+ *               and no securities row with cash exists that could be left out, so nothing
+ *               the account rows raise changes or disappears.
+ *
+ * The spec is self-contained: it creates its own broker and uploads the two members through
+ * the API in one batch (`batch_id` in the form, as the wizard sends it), so it neither
+ * depends on the mock data nor shifts the broker indices other suites rely on. Every broker
+ * a test creates is deleted in afterEach (force), and its files with it, the set's combined
+ * file included: a file left behind would be inherited by the next broker that reuses the id.
+ *
+ * The corridor is the shared one (fixtures/import-wizard.ts): the set's card is selected in
+ * step 2 by its key and ticked whole; whether the notices' confirmation must be read past is
+ * decided by the parse response of the combined file; the conditional steps are crossed when
+ * the stepper lands on them. The rows the wizard shows are those of the COMBINED file, in date
+ * order: no test here names a row by its position in a source export.
  *
  * Test IDs: CAC-001..CAC-012
  *
@@ -29,29 +48,35 @@
  */
 
 import {expect, test, type Page} from '../fixtures/playwright';
+import {randomUUID} from 'crypto';
 import {readFileSync} from 'fs';
 import {resolve} from 'path';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {waitForSettled} from '../fixtures/app-events';
-import {continueToReview, continueToStep, parseSelectedFile, selectBrokerFile, type ParseResponse} from '../fixtures/import-wizard';
+import {appears, optionsClosed} from '../fixtures/probe';
+import {continueToReview, continueToStep, parseSelectedSet, selectReportSet, type ParseResponse} from '../fixtures/import-wizard';
 import {TEST_USER} from '../fixtures/test-users';
 import {uniqueSuffix} from '../fixtures/unique';
 
 test.setTimeout(120_000);
 
-const FIXTURE = resolve(process.cwd(), '../backend/app/services/brim_providers/sample_reports/credit_agricole-conti-contract.csv');
+const SAMPLES = resolve(process.cwd(), '../backend/app/services/brim_providers/sample_reports');
+const ACCOUNT_FIXTURE = resolve(SAMPLES, 'credit_agricole-conti-contract.csv');
+const SECURITIES_FIXTURE = resolve(SAMPLES, 'credit_agricole-securities-contract.csv');
+const CA = 'broker_credit_agricole';
 const API = `http://localhost:${process.env.TEST_PORT || '6041'}/api/v1`;
 
 // ---------------------------------------------------------------------------
-// Setup — broker and file created through the API, not through the UI
+// Setup — broker and set created through the API, not through the UI
 // ---------------------------------------------------------------------------
 
-/** A broker this test created and the fixture file uploaded to it. */
+/** A broker this test created and the report set (one upload batch, two exports) uploaded to it. */
 interface CaFixture {
     brokerId: number;
     brokerName: string;
-    fileId: string;
-    fileName: string;
+    batchId: string;
+    securitiesFileId: string;
+    accountFileId: string;
 }
 
 /** What afterEach deletes: each broker this test created, and the files it must take with it. */
@@ -62,19 +87,18 @@ interface OwnedBroker {
 }
 
 /**
- * Create a broker bound to the CA plugin and upload the contract fixture to it.
+ * Create a broker bound to the CA plugin and upload the contract set to it: the two members in one batch.
  *
  * Doing this over the API keeps the spec about the contract rather than about the
  * upload form, which `tx-brim-import.spec.ts` already covers. The name is unique per
  * run so repeated runs against a persistent database do not collide.
  *
- * The broker is recorded in `owned` as soon as it exists, the file as soon as the
+ * The broker is recorded in `owned` as soon as it exists, each file as soon as its
  * upload answers: whatever fails afterwards, afterEach still deletes them.
  */
 async function createBrokerWithFixture(page: Page, owned: OwnedBroker[], options: {label: string; filePrefix: string; openedAt: string}): Promise<CaFixture> {
     const suffix = uniqueSuffix();
     const brokerName = `${options.label} ${suffix}`;
-    const fileName = `${options.filePrefix}-${suffix}.csv`;
 
     const created = await page.request.post(`${API}/brokers`, {
         data: [{name: brokerName, opened_at: options.openedAt, default_import_plugin: 'broker_credit_agricole'}],
@@ -87,28 +111,48 @@ async function createBrokerWithFixture(page: Page, owned: OwnedBroker[], options
     const record: OwnedBroker = {brokerId, brokerName, fileIds: []};
     owned.push(record);
 
-    const upload = await page.request.post(`${API}/brokers/import/upload`, {
-        multipart: {
-            broker_id: String(brokerId),
-            file: {name: fileName, mimeType: 'text/csv', buffer: readFileSync(FIXTURE)},
-        },
-    });
-    expect(upload.ok(), await upload.text()).toBeTruthy();
-    const fileId = ((await upload.json()) as {file_id: string}).file_id;
-    record.fileIds.push(fileId);
+    // The files of one batch are one report set: the wizard's step 1 gives the exports of a session the same batch_id.
+    const batchId = randomUUID();
+    const uploadMember = async (fixture: string, role: 'securities' | 'account'): Promise<string> => {
+        const fileName = `${options.filePrefix}-${role}-${suffix}.csv`;
+        const upload = await page.request.post(`${API}/brokers/import/upload`, {
+            multipart: {
+                broker_id: String(brokerId),
+                batch_id: batchId,
+                file: {name: fileName, mimeType: 'text/csv', buffer: readFileSync(fixture)},
+            },
+        });
+        const body = await upload.text();
+        expect(upload.ok(), body).toBeTruthy();
+        const info = JSON.parse(body) as {file_id: string; filename: string; target_broker_id: number | null; batch_id?: string | null};
+        record.fileIds.push(info.file_id);
+        expect(info, `the ${role} export lands on "${brokerName}", in the batch of its set`).toMatchObject({filename: fileName, target_broker_id: brokerId, batch_id: batchId});
+        return info.file_id;
+    };
+    const securitiesFileId = await uploadMember(SECURITIES_FIXTURE, 'securities');
+    const accountFileId = await uploadMember(ACCOUNT_FIXTURE, 'account');
 
-    return {brokerId, brokerName, fileId, fileName};
+    return {brokerId, brokerName, batchId, securitiesFileId, accountFileId};
 }
 
 /**
  * Delete every broker in `owned` with force — the server deletes the broker's BRIM files
  * with it — and empty the list. Asserts each delete, and that the files went too: a file
- * that outlives its broker is inherited by the next broker that reuses the id.
+ * that outlives its broker is inherited by the next broker that reuses the id. The files
+ * checked are the two uploads and every other file the broker holds when it is deleted: a
+ * set's combined file is written by the analysis, so only the broker's list knows its id.
  */
 async function deleteOwnedBrokers(page: Page, owned: OwnedBroker[]): Promise<void> {
     const failures: string[] = [];
     for (const broker of owned.splice(0)) {
         try {
+            const listed = await page.request.get(`${API}/brokers/import/files?broker_ids=${broker.brokerId}`);
+            if (listed.ok()) {
+                const files = (await listed.json()) as Array<{file_id: string; target_broker_id: number | null}>;
+                for (const file of files) if (file.target_broker_id === broker.brokerId && !broker.fileIds.includes(file.file_id)) broker.fileIds.push(file.file_id);
+            } else {
+                failures.push(`list the files of broker "${broker.brokerName}" (${broker.brokerId}): HTTP ${listed.status()}`);
+            }
             const response = await page.request.delete(`${API}/brokers?ids=${broker.brokerId}&force=true`);
             const body = (await response.json().catch(() => null)) as {results?: Array<{id: number; success: boolean}>} | null;
             if (!response.ok() || body?.results?.find((item) => item.id === broker.brokerId)?.success !== true) {
@@ -160,14 +204,14 @@ async function openImportWizard(page: Page) {
 }
 
 /**
- * Select the uploaded fixture in step 2 — by its file id, in its broker's panel, on whichever
- * page of the panel it is — and parse it, stopping on the analysis step. Returns the parse
- * response: it says whether leaving the analysis asks to confirm notices.
+ * Select the uploaded set in step 2 — its card, by the batch it was uploaded in, ticked whole — and
+ * parse it, stopping on the analysis step. The set is combined first and the combined file parsed:
+ * the response returned is that parse's, and it says whether leaving the analysis asks to confirm notices.
  */
 async function parseFixture(page: Page, target: CaFixture): Promise<ParseResponse> {
     await page.getByTestId('import-wizard-next').click();
-    await selectBrokerFile(page, {brokerId: target.brokerId, fileId: target.fileId});
-    return parseSelectedFile(page, target.fileId);
+    await selectReportSet(page, {brokerId: target.brokerId, pluginCode: CA, batchId: target.batchId});
+    return parseSelectedSet(page);
 }
 
 /** Walk from the analysis step to the corrections step, past the notices and the unification step if the stepper lands on it. */
@@ -466,36 +510,48 @@ test.describe('Import Wizard — plugin contract', () => {
         if (!(await resolveSection.isVisible({timeout: 3_000}).catch(() => false))) {
             await step4.getByTestId('import-wizard-resolve-toggle').click();
         }
+        await expect(resolveSection, 'the section of the instruments to resolve is open').toBeVisible({timeout: 5_000});
         await resolveSection.scrollIntoViewIfNeeded();
 
-        const select = resolveSection.locator('[data-testid="asset-select"]').first();
-        await select.click();
+        // The advisory rides on ONE of the set's extracted assets (the bond whose maturity the account states with
+        // no coupon to identify it), and which select that is depends on the order the combined file lists the
+        // assets in: the transfer from another dossier that the securities member brings is another asset, with no
+        // advisory. So the forms are opened one after the other until the banner is found; that it IS found is the
+        // assertion, not a condition.
+        const selects = resolveSection.locator('[data-testid="asset-select"]');
+        await expect(selects.first(), 'the review lists the instruments to resolve').toBeVisible({timeout: 5_000});
+        const total = await selects.count();
         const createNew = page.getByTestId('search-select-create-new');
-        if (await createNew.isVisible({timeout: 2_000}).catch(() => false)) {
+        const notice = page.getByTestId('asset-import-notice');
+        let advisories = 0;
+        for (let index = 0; index < total && advisories === 0; index++) {
+            await selects.nth(index).click();
+            if (!(await appears(createNew, 3_000))) {
+                // This instrument is already bound to an asset: nothing to create, so no advisory to read here.
+                await page.keyboard.press('Escape');
+                await optionsClosed(page);
+                continue;
+            }
             await createNew.click();
             await page.getByTestId('asset-modal-form').waitFor({state: 'visible', timeout: 6_000});
-
-            // The banner is advisory: it may or may not concern this particular
-            // instrument, but when it is there it must name what it saw.
-            const notice = page.getByTestId('asset-import-notice');
-            if (
-                await notice
-                    .first()
-                    .isVisible({timeout: 2_000})
-                    .catch(() => false)
-            ) {
+            if (await appears(notice.first(), 2_000)) {
+                advisories += 1;
+                // When it is there it must name what it saw.
                 await expect(page.getByTestId('asset-import-notices')).toBeVisible();
                 expect((await notice.first().textContent())?.trim().length).toBeGreaterThan(0);
             }
             await page.getByTestId('asset-modal-cancel').click();
+            await expect(page.getByTestId('asset-modal-form')).toBeHidden({timeout: 5_000});
+            await optionsClosed(page);
         }
+        expect(advisories, `one of the ${total} instrument(s) of the set carries the "possibly matured" advisory on its creation form`).toBe(1);
     });
 
     // -----------------------------------------------------------------------
     // CAC-012 — broker opening date: reported, fixable, re-checkable
     // -----------------------------------------------------------------------
     test('CAC-012: transactions predating the broker are reported and can be fixed', async ({page}) => {
-        // The fixture's earliest movement is from 2025; a broker opened after it makes
+        // The set's earliest movement is from 2025; a broker opened after it makes
         // every earlier row unimportable until the date is moved back.
         const late = await createBrokerWithFixture(page, ownedBrokers, {label: 'CA Late', filePrefix: 'ca-late', openedAt: '2026-08-01'});
 

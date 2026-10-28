@@ -15,12 +15,13 @@ To ensure that external providers (like Yahoo Finance, ECB, etc.) are reachable 
 | `justetf-multicurrency` | The JustETF provider in its four currencies (EUR, USD, CHF, GBP): current price, history, search, parameter validation |
 | `brim-providers` | Broker Report Import Manager parsers (local sample files, no network) |
 | `brim-danske-bank` | The Danske Bank report-set plugin: file roles, combining a set into one file, parsing it (local sample files, no network) |
+| `brim-credit-agricole` | Crédit Agricole report-set plugin: roles, rule M, pairing, balances and holes, combining, parsing (local sample files, no network) |
 | `brim-degiro` | The DEGIRO plugin: recognition, reading by position, types, FX pairs, numbers, messages, orders list (local sample files, no network) |
 | `all` | All of the above |
 
 `--providers` and `--exclude-providers` (see [Provider Filtering](#provider-filtering)) filter
-`fx-providers`, `asset-providers` and `brim-providers`. `justetf-multicurrency`, `brim-danske-bank`
-and `brim-degiro` take no provider filter: `all` runs them in full whatever the filter says.
+`fx-providers`, `asset-providers` and `brim-providers`. `justetf-multicurrency`, `brim-danske-bank`,
+`brim-credit-agricole` and `brim-degiro` take no provider filter: `all` runs them in full whatever the filter says.
 
 ## 🚀 Running
 
