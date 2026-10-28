@@ -184,15 +184,39 @@ def same_rows(first: Sequence[Any], second: Sequence[Any]) -> bool:
     return Counter(row.signature for row in first) == Counter(row.signature for row in second)
 
 
+def contained_rows(inner: Sequence[Any], outer: Sequence[Any]) -> bool:
+    """``inner`` is part of ``outer``: every ``signature`` appears in ``outer`` at least as often (an empty group is part of any)."""
+    return not (Counter(row.signature for row in inner) - Counter(row.signature for row in outer))
+
+
 class RoleMerge:
-    """Rule M (design D-S28): for each day, the rows of the latest file covering it.
+    """Rule M (design D-S28): for each day, the rows of one file among the files covering it.
 
     A row must expose ``signature`` (a hashable that is equal for two copies of the same bank row).
+
+    Two policies, both with the default that Danske Bank uses:
+
+    - ``owner``: ``"latest"`` (default) gives the day to the file that ends last; ``"most_rows"`` gives it to the file with
+      the most rows that day (a bank can only cut an export short, never add rows; ties go to the file that ends last);
+    - ``contradiction``: ``"differs"`` (default) calls a day a mismatch when two files do not hold the same rows;
+      ``"not_contained"`` calls it a mismatch only when a file holds a row the owner lacks (a file cut mid-day, whose rows
+      are all in the owner, is not a contradiction).
     """
 
-    def __init__(self, files: List[List[Any]], day_of: Callable[[Any], Optional[date]]):
+    def __init__(
+        self,
+        files: List[List[Any]],
+        day_of: Callable[[Any], Optional[date]],
+        *,
+        owner: str = "latest",
+        contradiction: str = "differs",
+    ):
+        if owner not in ("latest", "most_rows") or contradiction not in ("differs", "not_contained"):
+            raise ValueError(f"unknown rule M policy: owner={owner!r}, contradiction={contradiction!r}")
         self.files = files
         self.day_of = day_of
+        self._owner_policy = owner
+        self._contradiction_policy = contradiction
         self.spans = [coverage(rows, day_of) for rows in files]
         self.order = sorted((index for index, span in enumerate(self.spans) if span), key=lambda index: (self.spans[index][1], self.spans[index][0], index))
         self.groups = [by_day(rows, day_of) for rows in files]
@@ -204,7 +228,16 @@ class RoleMerge:
         self.mismatch_days = sorted(self._mismatch_days())
 
     def _owner(self, day: date) -> int:
-        return next(index for index in reversed(self.order) if self.spans[index][0] <= day <= self.spans[index][1])
+        covering = [index for index in reversed(self.order) if self.spans[index][0] <= day <= self.spans[index][1]]
+        if self._owner_policy == "latest":
+            return covering[0]
+        # Most rows that day; max() keeps the first of equals, and ``covering`` starts with the file that ends last.
+        return max(covering, key=lambda index: len(self.groups[index].get(day, [])))
+
+    def _agree(self, other_rows: Sequence[Any], owner_rows: Sequence[Any]) -> bool:
+        if self._contradiction_policy == "not_contained":
+            return contained_rows(other_rows, owner_rows)
+        return same_rows(other_rows, owner_rows)
 
     def _place(self, index: int, row: Any) -> None:
         day = self.day_of(row)
@@ -222,7 +255,7 @@ class RoleMerge:
             candidates = {day for groups in self.groups for day in groups if span[0] <= day <= span[1]}
             for day in candidates:
                 owner = self._owner(day)
-                if owner != index and not same_rows(self.groups[index].get(day, []), self.groups[owner].get(day, [])):
+                if owner != index and not self._agree(self.groups[index].get(day, []), self.groups[owner].get(day, [])):
                     days.add(day)
         return days
 
@@ -248,16 +281,24 @@ def best_assignment[L, R](
     *,
     same_name: Callable[[L, R], bool],
     outcome_of: Callable[[L], Hashable],
+    pair_outcome_of: Optional[Callable[[L, R], Hashable]] = None,
 ) -> Optional[List[Tuple[L, R]]]:
     """The assignment with the most compatible names, if every such assignment imports the same rows.
 
     ``outcome_of`` is what an assigned left row would import (its signature): two assignments that differ
     only in which twin gets which partner import the same thing, so they are not an ambiguity.
+
+    When the right row also decides what is imported (a plugin that reads a withholding or an asset from it),
+    ``pair_outcome_of`` gives the outcome of a pair instead: two assignments that give the left rows different
+    partners are then an ambiguity unless the partners are interchangeable.
     """
     best_weight, outcomes, best = -1, set(), None
     for pairs in assignments(len(left), len(right)):
         weight = sum(same_name(left[i], right[j]) for i, j in pairs)
-        outcome = tuple(sorted((outcome_of(left[i]) for i, _ in pairs), key=repr))
+        if pair_outcome_of is None:
+            outcome = tuple(sorted((outcome_of(left[i]) for i, _ in pairs), key=repr))
+        else:
+            outcome = tuple(sorted((pair_outcome_of(left[i], right[j]) for i, j in pairs), key=repr))
         if weight > best_weight:
             best_weight, outcomes, best = weight, {outcome}, pairs
         elif weight == best_weight:
@@ -275,20 +316,22 @@ def assign[L, R](
     same_name: Callable[[L, R], bool],
     outcome_of: Callable[[L], Hashable],
     label_of: Callable[[R], str],
+    pair_outcome_of: Optional[Callable[[L, R], Hashable]] = None,
 ) -> Optional[List[Tuple[L, R]]]:
     """Pairs for one key (the rows that share a date, an amount and a direction); ``None`` when ambiguous.
 
     One against one is the pair; a larger group is paired only when its twins are indistinguishable
     (same import outcome on the left, same label on the right) or when one assignment wins on the names.
-    More than ``max_candidates`` rows on either side is not tried.
+    More than ``max_candidates`` rows on either side is not tried. With ``pair_outcome_of`` (see ``best_assignment``) the
+    shortcut for twins is skipped: the assignments are compared by what each pair imports.
     """
     if len(left) == 1 and len(right) == 1:
         return [(left[0], right[0])]
     if max(len(left), len(right)) > max_candidates:
         return None
-    if len({outcome_of(row) for row in left}) == 1 and len({norm(label_of(row)) for row in right}) == 1:
+    if pair_outcome_of is None and len({outcome_of(row) for row in left}) == 1 and len({norm(label_of(row)) for row in right}) == 1:
         return list(zip(left, right, strict=False))
-    return best_assignment(left, right, same_name=same_name, outcome_of=outcome_of)
+    return best_assignment(left, right, same_name=same_name, outcome_of=outcome_of, pair_outcome_of=pair_outcome_of)
 
 
 def pair_by_key[L, R](
