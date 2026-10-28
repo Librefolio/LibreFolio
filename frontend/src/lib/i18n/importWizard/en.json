@@ -339,7 +339,9 @@
       },
       "roleName": {
         "custody": "Securities transactions",
-        "cash": "Cash statement"
+        "cash": "Cash statement",
+        "securities": "Securities movements",
+        "account": "Account movements"
       },
       "period": {
         "years": "{n, plural, one {# year} other {# years}}",
@@ -398,7 +400,11 @@
         "overlap_mismatch": "Two “{role}” exports disagree on {days} day(s) between {first} and {last}: the newer one is used for those days.",
         "balance_chain_broken": "The running balance of the cash statement does not add up from {date}: the balances are only compared, not used for corrections.",
         "empty_member": "A “{role}” export has no rows.",
-        "mixed_accounts_in_file": "A securities export contains several custody accounts."
+        "mixed_accounts_in_file": "A securities export contains several custody accounts.",
+        "account_gap": "No account export covers {start} – {end}: the bank’s balances differ by {amount} over that period. Export the account movements for it if the bank still has them.",
+        "no_balance": "No account export states a balance (only the Excel export does): the cash is not compared with the bank.",
+        "ambiguous": "{rows, plural, one {# row} other {# rows}} could not be matched with certainty between the securities and the account export: check them.",
+        "no_counterpart": "{rows, plural, one {# row has} other {# rows have}} no matching row in the other export: check {rows, plural, one {it} other {them}}."
       },
       "gapFix": {
         "stepTitle": "Align with the bank",

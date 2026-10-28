@@ -26,10 +26,13 @@ PURE: samples and files written in ``tmp_path``, no server, no database, no netw
 
 from __future__ import annotations
 
+import atexit
 import csv
 import functools
 import io
 import re
+import shutil
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Union
@@ -38,6 +41,7 @@ import pytest
 
 from backend.app.config import PROJECT_ROOT
 from backend.app.schemas.brim import BRIMNotice, BRIMParseOutput
+from backend.app.services.brim.brim_provider import write_combined_csv
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brim_providers import _brim_io as brim_io
 from scripts.i18n_catalog import load_catalog
@@ -85,7 +89,7 @@ ROW_SKIPS_PENDING = frozenset(
 # The version each plugin bumps to (the output for the same file changes: its notices). DEGIRO and Scalable pin theirs in their own files.
 # W-B87 block 1 (rows with an economic effect imported): Revolut 1.3.0, Trading 212 1.2.0, eToro 1.3.0, Swissquote 1.2.0 (their output now holds the new transactions); eToro 1.4.0 (lot W5-2c: the overnight refund is an INTEREST).
 NEW_VERSIONS = {
-    "broker_credit_agricole": "1.5.0",
+    "broker_credit_agricole": "2.0.0",  # W5-7: a report-set plugin (the securities and the account exports imported together)
     "broker_directa": "1.1.0",
     "broker_revolut": "1.3.0",
     "broker_trading212": "1.2.0",
@@ -115,9 +119,28 @@ def _registered() -> List[str]:
     return sorted(BRIMProviderRegistry._providers)
 
 
+_COMBINED_FOLDER: List[Path] = []
+
+
+def _parse_member(code: str, path: Path, folder: Path) -> BRIMParseOutput:
+    """The parse of a file of a report-set plugin: a member is never parsed alone (``BRIMSetRequiredError``), so it is the only member
+    of a set, combined by the plugin and written by the core as the set API does; the notices cite lines of that combined file."""
+    plugin = _plugin(code)
+    role = plugin.detect_role(path)
+    assert role is not None, f"{code} reads {path.name} as no role of its set"
+    combined = folder / f"{path.stem}-{role}-combined.csv"
+    write_combined_csv(combined, plugin.combine({role: [path]}))
+    return plugin.parse(combined, broker_id=BROKER_ID)
+
+
 @functools.cache
 def _parse_sample(code: str, name: str) -> BRIMParseOutput:
-    """The plugin's parse of an untouched sample (cached: a sample never changes inside a run)."""
+    """The plugin's parse of an untouched sample (cached: a sample never changes inside a run); a report-set plugin's sample is a member, parsed as a set of one."""
+    if _plugin(code).report_roles:
+        if not _COMBINED_FOLDER:
+            _COMBINED_FOLDER.append(Path(tempfile.mkdtemp(prefix="lf-row-skips-combined-")))
+            atexit.register(shutil.rmtree, _COMBINED_FOLDER[0], True)
+        return _parse_member(code, SAMPLE_DIR / name, _COMBINED_FOLDER[0])
     return _plugin(code).parse(SAMPLE_DIR / name, broker_id=BROKER_ID)
 
 
@@ -250,7 +273,9 @@ class SkipCase:
     ``row`` is the cells of the new line, or a ``{column name: value}`` dict laid out under the sample's first line (the names are
     compared lowercase, a column the dict does not name is empty). ``code`` is the notice the row must be listed under, with
     ``severity``; ``extra_transactions`` is how many transactions the row gives (0: left out; 1: imported, but a part of it is not);
-    ``reason_has`` is a lowercase text the reason of the evidence row must hold (the shared codes only).
+    ``reason_has`` is a lowercase text the reason of the evidence row must hold (the shared codes only). ``marker`` is set for a
+    report-set plugin: the file with the row is a member parsed as a set of one, the notices cite lines of the COMBINED file, and
+    ``marker`` is the text that finds the row's line there.
     """
 
     id: str
@@ -263,6 +288,7 @@ class SkipCase:
     severity: str = "warning"
     extra_transactions: int = 0
     reason_has: Optional[str] = None
+    marker: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -345,10 +371,10 @@ SKIP_CASES: Tuple[SkipCase, ...] = (
     # --- DEGIRO: six codes of its own, all with report_issue; one small statement per code is in test_brim_degiro.py
     SkipCase("degiro-unknown-description", "broker_degiro", "degiro-account-en.csv", _degiro_row("Zorglub bonification"), "degiro_unknown_rows"),
     SkipCase("degiro-unreadable-date", "broker_degiro", "degiro-account-en.csv", _degiro_row("iDEAL Deposit", day="99-99-2025"), "degiro_unknown_rows", kind="unreadable"),
-    # --- Crédit Agricole: three codes of its own get report_issue
-    SkipCase("ca-securities-unknown-causale", "broker_credit_agricole", "credit_agricole-export.csv", ["12/07/2026", "FONDO PROVA", "EUR", "CAUSALE MAI VISTA", "10,00", "EUR", "1", "5", "50,00", "12/07/2026"], "ca_securities_unknown_causale"),
-    SkipCase("ca-account-invalid-amount", "broker_credit_agricole", "credit_agricole-conti.csv", ["12/07/2026", "12/07/2026", "ACCREDITO EMOLUMENTI", "PROVA", "'abc", "EUR"], "ca_account_invalid_amount", kind="unreadable"),
-    SkipCase("ca-account-unknown-causale", "broker_credit_agricole", "credit_agricole-conti.csv", ["12/07/2026", "12/07/2026", "OPERAZIONE MAI VISTA", "QUALCOSA DI NUOVO", "'-250,00", "EUR"], "ca_unknown_causale", severity="info", extra_transactions=1),
+    # --- Crédit Agricole: three codes of its own get report_issue (a member of the set: parsed as a set of one, the line is the combined file's)
+    SkipCase("ca-securities-unknown-causale", "broker_credit_agricole", "credit_agricole-export.csv", ["12/07/2026", "FONDO PROVA", "EUR", "CAUSALE MAI VISTA", "10,00", "EUR", "1", "5", "50,00", "12/07/2026"], "ca_securities_unknown_causale", marker="CAUSALE MAI VISTA"),
+    SkipCase("ca-account-invalid-amount", "broker_credit_agricole", "credit_agricole-conti.csv", ["12/07/2026", "12/07/2026", "ACCREDITO EMOLUMENTI", "PROVA", "'abc", "EUR"], "ca_account_invalid_amount", kind="unreadable", marker="'abc"),
+    SkipCase("ca-account-unknown-causale", "broker_credit_agricole", "credit_agricole-conti.csv", ["12/07/2026", "12/07/2026", "OPERAZIONE MAI VISTA", "QUALCOSA DI NUOVO", "'-250,00", "EUR"], "ca_unknown_causale", severity="info", extra_transactions=1, marker="QUALCOSA DI NUOVO"),
     # --- Scalable: a status nobody knows is unknown, an empty one is unreadable (the known not-executed ones are silent: test_brim_scalable.py)
     SkipCase("scalable-unknown-status", "broker_scalable", "scalable-prime-export.csv", {**_SCALABLE_ROW, "status": "On hold"}, ROWS_NOT_RECOGNIZED, reason_has="on hold"),
     SkipCase("scalable-empty-status", "broker_scalable", "scalable-prime-export.csv", {**_SCALABLE_ROW, "status": ""}, ROWS_UNREADABLE, kind="unreadable"),
@@ -435,7 +461,15 @@ def _case_ids(cases: Sequence[Any]) -> List[str]:
 def _parse_case(case: Union[SkipCase, SilentCase], folder: Path) -> Tuple[BRIMParseOutput, BRIMParseOutput, int]:
     """The untouched sample's parse, the parse of the sample with the case's row, and the line of that row."""
     path, line = _write_with_row(folder, case.sample, case.row, case.delimiter)
-    return _parse_sample(case.plugin, case.sample), _plugin(case.plugin).parse(path, broker_id=BROKER_ID), line
+    marker = getattr(case, "marker", None)
+    if marker is None:
+        return _parse_sample(case.plugin, case.sample), _plugin(case.plugin).parse(path, broker_id=BROKER_ID), line
+    # A report-set plugin: the file with the row is the only member of a set; the row's line is a line of the combined file.
+    out = _parse_member(case.plugin, path, folder)
+    combined = folder / f"{path.stem}-{_plugin(case.plugin).detect_role(path)}-combined.csv"
+    lines = [number for number, text in enumerate(combined.read_text(encoding="utf-8-sig").splitlines(), start=1) if marker in text]
+    assert len(lines) == 1, f"{case.id}: {len(lines)} lines of the combined file hold {marker!r}, expected exactly one"
+    return _parse_sample(case.plugin, case.sample), out, lines[0]
 
 
 class TestRowsLeftOut:
@@ -579,7 +613,7 @@ SAMPLE_LISTINGS: Tuple[SampleListing, ...] = (
 SAMPLE_TRANSACTIONS = {
     ("broker_degiro", "degiro-export.csv"): 57,
     ("broker_degiro", "degiro-account-en.csv"): 17,
-    ("broker_credit_agricole", "credit_agricole-export.csv"): 156,
+    ("broker_credit_agricole", "credit_agricole-export.csv"): 36,  # 156 up to 1.5.0 (with the automatic cash legs); a securities export alone imports its 36 transfers in, the other rows need the account export that states their cash
     ("broker_credit_agricole", "credit_agricole-conti.csv"): 24,
     ("broker_scalable", "scalable-prime-export.csv"): 17,
     ("broker_scalable", "scalable-broker-export.csv"): 19,
