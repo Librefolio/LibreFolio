@@ -19,7 +19,7 @@
     import type {Snippet} from 'svelte';
     import {_ as t} from '$lib/i18n';
     import {todayIso} from '$lib/utils/dateOnly';
-    import {Plus, Trash2, Undo2, Upload, Eye, EyeOff} from 'lucide-svelte';
+    import {Download, Plus, Trash2, Undo2, Upload, Eye, EyeOff} from 'lucide-svelte';
     import type {ParsedRow} from './CsvEditor.svelte';
     import type {ColumnDef, DataRow, RowStatus} from './DataEditorTypes';
     import DataTable from '$lib/components/table/DataTable.svelte';
@@ -46,6 +46,11 @@
         readonly?: boolean;
         /** Snippet that renders the import modal. Receives {open, onimport} props via callback. */
         importModal?: Snippet<[{open: boolean; setOpen: (v: boolean) => void; onimport: (rows: ParsedRow[]) => void}]>;
+        /**
+         * Snippet that renders the export dialog (FB-30). With it, an «Export» button sits beside «Import CSV», and stays
+         * when the editor is read-only: a file can always be taken out.
+         */
+        exportModal?: Snippet<[{open: boolean; setOpen: (v: boolean) => void}]>;
         /** Emits only dirty rows (status !== 'original') */
         onchange?: (dirtyRows: DataRow[]) => void;
         /**
@@ -62,13 +67,14 @@
         importMatchKeys?: string[];
     }
 
-    let {columns, rows = $bindable([]), readonly: isReadonly = false, importModal, onchange, defaultRowValues = {}, importMatchKeys = []}: Props = $props();
+    let {columns, rows = $bindable([]), readonly: isReadonly = false, importModal, exportModal, onchange, defaultRowValues = {}, importMatchKeys = []}: Props = $props();
 
     // =========================================================================
     // State
     // =========================================================================
 
     let importModalOpen = $state(false);
+    let exportModalOpen = $state(false);
     let dataTableRef: DataTable<DataRow> | undefined = $state(undefined);
     let selectedIds: string[] = $state([]);
     let hideStale = $state(false);
@@ -635,6 +641,12 @@
                     {$t('common.addRow')}
                 </button>
             {/if}
+            {#if exportModal}
+                <button class="flex items-center gap-1 px-2.5 py-1.5 text-xs bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors" onclick={() => (exportModalOpen = true)} data-testid="data-editor-export-btn">
+                    <Download size={13} />
+                    {$t('dataEditor.exportCsv')}
+                </button>
+            {/if}
         </div>
 
         <!-- Right: Selection bar + Counters + Stale toggle + Column visibility -->
@@ -731,6 +743,10 @@
 </div>
 
 <!-- Import Modal (injected via snippet) -->
+{#if exportModal}
+    {@render exportModal({open: exportModalOpen, setOpen: (v) => (exportModalOpen = v)})}
+{/if}
+
 {#if importModal}
     {@render importModal({open: importModalOpen, setOpen: (v) => (importModalOpen = v), onimport: handleImport})}
 {/if}
