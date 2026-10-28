@@ -8859,3 +8859,18 @@ Lotto L3 dell'inventario di MF (`ondata5/MF-pavimenti-inventario.md`, punti P7�
 Dopo: `services transaction-decimal-places`/`-edge-cases`/`transaction_service` 360 verdi, `api transactions` 26, `services brim-gap-fix` 118; Vitest di tutta `frontend` 630 file / 22229 test (con `LC_ALL=en_US.UTF-8`); `front check` 0/0; E2E `front-transaction all` 372 verdi (+ il nuovo test «1850 confermato e salvato»); due rossi di `tx-import-resolution` (IWR-004/005: login scaduto a 30 s su `/dashboard`, macchina carica) verdi rilanciando lo spec da solo (15 su 15); mkdocs build e check-links verdi; ruff/black/prettier puliti.
 > **Note implementazione**: l'E2E del 1850 usa un conto usa-e-getta, perché una riga del 1850 sul broker del seed sposterebbe NAV e storia degli altri test (`Transaction` non ha `user_id`). Il codice `dateOutOfRange` resta per i client: cambiano solo testo e `params`.
 > **⚠️ Fuori pista**: nessuna. Resta per L5: costante `EARLIEST_RANGE_START`, righe di `data-quality-banner.md` (§ `TRANSACTIONS_BEFORE_FLOOR`, frase «N74 refuses…»), CHANGELOG.
+
+---
+
+## 13. Ondata 6 · W2 (28/10/2026)
+
+Kickoff: `salvataggi-worktrees-20261021/ondata6/kickoff-W2.md`. Base `32674edb8`, corsia 6203 (`/tmp/librefolio-r13-o6-w2`). Checkpoint 1 = MF-L, consegnato da solo (MF lo aspetta).
+
+### Checkpoint 1 · MF-L — via `BRSummary.holdings`
+✅ (28/10) **Analisi**: nessuna pagina legge `holdings` di `GET /brokers/{id}/summary` (il frontend legge `cash_balances`, `user_role`, `user_share_percentage`; i `holdings` delle pagine broker/dashboard sono del *report* di portafoglio). Chi lo scriveva: il ciclo di `get_summary`, `_holding_average_costs`, `_get_latest_prices_batch`.
+✅ **Rosso prima**: `BR-U-032` (servizio) rosso per «`holdings` presente nel riepilogo»; poi verde.
+✅ **Codice**: tolti `BRAssetHolding`, `BRSummary.holdings` e `BRSummary.missing_fx_pairs` (esisteva solo per il costo delle posizioni: sarebbe rimasto sempre vuoto) da `schemas/brokers.py` e `schemas/__init__.py`; `brokers/summary.py` ora calcola solo cassa, ruolo e quota (via `_holding_average_costs`, `_get_latest_prices_batch`, import di `average_cost`/`splits`/`valuation`/`returns`). `api/v1/brokers.py` solo docstring. `api sync` fatto.
+✅ **Test**: BR-U-032 riscritto («niente holdings»), BR-U-033/036/037/038/039/094 (costo e P&L per posizione nel riepilogo) e `test_broker_summary_splits.py` (MF-I2) **tolti** insieme alla funzione: il costo medio resta coperto da `financial_math` e dai test del report/lotti. As-of (BR-U-090..093, BR-A-070..072) e cancellazione (BR-U-075) ora leggono la sola cassa. API: BR-A-013/013B verificano l'assenza di `holdings`.
+✅ **Doc**: `developer/backend/transactions/wac.md` (sezione Broker summary + tabella Diagnostics senza la colonna), `service.md`.
+> **Note implementazione**: `TransactionService.get_asset_holdings` resta (testato, usato dai test del decimal-places) ma ora **non ha più chiamanti nell'app**: candidato al codice morto, da decidere con W6-12 (stesso file `balances.py`). `BRSummary.total_value_base_currency` non è mai valorizzato dal backend, ma `brokers/[id]/+page.svelte:884` lo legge (ramo morto): file di Y, solo segnalato.
+> **⚠️ Fuori pista**: nessuna.
