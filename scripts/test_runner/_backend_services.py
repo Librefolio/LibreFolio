@@ -1142,6 +1142,16 @@ def services_brim_report_sets(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "BRIM report sets tests", verbose=verbose)
 
 
+def services_brim_report_set_core(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the shared core of the report-set BRIM plugins: helpers, readers, rule M, pairing, timeline."""
+    print_section("Services: BRIM Report-set Core")
+    print_info("Testing: backend/app/services/brim/brim_report_set_core.py (shared by the Danske Bank and Crédit Agricole plugins)")
+    print_info("Tests: norm/plain/money/business days, layout and header scan, xlsx/csv readers, RoleMerge (rule M), assign/pair_by_key, merge_spans/build_timeline/zone")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_report_set_core.py", test_names)
+    return run_command(cmd, "BRIM report-set core tests", verbose=verbose)
+
+
 def services_brim_gap_fix(verbose: bool = False, test_names: list = None) -> bool:
     """Test the BRIM gap-fix: LibreFolio's balances at a date, the gap-fix schemas and compute_gap_fix."""
     print_section("Services: BRIM Gap-fix")
@@ -2938,6 +2948,15 @@ Note: No backend server required.
     add_test(cat, "brim-provider-base", services_brim_provider_base, name="BRIM Provider Base", desc="Abstract base defaults + text-encoding fallback")
     add_test(cat, "brim-report-sets", services_brim_report_sets, name="BRIM Report Sets", desc="Report-set schemas, contract defaults, combined-file storage")
     add_test(cat, "brim-gap-fix", services_brim_gap_fix, name="BRIM Gap-fix", desc="Gap-fix: bank truth points vs LibreFolio state, proposals and verifications")
+    add_test(
+        cat,
+        "brim-report-set-core",
+        services_brim_report_set_core,
+        name="BRIM Report-set Core",
+        desc="Shared report-set core: text/number helpers, xlsx/csv readers and header scan, rule M (RoleMerge), one-to-one pairing, timeline and zones",
+        # PURE: synthetic rows and files under tmp_path; no database, no server, no network.
+        isolation="pure",
+    )
     add_test(
         cat,
         "gap-fix-currency-guard",
