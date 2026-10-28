@@ -169,6 +169,8 @@
 
     // Sync modal
     let syncModalOpen = $state(false);
+    /** The card or row Sync waiting for the user's yes: the prices already stored in its range, and the manual ones (X-R61). */
+    let syncConfirm = $state<{asset: any; stored: number; manual: number} | null>(null);
     let syncModalAssets = $state<AssetInfo[]>([]);
 
     // Asset modal (create/edit)
@@ -1189,7 +1191,33 @@
         }
     }
 
+    /**
+     * The card's or row's Sync (X-R61): it asks first when the range already holds stored prices, which the sync
+     * replaces; the count comes from the backend (X-R29), manual ones apart. A count that cannot be read does not
+     * stop the sync.
+     */
     async function handleSyncAsset(asset: any) {
+        let counted: {stored_count?: number; manual_count?: number} | undefined;
+        try {
+            const response = await zodiosApi.count_stored_prices_api_v1_assets_prices_stored_count_post([{asset_id: asset.id, date_range: {start: syncDateStart, end: dateEnd}}]);
+            counted = (response as any)?.items?.[0];
+        } catch (e) {
+            console.warn('Stored prices not counted before the sync', {assetId: asset.id}, e);
+        }
+        if ((counted?.stored_count ?? 0) > 0) {
+            syncConfirm = {asset, stored: counted!.stored_count!, manual: counted!.manual_count ?? 0};
+            return;
+        }
+        await runSyncAsset(asset);
+    }
+
+    async function confirmSyncAsset() {
+        const pending = syncConfirm;
+        syncConfirm = null;
+        if (pending) await runSyncAsset(pending.asset);
+    }
+
+    async function runSyncAsset(asset: any) {
         syncingAssetIds = new Set([...syncingAssetIds, asset.id]);
         try {
             const response = await zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post([
@@ -2232,6 +2260,21 @@
     results={bulkDeleteResults}
     testId="asset-bulk-delete-confirm"
     title={$t('common.confirmDelete')}
+/>
+
+<!-- Card / row Sync: asks first when the range holds stored prices (X-R61) -->
+<ConfirmModal
+    confirmText={$t('assets.sync.confirmAction')}
+    description={syncConfirm && syncConfirm.manual > 0 ? $t('assets.sync.confirmManual', {values: {manual: syncConfirm.manual}}) : undefined}
+    message={syncConfirm ? $t('assets.sync.confirmMessage', {values: {stored: syncConfirm.stored}}) : ''}
+    onCancel={() => {
+        syncConfirm = null;
+    }}
+    onConfirm={confirmSyncAsset}
+    open={syncConfirm !== null}
+    testId="asset-sync-confirm"
+    title={$t('assets.sync.confirmTitle', {values: {name: syncConfirm?.asset?.display_name ?? ''}})}
+    warning={true}
 />
 
 <!-- Asset Sync Modal -->

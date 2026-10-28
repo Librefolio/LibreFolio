@@ -25,7 +25,7 @@ from backend.app.schemas.prices import (
     FAUpsert,
     FAUpsertResult,
 )
-from backend.app.schemas.refresh import FABulkRefreshResponse, FARefreshItem
+from backend.app.schemas.refresh import FABulkRefreshResponse, FARefreshItem, FAStoredPriceCountItem, FAStoredPriceCountResponse
 from backend.app.schemas.signals import (
     SignalCatalogResponse,
     SignalDomain,
@@ -265,6 +265,27 @@ async def get_current_prices_bulk(
 # ============================================================================
 # PROVIDER REFRESH ENDPOINTS
 # ============================================================================
+
+
+@price_router.post("/stored-count", response_model=FAStoredPriceCountResponse)
+async def count_stored_prices(
+    items: List[FAStoredPriceCountItem],
+    session: AsyncSession = Depends(get_session_generator),
+    _current_user: User = Depends(get_current_user),
+):
+    """Count the prices stored in each item's range, and how many of them were entered by hand (X-R29).
+
+    Read only, DB only: it tells the page, before a sync, how many stored prices the sync would replace. The body is the
+    sync's: an asset and the range a sync would ask for. At most ``MAX_BULK_ITEMS`` items (422 ``bulk_too_many_items``,
+    before any read). The answer follows the request's order.
+    """
+    if len(items) > MAX_BULK_ITEMS:
+        raise HTTPException(status_code=422, detail=bulk_too_many_items_detail(len(items), MAX_BULK_ITEMS))
+    try:
+        return FAStoredPriceCountResponse(items=await AssetSourceManager.count_stored_prices(items, session))
+    except Exception as e:
+        logger.exception(f"Error counting stored prices: {e}")
+        raise HTTPException(status_code=500, detail="Internal error while counting prices") from e
 
 
 @price_router.post("/sync", response_model=FABulkRefreshResponse)
