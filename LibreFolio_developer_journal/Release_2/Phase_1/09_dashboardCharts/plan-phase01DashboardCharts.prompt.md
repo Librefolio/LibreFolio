@@ -8721,3 +8721,19 @@ Fonte: i feedback del developer nella testlist del server (§1 e §2). Base `326
 > **Note implementazione**: `attachDaySnap` si può richiamare sulla stessa istanza (`AllocationHistoryChart` lo fa a ogni disegno): l'ascoltatore del mouse è uno solo, il gestore del puntatore viene sostituito, mai impilato (test dedicato). I tre test nuovi sono registrati in `scripts/test_runner/_frontend_utility.py` (`check-orphans` verde, 680 test).
 > **Note implementazione**: verificato a mano nel browser sul server di prova (porta 6225): col mouse a x=524 il tooltip dice «16 Sept 2026 (Wed)» e la linea del puntatore sta sul 16 settembre (x=527); la rotella zooma il grafico «Return of the positions». FB-5 verificato solo con Vitest (jsdom), non su un telefono.
 > **Da fare da altri**: `GrowthChart.svelte` (~riga 1124, file di Y) — dopo `zoomInstance.on('updateAxisPointer', onAxisPointer)` aggiungere `attachDaySnap(zoomInstance)` + l'import: oggi il grafico principale ha ancora il puntatore a metà fra due giorni.
+
+## 28/10 · Ondata 6 — checkpoint 3a (day snap · common.totalValue · Y6-1)
+
+Base: `19c9928ae` (checkpoint 2 `0f7709fc6` + checkpoint 1 di Y2 `8537f3a99`).
+
+- ✅ (28/10) **`attachDaySnap` nel grafico di crescita** (richiesta di Y2): `GrowthChart.svelte` chiama `attachDaySnap(zoomInstance)` dopo il suo `updateAxisPointer`. Nuovo `GrowthChart.daySnap.test.ts` (2 casi: il puntatore a metà fra due giorni è riportato sul giorno più vicino, 1 rosso prima; già su un giorno non si tocca).
+- ✅ (28/10) **`common.totalValue`** tolta dai 4 cataloghi (nessun uso dopo la tolta del ramo morto del broker).
+- ✅ (28/10) **Y6-1 (Y-32)**, la lista degli asset: il poll dei prezzi live porta con sé il Δ del backend e porta la testa della serie.
+  - `fetchCurrentPrices(ids, {rangeStart})` manda `range_start` a ogni lotto; `LivePriceResult` ha `asOfDate` e `rangeChange`.
+  - La lista chiede `range_start` solo quando l'intervallo finisce oggi e «Tutto» ha già un primo giorno vero (non mentre è in attesa): il Δ della card segue il prezzo mostrato (`applyLiveRangeDeltas`, `assetRangeDelta`).
+  - L'ultimo punto della serie in cache e della card si porta sul prezzo live **sul posto**, senza invalidare né richiedere (`withLiveHead` in `utils/liveHead.ts`, `ReducedPriceCache.applyLiveHead`): giornaliera, il punto del giorno prende il prezzo oppure se ne aggiunge uno; settimanale/mensile, l'ultimo punto si sposta, i bucket restano gli stessi (lo step che la cache serve non cambia). Una risposta di un intervallo passato nel frattempo non si applica.
+  - Rossi prima, verdi dopo: `livePriceService.test.ts` (5 rossi, 81/81 dopo; 4 aspettative del mappatore aggiornate con i due campi nuovi), `liveHead.test.ts` (10), `reducedPriceCache.test.ts` (+5).
+  - **Glob degli E2E** (avviso del backlog): le richieste ora hanno una query, quindi le glob esatte `**/api/v1/assets/prices/current` non le vedevano e la lista avrebbe interrogato i provider veri e scritto nel DB condiviso. Allargate con `*` in nove file che aprono la lista (`asset-list`, `asset-browse`, `asset-card-sync-confirm`, `asset-event-delete`, `asset-data-editor`, `asset-events-owned`, `asset-modal`, `app-start-auth`, `onboarding-tour`, `tx-import-asset-inspector`). Lasciati esatti `asset-detail:90` e `fx-detail:427` (pagine di dettaglio).
+  - Nuovo E2E «Asset List Page — the live poll brings the Δ with the quote»: il poll chiede `range_start` e la card mostra il Δ.
+  > **⚠️ Fuori pista**: l'E2E l'ho scritto con la cura (nessun rosso eseguito); il rosso eseguito è Vitest.
+- ✅ **Prove (28/10)**: Vitest `services`, `stores`, `utils`, `features/dashboard`, `components/assets`, `components/charts` 214 file / 7028; `front check` 0/0; `front-asset asset-list` 54/54; `front-asset asset-browse` 8/8; `front-portfolio dashboard` 33/33; `i18n check` stretto; `check-orphans` verde.

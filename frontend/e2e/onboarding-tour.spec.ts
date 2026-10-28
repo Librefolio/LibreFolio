@@ -713,7 +713,7 @@ test.describe('Onboarding Round 5', () => {
                 },
             });
         });
-        await page.route('**/api/v1/assets/prices/current', async (route) => {
+        await page.route('**/api/v1/assets/prices/current*', async (route) => {
             await route.fulfill({json: {results: [], success_count: 0, errors: []}});
         });
 
