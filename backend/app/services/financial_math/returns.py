@@ -124,6 +124,11 @@ def annualized_to_cumulative(rate: Decimal | None, days: int) -> Decimal | None:
         return None
 
 
+def annualizes(days: int, min_days: int = _MIN_ANNUALIZATION_DAYS) -> bool:
+    """Whether a window of ``days`` is long enough to annualize a return over (:func:`cumulative_to_annualized`'s floor)."""
+    return days >= min_days and days > 0
+
+
 def cumulative_to_annualized(total_return: Decimal | None, days: int, min_days: int = _MIN_ANNUALIZATION_DAYS) -> Decimal | None:
     """Convert a cumulative return over a holding window to an annualized (CAGR) rate.
 
@@ -143,7 +148,7 @@ def cumulative_to_annualized(total_return: Decimal | None, days: int, min_days: 
         return None
     if total_return <= Decimal("-1"):
         return None
-    if days < min_days or days <= 0:
+    if not annualizes(days, min_days):
         return None
     try:
         base = float(Decimal("1") + total_return)
@@ -658,6 +663,46 @@ def calculate_twrr_series(
         )
         for point in calculate_twrr_period_series(nav_snapshots, cash_flows, exposure_by_date=exposure_by_date)
     ]
+
+
+@dataclass(frozen=True)
+class PeriodTWRRPoint:
+    """The Dashboard's TWRR at a date; None where the card of the period ending there would show «—»."""
+
+    date: date
+    twrr: Decimal | None
+
+
+def period_twrr_series(nav_snapshots: Sequence[NAVSnapshot], cash_flows: Sequence[CashFlowInput]) -> list[PeriodTWRRPoint]:
+    """The Dashboard's TWRR line (MF-K3): at every snapshot after the first, the cumulative TWRR from the first.
+
+    A point is None where the value is at or below zero: a portfolio emptied (or in debt) has no time-weighted return
+    to show, as the MWRR has none (D-MF5). The sub-periods after it keep compounding as before (a sub-period starting
+    from 0 returns 0), so a portfolio filled again shows its TWRR again. :func:`period_twrr` is the last point, the
+    card of the whole period. Empty without two snapshots or without flows.
+    """
+    if len(nav_snapshots) < 2 or not cash_flows:
+        return []
+    navs = {snapshot.date: snapshot.nav for snapshot in nav_snapshots}
+    return [PeriodTWRRPoint(date=point.date, twrr=point.twrr if navs[point.date] > 0 else None) for point in calculate_twrr_series(list(nav_snapshots), list(cash_flows))]
+
+
+def period_twrr(nav_snapshots: Sequence[NAVSnapshot], cash_flows: Sequence[CashFlowInput]) -> Decimal | None:
+    """The TWRR of a period as the Dashboard's card shows it: the last point of :func:`period_twrr_series`."""
+    series = period_twrr_series(nav_snapshots, cash_flows)
+    return series[-1].twrr if series else None
+
+
+def period_roi_cash_flows(nav_snapshots: Sequence[NAVSnapshot], cash_flows: Sequence[CashFlowInput], date_from: date | None) -> tuple[CashFlowInput, ...]:
+    """The flows the period's simple ROI counts its capital from, card and line alike (MF-K3).
+
+    The period's flows (:func:`rebase_to_period`), except when ``date_from`` precedes every snapshot: that period holds
+    the whole history, so its capital is every flow, the first day's deposit included — the rebase leaves that one out
+    (it is inside the first NAV, which the TWRR and the MWRR start from), and the ROI would see no capital at all.
+    """
+    if date_from is not None and nav_snapshots and date_from < min(snapshot.date for snapshot in nav_snapshots):
+        return tuple(cash_flows)
+    return rebase_to_period(nav_snapshots, cash_flows, date_from).cash_flows
 
 
 # XIRR: a rate is returned only when it is a root of the flows' NPV (|NPV| within this share of the

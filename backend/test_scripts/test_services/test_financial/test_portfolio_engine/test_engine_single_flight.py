@@ -130,6 +130,7 @@ from backend.app.services.ai_export.components.types import BuildScope, DetailLe
 from backend.app.services.ai_export.dependencies import BuildContext, build_bucket_plan_for_scope
 from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine
 from backend.app.services.financial_math.portfolio.models import DailyStates, PortfolioCalculationResult, StateSegment
+from backend.app.services.financial_math.price_marks import AssetPriceSeries
 from backend.app.services.pac_allocator.source.distribution import build_planner_current_distribution
 from backend.app.services.portfolio_service import PortfolioService
 from backend.test_scripts.test_utils import print_section, print_success
@@ -796,9 +797,8 @@ def _snapshot(value: Any, path: str = "result", _stack: frozenset[int] = frozens
     if id(value) in _stack:
         return ("cycle", type(value).__name__)
     stack = _stack | {id(value)}
-    if isinstance(value, DailyStates):
-        # P4: the states a consumer could write into are the stored ones, one per segment (start, end, state)
-        return (type(value).__name__, _snapshot(value.segments, f"{path}.segments", stack))
+    if isinstance(value, DailyStates | AssetPriceSeries):
+        return _snapshot_engine_store(value, path, stack)
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         return _snapshot_dataclass(value, path, stack)
     if isinstance(value, Mapping):
@@ -808,6 +808,17 @@ def _snapshot(value: Any, path: str = "result", _stack: frozenset[int] = frozens
     if isinstance(value, list | tuple):
         return (type(value).__name__, tuple(_snapshot(item, f"{path}[{index}]", stack) for index, item in enumerate(value)))
     raise _UnsnapshottableValue(f"{path}: cannot snapshot a {type(value).__qualname__}")
+
+
+def _snapshot_engine_store(value: DailyStates | AssetPriceSeries, path: str, stack: frozenset[int]) -> Any:
+    """The engine's own containers, which are no dataclass and have no equality of their own."""
+    if isinstance(value, DailyStates):
+        # P4: the states a consumer could write into are the stored ones, one per segment (start, end, state)
+        return (type(value).__name__, _snapshot(value.segments, f"{path}.segments", stack))
+    # MF6-1: the engine's marks (result.marks.mark_series) hold one price series per asset, a slotted class. Its whole
+    # state is its slots — the observation days, values, kinds, currencies, OHLC and last market day, lists a consumer
+    # could write into — so each slot is snapshot, none skipped
+    return (type(value).__name__, tuple((slot, _snapshot(getattr(value, slot), f"{path}.{slot}", stack)) for slot in type(value).__slots__))
 
 
 def _snapshot_dataclass(value: Any, path: str, stack: frozenset[int]) -> Any:
@@ -936,7 +947,8 @@ class TestTheSharedResultIsNotMutatedByItsConsumers:
 
     def test_the_snapshot_sees_a_write_anywhere_in_a_result(self):
         """The guard's teeth (pure): a write into a nested dict of a daily state, a list append, a Decimal's exponent,
-        a field rebound — each changes the snapshot; an object it cannot compare raises instead of being skipped."""
+        a field rebound, a write into the engine's marks (a price series' slots, a rate; MF6-1) — each changes the
+        snapshot; an object it cannot compare raises instead of being skipped."""
         from backend.app.services.financial_math.portfolio.models import DailyPortfolioState  # noqa: PLC0415
 
         zero = Decimal("0")
@@ -974,5 +986,26 @@ class TestTheSharedResultIsNotMutatedByItsConsumers:
             write(result)
             assert _differences(before, _snapshot(result)), f"the snapshot missed a write: {name}"
         assert _differences(_snapshot(build_segments()), _snapshot(build_segments())) == [], "two equal segmented results snapshot differently"
+
+        # MF6-1: the engine's marks — a price series (slotted, no equality of its own) and the rates they convert with
+        from backend.app.services.financial_math.portfolio.daily_state import AssetMarks  # noqa: PLC0415
+        from backend.app.services.financial_math.price_marks import build_asset_price_series  # noqa: PLC0415
+
+        def build_marks() -> PortfolioCalculationResult:
+            series = build_asset_price_series(price_rows=[(D0, Decimal("10"), USD)], transactions=[], split_linked_tx_ids=set(), asset_currency=USD, quote_base_quantity=1)
+            marks = AssetMarks(mark_series={1: series}, split_history={}, quote_base_map={1: None}, fx_rate_map={(USD, EUR, D0): Decimal("0.9")}, target_currency=EUR, first_day=D0, last_day=D0)
+            return PortfolioCalculationResult(daily_states=[], date_from=D0, date_to=D0, marks=marks)
+
+        marks_writes: dict[str, Callable[[PortfolioCalculationResult], None]] = {
+            "price series value": lambda result: result.marks.mark_series[1]._values.__setitem__(0, Decimal("11")),
+            "price series day appended": lambda result: result.marks.mark_series[1]._dates.append(D0 + timedelta(days=1)),
+            "marks rate": lambda result: result.marks.fx_rate_map.__setitem__((USD, EUR, D0), Decimal("0.8")),
+        }
+        for name, write in marks_writes.items():
+            result = build_marks()
+            before = _snapshot(result)
+            write(result)
+            assert _differences(before, _snapshot(result)), f"the snapshot missed a write: {name}"
+        assert _differences(_snapshot(build_marks()), _snapshot(build_marks())) == [], "two equal results with marks snapshot differently"
         with pytest.raises(_UnsnapshottableValue):
             _snapshot(PortfolioCalculationResult(daily_states=[object()]))

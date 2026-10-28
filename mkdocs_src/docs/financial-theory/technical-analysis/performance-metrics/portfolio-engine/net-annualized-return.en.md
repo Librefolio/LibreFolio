@@ -138,7 +138,10 @@ $$
 - The numerator is the row's whole $\mathrm{PnL}_{period}$: for a position held at $t_{\mathrm{from}}$, its $\Delta\mathrm{UGL}$ gives back the unrealized gain/loss it started with.
 - The displayed period percentage keeps $|\mathrm{StartValue}|$ as base: only the annualized value changes base and window.
 
-When this gives no value, the row keeps the rule above. That happens when units left the position in any other way — a transfer outside the scope, or still in transit at $t_{\mathrm{end}}$, a transfer or a disposal whose value or cost is unknown — since the row's result would then hold more than its base covers; and with fewer than 30 days held, or a return of $-100\%$ or worse. The rule above is: $|\mathrm{StartValue}|$ over $t_{\mathrm{from}} \to t_{\mathrm{end}}$, and no value for a position opened in the period.
+When this gives no value, two cases follow:
+
+- **Fewer than 30 days held** in the period, $t_{\mathrm{close}} - t_{\mathrm{start}} < 30$: the row has no annualized return (`—`), whatever else made the base unusable. The rule above would annualize over $t_{\mathrm{from}} \to t_{\mathrm{end}}$, as if ten days held had lasted the whole period (MF-A3).
+- **Otherwise** the row keeps the rule above. That happens when units left the position in any other way — a transfer outside the scope, or still in transit at $t_{\mathrm{end}}$, a transfer or a disposal whose value or cost is unknown — since the row's result would then hold more than its base covers; and with a return of $-100\%$ or worse. The rule above is: $|\mathrm{StartValue}|$ over $t_{\mathrm{from}} \to t_{\mathrm{end}}$, and no value for a position opened in the period.
 
 ??? example "Example: a position sold 90 days into a one-year period"
 

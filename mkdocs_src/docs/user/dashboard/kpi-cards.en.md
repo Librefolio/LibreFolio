@@ -86,7 +86,7 @@ How well did your money work, whatever the size of your portfolio? The **Returns
 
 - **Timing effect** — the big number, in percentage points (pp): $\text{MWRR}_{\text{cumulative}} - \text{TWRR}$ → [Timing Effect](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/timing-effect.md)
 - **The percentage under it** — for example `+0.35%`: today's change in your Total P&L, against yesterday's net worth (panel below)
-- **ROI** — the period's gain against the capital invested → [Simple ROI](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/roi.md)
+- **ROI** — the period's gain against the capital invested: what the portfolio was worth when the period began, plus the deposits and minus the withdrawals made since. When the range starts before your first transaction, your first deposit counts as capital too, so the ROI is the same as over your whole history → [Simple ROI](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/roi.md#dashboard-period-roi)
 - **TWRR** — how your asset choices performed, whatever the timing of your deposits → [TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md)
 - **MWRR cumulative** and **MWRR annualized** — your personal return, deposit timing included, over the period and as a yearly rate → [MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)
 
@@ -95,7 +95,7 @@ How well did your money work, whatever the size of your portfolio? The **Returns
 - **Favorable timing** (green): you tended to deposit before prices rose. **Unfavorable timing** (red): you tended to deposit at the peaks. Close to zero it reads **Neutral timing**, neither green nor red.
 - **TWRR judges the strategy, MWRR your personal result** — as for a fund manager and an investor.
 - **The four rows cover the whole period**; the small percentage covers today only.
-- **`—` means no value**: a return LibreFolio cannot compute for the period shows `—` instead of a number. The timing effect needs both TWRR and MWRR: when one is missing it shows a grey `—`, with no timing label.
+- **`—` means no value**: a return LibreFolio cannot compute for the period shows `—` instead of a number. TWRR and MWRR show `—` when your portfolio is worth zero or less at the end of the period, for example after you sold everything and withdrew the cash ([When No TWRR Is Shown](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md#when-no-twrr), [MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)). The timing effect needs both TWRR and MWRR: when one is missing it shows a grey `—`, with no timing label. The ROI is never `—`: without capital invested in the period it reads `0.00%`.
 
 ??? info "📏 The percentage under the timing effect — how it is computed"
 

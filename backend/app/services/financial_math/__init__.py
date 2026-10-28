@@ -31,7 +31,8 @@ Modules:
   writes and a restore checks.
 * ``returns`` — simple ROI, TWRR and MWRR, as point values and daily series (the
   Dashboard's MWRR rule, one for the card and every point of the line, in
-  ``period_mwrr`` and ``period_mwrr_series``), the conversion between cumulative and annualized returns, a period's start (rebasing), the
+  ``period_mwrr`` and ``period_mwrr_series``, its TWRR rule in ``period_twrr`` and
+  ``period_twrr_series``, and the flows its simple ROI counts as capital), the conversion between cumulative and annualized returns, a period's start (rebasing), the
   net return of a holding, a gain or loss as a fraction of its base (of one holding or a
   group), a change as a fraction of its base, the timing effect (MWRR − TWRR), the gain or loss a
   disposal realizes, the return between two prices (also as a float for a return series), the
@@ -59,7 +60,8 @@ Modules:
 * ``fifo`` — FIFO lots: custody fragments, closures, transfers, and the allocation of
   income and costs to lots (``models``, ``eligibility``, ``engine``).
 * ``portfolio`` — the daily portfolio state (NAV, capital, P&L, per-broker contributions)
-  and the views derived from it (``models``, ``classifier``, ``daily_state``,
+  and the views derived from it (``models``, ``classifier``, ``daily_state`` — with the price of an
+  asset on a day as the replay values it, ``AssetMarks`` on the engine's result —,
   ``derived_views``, ``data_quality``, ``period``, ``contributions``, ``engine``).
 * ``lots`` — the math of the lots analysis: price lookups, conversions (a closure's legs,
   each at its own date), economic events, lot histories and average cost lines (``prices``, ``conversions``, ``economic_events``,
