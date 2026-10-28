@@ -220,7 +220,9 @@
       "appended": "{n} new"
     },
     "staleShow": "{n, plural, one {Show # stale row} other {Show # stale rows}}",
-    "staleHide": "{n, plural, one {Hide # stale row} other {Hide # stale rows}}"
+    "staleHide": "{n, plural, one {Hide # stale row} other {Hide # stale rows}}",
+    "importProviderEventsLeftOut": "{n, plural, one {# event marked PROVIDER was left out} other {# events marked PROVIDER were left out}}: sync the asset to load {n, plural, one {it} other {them}}.",
+    "savePartial": "Already saved: {saved, plural, one {# price} other {# prices}} written, {deleted, plural, one {# price} other {# prices}} deleted. Fix the cause and save again for the rest."
   },
   "datePicker": {
     "presets": {

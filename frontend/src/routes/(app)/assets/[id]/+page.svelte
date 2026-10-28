@@ -2769,6 +2769,7 @@
                         currency={assetInfo?.currency}
                         {chartData}
                         {events}
+                        hasProvider={!!providerAssignment?.provider_code}
                         bind:saving={savingEdit}
                         bind:dirtyCount={editorDirtyCount}
                         onsave={async (expandedRange) => {

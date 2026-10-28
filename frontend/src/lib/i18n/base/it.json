@@ -220,7 +220,9 @@
       "appended": "{n, plural, one {# nuovo} other {# nuovi}}"
     },
     "staleShow": "{n, plural, one {Mostra # riga non aggiornata} other {Mostra # righe non aggiornate}}",
-    "staleHide": "{n, plural, one {Nascondi # riga non aggiornata} other {Nascondi # righe non aggiornate}}"
+    "staleHide": "{n, plural, one {Nascondi # riga non aggiornata} other {Nascondi # righe non aggiornate}}",
+    "importProviderEventsLeftOut": "{n, plural, one {# evento segnato PROVIDER è stato escluso} other {# eventi segnati PROVIDER sono stati esclusi}}: sincronizza l'asset per {n, plural, one {caricarlo} other {caricarli}}.",
+    "savePartial": "Già salvato: {saved, plural, one {# prezzo scritto} other {# prezzi scritti}}, {deleted, plural, one {# prezzo cancellato} other {# prezzi cancellati}}. Correggi la causa e salva di nuovo per il resto."
   },
   "datePicker": {
     "presets": {
