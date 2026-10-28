@@ -112,6 +112,10 @@ export function buildTooltipBucketHeader(bucket: BucketInfo, theme: TooltipTheme
         return `${buildTooltipHeader(t('chart.tooltip.weekRange', {values: {start: formatDay(upTo.bucketStart), end: formatDay(upTo.bucketEnd)}}), theme.textColor)}${contextLine}`;
     }
 
+    if (bucket.resolution === 'yearly') {
+        return `${buildTooltipHeader(t('chart.tooltip.yearLabel', {values: {year: String(Number(upTo.bucketEnd.slice(0, 4)))}}), theme.textColor)}${contextLine}`;
+    }
+
     return `${buildTooltipHeader(t('chart.tooltip.monthLabel', {values: {month: formatTooltipMonth(upTo.bucketEnd)}}), theme.textColor)}${contextLine}`;
 }
 

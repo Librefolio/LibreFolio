@@ -61,7 +61,7 @@
 
     // The aggregation level of the card, as the detail's badge says it (Y5-F3): what the backend sampled, or what the chart
     // itself aggregates for this plot, whichever is coarser.
-    const COARSENESS: Record<ChartResolution, number> = {daily: 0, weekly: 1, monthly: 2};
+    const COARSENESS: Record<ChartResolution, number> = {daily: 0, weekly: 1, monthly: 2, yearly: 3};
     let chartResolution = $state<ChartResolution>('daily');
     let shownResolution = $derived<ChartResolution>(COARSENESS[sampledResolution] >= COARSENESS[chartResolution] ? sampledResolution : chartResolution);
 </script>

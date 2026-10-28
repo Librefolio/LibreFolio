@@ -8,6 +8,8 @@ Below the KPI cards, the **Portfolio Growth** chart and the **Asset Allocation**
 
 The growth chart shows how your portfolio evolved over the selected period: the **Abs / % / P&L** toggle in its top-right corner switches between absolute values, rates of return, and the money actually earned.
 
+On a long period the chart groups the days to stay readable: into weeks, then months, and, for a history of many decades, years. A **Weekly**, **Monthly** or **Yearly** badge at the top left of the chart says which. When nothing is grouped, there is no badge.
+
 The chart remembers your last view, P&L sub-view included, in this browser and for each user, and shares it with the broker pages. It starts on **Abs**. Without rate-of-return data, **%** is greyed out and the chart shows **Abs**, but keeps your choice: **%** comes back as soon as there is data to draw — after you change the period or the broker, or the next time you open the chart — unless you pick another view in the meantime.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-growth" data-carousel-interval="5000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
