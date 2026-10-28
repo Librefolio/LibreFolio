@@ -9329,3 +9329,32 @@ Corsia 6209, `/tmp/librefolio-r13-o6-x`. Brief: `salvataggi-worktrees-20261021/o
 > **Note implementazione** (✅ 28/10/2026): prova fatta, **già coperto, nessuna cura**. `get_prices_bulk` legge le righe salvate (un intervallo indicizzato: costa quello che l'asset salva, non lo span) e
 > conta i giorni di ogni riempimento con `_fill_span` prima di costruirli, quindi un intervallo di tutto il calendario non costa niente e due serie con una riga all'anno 1 sono rifiutate prima del fill
 > (422 `bulk_too_many_days`). Due test lo fissano (`test_bulk_limits.py`, BL-S01 e BL-S02, verdi su HEAD senza cure).
+
+> **Checkpoint 2** committato dal coordinatore: `1054b9111` (28/10).
+
+### Checkpoint 3
+
+#### FB-11 · asset ↔ coppia FX: la riproduzione (28/10, server di prova sulla 6209, utente `e2e_test_user`)
+
+> **Verdetto** (prima di cambiare codice):
+> - **Vista prezzi, dettaglio asset:** la coppia FX **si aggiunge** (scheda «FX Pair», 93 punti) **e si disegna**: dopo la ricarica della pagina la linea c'è (in modalità %; in Abs un tasso ~1,08 accanto a un prezzo di 345 $ sarebbe una riga piatta a fondo scala).
+> - **Rolling Return, dettaglio asset e dettaglio FX:** il menu «Data comparison» offre **solo il tipo della pagina** (`allowedSignalTypes`), e la scheda dell'altro tipo già salvata sparisce (`visibleSignals` la filtra). Il dato dell'altro tipo non viene nemmeno chiesto: l'asset chiede i rendimenti solo agli `asset-comparison` (`calendarComparisonAssetIds`), la pagina FX solo le conversioni dei `fx-pair` (`buildFxDetailCalendarQuery`).
+> - **Impostazioni delle card (liste Assets e FX):** nell'anteprima normale il menu offre i due tipi; nell'anteprima Rolling Return solo il tipo della lista (`ChartSettingsModal.svelte:243`, `signalTypesShown`). Le card della lista in Rolling Return disegnano solo il proprio tipo (`renderCalendarComparisons` in `assets/+page.svelte`, `renderCalendarPairComparisons` in `fx/+page.svelte`).
+> - **Card della lista Assets, vista prezzi:** nessuno carica i tassi di una coppia FX in confronto (`ensureSignalFxPairs` lo chiamano solo i dettagli, Y-41): da verificare con un E2E.
+
+#### FB-11 · asset ↔ coppia FX nel Rolling Return (28/10)
+
+> **Note implementazione** (✅ 28/10/2026): le due pagine di dettaglio ora accettano **i due tipi** nella vista Rolling Return e ne calcolano il rendimento a finestra.
+> - **Dettaglio asset** (`assets/[id]/+page.svelte`): `allowedSignalTypes` = `['asset-comparison','fx-pair']`; `loadCalendarPairComparisons` chiede le coppie a `POST /fx/currencies/convert` (1 unità, direzione del segnale, segnale `ASSET_CALENDAR_ROLLING_RETURN`); le linee passano per `renderCalendarPairComparisons`; il grafico porta `data-calendar-pair-comparison-ready|partial|unavailable|error` (id dei segnali).
+> - **Dettaglio FX** (`fx/[pair]/+page.svelte`): `['fx-pair','asset-comparison']`; `loadCalendarAssetComparisons` chiede gli asset a `POST /assets/prices/query` (`include_price:false`, `include_events:false`, nella valuta propria dell'asset); linee da `renderCalendarComparisons`; `data-calendar-asset-comparison-ready|partial|unavailable|error` (id degli asset).
+> - Moduli puri `charts/crossTypeCalendar.ts` (`buildFxPairComparisonQuery`, `fxPairComparisonViews`, `buildAssetComparisonQuery`). `ChartSignalsSection.svelte` **non è toccato**: la restrizione viveva nelle pagine.
+> - **Rossi prima**: Vitest `crossTypeCalendar.test.ts` (modulo mancante); E2E (test-author): un confronto aggiunto dal menu in Rolling Return non partiva su nessuna delle due pagine.
+> - **⚠️ Fuori pista**: il test-author ha trovato un **mio** errore: confrontavo le impronte dei bersagli *dopo* `setPairSettings`, che aggiorna `signals` subito, quindi un confronto aggiunto dal pannello non caricava mai (in FX valeva già per le coppie `fx-pair`, senza test). Ora il flag si calcola prima, come gli altri (`shouldReloadCalendarTargets`, `shouldReloadCalendarPairs`).
+> - **Non fatto (seguito)**: le **card delle liste** (`ChartSettingsModal.svelte:243`, `signalTypesShown`; `renderCalendarComparisons` in `assets/+page.svelte`, `renderCalendarPairComparisons` in `fx/+page.svelte`) restano del solo tipo della lista nel Rolling Return: servirebbe far chiedere alle liste anche l'altro tipo. In vista prezzi le card offrono già i due tipi.
+
+#### FB-30 · pulsante «Esporta» negli editor dei dati (28/10)
+
+> **Note implementazione** (✅ 28/10/2026, E2E dopo): `DataEditor.svelte` ha uno snippet `exportModal` e, con esso, un pulsante `data-editor-export-btn` accanto a «Importa CSV» (resta anche in sola lettura). Nuova `DataExportModal.svelte` (CSV di default o JSON; un download fallito tiene la finestra aperta con l'errore; il confirm non si preme due volte). `AssetDataEditorSection` la apre per **Prezzi** (`/backup/asset/{id}/prices`) e **Eventi** (`/events`) con `downloadAssetBackup`; `FxDataEditorSection` per i **tassi** (`/backup/fx/{base}/{quote}/rates`) con il nuovo `downloadFxRatesBackup`. 6 chiavi `dataEditor.export*` in 4 lingue. Rosso prima: `DataExportModal.test.ts` (componente mancante).
+> **⚠️ Fuori pista**: tocca `DataEditor.svelte`, che Y6-3 aspetta: va committato prima di Y6-3.
+
+> **Checkpoint 3, rifacimento** (28/10): il coordinatore ha trovato un rosso vero in `front-asset asset-detail` (`asset-detail.spec.ts:577`, `signal-tree-option-fx-pair` atteso assente). Era il test che **fissava la restrizione** che FB-11 toglie; corretto il test (ora l'opzione deve essere visibile), non il codice. Rifatti interi: `front-asset asset-detail` 58/58, `front-fx all` 157 E2E + 169 Vitest, tutti verdi.

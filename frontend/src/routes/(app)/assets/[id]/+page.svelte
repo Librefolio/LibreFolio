@@ -82,9 +82,10 @@
     import type {SignalLabelInfo} from '$lib/charts/signalLabel';
     import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
     import {ensureSignalFxPairs, fxPairSlugsOf} from '$lib/charts/comparisonSeries';
+    import {buildFxPairComparisonQuery, fxPairComparisonViews} from '$lib/charts/crossTypeCalendar';
     import {applyComparisonAssetsData, buildComparisonSyncRange, clearComparisonAssetsData, collectConfiguredComparisonFxSlugs, comparisonAnswerGenerations, comparisonAnswerIsCacheable, comparisonAnswerKey, loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
     import {comparisonAssetIds as comparisonPeerAssetIds, detailPageSignalSources, parseBackendSignalResults, signalDataContextFingerprint} from '$lib/charts/chartPageSignals';
-    import {renderBackendResults, renderLocalSignals, type SignalDataSources} from '$lib/charts/chartSignalRendering';
+    import {renderBackendResults, renderCalendarPairComparisons, renderLocalSignals, type SignalDataSources} from '$lib/charts/chartSignalRendering';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
     import {COLORS} from '$lib/components/charts/lineChartHelpers';
@@ -213,6 +214,9 @@
     let calendarRangeDays = $derived(calendarReturnRangeDays(dateStart, dateEnd));
     let calendarReturnView: CalendarReturnView = $state(emptyCalendarReturnView());
     let calendarComparisonViews: Map<number, CalendarReturnView> = $state(new Map());
+    // FB-11: the rolling return of the FX pairs its `fx-pair` signals compare, by signal id; asked on its own, apart from the asset's
+    let calendarPairViews: Map<string, CalendarReturnView> = $state(new Map());
+    let calendarPairRequestGeneration = 0;
     let calendarComparisonProblems: Map<number, SignalProblem> = $state(new Map());
     let calendarComparisonFxFailures: Set<number> = $state(new Set());
     let calendarSnapshotFingerprint: string | null = $state(null);
@@ -750,7 +754,16 @@
         }
         return rendered;
     });
-    let calendarOverlaySignals = $derived([...calendarComparisonSignals, ...calendarMeasureSignals]);
+    let calendarPairSignals: RenderedSignal[] = $derived(renderCalendarPairComparisons(signals, calendarPairViews));
+    let calendarOverlaySignals = $derived([...calendarComparisonSignals, ...calendarPairSignals, ...calendarMeasureSignals]);
+    /** The `fx-pair` signals compared in the rolling return by the state of their view (signal ids). */
+    let calendarPairComparisonState = $derived.by(() => {
+        const byState: Record<'ready' | 'partial' | 'unavailable' | 'error', string[]> = {ready: [], partial: [], unavailable: [], error: []};
+        for (const [configId, view] of calendarPairViews) {
+            if (view.state === 'ready' || view.state === 'partial' || view.state === 'unavailable' || view.state === 'error') byState[view.state].push(configId);
+        }
+        return byState;
+    });
     let calendarComparisonState = $derived.by(() => {
         const state: Record<CalendarReturnViewState, number[]> = {
             idle: [],
@@ -1081,6 +1094,8 @@
         comparisonInFlight = null;
         calendarReturnView = emptyCalendarReturnView();
         calendarComparisonViews = new Map();
+        calendarPairViews = new Map();
+        calendarPairRequestGeneration += 1;
         calendarComparisonProblems = new Map();
         calendarComparisonFxFailures = new Set();
         calendarSnapshotFingerprint = null;
@@ -1284,6 +1299,37 @@
      * `silent`: the reload after a price catch-up (Y5-1) — the chart and the signals on screen stay as they are, and nothing
      * says the page is busy (no `loading`, no calendar `loading`, no `signalsLoading`): it is not a load the user asked for.
      */
+    /** The `fx-pair` signals of `configs` as the FX page reads them: the pair, and whether the signal shows it inverted. */
+    function fxPairTargetsOf(configs: readonly SignalConfig[]): Array<{configId: string; pairSlug: string; inverted: boolean}> {
+        return configs.filter((config) => config.signalType === 'fx-pair' && config.params.pairSlug).map((config) => ({configId: config.id, pairSlug: String(config.params.pairSlug), inverted: Boolean(config.params._inverted)}));
+    }
+
+    /**
+     * FB-11: the rolling return of the FX pairs the `fx-pair` signals compare, asked of `POST /fx/currencies/convert` over the
+     * period on screen and the window (`buildFxPairComparisonQuery`). Independent of the asset's own request: it never throws
+     * and a failure marks each pair `error`; a request the page has moved past is dropped.
+     */
+    async function loadCalendarPairComparisons(configs: SignalConfig[] = signals): Promise<void> {
+        const requestedAssetId = data.assetId;
+        const sessionGeneration = getClientSessionGeneration();
+        const requestVersion = ++calendarPairRequestGeneration;
+        const current = () => pageAlive && requestVersion === calendarPairRequestGeneration && primaryMode === 'calendar-return' && data.assetId === requestedAssetId && isClientSessionCurrent(sessionGeneration);
+        const entries = buildFxPairComparisonQuery({start: dateStart, end: dateEnd, windowDays: calendarWindowDays, pairTargets: fxPairTargetsOf(configs)});
+        if (entries.length === 0) {
+            calendarPairViews = new Map();
+            return;
+        }
+        try {
+            const response = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post(entries.map((entry) => entry.request));
+            if (!current()) return;
+            calendarPairViews = fxPairComparisonViews(response, entries);
+        } catch (e) {
+            if (!current()) return;
+            console.error('Failed to load the rolling return of the compared FX pairs:', e);
+            calendarPairViews = new Map(entries.map((entry) => [entry.configId, emptyCalendarReturnView('error')]));
+        }
+    }
+
     async function loadChartData(force = false, requestedSignalConfigs: SignalConfig[] = signals, propagateError = false, silent = false) {
         lastChartLoadAskedServer = false;
         const requestedAssetId = data.assetId;
@@ -1297,6 +1343,7 @@
         const effectiveCurrency = displayCurrency && assetInfo?.currency && displayCurrency !== assetInfo.currency ? displayCurrency : (assetInfo?.currency ?? '');
         const targetCurrency = displayCurrency && assetInfo?.currency && displayCurrency !== assetInfo.currency ? displayCurrency : undefined;
         const wantsCalendarReturn = primaryMode === 'calendar-return';
+        if (wantsCalendarReturn) void loadCalendarPairComparisons(requestedSignalConfigs);
         const backendSignalConfigs = wantsCalendarReturn ? [] : requestedSignalConfigs;
         const requestPlan = buildBackendSignalRequestPlan(backendSignalConfigs, signalDefinitions);
         const requestVersion = signalResultState.beginRequest();
@@ -1975,8 +2022,15 @@
         const shouldReloadCalendarComparisons = calendarComparisonFingerprint(signals) !== calendarComparisonFingerprint(newSignals);
         const shouldReloadPriceComparisons = priceComparisonLoadFingerprint(signals) !== priceComparisonLoadFingerprint(newSignals);
         const shouldLoadFxPairs = fxPairSlugsOf(signals).join() !== fxPairSlugsOf(newSignals).join();
+        // FB-11: read before `setPairSettings`, which makes `signals` the new list at once
+        const pairTargetsFingerprint = (configs: SignalConfig[]) =>
+            fxPairTargetsOf(configs)
+                .map((t) => `${t.configId}:${t.pairSlug}:${t.inverted}`)
+                .join();
+        const shouldReloadCalendarPairs = pairTargetsFingerprint(signals) !== pairTargetsFingerprint(newSignals);
         setPairSettings(`asset-${data.assetId}`, {...settings, signals: JSON.parse(JSON.stringify(newSignals))});
         if (shouldLoadFxPairs) void loadSignalFxPairs(newSignals);
+        if (primaryMode === 'calendar-return' && shouldReloadCalendarPairs) void loadCalendarPairComparisons(newSignals);
         if (primaryMode === 'price' && shouldReloadPriceComparisons) {
             void trackComparisonLoad('asset-comparison', newSignals);
         }
@@ -2442,7 +2496,7 @@
             <ChartSignalsSection
                 signals={signalPanelConfigs}
                 definitions={signalDefinitions}
-                allowedSignalTypes={primaryMode === 'calendar-return' ? ['asset-comparison'] : undefined}
+                allowedSignalTypes={primaryMode === 'calendar-return' ? ['asset-comparison', 'fx-pair'] : undefined}
                 backendError={primaryMode === 'price' ? signalBackendError : null}
                 {signalsLoading}
                 onretrybackend={retryBackendSignals}
@@ -2484,6 +2538,10 @@
             data-calendar-comparison-partial={primaryMode === 'calendar-return' ? calendarComparisonState.partial.join(',') : undefined}
             data-calendar-comparison-unavailable={primaryMode === 'calendar-return' ? calendarComparisonState.unavailable.join(',') : undefined}
             data-calendar-comparison-error={primaryMode === 'calendar-return' ? calendarComparisonState.error.join(',') : undefined}
+            data-calendar-pair-comparison-ready={primaryMode === 'calendar-return' ? calendarPairComparisonState.ready.join(',') : undefined}
+            data-calendar-pair-comparison-partial={primaryMode === 'calendar-return' ? calendarPairComparisonState.partial.join(',') : undefined}
+            data-calendar-pair-comparison-unavailable={primaryMode === 'calendar-return' ? calendarPairComparisonState.unavailable.join(',') : undefined}
+            data-calendar-pair-comparison-error={primaryMode === 'calendar-return' ? calendarPairComparisonState.error.join(',') : undefined}
             data-calendar-primary-problem-code={primaryMode === 'calendar-return' ? (calendarReturnView.problem?.code ?? undefined) : undefined}
             data-calendar-primary-problem-status={primaryMode === 'calendar-return' ? (calendarReturnView.problem?.status ?? undefined) : undefined}
             data-series-state={chartSeriesState}
