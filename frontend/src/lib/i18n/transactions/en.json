@@ -286,7 +286,10 @@
       "costBasisModeIncompatible": "❌ {type} takes no cost basis here, so no Auto or Manual mode: remove it.",
       "costBasisNegative": "The cost basis can't be negative: enter 0 or more.",
       "pairAdjustmentNotAllowed": "Two Adjustments cannot be linked: use an Asset Transfer to move units between brokers.",
-      "pairArrivalBeforeDeparture": "The arrival ({arrivalDate}) is dated before the departure ({departureDate}). It was saved as entered: check the two dates."
+      "pairArrivalBeforeDeparture": "The arrival ({arrivalDate}) is dated before the departure ({departureDate}). It was saved as entered: check the two dates.",
+      "pairCurrencyMismatch": "Both sides of a cash transfer must be in the same currency (found {currencyA} and {currencyB}). To change currency, use a currency exchange",
+      "pairAmountMismatch": "A cash transfer must take out of one broker the same amount it brings into the other (found {amountA} and {amountB})",
+      "pairCurrencySame": "The two sides of a currency exchange must be in different currencies (both are {currency})"
     },
     "pydantic": {
       "greaterThan": "Value must be greater than {gt}",

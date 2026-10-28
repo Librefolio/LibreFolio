@@ -565,6 +565,26 @@ def services_linked_adjustment_pair(verbose: bool = False, test_names: list = No
     return run_command(cmd, "Linked adjustment pair tests", verbose=verbose)
 
 
+def services_linked_cash_pair(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that a batch refuses a linked CASH_TRANSFER or FX_CONVERSION that contradicts its type (W6-7)."""
+    print_section("Services: Linked Cash Pair")
+    print_info("Testing: backend/app/services/transactions/validation.py (_validate_linked_pair) + batch_creates.py (the link_uuid groups)")
+    print_info("Tests: a CASH_TRANSFER pair in two currencies or with amounts that are not opposite, and an FX_CONVERSION in one currency, refused on the first create (commit and validate); coherent pairs and stored pairs untouched; the rule follows TX_TYPE_METADATA; the messages in 4 languages")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_linked_cash_pair.py", test_names)
+    return run_command(cmd, "Linked cash pair tests", verbose=verbose)
+
+
+def services_generic_csv_cost_todo(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that the generic CSV asks for an inherited cost only where it is missing: a typed 0 is a cost (W6-5)."""
+    print_section("Services: Generic CSV Cost Todo")
+    print_info("Testing: backend/app/services/brim_providers/broker_generic_csv/plugin.py (needs_cost_basis_todo)")
+    print_info("Tests: an incoming ADJUSTMENT with a cost of 0 is not asked again; without a cost it is; an outgoing one and other types never are; the todos of a parsed file")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_generic_csv_cost_todo.py", test_names)
+    return run_command(cmd, "Generic CSV cost todo tests", verbose=verbose)
+
+
 def services_transfer_pair_order(verbose: bool = False, test_names: list = None) -> bool:
     """Test that a linked TRANSFER / CASH_TRANSFER arriving before it departs is saved as sent and warned (pairArrivalBeforeDeparture)."""
     print_section("Services: Transfer Pair Order")
@@ -2481,6 +2501,20 @@ Note: No backend server required.
         services_linked_adjustment_pair,
         name="Linked Adjustment Pair",
         desc="Two ADJUSTMENTs under one link_uuid are refused on the first create (pairAdjustmentNotAllowed, commit and validate); a TRANSFER pair, the Bulk promote, unlinked ADJUSTMENTs and a stored pair are not touched; the message exists in EN/IT/FR/ES",
+    )
+    add_test(
+        cat,
+        "linked-cash-pair",
+        services_linked_cash_pair,
+        name="Linked Cash Pair",
+        desc="W6-7: a CASH_TRANSFER pair in two currencies or with amounts that are not opposite, and an FX_CONVERSION in one currency, are refused on the first create (pairCurrencyMismatch, pairAmountMismatch, pairCurrencySame; commit and validate); coherent and stored pairs are not touched; the rule follows TX_TYPE_METADATA; the messages exist in EN/IT/FR/ES",
+    )
+    add_test(
+        cat,
+        "generic-csv-cost-todo",
+        services_generic_csv_cost_todo,
+        name="Generic CSV Cost Todo",
+        desc="W6-5: the generic CSV asks for the inherited cost only where it is missing: an incoming ADJUSTMENT with a cost of 0 is not asked again, one without a cost is, an outgoing one and other types never are",
     )
     add_test(
         cat,
