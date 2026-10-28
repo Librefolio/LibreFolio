@@ -22,7 +22,8 @@
       "navigate_fx": "Voir FX",
       "add_fx_pair": "Ajouter paire FX",
       "sync_fx_pair": "Synchroniser les taux",
-      "sync_asset_prices": "Synchroniser les prix"
+      "sync_asset_prices": "Synchroniser les prix",
+      "sync_stale_fx": "Synchroniser les taux"
     },
     "referencePriceFallback": "Lots ouverts par un ajustement un jour sans cotation de marché : leur rendement ouvert part du dernier prix connu à cette date, une cotation antérieure ou le prix d'un achat ou d'une vente",
     "referencePriceUnavailable": "Lots ouverts par un ajustement avant tout prix : leur rendement ouvert part de leur propre coût d'achat unitaire, et n'est pas disponible sans coût d'achat",
@@ -43,6 +44,7 @@
     "nonIsoCurrencyCandidates": "Montants en « {value} », qui n'est pas un code de devise ISO (il peut désigner {candidates}) — leurs conversions peuvent manquer, et leurs lignes ne peuvent pas être enregistrées de nouveau tant que le code n'est pas corrigé",
     "nonIsoCurrencyUnknown": "Montants en « {value} », qui n'est pas un code de devise ISO — leurs conversions peuvent manquer, et leurs lignes ne peuvent pas être enregistrées de nouveau tant que le code n'est pas corrigé",
     "nonIsoReportCurrency": "Ce rapport convertit en « {value} », qui n'est pas un code de devise ISO (il désigne {suggestion}) — choisissez {suggestion} comme « Devise par défaut » dans Paramètres › Préférences",
-    "nonIsoReportCurrencyUnknown": "Ce rapport convertit en « {value} », qui n'est pas un code de devise ISO — choisissez de nouveau la « Devise par défaut » dans Paramètres › Préférences"
+    "nonIsoReportCurrencyUnknown": "Ce rapport convertit en « {value} », qui n'est pas un code de devise ISO — choisissez de nouveau la « Devise par défaut » dans Paramètres › Préférences",
+    "staleFx": "{count} taux de change non à jour, le plus ancien depuis {days} jours — synchronisez les taux pour mettre à jour les totaux"
   }
 }
