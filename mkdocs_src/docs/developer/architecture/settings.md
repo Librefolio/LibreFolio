@@ -116,8 +116,8 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       also as `_FILE`), `LIBREFOLIO_NO_SCHEDULER`, `LIBREFOLIO_DISABLE_DONATION_POPUP`,
       `LIBREFOLIO_DISABLE_WHATS_NEW` (both hidden switches, set by `./dev.py server --test` on every
       test lane, decision D-A7; the second turns off the «What's new» window of lot C-54),
-      `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_MAX_USERS`, `LIBREFOLIO_PUBLIC_URL`,
-      `LIBREFOLIO_BILLING_URL`, `LIBREFOLIO_LOGIN_LIMIT`, `LIBREFOLIO_SUPPORT_URL`, `LIBREFOLIO_TOS_URL`,
+      `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_MAX_USERS`, `LIBREFOLIO_DEFAULT_LANGUAGE`,
+      `LIBREFOLIO_PUBLIC_URL`, `LIBREFOLIO_BILLING_URL`, `LIBREFOLIO_LOGIN_LIMIT`, `LIBREFOLIO_SUPPORT_URL`, `LIBREFOLIO_TOS_URL`,
       `LIBREFOLIO_PRIVACY_URL`, `LIBREFOLIO_TEST_LANE_ID`, `LF_APP_VERSION` (the version a release
       job or `./dev.py docker build` freezes), `LIBREFOLIO_BLOCKED`, `LIBREFOLIO_DELETION_DATE`,
       `LIBREFOLIO_WEB_LINK_FINDER_*` (the API key also as `_FILE`), the variables of the plugin
@@ -192,12 +192,16 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       `panel_status_token()`, the token of the hosting panel's status route, also as `_FILE`, with
       the rules of the backup token, raising `HostingPanelConfigError`; see
       [Hosting Panel API](../../admin/hosting_panel_api.md#panel-api)). Unlike a `Settings` field, an
-      invalid `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_MAX_USERS`, `LIBREFOLIO_PUBLIC_URL` or
+      invalid `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_PUBLIC_URL` or
       `LIBREFOLIO_BILLING_URL` never stops the startup: its accessor raises `ValueError`, and
-      `registration_service.py` logs it and falls back safely — registration closed for the first
-      two, the bare path or no billing link for the URLs
-      ([Registration Modes](access_control.md#registration-modes)). An invalid
-      `LIBREFOLIO_SUPPORT_URL` does not either: `support_link()`
+      `registration_service.py` logs it and falls back safely — registration closed for the first,
+      the bare path or no billing link for the URLs
+      ([Registration Modes](access_control.md#registration-modes)). A `LIBREFOLIO_MAX_USERS` that is not a
+      whole number of at least 1 and a `LIBREFOLIO_DEFAULT_LANGUAGE` that is not `en`, `it`, `fr` or `es` do stop it:
+      `log_configuration_audit()` calls `max_users()` and `default_language()`. Until an administrator saves the
+      `default_language` setting, `global_settings_service.effective_stored_value()` answers with the variable
+      (CL-10). An invalid
+      `LIBREFOLIO_SUPPORT_URL` does not stop it either: `support_link()`
       (`services/platform/instance_links.py`) logs it once, and `GET /system/instance` answers
       `support_url: null`, so the app keeps its link to the project's GitHub issues. Nor does an
       invalid `LIBREFOLIO_TOS_URL` or `LIBREFOLIO_PRIVACY_URL`: `terms_link()` and `privacy_link()`,

@@ -97,7 +97,7 @@
 
 <!-- Mobile Overlay -->
 {#if isOpen}
-    <div class="fixed inset-0 bg-lf-overlay z-40 lg:hidden" on:click={closeSidebar} on:keydown={(e) => e.key === 'Escape' && closeSidebar()} role="button" tabindex="-1" aria-label="Close sidebar"></div>
+    <div class="fixed inset-0 bg-lf-overlay z-40 lg:hidden" on:click={closeSidebar} on:keydown={(e) => e.key === 'Escape' && closeSidebar()} role="button" tabindex="-1" aria-label={$_('nav.closeSidebar')}></div>
 {/if}
 
 <!-- Sidebar -->
@@ -111,7 +111,7 @@
         <button
             class="flex items-center space-x-3 cursor-pointer rounded-lg focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-lf-bar-focus"
             on:click={toggleCollapsed}
-            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={collapsed ? $_('nav.expandSidebar') : $_('nav.collapseSidebar')}
             data-testid="sidebar-collapse-toggle"
             use:guideAnchor={'nav.toggle.desktop'}
         >
@@ -124,7 +124,7 @@
         </button>
         <!-- Mobile close button -->
         {#if !collapsed}
-            <button class="lg:hidden p-2 hover:bg-lf-bar-hover rounded-lg focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-lf-bar-focus" on:click={closeSidebar}>
+            <button class="lg:hidden p-2 hover:bg-lf-bar-hover rounded-lg focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-lf-bar-focus" on:click={closeSidebar} aria-label={$_('nav.closeSidebar')}>
                 <X size={20} />
             </button>
         {/if}

@@ -647,6 +647,16 @@ def services_accounts_checks(verbose: bool = False, test_names: list = None) -> 
     return run_command(cmd, "Accounts configuration check tests", verbose=verbose)
 
 
+def services_default_language_variable(verbose: bool = False, test_names: list = None) -> bool:
+    """Test LIBREFOLIO_DEFAULT_LANGUAGE: the instance default language until an administrator chose one (CL-10)."""
+    print_section("Services: LIBREFOLIO_DEFAULT_LANGUAGE")
+    print_info("Testing: backend/app/services/accounts/global_settings_service.py (get_setting_value), settings_service.py (readers, get_or_create_user_settings), email/flows.py")
+    print_info("Tests: the variable wins over a row nobody saved, the administrator's row wins even when it says en, the emails and a new account follow")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_default_language_variable.py", test_names)
+    return run_command(cmd, "Default language variable tests", verbose=verbose)
+
+
 def services_registration(verbose: bool = False, test_names: list = None) -> bool:
     """Test who may create an account: registration modes, invitations, the user limit, and their variables."""
     print_section("Services: Registration")
@@ -1810,6 +1820,15 @@ def services_app_lifecycle(verbose: bool = False, test_names: list = None) -> bo
     return run_command(cmd, "App lifecycle tests", verbose=verbose)
 
 
+def services_static_unknown_addresses(verbose: bool = False, test_names: list = None) -> bool:
+    """Test what the backend answers for an address it does not know under api/ and /mkdocs/: a redirect to the app for a browser navigation, a JSON 404 for the rest (FB-23)."""
+    print_section("Services: Unknown Addresses")
+    print_info("Testing: backend/app/services/platform/static_site.py (frontend_catchall, mkdocs_static)")
+    print_info("Tests: navigation (Sec-Fetch-Mode navigate, or Accept text/html without Sec-Fetch-Mode) -> 302 /; everything else -> JSON 404; what exists is unchanged")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_static_unknown_addresses.py", test_names)
+    return run_command(cmd, "Unknown addresses tests", verbose=verbose)
+
+
 def services_static_cache_policy(verbose: bool = False, test_names: list = None) -> bool:
     """Test the cache policy of the web app's files: hashed chunks immutable, the rest of /_app and the HTML revalidated (F28)."""
     print_section("Services: Static Cache Policy")
@@ -2532,9 +2551,19 @@ Note: No backend server required.
         "accounts-checks",
         services_accounts_checks,
         name="Accounts Configuration Checks",
-        desc="LIBREFOLIO_LOGIN_LIMIT (A8a): unset/on/off, any other value a ValueError; accounts.login_limit ok/warning/error in CONFIG_CHECKS; the startup audit stops on an invalid value before logging anything",
+        desc="LIBREFOLIO_LOGIN_LIMIT (A8a): unset/on/off, any other value a ValueError; accounts.login_limit ok/warning/error in CONFIG_CHECKS; the startup audit stops on an invalid value before logging anything; CL-1: the audit stops on an unusable LIBREFOLIO_MAX_USERS (0, a word, a negative number, a decimal) naming it; CL-10: and on a LIBREFOLIO_DEFAULT_LANGUAGE that is not en/it/fr/es",
         # PURE: environment through monkeypatch, the audit's logger recorded; three fresh interpreters check the import
         # order, as email-checks does. No DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "default-language-variable",
+        services_default_language_variable,
+        name="Default Language Variable",
+        desc="CL-10: LIBREFOLIO_DEFAULT_LANGUAGE is the instance default language while the default_language row was never saved by an administrator (missing, or updated_by_user_id NULL); once saved, even as en, the row wins; get_setting_value, get_global_setting / get_all_global_settings, instance_language, account_language and get_or_create_user_settings follow; no other setting moves",
+        # PURE: a private SQLite file under tmp_path with the ORM schema and the seeded global settings; the variable through
+        # monkeypatch. No lane DB, no server, no network.
         isolation="pure",
     )
     add_test(
@@ -2542,7 +2571,7 @@ Note: No backend server required.
         "registration",
         services_registration,
         name="Registration",
-        desc="registration_mode in the registry, LIBREFOLIO_REGISTRATION/MAX_USERS/PUBLIC_URL/BILLING_URL accessors, effective mode, usage, invitations, register_user rule, limit under a race, bcrypt off the loop",
+        desc="registration_mode in the registry, LIBREFOLIO_REGISTRATION/MAX_USERS/PUBLIC_URL/BILLING_URL accessors, CL-10 LIBREFOLIO_DEFAULT_LANGUAGE (default_language(): unset/blank none, en/it/fr/es any case stripped lower-case, else a ValueError naming it; .env.example), effective mode, usage, invitations, register_user rule, limit under a race, bcrypt off the loop",
         # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
         # server. The variables are set with monkeypatch in this process, and the once-per-process error log is checked
         # in this process too (the report cache cleared around each test); the race holds two connections to that
@@ -3511,6 +3540,17 @@ Note: No backend server required.
         # PURE: B's hook replaced by monkeypatch, the guard's clock patched; the two-worker case uses a restore.json and a
         # migrated database copy under tmp_path (the fixtures of test_backup_owner.py) and a fake of A's function. No lane
         # DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "static-unknown-addresses",
+        services_static_unknown_addresses,
+        name="Static Unknown Addresses",
+        desc="FB-23: a missing address under api/ (an unknown route, the API documentation when off) or a missing /mkdocs/ file: a browser navigation (Sec-Fetch-Mode navigate, or Accept with text/html and no Sec-Fetch-Mode) gets 302 Location /, any other request a JSON 404 {detail: Not Found}; the SPA fallback, the documentation, a real API route and the API pages when on are unchanged; a missing /_app chunk stays a plain 404",
+        # A fresh FastAPI() holding a real route, install_api_docs and the static site of a fake build and a fake documentation
+        # under tmp_path (FRONTEND_BUILD_DIR and SITE_DIR swapped in by monkeypatch), called through httpx's in-process ASGI
+        # transport. No DB, no server, no network.
         isolation="pure",
     )
     add_test(

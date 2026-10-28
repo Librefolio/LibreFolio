@@ -325,7 +325,7 @@ checks, and logs an error for each one that fails. The **Security** tab of Setti
 [initial administrator](hosting_instances.md#initial-admin) stands: whether your customer has used the setup link, and
 until when the link works. It also gives the instance's `mode` and its `restore`
 ([Restoring an Instance from Your Panel](hosting_panel_backups.md#panel-restore)), how many places its users take, with the
-limit, and whether the owner's [new address](hosting_instances.md#owner-email-change) waits for its confirmation. Turn it on with a token of its own in
+limit, whether the owner's [new address](hosting_instances.md#owner-email-change) waits for its confirmation, and the language the owner chose, to write to them in it. Turn it on with a token of its own in
 `LIBREFOLIO_PANEL_STATUS_TOKEN`, as in [A Token per Scope](#panel-api-tokens), then:
 
 ```bash
@@ -334,7 +334,7 @@ curl -sS -H "Authorization: Bearer $LIBREFOLIO_PANEL_STATUS_TOKEN" \
 ```
 
 ```json
-{"admin_setup": "pending", "setup_expires_at": "2026-10-23T09:12:44.512312Z", "mode": "normal", "restore": null, "users_used": 3, "users_limit": 10, "owner_email_change": null, "instance_key": "ok", "users_over_limit": false}
+{"admin_setup": "pending", "setup_expires_at": "2026-10-23T09:12:44.512312Z", "mode": "normal", "restore": null, "users_used": 3, "users_limit": 10, "owner_email_change": null, "instance_key": "ok", "users_over_limit": false, "owner_language": "it"}
 ```
 
 | `admin_setup` | What it means | `setup_expires_at` |
@@ -347,15 +347,16 @@ curl -sS -H "Authorization: Bearer $LIBREFOLIO_PANEL_STATUS_TOKEN" \
 | Key | What it holds |
 | --- | --- |
 | `mode` | `normal`, or `awaiting_restore` while [`LIBREFOLIO_AWAIT_RESTORE`](hosting_panel_backups.md#await-restore) is on |
-| `restore` | `null` when no restore was ever recorded on this instance; otherwise `state` (`pending`, `in_progress`, `committed`, `rolled_back`, or `unreadable` when the state of the restore cannot be read), `reason` (why a restore was rolled back: `first_start_failed`, `swap_interrupted`, `swap_failed` or `stage_missing`; for `unreadable`, why the state cannot be read: `io`, `not_a_file` or `invalid`), `waiting` (why a confirmed restore still waits: `backup_running`, `other_data_directory`, `server_running` or `instance_blocked`), `backup_created_at` and `stage_id`. Each is `null` when it does not apply. It never says who confirmed the restore |
+| `restore` | `null` when no restore was ever recorded on this instance; otherwise `state` (`pending`, `in_progress`, `committed`, `rolled_back`, or `unreadable` when the state of the restore cannot be read), `reason` (why a restore was rolled back: `first_start_failed`, `swap_interrupted`, `swap_failed` or `stage_missing`; for `unreadable`, why the state cannot be read: `io`, `not_a_file` or `invalid`; for a `committed` restore, `owner_assignment` when the restore is done but the owner of the restored data has no account yet, so the instance serves no data until it has one: have the instance's administrator run `./dev.py backup pending --recover owner`, see [When the Owner of a Restored Instance Has No Account Yet](hosting_panel_backups.md#restore-owner-pending)), `waiting` (why a confirmed restore still waits: `backup_running`, `other_data_directory`, `server_running` or `instance_blocked`), `backup_created_at` and `stage_id`. Each is `null` when it does not apply. It never says who confirmed the restore |
 | `users_used` | The places the users take, a whole number from `0`: the active accounts, the invitations not yet used, revoked or expired, and the deactivated accounts that wait for their email verification while its link is live or, for the [initial administrator](hosting_instances.md#initial-admin), for the setup. Each account or invitation counts once. It is what `LIBREFOLIO_MAX_USERS` limits |
-| `users_limit` | The value of `LIBREFOLIO_MAX_USERS`, a whole number from `1`; `null` when it is not set, which means no limit |
+| `users_limit` | The value of `LIBREFOLIO_MAX_USERS`, a whole number from `1`; `null` when it is not set, which means no limit. Also `null` when the variable holds a value that cannot be used (`0`, `abc`): the route still answers `200`, never `500`; have the value fixed, as the instance does not start with it |
 | `owner_email_change` | Where a [change of the owner's address](hosting_instances.md#owner-email-change) stands: `pending` (the new address was sent a confirmation link and the account keeps the old one until it is clicked), `blocked` (another account already holds the new address, so nothing changes: change the variable again to a free address) or `null` (no change is waiting, the instance is not managed, or its initial administrator has not set up yet). Never the address |
 | `instance_key` | `ok`, or `mismatch` when the instance key it has is not the one its data was written with ([The Key Check](configuration_secrets.md#instance-key-check)). With `mismatch`, your backup starts answer `409` `backup_instance_key_mismatch` and the wake-up runs no job; the instance keeps serving. Never the fingerprint |
+| `owner_language` | The language the instance's owner chose in their account settings: `en`, `it`, `fr` or `es`. Use it to write to your customer in their own language. `null` when the instance has no owner, or the owner has not chosen a language yet. Never anything else of the account |
 | `users_over_limit` | `true` while the active accounts outnumber `users_limit`, for example after your customer moved to a smaller plan: ordinary users are then refused until an administrator chooses who keeps access, and the others are deactivated, never deleted. `false` otherwise, and always `false` when `users_limit` is `null`. Invitations and accounts waiting for their email verification take places, so they count in `users_used`, but they never make this `true`. One yes or no, never who |
 
-- The answer holds these nine keys and nothing else: `admin_setup`, `setup_expires_at`, `mode`,
-  `restore`, `users_used`, `users_limit`, `owner_email_change`, `instance_key` and `users_over_limit`. The two counts are numbers only,
+- The answer holds these ten keys and nothing else: `admin_setup`, `setup_expires_at`, `mode`,
+  `restore`, `users_used`, `users_limit`, `owner_email_change`, `instance_key`, `users_over_limit` and `owner_language`. The two counts are numbers only,
   never a username, an email address or an id; `owner_email_change` never carries the address either, `instance_key` never the fingerprint, and `users_over_limit` never says who. Ignore the keys you do not know: a later version may add some.
 - 📏 Compare `users_used` with `users_limit` to know when an instance is full. At the limit, nobody
   can sign up without an invitation and administrators cannot create invitations: see

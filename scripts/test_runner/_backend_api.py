@@ -1497,7 +1497,7 @@ Tests for REST API endpoints (server auto-started):
         "api-docs",
         api_api_docs,
         name="API Docs",
-        desc="H-55 R5: /api/v1/docs, /api/v1/redoc and openapi.json only with LIBREFOLIO_API_DOCS or test mode (404 otherwise, Docker included); our pages, no inline script, the libraries from jsDelivr at an exact version with SRI and crossorigin, the start scripts served by the instance, out of the schema; main.py wiring; app.openapi() with openapi_url None",
+        desc="H-55 R5: /api/v1/docs, /api/v1/redoc and openapi.json only with LIBREFOLIO_API_DOCS or test mode (404 otherwise, Docker included); our pages, no inline script, the libraries from jsDelivr at an exact version with SRI and crossorigin, the start scripts served by the instance, out of the schema; main.py wiring; app.openapi() with openapi_url None; FB-23: with the static site installed after them, a browser navigation to the three addresses is a 302 to / and any other request a JSON 404",
         isolation="pure",
     )
     add_test(
@@ -1513,7 +1513,7 @@ Tests for REST API endpoints (server auto-started):
         "panel-status",
         api_panel_status,
         name="Hosting Panel Status API",
-        desc="H-61 R1: GET /panel/status off 404 without a token, panel_status_unauthorized, the four states of the initial administrator's setup with the expiry of a pending one only, no personal data, answered on a blocked instance, its OpenAPI schema; the places taken and the limit, owner_email_change, instance_key (nine keys in all); H5-8 users_over_limit: true only while the ACTIVE accounts outnumber LIBREFOLIO_MAX_USERS (invitations and waiting accounts do not count, a deactivated one neither), recomputed at each request, never who, on a blocked, awaiting-restore or unreadable-restore instance, a required boolean right after instance_key in the OpenAPI",
+        desc="H-61 R1: GET /panel/status off 404 without a token, panel_status_unauthorized, the four states of the initial administrator's setup with the expiry of a pending one only, no personal data, answered on a blocked instance, its OpenAPI schema; the places taken and the limit, owner_email_change, instance_key (nine keys in all); H5-8 users_over_limit: true only while the ACTIVE accounts outnumber LIBREFOLIO_MAX_USERS (invitations and waiting accounts do not count, a deactivated one neither), recomputed at each request, never who, on a blocked, awaiting-restore or unreadable-restore instance, a required boolean right after instance_key in the OpenAPI; CL-1 an unusable LIBREFOLIO_MAX_USERS answers 200 with users_limit null; CL-6 restore.reason owner_assignment for a committed restore whose owner has no account (and the OpenAPI enum); CL-9 owner_language (the owner's language, null otherwise; ten keys in all)",
         isolation="pure",
     )
     add_test(
