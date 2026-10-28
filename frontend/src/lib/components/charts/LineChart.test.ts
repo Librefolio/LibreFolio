@@ -352,6 +352,17 @@ function houseDay(iso: string, locale: string): string {
     return new Intl.DateTimeFormat(locale, {year: 'numeric', month: 'short', day: 'numeric'}).format(new Date(year, month - 1, day));
 }
 
+/**
+ * `houseDay` plus the weekday of that calendar day in brackets, as Intl writes it in `locale` — `4 mar 2024 (lun)`, `4 mars 2024 (lun.)`,
+ * `Mar 4, 2024 (Mon)`: the header of ONE day (Y2 FB-1). The weekday is read on the UTC calendar of the same y-m-d, so the oracle shares no
+ * code with the product and no time zone moves it.
+ */
+function houseDayWithWeekday(iso: string, locale: string): string {
+    const [year, month, day] = iso.split('-').map(Number);
+    const weekday = new Intl.DateTimeFormat(locale, {weekday: 'short', timeZone: 'UTC'}).format(new Date(Date.UTC(year, month - 1, day)));
+    return `${houseDay(iso, locale)} (${weekday})`;
+}
+
 /** Switch the interface language in place, as the language selector does; answer the locale it now writes figures in. */
 async function speak(lang: UiLanguage): Promise<string> {
     currentLanguage.set(lang);
@@ -388,8 +399,8 @@ describe('LineChart — the days its tooltip writes, in the house notation of th
             {seriesName: PEER.label, value: 50},
         ]);
 
-        expect({header: lines[0], representative: lastBrackets(lines.find((line) => line.startsWith(`${PEER.label}:`)))}, `the tooltip’s days are not in the ${lang} interface’s notation: the header and valueAt write ISO days`).toEqual({
-            header: houseDay('2024-03-04', locale),
+        expect({header: lines[0], representative: lastBrackets(lines.find((line) => line.startsWith(`${PEER.label}:`)))}, `the tooltip’s days are not in the ${lang} interface’s notation: the header writes an ISO day or no weekday, valueAt an ISO day`).toEqual({
+            header: houseDayWithWeekday('2024-03-04', locale),
             representative: catalogue('chart.tooltip.valueAt', {date: houseDay('2024-03-01', locale)}),
         });
     });

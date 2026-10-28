@@ -857,6 +857,19 @@ function dayIn(iso: string, localeTag: string): string {
 /** A calendar day in the interface locale the chart is drawn in. WHY: the header follows the interface language, never the browser's. */
 const uiDay = (iso: string) => dayIn(iso, uiLocale());
 
+/**
+ * The header of ONE calendar day: `dayIn` plus the weekday of that day in brackets (Y2 FB-1) — `Jun 30, 2025 (Mon)`, `30 giu 2025 (lun)`.
+ * WHY test-side: the weekday is read by Intl on the UTC calendar of the same y-m-d, never by the formatter under test.
+ */
+function dayWithWeekdayIn(iso: string, localeTag: string): string {
+    const [year, month, date] = iso.split('-').map(Number);
+    const weekday = new Intl.DateTimeFormat(localeTag, {weekday: 'short', timeZone: 'UTC'}).format(new Date(Date.UTC(year, month - 1, date)));
+    return `${dayIn(iso, localeTag)} (${weekday})`;
+}
+
+/** A one-day header in the interface locale the chart is drawn in. */
+const uiDayWithWeekday = (iso: string) => dayWithWeekdayIn(iso, uiLocale());
+
 function escapeRegExp(text: string): string {
     return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -1291,7 +1304,7 @@ describe('AllocationHistoryChart — sector and geography: grouped as before (D3
         const html = tooltipOf(option, 0);
 
         // WHY (plan 52, C2): the header writes its day in the interface language, never as raw ISO.
-        expect(html).toBe(buildTooltipHeader(uiDay(ONE_DATE), theme.mutedColor) + buildTooltipByThreshold(items, 3, theme, remainingLabel()));
+        expect(html).toBe(buildTooltipHeader(uiDayWithWeekday(ONE_DATE), theme.mutedColor) + buildTooltipByThreshold(items, 3, theme, remainingLabel()));
         expect(html).not.toMatch(/\d{4}-\d{2}-\d{2}/);
         expect(html).not.toMatch(/data-allocation-(family|member)/);
     });
@@ -1828,7 +1841,7 @@ describe('AllocationHistoryChart — the tooltip header writes its dates in the 
         const {option, index} = await rowOn(DAILY_DAY, {before: '2025-03-04', after: '2025-03-06'}, false);
         const lines = headerLines(tooltipOf(option, index), 1);
 
-        expect(lines).toEqual([uiDay(DAILY_DAY)]);
+        expect(lines).toEqual([uiDayWithWeekday(DAILY_DAY)]);
         expect(lines.join('\n')).not.toMatch(ISO_DAY);
     });
 

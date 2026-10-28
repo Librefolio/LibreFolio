@@ -8662,3 +8662,24 @@ Z-13, Z-18, Z-14): si **estende**, non si crea.
 - ✅ **Passo 5, #48** (committato `36eaffa4d`): dopo l'unione di J, `PositionSeriesPoint` ha `through` e la risposta `range`. `positionLine` dà un punto per tratto più la chiusura all'ultimo `through`, linea `stepped`; `lineOnDay(line, day)` dà il punto che tiene il giorno; `PositionsReturnChart` disegna `step: 'end'` e il suo tooltip elenca, per ogni linea disegnata, quello che dice nel giorno puntato (`snap: false` più `updateAxisPointer`). `PositionsReturnChart.steps.test.ts` (6). E2E dashboard 32/32 (due rossi al primo giro, di carico: l'app non arrivava in 15 e 30 s, rilanciato senza modifiche); gallery `main dashboard` desktop 1/1.
 - ✅ **Passo 6, i lotti**: `lotStepRows.ts` (giorni testimone di più storie, `expandAtDays` per serie, `withBucketEnds`; 15 casi con parità sul giorno per giorno) e `components/charts/stepTooltip.ts` (`paramsAtDay`: i parametri del tooltip di ECharts riscritti sul giorno puntato; 7 casi). `LotComparisonChart` e `LotWacPriceChart` prendono `range`, espandono le storie nei giorni testimone e disegnano le linee con `step: 'end'` a risoluzione giornaliera; il pannello passa `range` di ciascuna risposta (`asObject(response.range)`). Il resto dei due grafici (somme per data, cascata di risoluzione, zoom, marcatori, bolle) non è stato toccato. `LotComparisonChart.steps.test.ts` (6) e `LotWacPriceChart.steps.test.ts` (6), con il controllo di mutazione: spenti `step` e il giorno puntato, i casi nuovi diventano rossi.
   > **Nota**: le serie `value_history`, `return_history`, `market_price_history`, `broker_wac_history` e `cumulative_wac_history` sono quelle di J; `price_history` e `performance_history` non le legge nessun grafico.
+
+## 28/10 · Ondata 6 · Y2 — sistema dei grafici (checkpoint 1: FB-1, FB-2, FB-9, FB-8, FB-5, FB-4)
+
+Fonte: i feedback del developer nella testlist del server (§1 e §2). Base `32674edb8`, corsia 6225.
+
+| Lotto | Cosa | Stato |
+|---|---|---|
+| FB-1 | giorno della settimana tra parentesi dopo la data nei tooltip (`formatDayWithWeekday`, un formattatore condiviso, lingua dell'interfaccia) | ✅ 28/10 |
+| FB-2 | il puntatore dei grafici a gradini si aggancia ai giorni (`attachDaySnap`, `snapToDay`) | ✅ 28/10 (GrowthChart: una riga da aggiungere, file di Y) |
+| FB-9 | segnaposto del selettore vuoto su una riga, troncato (`SearchSelect`) | ✅ 28/10 |
+| FB-8 | i tre pulsanti di vista di Assets e FX col tooltip del design system, sempre; pulsanti della barra a tutta larghezza | ✅ 28/10 (E2E: `fx-list` 38/38, `asset-list` 53/53) |
+| FB-5 | tooltip di «Return of the positions» tronca i nomi lunghi, mai più largo del grafico | ✅ 28/10 |
+| FB-4 | zoom (`dataZoom` inside, `filterMode: 'none'`) in «Return of the positions» | ✅ 28/10 |
+
+> **Note implementazione**: il giorno della settimana viene da `Intl` (`weekday: 'short'`): tradotto senza chiavi nuove. Una stringa che non è un giorno `YYYY-MM-DD` resta com'è (un conteggio o un anno nell'intestazione di `LineChart` non diventano giorni: lo ha mostrato il guard di `LineChart.test.ts`).
+> **Note implementazione**: l'aggancio ai giorni rilancia `updateAxisPointer` con il valore del giorno più vicino (mezzogiorno è il punto di svolta), all'altezza del mouse; il secondo evento porta una mezzanotte e chiude il giro. Il tooltip continua a leggere il giorno puntato (`pointedDay`).
+> **⚠️ Fuori pista**: il worktree era a `f4a5e6e0a`, non a `32674edb8` (l'app aveva tagliato dalla versione spinta); il coordinatore l'ha portato avanti.
+> **⚠️ Fuori pista**: FB-9 è risolto in `SearchSelect.svelte` (il segnaposto), non in `ChartSignalsSection.svelte`: nessun conflitto con FB-11 di X.
+> **Note implementazione**: `attachDaySnap` si può richiamare sulla stessa istanza (`AllocationHistoryChart` lo fa a ogni disegno): l'ascoltatore del mouse è uno solo, il gestore del puntatore viene sostituito, mai impilato (test dedicato). I tre test nuovi sono registrati in `scripts/test_runner/_frontend_utility.py` (`check-orphans` verde, 680 test).
+> **Note implementazione**: verificato a mano nel browser sul server di prova (porta 6225): col mouse a x=524 il tooltip dice «16 Sept 2026 (Wed)» e la linea del puntatore sta sul 16 settembre (x=527); la rotella zooma il grafico «Return of the positions». FB-5 verificato solo con Vitest (jsdom), non su un telefono.
+> **Da fare da altri**: `GrowthChart.svelte` (~riga 1124, file di Y) — dopo `zoomInstance.on('updateAxisPointer', onAxisPointer)` aggiungere `attachDaySnap(zoomInstance)` + l'import: oggi il grafico principale ha ancora il puntatore a metà fra due giorni.
