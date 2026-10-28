@@ -663,7 +663,7 @@ BR-U-081…085) and `./dev.py test services user-profile` (`TestDeleteUser`, the
 ## ⚖️ Balance Queries
 
 The service exposes two public query methods (`TransactionBalancesMixin`,
-`balances.py`), used by the broker summary:
+`balances.py`); the broker summary reads the first:
 
 ```python
 await svc.get_cash_balances(broker_id, as_of=None)   # Dict[currency, Decimal]
@@ -699,9 +699,8 @@ without its excluded ids — and so does the asset list's set of held assets
 the decimals — `0.1 + 0.2 − 0.3` gives `2.8e-17`, not 0 — an error the read at 6
 decimals used to hide. Summed in Python, a zero balance is exactly zero.
 
-The holdings' cost no longer comes from this service: the broker summary computes
-it with the shared average cost, on the same `as_of` (see
-[WAC & Cost Basis](wac.md#broker-summary)).
+The broker summary no longer lists holdings: a position's quantity, cost and value come from the
+portfolio report (see [WAC & Cost Basis](wac.md#broker-summary)).
 
 ---
 
