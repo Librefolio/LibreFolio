@@ -295,6 +295,23 @@ def _read_table(path: Path) -> List[List[Any]]:
     return io.read_rows(path)
 
 
+def _date_text(value: Any, parsed: Optional[date]) -> str:
+    """A date cell as ``dd/mm/yyyy``: an XLSX date cell would print as ``2024-07-01 00:00:00``, which the combined file could not read back."""
+    return parsed.strftime("%d/%m/%Y") if parsed is not None else io.cell_str(value)
+
+
+def _number_text(value: Any, *, italian: bool) -> str:
+    """A number cell the way the file's own convention writes it, so that the combined file reads back the same figure.
+
+    A numeric XLSX cell prints with a dot (``1234.56``), which an Italian column (``Prezzo``, ``Controvalore``, ``Importo``) would
+    read as a thousands separator; a text cell is the file's own and stays as it is.
+    """
+    if isinstance(value, (int, float, Decimal)) and not isinstance(value, bool):
+        text = format(Decimal(str(value)), "f")
+        return text.replace(".", ",") if italian else text
+    return io.cell_str(value)
+
+
 def read_securities(path: Path, file_index: int = 1, file_count: int = 1) -> SecuritiesFile:
     """The securities rows of one export. A row without a date or a causale, a blank row and the recap footer are not rows."""
     rows = _read_table(path)
@@ -316,13 +333,13 @@ def read_securities(path: Path, file_index: int = 1, file_count: int = 1) -> Sec
             continue
         currency = resolve_currency(row, divisa_cols)
         cells = {
-            "Data operazione": io.cell_str(io.row_get(row, col, "date")),
-            "Data valuta": io.cell_str(io.row_get(row, col, "value")),
+            "Data operazione": _date_text(io.row_get(row, col, "date"), day),
+            "Data valuta": _date_text(io.row_get(row, col, "value"), io.to_date(io.row_get(row, col, "value"))),
             "Nome": name,
             "Causale": causale,
-            "Prezzo": io.cell_str(io.row_get(row, col, "price")),
-            "Quantità": io.cell_str(io.row_get(row, col, "qty")),
-            "Controvalore": io.cell_str(io.row_get(row, col, "ctv")),
+            "Prezzo": _number_text(io.row_get(row, col, "price"), italian=True),
+            "Quantità": _number_text(io.row_get(row, col, "qty"), italian=False),
+            "Controvalore": _number_text(io.row_get(row, col, "ctv"), italian=True),
             "Divisa": currency,
         }
         parsed.append(
@@ -367,11 +384,11 @@ def read_account(path: Path, file_index: int = 1, file_count: int = 1) -> Accoun
             continue
         currency = io.cell_str(io.row_get(row, col, "divisa")) or "EUR"
         cells = {
-            "Data Op.": io.cell_str(io.row_get(row, col, "date")),
-            "Data Val.": io.cell_str(io.row_get(row, col, "value")),
+            "Data Op.": _date_text(io.row_get(row, col, "date"), day),
+            "Data Val.": _date_text(io.row_get(row, col, "value"), io.to_date(io.row_get(row, col, "value"))),
             "Causale": causale,
             "Descrizione": description,
-            "Importo": io.cell_str(io.row_get(row, col, "importo")),
+            "Importo": _number_text(io.row_get(row, col, "importo"), italian=True),
             "Divisa": currency,
         }
         parsed.append(
@@ -389,6 +406,48 @@ def read_account(path: Path, file_index: int = 1, file_count: int = 1) -> Accoun
             )
         )
     return AccountFile(path=path, rows=parsed, testata=read_testata(rows, header_idx))
+
+
+def securities_from_cells(cells: Dict[str, str], line: int) -> Optional[SecuritiesRow]:
+    """A securities row read back from the cells the combined file keeps (``None`` when it has no date or no causale)."""
+    day = io.to_date(cells.get("Data operazione"))
+    causale = cells.get("Causale", "").strip().upper()
+    if day is None or not causale:
+        return None
+    return SecuritiesRow(
+        file_index=1,
+        file_count=1,
+        row=line,
+        op=day,
+        value=io.to_date(cells.get("Data valuta")),
+        name=cells.get("Nome", "").strip(),
+        causale=causale,
+        price=io.to_decimal_it(cells.get("Prezzo")),
+        qty=io.to_decimal_plain(cells.get("Quantità")),
+        ctv=io.to_decimal_it(cells.get("Controvalore")),
+        currency=cells.get("Divisa", "").strip() or "EUR",
+        cells=dict(cells),
+    )
+
+
+def account_from_cells(cells: Dict[str, str], line: int) -> Optional[AccountRow]:
+    """An account row read back from the cells the combined file keeps (``None`` when it has no date or no causale)."""
+    day = io.to_date(cells.get("Data Op."))
+    causale = cells.get("Causale", "").strip().upper()
+    if day is None or not causale:
+        return None
+    return AccountRow(
+        file_index=1,
+        file_count=1,
+        row=line,
+        op=day,
+        value=io.to_date(cells.get("Data Val.")),
+        causale=causale,
+        description=cells.get("Descrizione", "").strip(),
+        amount=io.to_decimal_it(cells.get("Importo")),
+        currency=cells.get("Divisa", "").strip() or "EUR",
+        cells=dict(cells),
+    )
 
 
 # =============================================================================

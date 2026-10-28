@@ -421,7 +421,7 @@ class Analysis:
             outcome.kind = "standalone"
         elif row.klass in PAIRED_SECURITIES:
             reason = self._unpaired_securities_reason(row)
-            if reason != "ambiguous" and self._inside_one_hole(row.op, row.value or row.op):
+            if reason != "ambiguous" and row.ctv is not None and self._inside_one_hole(row.op, row.value or row.op):
                 # No account export covers these days, so the securities export is the only record of the movement: it is
                 # recorded with its own cash, and the gap-fix proposes only what is left of the hole. Both dates must be
                 # inside: a bank that books a day before the securities date (a fund) has the cash in the balance at the end
@@ -569,7 +569,7 @@ class Analysis:
         for hole in self.holes:
             message = f"No account export covers {hole.days.start.isoformat()} to {hole.days.end.isoformat()}: the bank's balances differ by {core.money(hole.residual)} over that period. Export the account movements for it if the bank still has them"
             corrected = hole in self.corrected_holes
-            notices.append(BRIMNotice(severity="warning", code="gap", message=message, context={"start": hole.days.start.isoformat(), "end": hole.days.end.isoformat(), "amount": core.money(hole.residual), "corrected": corrected}))
+            notices.append(BRIMNotice(severity="warning", code="account_gap", message=message, context={"start": hole.days.start.isoformat(), "end": hole.days.end.isoformat(), "amount": core.money(hole.residual), "corrected": corrected}))
         if self.broken or self.conflicting_days:
             first = self.broken[0].end.as_of if self.broken else self.conflicting_days[0]
             message = f"The balances stated by the account exports do not add up with their rows from {first.isoformat()}: they are only compared, never used for a correction"
