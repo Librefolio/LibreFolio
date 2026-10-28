@@ -70,14 +70,15 @@ layer — its boundaries, imports and guards — are in `financial-math.instruct
 | Calculation | Where it lives |
 |---|---|
 | Average purchase cost (WAC), cost-basis steps and conversions | `services/financial_math/average_cost.py` |
-| Cash per broker and currency, its daily value, FX results on cash | `services/financial_math/native_cash.py` |
+| Cash per broker and currency, its daily value, FX results on cash, the first day a balance ends below zero | `services/financial_math/native_cash.py` |
+| The days something can change on: an FX reading's candidate days, the days a reading changes, the day after each | `services/financial_math/change_days.py` |
 | Control totals of the ledger (backup manifest, restore check) | `services/financial_math/ledger_totals.py` |
-| Daily portfolio state: NAV, capital baseline, P&L, per-broker contributions | `services/financial_math/portfolio/` (`daily_state.py`, run by `engine.py`) |
+| Daily portfolio state: NAV, capital baseline, P&L, per-broker contributions; the price of an asset on a day as the replay values it (`AssetMarks`, on the engine's result) | `services/financial_math/portfolio/` (`daily_state.py`, run by `engine.py`) |
 | A period's boundary states, P&L and identity; the day's change of the total P&L | `services/financial_math/portfolio/period.py` |
 | A position's period contribution (Performance table): the transfer split between brokers, return on the start value, annualized window, closed positions | `services/financial_math/portfolio/contributions.py` |
 | FIFO lots and realized gains | `services/financial_math/fifo/` |
 | Lots analysis: lot summary and histories, economic events, average cost lines, transfers at the scope's edge | `services/financial_math/lots/` |
-| Simple ROI, TWRR, MWRR (and the Dashboard's MWRR rule for card and line), annualization, a period's start (rebasing), net holding return, G/L ratio (of a holding or a group), a change as a fraction of its base, the timing effect, realized gain, price return (also as a float for a return series), the observed annualization factor of a return series (`DAYS_PER_YEAR`, its validator, and both conversions between calendar days and observations), the fixed-period changes of a price or rate (1D … 5Y, both orientations), the gain that recovers a drawdown | `services/financial_math/returns.py` |
+| Simple ROI, TWRR, MWRR (and the Dashboard's MWRR and TWRR rules for card and line, the simple ROI's capital), annualization, a period's start (rebasing), net holding return, G/L ratio (of a holding or a group), a change as a fraction of its base, the timing effect, realized gain, price return (also as a float for a return series), the observed annualization factor of a return series (`DAYS_PER_YEAR`, its validator, and both conversions between calendar days and observations), the fixed-period changes of a price or rate (1D … 5Y, both orientations), the gain that recovers a drawdown | `services/financial_math/returns.py` |
 | Holding value from quantity and price | `services/financial_math/valuation.py` |
 | A trade's unit price on the quote's axis (`unit_price_on_quote_axis`, read by `price_marks.py` for a trade's mark); amount ↔ unit price at a given scale (the transaction form computes its own in the browser since W5-9) | `services/financial_math/trade_amount.py` |
 | The orientation of a stored FX rate (a pair read from source to destination, either way); the unit rates a calculation reads by day, kept as steps and answered on the asked days only (`AskedDayRates`, P3) | `services/financial_math/fx_rates.py` |

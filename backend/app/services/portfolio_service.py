@@ -92,6 +92,7 @@ from backend.app.services.financial_math.native_cash import CONVERSION_DUST, Nat
 from backend.app.services.financial_math.portfolio import period as period_math
 from backend.app.services.financial_math.portfolio.contributions import (
     annualized_period_return,
+    closed_flight_too_short,
     closed_position_annualized,
     closed_position_base,
     period_return_on_start,
@@ -107,8 +108,6 @@ from backend.app.services.financial_math.returns import (
     annualized_to_cumulative,
     calculate_simple_roi,
     calculate_simple_roi_series,
-    calculate_twrr,
-    calculate_twrr_series,
     change_ratio,
     cumulative_to_annualized,
     gain_loss_ratio,
@@ -116,6 +115,8 @@ from backend.app.services.financial_math.returns import (
     net_holding_return,
     period_mwrr,
     period_mwrr_series,
+    period_twrr,
+    period_twrr_series,
     realized_gain,
     rebase_to_period,
     timing_effect,
@@ -129,7 +130,6 @@ from backend.app.services.financial_math.yield_on_cost import (
     calculate_yield_on_cost_for_positions,
     compute_yield_on_cost_dependency_identity,
 )
-from backend.app.services.fx.conversion import convert_bulk
 from backend.app.services.platform.data_quality_thresholds import QUANTITY_DUST_THRESHOLD
 from backend.app.utils.datetime_utils import latest_range_end
 from backend.app.utils.runtime.cache import get_ttl_cache
@@ -509,14 +509,6 @@ class PortfolioService:
         result = await self.db.execute(stmt)
         return list(result.scalars().all())
 
-    async def _get_price_at_date(self, asset_id: int, target_date: date_type) -> Optional[tuple[Decimal, str, date_type]]:
-        """Return (close_price, currency, actual_date) for the latest price on or before target_date (backward-fill)."""
-        stmt = select(PriceHistory.close, PriceHistory.currency, PriceHistory.date).where(PriceHistory.asset_id == asset_id, PriceHistory.close.is_not(None), PriceHistory.date <= target_date).order_by(PriceHistory.date.desc()).limit(1)
-        row = (await self.db.execute(stmt)).one_or_none()
-        if row:
-            return row.close, row.currency, row.date
-        return None
-
     async def _get_asset(self, asset_id: int) -> Asset | None:
         return await self.db.get(Asset, asset_id)
 
@@ -526,27 +518,6 @@ class PortfolioService:
         stmt = select(Asset).where(Asset.id.in_(asset_ids))
         result = await self.db.execute(stmt)
         return {asset.id: asset for asset in result.scalars().all()}
-
-    async def _convert_to_base(
-        self,
-        amount: Decimal,
-        currency: str,
-        base_currency: str,
-        as_of_date: date_type,
-    ) -> tuple[Decimal | None, list[WACMissingPairInfo]]:
-        """Convert amount to base_currency. Returns (converted_amount, missing_pairs)."""
-        if currency == base_currency:
-            return amount, []
-        results, _ = await convert_bulk(
-            self.db,
-            [(Currency(code=currency, amount=amount), base_currency, as_of_date)],
-            raise_on_error=False,
-        )
-        if results and results[0] is not None:
-            converted, _, _ = results[0]
-            return converted.amount, []
-        pair_key = f"{currency}/{base_currency}"
-        return None, [WACMissingPairInfo(pair=pair_key, dates=[as_of_date])]
 
     async def _missing_cost_basis_assets(self, engine_result: Any) -> list[tuple[int, str]]:
         """(asset_id, name) of the assets with an acquisition of unknown cost in the engine's replay."""
@@ -722,6 +693,7 @@ class PortfolioService:
         first_lot_txn_dates: dict[tuple[int, int], date_type] = {key: min(t.date for t in txns) for key, txns in lot_txns_by_key.items() if txns}
 
         end_positions = [ps for ps in engine_result.position_states_end if ps.quantity > _QUANTITY_DUST_THRESHOLD]
+        marks = getattr(engine_result, "marks", None)
         yield_on_cost_by_position = await calculate_yield_on_cost_for_positions(
             self.db,
             user_id=user_id,
@@ -748,18 +720,14 @@ class PortfolioService:
             broker = brokers_map.get(ps.broker_id)
             broker_name = broker.name if broker else broker_names.get(ps.broker_id, f"Broker {ps.broker_id}")
 
+            # MF6-1 (T-U5): the unit prices come from the engine's reader, as the replay valued them, converted at the
+            # day's rate; a missing rate is the engine's to report (the position's missing_fx_pair)
             current_price: Decimal | None = None
             if ps.valuation_effective_unit_price is not None and ps.valuation_effective_currency is not None:
                 if ps.valuation_effective_currency == base_currency:
                     current_price = ps.valuation_effective_unit_price
-                else:
-                    current_price, mp = await self._convert_to_base(
-                        ps.valuation_effective_unit_price,
-                        ps.valuation_effective_currency,
-                        base_currency,
-                        ps.date,
-                    )
-                    all_missing_pairs.extend(mp)
+                elif marks is not None:
+                    current_price = marks.in_target(ps.valuation_effective_unit_price, ps.valuation_effective_currency, ps.date)
 
             yield_on_cost_calculation = yield_on_cost_by_position[(ps.asset_id, ps.broker_id)]
             wac_per_unit = yield_on_cost_calculation.wac_per_unit
@@ -773,15 +741,13 @@ class PortfolioService:
             price_change_1d: Decimal | None = None
             gain_loss_change_1d: Decimal | None = None
             gain_loss_change_1d_percent: Decimal | None = None
-            if ps.valuation_source == "MARKET_PRICE" and current_price is not None:
-                prev_price_data = await self._get_price_at_date(ps.asset_id, ps.date - timedelta(days=1))
-                if prev_price_data:
-                    prev_raw, prev_ccy, prev_date = prev_price_data
-                    if prev_ccy == base_currency:
-                        prev_price_base = prev_raw
-                    else:
-                        prev_price_base, mp = await self._convert_to_base(prev_raw, prev_ccy, base_currency, prev_date)
-                        all_missing_pairs.extend(mp)
+            if ps.valuation_source == "MARKET_PRICE" and current_price is not None and marks is not None:
+                # The day before: the last market quote on or before it, converted at that day's rate (a mark is converted
+                # on the day it is read); none on a day the engine did not replay
+                day_before = ps.date - timedelta(days=1)
+                previous = marks.last_market_price_at(ps.asset_id, day_before)
+                if previous is not None:
+                    prev_price_base = marks.in_target(previous.unit_price, previous.currency, day_before)
                     if prev_price_base is not None and prev_price_base != 0:
                         # MF-A12 (N92): the change over the size of the previous price, measured as the % column measures
                         # the value's (the same association: a tie rounds as before); a negative price's change keeps the
@@ -927,18 +893,13 @@ class PortfolioService:
         period_navs = list(period.nav_snapshots)
         period_start_date_perf = period.start_date if period.start_date is not None else today
 
-        # Net invested for the period (sum of deposits minus withdrawals)
-        period_net_invested = sum(-cf.amount for cf in period_cfs)
+        # Net invested for the period (sum of deposits minus withdrawals), from the same flows as the ROI line (MF-K3)
+        period_net_invested = sum(-cf.amount for cf in views.build_roi_cash_flows(date_from, nav_snapshots, cash_flows_perf))
         simple_roi = calculate_simple_roi(engine_nav, period_net_invested) if period_net_invested > 0 else Decimal("0")
-        twrr_result: Decimal | None = None
         mwrr_result: Decimal | None = None
-
-        if period_navs and period_cfs and engine_nav > 0:
-            try:
-                twrr_point = calculate_twrr(period_navs, period_cfs)
-                twrr_result = twrr_point.twrr
-            except (ValueError, ZeroDivisionError):
-                twrr_result = None
+        # The Dashboard's TWRR rule lives in the house: the card is the last point of the line (MF-K3), «—» at a value at
+        # or below zero
+        twrr_result = period_twrr(period_navs, period_cfs)
         # The Dashboard's MWRR rule lives in the house: the card is the last point of the line by construction
         # (D-MF5): no rate without net invested capital or with a value at or below zero.
         mwrr_result = (await asyncio.to_thread(period_mwrr, period_navs, period_cfs, date_to or today, engine_nav)).mwrr
@@ -1251,15 +1212,18 @@ class PortfolioService:
         pins = (start + timedelta(days=1),) if start < end else ()
 
         # ── TWRR and ROI on the days a step may start (a quiet day keeps both) ──
-        nav_snapshots, cash_flows = views.build_performance_inputs(date_from, days=[*views.change_days(start, end, pins), end])
+        performance_days = [*views.change_days(start, end, pins), end]
+        nav_snapshots, cash_flows = views.build_performance_inputs(date_from, days=performance_days)
         period = rebase_to_period(nav_snapshots, cash_flows, date_from)
         period_cash_flows = list(period.cash_flows)
         period_nav_snapshots = list(period.nav_snapshots)
-        twrr_map: dict[date_type, Decimal] = {}
+        twrr_map: dict[date_type, Decimal | None] = {}
         roi_map: dict[date_type, Decimal] = {}
         if period_nav_snapshots and period_cash_flows:
-            twrr_map = {pt.date: pt.twrr for pt in calculate_twrr_series(period_nav_snapshots, period_cash_flows)}
-            roi_map = {pt.date: pt.roi for pt in calculate_simple_roi_series(period_nav_snapshots, period_cash_flows)}
+            # The card's rules at every point (MF-K3): no TWRR at a value at or below zero; the ROI's capital from the
+            # first day with capital when the range starts before the portfolio
+            twrr_map = {pt.date: pt.twrr for pt in period_twrr_series(period_nav_snapshots, period_cash_flows)}
+            roi_map = {pt.date: pt.roi for pt in calculate_simple_roi_series(period_nav_snapshots, list(views.build_roi_cash_flows(date_from, nav_snapshots, cash_flows, days=performance_days)))}
 
         # First point pinned to 0% for the TWRR (and the MWRR line): period-relative returns measured from inception are
         # 0 at the period start by definition. ROI is NOT pinned — it is an absolute ratio (NAV − net_invested)/net_invested,
@@ -1750,7 +1714,18 @@ class PortfolioService:
             period_pnl_pct = period_return_on_start(period_pnl, start_value)
             # MF-A9: a position opened in the period that received units by a counted tract, and from which no unit left in
             # the period, counts them, in its fallback base, from their value on arrival, as its result does
-            row_exits = exits_in(lot_moves.get(pos_key, []), date_from, effective_end)
+            row_moves = lot_moves.get(pos_key, [])
+            row_exits = exits_in(row_moves, date_from, effective_end)
+            # MF-A5: the cost of every unit that left, sold or moved by a counted tract; a unit that left another way
+            # leaves no base. MF-A8: units received by a counted tract enter it at their value on arrival, as they enter
+            # the row's result
+            exits_base = closed_position_base(
+                per_cost_sold.get(pos_key, Decimal("0")),
+                per_sales.get(pos_key, 0),
+                moved_out.get(pos_key),
+                row_exits,
+                moved_in.get(pos_key),
+            )
             period_annualized = annualized_period_return(
                 period_pnl,
                 start_value,
@@ -1760,20 +1735,13 @@ class PortfolioService:
                 moved_in=moved_in.get(pos_key) if row_exits == 0 else None,
             )
             if is_fully_sold:
-                opened, closed = closed_position_window(lot_moves.get(pos_key, []))
-                # MF-A5: the base is the cost of every unit that left, sold or moved by a counted tract; a unit that left
-                # another way leaves no base, and the general rule stands. MF-A8: units received by a counted tract enter
-                # the base at their value on arrival, as they enter the row's result
-                base = closed_position_base(
-                    per_cost_sold.get(pos_key, Decimal("0")),
-                    per_sales.get(pos_key, 0),
-                    moved_out.get(pos_key),
-                    row_exits,
-                    moved_in.get(pos_key),
-                )
-                closed_annualized = closed_position_annualized(period_pnl, base, opened, closed, date_from)
+                opened, closed = closed_position_window(row_moves)
+                closed_annualized = closed_position_annualized(period_pnl, exits_base, opened, closed, date_from)
                 if closed_annualized is not None:
                     period_annualized = closed_annualized
+                elif closed_flight_too_short(opened, closed, date_from):
+                    # MF-A3: held too few days in the period to annualize, «—», never the general rule over the period
+                    period_annualized = None
 
             contributions.append(
                 AssetPeriodContribution(

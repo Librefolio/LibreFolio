@@ -53,7 +53,7 @@ Each line is the return accumulated since the start of the selected period:
 | **[TWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md)** | Pure asset strategy return, ignoring when you deposited |
 | **[ROI](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/roi.md)** | Raw return on net invested capital |
 
-The gap between MWRR and TWRR is the [Timing Effect](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/timing-effect.md). The MWRR line has a gap on the days that have no MWRR — a value of zero or less, or net withdrawals that leave no invested capital — by the same rule as the MWRR cards ([MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)); TWRR and ROI stay. When the last day of the period has none, the [Data Quality banner](index.md#data-quality-banner) says *MWRR cannot be calculated for this period*.
+The gap between MWRR and TWRR is the [Timing Effect](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/timing-effect.md). The MWRR line has a gap on the days that have no MWRR — a value of zero or less, or net withdrawals that leave no invested capital — by the same rule as the MWRR cards ([MWRR](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/mwrr.md)). The TWRR line has a gap on the days your portfolio is worth zero or less, for example after you sold everything and withdrew the cash, by the same rule as the TWRR card; after new deposits it picks up again from where it stood ([When No TWRR Is Shown](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md#when-no-twrr)). The ROI line has no gap. When the last day of the period has none, the [Data Quality banner](index.md#data-quality-banner) says *MWRR cannot be calculated for this period*.
 
 ### 💰 P&L — the money you made {: #pnl-mode }
 
@@ -214,6 +214,14 @@ With no subtype at all, the donut keeps a single ring.
 ### 💵 Cash as Liquidity
 
 Your cash is the **Liquidity** slice of **By Type**, **By Sector** and **By Asset**; the **Geographic** map leaves it out, as cash belongs to no country. With the broker filter on, the panel shows only the selected brokers' assets and cash.
+
+### ➖ Negative cash {: #allocation-negative-cash }
+
+Each slice's percentage is its amount divided by the sum of all the slices, cash included, so negative cash changes the shares:
+
+- **Cash below zero, assets above it** — for example €1,500 of stocks with cash at −€500 on an overdraft: the slices add up to €1,000, so **Liquidity** reads −50% and the stocks 150%. The percentages still add up to 100%.
+- **Nothing left to share** — when the slices add up to zero or less, no slice has a percentage: €500 of stocks bought on an overdraft of −€500, or a portfolio you emptied, whose only slice is **Liquidity** at zero. Each slice shows `—` instead of a percentage and keeps its amount, and the chart has nothing to draw and says so. In **History**, a day on which the slices add up to zero or less has no percentages either.
+- **A tiny leftover** of 0.00001 units or fewer, which a sale of almost every unit can leave, is not a holding: it has no slice.
 
 ---
 

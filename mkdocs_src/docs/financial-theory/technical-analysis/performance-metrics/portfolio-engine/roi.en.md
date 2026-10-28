@@ -20,6 +20,21 @@ $$
 
 `CapitalBaseline` includes ordinary external cash flows and priced in-kind ADJUSTMENT/TRANSFER capital. That prevents inherited or seeded portfolios from showing absurd ROI because an asset entered without a cash deposit.
 
+## 🪟 The ROI of a Period {: #dashboard-period-roi }
+
+The ROI on the Dashboard's Returns card and its line on the `%` chart measure the selected period, not the whole history. Their capital is the value the period opens with, plus the deposits and minus the withdrawals made after it:
+
+$$
+\mathrm{ROI}_{\mathrm{period}}(t)=
+\frac{\mathrm{NAV}(t)-\mathrm{NetInvested}(t)}{\mathrm{NetInvested}(t)},
+\qquad
+\mathrm{NetInvested}(t)=\max\!\left(0,\ \mathrm{NAV}(t_0)+\sum_{t_0<s\le t}\mathrm{CF}_s\right)
+$$
+
+where $t_0$ is the last day of the history on or before the period's start, and $\mathrm{CF}_s$ counts the external flows — deposits positive, withdrawals negative, in-kind capital included as for the capital baseline above. The card is the line's last point; where $\mathrm{NetInvested}(t)$ is zero the ROI is $0$, never a missing value.
+
+When the period starts **before the portfolio's first day**, there is no value to open with, and the flows of that first day — the first deposit — would fall outside the sum. The period then holds the whole history, so its capital is every flow, the first deposit included: the ROI is the same as with no start date at all, on the card and at every point of the line.
+
 ## 🎯 When to use it
 
 - To read headline portfolio gain/loss against contributed economic capital.
