@@ -608,10 +608,11 @@ test.describe('Transactions', () => {
             // Both forms of the same trade: the total amount (a BUY shows it unsigned) and the unit price next to it.
             const cashAmount = page.getByTestId('tx-form-cash-amount');
             await expect.poll(async () => Number((await cashAmount.inputValue()).replace(',', '.')), {timeout: 3_000, message: 'the total amount of the saved BUY'}).toBe(100);
-            await expect(page.getByTestId('tx-form-unit-price-computed')).toHaveAttribute('data-value', '25', {timeout: 3_000});
-            // Read-only: no badge to switch the entry mode, no price field to type in.
+            const derived = page.getByTestId('tx-form-cash-derived');
+            await expect(derived).toHaveAttribute('data-mode', 'unit_price', {timeout: 3_000});
+            await expect(derived).toHaveAttribute('data-value', '25');
+            // Read-only: no selector to change how the amount is read. The derived unit price is on screen (above), so its absence is about the form.
             await expect(page.getByTestId('tx-form-entry-mode')).toHaveCount(0);
-            await expect(page.getByTestId('tx-form-unit-price')).toHaveCount(0);
         });
     });
 
@@ -981,7 +982,7 @@ test.describe('Transactions', () => {
     // the form catching up with the keystroke, not a round trip. The saved-trade (view mode) half is in the block of the
     // disposable account, which owns a BUY.
     test.describe('Total amount / Unit price (#47)', () => {
-        test('on Unit price, 83,40 for 12 units fills the amount; an edited amount gives the price back; nothing is committed', async ({page}) => {
+        test('on Unit price, 83,40 for 12 units reads as 1000.8 in total; Total reads the same text as a total; an edited total gives the unit price back; nothing is committed', async ({page}) => {
             // The asset is this test's own and the form is never saved: Apply is not even pressed.
             const name = `E2E entry mode ${uniqueSuffix()}`;
             await createOwnedAsset(page, name);
@@ -999,28 +1000,46 @@ test.describe('Transactions', () => {
             await pickAsset(page, name);
             await page.getByTestId('tx-form-quantity').fill('12');
 
-            // A BUY single form: the badge is there and the amount drives by default.
-            const amountButton = page.getByTestId('tx-form-entry-mode-amount');
+            // A BUY single form: the selector is in the cash field, on the row of its label, and the number is read as the total by default.
+            const cashWrap = page.getByTestId('tx-form-cash-wrap');
+            const selector = cashWrap.getByTestId('tx-form-entry-mode');
+            const totalButton = page.getByTestId('tx-form-entry-mode-amount');
             const unitPriceButton = page.getByTestId('tx-form-entry-mode-unit-price');
-            await expect(page.getByTestId('tx-form-entry-mode')).toBeVisible({timeout: 5_000});
-            await expect(amountButton).toHaveAttribute('aria-pressed', 'true');
+            await expect(selector).toBeVisible({timeout: 5_000});
+            await expect(totalButton).toHaveAttribute('aria-pressed', 'true');
 
-            // Switch to Unit price and type it the way the locale writes it: the form calculates the amount.
+            // The same field, read two ways: one input, no second price field.
+            const cashAmount = page.getByTestId('tx-form-cash-amount');
+            await expect(cashAmount).toBeVisible();
+            await expect(page.getByTestId('tx-form-unit-price')).toHaveCount(0);
+            // On the row of the label: above the amount, not under it.
+            const selectorBox = await selector.boundingBox();
+            const amountBox = await cashAmount.boundingBox();
+            expect(selectorBox && amountBox && selectorBox.y + selectorBox.height <= amountBox.y + 1, 'the selector is above the amount input').toBe(true);
+
+            // Switch to Unit price and type the number the way the locale writes it: 83,40 is a price, the total follows.
             await unitPriceButton.click();
             await expect(unitPriceButton).toHaveAttribute('aria-pressed', 'true');
-            await expect(amountButton).toHaveAttribute('aria-pressed', 'false');
-            const unitPrice = page.getByTestId('tx-form-unit-price');
-            await expect(unitPrice).toBeVisible({timeout: 3_000});
-            await unitPrice.fill('83,40');
+            await expect(totalButton).toHaveAttribute('aria-pressed', 'false');
+            await fillCashAmount(page, '83,40');
+            await expect(unitPriceButton, 'typing the number does not change how it is read').toHaveAttribute('aria-pressed', 'true');
+            const derived = page.getByTestId('tx-form-cash-derived');
+            await expect(derived).toHaveAttribute('data-mode', 'total', {timeout: 3_000});
+            await expect(derived).toHaveAttribute('data-value', '1000.8');
 
-            const cashAmount = page.getByTestId('tx-form-cash-amount');
-            // A number, polled: 12 × 83.4 is 1000.8 whatever zeros or separator the field shows.
-            await expect.poll(async () => Number((await cashAmount.inputValue()).replace(',', '.')), {timeout: 3_000, message: 'the amount calculated for 12 units at 83.40'}).toBe(1000.8);
+            // Back to Total: the text of the input is the same one, now it is the total, and the form shows the unit price (83.4 / 12).
+            const written = await cashAmount.inputValue();
+            await totalButton.click();
+            await expect(totalButton).toHaveAttribute('aria-pressed', 'true');
+            await expect(cashAmount).toHaveValue(written);
+            await expect(derived).toHaveAttribute('data-mode', 'unit_price', {timeout: 3_000});
+            await expect(derived).toHaveAttribute('data-value', '6.95');
 
-            // Edit the amount: it drives again, and the price follows it. 1000.9 / 12 is 83.408333333333 (12 decimals).
+            // Edit the total: 1000.9 / 12 is 83.408333333333 (12 decimals).
             await fillCashAmount(page, '1000.9');
-            await expect(amountButton).toHaveAttribute('aria-pressed', 'true');
-            await expect(page.getByTestId('tx-form-unit-price-computed')).toHaveAttribute('data-value', '83.408333333333', {timeout: 3_000});
+            await expect(totalButton).toHaveAttribute('aria-pressed', 'true');
+            await expect(derived).toHaveAttribute('data-mode', 'unit_price');
+            await expect(derived).toHaveAttribute('data-value', '83.408333333333', {timeout: 3_000});
 
             expect(commits, 'typing prices and amounts never commits anything').toEqual([]);
         });
@@ -1037,17 +1056,18 @@ test.describe('Transactions', () => {
             await page.getByTestId('tx-form-quantity').fill('1000');
 
             await page.getByTestId('tx-form-entry-mode-unit-price').click();
-            const unitPrice = page.getByTestId('tx-form-unit-price');
-            await expect(unitPrice).toBeVisible({timeout: 3_000});
-            await unitPrice.fill('98,5');
-            const cashAmount = page.getByTestId('tx-form-cash-amount');
-            await expect.poll(async () => Number((await cashAmount.inputValue()).replace(',', '.')), {timeout: 3_000, message: 'the amount for 1000 units at 98.5 per 100'}).toBe(985);
+            await expect(page.getByTestId('tx-form-entry-mode-unit-price')).toHaveAttribute('aria-pressed', 'true');
+            await fillCashAmount(page, '98,5');
+            const derived = page.getByTestId('tx-form-cash-derived');
+            await expect(derived).toHaveAttribute('data-mode', 'total', {timeout: 3_000});
+            await expect(derived).toHaveAttribute('data-value', '985');
 
-            // Back the other way: a different amount is typed, so the amount drives and the price is read off it
-            // (typing the same 985 again would change nothing, and the unit price would stay in charge).
-            await fillCashAmount(page, '985.5');
+            // Read the other way: a total of 985.5 over 1000 units is 98.55 per 100.
+            await page.getByTestId('tx-form-entry-mode-amount').click();
             await expect(page.getByTestId('tx-form-entry-mode-amount')).toHaveAttribute('aria-pressed', 'true');
-            await expect(page.getByTestId('tx-form-unit-price-computed')).toHaveAttribute('data-value', '98.55', {timeout: 3_000});
+            await fillCashAmount(page, '985.5');
+            await expect(derived).toHaveAttribute('data-mode', 'unit_price');
+            await expect(derived).toHaveAttribute('data-value', '98.55', {timeout: 3_000});
         });
     });
 

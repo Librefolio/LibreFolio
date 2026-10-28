@@ -78,10 +78,10 @@
       "costBasis": "Cost basis override",
       "linkUuid": "Linked TX",
       "pairPartner": "Pair partner",
-      "hintSignPositive": "must be > 0",
-      "hintSignNegative": "enter positive — auto-negated on save",
-      "hintSignZero": "must be 0",
-      "hintSignNonzero": "must be ≠ 0",
+      "hintSignPositive": "Enter a value above 0",
+      "hintSignNegative": "Enter a positive value",
+      "hintSignZero": "Enter 0",
+      "hintSignNonzero": "Enter a value other than 0",
       "saveFailed": "Failed to save transaction",
       "fxTitle": "Currency Exchange",
       "transferAssetTitle": "Asset Transfer",
@@ -96,14 +96,15 @@
       "eventCreateDateRequired": "Date is required",
       "fxDatesHint": "The 'From' and 'To' dates usually match: they differ when the broker credits the new currency on another day.",
       "eventEditTitle": "Edit event for {asset}",
-      "entryModeAmount": "Total amount",
+      "entryModeAmount": "Total",
       "entryModeUnitPrice": "Unit price",
-      "unitPriceCalculated": "calculated",
-      "unitPriceHint": "The amount is calculated from the unit price and the quantity; you can still edit it.",
       "preFloorDate": {
         "message": "The date {date} is before 1 January 1900. Check that the year is right: it is often a typo.",
         "confirm": "Yes, the date is right"
-      }
+      },
+      "entryModeLabel": "How to read the amount",
+      "entryDerivedTotal": "= {value} in total",
+      "entryDerivedUnit": "= {value} {base, plural, =1 {per unit} other {per # units}}"
     },
     "bulk": {
       "resetRow": "Reset row",

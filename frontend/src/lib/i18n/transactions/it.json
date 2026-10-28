@@ -78,10 +78,10 @@
       "costBasis": "Costo di carico manuale",
       "linkUuid": "TX Collegata",
       "pairPartner": "Transazione collegata",
-      "hintSignPositive": "deve essere > 0",
-      "hintSignNegative": "inserisci positivo — invertito al salvataggio",
-      "hintSignZero": "deve essere 0",
-      "hintSignNonzero": "deve essere ≠ 0",
+      "hintSignPositive": "Inserisci un valore maggiore di 0",
+      "hintSignNegative": "Inserisci un valore positivo",
+      "hintSignZero": "Inserisci 0",
+      "hintSignNonzero": "Inserisci un valore diverso da 0",
       "saveFailed": "Impossibile salvare la transazione",
       "fxTitle": "Cambio Valuta",
       "transferAssetTitle": "Trasferimento Asset",
@@ -96,14 +96,15 @@
       "eventCreateDateRequired": "La data è obbligatoria",
       "fxDatesHint": "Le date 'Da' e 'A' di solito coincidono: si separano quando il broker accredita la nuova valuta in un altro giorno.",
       "eventEditTitle": "Modifica evento per {asset}",
-      "entryModeAmount": "Importo totale",
+      "entryModeAmount": "Totale",
       "entryModeUnitPrice": "Prezzo unitario",
-      "unitPriceCalculated": "calcolato",
-      "unitPriceHint": "L'importo si calcola dal prezzo unitario e dalla quantità; puoi comunque modificarlo.",
       "preFloorDate": {
         "message": "La data {date} è anteriore al 1° gennaio 1900. Controlla che l'anno sia giusto: spesso è un errore di battitura.",
         "confirm": "Sì, la data è giusta"
-      }
+      },
+      "entryModeLabel": "Come leggere il numero",
+      "entryDerivedTotal": "= {value} in totale",
+      "entryDerivedUnit": "= {value} {base, plural, =1 {per unità} other {per # unità}}"
     },
     "bulk": {
       "resetRow": "Reimposta riga",
