@@ -31,6 +31,9 @@
     import {getEventTypeOptions, EVENT_TYPES_ALL} from '$lib/features/transactions/events/eventTypes';
     import {generateUUID} from '$lib/utils/core/uuid';
     import TabBar from '$lib/components/ui/tabs/TabBar.svelte';
+    import type {ParsedRow} from '$lib/components/ui/data-editor/CsvEditor.svelte';
+    import {toasts} from '$lib/stores/app/toastStore.svelte';
+    import {formatDay} from '$lib/utils/core/formatAxisDate';
 
     // =========================================================================
     // Props
@@ -49,6 +52,8 @@
         saving?: boolean;
         /** Number of dirty rows across both tabs — exposed for parent */
         dirtyCount?: number;
+        /** The asset has a data provider: an imported event marked PROVIDER is left out, the provider writes it (W-B16) */
+        hasProvider?: boolean;
         /** Called after successful save, with optional expanded date range */
         onsave?: (expandedRange?: {start: string; end: string}) => void;
         /** Called when edit is cancelled */
@@ -57,7 +62,7 @@
         onpendingchange?: (previewSignal: RenderedSignal | null) => void;
     }
 
-    let {assetId, currency, chartData, events, saving = $bindable(false), dirtyCount = $bindable(0), onsave, oncancel, onpendingchange}: Props = $props();
+    let {assetId, currency, chartData, events, hasProvider = false, saving = $bindable(false), dirtyCount = $bindable(0), onsave, oncancel, onpendingchange}: Props = $props();
 
     /** How long a save's warning about refused prices stays (X-R46): it names dates to enter again. */
     const REFUSAL_TOAST_MS = 20000;
@@ -176,6 +181,32 @@
         }));
     }
 
+    /**
+     * The imported event lines the editor adds (W-B16): the events export marks each line MANUAL or PROVIDER. With a
+     * provider on the asset, a PROVIDER line is left out and the lot is told once, because the provider writes that event
+     * at its next sync (a line kept here would come back as a second, manual one). Without a provider nothing else
+     * will write it, so the line is added. A line never carries `source` into the editor's rows.
+     */
+    function withoutProviderEvents(imported: ParsedRow[]): ParsedRow[] {
+        let left = 0;
+        const kept: ParsedRow[] = [];
+        for (const line of imported) {
+            const {source, ...values} = line.values;
+            if (
+                hasProvider &&
+                String(source ?? '')
+                    .trim()
+                    .toUpperCase() === 'PROVIDER'
+            ) {
+                left += 1;
+                continue;
+            }
+            kept.push({...line, values});
+        }
+        if (left > 0) toasts.warning($t('dataEditor.importProviderEventsLeftOut', {values: {n: left}}));
+        return kept;
+    }
+
     /** The DB id of a saved event row; null for a row the server has never seen, whose
      *  rowId is its date (`2026-03-15`, `2026-03-15#2`) or a `new-<uuid>`. */
     function dbEventId(row: DataRow): number | null {
@@ -275,9 +306,11 @@
 
         saving = true;
         error = null;
+        // A save is up to three requests (prices, deleted prices, events): one that fails after another wrote leaves the
+        // asset partly saved, and the message says so (X-R39). Kept outside the `try` for the `catch`.
+        const counts: AssetDataSaveCounts = {pricesSaved: 0, pricesRefused: 0, pricesDeleted: 0, pricesSkipped: 0, eventsDeleted: 0, eventsSaved: 0};
 
         try {
-            const counts: AssetDataSaveCounts = {pricesSaved: 0, pricesRefused: 0, pricesDeleted: 0, pricesSkipped: 0, eventsDeleted: 0, eventsSaved: 0};
             let refusedPrices: Rejection[] = [];
             let unexplained: string | null = null;
 
@@ -400,7 +433,15 @@
                     // date and type of an event deleted in the same save (I-10), and a refusal keeps nothing — the
                     // deletions included — and says which row stopped it.
                     const resp = await zodiosApi.upsert_events_bulk_api_v1_assets_events_post([{asset_id: assetId, delete_ids: idsToDelete, events: eventItems}]).catch((err: unknown) => {
-                        throw new Error(eventSaveErrorMessage(err, $t, eventItems, (type) => $t(`assetDetail.eventType.${type}`) || type));
+                        throw new Error(
+                            eventSaveErrorMessage(
+                                err,
+                                $t,
+                                eventItems,
+                                (type) => $t(`assetDetail.eventType.${type}`) || type,
+                                (iso) => formatDay(iso),
+                            ),
+                        );
                     });
 
                     const deletedIds = new Set<number>(resp.results?.[0]?.deleted_ids ?? []);
@@ -447,8 +488,9 @@
             // X-R46: what the server refused, in the interface language when coded; never Axios's «Request failed …».
             // The events' refusal arrives as an Error already worded by eventSaveErrorMessage, and keeps its text.
             const msg = saveErrorText(e, $t);
-            error = $t('dataEditor.saveFailed', {values: {error: msg}});
-            notify({name: 'assets.data.saveFailed', detail: {error: msg}, toast: {variant: 'error', message: error}});
+            const written = counts.pricesSaved > 0 || counts.pricesDeleted > 0;
+            error = $t('dataEditor.saveFailed', {values: {error: msg}}) + (written ? `\n${$t('dataEditor.savePartial', {values: {saved: counts.pricesSaved, deleted: counts.pricesDeleted}})}` : '');
+            notify({name: 'assets.data.saveFailed', detail: {error: msg, pricesSaved: counts.pricesSaved, pricesDeleted: counts.pricesDeleted}, toast: {variant: 'error', message: error}});
         } finally {
             saving = false;
         }
@@ -488,7 +530,7 @@
 <div class="space-y-3">
     <!-- Error banner -->
     {#if error}
-        <div class="bg-lf-danger-soft border border-lf-danger-line rounded-lg px-4 py-2 text-sm text-lf-danger-on-soft" data-testid="asset-editor-error">
+        <div class="bg-lf-danger-soft border border-lf-danger-line rounded-lg px-4 py-2 text-sm text-lf-danger-on-soft whitespace-pre-line" data-testid="asset-editor-error">
             {error}
         </div>
     {/if}
@@ -542,7 +584,7 @@
     {#if activeTab === 'events'}
         <DataEditor bind:rows={eventRows} bind:this={eventEditor} columns={eventColumns} importMatchKeys={['type']}>
             {#snippet importModal({open, setOpen, onimport})}
-                <EventDataImportModal {open} {onimport} onclose={() => setOpen(false)} />
+                <EventDataImportModal {open} onimport={(imported) => onimport(withoutProviderEvents(imported))} onclose={() => setOpen(false)} />
             {/snippet}
         </DataEditor>
     {/if}

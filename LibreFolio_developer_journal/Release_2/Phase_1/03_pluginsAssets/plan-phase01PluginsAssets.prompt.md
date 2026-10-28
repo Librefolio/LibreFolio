@@ -9301,3 +9301,31 @@ Corsia 6209, `/tmp/librefolio-r13-o6-x`. Brief: `salvataggi-worktrees-20261021/o
 > 4 chiavi nuove in 4 lingue (`assets.sync.confirm*`). Test: servizio `asset-source-guards` (conteggio per voce), API `assets-price` (2), E2E `asset-card-sync-confirm` (4, tutto mockato).
 > **⚠️ Fuori pista**: il servizio è stato scritto prima del suo test (nessun rosso vero: la funzione non esisteva). Non toccato: l'avviso di `SyncModalBase` («Sync all», selezione, pagina
 > dell'asset) conta ancora dai dati mostrati e non nomina i manuali; portarlo sull'endpoint è un seguito.
+
+> **Checkpoint 1** committato dal coordinatore: `4577ecb65` (28/10).
+
+### Checkpoint 2
+
+#### X6-3 · W-B16: l'import degli eventi legge la colonna `source` (28/10)
+
+> **Note implementazione** (✅ 28/10/2026): `EventDataImportModal.svelte` legge la colonna `source` (facoltativa). `AssetDataEditorSection.svelte` ha una prop `hasProvider` (la passa la pagina di
+> dettaglio, `providerAssignment?.provider_code`) e `withoutProviderEvents()`: con un fornitore sull'asset, le righe `PROVIDER` non entrano nell'editor e un solo avviso dice quante («sincronizza
+> l'asset per caricarle»); senza fornitore entrano come eventi manuali; `source` non arriva mai nelle righe. Chiave `dataEditor.importProviderEventsLeftOut` in 4 lingue.
+> **Rosso prima** (Vitest, `AssetDataEditorSection.test.ts`): la riga `PROVIDER` entrava (1 rosso su 2; la guardia «senza fornitore» verde prima e dopo).
+> **⚠️ Fuori pista**: il kickoff nomina `DataEditor.svelte` (`handleImport`); il filtro sta invece nella sezione dell'asset, che conosce il fornitore: `DataEditor.svelte` non è toccato, quindi Y6-3 non
+> aspetta più niente su quel file. L'«opzione» del backlog (importare comunque come manuali) non c'è: il caso per cui serviva (asset senza fornitore) è già coperto dalla regola; se il developer la vuole lo stesso, è una domanda di prodotto.
+
+#### X6-5 + X-R39 · documentazione, `dateLabel`, scrittura parziale (28/10)
+
+> **Note implementazione** (✅ 28/10/2026): doc in inglese: `provider_policy.py` nella tabella dei moduli di `developer/backend/assets/architecture.md` (con le righe di `price_store.py` aggiornate per X-R78 e
+> X-R29), «Maturity Settlement» nella tabella degli eventi di `user/assets/providers/scheduled-investment.en.md` (pagina con traduzioni: debito dichiarato), la guida dell'import degli eventi in
+> `user/assets/detail/data-editor.en.md` (righe `PROVIDER`). Codice: `AssetDataEditorSection.svelte` passa `(iso) => formatDay(iso)` a `eventSaveErrorMessage` e `saveErrorText` (le date degli errori degli
+> eventi non sono più ISO); i `counts` sono fuori dal `try`, e un salvataggio che si ferma dopo aver scritto o cancellato prezzi aggiunge «Già salvato: N prezzi scritti, M cancellati…»
+> (`dataEditor.savePartial`, 4 lingue; l'evento `assets.data.saveFailed` porta `pricesSaved` e `pricesDeleted`). W-B27: il prefisso «Save failed:» era già tradotto (`dataEditor.saveFailed`); restava il `dateLabel`.
+> **Rossi prima** (Vitest): messaggio parziale e `dateLabel` (2 rossi su 3; la guardia «nulla scritto, nessuna frase» verde).
+
+#### Tetto di span della query prezzi (28/10)
+
+> **Note implementazione** (✅ 28/10/2026): prova fatta, **già coperto, nessuna cura**. `get_prices_bulk` legge le righe salvate (un intervallo indicizzato: costa quello che l'asset salva, non lo span) e
+> conta i giorni di ogni riempimento con `_fill_span` prima di costruirli, quindi un intervallo di tutto il calendario non costa niente e due serie con una riga all'anno 1 sono rifiutate prima del fill
+> (422 `bulk_too_many_days`). Due test lo fissano (`test_bulk_limits.py`, BL-S01 e BL-S02, verdi su HEAD senza cure).
