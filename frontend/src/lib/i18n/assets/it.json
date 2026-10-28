@@ -94,7 +94,11 @@
       "toastFailed": "Sincronizzazione fallita per {name}",
       "modalTitle": "Sincronizza Prezzi",
       "modalDescription": "Sincronizza i prezzi dai provider configurati per l'intervallo di date selezionato.",
-      "assetsCount": "asset"
+      "assetsCount": "asset",
+      "confirmTitle": "Sincronizzare {name}?",
+      "confirmMessage": "{stored, plural, one {# prezzo salvato} other {# prezzi salvati}} in questo intervallo {stored, plural, one {sarà sostituito} other {saranno sostituiti}} con i valori del provider.",
+      "confirmManual": "Di questi, {manual, plural, one {# è stato inserito a mano e sarà sostituito} other {# sono stati inseriti a mano e saranno sostituiti}} comunque.",
+      "confirmAction": "Sincronizza"
     },
     "delete": {
       "confirmQuestion": "Eliminare \"{name}\"?",

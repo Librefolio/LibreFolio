@@ -8,7 +8,7 @@ from decimal import Decimal
 from typing import List, Optional
 
 import structlog
-from sqlalchemy import and_, delete, func, or_, select
+from sqlalchemy import and_, case, delete, func, or_, select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,6 +26,7 @@ from backend.app.schemas import (
     FAUpsert,
 )
 from backend.app.schemas.prices import CLEAR, FACurrentValue
+from backend.app.schemas.refresh import FAStoredPriceCount, FAStoredPriceCountItem
 from backend.app.utils.date_range_limits import DateOutOfRangeError, latest_stored_date
 from backend.app.utils.datetime_utils import utcnow
 from backend.app.utils.sql_chunks import chunks
@@ -397,12 +398,16 @@ class PriceStoreOperations:
                     # bounds are held to the close (X-R46: the data editor's erase of High or Low was refused)
                     incoming_low = None if price.low == CLEAR else price.low
                     incoming_high = None if price.high == CLEAR else price.high
-                    if incoming_low is not None and incoming_high is not None:
-                        if incoming_low > incoming_high or not (incoming_low <= price.close <= incoming_high):
-                            rejected_dates.append(f"{date_key.isoformat()} (close={price.close}, low={merged_low}, high={merged_high})")
-                            rejections.append((date_key, "ohlc_inconsistent"))
-                            continue
-                    elif merged_low is not None and merged_high is not None:
+                    # X-R78 (X6-2, developer 23/10): a manual price, the API's frontier, is also refused when its only real
+                    # bound lies on the wrong side of the close (a Low above it, a High below it). A provider's or the
+                    # scheduler's keeps widening the merged bounds around the close below
+                    lone_bound_wrong_side = source_plugin_key == "MANUAL" and ((incoming_low is not None and incoming_low > price.close) or (incoming_high is not None and incoming_high < price.close))
+                    both_bounds_inconsistent = incoming_low is not None and incoming_high is not None and (incoming_low > incoming_high or not (incoming_low <= price.close <= incoming_high))
+                    if both_bounds_inconsistent or lone_bound_wrong_side:
+                        rejected_dates.append(f"{date_key.isoformat()} (close={price.close}, low={merged_low}, high={merged_high})")
+                        rejections.append((date_key, "ohlc_inconsistent"))
+                        continue
+                    if merged_low is not None and merged_high is not None:
                         merged_low = min(merged_low, price.close)
                         merged_high = max(merged_high, price.close)
 
@@ -487,6 +492,28 @@ class PriceStoreOperations:
             )
         # update_count = 0 because SQLite doesn't distinguish
         return {"inserted_count": total_inserted, "updated_count": 0, "results": results}
+
+    @staticmethod
+    async def count_stored_prices(items: List[FAStoredPriceCountItem], session: AsyncSession) -> List[FAStoredPriceCount]:
+        """Count the prices stored in each item's range, and how many are manual (X-R29): what a sync would replace.
+
+        One grouped ``SELECT`` per item (the route caps the items at ``MAX_BULK_ITEMS``), a read only. ``start`` ``"min"``
+        counts from the first stored day; ``"resume"`` starts after the last stored day, so it counts none. An asset
+        without a price, or unknown, counts 0 and 0. The answer follows the request's order.
+        """
+        counts: List[FAStoredPriceCount] = []
+        for item in items:
+            start = item.date_range.start
+            if start == "resume":
+                counts.append(FAStoredPriceCount(asset_id=item.asset_id))
+                continue
+            conditions = [PriceHistory.asset_id == item.asset_id, PriceHistory.date <= item.date_range.end]
+            if start != "min":
+                conditions.append(PriceHistory.date >= start)
+            manual = func.coalesce(func.sum(case((PriceHistory.source_plugin_key == "MANUAL", 1), else_=0)), 0)
+            row = (await session.execute(select(func.count(), manual).where(and_(*conditions)))).one()
+            counts.append(FAStoredPriceCount(asset_id=item.asset_id, stored_count=row[0], manual_count=row[1]))
+        return counts
 
     @staticmethod
     async def bulk_delete_prices(data: List[FAAssetDelete], session: AsyncSession) -> FABulkDeleteResponse:
