@@ -339,7 +339,9 @@
       },
       "roleName": {
         "custody": "Movimenti titoli",
-        "cash": "Estratto del conto"
+        "cash": "Estratto del conto",
+        "securities": "Movimenti titoli",
+        "account": "Movimenti del conto"
       },
       "period": {
         "years": "{n, plural, one {# anno} other {# anni}}",
@@ -398,7 +400,11 @@
         "overlap_mismatch": "Due export «{role}» non coincidono in {days} giorni fra il {first} e il {last}: per quei giorni vale il più recente.",
         "balance_chain_broken": "Il saldo progressivo dell'estratto non torna dal {date}: i saldi si confrontano soltanto, non servono per le correzioni.",
         "empty_member": "Un export «{role}» non ha righe.",
-        "mixed_accounts_in_file": "Un export dei titoli contiene più depositi titoli."
+        "mixed_accounts_in_file": "Un export dei titoli contiene più depositi titoli.",
+        "account_gap": "Nessun export del conto copre {start} – {end}: i saldi della banca differiscono di {amount} in quel periodo. Se la banca ha ancora i movimenti, esportali.",
+        "no_balance": "Nessun export del conto riporta un saldo (lo fa solo l’export Excel): la cassa non viene confrontata con la banca.",
+        "ambiguous": "{rows, plural, one {# riga non si può} other {# righe non si possono}} abbinare con certezza tra l’export dei titoli e quello del conto: controllale.",
+        "no_counterpart": "{rows, plural, one {# riga non ha} other {# righe non hanno}} la riga corrispondente nell’altro export: controll{rows, plural, one {ala} other {ale}}."
       },
       "gapFix": {
         "stepTitle": "Allinea con la banca",
