@@ -339,7 +339,9 @@
       },
       "roleName": {
         "custody": "Movimientos de valores",
-        "cash": "Extracto de la cuenta de efectivo"
+        "cash": "Extracto de la cuenta de efectivo",
+        "securities": "Movimientos de valores",
+        "account": "Movimientos de la cuenta"
       },
       "period": {
         "years": "{n, plural, one {# año} other {# años}}",
@@ -398,7 +400,11 @@
         "overlap_mismatch": "Dos exportaciones «{role}» no coinciden en {days} día(s) entre el {first} y el {last}: para esos días se usa la más reciente.",
         "balance_chain_broken": "El saldo acumulado del extracto no cuadra desde el {date}: los saldos solo se comparan, no se usan para las correcciones.",
         "empty_member": "Una exportación «{role}» no tiene filas.",
-        "mixed_accounts_in_file": "Una exportación de valores contiene varias cuentas de custodia."
+        "mixed_accounts_in_file": "Una exportación de valores contiene varias cuentas de custodia.",
+        "account_gap": "Ningún export de la cuenta cubre {start} – {end}: los saldos del banco difieren en {amount} en ese periodo. Exporta los movimientos de la cuenta si el banco aún los tiene.",
+        "no_balance": "Ningún export de la cuenta indica un saldo (solo lo hace el export de Excel): el efectivo no se compara con el banco.",
+        "ambiguous": "{rows, plural, one {# fila no se puede emparejar} other {# filas no se pueden emparejar}} con certeza entre el export de valores y el de la cuenta: revísalas.",
+        "no_counterpart": "{rows, plural, one {# fila no tiene} other {# filas no tienen}} la fila correspondiente en el otro export: revísa{rows, plural, one {la} other {las}}."
       },
       "gapFix": {
         "stepTitle": "Alinear con el banco",

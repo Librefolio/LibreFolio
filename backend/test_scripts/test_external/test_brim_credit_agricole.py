@@ -29,6 +29,10 @@ What is pinned, by area (letters follow the plan, W5-7):
 - H in-flight cash; I opening positions; J zones; K dates (the operation date is never replaced by the value date);
 - L ``describe_set``.
 
+From the section "W5-7 STEP 6" on, the subject is the plugin ``broker_credit_agricole`` 2.0.0 wired to that analysis: its
+contract, ``combine`` (the combined table), ``parse`` (the combined file), the standalone account rows (parity with 1.5.0, as
+literals) and the end-to-end proofs (``apply_history`` and ``compute_gap_fix`` on a private in-memory database).
+
 Every file is synthetic: written under ``tmp_path_factory`` by the builders of this module, with invented names, ISINs,
 dossier numbers and amounts. No server, no database, no network, no clock: pure.
 
@@ -38,19 +42,33 @@ section "W5-7 · Crédit Agricole sui report set — piano dettagliato".
 
 from __future__ import annotations
 
+import csv
+import json
 import re
+from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import openpyxl
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlmodel import SQLModel
 
-from backend.app.schemas.brim import BRIMCoverage
-from backend.app.schemas.common import DateRangeModel
+import backend.app.db.models  # noqa: F401 — registers the app tables on SQLModel.metadata (the end-to-end proofs of step 6)
+from backend.app.config import PROJECT_ROOT
+from backend.app.db.models import TransactionType
+from backend.app.schemas.brim import BRIMCheckpoint, BRIMCombinedTable, BRIMCoverage, BRIMGapFixRequest, BRIMParseOutput, BRIMTruthCash, is_fake_asset_id
+from backend.app.schemas.common import Currency, DateRangeModel
+from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim import brim_report_set_core as core
+from backend.app.services.brim import brim_report_sets
+from backend.app.services.brim.brim_gap_fix import compute_gap_fix
+from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider, BRIMSetRequiredError, write_combined_csv
+from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brim_providers.broker_credit_agricole import _classify as classify_module
 from backend.app.services.brim_providers.broker_credit_agricole._report_set import (
     ZONE_BEFORE,
@@ -66,8 +84,10 @@ from backend.app.services.brim_providers.broker_credit_agricole._report_set impo
     pair_rows,
 )
 from backend.app.services.brim_providers.broker_credit_agricole._rows import (
+    ACCOUNT_COLUMNS,
     ROLE_ACCOUNT,
     ROLE_SECURITIES,
+    SECURITIES_COLUMNS,
     AccountRow,
     SecuritiesRow,
     account_fingerprint,
@@ -1441,7 +1461,7 @@ class TestBalanceScenarios:
             assert (opening_cp.cash.as_of, opening_cp.cash.stated) == (d("2025-06-30"), Decimal("5000.00"))
             assert (gap_cp.cash.as_of, gap_cp.cash.stated, gap_cp.cash.kind) == (d("2025-07-31"), Decimal("6300.00"), "gap")
             assert analysis.gaps() == [DateRangeModel(start=d("2025-07-01"), end=d("2025-07-31"))]
-            notice = notice_of(analysis, "gap")
+            notice = notice_of(analysis, "account_gap")
             assert notice.severity == "warning"
             assert notice.context == {"start": "2025-07-01", "end": "2025-07-31", "amount": "1300.00", "corrected": True}
             assert "balance_chain_broken" not in codes(analysis)
@@ -1464,14 +1484,14 @@ class TestBalanceScenarios:
         assert analysis.holes == []
         assert analysis.gaps() == []
         assert [c.kind for c in analysis.checkpoints] == ["opening"]
-        assert "gap" not in codes(analysis)
+        assert "account_gap" not in codes(analysis)
         assert "balance_chain_broken" not in codes(analysis)
         assert analysis.zone(d("2025-07-15")) == ZONE_WINDOW
 
     def test_3_the_missing_month_in_an_xlsx_without_balances_does_the_same(self, work):
         analysis = work.analysis(acc=[file_a(work), file_b(work), work.acc(JULY_ROWS, "xlsx")])
         assert analysis.holes == []
-        assert "gap" not in codes(analysis)
+        assert "account_gap" not in codes(analysis)
 
     def test_4_a_file_that_does_not_add_up_is_only_a_verification(self, work):
         analysis = work.analysis(acc=[file_a(work)])
@@ -1514,10 +1534,10 @@ class TestBalanceScenarios:
         assert analysis.checkpoints[1].cash.as_of == d("2025-08-31")
         assert analysis.checkpoints[1].cash.stated == Decimal("2200.00")
         assert analysis.gaps() == [DateRangeModel(start=d("2025-08-01"), end=d("2025-08-31"))]
-        assert sorted(codes(analysis)) == ["balance_chain_broken", "gap"]
+        assert sorted(codes(analysis)) == ["account_gap", "balance_chain_broken"]
         assert notice_of(analysis, "balance_chain_broken").context == {"date": "2025-10-31"}
-        assert notice_of(analysis, "gap").context["amount"] == "700.00"
-        assert notice_of(analysis, "gap").context["corrected"] is True  # a hole BEFORE a later broken interval keeps its correction
+        assert notice_of(analysis, "account_gap").context["amount"] == "700.00"
+        assert notice_of(analysis, "account_gap").context["corrected"] is True  # a hole BEFORE a later broken interval keeps its correction
         # The balances of the broken stretch are compared, never used.
         assert [v.as_of for v in analysis.verifications] == [d("2025-07-31"), d("2025-09-30"), d("2025-10-31")]
         assert {v.kind for v in analysis.verifications} == {"verification"}
@@ -1730,7 +1750,7 @@ class TestDescribeSet:
     def test_the_gaps_are_the_holes(self, work):
         shape = describe_set({ROLE_ACCOUNT: [file_a(work), file_b(work)]})
         assert [(g.start, g.end) for g in shape.gaps] == [(d("2025-07-01"), d("2025-07-31"))]
-        assert [n.code for n in shape.notices] == ["gap"]
+        assert [n.code for n in shape.notices] == ["account_gap"]
         assert shape.segments == []
 
     def test_a_clean_set_has_no_notice(self, work):
@@ -1870,7 +1890,7 @@ class TestHoleAfterABrokenInterval:
     def test_the_hole_is_still_reported_but_not_corrected(self, work):
         analysis = hole_after_broken(work)
         assert analysis.gaps() == [DateRangeModel(start=d("2025-09-01"), end=d("2025-09-30"))]
-        notice = notice_of(analysis, "gap")
+        notice = notice_of(analysis, "account_gap")
         assert notice.severity == "warning"
         assert notice.context == {"start": "2025-09-01", "end": "2025-09-30", "amount": "300.00", "corrected": False}
         assert notice_of(analysis, "balance_chain_broken").context == {"date": "2025-08-31"}
@@ -1888,7 +1908,7 @@ class TestHoleAfterABrokenInterval:
         analysis = work.analysis(acc=[f1, f2, f3])
         assert [i.kind for i in analysis.intervals] == ["closed", "hole", "closed", "broken"]
         assert [c.kind for c in analysis.checkpoints] == ["opening", "gap"]
-        assert notice_of(analysis, "gap").context["corrected"] is True
+        assert notice_of(analysis, "account_gap").context["corrected"] is True
 
 
 # --- rule 3: opening positions include what is in flight -------------------------------------------------------------
@@ -2183,3 +2203,1119 @@ class TestPairingKeyRoundsHalfUp:
     def test_the_same_rule_holds_for_a_purchase(self, work):
         result = pair(work, [buy_sec(self.DAY, "5000.005")], [buy_acc(self.DAY, "5000.01")])
         assert len(result.pairs) == 1
+
+
+# =============================================================================
+# W5-7 STEP 6 — THE PLUGIN ON THE REPORT SET (written red first, before the wiring)
+# =============================================================================
+#
+# Everything above reads the exports (rows, rule M, pairs, balances). From here the plugin ``broker_credit_agricole`` 2.0.0
+# is the subject: its contract (roles, ``can_parse``, ``parse`` of an original), ``combine`` (the combined table) and
+# ``parse`` (the combined file). The contract is the sheet "W-CP3 · contratto di combine / parse" of the plan W5-7.
+#
+# Every set is synthetic and built by the builders above. Each scenario is combined once, written with the core's
+# ``write_combined_csv`` and parsed once; the end-to-end proofs run ``apply_history`` and ``compute_gap_fix`` on a private
+# in-memory SQLite database (never the lane's), as the wizard does for a first import.
+#
+# What is NOT here: the optional ``portfolio`` role (step 7).
+
+PLUGIN_CODE = "broker_credit_agricole"
+SAMPLE_DIR = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports"
+BROKER_ID = 1
+REAL_ASSET_BASE = 101
+
+NEW_BOND, NEW_BOND_ACC = "BTP NUOVO 1/2/2036 3.00%", "BTP NUOVO 1/2/2036"
+LONELY_BOND = "BTP LONELY 1/1/2030 2%"
+
+LF_HEADERS = ["lf_row_kind", "lf_zone", "lf_reason", "lf_checkpoint", "lf_source", "lf_match_key", "lf_value", "lf_currency", "lf_proof"]
+COMBINED_HEADERS = [*LF_HEADERS, *(f"securities:{column}" for column in SECURITIES_COLUMNS), *(f"account:{column}" for column in ACCOUNT_COLUMNS)]
+DATA_KINDS = {"pair", "standalone", "excluded"}
+TRUTH_KINDS = {"truth_cash", "truth_position", "verification"}
+ITALIAN_DATE_RE = re.compile(r"^\d{2}/\d{2}/\d{4}$")
+ITALIAN_MONEY_RE = re.compile(r"^-?\d+,\d{2}$")
+PLAIN_QUANTITY_RE = re.compile(r"^\d+(\.\d+)?$")
+SOURCE_TOKEN_RE = re.compile(r"^(securities|account)(?:#([1-9]\d*))?:([1-9]\d*)$")
+
+
+def ca_plugin() -> BRIMProvider:
+    """The registered Crédit Agricole plugin (looked up inside every test, never at import time)."""
+    BRIMProviderRegistry.auto_discover()
+    found = BRIMProviderRegistry.get_provider_instance(PLUGIN_CODE)
+    if found is None:
+        pytest.fail(f"no BRIM plugin is registered as {PLUGIN_CODE}", pytrace=False)
+    return found
+
+
+# --- the scenarios: member files built once, combined once, parsed once -------------------------------------------------
+
+
+@dataclass
+class Run:
+    """A scenario after the plugin: its member files, the combined table, the combined file and its parse."""
+
+    members: Dict[str, List[Path]]
+    folder: Path
+    table: BRIMCombinedTable
+    path: Path
+    output: BRIMParseOutput
+
+    @property
+    def records(self) -> List[Dict[str, str]]:
+        return records_of(self.table)
+
+
+BUILDERS: Dict[str, Callable[[Work], Dict[str, List[Path]]]] = {}
+_RUNS: Dict[str, Run] = {}
+
+
+def builder(name: str) -> Callable[[Callable[[Work], Dict[str, List[Path]]]], Callable[[Work], Dict[str, List[Path]]]]:
+    def register(function: Callable[[Work], Dict[str, List[Path]]]) -> Callable[[Work], Dict[str, List[Path]]]:
+        BUILDERS[name] = function
+        return function
+
+    return register
+
+
+def records_of(table: BRIMCombinedTable) -> List[Dict[str, str]]:
+    return [dict(zip(table.headers, row, strict=True)) for row in table.rows]
+
+
+def run_of(name: str, tmp_path_factory: pytest.TempPathFactory) -> Run:
+    """The scenario ``name`` combined and parsed through the plugin, once per session."""
+    if name not in _RUNS:
+        work = Work(tmp_path_factory.mktemp(f"ca-{name}"))
+        members = BUILDERS[name](work)
+        plugin = ca_plugin()
+        table = plugin.combine(members)
+        path = work.folder / "combined.csv"
+        write_combined_csv(path, table)
+        _RUNS[name] = Run(members, work.folder, table, path, plugin.parse(path, broker_id=BROKER_ID))
+    return _RUNS[name]
+
+
+def account_xlsx(work: Work, rows: Sequence[Acc], *, opening: str, date_from: str, date_to: str) -> Path:
+    """An account XLSX whose balances add up: the closing balance is the opening one plus its rows."""
+    closing = Decimal(opening) + sum((Decimal(row.amount) for row in rows), Decimal(0))
+    return work.acc(rows, "xlsx", opening=opening, closing=f"{closing:.2f}", date_from=date_from, date_to=date_to)
+
+
+def set_of(securities: Sequence[Path], account: Sequence[Path]) -> Dict[str, List[Path]]:
+    return {ROLE_SECURITIES: list(securities), ROLE_ACCOUNT: list(account)}
+
+
+# --- the sets ---------------------------------------------------------------------------------------------------------
+
+
+@builder("full")
+def _full(work: Work) -> Dict[str, List[Path]]:
+    """A month of every kind of fact. The account opens at 0 on 2026-01-31; the securities export states 4.443,75 on 2026-02-15.
+
+    - a transfer from another dossier before the opening (40000 BOND_A), a coupon with its withholding, a purchase, a
+      *collocamento* (the order is on 02-10, the bank books it on 02-18), a fund subscription, a fund redemption, a maturity
+      with a premium (40500 for 40000 held), a payment whose value date is two days after its operation date, and a coupon
+      that only the account export shows;
+    - a securities coupon with no row in the account (excluded).
+    """
+    secs = [
+        transfer_sec("2026-01-25", BOND_A, "40000"),
+        coupon_sec("2026-02-05", "93.75"),
+        buy_sec("2026-02-09", "250.00"),
+        Sec("2026-02-10", NEW_BOND, "ACQ.CONT.SU MERC.", "2000", "2000.00", "2026-02-18"),
+        fund_buy_sec("2026-02-12", "400.00"),
+        coupon_sec("2026-02-15", "77.00", name=LONELY_BOND),
+        redeem_sec("2026-02-20", "150.00"),
+        matured_sec("2026-02-25", "40500.00"),
+    ]
+    accs = [
+        salary_acc("2026-02-01", "5000.00"),
+        coupon_acc("2026-02-05", "93.75"),
+        buy_acc("2026-02-09", "250.00"),
+        fund_buy_acc("2026-02-12", "400.00"),
+        buy_acc("2026-02-18", "2000.00", name=NEW_BOND_ACC),
+        redeem_acc("2026-02-20", "150.00"),
+        Acc("2026-02-22", "PAGAMENTO TRAMITE POS", "POS CARTA 00000000 a", "-25.50", "2026-02-24"),
+        matured_acc("2026-02-25", "40500.00"),
+        coupon_acc("2026-02-27", "46.88", ritenuta="15,62"),
+    ]
+    return set_of([work.sec(secs, "xlsx", liquidity="4.443,75 EUR", updated="15/02/02026")], [account_xlsx(work, accs, opening="0", date_from="2026-02-01", date_to="2026-02-28")])
+
+
+@builder("five_days")
+def _five_days(work: Work) -> Dict[str, List[Path]]:
+    """The account opens at 0 on 2026-01-31 and its first row is five days later (02-05). No transfer."""
+    accs = [salary_acc("2026-02-05", "1000.00"), coupon_acc("2026-02-10", "93.75")]
+    return set_of([work.sec([coupon_sec("2026-02-10", "93.75")])], [account_xlsx(work, accs, opening="0", date_from="2026-02-01", date_to="2026-02-28")])
+
+
+@builder("straddle")
+def _straddle(work: Work) -> Dict[str, List[Path]]:
+    """A purchase ordered on 01-29 and booked on 02-02 straddles the opening (2026-01-31, balance 0)."""
+    secs = [buy_sec("2026-01-29", "250.00", value="2026-02-02")]
+    accs = [buy_acc("2026-02-02", "250.00"), salary_acc("2026-02-03", "1000.00")]
+    return set_of([work.sec(secs)], [account_xlsx(work, accs, opening="0", date_from="2026-02-01", date_to="2026-02-28")])
+
+
+def _january(work: Work) -> Path:
+    accs = [salary_acc("2026-01-01", "1000.00"), coupon_acc("2026-01-10", "93.75")]
+    return account_xlsx(work, accs, opening="0", date_from="2026-01-01", date_to="2026-01-31")
+
+
+def _march(work: Work) -> Path:
+    return account_xlsx(work, [pos_acc("2026-03-05", "-50.00")], opening="1500.00", date_from="2026-03-01", date_to="2026-03-31")
+
+
+@builder("hole")
+def _hole(work: Work) -> Dict[str, List[Path]]:
+    """Two account exports with February missing: January closes at 1093.75, March opens at 1500.00."""
+    secs = [coupon_sec("2026-01-10", "93.75")]
+    return set_of([work.sec(secs)], [_january(work), _march(work)])
+
+
+@builder("hole_filled")
+def _hole_filled(work: Work) -> Dict[str, List[Path]]:
+    """The same two exports and the February one between them (it opens at 1093.75 and closes at 1500.00)."""
+    secs = [coupon_sec("2026-01-10", "93.75")]
+    february = account_xlsx(work, [Acc("2026-02-10", "ACCREDITO EMOLUMENTI", "STIPENDIO SAMPLE b", "700.00"), pos_acc("2026-02-20", "-293.75")], opening="1093.75", date_from="2026-02-01", date_to="2026-02-28")
+    return set_of([work.sec(secs)], [_january(work), february, _march(work)])
+
+
+@builder("hole_securities")
+def _hole_securities(work: Work) -> Dict[str, List[Path]]:
+    """The hole of February, but the securities export has two rows in it: a coupon (+62.50) and a purchase (-100.00)."""
+    secs = [coupon_sec("2026-01-10", "93.75"), coupon_sec("2026-02-10", "62.50"), buy_sec("2026-02-12", "100.00")]
+    return set_of([work.sec(secs)], [_january(work), _march(work)])
+
+
+@builder("coupons")
+def _coupons(work: Work) -> Dict[str, List[Path]]:
+    """Three coupons in both exports (two titles) and one that only the account shows: four coupons, no balance."""
+    secs = [coupon_sec("2026-02-03", "93.75"), coupon_sec("2026-02-10", "50.00"), coupon_sec("2026-02-17", "12.50", name=BOND_B, qty="5000"), coupon_sec("2026-02-18", "7.00", name=LONELY_BOND)]
+    accs = [
+        coupon_acc("2026-02-03", "93.75"),
+        coupon_acc("2026-02-10", "50.00", ritenuta="16,67"),
+        coupon_acc("2026-02-17", "12.50", name=BOND_B_ACC, isin=ISIN_B, ritenuta="4,17"),
+        coupon_acc("2026-02-24", "20.00", ritenuta="6,67"),
+    ]
+    return set_of([work.sec(secs)], [work.acc(accs)])
+
+
+@builder("excluded")
+def _excluded(work: Work) -> Dict[str, List[Path]]:
+    """One row of every reason a row is left out, around two valid account payments (02-10, 02-20)."""
+    secs = [
+        coupon_sec("2026-01-05", "8.00", name="EARLY BOND 1/1/2030"),  # before the account export: outside_cash_coverage
+        coupon_sec("2026-03-05", "9.00", name="LATE BOND 1/1/2030"),  # after it: not_yet_settled
+        coupon_sec("2026-02-12", "7.00", name="MIDDLE BOND 1/1/2030"),  # inside it, no row in the account: no_counterpart
+        Sec("2026-02-12", "ODD ROW SAMPLE", "OPERAZIONE STRANA", "0", "0"),  # a causale nobody knows: unknown_type
+    ]
+    accs = [pos_acc("2026-02-10", "-1.00"), pos_acc("2026-02-15", "n/d", "b"), pos_acc("2026-02-20", "-2.00", "c")]  # the middle one is unreadable: invalid
+    return set_of([work.sec(secs)], [work.acc(accs)])
+
+
+#: The standalone account rows and what the 1.5.0 plugin made of them (captured from the 1.5.0 plugin on exactly these rows).
+PARITY_ACCOUNT_ROWS: List[Acc] = [
+    salary_acc("2026-03-02", "1500.00"),
+    Acc("2026-03-03", "PAGAMENTO TRAMITE POS", "POS CARTA 00000000 a", "-25.50"),
+    Acc("2026-03-04", "INTERESSI/COMPETENZE", "CANONE MENSILE SAMPLE", "-4.00"),
+    Acc("2026-03-05", "INTERESSI/COMPETENZE", "INTERESSI CREDITORI SAMPLE", "0.35"),
+    Acc("2026-03-06", "COMMISSIONI/SPESE", "COMMISSIONE BONIFICO SAMPLE", "-2.00"),
+    Acc("2026-03-07", "COMMISSIONI/SPESE", "IMPOSTA DI BOLLO SAMPLE", "-34.20"),
+    coupon_acc("2026-03-10", "93.75"),
+    Acc("2026-03-11", INCOME_CAUSALE, f"DIVIDENDO SAMPLE CORP {ISIN_B} DOS:00000/00000000", "12.00"),
+    buy_acc("2026-03-12", "250.00"),
+    Acc("2026-03-13", "CAUSALE NUOVA SAMPLE", "MOVIMENTO SAMPLE", "-9.00"),
+    redeem_acc("2026-03-14", "150.00"),
+    matured_acc("2026-03-15", "1000.00", name="BTP ALTRO 1/3/2026"),
+    Acc("2026-03-16", "COMMISS./SPESE SU OPERAZ. TITOLI", "SPESE SAMPLE OPERAZIONE DOSSIER: 00000", "-3.00"),
+]
+
+
+@builder("parity")
+def _parity(work: Work) -> Dict[str, List[Path]]:
+    """Account rows with no securities counterpart at all: each is a standalone row. One unrelated securities row completes the set."""
+    return set_of([work.sec([coupon_sec("2026-03-01", "8.00", name="UNRELATED SAMPLE BOND")])], [work.acc(PARITY_ACCOUNT_ROWS)])
+
+
+@builder("maturity_derived")
+def _maturity_derived(work: Work) -> Dict[str, List[Path]]:
+    """A maturity with no position held by the other securities rows: 40160 at price 100.40, the nominal is derived (40000)."""
+    row = Sec("2026-02-10", BOND_A, "TITOLI SCADUTI", "0", "40160.00")
+    cells = _sec_cells(row)
+    cells[4] = "100,40"  # the price column
+    securities = _write_text(work.folder / "securities-priced.csv", [SECURITIES_CSV_HEADER, ";".join(cells)])
+    return set_of([securities], [work.acc([matured_acc("2026-02-10", "40160.00")])])
+
+
+# --- typed cells (point e): the XLSX as Excel writes it, numbers and dates are real cells ---------------------------------
+
+
+TYPED_SECS = [coupon_sec("2026-02-05", "1234.56"), fund_buy_sec("2026-02-10", "2500.75")]
+TYPED_ACCS = [salary_acc("2026-02-01", "4000.55"), coupon_acc("2026-02-05", "1234.56"), fund_buy_acc("2026-02-10", "2500.75")]
+
+
+def _as_day(text: str) -> datetime:
+    return datetime.combine(d(text), datetime.min.time())
+
+
+def _typed_value(row_value: str, op: str) -> Optional[datetime]:
+    return _as_day(op if row_value == SAME else row_value) if row_value else None
+
+
+def write_securities_xlsx_typed(path: Path, rows: Sequence[Sec]) -> Path:
+    """The securities XLSX with real date and number cells (the layout of ``write_securities_xlsx``)."""
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.append([])
+    sheet.append([])
+    sheet.append([None] * 11 + ["Lista Movimenti Deposito Titoli"])
+    sheet.append([])
+    sheet.append([None, None, "Data operazione", "Nome", "Divisa", "Causale", "Prezzo", "Divisa prezzo", "Cambio", "Quantità", "Ctv in Eur", "Data Valuta"])
+    for row in rows:
+        sheet.append([None, None, _as_day(row.op), row.name, row.causale, row.causale, 0.0, row.currency, 1.0, float(Decimal(row.qty)), float(Decimal(row.ctv)), _typed_value(row.value, row.op)])
+    sheet.append([None, None, None, "Totale operazioni", None, None, None, None, None, None, 0.0])
+    workbook.save(path)
+    return path
+
+
+def write_account_xlsx_typed(path: Path, rows: Sequence[Acc], *, opening: str, date_from: str, date_to: str) -> Path:
+    """The account XLSX with real cells, the testata included (the layout of ``write_account_xlsx``)."""
+    closing = Decimal(opening) + sum((Decimal(row.amount) for row in rows), Decimal(0))
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.append(["Lista Movimenti Conto"])
+    sheet.append(["Saldo Iniziale", None, float(Decimal(opening)), "Saldo Finale", None, float(closing)])
+    sheet.append(["Data dal", None, _as_day(date_from), "Data al", None, _as_day(date_to)])
+    sheet.append([])
+    sheet.append(["Data Op.", "Data Val.", "Causale", "Descrizione", "Importo", "Divisa"])
+    for row in rows:
+        sheet.append([_as_day(row.op), _typed_value(row.value, row.op), row.causale, row.desc, float(Decimal(row.amount)), row.currency])
+    sheet.append(["Totale Entrate/Uscite/Movimenti €", None, None, None, 0.0])
+    workbook.save(path)
+    return path
+
+
+@builder("typed")
+def _typed(work: Work) -> Dict[str, List[Path]]:
+    securities = write_securities_xlsx_typed(work.folder / "securities-typed.xlsx", TYPED_SECS)
+    account = write_account_xlsx_typed(work.folder / "account-typed.xlsx", TYPED_ACCS, opening="0", date_from="2026-02-01", date_to="2026-02-28")
+    return set_of([securities], [account])
+
+
+@builder("typed_twin")
+def _typed_twin(work: Work) -> Dict[str, List[Path]]:
+    """The same facts as the typed set, in CSV: the cells are text, written with the bank's thousands separators."""
+    return set_of([work.sec(TYPED_SECS)], [work.acc(TYPED_ACCS)])
+
+
+# --- reading a parse -----------------------------------------------------------------------------------------------------
+
+
+def names_of(output: BRIMParseOutput) -> Dict[int, Optional[str]]:
+    return {asset_id: info.extracted_name for asset_id, info in output.extracted_assets.items()}
+
+
+def tx_tuples(output: BRIMParseOutput) -> List[Tuple[Any, ...]]:
+    """``(type, date, quantity, cash, title)`` of every transaction, sorted (order is not what is pinned)."""
+    names = names_of(output)
+    found = [(tx.type.value, tx.date, tx.quantity, None if tx.cash is None else tx.cash.amount, None if tx.asset_id is None else names.get(tx.asset_id)) for tx in output.transactions]
+    return sorted(found, key=lambda item: (item[1], item[0], item[4] or "", item[3] if item[3] is not None else Decimal(0)))
+
+
+def expected(*items: Tuple[Any, ...]) -> List[Tuple[Any, ...]]:
+    """Expected ``tx_tuples`` from ``(type, "YYYY-MM-DD", quantity, cash, title)``, sorted the same way."""
+    found = [(kind, d(day), Decimal(quantity), None if cash is None else Decimal(cash), title) for kind, day, quantity, cash, title in items]
+    return sorted(found, key=lambda item: (item[1], item[0], item[4] or "", item[3] if item[3] is not None else Decimal(0)))
+
+
+def txs_of(output: BRIMParseOutput, **attrs: Any) -> List[Any]:
+    """The transactions of a parse that match ``attrs``: ``type`` (its value text), ``date`` (ISO text) and ``title``."""
+    names = names_of(output)
+    found = []
+    for tx in output.transactions:
+        view = {"type": tx.type.value, "date": tx.date.isoformat(), "title": names.get(tx.asset_id)}
+        if all(view[key] == value for key, value in attrs.items()):
+            found.append(tx)
+    return found
+
+
+def one_tx(output: BRIMParseOutput, **attrs: Any) -> Any:
+    found = txs_of(output, **attrs)
+    assert len(found) == 1, f"{len(found)} transactions match {attrs}"
+    return found[0]
+
+
+def notice_codes(output: BRIMParseOutput) -> List[str]:
+    return [notice.code for notice in output.warnings]
+
+
+def checkpoint_at(output: BRIMParseOutput, as_of: str) -> Any:
+    found = [checkpoint for checkpoint in output.checkpoints if checkpoint.as_of == d(as_of)]
+    assert len(found) == 1, f"one checkpoint expected at {as_of}, got {[item.as_of.isoformat() for item in output.checkpoints]}"
+    return found[0]
+
+
+def cash_of(items: Sequence[Any]) -> Dict[str, Decimal]:
+    return {item.currency: item.amount for item in items}
+
+
+# --- reading a combined table ----------------------------------------------------------------------------------------------
+
+
+def by_kind(records: Sequence[Dict[str, str]], *kinds: str) -> List[Dict[str, str]]:
+    return [record for record in records if record["lf_row_kind"] in kinds]
+
+
+def record_of(records: Sequence[Dict[str, str]], role: str, row: int) -> Dict[str, str]:
+    """The one data row of the table that comes from line ``row`` of the (single) file of ``role``."""
+    token = f"{role}:{row}"
+    found = [record for record in by_kind(records, *DATA_KINDS) if token in record["lf_source"].split(" + ")]
+    assert len(found) == 1, f"{len(found)} data rows come from {token}"
+    return found[0]
+
+
+def day_text(text: str) -> date:
+    return datetime.strptime(text, "%d/%m/%Y").date()
+
+
+def row_day(record: Dict[str, str]) -> Tuple[date, int]:
+    """The day a table row is placed at, and 0 for a fact / 1 for a truth point of that day."""
+    if record["lf_row_kind"] in TRUTH_KINDS:
+        return d(record["lf_checkpoint"]), 1
+    return day_text(record["securities:Data operazione"] or record["account:Data Op."]), 0
+
+
+def truths(records: Sequence[Dict[str, str]], kind: str) -> List[Dict[str, str]]:
+    return [record for record in records if record["lf_row_kind"] == kind]
+
+
+# =============================================================================
+# 1. THE PLUGIN'S CONTRACT: identity, roles, recognition, the refusal of an original
+# =============================================================================
+
+
+class TestPluginContract:
+    """The plugin is a report-set plugin: 2.0.0, history tag, ``import`` policy, the two required roles, sample sets."""
+
+    def test_version_history_tag_and_policy(self):
+        plugin = ca_plugin()
+        assert plugin.plugin_version == "2.0.0"
+        assert plugin.history_tag == "credit_agricole"
+        assert plugin.pre_checkpoint_policy == "import"  # every row is imported, nothing is summarised before a checkpoint
+        assert plugin.is_report_set_plugin is True
+
+    def test_the_two_required_roles(self):
+        roles = {role.code: role for role in ca_plugin().report_roles}
+        assert [role.code for role in ca_plugin().report_roles][:2] == [ROLE_SECURITIES, ROLE_ACCOUNT]
+        securities, account = roles[ROLE_SECURITIES], roles[ROLE_ACCOUNT]
+        assert (securities.required, securities.multiple, sorted(securities.extensions)) == (True, True, [".csv", ".xlsx"])
+        assert (account.required, account.multiple, sorted(account.extensions)) == (True, True, [".csv", ".xlsx"])
+        assert (securities.must_cover, account.must_cover, account.max_history) == (None, ROLE_SECURITIES, "P2Y")
+
+    def test_the_sample_sets_are_synthetic_sets_of_both_roles(self):
+        sample_sets = ca_plugin().test_sample_sets
+        assert sample_sets, "a report-set plugin declares its sample sets"
+        for sample_set in sample_sets:
+            assert set(sample_set) == {ROLE_SECURITIES, ROLE_ACCOUNT}
+            for role, names in sample_set.items():
+                assert names, f"a sample set has no {role} file"
+                for name in names:
+                    assert (SAMPLE_DIR / name).is_file(), f"{name} is not in sample_reports/"
+                    assert ca_plugin().detect_role(SAMPLE_DIR / name) == role
+
+
+class TestRecognition:
+    """``detect_role``, ``can_parse``, ``describe_member`` and ``describe_set`` are the analysis of the set, exposed by the plugin."""
+
+    @pytest.mark.parametrize("kind", ["csv", "xlsx"])
+    def test_detect_role_of_the_two_exports(self, work, kind):
+        plugin = ca_plugin()
+        assert plugin.detect_role(work.sec([coupon_sec("2026-02-05", "93.75")], kind)) == ROLE_SECURITIES
+        assert plugin.detect_role(work.acc([pos_acc("2026-02-05", "-1.00")], kind)) == ROLE_ACCOUNT
+
+    def test_a_combined_file_an_unrelated_file_and_a_binary_file_have_no_role(self, work, tmp_path_factory):
+        plugin = ca_plugin()
+        combined = run_of("full", tmp_path_factory).path
+        assert plugin.detect_role(combined) is None
+        assert plugin.detect_role(work.text("other.csv", ["a;b;c", "1;2;3"])) is None
+        binary = work.folder / "garbage.xlsx"
+        binary.write_bytes(b"\x00\x01\x02 not a workbook")
+        assert plugin.detect_role(binary) is None
+
+    def test_can_parse_the_exports_and_the_combined_file_and_nothing_else(self, work, tmp_path_factory):
+        plugin = ca_plugin()
+        binary = work.folder / "garbage.xlsx"
+        binary.write_bytes(b"\x00\x01\x02 not a workbook")
+        for kind in ("csv", "xlsx"):
+            assert plugin.can_parse(work.sec([coupon_sec("2026-02-05", "93.75")], kind)) is True
+            assert plugin.can_parse(work.acc([pos_acc("2026-02-05", "-1.00")], kind)) is True  # so that the wizard can say "the set is needed"
+        assert plugin.can_parse(run_of("full", tmp_path_factory).path) is True
+        assert plugin.can_parse(work.text("other.csv", ["a;b;c", "1;2;3"])) is False
+        assert plugin.can_parse(work.text("notes.txt", [SECURITIES_CSV_HEADER])) is False
+        assert plugin.can_parse(binary) is False
+        assert plugin.can_parse(work.folder / "missing.csv") is False
+
+    def test_describe_member_is_the_analysis_of_the_member(self, work):
+        plugin = ca_plugin()
+        securities = work.sec([coupon_sec("2026-02-05", "93.75"), buy_sec("2026-02-09", "250.00")], "xlsx")
+        account = account_xlsx(work, [salary_acc("2026-02-01", "100.00")], opening="0", date_from="2026-02-01", date_to="2026-02-28")
+        for path, role, rows in ((securities, ROLE_SECURITIES, 2), (account, ROLE_ACCOUNT, 1)):
+            summary = plugin.describe_member(path)
+            assert (summary.role, summary.rows) == (role, rows)
+            assert summary == describe_member(path)
+
+    def test_describe_set_is_the_analysis_of_the_set(self, tmp_path_factory):
+        members = run_of("hole", tmp_path_factory).members
+        shape = ca_plugin().describe_set(members)
+        assert shape == describe_set(members)
+        assert [(gap.start, gap.end) for gap in shape.gaps] == [(d("2026-02-01"), d("2026-02-28"))]
+
+
+class TestAnOriginalIsNeverImportedAlone:
+    """An export is imported through the combined file only: the original is refused with the role that is missing."""
+
+    @pytest.mark.parametrize("kind", ["csv", "xlsx"])
+    def test_a_securities_export_asks_for_the_account(self, work, kind):
+        with pytest.raises(BRIMSetRequiredError) as raised:
+            ca_plugin().parse(work.sec([coupon_sec("2026-02-05", "93.75")], kind), broker_id=BROKER_ID)
+        assert raised.value.missing_roles == [ROLE_ACCOUNT]
+
+    @pytest.mark.parametrize("kind", ["csv", "xlsx"])
+    def test_an_account_export_asks_for_the_securities(self, work, kind):
+        with pytest.raises(BRIMSetRequiredError) as raised:
+            ca_plugin().parse(work.acc([pos_acc("2026-02-05", "-1.00")], kind), broker_id=BROKER_ID)
+        assert raised.value.missing_roles == [ROLE_SECURITIES]
+
+    def test_guard_a_csv_that_is_neither_an_original_nor_a_combined_file_is_a_parse_error(self, work):
+        """Guard: green with the 1.5.0 plugin too (it refused an unknown header), and it must stay so."""
+        with pytest.raises(BRIMParseError) as raised:
+            ca_plugin().parse(work.text("other.csv", ["a;b;c", "1;2;3"]), broker_id=BROKER_ID)
+        assert not isinstance(raised.value, BRIMSetRequiredError)
+
+
+# =============================================================================
+# 2. THE COMBINED TABLE (``combine``)
+# =============================================================================
+
+
+class TestCombinedTable:
+    """Columns, one row per fact, kinds, reasons, order, privacy, purity."""
+
+    def test_the_columns_and_their_order(self, tmp_path_factory):
+        assert run_of("full", tmp_path_factory).table.headers == COMBINED_HEADERS
+
+    def test_one_row_per_fact_and_the_kind_of_each(self, tmp_path_factory):
+        records = run_of("full", tmp_path_factory).records
+        assert Counter(record["lf_row_kind"] for record in records) == {"pair": 6, "standalone": 4, "excluded": 1, "truth_cash": 1, "truth_position": 1, "verification": 2}
+
+    def test_each_row_of_each_file_is_in_the_table_exactly_once(self, tmp_path_factory):
+        run = run_of("full", tmp_path_factory)
+        wanted = [f"{ROLE_SECURITIES}:{row.row}" for row in read_securities(run.members[ROLE_SECURITIES][0]).rows]
+        wanted += [f"{ROLE_ACCOUNT}:{row.row}" for row in read_account(run.members[ROLE_ACCOUNT][0]).rows]
+        seen: List[str] = []
+        for record in by_kind(run.records, *DATA_KINDS):
+            tokens = record["lf_source"].split(" + ")
+            assert all(SOURCE_TOKEN_RE.match(token) for token in tokens), record["lf_source"]
+            seen += tokens
+        assert sorted(seen) == sorted(wanted)
+
+    def test_a_pair_is_one_row_with_both_halves(self, tmp_path_factory):
+        run = run_of("full", tmp_path_factory)
+        pairs = by_kind(run.records, "pair")
+        coupon = next(record for record in pairs if record["securities:Data operazione"] == "05/02/2026")
+        assert len(coupon["lf_source"].split(" + ")) == 2
+        assert coupon["securities:Nome"] == BOND_A
+        assert coupon["account:Descrizione"].startswith("CEDOLA:")
+        assert (coupon["securities:Controvalore"], coupon["account:Importo"]) == ("93,75", "93,75")
+        assert coupon["lf_zone"] == "window"
+        assert all(record["securities:Nome"] and record["account:Descrizione"] for record in pairs)
+
+    def test_the_collocamento_pair_keeps_its_two_dates(self, tmp_path_factory):
+        """The order is on 02-10 (securities), the bank books it on 02-18 (account): both are in the row."""
+        record = next(record for record in by_kind(run_of("full", tmp_path_factory).records, "pair") if record["securities:Nome"] == NEW_BOND)
+        assert (record["securities:Data operazione"], record["securities:Data valuta"], record["account:Data Op."]) == ("10/02/2026", "18/02/2026", "18/02/2026")
+
+    def test_a_row_of_one_export_only_has_empty_cells_for_the_other(self, tmp_path_factory):
+        records = run_of("full", tmp_path_factory).records
+        for record in by_kind(records, "standalone", "excluded"):
+            halves = [bool(record[f"securities:{SECURITIES_COLUMNS[0]}"]), bool(record[f"account:{ACCOUNT_COLUMNS[0]}"])]
+            assert sorted(halves) == [False, True], record["lf_source"]
+
+    def test_the_standalone_and_excluded_rows_and_their_reason(self, tmp_path_factory):
+        run = run_of("full", tmp_path_factory)
+        by_day = {record["securities:Data operazione"] or record["account:Data Op."]: record for record in by_kind(run.records, "standalone", "excluded")}
+        assert by_day["25/01/2026"]["lf_row_kind"] == "standalone"  # the transfer from another dossier
+        assert (by_day["25/01/2026"]["lf_zone"], by_day["25/01/2026"]["lf_reason"]) == ("before", "")
+        assert (by_day["01/02/2026"]["lf_row_kind"], by_day["01/02/2026"]["lf_reason"]) == ("standalone", "")  # the salary
+        assert (by_day["15/02/2026"]["lf_row_kind"], by_day["15/02/2026"]["lf_reason"]) == ("excluded", "no_counterpart")  # the lonely coupon
+        assert (by_day["27/02/2026"]["lf_row_kind"], by_day["27/02/2026"]["lf_reason"]) == ("standalone", "")  # the coupon of the account alone
+
+    def test_every_reason_a_row_is_left_out(self, tmp_path_factory):
+        run = run_of("excluded", tmp_path_factory)
+        securities = {row.name: row for row in read_securities(run.members[ROLE_SECURITIES][0]).rows}
+        account = {row.description: row for row in read_account(run.members[ROLE_ACCOUNT][0]).rows}
+        got = {
+            "EARLY BOND 1/1/2030": record_of(run.records, ROLE_SECURITIES, securities["EARLY BOND 1/1/2030"].row),
+            "LATE BOND 1/1/2030": record_of(run.records, ROLE_SECURITIES, securities["LATE BOND 1/1/2030"].row),
+            "MIDDLE BOND 1/1/2030": record_of(run.records, ROLE_SECURITIES, securities["MIDDLE BOND 1/1/2030"].row),
+            "ODD ROW SAMPLE": record_of(run.records, ROLE_SECURITIES, securities["ODD ROW SAMPLE"].row),
+            "POS CARTA 00000000 b": record_of(run.records, ROLE_ACCOUNT, account["POS CARTA 00000000 b"].row),
+        }
+        assert {name: (record["lf_row_kind"], record["lf_reason"]) for name, record in got.items()} == {
+            "EARLY BOND 1/1/2030": ("excluded", "outside_cash_coverage"),
+            "LATE BOND 1/1/2030": ("excluded", "not_yet_settled"),
+            "MIDDLE BOND 1/1/2030": ("excluded", "no_counterpart"),
+            "ODD ROW SAMPLE": ("excluded", "unknown_type"),
+            "POS CARTA 00000000 b": ("excluded", "invalid"),
+        }
+
+    def test_a_securities_row_inside_a_hole_is_standalone_in_gap(self, tmp_path_factory):
+        run = run_of("hole_securities", tmp_path_factory)
+        rows = {row.op: row for row in read_securities(run.members[ROLE_SECURITIES][0]).rows}
+        for day in ("2026-02-10", "2026-02-12"):
+            record = record_of(run.records, ROLE_SECURITIES, rows[d(day)].row)
+            assert (record["lf_row_kind"], record["lf_reason"], record["lf_zone"]) == ("standalone", "in_gap", "gap"), day
+
+    def test_the_table_is_ordered_by_operation_date_and_a_days_truth_points_come_after_its_facts(self, tmp_path_factory):
+        keys = [row_day(record) for record in run_of("full", tmp_path_factory).records]
+        assert keys == sorted(keys)
+
+    def test_the_cash_truth_points(self, tmp_path_factory):
+        records = run_of("full", tmp_path_factory).records
+        (opening,) = truths(records, "truth_cash")
+        assert (opening["lf_checkpoint"], opening["lf_zone"], opening["lf_currency"], Decimal(opening["lf_value"])) == ("2026-01-31", "before", "EUR", Decimal("0"))
+        # the securities export states 4.443,75 on 02-15; the 2000.00 purchase ordered on 02-10 is booked on 02-18: it is in flight
+        assert {record["lf_checkpoint"]: Decimal(record["lf_value"]) for record in truths(records, "verification")} == {"2026-02-15": Decimal("2443.75"), "2026-02-28": Decimal("43115.13")}
+
+    def test_the_opening_position_is_what_the_transfer_proves(self, tmp_path_factory):
+        (position,) = truths(run_of("full", tmp_path_factory).records, "truth_position")
+        assert (position["lf_checkpoint"], position["lf_proof"], Decimal(position["lf_value"])) == ("2026-01-31", "exact:transfer_in", Decimal("40000"))
+
+    def test_a_pair_that_straddles_the_opening_is_in_flight_at_the_opening(self, tmp_path_factory):
+        """Ordered on 01-29, booked on 02-02: at the end of 01-31 the ledger holds it and the bank does not."""
+        (opening,) = truths(run_of("straddle", tmp_path_factory).records, "truth_cash")
+        assert (opening["lf_checkpoint"], Decimal(opening["lf_value"])) == ("2026-01-31", Decimal("-250.00"))
+
+    def test_a_hole_is_closed_by_a_cash_truth_at_its_end_and_a_covered_stretch_is_not(self, tmp_path_factory):
+        hole = truths(run_of("hole", tmp_path_factory).records, "truth_cash")
+        assert [(record["lf_checkpoint"], record["lf_zone"], Decimal(record["lf_value"])) for record in hole] == [("2025-12-31", "before", Decimal("0")), ("2026-02-28", "gap", Decimal("1500.00"))]
+        filled = truths(run_of("hole_filled", tmp_path_factory).records, "truth_cash")
+        assert [record["lf_checkpoint"] for record in filled] == ["2025-12-31"]
+
+    def test_the_summary_is_json_and_states_the_balance_chain(self, tmp_path_factory):
+        summary = run_of("full", tmp_path_factory).table.summary
+        assert "balance_chain" in summary
+        assert isinstance(json.dumps(summary), str)
+
+    def test_combine_is_a_pure_function_of_the_members(self, tmp_path_factory):
+        run = run_of("full", tmp_path_factory)
+        again = ca_plugin().combine(run.members)
+        assert (again.headers, again.rows, again.summary) == (run.table.headers, run.table.rows, run.table.summary)
+
+    def test_the_combined_file_never_holds_a_dossier_a_support_account_or_an_owner(self, tmp_path_factory):
+        text = run_of("full", tmp_path_factory).path.read_text(encoding="utf-8-sig")
+        for secret in ("1234500001", "9876500002", "ROSSI MARIO"):  # the testata of the securities XLSX
+            assert secret not in text
+
+
+# =============================================================================
+# 3. THE CELLS ARE REWRITABLE (point e)
+# =============================================================================
+
+
+class TestRewritableCells:
+    """An XLSX with real number and date cells gives a combined file that reads back to the same figures."""
+
+    def test_the_cells_of_a_typed_xlsx_are_written_the_way_the_combined_file_reads_them(self, tmp_path_factory):
+        records = by_kind(run_of("typed", tmp_path_factory).records, *DATA_KINDS)
+        assert len(records) == 3  # the coupon pair, the fund pair and the salary
+        for record in records:
+            for column in ("securities:Data operazione", "securities:Data valuta", "account:Data Op.", "account:Data Val."):
+                assert record[column] == "" or ITALIAN_DATE_RE.match(record[column]), (column, record[column])
+            for column in ("securities:Controvalore", "account:Importo"):
+                assert record[column] == "" or ITALIAN_MONEY_RE.match(record[column]), (column, record[column])
+            assert record["securities:Quantità"] == "" or PLAIN_QUANTITY_RE.match(record["securities:Quantità"]), record["securities:Quantità"]
+
+    def test_the_figures_are_the_ones_of_the_cells(self, tmp_path_factory):
+        pairs = {record["securities:Nome"]: record for record in by_kind(run_of("typed", tmp_path_factory).records, "pair")}
+        coupon, fund = pairs[BOND_A], pairs[FUND_X]
+        assert (coupon["securities:Data operazione"], coupon["securities:Controvalore"], coupon["account:Importo"]) == ("05/02/2026", "1234,56", "1234,56")
+        assert (fund["securities:Data operazione"], fund["securities:Quantità"], fund["securities:Controvalore"], fund["account:Importo"]) == ("10/02/2026", "1867.178", "2500,75", "-2500,75")
+
+    def test_the_combined_file_of_a_typed_xlsx_is_parsed_to_the_same_transactions(self, tmp_path_factory):
+        output = run_of("typed", tmp_path_factory).output
+        assert tx_tuples(output) == expected(
+            ("DEPOSIT", "2026-02-01", "0", "4000.55", None),
+            ("INTEREST", "2026-02-05", "0", "1265.81", BOND_A),
+            ("TAX", "2026-02-05", "0", "-31.25", BOND_A),
+            ("BUY", "2026-02-10", "1867.178", "-2500.75", FUND_X),
+        )
+        assert cash_of(checkpoint_at(output, "2026-01-31").cash) == {"EUR": Decimal("0")}
+        assert [(item.as_of, cash_of(item.cash)) for item in output.verifications] == [(d("2026-02-28"), {"EUR": Decimal("2734.36")})]
+
+    def test_the_same_facts_in_csv_make_the_same_transactions(self, tmp_path_factory):
+        assert tx_tuples(run_of("typed_twin", tmp_path_factory).output) == tx_tuples(run_of("typed", tmp_path_factory).output)
+
+    def test_the_combined_file_reads_back_to_the_table_it_was_written_from(self, tmp_path_factory):
+        run = run_of("typed", tmp_path_factory)
+        with run.path.open(encoding="utf-8-sig", newline="") as handle:
+            rows = list(csv.reader(handle, delimiter=";"))
+        assert rows == [run.table.headers, *run.table.rows]
+
+
+# =============================================================================
+# 4. THE PARSE OF THE COMBINED FILE (``parse``)
+# =============================================================================
+
+
+class TestParseOfTheCombinedFile:
+    """What each row of the full set becomes."""
+
+    def test_the_transactions(self, tmp_path_factory):
+        assert tx_tuples(run_of("full", tmp_path_factory).output) == expected(
+            ("ADJUSTMENT", "2026-01-25", "40000", None, BOND_A),
+            ("DEPOSIT", "2026-02-01", "0", "5000.00", None),
+            ("INTEREST", "2026-02-05", "0", "125.00", BOND_A),
+            ("TAX", "2026-02-05", "0", "-31.25", BOND_A),
+            ("BUY", "2026-02-09", "5000", "-250.00", BOND_B),
+            ("BUY", "2026-02-10", "2000", "-2000.00", NEW_BOND),
+            ("BUY", "2026-02-12", "1867.178", "-400.00", FUND_X),
+            ("SELL", "2026-02-20", "-100", "150.00", FUND_R_SEC),
+            ("WITHDRAWAL", "2026-02-22", "0", "-25.50", None),
+            ("SELL", "2026-02-25", "-40000", "40000.00", BOND_A),
+            ("INTEREST", "2026-02-25", "0", "500.00", BOND_A),
+            ("INTEREST", "2026-02-27", "0", "62.50", BOND_A),
+            ("TAX", "2026-02-27", "0", "-15.62", BOND_A),
+        )
+
+    def test_a_coupon_pair_is_the_gross_interest_and_its_withholding(self, tmp_path_factory):
+        output = run_of("full", tmp_path_factory).output
+        interest = one_tx(output, type="INTEREST", date="2026-02-05")
+        tax = one_tx(output, type="TAX", date="2026-02-05")
+        assert (interest.tags, interest.description, interest.quantity) == (["import", "credit_agricole"], f"CEDOLA: {BOND_A}", 0)
+        assert "withholding_tax" in tax.tags
+        assert interest.cash.amount + tax.cash.amount == Decimal("93.75")  # what the bank credited
+
+    def test_a_purchase_has_no_deposit_before_it(self, tmp_path_factory):
+        output = run_of("full", tmp_path_factory).output
+        deposits = txs_of(output, type="DEPOSIT")
+        assert [(tx.date, tx.cash.amount) for tx in deposits] == [(d("2026-02-01"), Decimal("5000.00"))]  # the salary and nothing else
+
+    def test_a_maturity_with_a_premium_is_a_par_sale_and_the_premium(self, tmp_path_factory):
+        output = run_of("full", tmp_path_factory).output
+        assert "maturity_premium" in one_tx(output, type="INTEREST", date="2026-02-25").tags
+        assert "maturity_premium" not in one_tx(output, type="SELL", date="2026-02-25").tags
+
+    def test_a_maturity_with_no_position_derives_its_nominal_and_asks_to_verify(self, tmp_path_factory):
+        output = run_of("maturity_derived", tmp_path_factory).output
+        assert tx_tuples(output) == expected(("SELL", "2026-02-10", "-40000", "40000.00", BOND_A), ("INTEREST", "2026-02-10", "0", "160.00", BOND_A))
+        sale = one_tx(output, type="SELL")
+        todos = [todo for todo in output.field_todos if output.transactions[todo.tx_index] is sale]
+        assert [(todo.reason_code, todo.field, todo.severity) for todo in todos] == [("derived_quantity", "quantity", "warning")]
+
+    def test_a_transfer_from_another_dossier_is_an_adjustment_and_a_notice(self, tmp_path_factory):
+        output = run_of("full", tmp_path_factory).output
+        transfer = one_tx(output, type="ADJUSTMENT")
+        assert transfer.cash is None
+        assert transfer.description.startswith("[GIRO ALTRO DOSSIER — successione / transfer-in]")
+        notice = next(notice for notice in output.warnings if notice.code == "ca_succession_transfer_in")
+        assert notice.severity == "info"
+
+    def test_one_title_is_one_asset_and_the_isin_of_a_pair_links_the_coupon_of_the_account_alone(self, tmp_path_factory):
+        output = run_of("full", tmp_path_factory).output
+        names = names_of(output)
+        bond_a = {tx.asset_id for tx in output.transactions if names.get(tx.asset_id) == BOND_A}
+        assert len(bond_a) == 1 and None not in bond_a
+        assert one_tx(output, type="INTEREST", date="2026-02-27").asset_id in bond_a  # the account coupon, written with the short name
+        assert sorted(name for name in names.values() if name in (BOND_A, BOND_B, NEW_BOND, FUND_X, FUND_R_SEC)) == sorted([BOND_A, BOND_B, NEW_BOND, FUND_X, FUND_R_SEC])
+        assert all(asset_id is None or is_fake_asset_id(asset_id) for asset_id in (tx.asset_id for tx in output.transactions))
+
+    def test_nothing_is_invented_and_nothing_is_rejected(self, tmp_path_factory):
+        output = run_of("full", tmp_path_factory).output
+        assert output.validation_issues == []
+        assert all(tx.broker_id == BROKER_ID for tx in output.transactions)
+
+    def test_the_excluded_row_imports_nothing_and_has_a_notice(self, tmp_path_factory):
+        output = run_of("full", tmp_path_factory).output
+        assert not [tx for tx in output.transactions if tx.cash is not None and tx.cash.amount == Decimal("77.00")]
+        assert any("no_counterpart" in code for code in notice_codes(output))
+
+    def test_every_reason_a_row_is_left_out_has_a_notice_and_no_transaction(self, tmp_path_factory):
+        output = run_of("excluded", tmp_path_factory).output
+        assert tx_tuples(output) == expected(("WITHDRAWAL", "2026-02-10", "0", "-1.00", None), ("WITHDRAWAL", "2026-02-20", "0", "-2.00", None))
+        codes = " ".join(notice_codes(output))
+        # a notice per reason; its code is the plugin's choice (``excluded_<reason>``, or its own name for an unknown causale and an unreadable amount)
+        for reason in ("outside_cash_coverage", "not_yet_settled", "no_counterpart", "unknown", "invalid"):
+            assert reason in codes, reason
+
+    def test_the_opening_checkpoint_and_the_verifications(self, tmp_path_factory):
+        output = run_of("full", tmp_path_factory).output
+        opening = checkpoint_at(output, "2026-01-31")
+        assert [checkpoint.as_of for checkpoint in output.checkpoints] == [d("2026-01-31")]
+        assert (opening.kind, cash_of(opening.cash)) == ("opening", {"EUR": Decimal("0")})
+        names = names_of(output)
+        assert {names[position.asset_id]: (position.quantity, position.exactness) for position in opening.positions} == {BOND_A: (Decimal("40000"), "exact")}
+        assert opening.absorbed.count == 0  # with the policy import nothing is summarised
+        assert opening.absorbed.opening_cash == []
+        assert [(item.as_of, cash_of(item.cash)) for item in output.verifications] == [(d("2026-02-15"), {"EUR": Decimal("2443.75")}), (d("2026-02-28"), {"EUR": Decimal("43115.13")})]
+
+    def test_a_hole_is_a_gap_checkpoint_at_its_end(self, tmp_path_factory):
+        output = run_of("hole", tmp_path_factory).output
+        assert [(checkpoint.as_of, checkpoint.kind, cash_of(checkpoint.cash)) for checkpoint in output.checkpoints] == [
+            (d("2025-12-31"), "opening", {"EUR": Decimal("0")}),
+            (d("2026-02-28"), "gap", {"EUR": Decimal("1500.00")}),
+        ]
+        assert [(item.as_of, cash_of(item.cash)) for item in output.verifications] == [(d("2026-01-31"), {"EUR": Decimal("1093.75")}), (d("2026-03-31"), {"EUR": Decimal("1450.00")})]
+
+    def test_a_securities_row_inside_a_hole_brings_its_cash_and_no_counter_leg(self, tmp_path_factory):
+        output = run_of("hole_securities", tmp_path_factory).output
+        assert tx_tuples(output) == expected(
+            ("DEPOSIT", "2026-01-01", "0", "1000.00", None),
+            ("INTEREST", "2026-01-10", "0", "125.00", BOND_A),
+            ("TAX", "2026-01-10", "0", "-31.25", BOND_A),
+            ("INTEREST", "2026-02-10", "0", "62.50", BOND_A),
+            ("BUY", "2026-02-12", "5000", "-100.00", BOND_B),
+            ("WITHDRAWAL", "2026-03-05", "0", "-50.00", None),
+        )
+
+    def test_a_combined_file_keeps_its_parse_after_a_rewrite_of_its_cells(self, tmp_path_factory):
+        """The parse reads the file, not the table: the file written by the core and read back gives the same transactions."""
+        run = run_of("full", tmp_path_factory)
+        assert tx_tuples(ca_plugin().parse(run.path, broker_id=BROKER_ID)) == tx_tuples(run.output)
+
+
+class TestNoAutoCash:
+    """Point d: the cash of a fact is the account's, so the securities side never adds a counter leg."""
+
+    def test_a_coupon_is_one_interest_whatever_the_number_of_its_rows(self, tmp_path_factory):
+        output = run_of("coupons", tmp_path_factory).output
+        assert len(txs_of(output, type="INTEREST")) == 4  # three coupons in both exports and one in the account alone
+        assert len(txs_of(output, type="TAX")) == 4
+        assert len(output.transactions) == 8
+
+    def test_no_transaction_is_an_auto_cash_leg(self, tmp_path_factory):
+        for name in ("coupons", "full", "hole_securities"):
+            output = run_of(name, tmp_path_factory).output
+            assert not [tx for tx in output.transactions if "auto_cash" in (tx.tags or [])], name
+            assert not [tx for tx in output.transactions if (tx.description or "").startswith("Auto cash")], name
+
+    def test_the_coupons_cash_and_titles(self, tmp_path_factory):
+        output = run_of("coupons", tmp_path_factory).output
+        assert tx_tuples(output) == expected(
+            ("INTEREST", "2026-02-03", "0", "125.00", BOND_A),
+            ("TAX", "2026-02-03", "0", "-31.25", BOND_A),
+            ("INTEREST", "2026-02-10", "0", "66.67", BOND_A),
+            ("TAX", "2026-02-10", "0", "-16.67", BOND_A),
+            ("INTEREST", "2026-02-17", "0", "16.67", BOND_B),
+            ("TAX", "2026-02-17", "0", "-4.17", BOND_B),
+            ("INTEREST", "2026-02-24", "0", "26.67", BOND_A),
+            ("TAX", "2026-02-24", "0", "-6.67", BOND_A),
+        )
+
+    def test_the_two_titles_are_two_assets(self, tmp_path_factory):
+        output = run_of("coupons", tmp_path_factory).output
+        names = names_of(output)
+        ids = {title: {tx.asset_id for tx in output.transactions if names.get(tx.asset_id) == title} for title in (BOND_A, BOND_B)}
+        assert all(len(found) == 1 for found in ids.values())
+        assert ids[BOND_A] != ids[BOND_B]
+        assert one_tx(output, type="INTEREST", date="2026-02-24").asset_id in ids[BOND_A]  # the account-only coupon, by its ISIN
+
+
+class TestOperationDates:
+    """Point c: a transaction is recorded on the day it was made (the operation date), never on the value date."""
+
+    def test_the_collocamento_is_on_the_day_of_the_order_not_the_value_date(self, tmp_path_factory):
+        output = run_of("full", tmp_path_factory).output
+        order = one_tx(output, type="BUY", title=NEW_BOND)
+        assert order.date == d("2026-02-10")  # ordered eight days before the value date
+
+    def test_a_payment_is_on_its_operation_date_not_on_its_value_date(self, tmp_path_factory):
+        assert one_tx(run_of("full", tmp_path_factory).output, type="WITHDRAWAL").date == d("2026-02-22")  # the value date is 02-24
+
+    def test_no_transaction_of_the_set_is_dated_on_a_value_date_that_is_not_an_operation_date(self, tmp_path_factory):
+        run = run_of("full", tmp_path_factory)
+        securities = read_securities(run.members[ROLE_SECURITIES][0]).rows
+        account = read_account(run.members[ROLE_ACCOUNT][0]).rows
+        operation_days = {row.op for row in [*securities, *account]}
+        value_only = {row.value for row in [*securities, *account] if row.value is not None} - operation_days
+        assert value_only, "premise: the set has value dates that are nobody's operation date"
+        tx_days = {tx.date for tx in run.output.transactions}
+        assert not (tx_days & value_only)
+        assert tx_days <= operation_days
+
+    def test_a_table_row_is_placed_on_its_operation_date(self, tmp_path_factory):
+        """The table is ordered by operation date, a pair by the securities one: the collocamento is between 02-09 and 02-12."""
+        pairs = [record["securities:Data operazione"] for record in by_kind(run_of("full", tmp_path_factory).records, "pair")]
+        assert [day_text(day) for day in pairs] == sorted(day_text(day) for day in pairs)
+        assert pairs.index("10/02/2026") == pairs.index("09/02/2026") + 1
+
+
+# =============================================================================
+# 5. THE STANDALONE ACCOUNT ROWS ARE THE 1.5.0 ONES (proof 6)
+# =============================================================================
+
+#: ``(type, date, quantity, cash, title)`` of the standalone account rows of ``PARITY_ACCOUNT_ROWS``, as the 1.5.0 plugin made them.
+PARITY_TRANSACTIONS = [
+    ("DEPOSIT", "2026-03-02", "0", "1500.00", None),
+    ("WITHDRAWAL", "2026-03-03", "0", "-25.50", None),
+    ("FEE", "2026-03-04", "0", "-4.00", None),
+    ("INTEREST", "2026-03-05", "0", "0.35", None),
+    ("FEE", "2026-03-06", "0", "-2.00", None),
+    ("TAX", "2026-03-07", "0", "-34.20", None),
+    ("INTEREST", "2026-03-10", "0", "125.00", "BTP SAMPLE 1/12/2026"),
+    ("TAX", "2026-03-10", "0", "-31.25", "BTP SAMPLE 1/12/2026"),
+    ("DIVIDEND", "2026-03-11", "0", "12.00", "SAMPLE CORP"),
+    ("WITHDRAWAL", "2026-03-12", "0", "-250.00", None),
+    ("WITHDRAWAL", "2026-03-13", "0", "-9.00", None),
+    ("DEPOSIT", "2026-03-14", "0", "150.00", None),
+    ("FEE", "2026-03-16", "0", "-3.00", None),
+]
+PARITY_TAGS = {
+    ("2026-03-02", "DEPOSIT"): ["import", "credit_agricole", "accredito_emolumenti"],
+    ("2026-03-03", "WITHDRAWAL"): ["import", "credit_agricole", "pagamento_tramite_pos"],
+    ("2026-03-04", "FEE"): ["import", "credit_agricole", "interessi_competenze"],
+    ("2026-03-05", "INTEREST"): ["import", "credit_agricole", "interessi_competenze"],
+    ("2026-03-06", "FEE"): ["import", "credit_agricole", "commissioni_spese"],
+    ("2026-03-07", "TAX"): ["import", "credit_agricole", "commissioni_spese"],
+    ("2026-03-10", "INTEREST"): ["import", "credit_agricole", "cedole_dividendi_premi_estratti"],
+    ("2026-03-10", "TAX"): ["import", "credit_agricole", "cedole_dividendi_premi_estratti", "withholding_tax"],
+    ("2026-03-11", "DIVIDEND"): ["import", "credit_agricole", "cedole_dividendi_premi_estratti"],
+    ("2026-03-12", "WITHDRAWAL"): ["import", "credit_agricole", "compravendita_titoli_fondi_opzioni"],
+    ("2026-03-13", "WITHDRAWAL"): ["import", "credit_agricole", "causale_nuova_sample"],
+    ("2026-03-14", "DEPOSIT"): ["import", "credit_agricole", "giroconto_bonifico"],
+    ("2026-03-16", "FEE"): ["import", "credit_agricole", "commiss_spese_su_operaz_titoli"],
+}
+
+
+class TestStandaloneAccountRowsKeepTheirTransactions:
+    """Proof 6. The literals above are what the 1.5.0 plugin returned for the same rows (captured before the rewrite)."""
+
+    def test_types_dates_cash_and_titles(self, tmp_path_factory):
+        output = run_of("parity", tmp_path_factory).output
+        rest = [item for item in tx_tuples(output) if item[0] != "SELL"]
+        assert rest == expected(*PARITY_TRANSACTIONS)
+
+    def test_tags_and_the_description_of_the_account_row(self, tmp_path_factory):
+        output = run_of("parity", tmp_path_factory).output
+        rows = {acc.op: acc for acc in PARITY_ACCOUNT_ROWS}
+        for (day, kind), tags in PARITY_TAGS.items():
+            tx = one_tx(output, type=kind, date=day)
+            assert tx.tags == tags, (day, kind)
+            if (day, kind) != ("2026-03-10", "TAX"):  # the withholding leg of a coupon prefixes its label
+                assert tx.description == rows[day].desc, (day, kind)
+
+    def test_a_coupon_without_a_pair_is_gross_interest_plus_tax_like_before(self, tmp_path_factory):
+        output = run_of("parity", tmp_path_factory).output
+        interest, tax = one_tx(output, type="INTEREST", date="2026-03-10"), one_tx(output, type="TAX", date="2026-03-10")
+        assert interest.asset_id == tax.asset_id
+        assert interest.description.startswith("CEDOLA:BTP SAMPLE 1/12/2026 IT0000000001")
+        assert tax.description.startswith("[CEDOLE, DIVIDENDI, PREMI ESTRATTI — ritenuta]")
+
+    def test_a_standalone_maturity_sells_the_nominal_it_derives(self, tmp_path_factory):
+        output = run_of("parity", tmp_path_factory).output
+        assert [item for item in tx_tuples(output) if item[0] == "SELL"] == expected(("SELL", "2026-03-15", "-1000", "1000.00", "BTP ALTRO 1/3/2026"))
+        assert "account_maturity" in one_tx(output, type="SELL").tags
+
+    def test_the_unresolved_trades_are_blockers_and_the_unallocated_charge_a_todo(self, tmp_path_factory):
+        output = run_of("parity", tmp_path_factory).output
+        found = {}
+        for todo in output.field_todos:
+            tx = output.transactions[todo.tx_index]
+            found[(tx.date.isoformat(), tx.type.value)] = (todo.severity, todo.reason_code, todo.field, (todo.context or {}).get("reason"))
+        assert found == {
+            ("2026-03-12", "WITHDRAWAL"): ("blocker", "ca_account_trade_unresolved", "asset_id", "no_quantity"),
+            ("2026-03-14", "DEPOSIT"): ("blocker", "ca_account_trade_unresolved", "asset_id", "fund_redemption"),
+            ("2026-03-16", "FEE"): ("warning", "ca_account_charge_unallocated", "asset_id", None),
+        }
+
+    def test_an_unknown_causale_is_a_notice_that_names_it(self, tmp_path_factory):
+        output = run_of("parity", tmp_path_factory).output
+        notice = next(notice for notice in output.warnings if notice.code == "ca_unknown_causale")
+        assert notice.severity == "info"
+        assert notice.context["causali"] == ["CAUSALE NUOVA SAMPLE"]
+        assert notice.context["row_count"] == 1
+
+
+# =============================================================================
+# 6. END TO END: combine -> parse -> apply_history -> compute_gap_fix (proofs 1-4)
+# =============================================================================
+
+
+@dataclass
+class FirstImport:
+    """A first import of a parse, run as the wizard runs it: the history, then the gap-fix, on a private in-memory database."""
+
+    response: Any
+    history_start: date
+    kept: List[BRIMCheckpoint]
+    selection: List[TXCreateItem]
+    titles: Dict[str, int]
+
+
+async def first_import(output: BRIMParseOutput) -> FirstImport:
+    """``apply_history`` on an empty history, then ``compute_gap_fix`` with every transaction dated on or after H0.
+
+    The wizard hides what precedes H0 (the opening brings it) and resolves every fake asset to a real one: here the real ids
+    are ``REAL_ASSET_BASE`` + the rank of the fake one. The database is private to the call and closed before it returns.
+    """
+    plugin = ca_plugin()
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(SQLModel.metadata.create_all)
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            checkpoints, verifications, history_start = await brim_report_sets.apply_history(session, broker_id=BROKER_ID, plugin=plugin, output=output)
+            assert history_start is not None, "premise: a first import has an H0"
+            real = {fake: REAL_ASSET_BASE + index for index, fake in enumerate(sorted(output.extracted_assets))}
+            selection = [tx.model_copy(update={"asset_id": real.get(tx.asset_id, tx.asset_id)}) for tx in output.transactions if tx.date >= history_start]
+            resolved = [checkpoint.model_copy(update={"positions": [position.model_copy(update={"asset_id": real[position.asset_id]}) for position in checkpoint.positions]}) for checkpoint in checkpoints]
+            request = BRIMGapFixRequest(broker_id=BROKER_ID, plugin_code=PLUGIN_CODE, checkpoints=resolved, verifications=verifications, selection=selection)
+            response = await compute_gap_fix(session, request)
+    finally:
+        await engine.dispose()
+    names = names_of(output)
+    return FirstImport(response, history_start, list(checkpoints), selection, {names[fake]: real_id for fake, real_id in real.items()})
+
+
+def gf_checkpoint(response: Any, as_of: str) -> Any:
+    found = [result for result in response.checkpoints if result.as_of == d(as_of)]
+    assert len(found) == 1, f"one gap-fix result expected at {as_of}, got {[result.as_of.isoformat() for result in response.checkpoints]}"
+    return found[0]
+
+
+def gf_verification(response: Any, as_of: str) -> Any:
+    found = [result for result in response.verifications if result.as_of == d(as_of)]
+    assert len(found) == 1, f"one verification expected at {as_of}, got {[result.as_of.isoformat() for result in response.verifications]}"
+    return found[0]
+
+
+def gf_cash(result: Any) -> Dict[str, Tuple[Decimal, Decimal, Decimal]]:
+    """``{currency: (bank, librefolio, difference)}``."""
+    return {row.currency: (row.bank, row.librefolio, row.difference) for row in result.cash}
+
+
+def gf_positions(result: Any, titles: Dict[str, int]) -> Dict[str, Tuple[str, Decimal, Decimal, Decimal]]:
+    by_id = {real_id: title for title, real_id in titles.items()}
+    return {by_id[row.asset_id]: (row.exactness, row.bank, row.librefolio, row.difference) for row in result.positions}
+
+
+def gf_proposals(result: Any) -> List[Tuple[str, Optional[Decimal], date]]:
+    return sorted((item.type.value, None if item.cash is None else item.cash.amount, item.date) for item in result.proposals)
+
+
+def money(value: str) -> Tuple[Decimal, Decimal, Decimal]:
+    """A cash row that agrees: the bank's figure on both sides, no difference."""
+    return Decimal(value), Decimal(value), Decimal(0)
+
+
+class TestFirstImportEndToEnd:
+    """The truth points of the plugin, against the ledger a first import builds from its transactions."""
+
+    @pytest.mark.asyncio
+    async def test_the_full_set_agrees_with_the_bank_at_the_opening_and_at_both_verifications(self, tmp_path_factory):
+        """Proof 1, with the cash in flight of a collocamento between the opening and the end of the month.
+
+        The account opens at 0 and the opening position (the transfer) is held by the ledger from its own date: nothing to
+        correct. The securities export states 4.443,75 on 02-15, with 2000.00 ordered and not yet booked: the ledger, which
+        records the order on 02-10, holds 2443.75, and so does the truth. The last balance closes the month to the cent."""
+        flow = await first_import(run_of("full", tmp_path_factory).output)
+        assert flow.history_start == d("2026-01-25")
+        assert [checkpoint.as_of for checkpoint in flow.kept] == [d("2026-01-31")], "the opening is kept by apply_history"
+        opening = gf_checkpoint(flow.response, "2026-01-31")
+        assert (opening.kind, gf_cash(opening), gf_proposals(opening)) == ("opening", {"EUR": money("0")}, [])
+        assert gf_positions(opening, flow.titles) == {BOND_A: ("exact", Decimal("40000"), Decimal("40000"), Decimal(0))}
+        for day, value in (("2026-02-15", "2443.75"), ("2026-02-28", "43115.13")):
+            verified = gf_verification(flow.response, day)
+            assert (verified.ok, gf_cash(verified)) == (True, {"EUR": money(value)}), day
+
+    @pytest.mark.asyncio
+    async def test_the_opening_survives_apply_history_when_the_first_row_is_five_days_later(self, tmp_path_factory):
+        """Proof 2. The account opens on 01-31 and its first row is 02-05: with the policy ``import`` H0 is the first
+        transaction, and the opening must still be a checkpoint of the import (it compares the bank with the ledger on the eve
+        of the history, and the ledger is empty then, as the bank's balance is 0)."""
+        run = run_of("five_days", tmp_path_factory)
+        assert [checkpoint.as_of for checkpoint in run.output.checkpoints] == [d("2026-01-31")], "premise: the plugin states the opening"
+        assert min(tx.date for tx in run.output.transactions) == d("2026-02-05"), "premise: the first transaction is five days after it"
+        flow = await first_import(run.output)
+        assert [checkpoint.as_of for checkpoint in flow.kept] == [d("2026-01-31")], "CORE: apply_history dropped the opening that precedes H0 by more than a day; the plugin does state it"
+        opening = gf_checkpoint(flow.response, "2026-01-31")
+        assert (gf_cash(opening), gf_proposals(opening)) == ({"EUR": money("0")}, [])
+        verified = gf_verification(flow.response, "2026-02-28")
+        assert (verified.ok, gf_cash(verified)) == (True, {"EUR": money("1093.75")})
+
+    @pytest.mark.asyncio
+    async def test_a_pair_that_straddles_the_opening_leaves_no_difference(self, tmp_path_factory):
+        """Proof 3. Ordered on 01-29 (securities), booked on 02-02 (account): on 01-31 the ledger holds the purchase and the
+        bank does not, so the opening states the bank's balance plus the cash in flight, and the difference is 0."""
+        run = run_of("straddle", tmp_path_factory)
+        flow = await first_import(run.output)
+        assert one_tx(run.output, type="BUY").date == d("2026-01-29"), "premise: the purchase is recorded on the day of the order"
+        assert flow.history_start == d("2026-01-29")
+        opening = gf_checkpoint(flow.response, "2026-01-31")
+        assert (gf_cash(opening), gf_proposals(opening)) == ({"EUR": money("-250.00")}, [])
+        verified = gf_verification(flow.response, "2026-02-28")
+        assert (verified.ok, gf_cash(verified)) == (True, {"EUR": money("750.00")})
+
+    @pytest.mark.asyncio
+    async def test_a_month_without_rows_is_one_cash_correction(self, tmp_path_factory):
+        """Proof 4. January closes at 1093.75 and March opens at 1500.00, and no export covers February: 406.25 of cash the
+        files do not show, proposed once, at the end of the hole. Everything else agrees with the bank."""
+        flow = await first_import(run_of("hole", tmp_path_factory).output)
+        gaps = [result for result in flow.response.checkpoints if result.kind == "gap"]
+        assert [result.as_of for result in gaps] == [d("2026-02-28")]
+        assert gf_cash(gaps[0]) == {"EUR": (Decimal("1500.00"), Decimal("1093.75"), Decimal("406.25"))}
+        assert gf_proposals(gaps[0]) == [("DEPOSIT", Decimal("406.25"), d("2026-02-28"))]
+        assert gf_proposals(gf_checkpoint(flow.response, "2025-12-31")) == []
+        assert {verified.as_of: verified.ok for verified in flow.response.verifications} == {d("2026-01-31"): True, d("2026-03-31"): True}
+
+    @pytest.mark.asyncio
+    async def test_the_same_months_with_the_february_rows_need_no_correction(self, tmp_path_factory):
+        flow = await first_import(run_of("hole_filled", tmp_path_factory).output)
+        assert [result.as_of for result in flow.response.checkpoints if result.kind == "gap"] == []
+        assert all(not result.proposals for result in flow.response.checkpoints)
+        assert flow.response.verifications and all(verified.ok for verified in flow.response.verifications)
+        assert d("2026-03-31") in {verified.as_of for verified in flow.response.verifications}
+
+    @pytest.mark.asyncio
+    async def test_securities_rows_inside_the_hole_leave_only_what_is_left_of_it(self, tmp_path_factory):
+        """The coupon (+62.50) and the purchase (-100.00) of February are in the ledger, which holds 1093.75 + 62.50 - 100.00 =
+        1056.25 at the end of the hole while the bank states 1500.00: the correction is 443.75, not the 406.25 of the bare hole."""
+        flow = await first_import(run_of("hole_securities", tmp_path_factory).output)
+        (gap,) = [result for result in flow.response.checkpoints if result.kind == "gap"]
+        assert gf_cash(gap) == {"EUR": (Decimal("1500.00"), Decimal("1056.25"), Decimal("443.75"))}
+        assert gf_proposals(gap) == [("DEPOSIT", Decimal("443.75"), d("2026-02-28"))]
+        assert all(verified.ok for verified in flow.response.verifications)
+
+
+class TestApplyHistoryKeepsTheOpening:
+    """The core alone, with the policy ``import`` and no plugin of ours: does the opening survive a first row that is not the next day?
+
+    Proof 2 asks it of the plugin's own output; this isolates the core, so that a red there is read as the core's."""
+
+    @staticmethod
+    def _output(first_row: str) -> BRIMParseOutput:
+        return BRIMParseOutput(
+            transactions=[TXCreateItem(broker_id=BROKER_ID, type=TransactionType.DEPOSIT, date=d(first_row), cash=Currency(code="EUR", amount=Decimal("1000.00")), tags=["import", "credit_agricole"])],
+            checkpoints=[BRIMCheckpoint(as_of=d("2026-01-31"), kind="opening", cash=[BRIMTruthCash(currency="EUR", amount=Decimal("0"))])],
+        )
+
+    @staticmethod
+    async def _kept(first_row: str) -> List[date]:
+        plugin = SimpleNamespace(history_tag="credit_agricole", pre_checkpoint_policy="import")
+        engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        try:
+            async with engine.begin() as connection:
+                await connection.run_sync(SQLModel.metadata.create_all)
+            async with AsyncSession(engine, expire_on_commit=False) as session:
+                kept, _verifications, _start = await brim_report_sets.apply_history(session, broker_id=BROKER_ID, plugin=plugin, output=TestApplyHistoryKeepsTheOpening._output(first_row))
+        finally:
+            await engine.dispose()
+        return [checkpoint.as_of for checkpoint in kept]
+
+    @pytest.mark.asyncio
+    async def test_guard_an_opening_the_day_before_the_first_row_is_kept(self):
+        """Guard, green today: the premise of the next test (the stub plugin is read as a plugin with the policy import)."""
+        assert await self._kept("2026-02-01") == [d("2026-01-31")]
+
+    @pytest.mark.asyncio
+    async def test_an_opening_five_days_before_the_first_row_is_kept(self):
+        assert await self._kept("2026-02-05") == [d("2026-01-31")]
