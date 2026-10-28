@@ -138,6 +138,11 @@ The folded file must give the same schema as the chain it replaces: freeze that 
 the chain, and test the new file against it (`test_migration_005_release_1_3.py`). A database stamped with a
 retired id comes from an unreleased build only: it is brought forward by hand (the developer journal holds the
 procedure), never by code in the app, and a backup at such an id is refused as from a newer LibreFolio.
+When SQL lines by hand would be long or fragile (rebuilding a table to change a CHECK, say), the procedure may use a
+repair script — **ask the developer first** (his decision, 28/10/2026). The script lives in the developer journal next
+to its procedure (`repair_005_owner_columns.py`: standard library only, a copy of the file before it writes, one
+transaction, an integrity check, a no-op when run again), and is run by hand on a file the developer names: never
+imported by the app, never a `dev.py` command, never run at startup.
 
 ### One head, always — never `alembic merge`
 

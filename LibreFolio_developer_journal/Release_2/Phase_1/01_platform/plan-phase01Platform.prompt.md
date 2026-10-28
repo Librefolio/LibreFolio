@@ -8531,6 +8531,12 @@ di `account_tokens`. La migrazione `006_owner_email_change` è stata fusa nella 
 «ogni release una migrazione»), quindi Alembic vede il DB al head e non esegue niente. Sintomo: il server si avvia ma
 l'account del titolare dà errore (`no such column: users.is_instance_owner`) oppure parte con la 005 vecchia.
 
+> **Decisione del developer (28/10/2026)**: lo script resta qui. Testuale: «è fuori dall'app ed è la procedura
+> manuale». Devia dalla decisione del 19/10 (righe SQL esatte) e il coordinatore non l'aveva segnalato. Regola da qui
+> in avanti: uno script di riparazione a mano va bene se sta nel diario, ma **va chiesto prima**
+> (`backend-db.instructions.md`, «Alembic Migrations»). Usato il 28/10 sul server Linux del developer (Docker): DB
+> riparato.
+
 **Lo script**: [`repair_005_owner_columns.py`](repair_005_owner_columns.py), accanto a questo file. Solo libreria
 standard, **non** è codice dell'app, si lancia a mano contro il file del DB (percorso passato come argomento).
 
