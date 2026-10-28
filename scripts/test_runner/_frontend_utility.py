@@ -191,6 +191,8 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/brokers/lots/lotComparisonChartHelpers.test.ts",
             "src/lib/features/dashboard/positionsSeries.test.ts",
             "src/lib/features/dashboard/positionsSeriesController.test.ts",
+            "src/lib/features/dashboard/dateRangeController.test.ts",
+            "src/lib/features/dashboard/staleFxIssue.test.ts",
             "src/lib/features/brokers/lots/lotGanttChartHelpers.test.ts",
             "src/lib/features/brokers/lots/lotStateVisual.test.ts",
             "src/lib/features/brokers/lots/unifiedLotsTableHelpers.test.ts",

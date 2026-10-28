@@ -11,7 +11,7 @@
     import {defaultDisplayCurrency} from '$lib/stores/app/settings';
     import {currentLanguage} from '$lib/stores/app/language';
     import {formatPercent} from '$lib/utils/core/formatPercent';
-    import {getEnd, getStart, isMaxSentinel, resolveDateSentinel, setDateRange} from '$lib/stores/dateRangeStore.svelte';
+    import {getEnd, getStart, historyStart, isMaxSentinel, resolveDateSentinel, setDateRange} from '$lib/stores/dateRangeStore.svelte';
     import {todayIso} from '$lib/utils/dateOnly';
     import {ArrowLeft, ArrowRightLeft, Briefcase, Crown, ExternalLink, Eye, FileText, Info, Pencil, Plus, RefreshCw, Share2, Shield, TrendingUp, Upload, Users, Wallet} from 'lucide-svelte';
     import BrokerModal from '$lib/features/brokers/BrokerModal.svelte';
@@ -123,12 +123,12 @@
     // reactive statement or the template reads it.
     $: void pnlCandlesLoading;
     let positionsSeriesScope: PositionsSeriesScope;
-    $: positionsSeriesScope = {brokerIds: [data.brokerId], start: dateFrom || undefined, end: dateTo || undefined, currency: targetCurrency || baseCurrency, ready: broker !== null, version: refreshVersion};
+    $: positionsSeriesScope = {brokerIds: [data.brokerId], start: historyStart(isMaxPending, dateFrom), end: dateTo || undefined, currency: targetCurrency || baseCurrency, ready: broker !== null, version: refreshVersion};
     $: positionsSeriesCtl.sync(positionsSeriesScope);
 
     /** The scope of a lazy report section: this broker, the period and the currency. An answer of another scope is not applied, and a failure counts for its own scope only (Y-24). */
     function reportScope(): string {
-        return `${data.brokerId}|${dateFrom}|${dateTo}|${targetCurrency}`;
+        return `${data.brokerId}|${historyStart(isMaxPending, dateFrom)}|${dateTo}|${targetCurrency}`;
     }
 
     let editModalOpen = false;
@@ -340,7 +340,7 @@
      */
     async function loadOverview(force = false) {
         const options = {includeIncomeHistory: true, includeCostHistory: true, includeDepositHistory: true, includeAcquisitionFunding: true};
-        const cached = peekReport([data.brokerId], dateFrom || undefined, dateTo || undefined, targetCurrency, false, false, true, true, options);
+        const cached = peekReport([data.brokerId], historyStart(isMaxPending, dateFrom), dateTo || undefined, targetCurrency, false, false, true, true, options);
         if (cached) applyOverview(cached.report);
         if (cached && !cached.stale && !force) {
             reportLoading = false;
@@ -348,7 +348,7 @@
         }
         reportLoading = true;
         try {
-            const report = await fetchReport([data.brokerId], dateFrom || undefined, dateTo || undefined, targetCurrency, force, undefined, undefined, undefined, undefined, options);
+            const report = await fetchReport([data.brokerId], historyStart(isMaxPending, dateFrom), dateTo || undefined, targetCurrency, force, undefined, undefined, undefined, undefined, options);
             if (report || !cached) applyOverview(report);
             else toasts.error(`${$_('common.refresh')} — ${escapeHtml(portfolioError() ?? $_('common.error'))}`);
         } finally {
@@ -395,7 +395,7 @@
         pnlCandlesLoading = true;
         try {
             // Only pnl_candles is read, so every other section is switched off.
-            const report = await fetchReport([data.brokerId], dateFrom || undefined, dateTo || undefined, targetCurrency, false, false, false, false, false, {includePnlCandles: true});
+            const report = await fetchReport([data.brokerId], historyStart(isMaxPending, dateFrom), dateTo || undefined, targetCurrency, false, false, false, false, false, {includePnlCandles: true});
             // An answer of another scope is not this one's: the scope on screen asks for its own.
             if (reportScope() !== askedScope) return;
             if (report) candlesRetry.succeeded(askedScope);
@@ -413,7 +413,7 @@
         contributionLoading = true;
         try {
             // includeHistory/includeAllocationHistory=false: only positions_contribution is read below.
-            const report = await fetchReport([broker.id], dateFrom || undefined, dateTo || undefined, targetCurrency, false, true, false, false, false);
+            const report = await fetchReport([broker.id], historyStart(isMaxPending, dateFrom), dateTo || undefined, targetCurrency, false, true, false, false, false);
             if (reportScope() !== askedScope) return;
             // The outcome is recorded before `finally` lets the flag go: the effect it wakes reads it (Y-24).
             if (report) contributionRetry.succeeded(askedScope);
