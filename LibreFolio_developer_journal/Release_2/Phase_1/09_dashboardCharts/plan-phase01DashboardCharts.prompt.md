@@ -8683,3 +8683,30 @@ Fonte: i feedback del developer nella testlist del server (§1 e §2). Base `326
 > **Note implementazione**: `attachDaySnap` si può richiamare sulla stessa istanza (`AllocationHistoryChart` lo fa a ogni disegno): l'ascoltatore del mouse è uno solo, il gestore del puntatore viene sostituito, mai impilato (test dedicato). I tre test nuovi sono registrati in `scripts/test_runner/_frontend_utility.py` (`check-orphans` verde, 680 test).
 > **Note implementazione**: verificato a mano nel browser sul server di prova (porta 6225): col mouse a x=524 il tooltip dice «16 Sept 2026 (Wed)» e la linea del puntatore sta sul 16 settembre (x=527); la rotella zooma il grafico «Return of the positions». FB-5 verificato solo con Vitest (jsdom), non su un telefono.
 > **Da fare da altri**: `GrowthChart.svelte` (~riga 1124, file di Y) — dopo `zoomInstance.on('updateAxisPointer', onAxisPointer)` aggiungere `attachDaySnap(zoomInstance)` + l'import: oggi il grafico principale ha ancora il puntatore a metà fra due giorni.
+
+## 28/10 · Ondata 6 · Y2 — checkpoint 2: FB-10 (pannello di scelta dell'asset) e `ViewModeToggle`
+
+Base: `8537f3a99` (checkpoint 1 committato). Ordine deciso dal coordinatore: FB-6 aspetta Y6-4 di Y, FB-3 dopo; qui FB-10 e `ViewModeToggle`.
+
+| Lotto | Cosa | Stato |
+|---|---|---|
+| FB-10 a | i menu dei filtri (Tipo, Valuta) si aprono fuori dal pannello, in coordinate dello schermo (`CheckMenu` → `SelectPopover` con `placement`): una lista corta non li taglia, e `dropdownPlacement` li tiene dentro lo schermo | ✅ 28/10 |
+| FB-10 b | la valuta della riga con la bandiera (`currencyCell`, `getCurrencyInfo`) | ✅ 28/10 |
+| FB-10 c | il tipo con il badge colorato del design system (`typeBadge`: `assetTypeBadgeClass` + il puntino del sottotipo, come le schede) | ✅ 28/10 |
+| FB-10 d | un tipo lungo ha una larghezza massima (`max-w-[7rem]`) e scorre (`scrollOnOverflow`): non copre più il nome | ✅ 28/10 |
+| FB-10 e | dopo i benchmark, i gruppi «tuoi / di altri / osservati» come nella lista Assets (`assetScope`, stesse chiavi `assets.panels.*`) | ✅ 28/10 |
+| `ViewModeToggle` | tooltip del design system al posto di `title`, nome accessibile tradotto (`sharedResource.viewGrid/viewTable`), il clic non fissa il suggerimento | ✅ 28/10 |
+
+> **Note implementazione**: i gruppi si formano solo per gli asset di cui il chiamante dice chi li tiene (`held_by_me`/`held_by_others`); gli altri restano nel «resto». `assetStore` ora copia i due campi (`normalize`); `BenchmarkSelect` li riceve così, `ChartSignalsSection` li legge dallo store (`getAssetInfo`) perché le pagine passano elenchi senza quei campi. `assetScope` è una terza copia della regola della pagina Assets, con il suo copy guard in `AssetPickerPanel.rows.test.ts`.
+> **Note implementazione**: la prova «un solo marquee per riga» dei test del panel e di `ChartSignalsSection` ora esclude il marquee del badge del tipo (è un'altra cosa: il nome dell'asset ne ha ancora uno solo).
+> **⚠️ Fuori pista**: `ChartSignalsSection.svelte` è il file di FB-11 di X (treno 13): la modifica è piccola (import + `comparisonPickerAssets`), da fondere con la loro. `files/+page.svelte` ha lo stesso difetto di `title` sui suoi pulsanti griglia/lista: non toccato.
+> **Note implementazione**: i menu dei filtri escono dal pannello **solo in modalità singola** (`CheckMenu` `floating`): nel «+» del laboratorio il pannello non taglia e `risk-lab.spec.ts` misura proprio la pagina che cresce sotto il menu (il primo tentativo, per tutte e due le modalità, lo aveva rotto: 2 rossi veri, rientrati).
+> **Note implementazione**: sulle pagine di dettaglio lo store degli asset non è caricato: `ChartSignalsSection` lo chiede al montaggio (`ensureAssetsLoaded`); senza, nessun asset veniva raggruppato (visto nel browser, poi corretto e rivisto: «Benchmarks · Your assets · Other users' assets · Watched»).
+> **Prove**: Vitest `src/lib/{components,stores,features/risk,features/dashboard,utils}` 321 file / 10 419 test verdi; `npm run check` 0 errori; E2E su corsia 6225: asset-list 53, fx-list 38, asset-browse 8, asset-detail 56, fx-detail 33, risk-lab (i test del selettore e dei filtri) verdi, preview del confronto 1. Rossi sotto carico (macchina a 30–50): timeout di hook in 6 file non miei e un login lento in 4 test, tutti verdi rilanciati da soli.
+
+### 28/10 sera · Triage dei rossi di `fx-list` e `fx-detail` nella verifica del coordinatore (skill `test-triage`)
+
+Rossi visti dal coordinatore a 2 worker: `fx-list` 3/38 (`:67`, `:210`, `:1021`) e `fx-detail` 1/33 (`:1373`, `waitForResponse` del confronto scaduto). Ipotesi dichiarata: `ChartSignalsSection` ora carica lo store degli asset al montaggio (FB-10).
+- **Prova sul codice, non sulla fiducia**: `ChartSignalsSection` è montata al caricamento solo dalle pagine di dettaglio asset e FX; in `fx-list` entra solo con la finestra delle impostazioni aperta. I tre rossi di `fx-list` sono login fermo sulla splash («none of [app-shell, …] at /dashboard») in test che non la toccano.
+- **Riproduzione**: `--workers 2`, corsia 6225, codice identico: il test `:1373` da solo due volte verde (8,3 s); `fx-list` 38/38 e `fx-detail` 33/33, **due volte di fila ciascuno** (carico 1,9 e 4,1; 1,3–1,4 min e 1,2 min). Nella verifica del coordinatore gli stessi spec impiegavano 2,2 e 2,9 min: il doppio, cioè la macchina era lenta in un modo che il carico non mostrava.
+- **Verdetto**: ambiente / lentezza (stesso sintomo di H5-11), non difetto di FB-10; nessun file di prodotto o di test toccato per questo.

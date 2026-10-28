@@ -57,6 +57,9 @@ export interface AssetInfo {
     tx_count?: number;
     /** F15 — transactions in brokers the current user owns (share > 0). */
     tx_count_own?: number;
+    /** A positive quantity is held now in a broker the current user owns; and by other users. The asset list's usage panels, and the asset picker's groups, read them. */
+    held_by_me?: boolean;
+    held_by_others?: boolean;
     identifier_isin?: string | null;
     identifier_ticker?: string | null;
     identifier_cusip?: string | null;
@@ -99,6 +102,8 @@ function normalize(raw: Record<string, unknown>): AssetInfo {
     copyDirect('has_metadata');
     copyDirect('tx_count');
     copyDirect('tx_count_own');
+    copyDirect('held_by_me');
+    copyDirect('held_by_others');
     copyFlat('identifier_isin');
     copyFlat('identifier_ticker');
     copyFlat('identifier_cusip');
