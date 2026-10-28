@@ -68,3 +68,11 @@ all'utente sta in [`../Phase_1/PROSSIMI_LAVORI.md`](../Phase_1/PROSSIMI_LAVORI.m
   quindi la matematica va in `backend/app/services/financial_math/` (regola 10), con MF;
 - gli import: i plugin che già leggono la commissione accanto al trade (Fineco dal treno 7, W-B92) potrebbero
   collegarla allo stesso modo.
+
+## ⚖️ Il Rebalancer del PAC
+
+**Origine**: decisione del developer del 28/10/2026, nella revisione dell'ondata 6 della 1.3: il Rebalancer va nella
+1.4. Dettagli in [`TODO_FUTURI.md`](../../../TODO_FUTURI.md), «Rebalancer del PAC».
+
+**Cosa resta**: l'analisi del Rebalancer («riga 14»), gli E2E del PAC, il difetto 1 e l'opzione (e) del backlog di
+[`../Phase_0/13_pacAllocator/`](../Phase_0/13_pacAllocator/) (i difetti 2 e 5 e C-38 sono chiusi, `ca681b4f9`).
