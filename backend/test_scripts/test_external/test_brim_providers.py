@@ -57,7 +57,7 @@ from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.brim_providers._brim_io import MATURITY_NOTICE_KIND, model_bond_maturity, read_rows
 from backend.app.services.brim_providers.broker_coinbase.plugin import CoinbaseBrokerProvider, _parse_coinbase_amount, _parse_coinbase_datetime
-from backend.app.services.brim_providers.broker_credit_agricole import plugin as ca
+from backend.app.services.brim_providers.broker_credit_agricole import _classify as ca
 from backend.app.services.brim_providers.broker_credit_agricole.plugin import CreditAgricoleBrokerProvider
 from backend.app.services.brim_providers.broker_degiro.plugin import DegiroBrokerProvider, _extract_quantity_from_description, _parse_degiro_date
 from backend.app.services.brim_providers.broker_directa.plugin import DirectaBrokerProvider, _parse_directa_date, _parse_directa_number
@@ -1921,7 +1921,7 @@ class TestBrokerParserCoverageHelpers:
         make classification depend on dispatch order, which is exactly the kind of
         silent ambiguity the registry exists to remove.
         """
-        tiers = [ca._ACCT_INCOME_CAUSALI, ca._ACCT_MATURITY_CAUSALI, ca._ACCT_FEETAX_CAUSALI, ca._ACCT_CANONE_CAUSALI, ca._ACCT_UNRESOLVED_CAUSALI, ca._ACCT_DECLARED_CASH_CAUSALI]
+        tiers = [ca.ACCT_INCOME_CAUSALI, ca.ACCT_MATURITY_CAUSALI, ca.ACCT_FEETAX_CAUSALI, ca.ACCT_CANONE_CAUSALI, ca.ACCT_UNRESOLVED_CAUSALI, ca.ACCT_DECLARED_CASH_CAUSALI]
         seen: Set[str] = set()
         for tier in tiers:
             assert not (seen & tier), f"causale listed in more than one tier: {seen & tier}"
@@ -1936,7 +1936,7 @@ class TestBrokerParserCoverageHelpers:
         todo nor a notice.
         """
         out = CreditAgricoleBrokerProvider().parse(CA_CONTI_SAMPLE, broker_id=1)
-        declared_cash_slugs = {ca._slug_causale(c) for c in ca._ACCT_DECLARED_CASH_CAUSALI}
+        declared_cash_slugs = {ca.slug_causale(c) for c in ca.ACCT_DECLARED_CASH_CAUSALI}
         cash_rows = [tx for tx in out.transactions if declared_cash_slugs & set(tx.tags or [])]
         assert cash_rows, "fixture must exercise the declared-cash tier"
         assert all(tx.type in (TransactionType.DEPOSIT, TransactionType.WITHDRAWAL) for tx in cash_rows)
@@ -1998,13 +1998,13 @@ class TestBrokerParserCoverageHelpers:
         rule exists for.
         """
         wrapped = "ORD:SAMPLE FUND SICAV DT.ORD:000000 DESCR.OPERAZIONESCT::RIMBORSI: : : :SU SAMPLE FUND SIC AV CL B<*>"
-        assert ca._sct_fund_redemption_name(wrapped) == "SAMPLE FUND SICAV"
+        assert ca.sct_fund_redemption_name(wrapped) == "SAMPLE FUND SICAV"
         # No redemption wording at all.
-        assert ca._sct_fund_redemption_name("ORD:SAMPLE FUND SICAV DT.ORD:000000 DESCR.OPERAZIONE SCT:BONIFICO SU SAMPLE FUND SICAV") == ""
+        assert ca.sct_fund_redemption_name("ORD:SAMPLE FUND SICAV DT.ORD:000000 DESCR.OPERAZIONE SCT:BONIFICO SU SAMPLE FUND SICAV") == ""
         # Redemption wording, but the payer is not the subject of the payment.
-        assert ca._sct_fund_redemption_name("ORD:DIVISIONE SERVIZI DT.ORD:000000 DESCR.OPERAZIONE SCT:RIMBORSO IRPEF - 730 ANNO 2023") == ""
+        assert ca.sct_fund_redemption_name("ORD:DIVISIONE SERVIZI DT.ORD:000000 DESCR.OPERAZIONE SCT:RIMBORSO IRPEF - 730 ANNO 2023") == ""
         # No ordering party to identify anything with.
-        assert ca._sct_fund_redemption_name("BONIFICO SCT:RIMBORSI SU QUALCOSA") == ""
+        assert ca.sct_fund_redemption_name("BONIFICO SCT:RIMBORSI SU QUALCOSA") == ""
 
     def test_credit_agricole_account_trade_becomes_a_real_buy(self):
         """The 50k bug: a COMPRAVENDITA row used to become an anonymous withdrawal.
