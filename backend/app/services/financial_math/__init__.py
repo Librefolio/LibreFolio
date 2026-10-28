@@ -25,7 +25,10 @@ Modules:
   currencies, the pool after every movement, the unit cost each movement carried, and the
   conversions that could not be made.
 * ``native_cash`` — every broker's cash in the currencies it was recorded in: the balances,
-  their value in the report currency on any day, and the period flows by type and position.
+  their value in the report currency on any day, and the period flows by type and position; the first
+  day a broker's balance in a currency ends below zero.
+* ``change_days`` — the days something can change on: the days a reading of an FX pair can differ from
+  the day before, the days a reading really changes on a calendar, and days with the day after each.
 * ``ledger_totals`` — the control totals of the transaction ledger, with no price, rate or
   cost: cash per broker and currency and quantity per broker and asset, which a backup
   writes and a restore checks.
@@ -54,7 +57,7 @@ Modules:
 * ``splits`` — the ADJUSTMENT rows linked to a SPLIT asset event, loaded with one query, the ids
   an average-cost replay marks as a rescale, and the rule for a usable split ratio.
 * ``weights`` — a part's share of a total (none on a total at or below zero), the slices of an
-  allocation, gross weights, and concentration (largest weight, Herfindahl index).
+  allocation (none on a sum at or below zero), gross weights, and concentration (largest weight, Herfindahl index).
 * ``holding_window`` — how long a position has been held at its broker: the oldest lot still
   open and a closed position's flight time, from its quantity stream (a split rescales the lots).
 * ``fifo`` — FIFO lots: custody fragments, closures, transfers, and the allocation of

@@ -70,7 +70,8 @@ layer — its boundaries, imports and guards — are in `financial-math.instruct
 | Calculation | Where it lives |
 |---|---|
 | Average purchase cost (WAC), cost-basis steps and conversions | `services/financial_math/average_cost.py` |
-| Cash per broker and currency, its daily value, FX results on cash | `services/financial_math/native_cash.py` |
+| Cash per broker and currency, its daily value, FX results on cash, the first day a balance ends below zero | `services/financial_math/native_cash.py` |
+| The days something can change on: an FX reading's candidate days, the days a reading changes, the day after each | `services/financial_math/change_days.py` |
 | Control totals of the ledger (backup manifest, restore check) | `services/financial_math/ledger_totals.py` |
 | Daily portfolio state: NAV, capital baseline, P&L, per-broker contributions; the price of an asset on a day as the replay values it (`AssetMarks`, on the engine's result) | `services/financial_math/portfolio/` (`daily_state.py`, run by `engine.py`) |
 | A period's boundary states, P&L and identity; the day's change of the total P&L | `services/financial_math/portfolio/period.py` |

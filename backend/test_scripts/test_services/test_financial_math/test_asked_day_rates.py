@@ -79,7 +79,7 @@ Runs in ``./dev.py test services financial-math`` (the runner collects the whole
 alone: ``./dev.py test services financial-math test_asked_day_rates``.
 
 Reference: backend/app/services/fx/conversion.py (UnitRateSteps, unit_rate_steps), backend/app/services/financial_math/
-native_cash.py (_unit_requests, _rate_series, _rate_at, change_days), backend/app/services/financial_math/portfolio/
+native_cash.py (_unit_requests, _rate_series, _rate_at), financial_math/change_days.py (change_days), backend/app/services/financial_math/portfolio/
 engine.py (_preload_fx_rates), backend/test_scripts/test_services/test_fx_rate_steps.py (X's oracle),
 LibreFolio_developer_journal/Release_2/Phase_1/11_financialMath/plan-phase01FinancialMath.prompt.md («formule veloci», P3).
 """
