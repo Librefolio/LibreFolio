@@ -76,7 +76,7 @@ from backend.app.db.models import TransactionType
 from backend.app.services.financial_math.portfolio.classifier import ScopeAwareTransactionClassifier
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
 from backend.app.services.financial_math.portfolio.models import DailyPositionState, DailyStates, PortfolioCalculationResult, PositionFrame, ValuationSource
-from backend.app.services.financial_math.price_marks import build_asset_price_series
+from backend.app.services.financial_math.price_marks import AssetPriceSeries, build_asset_price_series
 from backend.test_scripts.test_services._engine_average_costs import engine_average_costs
 from backend.test_scripts.test_services._engine_native_cash import engine_native_cash
 
@@ -218,6 +218,10 @@ def _deep(value: Any) -> Any:
         return (type(value).__name__, tuple((f.name, _deep(getattr(value, f.name))) for f in dataclasses.fields(value)))
     if isinstance(value, DailyStates):
         return ("DailyStates", tuple((seg.start, seg.end, _deep(seg.state)) for seg in value.segments))
+    if isinstance(value, AssetPriceSeries):
+        # MF6-1: result.marks (AssetMarks) holds one price series per asset, a class with identity equality only:
+        # compared by what it answers — every observation day and the mark resolved on it
+        return ("AssetPriceSeries", tuple((day, _deep(value.resolve(day))) for day in value.observation_dates))
     if isinstance(value, dict):
         return ("dict", tuple((_deep(k), _deep(v)) for k, v in value.items()))
     if isinstance(value, (list, tuple)):
@@ -402,7 +406,8 @@ class TestOffByDefault:
     @pytest.mark.parametrize("name", BOOK_IDS)
     def test_the_flag_changes_nothing_else(self, name):
         """Every other field of the result — the daily states (segments, values, exponents), the snapshots, the sales,
-        the end state, the missing conversions — is identical with the flag on and off."""
+        the end state, the missing conversions, the engine's marks (MF6-1: their price series compared by what they
+        resolve, see ``_deep``) — is identical with the flag on and off."""
         book = BOOKS[name]
         off = _build(book.ledger(), date_from=book.date_from)
         on = _with_frames(name)

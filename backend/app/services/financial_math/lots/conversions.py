@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections import ChainMap, defaultdict
 from dataclasses import dataclass
 from datetime import date as date_type
-from datetime import timedelta
 from decimal import Decimal
 from typing import Sequence
 
@@ -17,6 +16,7 @@ from backend.app.schemas.portfolio import (
     LotAnalysisType,
 )
 from backend.app.schemas.wac import WACMissingPairInfo
+from backend.app.services.financial_math.change_days import reading_change_days
 from backend.app.services.financial_math.fifo.models import FifoEvent, FifoInputTransaction, FifoLot, FragmentInterval, LotClosure
 from backend.app.services.financial_math.fx_rates import AskedDayRates
 from backend.app.services.financial_math.lots.prices import opening_reference_price
@@ -151,12 +151,7 @@ class FxRateResolver:
         days: set[date_type] = set()
         for currency in self._windows:
             for rates in self._rates.maps:
-                if isinstance(rates, AskedDayRates):
-                    days.update(rates.reading_change_days(currency, self.target_currency))
-                else:
-                    for rate_key in rates:
-                        if rate_key[0] == currency:
-                            days.update((rate_key[1], rate_key[1] + timedelta(days=1)))
+                days.update(reading_change_days(rates, currency, self.target_currency))
         return tuple(sorted(days))
 
     def missing_pairs(self) -> list[WACMissingPairInfo]:

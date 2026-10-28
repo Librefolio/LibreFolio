@@ -13,7 +13,6 @@ from collections.abc import Iterable, Mapping
 from decimal import Decimal
 
 _ZERO = Decimal("0")
-_ONE = Decimal("1")
 _HUNDRED = Decimal("100")
 
 
@@ -30,15 +29,17 @@ def percent_of(part: Decimal, total: Decimal) -> Decimal | None:
     return share * _HUNDRED if share is not None else None
 
 
-def slice_percents(amounts: Mapping[str, Decimal]) -> dict[str, Decimal]:
+def slice_percents[K](amounts: Mapping[K, Decimal]) -> dict[K, Decimal | None]:
     """The slices of an allocation as percentages of their sum, unrounded, in the mapping's order.
 
     An allocation keeps signed slices — cash below zero is a slice below zero, and the others then add up to more than
-    100 (see ``AllocationItem.value``) — so this divides by the signed sum, and an empty or all-zero allocation is all
-    zeros rather than unavailable. A sum that cancels out still divides by one and a negative sum flips every sign:
-    the allocation charts' rule as it was, kept on purpose (MF-C2 is the follow-up decision).
+    100 (see ``AllocationItem.value``) — so this divides by the signed sum. A sum at or below zero gives no share
+    (MF-C2): every slice is None, its amount stays the caller's — never a percentage of an arbitrary divisor, as
+    :func:`share_of`. An empty allocation has no slices.
     """
-    total = sum(amounts.values(), _ZERO) or _ONE
+    total = sum(amounts.values(), _ZERO)
+    if total <= 0:
+        return dict.fromkeys(amounts)
     return {name: amount / total * _HUNDRED for name, amount in amounts.items()}
 
 

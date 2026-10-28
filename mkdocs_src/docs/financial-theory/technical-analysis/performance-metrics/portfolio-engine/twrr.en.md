@@ -105,6 +105,16 @@ $$
 
 ---
 
+## 🚫 When No TWRR Is Shown {: #when-no-twrr }
+
+The KPI card and the TWRR line of the Dashboard chart follow the same rule on every day of the period: a day has a TWRR only when the portfolio's value on that day is above zero. A portfolio you emptied — everything sold and the cash withdrawn — or one whose debts exceed what it holds has no time-weighted return to show.
+
+On such a day the card shows `—` and the line has a gap. The card always shows the line's last point, so a card without TWRR goes with a line that ends in a gap, and the [Timing Effect](timing-effect.md), which needs the TWRR, shows `—` too. When new deposits bring the value back above zero, the line resumes from the return it had reached before the gap: the days at zero add no gain and no loss, and the chain of sub-periods keeps compounding from there.
+
+The first point of the line is the exception: it is always 0, the point every return of the period starts from.
+
+---
+
 !!! tip "Analyzing the Performance Difference"
 
     To understand how your personal cash flows caused your actual returns to deviate from the pure strategy return (TWRR), refer to the [Timing Effect](timing-effect.md) page.

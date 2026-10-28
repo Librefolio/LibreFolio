@@ -22,7 +22,7 @@ from backend.app.services.financial_math.average_cost import (
 )
 from backend.app.services.financial_math.portfolio.data_quality import build_data_quality_report
 from backend.app.services.financial_math.portfolio.models import ClassifiedTransaction, DailyPortfolioState, DailyStates
-from backend.app.services.financial_math.returns import CashFlowInput, NAVSnapshot
+from backend.app.services.financial_math.returns import CashFlowInput, NAVSnapshot, period_roi_cash_flows
 from backend.app.services.financial_math.series_steps import steps_from_rows
 from backend.app.services.financial_math.weights import slice_percents
 from backend.app.utils.asset.sector import sector_emoji
@@ -97,6 +97,11 @@ def mwrr_line_days(steps: Iterable[Any]) -> list[date_type]:
 def _amount_or_none(amount: Decimal) -> Decimal | None:
     """The history's optional amounts: None when zero, as the point has always given them."""
     return amount if amount else None
+
+
+def _cents(percent: Decimal | None) -> Decimal | None:
+    """An allocation slice's share rounded to 0.01; None stays None (a sum at or below zero, MF-C2)."""
+    return percent.quantize(Decimal("0.01")) if percent is not None else None
 
 
 #: The history point's money fields, each with the state's amount it shows (an optional one is None when zero)
@@ -385,6 +390,22 @@ class DerivedViewsBuilder:
                 cash_flows.append(CashFlowInput(date=s.date, amount=-delta))
         return nav_snapshots, cash_flows
 
+    def build_roi_cash_flows(
+        self,
+        date_from: date_type | None,
+        nav_snapshots: Sequence[NAVSnapshot],
+        cash_flows: Sequence[CashFlowInput],
+        days: Iterable[date_type] | None = None,
+    ) -> tuple[CashFlowInput, ...]:
+        """The flows the period's simple ROI counts its capital from, card and line alike (MF-K3,
+        :func:`returns.period_roi_cash_flows`), given the period's inputs (:meth:`build_performance_inputs` of
+        ``date_from`` and ``days``). Those start from the opening state's capital, so a ``date_from`` before the first
+        state reads the whole history's instead: its first day's deposit is then a flow, not the opening value."""
+        window = self.window_range(None, None)
+        if date_from is not None and window is not None and date_from < window[0]:
+            nav_snapshots, cash_flows = self.build_performance_inputs(None, days=days)
+        return period_roi_cash_flows(nav_snapshots, cash_flows, date_from)
+
     def _sparse_performance_inputs(self, date_from: date_type | None, days: Iterable[date_type] | None) -> tuple[list, list]:
         """:meth:`build_performance_inputs` on the engine's DailyStates: the snapshots of the opening day and of ``days``
         after it (default: every segment start and the last day), the flows of the segment starts (D-P4)."""
@@ -436,7 +457,7 @@ class DerivedViewsBuilder:
             return [
                 {
                     "name": name,
-                    "value": percents[name].quantize(Decimal("0.01")),
+                    "value": _cents(percents[name]),
                     "amount": amt,
                     "emoji": sector_emoji(name) if use_sector_emoji else None,
                 }
@@ -456,7 +477,7 @@ class DerivedViewsBuilder:
         def components(state: DailyPortfolioState) -> list[dict]:
             d = getattr(state, attr, {})
             percents = slice_percents(d)
-            return [{"name": name, "value": percents[name].quantize(Decimal("0.01")), "amount": amt} for name, amt in sorted(d.items(), key=lambda x: -x[1])]
+            return [{"name": name, "value": _cents(percents[name]), "amount": amt} for name, amt in sorted(d.items(), key=lambda x: -x[1])]
 
         return self._component_steps(components, date_from)
 
@@ -482,7 +503,7 @@ class DerivedViewsBuilder:
             component = {
                 "name": "Liquidity" if asset_id is None else names.get(asset_id, f"Asset {asset_id}"),
                 "id": asset_id,
-                "value": percents[asset_id].quantize(Decimal("0.01")),
+                "value": _cents(percents[asset_id]),
                 "amount": amount,
             }
             if with_emoji:
