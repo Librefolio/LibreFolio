@@ -834,6 +834,19 @@ function dayIn(iso: string, localeTag: string): string {
 const uiDay = (iso: string) => dayIn(iso, uiLocale());
 
 /**
+ * The header of ONE calendar day: `dayIn` plus the weekday of that day in brackets (Y2 FB-1) — `Jun 30, 2025 (Mon)`, `30 giu 2025 (lun)`.
+ * WHY test-side: the weekday is read by Intl on the UTC calendar of the same y-m-d, never by the formatter under test.
+ */
+function dayWithWeekdayIn(iso: string, localeTag: string): string {
+    const [year, month, date] = iso.split('-').map(Number);
+    const weekday = new Intl.DateTimeFormat(localeTag, {weekday: 'short', timeZone: 'UTC'}).format(new Date(Date.UTC(year, month - 1, date)));
+    return `${dayIn(iso, localeTag)} (${weekday})`;
+}
+
+/** A one-day header in the interface locale the chart is drawn in. */
+const uiDayWithWeekday = (iso: string) => dayWithWeekdayIn(iso, uiLocale());
+
+/**
  * The label/value rows of a tooltip, as elements.
  *
  * Every amount row GrowthChart emits has the shape `<div><span>label</span><b>value</b></div>`,
@@ -2422,7 +2435,7 @@ describe('GrowthChart ladder x axis (S7)', {timeout: 30_000}, () => {
         // WHY: decision (d), a day has no span to print; the period form is for wider rungs. Plan 52, C2: the day is
         // written in the interface language.
         await openRung(FIXTURE_40, 'candles', '1d', DAY_COUNT);
-        expect([0, DAY_COUNT - 1].map((index) => tooltipHeaderText(ladderTooltip(index)))).toEqual([uiDay('2026-01-01'), uiDay('2026-02-09')]);
+        expect([0, DAY_COUNT - 1].map((index) => tooltipHeaderText(ladderTooltip(index)))).toEqual([uiDayWithWeekday('2026-01-01'), uiDayWithWeekday('2026-02-09')]);
     });
 
     // --- B4-B5: a partial period is marked and explained; the period in progress is not marked ---
@@ -4329,7 +4342,7 @@ describe('GrowthChart — the tooltip header writes its dates in the interface l
         const index = await bucketIndex(DAILY_DAY, 'daily');
         const lines = headerLines(tooltipAt(index), 1);
 
-        expect(lines).toEqual([uiDay(DAILY_DAY.start)]);
+        expect(lines).toEqual([uiDayWithWeekday(DAILY_DAY.start)]);
         expect(lines.join('\n')).not.toMatch(ISO_DAY);
     });
 

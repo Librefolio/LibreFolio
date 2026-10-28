@@ -192,6 +192,23 @@ export function dayOfAxisValue(axisValue: number): string {
 }
 
 /**
+ * Where the pointer of a step chart sits: the calendar day NEAREST to a time-axis millisecond (noon is the turning point), with the
+ * millisecond of that day's local midnight, where the pointer line is drawn. The pointer never rests between two days (Y2 FB-2).
+ */
+export function snapToDay(axisValue: number): {day: string; ms: number} {
+    const floor = dayOfAxisValue(axisValue);
+    const floorMs = localMidnightMs(floor);
+    const nextDay = addDays(floor, 1);
+    const nextMs = localMidnightMs(nextDay);
+    return axisValue - floorMs < nextMs - axisValue ? {day: floor, ms: floorMs} : {day: nextDay, ms: nextMs};
+}
+
+function localMidnightMs(day: string): number {
+    const [year, month, date] = day.split('-').map(Number);
+    return new Date(year, month - 1, date).getTime();
+}
+
+/**
  * The days of the window `from`..`to` that the series covers, each with its point: the only function that makes days. It
  * makes them only for a window that stays within `maxDays` once cut to what the series covers, and gives null above that,
  * so the caller draws the steps (or a bucket) instead. The days are counted before any is made.
