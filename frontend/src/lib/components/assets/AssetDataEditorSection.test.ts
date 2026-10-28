@@ -31,6 +31,10 @@
  */
 import {beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
+import {toasts} from '$lib/stores/app/toastStore.svelte';
+import {_ as t} from '$lib/i18n';
+import {get} from 'svelte/store';
+import {formatDay} from '$lib/utils/core/formatAxisDate';
 
 const api = vi.hoisted(() => ({
     upsertPrices: vi.fn(),
@@ -197,5 +201,91 @@ describe('AssetDataEditorSection — a row with a negative open, high, low or vo
         expect(sent.map((point) => point.date)).toEqual(['2024-06-15']);
         expect(sent[0]).toMatchObject({date: '2024-06-15', close: 12, open: 0, high: 13, low: 11, volume: 0});
         expect(savedSince(since)?.detail).toMatchObject({pricesSkipped: 1, pricesSaved: 1});
+    });
+});
+
+describe('AssetDataEditorSection — the events import reads the source column (W-B16, lot X6-3)', () => {
+    const FILE = ['date;currency;type;amount;notes;source', '2024-06-20;USD;DIVIDEND;1.25;;PROVIDER', '2024-06-21;USD;DIVIDEND;2.5;;MANUAL', '2024-06-22;USD;INTEREST;0.4;;PROVIDER'].join('\n');
+
+    /** The section on its Events tab, the events import opened and the file imported (all three lines valid). */
+    async function importEvents(props: {hasProvider?: boolean}) {
+        const {container} = render(AssetDataEditorSection, {props: {assetId: ASSET_ID, chartData: [], events: [], onsave: vi.fn(), ...props}});
+        await fireEvent.click(await screen.findByTestId('asset-editor-events-tab'));
+        await importCsv(FILE, 3);
+        return container;
+    }
+
+    it('an asset with a provider: the PROVIDER lines are left out and counted in one warning, the MANUAL line is added', async () => {
+        const warning = vi.spyOn(toasts, 'warning');
+        const container = await importEvents({hasProvider: true});
+
+        await waitFor(() => expect(rowOf(container, '2024-06-21'), 'the MANUAL line is added').not.toBeNull());
+        expect(rowOf(container, '2024-06-20'), 'a PROVIDER line is not added: the provider writes it').toBeNull();
+        expect(rowOf(container, '2024-06-22')).toBeNull();
+        expect(warning, 'the two left out are told once').toHaveBeenCalledTimes(1);
+        expect(String(warning.mock.calls[0][0]), 'the warning counts them').toContain('2');
+        warning.mockRestore();
+    });
+
+    it('an asset without a provider: every line is added, the PROVIDER ones as manual events, with no warning', async () => {
+        const warning = vi.spyOn(toasts, 'warning');
+        const container = await importEvents({hasProvider: false});
+
+        await waitFor(() => expect(rowOf(container, '2024-06-21')).not.toBeNull());
+        expect(rowOf(container, '2024-06-20'), 'nothing else will write it: it is added').not.toBeNull();
+        expect(rowOf(container, '2024-06-22')).not.toBeNull();
+        expect(warning).not.toHaveBeenCalled();
+        warning.mockRestore();
+    });
+});
+
+describe('AssetDataEditorSection — a save that stops after a write says so, and names a date as the interface writes it (X-R39, W-B27; lot X6-5)', () => {
+    /** A refused events save, as the API client throws it: a 400 with the coded detail. */
+    function keyConflict(date: string) {
+        return {response: {status: 400, data: {detail: {error_code: 'EVENT_KEY_CONFLICT', message: 'two manual events', params: {date, type: 'DIVIDEND'}}}}};
+    }
+
+    /** The section with a price line (Prices tab) and an event line (Events tab) imported, ready to save. */
+    async function dirtyPriceAndEvent() {
+        const onsave = vi.fn();
+        render(AssetDataEditorSection, {props: {assetId: ASSET_ID, chartData: [], events: [], onsave}});
+        await importCsv(['date;currency;close', '2024-06-12;USD;10'].join('\n'), 1);
+        await fireEvent.click(await screen.findByTestId('asset-editor-events-tab'));
+        await importCsv(['date;currency;type;amount', '2024-06-21;USD;DIVIDEND;2.5'].join('\n'), 1);
+        return onsave;
+    }
+
+    it('the prices were written and the events refused: the error says the prices are already saved', async () => {
+        api.upsertEvents.mockRejectedValue(keyConflict('2024-06-21'));
+        await dirtyPriceAndEvent();
+        const since = appEvents().seq();
+
+        await fireEvent.click(screen.getByTestId('asset-editor-save-btn'));
+
+        const error = await screen.findByTestId('asset-editor-error');
+        expect(error.textContent, 'X-R39: the prices already written are named').toContain(get(t)('dataEditor.savePartial', {values: {saved: 1, deleted: 0}}));
+        const failed = appEvents().events.find((event) => event.seq > since && event.name === 'assets.data.saveFailed');
+        expect(failed?.detail, 'the event carries what was written').toMatchObject({pricesSaved: 1, pricesDeleted: 0});
+    });
+
+    it('GUARD: the first request refused, nothing written: no partial sentence', async () => {
+        api.upsertPrices.mockRejectedValue({response: {status: 500, data: {detail: 'boom'}}});
+        await dirtyPriceAndEvent();
+
+        await fireEvent.click(screen.getByTestId('asset-editor-save-btn'));
+
+        const error = await screen.findByTestId('asset-editor-error');
+        expect(error.textContent).not.toContain(get(t)('dataEditor.savePartial', {values: {saved: 1, deleted: 0}}));
+    });
+
+    it('a refused event names its date as the interface writes a date (W-B27), not as ISO', async () => {
+        api.upsertEvents.mockRejectedValue(keyConflict('2024-06-21'));
+        await dirtyPriceAndEvent();
+
+        await fireEvent.click(screen.getByTestId('asset-editor-save-btn'));
+
+        const error = await screen.findByTestId('asset-editor-error');
+        expect(error.textContent).toContain(formatDay('2024-06-21'));
+        expect(error.textContent).not.toContain('2024-06-21');
     });
 });

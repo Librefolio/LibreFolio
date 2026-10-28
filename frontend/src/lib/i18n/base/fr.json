@@ -220,7 +220,9 @@
       "appended": "{n, plural, one {# nouveau} other {# nouveaux}}"
     },
     "staleShow": "{n, plural, one {Afficher # ligne obsolète} other {Afficher # lignes obsolètes}}",
-    "staleHide": "{n, plural, one {Masquer # ligne obsolète} other {Masquer # lignes obsolètes}}"
+    "staleHide": "{n, plural, one {Masquer # ligne obsolète} other {Masquer # lignes obsolètes}}",
+    "importProviderEventsLeftOut": "{n, plural, one {# événement marqué PROVIDER a été écarté} many {# événements marqués PROVIDER ont été écartés} other {# événements marqués PROVIDER ont été écartés}} : synchronisez l'actif pour {n, plural, one {le charger} many {les charger} other {les charger}}.",
+    "savePartial": "Déjà enregistré : {saved, plural, one {# prix écrit} many {# prix écrits} other {# prix écrits}}, {deleted, plural, one {# prix supprimé} many {# prix supprimés} other {# prix supprimés}}. Corrigez la cause et enregistrez à nouveau pour le reste."
   },
   "datePicker": {
     "presets": {
