@@ -10,6 +10,7 @@
   Uses Svelte 5 runes.
 -->
 <script lang="ts">
+    import {onMount} from 'svelte';
     import {ArrowLeftRight, Coins, ExternalLink, Info, Loader2, RotateCw, Trash2, AlertTriangle} from 'lucide-svelte';
     import {_ as t} from '$lib/i18n';
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
@@ -18,6 +19,7 @@
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
     import SearchSelect from '$lib/components/ui/select/SearchSelect.svelte';
     import AssetPickerPanel from '$lib/components/ui/select/AssetPickerPanel.svelte';
+    import {assetStoreVersion, ensureAssetsLoaded, getAssetInfo} from '$lib/stores/reference/assetStore';
     import type {PickerAsset, PickerVerdict} from '$lib/components/ui/select/assetPicker';
     import SignalStyleEditor from './SignalStyleEditor.svelte';
     import SignalParamControl from './SignalParamControl.svelte';
@@ -425,8 +427,20 @@
     /** Main asset ID parsed from mainPairSlug (format: "asset-123") */
     let mainAssetId = $derived(mainPairSlug.startsWith('asset-') ? Number(mainPairSlug.slice(6)) : 0);
 
+    // The panel groups the comparison assets by who holds them now, which only the asset store knows; a detail page does not load it itself.
+    onMount(() => {
+        void ensureAssetsLoaded().catch(() => undefined);
+    });
+
     /** The comparison assets as the shared asset panel describes them (Y5-F4). */
-    let comparisonPickerAssets = $derived<PickerAsset[]>((availableAssets ?? []).map((asset) => ({id: asset.id, display_name: asset.display_name, currency: asset.currency ?? '', icon_url: asset.icon_url ?? null, asset_type: asset.asset_type ?? null, is_benchmark: asset.is_benchmark === true})));
+    let comparisonPickerAssets = $derived.by<PickerAsset[]>(() => {
+        void $assetStoreVersion;
+        return (availableAssets ?? []).map((asset) => {
+            // Who holds the asset now comes from the asset store (the pages' lists do not carry it): the panel groups by it, after the benchmarks (Y2 FB-10).
+            const held = getAssetInfo(asset.id);
+            return {id: asset.id, display_name: asset.display_name, currency: asset.currency ?? '', icon_url: asset.icon_url ?? null, asset_type: asset.asset_type ?? null, is_benchmark: asset.is_benchmark === true, held_by_me: held?.held_by_me, held_by_others: held?.held_by_others};
+        });
+    });
 
     /** The panel's verdicts for one comparison row: the chart's own asset cannot be chosen, one compared by another row can (with a warning). */
     function comparisonVerdicts(currentAssetId: string): Map<number, PickerVerdict> {

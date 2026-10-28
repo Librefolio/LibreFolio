@@ -344,7 +344,9 @@
     "syncSelection": "Sync selection",
     "settingsHint": "Change how the charts look and which indicators and comparisons they draw. It applies to every chart in the list.",
     "syncAllHint": "Ask the data providers for new data and save it in LibreFolio.",
-    "refreshAllHint": "Reload what you see from LibreFolio, without asking the data providers."
+    "refreshAllHint": "Reload what you see from LibreFolio, without asking the data providers.",
+    "viewGrid": "Show as cards",
+    "viewTable": "Show as table"
   },
   "table": {
     "columns": "Columns",

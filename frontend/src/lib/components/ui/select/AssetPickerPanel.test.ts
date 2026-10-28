@@ -1481,9 +1481,9 @@ describe('AssetPickerPanel, mode="single": SearchSelect’s drop-in', () => {
     });
 
     describe('AssetPickerPanel, mode="single": long names scroll and say their whole label (Y-38)', () => {
-        /** The row's one marquee span: a row that held two (or none) would scroll the wrong thing. */
+        /** The row's one marquee span of the name: a row that held two (or none) would scroll the wrong thing. The type badge's own marquee (Y2 FB-10) is another thing. */
         function rowMarquee(row: HTMLElement): HTMLElement {
-            const marquees = row.querySelectorAll<HTMLElement>(OVERFLOW_MARQUEE_SELECTOR);
+            const marquees = [...row.querySelectorAll<HTMLElement>(OVERFLOW_MARQUEE_SELECTOR)].filter((marquee) => !marquee.closest('[data-testid*="-type-"]'));
             expect(marquees, `row ${idOf(row)}: exactly one marquee`).toHaveLength(1);
             return marquees[0];
         }
@@ -1634,8 +1634,8 @@ describe('AssetPickerPanel: an asset whose currency is empty or blank', () => {
         // The row says what the currency-less asset is, and no currency: it reads as its sibling's row minus «EUR».
         const expectedText = textOf(multiRow(panel, 61))
             .replace(WITH_CURRENCY_NAME, NO_CURRENCY_NAME)
-            .replace(/\s*EUR$/, '');
-        expect(textOf(multiRow(panel, 61)), 'control: the sibling row ends on its currency').toMatch(/EUR$/);
+            .replace(/\s*\S*\s*EUR$/, '');
+        expect(textOf(multiRow(panel, 61)), 'control: the sibling row ends on its currency (a flag before it)').toMatch(/EUR$/);
         expect(textOf(multiRow(panel, 63))).toBe(expectedText);
 
         await toggleFilter(panel, MULTI, 'currency', 'EUR');
