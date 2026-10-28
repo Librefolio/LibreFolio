@@ -63,7 +63,7 @@
     import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';
     import {goto} from '$app/navigation';
     import type {BrokerSummary} from '$lib/types';
-    import {parseCurrencyAmount, safeCurrency, safeString} from '$lib/types';
+    import {parseCurrencyAmount, safeString} from '$lib/types';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import CurrencyAmount from '$lib/components/ui/display/CurrencyAmount.svelte';
     import AiExportMenu from '$lib/features/ai-export/AiExportMenu.svelte';
@@ -733,6 +733,7 @@
                             {depositHistory}
                             {acquisitionFunding}
                             loading={reportLoading && portfolioHistory.length === 0}
+                            {pnlCandlesLoading}
                             baseCurrency={targetCurrency || baseCurrency}
                         />
                     </div>
@@ -880,18 +881,6 @@
                             <span class="text-lf-secondary">{formatDate(broker.created_at, $uiLocaleStore)}</span>
                         </div>
                     </div>
-
-                    {#if broker.total_value_base_currency}
-                        {@const totalValue = safeCurrency(broker.total_value_base_currency)}
-                        {#if totalValue}
-                            <div class="mt-4 pt-4 border-t border-lf-subtle">
-                                <div class="text-sm text-lf-muted">{$_('common.totalValue')}</div>
-                                <div class="text-2xl font-bold text-lf-link">
-                                    <CurrencyAmount amount={parseCurrencyAmount(totalValue.amount)} code={totalValue.code} />
-                                </div>
-                            </div>
-                        {/if}
-                    {/if}
                 </div>
 
                 <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle p-4" data-testid="broker-sharing-section">

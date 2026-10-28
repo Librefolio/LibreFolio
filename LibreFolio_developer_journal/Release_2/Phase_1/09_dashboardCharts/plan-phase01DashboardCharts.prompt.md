@@ -8688,3 +8688,36 @@ Le 33 chiamate di `resolveDateSentinel`, una per una:
 `data_quality.stale_fx_pairs` c'è già nel report ma non genera un `DataQualityIssue`. La riga si costruisce nel frontend (`features/dashboard/staleFxIssue.ts`, pura): codice `STALE_FX`, avviso, un solo bottone «Sincronizza tassi» (azione `sync_stale_fx`, stessa richiesta dei tassi mancanti: dal tasso più vecchio a oggi, una settimana di margine), le coppie sotto il messaggio. Testi `dataQuality.staleFx` e `dataQuality.cta.sync_stale_fx` in 4 lingue (dicono cosa fare: «sincronizza i tassi per aggiornare i totali»). L'azione è distinta da `sync_fx_pair` apposta: dopo la sincronizzazione i tassi mancanti hanno il loro messaggio di esito, quello dei tassi vecchi no.
 - ✅ (28/10) `staleFxIssue.test.ts` (4) e tre E2E nello spec dei banner («STALE_FX: riga con coppia e bottone», «nessun tasso vecchio, nessuna riga», «Sync rates sincronizza dalla data del tasso a oggi, poi ricarica»).
 - ✅ (28/10) **Prove del checkpoint 1**: `front-portfolio banners` 23/23 (3 nuovi); `front-portfolio dashboard` 33/33; `front-broker detail` 41/41; Vitest `features/dashboard` + `ui/feedback` + `stores` + `utils/sync` 69 file / 1843; `front check` 0/0; `i18n check` stretto; `check-orphans` verde (i due test nuovi registrati in `_frontend_utility.py`, `front_utility_unit`).
+
+## 28/10 · Ondata 6 — checkpoint 2 (Y6-4 · J-61 · W-B95 · TC-6)
+
+Base: `c0edda2af` (checkpoint 1 `a8c68dac4` + X6-1 di X).
+
+- ✅ (28/10) **Y6-4 (Y-18)**: `GrowthChart` ha la prop `pnlCandlesLoading`; con Candele attive, richieste e nessuna candela arrivata, copre il grafico con uno scheletro (`growth-pnl-candles-loading`, come quello della storia). Dashboard e pagina del broker la passano.
+  > **Note implementazione**: nuovo test `GrowthChart.candlesLoading.test.ts` (5 casi: 2 rossi prima, 3 guardie: nessun indicatore a candele ferme, con le candele già arrivate, fuori dal sottomodo Candele). Lo stato d'errore delle candele (la parte «resta per il developer» di Y-18) non è toccato.
+- ✅ (28/10) **Ramo morto** (segnalato da W2): tolto da `brokers/[id]/+page.svelte` il blocco `broker.total_value_base_currency` (il backend non lo valorizza mai) e l'import `safeCurrency`. La chiave `common.totalValue` non ha più usi nel codice: la lascio ai cataloghi (decisione al coordinatore).
+- ✅ (28/10) **J-61**: l'avviso «troppe lacune» non c'è più. `renderBackendSignalResult` non aggiunge note alle `warnings` (nessuna pagina le legge); resta il suffisso «(gaps joined)» nel nome della linea. Chiave `signals.gapsJoined.warning` tolta dai 4 cataloghi (`i18n remove`), commento di `MAX_LINE_RUNS` corretto. Test di `backendRendererSegments.test.ts` aggiornati: 6 rossi prima, 40/40 dopo; gruppo `charts/signals` 338/338. J-59 scartata (nulla da fare). Né la guida né il CHANGELOG nominano l'avviso: nulla da ritoccare.
+- ✅ (28/10) **W-B95**: la pagina Files traduce l'esito dell'anteprima con `resolveParseFailureMessage` (stessa funzione del wizard); `getFilePreviewError` non ha più chiamanti ed è tolta. `FilePreviewModal` pubblica `file-preview-error`. E2E `files.spec.ts` «a preview the server refuses with a code…»: rosso prima (il messaggio inglese del server compariva), verde dopo.
+- ✅ (28/10) **TC-6**: **già fatto** in A5b (`2b0715532`, 15/10): `currentLanguage.init()` segue `locale` finché nessuna lingua è scelta. `language.test.ts` 7/7 verde; nessun lavoro.
+- ✅ (28/10) **Prove del checkpoint 2**: Vitest `features/dashboard`, `charts/signals`, `features/files`, `utils/files`, `parseFailure`, `stores/app`: 68 file / 1839; `front check` 0/0; `front-utility files` 30/30; `front-portfolio dashboard` 33/33; `front-broker detail` 39/41 al primo giro con la macchina a carico 30–40 (un click della scheda che non apre la pagina in 10 s, un login oltre 30 s), poi i due da soli 2/2; `i18n check` stretto; `check-orphans` verde.
+
+## 28/10 · Ondata 6 · Y2 — sistema dei grafici (checkpoint 1: FB-1, FB-2, FB-9, FB-8, FB-5, FB-4)
+
+Fonte: i feedback del developer nella testlist del server (§1 e §2). Base `32674edb8`, corsia 6225.
+
+| Lotto | Cosa | Stato |
+|---|---|---|
+| FB-1 | giorno della settimana tra parentesi dopo la data nei tooltip (`formatDayWithWeekday`, un formattatore condiviso, lingua dell'interfaccia) | ✅ 28/10 |
+| FB-2 | il puntatore dei grafici a gradini si aggancia ai giorni (`attachDaySnap`, `snapToDay`) | ✅ 28/10 (GrowthChart: una riga da aggiungere, file di Y) |
+| FB-9 | segnaposto del selettore vuoto su una riga, troncato (`SearchSelect`) | ✅ 28/10 |
+| FB-8 | i tre pulsanti di vista di Assets e FX col tooltip del design system, sempre; pulsanti della barra a tutta larghezza | ✅ 28/10 (E2E: `fx-list` 38/38, `asset-list` 53/53) |
+| FB-5 | tooltip di «Return of the positions» tronca i nomi lunghi, mai più largo del grafico | ✅ 28/10 |
+| FB-4 | zoom (`dataZoom` inside, `filterMode: 'none'`) in «Return of the positions» | ✅ 28/10 |
+
+> **Note implementazione**: il giorno della settimana viene da `Intl` (`weekday: 'short'`): tradotto senza chiavi nuove. Una stringa che non è un giorno `YYYY-MM-DD` resta com'è (un conteggio o un anno nell'intestazione di `LineChart` non diventano giorni: lo ha mostrato il guard di `LineChart.test.ts`).
+> **Note implementazione**: l'aggancio ai giorni rilancia `updateAxisPointer` con il valore del giorno più vicino (mezzogiorno è il punto di svolta), all'altezza del mouse; il secondo evento porta una mezzanotte e chiude il giro. Il tooltip continua a leggere il giorno puntato (`pointedDay`).
+> **⚠️ Fuori pista**: il worktree era a `f4a5e6e0a`, non a `32674edb8` (l'app aveva tagliato dalla versione spinta); il coordinatore l'ha portato avanti.
+> **⚠️ Fuori pista**: FB-9 è risolto in `SearchSelect.svelte` (il segnaposto), non in `ChartSignalsSection.svelte`: nessun conflitto con FB-11 di X.
+> **Note implementazione**: `attachDaySnap` si può richiamare sulla stessa istanza (`AllocationHistoryChart` lo fa a ogni disegno): l'ascoltatore del mouse è uno solo, il gestore del puntatore viene sostituito, mai impilato (test dedicato). I tre test nuovi sono registrati in `scripts/test_runner/_frontend_utility.py` (`check-orphans` verde, 680 test).
+> **Note implementazione**: verificato a mano nel browser sul server di prova (porta 6225): col mouse a x=524 il tooltip dice «16 Sept 2026 (Wed)» e la linea del puntatore sta sul 16 settembre (x=527); la rotella zooma il grafico «Return of the positions». FB-5 verificato solo con Vitest (jsdom), non su un telefono.
+> **Da fare da altri**: `GrowthChart.svelte` (~riga 1124, file di Y) — dopo `zoomInstance.on('updateAxisPointer', onAxisPointer)` aggiungere `attachDaySnap(zoomInstance)` + l'import: oggi il grafico principale ha ancora il puntatore a metà fra due giorni.

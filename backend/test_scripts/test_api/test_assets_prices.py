@@ -1134,6 +1134,62 @@ async def test_query_more_than_1000_items_is_refused(test_server):
 
 
 # ============================================================
+# X-R29 (lot X6-1): POST /assets/prices/stored-count -- the stored prices of a range, and the manual ones
+# ============================================================
+
+
+@pytest.mark.asyncio
+async def test_stored_count_tells_stored_and_manual_prices_of_the_range(test_server):
+    """The page asks before a sync how many stored prices it would replace. Three manual prices (the route writes them as
+    MANUAL) on the days -2, -1 and 0 of a new asset; a second asset with none.
+
+    Contract: the range of all three days → 3 stored, 3 manual; the last two days → 2 / 2; a range past them → 0 / 0;
+    ``"min"`` up to the first day → 1 / 1; the asset with none → 0 / 0; one entry per item, in request order; the body is
+    the sync's (``asset_id``, ``date_range`` with ``start``/``end``).
+    """
+    print_section("X-R29: stored-count of a range")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        today = date.today()
+        first, middle, last = today - timedelta(days=2), today - timedelta(days=1), today
+        created = [(await client.post(f"{API_BASE}/assets", json=[FAAssetCreateItem(display_name=f"Stored count {unique_id('SC')}", currency="USD").model_dump(mode="json")], timeout=TIMEOUT)).json()["results"][0]["asset_id"] for _ in range(2)]
+        asset_id, empty_id = created
+        upsert = FAUpsert(asset_id=asset_id, prices=[FAPricePoint(date=day, close=Decimal("10"), currency="USD") for day in (first, middle, last)])
+        resp = await client.post(f"{API_BASE}/assets/prices", json=[upsert.model_dump(mode="json")], timeout=TIMEOUT)
+        assert resp.status_code == 200, resp.text
+
+        def item(target: int, start, end: date) -> dict:
+            return {"asset_id": target, "date_range": {"start": start if isinstance(start, str) else start.isoformat(), "end": end.isoformat()}}
+
+        body = [item(asset_id, first, last), item(asset_id, middle, last), item(asset_id, last + timedelta(days=1), last + timedelta(days=3)), item(asset_id, "min", first), item(empty_id, first, last)]
+        resp = await client.post(f"{API_BASE}/assets/prices/stored-count", json=body, timeout=TIMEOUT)
+
+        assert resp.status_code == 200, f"{resp.status_code}: {resp.text[:300]}"
+        counted = [(row["asset_id"], row["stored_count"], row["manual_count"]) for row in resp.json()["items"]]
+        assert counted == [(asset_id, 3, 3), (asset_id, 2, 2), (asset_id, 0, 0), (asset_id, 1, 1), (empty_id, 0, 0)], counted
+        print_success("  ✓ stored and manual counts per item, in request order")
+
+
+@pytest.mark.asyncio
+async def test_stored_count_of_more_than_1000_items_is_refused_and_needs_a_login(test_server):
+    """Like the price query: 1 001 items → 422 ``bulk_too_many_items`` before any read; without a session → 401."""
+    print_section("X-R29: stored-count limits")
+
+    async with httpx.AsyncClient() as client:
+        body = [{"asset_id": 1, "date_range": {"start": "2025-06-18", "end": "2025-06-18"}} for _ in range(BULK_MAX_ITEMS + 1)]
+        anonymous = await client.post(f"{API_BASE}/assets/prices/stored-count", json=body, timeout=TIMEOUT)
+        assert anonymous.status_code == 401, anonymous.text[:200]
+        await create_user_and_login(client)
+        resp = await client.post(f"{API_BASE}/assets/prices/stored-count", json=body, timeout=TIMEOUT)
+        assert resp.status_code == 422, f"{resp.status_code}: {resp.text[:300]}"
+        detail = resp.json()["detail"]
+        assert isinstance(detail, dict) and detail.get("code") == "bulk_too_many_items", detail
+        assert (detail["max_items"], detail["items"]) == (BULK_MAX_ITEMS, BULK_MAX_ITEMS + 1)
+        print_success("  ✓ 401 without a session, 422 bulk_too_many_items past the cap")
+
+
+# ============================================================
 # X-R65 (N83, revised 19/10): a stored price is dated no later than the server's tomorrow
 # ============================================================
 #
