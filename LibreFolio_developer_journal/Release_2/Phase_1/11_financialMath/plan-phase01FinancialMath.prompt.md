@@ -5080,3 +5080,44 @@ Treno 12 per MF6-1, K3, A3/A11; 13 per il resto (PIANO-ondata6 §4).
    > «giorno accanto» ×2 nei lotti, `merged_windows`/`merged_spans`. Casa proposta `financial_math/change_days.py`;
    > motore e lotti restano unioni separate. Firma della funzione pura per W6-12 (`first_negative_cash`) in §6.
 3. ✅ CHECKPOINT READY (solo documenti) inviato il 28/10 → FROZEN fino al commit e a MF-L di W2.
+
+#### MF6-1 → MF-K3 → MF-A3/A11 (28/10, base `f33d91b4f` = `32674edb8` + giorno 1 + MF-L)
+Ambiente: `npm ci` e `api sync` fatti (nessuna differenza nei contratti); corsia popolata.
+1. ✅ **MF6-1 (T-U5)** (28/10) — cura scritta. MF-L aveva già tolto `brokers/summary.py::_get_latest_prices_batch`: restava una
+   copia, `portfolio_service._get_price_at_date` (+ `_convert_to_base`, solo per la variazione a 1 giorno). Casa:
+   `daily_state.marked_price` (la regola che `_market_value_for` ora chiama) e `AssetMarks` sul risultato del motore
+   (`PortfolioCalculationResult.marks`: marchi, split, tassi chiesti, giorni del motore). Il riepilogo legge il prezzo
+   di oggi e quello di ieri (ultima quotazione di mercato ≤ D−1) dal lettore, convertiti al tasso del giorno.
+   > **Note implementazione**: cambia di proposito (1) il prezzo di ieri al tasso di ieri, non del giorno della chiusura;
+   > (2) primo giorno del portafoglio: nessuna variazione (ieri fuori dai giorni del motore), per tutte le valute;
+   > (3) `current_price` estero all'ultima cifra (× 1/tasso del motore invece di ÷ tasso di `convert_bulk`).
+   > I 4 test di `test_summary_day_change_house.py` (compreso il pareggio 200→202,47) e 131 di `test_portfolio_service`
+   > verdi.
+2. ✅ **MF-K3** (28/10) — cura scritta: `returns.period_twrr_series`/`period_twrr` (punto None a NAV ≤ 0, card = ultimo
+   punto), `period_roi_cash_flows` (periodo che precede il portafoglio ≡ storia intera per il capitale del ROI),
+   `DerivedViewsBuilder.build_roi_cash_flows`.
+   > **⚠️ Fuori pista**: test-author (C.2) ha preso un difetto del primo cablaggio: `build_performance_inputs(date_from)`
+   > parte già dal capitale dello stato d'apertura, quindi il deposito del primo giorno non arrivava al ROI (0 flussi,
+   > ROI 0). Rimedio: `build_roi_cash_flows` rilegge gli input della storia intera solo in quel caso (una lettura in più,
+   > solo quando l'intervallo precede il portafoglio).
+3. ✅ **MF-A3** (28/10; **MF-A11 non confermata**) — numeri su HEAD prima della cura (`annualized_period_return`): (a) 100 a 10, 99 vendute a 9,
+   1 tenuta: riga aperta «—» (−1 000 %), chiusa −31,9 % annuo, con la base unica −10 % cumulato (= la chiusa), −10,27 %
+   annuo; (b) residuo di polvere: +10 746,76 (×100 = 1 074 676 %) → +1,03 %.
+   > **⚠️ Fuori pista — A11 tolta**: scritta e poi ritirata. I libri dei test esistenti (`TestDustResidual`, MF-A10
+   > «residuo sopra la polvere e riacquisto») la smentiscono: 10 comprate a 100, quasi tutte vendute presto, 5
+   > ricomprate dopo, +100 di guadagno: oggi +24,38 % annuo (capitale medio impegnato ≈ 500, quindi vicino al vero), con
+   > la base A11 (500 + 1 000 uscite, su tutta la finestra) +8,03 %. Aggiusta gli estremi (a) e (b), peggiora questi:
+   > non confermata coi numeri → resta fuori. Proposta per dopo: una base media nel tempo (capitale × giorni tenuti /
+   > giorni della finestra, alla Modified Dietz), domanda per il developer.
+   Cura rimasta (A3): `contributions.closed_flight_too_short` (volo < 30 giorni nel periodo → «—», mai la regola
+   generale), `returns.annualizes`.
+4. ✅ **Rossi e riparazioni** (test-author): 6 file nuovi, 55 test, ognuno rosso su `f33d91b4f` per il motivo giusto e
+   verde sull'albero (`ondata6/MF6-reds-*.log`); 4 riparazioni di forma o di valore voluto: `test_position_frames`
+   (confronta `marks` per valore), `test_engine_single_flight` (fotografa `AssetPriceSeries`), `test_windowed_views`
+   (+1 lettura della storia intera solo per «prima della storia»), golden `eur_only_golden.json` (20 righe: `gain_loss_change_1d`
+   0E-12 → 0E-8 sugli EUR; l'ETF in IDR: `current_price` all'ultima cifra, variazione a 1 giorno −0,49 % / −0,35 % → 0,00 %).
+5. ✅ **Docs** (docs-writer): 7 pagine utente/teoria `.en.md` + `developer/backend/financial_math.md`; build strict 0,
+   check-links 0; debito di traduzione su 7 pagine (nessuno stamp).
+6. ✅ **Porte** (`ondata6/MF6-g3-*.log`, `MF6-g2-api-portfolio.log`): `roi-fifo-utils` **2488**, `financial-math`
+   **3833**, `portfolio-engine` **41**, `api portfolio` **58**, tutti verdi. CHECKPOINT READY inviato, FROZEN;
+   `portfolio_service.py` passa ad AIX dopo il commit.

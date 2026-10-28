@@ -67,7 +67,7 @@ backend/app/services/financial_math/
 ├── average_cost.py          average purchase cost (WAC): pools, cost steps, missing conversions
 ├── native_cash.py           cash per broker and currency: balances, daily value, flows, FX result
 ├── ledger_totals.py         control totals of the ledger for backups: cash per broker and currency, quantity per position
-├── returns.py               simple ROI, TWRR, MWRR (values and daily series; the Dashboard's rule in period_mwrr*; ROI and TWRR on a given capital or exposure for the lots' shorts; a flow counts on the first snapshot on or after it, flows_by_snapshot_date), annualization, period rebasing, G/L ratio (holding or group), change ratio, timing effect, realized gain, price return (also as a float for a return series), observed annualization of a return series (DAYS_PER_YEAR, its validator, calendar days ↔ observations both ways), fixed-period changes of a price or rate (1D … 5Y, both orientations) and its change over a whole range, recovery from a drawdown
+├── returns.py               simple ROI, TWRR, MWRR (values and daily series; the Dashboard's rules in period_mwrr*, period_twrr* and period_roi_cash_flows; ROI and TWRR on a given capital or exposure for the lots' shorts; a flow counts on the first snapshot on or after it, flows_by_snapshot_date), annualization and its 30-day floor (annualizes), period rebasing, G/L ratio (holding or group), change ratio, timing effect, realized gain, price return (also as a float for a return series), observed annualization of a return series (DAYS_PER_YEAR, its validator, calendar days ↔ observations both ways), fixed-period changes of a price or rate (1D … 5Y, both orientations) and its change over a whole range, recovery from a drawdown
 ├── valuation.py             holding value from quantity, price and quote_base_quantity
 ├── trade_amount.py          a trade's unit price on the quote's axis, unrounded (`unit_price_on_quote_axis`), which the trade marks of price_marks.py read; amount ↔ unit price on quote_base_quantity, half-even to a given scale (the transaction form computes its own in the browser since W5-9)
 ├── fx_rates.py              the orientation of a stored FX rate: a pair read from source to destination, either way (oriented_rate, any number type); the unit rates a calculation reads by day, as steps answered on the asked days only (AskedDayRates)
@@ -85,13 +85,13 @@ backend/app/services/financial_math/
 │   └── engine.py            FifoLotEngine, run_fifo_lot_engine()
 ├── portfolio/               daily portfolio state and the views derived from it
 │   ├── __init__.py          docstring only
-│   ├── models.py            classified transactions, daily states, contributions, results
+│   ├── models.py            classified transactions, daily states, contributions, results (PortfolioCalculationResult.marks: the result's AssetMarks)
 │   ├── classifier.py        ScopeAwareTransactionClassifier: internal, external, in transit
-│   ├── daily_state.py       DailyStateBuilder: the daily state vector, without I/O
-│   ├── derived_views.py     DerivedViewsBuilder (history, P&L, allocation…), cost positions
+│   ├── daily_state.py       DailyStateBuilder: the daily state vector, without I/O; an asset's mark on a day (marked_price, MarkedPrice) and the result's price reader (AssetMarks)
+│   ├── derived_views.py     DerivedViewsBuilder (history, P&L, allocation…, the flows of the period's simple ROI: build_roi_cash_flows), cost positions
 │   ├── data_quality.py      FX pair slug, configured pair sets, build_data_quality_report()
 │   ├── period.py            a period's boundary states, its P&L, the identity that closes it and its residual (the AI Export reconciliation, J-14); the day's P&L change; the period's realized sales (`period_realized_sales`)
-│   ├── contributions.py     a position's row in the Dashboard's Performance table: its period P&L (`position_period_pnl`), return on the start value, annualized returns, the internal-transfer split (P22: `transfer_tract` is the tract of one transfer for one broker)
+│   ├── contributions.py     a position's row in the Dashboard's Performance table: its period P&L (`position_period_pnl`), return on the start value, annualized returns (a closed flight too short to annualize: `closed_flight_too_short`, MF-A3), the internal-transfer split (P22: `transfer_tract` is the tract of one transfer for one broker)
 │   ├── position_series.py   a position's series, as steps, for the Dashboard's positions chart: P&L since the period's start (the Performance row's, at each day), its base and the percent on it, from the engine's frames of that position (J5-1, #48; D-P4)
 │   └── engine.py            PortfolioCalculationEngine: loads a scope, runs the steps, caches
 └── lots/                    lots analysis math, called by lots_analysis_service.py
@@ -129,6 +129,35 @@ the NPV changes sign around it (`_changes_sign_at`, in the scan and in `_bracket
 opens at 0 and whose flows all lie decades after its start (a typo dated in 1900), every term underflows to 0.0 at the
 top of the grid, and that point solved nothing; the period has no rate there («—»), while a genuine exact zero, a rate
 of exactly 0, still changes sign and counts. Flows that are all zero have no rate either (MF-P1d): the NPV is zero at every rate, and Newton would answer its own starting point (0.1, «10 %») — a period opening at 0 whose only deposit falls on its last day is one, since the deposit joins the final value (`_all_flows_zero`, in `_solve_xirr` and `_newton_xirr`).
+
+`period_twrr()` and `period_twrr_series()` (`returns.py`, MF-K3) hold the Dashboard's TWRR rule the same way, one rule
+for the card and every point of the line: `period_twrr_series()` is `calculate_twrr_series()` with `None`
+(`PeriodTWRRPoint.twrr`) wherever the snapshot's NAV is zero or less — an emptied portfolio has no time-weighted return,
+as it has no MWRR. The chain keeps compounding through those points (a sub-period starting from 0 returns 0), so after
+a refill the line shows its TWRR again; `period_twrr()` is the series' last point, the card. Empty without two snapshots
+or without flows. Before, the card had its own guard (`engine_nav > 0`) while the line stayed flat at its last value.
+`calculate_twrr()` and `calculate_twrr_series()` remain the bare chains, without that rule.
+
+`period_roi_cash_flows(nav_snapshots, cash_flows, date_from)` (`returns.py`) gives the flows the period's simple ROI
+counts its capital from, card and line alike: the period's flows (`rebase_to_period()`), except when `date_from`
+precedes every snapshot. The rebase leaves out the first day's flows there — they are inside the first NAV, which the
+TWRR and the MWRR start from — and the ROI would see no capital (0 % before MF-K3); that period holds the whole history,
+so its capital is every flow, as with no `date_from`. `DerivedViewsBuilder.build_roi_cash_flows()` calls it on the
+period's inputs, and reads the whole history's when `date_from` falls before the first state.
+
+`marked_price()` (`portfolio/daily_state.py`, MF6-1) is the one rule of «an asset's mark on a day» as the portfolio
+values it: the mark of the asset's `AssetPriceSeries`, a trade mark restated to current units through the splits since
+it was observed, in its own currency (`MarkedPrice`). `DailyStateBuilder._market_value_for()` values every holding with
+it, and the engine's result carries the same rule for its readers: `PortfolioCalculationResult.marks`, an `AssetMarks`
+(`None` when `calculate()` returns early) holding the replay's mark series, splits, `quote_base_quantity` and rates.
+`price_at(asset_id, day)` is the mark the valuation read; `last_market_price_at(asset_id, day)` the last market quote on
+or before `day` (a later trade observation does not move it); `in_target(amount, currency, day)` converts at `day`'s
+rate, as the valuation converts a mark. It answers on the engine's days only, `first_day` … `last_day`, since its rates
+are the ones the engine asked (`AskedDayRates`): any other day is `None`, in any currency. `portfolio_service` reads the
+holdings' unit prices and their one-day changes (`price_change_1d`, `gain_loss_change_1d`,
+`gain_loss_change_1d_percent`) through it and has no price query or conversion of its own any more: the day before's
+price is `last_market_price_at(day − 1)` converted at the rate of `day − 1` — not at the rate of the quote's own date —
+so a foreign quote that did not move shows only that day's rate move; on the replay's first day there is none.
 
 `float_price_return()` and `observed_annualization()` (`returns.py`) serve the float return series that the risk and
 signal statistics read. `market_series.py`, which prepares those series, takes both from here and keeps no return
@@ -806,7 +835,7 @@ for. The gate runs with the chart-safety unit tests:
 
 | Command | Runs (under `backend/test_scripts/`) | Covers |
 |---------|--------------------------------------|--------|
-| `./dev.py test services financial-math` | `test_services/test_financial_math/` | `average_cost.py`, `native_cash.py`, `ledger_totals.py`, `splits.py` (`test_splits.py`), `returns.py` (the period rebase and the return ratios, `test_returns_rebase_and_ratios.py`; the verified MWRR root, `test_mwrr_verified_root.py`; the Dashboard's MWRR rule, `period_mwrr()` and `period_mwrr_series()`, `test_period_mwrr.py`; the gain that recovers a drawdown, `required_recovery_return()`, `test_required_recovery_return.py`; the float price return and the observed annualization of a return series, `float_price_return()` and `observed_annualization()`, `test_series_returns.py`; the fixed-period changes of the Assets and FX tables, `fixed_period_dates()` and `fixed_period_changes()`, `test_fixed_period_changes.py`), `portfolio/period.py` (`test_period_and_unit_costs.py`, with `movement_unit_costs()` of `average_cost.py`), `compound_growth()` of `interest.py` (`test_compound_growth.py`, against the day-by-day product in a 60-digit context), its ACT/ACT fraction across years, digit for digit with the year loop, and its memo (`test_act_act_fraction.py`), and the layer guard; a pure unit — the file tests of `test_ledger_totals.py` and the loader tests of `test_splits.py` open private SQLite files under `tmp_path`: no shared database, no server |
+| `./dev.py test services financial-math` | `test_services/test_financial_math/` | `average_cost.py`, `native_cash.py`, `ledger_totals.py`, `splits.py` (`test_splits.py`), `returns.py` (the period rebase and the return ratios, `test_returns_rebase_and_ratios.py`; the verified MWRR root, `test_mwrr_verified_root.py`; the Dashboard's MWRR rule, `period_mwrr()` and `period_mwrr_series()`, `test_period_mwrr.py`; the Dashboard's TWRR rule and the simple ROI's capital, `period_twrr()`, `period_twrr_series()` and `period_roi_cash_flows()`, `test_period_twrr_and_roi_flows.py`; the gain that recovers a drawdown, `required_recovery_return()`, `test_required_recovery_return.py`; the float price return and the observed annualization of a return series, `float_price_return()` and `observed_annualization()`, `test_series_returns.py`; the fixed-period changes of the Assets and FX tables, `fixed_period_dates()` and `fixed_period_changes()`, `test_fixed_period_changes.py`), `portfolio/period.py` (`test_period_and_unit_costs.py`, with `movement_unit_costs()` of `average_cost.py`), `marked_price()` and `AssetMarks` of `portfolio/daily_state.py` (`test_asset_marks.py`), `closed_flight_too_short()` of `portfolio/contributions.py` (`test_contributions_short_flight_and_open_base.py`), `compound_growth()` of `interest.py` (`test_compound_growth.py`, against the day-by-day product in a 60-digit context), its ACT/ACT fraction across years, digit for digit with the year loop, and its memo (`test_act_act_fraction.py`), and the layer guard; a pure unit — the file tests of `test_ledger_totals.py` and the loader tests of `test_splits.py` open private SQLite files under `tmp_path`: no shared database, no server |
 | `./dev.py test services roi-fifo-utils` | `test_services/test_financial/` | Returns, FIFO lots, price marks, Yield on Cost, the portfolio engine (`test_portfolio_engine/`), and the portfolio and lots services that call them |
 | `./dev.py test services portfolio-engine` | `test_services/test_portfolio_engine_vnext.py` | `DailyStateBuilder` |
 | `./dev.py test services lots-analysis-pure` | `test_services/test_lots_analysis_pure.py` | `lots/` and the service's sync builders; a pure unit |
