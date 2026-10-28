@@ -142,7 +142,7 @@ interface StyledLineSegment {
  * 30 runs on a ten-year daily axis are about 75 000 points, a few price lines' worth. Measured on the real rolling metrics,
  * an asset quoted monthly gives at most 19 runs over ten years even at the smallest window, and the default window one;
  * only a small window on an illiquid daily asset goes past 30 (46 to 371). Past the cap the output is one line joining
- * its gaps, as before J-21, and both its name and the outcome's warnings say so.
+ * its gaps, as before J-21, and its name says so (no warning: no page shows the outcome's own, J-61).
  */
 export const MAX_LINE_RUNS = 30;
 
@@ -243,7 +243,7 @@ function splitLineSignal(signal: RenderedSignal, runs: LineRun[]): RenderedSigna
     }));
 }
 
-function renderScalarSeries(series: RenderLineSeries | RenderAreaSeries | RenderBarSeries, component: SignalVisualComponent, config: SignalConfig, seriesIndex: number, baseValue: number | null, shouldTransform: boolean, notes: string[], translate?: (key: string) => string): RenderedSignal[] {
+function renderScalarSeries(series: RenderLineSeries | RenderAreaSeries | RenderBarSeries, component: SignalVisualComponent, config: SignalConfig, seriesIndex: number, baseValue: number | null, shouldTransform: boolean, translate?: (key: string) => string): RenderedSignal[] {
     // A point without a value is never drawn as a 0: it ends a run, and the next value starts another.
     const data: Array<{date: string; value: number}> = [];
     const runs: LineRun[] = [];
@@ -302,7 +302,6 @@ function renderScalarSeries(series: RenderLineSeries | RenderAreaSeries | Render
     if (series.kind === 'bar') return [rendered];
     const styled = series.kind === 'line' && (rendered.valueRegions ?? []).some((region) => region.lineStyle);
     if (!styled && runs.length > MAX_LINE_RUNS) {
-        notes.push(translatedLabel('signals.gapsJoined.warning', 'Too many gaps to draw: the line joins them.', translate));
         return [{...rendered, label: `${rendered.label} (${translatedLabel('signals.gapsJoined.label', 'gaps joined', translate)})`}];
     }
     return splitLineSignal(rendered, runs);
@@ -354,20 +353,19 @@ function renderBandSeries(series: RenderBandSeries, component: SignalVisualCompo
 
 export function renderBackendSignalResult(result: BackendSignalResult, config: SignalConfig, options: BackendSignalRendererOptions): BackendSignalRenderOutcome {
     const baseValue = options.baseData[0]?.value ?? null;
-    const notes: string[] = [];
     const signals = (result.series ?? [])
         .flatMap((generatedSeries, seriesIndex) => {
             const series = normalizeBackendSignalSeries(generatedSeries);
             const shouldTransform = options.viewMode === 'percentage' && series.view_transform === 'base_percentage';
             const component = visualComponent(options.definition, series.key);
-            return series.kind === 'band' ? [renderBandSeries(series, component, config, baseValue, shouldTransform, options.translate)] : renderScalarSeries(series, component, config, seriesIndex, baseValue, shouldTransform, notes, options.translate);
+            return series.kind === 'band' ? [renderBandSeries(series, component, config, baseValue, shouldTransform, options.translate)] : renderScalarSeries(series, component, config, seriesIndex, baseValue, shouldTransform, options.translate);
         })
         .filter((signal) => signal.data.length > 0);
 
     return {
         signals,
         status: result.status,
-        warnings: [...(result.warnings ?? []).map((warning) => warning.message), ...notes],
+        warnings: (result.warnings ?? []).map((warning) => warning.message),
         error: resultErrorMessage(result.error),
     };
 }

@@ -728,7 +728,7 @@
                 <p>{$t('common.loading')}</p>
             </div>
         {:else if error}
-            <div class="preview-state error-state">
+            <div class="preview-state error-state" data-testid="file-preview-error">
                 <AlertCircle size={28} />
                 <p>{error}</p>
             </div>

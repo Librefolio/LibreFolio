@@ -1220,7 +1220,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "fx-sync", api_fx_sync, name="FX Sync API", desc="FX rate synchronization endpoints")
     # PURE: the handler runs in process with convert_bulk replaced by a double; no database, no server.
     add_test(api, "fx-convert-sampling", api_fx_convert_sampling, name="FX Convert Sampling", desc="Z-29fx: max_points, resolution and sample_like on POST /fx/currencies/convert: the step from the fill's first day, the bucket results, samples with resolution and sample_bounds, request_index, sample_reference 422s, signals reduced and aligned (O1), the calendar rolling return in the FX domain, the day budget", isolation="pure")
-    add_test(api, "assets-price", api_assets_price, name="Assets Price API", desc="Bulk upsert, delete, query, sync; X-R65 422 date_out_of_range; X-R71 422 price_currency_mismatch")
+    add_test(api, "assets-price", api_assets_price, name="Assets Price API", desc="Bulk upsert, delete, query, sync; X-R65 422 date_out_of_range; X-R71 422 price_currency_mismatch; X-R29 POST /assets/prices/stored-count (stored and manual rows of a range, 1 001 items 422, 401 without a session)")
     # Write-scoped (the category default): own user, own asset (deleted), rates only on AWG/TMT, a pair no other test uses.
     add_test(api, "period-changes", api_period_changes, name="Period Changes API", desc="MF-P2: login, base == quote 422, answer shape, and the Assets/FX pages' numbers from the price query and the conversions; MF-P2b: list caps, ≤ 5 distinct as_of; X5-6: no 1900 floor")
     add_test(api, "signal-catalogs", api_signal_catalogs, name="Signal Catalogs", desc="Static authenticated Asset/FX signal definitions")
