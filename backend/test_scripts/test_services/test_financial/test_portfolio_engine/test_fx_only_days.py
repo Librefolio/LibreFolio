@@ -29,7 +29,7 @@ The fix the RED tests are written for (CP-6):
    differs from the previous day's — a rate that appears or disappears counts; likewise, inside each
    cash in-transit interval, for its departure currency;
 2. every frame day with a market quote in ``price_map`` is dirty;
-3. ``native_cash.change_days(read, currencies, days)``, public and pure: the days of the calendar on
+3. ``financial_math.change_days.change_days(read, currencies, days)``, public and pure: the days of the calendar on
    which ``read`` gives a currency a value different from the calendar's previous day (None before
    the first day). ``NativeCash`` reads it with its last-known rate, the engine with the exact day.
 
@@ -43,9 +43,9 @@ every USD rate change is then already a dirty day (lot 41 F) — the defect woul
 
 Pure tests — no DB, no server. The helpers are copies of test_foreign_cash_revaluation.py and
 test_broker_internal_flows.py (this directory has no cross-test-module imports).
-``native_cash.change_days`` does not exist before the fix: it is read as
-``native_cash_module.change_days`` inside each test, never imported at module level, so this file
-collects and its other tests run; until the fix, those tests fail with an AttributeError.
+``change_days`` was born in ``native_cash`` with the fix (and read there through the module inside
+each test, so the file collected before it); it now lives in ``financial_math/change_days.py``, its
+one home, and is imported from there.
 """
 
 import dataclasses
@@ -54,7 +54,7 @@ from decimal import Decimal
 from unittest.mock import MagicMock
 
 from backend.app.db.models import TransactionType
-from backend.app.services.financial_math import native_cash as native_cash_module
+from backend.app.services.financial_math.change_days import change_days
 from backend.app.services.financial_math.native_cash import CashMovement, NativeCash
 from backend.app.services.financial_math.portfolio.classifier import ScopeAwareTransactionClassifier
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
@@ -656,7 +656,7 @@ class TestGuards:
 
 
 # =============================================================================
-# native_cash.change_days — the one pure function for both readings
+# financial_math.change_days.change_days — the one pure function for both readings
 # =============================================================================
 
 
@@ -691,26 +691,19 @@ _USD_WITH_A_GAP = {("USD", D1): "0.90", ("USD", D2): "0.90", ("USD", D4): "0.90"
 class TestChangeDays:
     """``change_days(read, currencies, days)``: the calendar days on which ``read`` gives a currency of
     ``currencies`` a value different from the calendar's previous day, None before the first day.
-
-    Red before the fix on the missing attribute: ``native_cash`` has no ``change_days`` yet.
     """
 
     def test_exact_day_reading_counts_the_day_a_rate_disappears_and_the_day_it_comes_back(self):
         """USD 0.90 on D1, D2, D4, D5 and nothing on D3: the exact-day reading changes on D1 (first
         day, None before), on D3 (0.90 -> None) and on D4 (None -> 0.90)."""
-        change_days = native_cash_module.change_days
-
         assert change_days(_exact_day(_USD_WITH_A_GAP), {"USD"}, CALENDAR) == (D1, D3, D4)
 
     def test_last_known_reading_sees_no_change_across_a_gap(self):
         """The same rates read as the cash reads them: D3 carries D2's 0.90, so only D1 changes."""
-        change_days = native_cash_module.change_days
-
         assert change_days(_last_known(_USD_WITH_A_GAP), {"USD"}, CALENDAR) == (D1,)
 
     def test_a_rate_present_on_the_first_calendar_day_counts(self):
         """USD 0.90 every day, calendar D2-D4: D2 counts (None before the calendar), D3 and D4 do not."""
-        change_days = native_cash_module.change_days
         flat = {("USD", day): "0.90" for day in CALENDAR}
 
         assert change_days(_exact_day(flat), {"USD"}, (D2, D3, D4)) == (D2,)
@@ -718,14 +711,11 @@ class TestChangeDays:
     def test_a_rate_absent_on_the_first_calendar_day_is_no_change(self):
         """USD 0.90 on D2 and D3 only, calendar D1-D3: D1 reads None as the day before it, so it is no
         change; D2 is (the rate appears)."""
-        change_days = native_cash_module.change_days
-
         assert change_days(_exact_day({("USD", D2): "0.90", ("USD", D3): "0.90"}), {"USD"}, (D1, D2, D3)) == (D2,)
 
     def test_the_change_days_of_several_currencies_are_merged_sorted_and_unique(self):
         """USD 0.90, 0.90, 0.80, 0.85, 0.85 changes on D1, D3, D4; GBP, from D2, 1.20, 1.20, 1.10, 1.10
         on D2, D4: together D1, D2, D3, D4, in calendar order, D4 once."""
-        change_days = native_cash_module.change_days
         usd = {("USD", day): rate for day, rate in zip(CALENDAR, ("0.90", "0.90", "0.80", "0.85", "0.85"), strict=True)}
         gbp = {("GBP", day): rate for day, rate in zip(CALENDAR[1:], ("1.20", "1.20", "1.10", "1.10"), strict=True)}
 
@@ -733,7 +723,6 @@ class TestChangeDays:
 
     def test_a_currency_outside_the_set_is_ignored(self):
         """CHF moves on D2 and D3, but only USD (0.90 every day) is asked: only D1 changes."""
-        change_days = native_cash_module.change_days
         rates = {("USD", day): "0.90" for day in CALENDAR} | {("CHF", D1): "1.05", ("CHF", D2): "1.10", ("CHF", D3): "1.05"}
 
         assert change_days(_exact_day(rates), {"USD"}, CALENDAR) == (D1,)
@@ -743,7 +732,6 @@ class TestChangeDays:
         last-known rate on the calendar of its rate points. A holds USD (0.90 on D1, 0.95 on D3 and D4),
         B holds GBP (1.20 on D2, 1.25 on D4); CHF has rates but no cash. Today's answer: D1, D2, D3, D4.
         """
-        change_days = native_cash_module.change_days
         rates = {("USD", D1): "0.90", ("USD", D3): "0.95", ("USD", D4): "0.95", ("GBP", D2): "1.20", ("GBP", D4): "1.25", ("CHF", D3): "1.05"}
         movements = (
             CashMovement(movement_id=1, transaction_type="DEPOSIT", date=D1, broker_id=A, asset_id=None, currency="USD", amount=Decimal("1000")),

@@ -6,9 +6,9 @@ Module under test: ``backend/app/services/financial_math/weights.py``, new. Five
 * ``share_of(part, total)``: ``part / total``, unrounded; None when the total is zero or negative;
 * ``percent_of(part, total)``: the same share × 100, unrounded; None where ``share_of`` is None;
 * ``slice_percents(amounts)``: the slices of an allocation as percentages of their **signed** sum,
-  unrounded, in the mapping's order; a sum of zero divides by 1 (so an empty or all-zero allocation
-  is all zeros). This is the old ``derived_views._alloc`` rule kept as it was: cash below zero is a
-  slice below zero and the others then add up to more than 100;
+  unrounded, in the mapping's order, when that sum is above zero: cash below zero is a slice below
+  zero and the others then add up to more than 100 (the old ``derived_views._alloc`` rule). On a sum
+  at or below zero every slice is None (MF-C2, below); an empty mapping is ``{}``;
 * ``gross_weights(values)``: ``|value| / Σ |value|`` per key, in the mapping's order; ``{}`` on a
   zero total (short positions weigh by their size);
 * ``concentration(weights_percent)``: the largest absolute weight and the Herfindahl index
@@ -28,6 +28,15 @@ other number must stay byte-identical, so ``TestParityWithTheOldFormulas`` write
 inline, as it stood at HEAD, and compares ``str()`` — value *and* exponent — with the new function,
 rounded where the caller rounds and unrounded too. ``TestDMF7Divergence`` pins the only difference,
 next to the number HEAD gave.
+
+MF-C2 (developer's decision, ondata 6; backlog ``BACKLOG_POST_1.2.md`` «MF-C2»): the allocation slices get
+the same rule. Until then ``slice_percents`` divided by the signed sum, and by 1 when the sum was zero:
+``{Stock: 500, Cash: −500}`` read 50000 % / −50000 %, and a negative sum flipped every slice's sign. Now a
+sum at or below zero — an all-zero allocation included, e.g. ``{Liquidity: 0}`` of an emptied portfolio —
+gives None for every slice (the chart shows «—»; the amounts stay with the caller). A positive sum is
+unchanged, negative cash included. ``TestMFC2Divergence`` pins the difference next to the number the old
+rule gave; the three sets that rule now covers left ``ALLOCATIONS`` (the parity table). RED until MF-C2:
+the flipped and the new tests fail with ``AssertionError`` (a Decimal where None is expected).
 
 Red by absence before MF-C: the module is imported while each test runs (``_weights()``), never at
 module level, so the file collects on HEAD and every test fails on ``ModuleNotFoundError``.
@@ -192,23 +201,38 @@ class TestSlicePercents:
         assert percents == {"Stock": _d("150"), "Cash": _d("-50")}
         assert sum(percents.values()) == 100
 
-    def test_a_negative_sum_divides_by_the_signed_sum(self):
-        """The old ``_alloc`` rule, kept: −200 is the divisor, so every slice changes sign."""
+    def test_a_negative_sum_has_no_slices(self):
+        """MF-C2: a sum below zero (a NAV below zero) is no divisor — every slice is None, in the mapping's order.
+        The old rule divided by −200, so every slice changed sign (−50 / 150)."""
         percents = _weights().slice_percents({"Stock": _d("100"), "Cash": _d("-300")})
-        assert percents == {"Stock": _d("-50"), "Cash": _d("150")}
-
-    def test_empty_and_all_zero_allocations_are_zeros_not_none(self):
-        weights = _weights()
-        assert weights.slice_percents({}) == {}
-        percents = weights.slice_percents({"Stock": _d("0"), "Cash": _d("0.00")})
         assert list(percents) == ["Stock", "Cash"]
-        assert all(value is not None and value == 0 for value in percents.values()), percents
+        assert percents == {"Stock": None, "Cash": None}
 
-    def test_a_net_zero_allocation_divides_by_one(self):
-        """The old ``or 1``, kept byte-identical on purpose (D-MF7 covers the holdings' weights, not the
-        allocation slices): slices that cancel out read as their amounts × 100."""
+    def test_an_empty_allocation_is_empty(self):
+        assert _weights().slice_percents({}) == {}
+
+    @pytest.mark.parametrize(
+        "amounts",
+        [{"Stock": _d("0"), "Cash": _d("0.00")}, {"Liquidity": _d("0")}, {"Liquidity": _d("-0")}],
+        ids=["two-zeros", "emptied-portfolio-liquidity-zero", "negative-zero"],
+    )
+    def test_an_all_zero_allocation_has_no_slices(self, amounts):
+        """MF-C2: a zero sum is no divisor either — ``{Liquidity: 0}`` is the type dimension of an emptied portfolio.
+        The old rule gave zeros (0 / 1 × 100)."""
+        percents = _weights().slice_percents(amounts)
+        assert list(percents) == list(amounts)
+        assert all(value is None for value in percents.values()), percents
+
+    def test_a_net_zero_allocation_has_no_slices(self):
+        """MF-C2: slices that cancel out (stocks bought on overdraft) have no shares. The old ``or 1`` read them as
+        their amounts × 100: 50000 % / −50000 %."""
         percents = _weights().slice_percents({"Stock": _d("500"), "Cash": _d("-500")})
-        assert percents == {"Stock": _d("50000"), "Cash": _d("-50000")}
+        assert percents == {"Stock": None, "Cash": None}
+
+    def test_a_positive_sum_by_a_hair_still_divides(self):
+        """The boundary is the sign of the sum, not its size: one cent above zero still divides by the signed sum."""
+        percents = _weights().slice_percents({"Stock": _d("500.01"), "Cash": _d("-500")})
+        assert percents == {"Stock": _d("500.01") / _d("0.01") * 100, "Cash": _d("-500") / _d("0.01") * 100}
 
     def test_unrounded(self):
         percents = _weights().slice_percents({"A": _d("1"), "B": _d("2")})
@@ -277,10 +301,7 @@ class TestConcentration:
 ALLOCATIONS = {
     "ordinary": {"Stock": Decimal("600"), "ETF": Decimal("300"), "Cash": Decimal("100")},
     "negative-cash": {"Stock": Decimal("1500"), "Bond": Decimal("250.75"), "Cash": Decimal("-500")},
-    "negative-sum": {"Stock": Decimal("100"), "Cash": Decimal("-300")},
-    "net-zero": {"Stock": Decimal("500"), "Cash": Decimal("-500")},
     "empty": {},
-    "all-zero": {"Stock": Decimal("0"), "Cash": Decimal("0.00")},
     "exponents": {"A": Decimal("1E+3"), "B": Decimal("2000.000"), "C": Decimal("-0.001")},
     "half-cent-tie": {"A": Decimal("12.345"), "B": Decimal("87.655")},
     "long-digits": {"A": Decimal("12345678901234567890.123456789"), "B": Decimal("3.3"), "Cash": Decimal("-7.77")},
@@ -331,8 +352,9 @@ RISK_SCOPES = {
 class TestParityWithTheOldFormulas:
     @pytest.mark.parametrize("amounts", list(ALLOCATIONS.values()), ids=list(ALLOCATIONS))
     def test_allocation_slices_are_the_old_alloc(self, amounts):
-        """``derived_views``: ``slice_percents(d)[name].quantize(0.01)`` is the old ``(amt / (sum or 1) * 100).quantize(0.01)``,
-        negative cash, negative and zero sums included — and so is every unrounded value."""
+        """``derived_views``: ``slice_percents(d)[name].quantize(0.01)`` is the old ``(amt / (sum or 1) * 100).quantize(0.01)``
+        on every sum above zero, negative cash included — and so is every unrounded value (MF-C2 took the sums at or
+        below zero out: ``TestMFC2Divergence``)."""
         new = _weights().slice_percents(amounts)
         old = _old_alloc_percents(amounts)
         assert _shown(new) == _shown(old), "unrounded slices differ"
@@ -409,3 +431,27 @@ class TestDMF7Divergence:
         total_market = sum(values, Decimal("0"))
         assert [_old_allocation_percent(value, values) for value in values] == [_d(text) for text in head], "the old formula, as pinned here, gave this"
         assert [_weights().percent_of(value, total_market) for value in values] == [None] * len(values)
+
+
+# =============================================================================
+# MF-C2: the allocation slices of a sum at or below zero
+# =============================================================================
+
+# (amounts, what the old rule gave, unrounded): every sum at or below zero
+NON_POSITIVE_ALLOCATIONS = {
+    "net-zero": ({"Stock": Decimal("500"), "Cash": Decimal("-500")}, {"Stock": Decimal("50000"), "Cash": Decimal("-50000")}),
+    "negative-sum": ({"Stock": Decimal("100"), "Cash": Decimal("-300")}, {"Stock": Decimal("-50"), "Cash": Decimal("150")}),
+    "all-zero": ({"Stock": Decimal("0"), "Cash": Decimal("0.00")}, {"Stock": Decimal("0"), "Cash": Decimal("0")}),
+    "emptied-portfolio": ({"Liquidity": Decimal("0")}, {"Liquidity": Decimal("0")}),
+    "every-slice-negative": ({"Stock": Decimal("-10"), "Cash": Decimal("-30")}, {"Stock": Decimal("25"), "Cash": Decimal("75")}),
+}
+
+
+class TestMFC2Divergence:
+    @pytest.mark.parametrize("amounts, head", list(NON_POSITIVE_ALLOCATIONS.values()), ids=list(NON_POSITIVE_ALLOCATIONS))
+    def test_no_slice_where_the_old_rule_divided_by_the_signed_sum_or_by_one(self, amounts, head):
+        """Old: ``amt / (sum or 1) × 100``. Now: None for every slice, the keys and their order kept."""
+        assert _old_alloc_percents(amounts) == head, "the old formula, as pinned here, gave this"
+        percents = _weights().slice_percents(amounts)
+        assert list(percents) == list(amounts)
+        assert all(value is None for value in percents.values()), f"expected None for every slice, got {percents}"
