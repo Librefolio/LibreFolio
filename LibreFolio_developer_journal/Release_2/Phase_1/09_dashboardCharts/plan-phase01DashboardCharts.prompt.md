@@ -8662,3 +8662,29 @@ Z-13, Z-18, Z-14): si **estende**, non si crea.
 - ✅ **Passo 5, #48** (committato `36eaffa4d`): dopo l'unione di J, `PositionSeriesPoint` ha `through` e la risposta `range`. `positionLine` dà un punto per tratto più la chiusura all'ultimo `through`, linea `stepped`; `lineOnDay(line, day)` dà il punto che tiene il giorno; `PositionsReturnChart` disegna `step: 'end'` e il suo tooltip elenca, per ogni linea disegnata, quello che dice nel giorno puntato (`snap: false` più `updateAxisPointer`). `PositionsReturnChart.steps.test.ts` (6). E2E dashboard 32/32 (due rossi al primo giro, di carico: l'app non arrivava in 15 e 30 s, rilanciato senza modifiche); gallery `main dashboard` desktop 1/1.
 - ✅ **Passo 6, i lotti**: `lotStepRows.ts` (giorni testimone di più storie, `expandAtDays` per serie, `withBucketEnds`; 15 casi con parità sul giorno per giorno) e `components/charts/stepTooltip.ts` (`paramsAtDay`: i parametri del tooltip di ECharts riscritti sul giorno puntato; 7 casi). `LotComparisonChart` e `LotWacPriceChart` prendono `range`, espandono le storie nei giorni testimone e disegnano le linee con `step: 'end'` a risoluzione giornaliera; il pannello passa `range` di ciascuna risposta (`asObject(response.range)`). Il resto dei due grafici (somme per data, cascata di risoluzione, zoom, marcatori, bolle) non è stato toccato. `LotComparisonChart.steps.test.ts` (6) e `LotWacPriceChart.steps.test.ts` (6), con il controllo di mutazione: spenti `step` e il giorno puntato, i casi nuovi diventano rossi.
   > **Nota**: le serie `value_history`, `return_history`, `market_price_history`, `broker_wac_history` e `cumulative_wac_history` sono quelle di J; `price_history` e `performance_history` non le legge nessun grafico.
+
+## 28/10 · Ondata 6 (Y: cruscotto, liste e banner) — checkpoint 1
+
+Base `32674edb8`. Corsia 6211, `/tmp/librefolio-r13-o6-y`. Brief: `salvataggi-worktrees-20261021/ondata6/kickoff-Y.md`.
+
+### FB-7 — «tutta la storia» parte dal primo movimento vero (non dal 2000)
+
+**Analisi.** `resolveDateSentinel('min')` dava `'2000-01-01'` e le richieste di storia lo mandavano al backend: una storia del 1850 si tagliava al 2000. Il backend sa già risolvere `"min"` (`resolve_date_sentinels`) su `/portfolio/report`, `/portfolio/positions-series` e `/portfolio/wac`: `OpenDateRangeModel`. Le rotte di prezzi, FX e rischio vogliono invece una data vera (`DateRangeModel`).
+
+Le 33 chiamate di `resolveDateSentinel`, una per una:
+- Dashboard (`dateRangeController`, 5) e broker (`brokers/[id]`, 4): **difetto**, la storia viene dal report → cura sotto.
+- Assets lista/dettaglio (13) e FX lista/dettaglio (13): chiedono prezzi/tassi con `DateRangeModel` → il pavimento 2000 c'è ancora lì (e gli E2E `asset-detail`/`fx-detail` lo fissano apposta). **Non toccato**: serve che il backend accetti `"min"` anche su quelle rotte (`schemas/prices.py:341`, `schemas/fx.py:115,208`), o una rotta «primo giorno con dati». Domanda al coordinatore.
+
+**Cura.** `historyStart(isMaxPending, start)` in `dateRangeStore.svelte.ts` (`"min"` finché «Tutto» è in attesa, la data vera dopo); `createDateRangeController().historyStart` per la Dashboard, la stessa funzione per la pagina del broker (sintassi Svelte 4). Report, contributo, candele, serie delle posizioni e chiave di cache usano `historyStart`. L'elenco transazioni della Dashboard e il suo link «vedi tutte» tolgono `date_start` finché «Tutto» è in attesa. `start` resta un segnaposto per chi vuole una data vera (rischio) fino a che la pagina non vede il primo giorno.
+
+- ✅ (28/10) **Rosso**: `dateRangeController.test.ts` (6 casi) rosso per `historyStart` mancante; **verde** dopo la cura (6/6).
+- ✅ (28/10) E2E `dashboard.spec.ts` «Dashboard «All» period (FB-7)»: scelto «Tutto», il report chiede `start: "min"` e mai `2000-01-01`.
+- ✅ (28/10) **Prova FB-7**: `front-portfolio dashboard FB-7` 1/1 (corsia 6211). Vitest `features/dashboard`, `ui/feedback`, `stores`, `utils/sync`: 69 file, 1843/1843. `front check` 0/0.
+  > **⚠️ Fuori pista**: l'E2E di FB-7 l'ho scritto insieme alla cura, quindi non l'ho visto rosso prima; il rosso provato è quello di Vitest (`historyStart` assente, 6/6 rossi).
+  > **Domanda aperta**: le pagine Assets e FX (lista e dettaglio) hanno ancora il pavimento 2000 per prezzi e tassi (`DateRangeModel`, start obbligatorio). Per tagliarlo serve il `"min"` sulle rotte `prices` e `fx` del backend (`schemas/prices.py:341`, `schemas/fx.py:115,208`): non è del mio perimetro.
+
+### Banner «cambio vecchio» (domanda 18)
+
+`data_quality.stale_fx_pairs` c'è già nel report ma non genera un `DataQualityIssue`. La riga si costruisce nel frontend (`features/dashboard/staleFxIssue.ts`, pura): codice `STALE_FX`, avviso, un solo bottone «Sincronizza tassi» (azione `sync_stale_fx`, stessa richiesta dei tassi mancanti: dal tasso più vecchio a oggi, una settimana di margine), le coppie sotto il messaggio. Testi `dataQuality.staleFx` e `dataQuality.cta.sync_stale_fx` in 4 lingue (dicono cosa fare: «sincronizza i tassi per aggiornare i totali»). L'azione è distinta da `sync_fx_pair` apposta: dopo la sincronizzazione i tassi mancanti hanno il loro messaggio di esito, quello dei tassi vecchi no.
+- ✅ (28/10) `staleFxIssue.test.ts` (4) e tre E2E nello spec dei banner («STALE_FX: riga con coppia e bottone», «nessun tasso vecchio, nessuna riga», «Sync rates sincronizza dalla data del tasso a oggi, poi ricarica»).
+- ✅ (28/10) **Prove del checkpoint 1**: `front-portfolio banners` 23/23 (3 nuovi); `front-portfolio dashboard` 33/33; `front-broker detail` 41/41; Vitest `features/dashboard` + `ui/feedback` + `stores` + `utils/sync` 69 file / 1843; `front check` 0/0; `i18n check` stretto; `check-orphans` verde (i due test nuovi registrati in `_frontend_utility.py`, `front_utility_unit`).
