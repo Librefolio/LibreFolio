@@ -895,26 +895,32 @@
         return getPairedAccessLevel(d.tx.broker_id, partnerBid);
     }
 
+    /**
+     * The row actions. An action is offered only when the page gave it a handler (FB-17): a button that does nothing is not shown.
+     * The Transactions page passes all of them; the broker page's tab passes the ones it wires.
+     */
     let rowActions = $derived<RowAction<DisplayRow>[]>([
         {
             id: 'view',
             icon: Eye,
             label: () => $t('transactions.actions.view') || 'View',
-            onClick: (d) => onViewRow?.(d.tx),
+            onClick: (d: DisplayRow) => onViewRow?.(d.tx),
+            visible: () => onViewRow !== undefined,
         },
         {
             id: 'edit',
             icon: Pencil,
             label: () => $t('common.edit') || 'Edit',
-            onClick: (d) => onEditRow?.(d.tx),
-            visible: (d) => rowAccessLevel(d) === 'full',
+            onClick: (d: DisplayRow) => onEditRow?.(d.tx),
+            visible: (d: DisplayRow) => onEditRow !== undefined && rowAccessLevel(d) === 'full',
         },
         {
             id: 'clone',
             icon: Copy,
             label: () => $t('transactions.actions.clone') || 'Clone',
-            onClick: (d) => onCloneRow?.(d.tx),
-            visible: (d) => {
+            onClick: (d: DisplayRow) => onCloneRow?.(d.tx),
+            visible: (d: DisplayRow) => {
+                if (onCloneRow === undefined) return false;
                 const level = rowAccessLevel(d);
                 // Standalone: clone allowed if user can edit the broker
                 if (d.tx.related_transaction_id == null) return canEditBroker(d.tx.broker_id);
@@ -926,18 +932,18 @@
             id: 'split',
             icon: Unlink,
             label: () => $t('transactions.actions.split') || 'Split pair',
-            onClick: (d) => onSplitRow?.(d.tx),
-            visible: (d) => d.tx.related_transaction_id != null && rowAccessLevel(d) === 'full',
+            onClick: (d: DisplayRow) => onSplitRow?.(d.tx),
+            visible: (d: DisplayRow) => onSplitRow !== undefined && d.tx.related_transaction_id != null && rowAccessLevel(d) === 'full',
         },
         {
             id: 'delete',
             icon: Trash2,
             label: () => $t('common.delete') || 'Delete',
-            variant: 'danger',
-            onClick: (d) => onDeleteRow?.(d.tx),
-            visible: (d) => rowAccessLevel(d) === 'full',
+            variant: 'danger' as const,
+            onClick: (d: DisplayRow) => onDeleteRow?.(d.tx),
+            visible: (d: DisplayRow) => onDeleteRow !== undefined && rowAccessLevel(d) === 'full',
         },
-    ]);
+    ] satisfies RowAction<DisplayRow>[]);
 
     /**
      * Click delegation for inline buttons rendered by HtmlCell:
