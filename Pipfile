@@ -15,6 +15,8 @@ pydantic-settings = "*"
 numpy = "*"
 python-dotenv = "*"
 apscheduler = "*"
+# zoneinfo (scheduler, settings, Yahoo) needs the IANA database; outside Docker only this package provides it
+tzdata = "*"
 structlog = "*"
 psutil = "*"
 python-dateutil = "*"
