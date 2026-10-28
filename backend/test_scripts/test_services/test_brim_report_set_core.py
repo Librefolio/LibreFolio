@@ -13,10 +13,10 @@ Covered:
   ``match_key_text``;
 - B source files: ``layout``, ``find_layout``, ``xlsx_rows`` (an ``.xlsx`` built with openpyxl under ``tmp_path``),
   ``csv_rows`` (a ``;`` and a ``,`` file under ``tmp_path``);
-- C rule M: ``coverage``, ``by_day``, ``same_rows`` and ``RoleMerge`` (which file owns which day, which rows are
-  superseded, on which days two files contradict);
+- C rule M: ``coverage``, ``by_day``, ``same_rows``, ``contained_rows`` and ``RoleMerge`` (which file owns which day, which
+  rows are superseded, on which days two files contradict; the ``owner`` and ``contradiction`` policies);
 - D pairing: ``assign``, ``best_assignment``, ``pair_by_key`` (a pair only when it is certain, else the rows are
-  listed as ambiguous);
+  listed as ambiguous), and ``pair_outcome_of`` (the right row decides what a pair imports);
 - E timeline: ``merge_spans``, ``build_timeline``, ``zone``, ``Segment.zone``.
 
 Pure: no database, no server, no network, no clock. A row of rule M is a tiny frozen dataclass with a ``day`` and a
@@ -512,6 +512,158 @@ class TestRoleMerge:
         assert merge.mismatch_days == []
 
 
+class TestContainedRows:
+    def test_a_subset_is_contained(self):
+        assert core.contained_rows([_Row(day(1), "a")], [_Row(day(1), "a"), _Row(day(1), "b")])
+
+    def test_the_same_rows_are_contained(self):
+        assert core.contained_rows([_Row(day(1), "a"), _Row(day(1), "b")], [_Row(day(1), "b"), _Row(day(1), "a")])
+
+    def test_an_empty_group_is_part_of_any(self):
+        assert core.contained_rows([], [_Row(day(1), "a")])
+        assert core.contained_rows([], [])
+
+    def test_a_row_the_outer_lacks_is_not_contained(self):
+        assert not core.contained_rows([_Row(day(1), "a"), _Row(day(1), "z")], [_Row(day(1), "a"), _Row(day(1), "b")])
+
+    def test_something_in_nothing_is_not_contained(self):
+        assert not core.contained_rows([_Row(day(1), "a")], [])
+
+    def test_a_signature_counts_as_often_as_it_appears(self):
+        once, twice = [_Row(day(1), "a")], [_Row(day(1), "a"), _Row(day(1), "a")]
+        assert core.contained_rows(once, twice)
+        assert not core.contained_rows(twice, once)
+
+    def test_only_the_signature_matters(self):
+        assert core.contained_rows([_Row(day(1), "a", "A")], [_Row(day(9), "a", "B")])
+
+
+class TestRoleMergePolicies:
+    """``owner`` and ``contradiction``: the two knobs a bank that only ever cuts an export short (Crédit Agricole) turns."""
+
+    def test_an_unknown_owner_policy_raises(self):
+        with pytest.raises(ValueError, match="unknown rule M policy"):
+            RoleMerge([_file("A", [1])], _day_of, owner="oldest")
+
+    def test_an_unknown_contradiction_policy_raises(self):
+        with pytest.raises(ValueError, match="unknown rule M policy"):
+            RoleMerge([_file("A", [1])], _day_of, contradiction="never")
+
+    def test_the_defaults_are_the_ones_danske_uses(self):
+        a = [_Row(day(1), "a", "A"), _Row(day(1), "b", "A"), _Row(day(2), "c", "A")]
+        b = [_Row(day(1), "a", "B"), _Row(day(3), "d", "B")]
+        default, explicit = RoleMerge([a, b], _day_of), RoleMerge([a, b], _day_of, owner="latest", contradiction="differs")
+        assert (default.kept, default.superseded, default.mismatch_days) == (explicit.kept, explicit.superseded, explicit.mismatch_days)
+        # The file that ends last owns every day it covers, however few rows it has there.
+        assert default.kept == b
+        assert default.superseded == a
+
+    def test_most_rows_gives_the_day_to_the_bigger_file_even_when_it_ends_earlier(self):
+        a = [_Row(day(1), "a", "A"), _Row(day(1), "b", "A"), _Row(day(2), "c", "A")]
+        b = [_Row(day(1), "a", "B"), _Row(day(3), "d", "B")]
+        merge = RoleMerge([a, b], _day_of, owner="most_rows", contradiction="not_contained")
+        assert merge.kept == [*a, b[1]]
+        assert merge.superseded == [b[0]]
+        assert merge.mismatch_days == []
+
+    @pytest.mark.parametrize("order", [(0, 1), (1, 0)])
+    def test_most_rows_does_not_depend_on_the_order_of_the_files(self, order):
+        a = [_Row(day(1), "a", "A"), _Row(day(1), "b", "A"), _Row(day(2), "c", "A")]
+        b = [_Row(day(1), "a", "B"), _Row(day(3), "d", "B")]
+        files = [[a, b][index] for index in order]
+        merge = RoleMerge(files, _day_of, owner="most_rows", contradiction="not_contained")
+        assert sorted(row.signature for row in merge.kept) == ["a", "b", "c", "d"]
+        assert {row.tag for row in merge.kept if row.signature == "a"} == {"A"}
+        assert merge.superseded == [b[0]]
+
+    def test_a_tie_goes_to_the_file_that_ends_last(self):
+        a = [_Row(day(1), "a", "A"), _Row(day(2), "b", "A")]
+        b = [_Row(day(1), "x", "B"), _Row(day(3), "y", "B")]
+        merge = RoleMerge([a, b], _day_of, owner="most_rows", contradiction="not_contained")
+        assert b[0] in merge.kept
+        assert a[0] in merge.superseded
+        # Day 2 is inside B's span but B has no row there: A has one, so A keeps it.
+        assert a[1] in merge.kept
+
+    def test_a_tie_between_files_with_the_same_span_goes_to_the_later_one_in_the_list(self):
+        a, b = [_Row(day(1), "a", "A"), _Row(day(2), "p", "A")], [_Row(day(1), "x", "B"), _Row(day(2), "q", "B")]
+        for files, owner_tag in (([a, b], "B"), ([b, a], "A")):
+            merge = RoleMerge(files, _day_of, owner="most_rows", contradiction="not_contained")
+            assert {row.tag for row in merge.kept} == {owner_tag}
+
+    def test_the_default_contradiction_calls_a_subset_a_mismatch(self):
+        a = [_Row(day(1), "a", "A"), _Row(day(1), "b", "A"), _Row(day(1), "c", "A")]
+        b = [_Row(day(1), "a", "B"), _Row(day(2), "d", "B")]
+        merge = RoleMerge([a, b], _day_of, owner="most_rows")
+        assert merge.mismatch_days == [day(1)]
+        assert merge.superseded == [b[0]]
+
+    def test_not_contained_does_not_call_a_subset_a_mismatch(self):
+        a = [_Row(day(1), "a", "A"), _Row(day(1), "b", "A"), _Row(day(1), "c", "A")]
+        b = [_Row(day(1), "a", "B"), _Row(day(2), "d", "B")]
+        merge = RoleMerge([a, b], _day_of, owner="most_rows", contradiction="not_contained")
+        assert merge.mismatch_days == []
+        # The subset still loses the day: its row is not counted twice.
+        assert merge.superseded == [b[0]]
+        assert merge.kept == [*a, b[1]]
+
+    def test_not_contained_calls_a_row_the_owner_lacks_a_mismatch_when_the_owner_is_bigger(self):
+        a = [_Row(day(1), "a", "A"), _Row(day(1), "b", "A"), _Row(day(1), "c", "A")]
+        b = [_Row(day(1), "a", "B"), _Row(day(1), "z", "B"), _Row(day(2), "d", "B")]
+        merge = RoleMerge([a, b], _day_of, owner="most_rows", contradiction="not_contained")
+        assert merge.mismatch_days == [day(1)]
+        assert merge.superseded == b[:2]
+
+    def test_not_contained_calls_a_row_the_owner_lacks_a_mismatch_on_a_tie(self):
+        a = [_Row(day(1), "a", "A"), _Row(day(1), "b", "A")]
+        b = [_Row(day(1), "a", "B"), _Row(day(1), "z", "B"), _Row(day(2), "d", "B")]
+        merge = RoleMerge([a, b], _day_of, owner="most_rows", contradiction="not_contained")
+        assert merge.mismatch_days == [day(1)]
+        assert merge.superseded == a
+
+    def test_not_contained_counts_copies(self):
+        # Two identical rows in the owner stay two; a file with the row once is a subset of it.
+        owner = [_Row(day(1), "x", "A"), _Row(day(1), "x", "A")]
+        cut = [_Row(day(1), "x", "B"), _Row(day(2), "y", "B")]
+        merge = RoleMerge([owner, cut], _day_of, owner="most_rows", contradiction="not_contained")
+        assert merge.mismatch_days == []
+        assert [row for row in merge.kept if row.signature == "x"] == owner
+        # The other way round it is not: a file that holds a signature more often than the owner contradicts it.
+        twice = [_Row(day(1), "x", "C"), _Row(day(1), "y", "C")]
+        owner_b = [_Row(day(1), "x", "D"), _Row(day(1), "z", "D"), _Row(day(2), "w", "D")]
+        merge = RoleMerge([twice, owner_b], _day_of, owner="most_rows", contradiction="not_contained")
+        assert merge.mismatch_days == [day(1)]
+
+    def test_identical_downloads_count_once_under_every_policy(self):
+        a, b = _file("A", [1, 2, 3]), _file("B", [1, 2, 3])
+        for owner in ("latest", "most_rows"):
+            for contradiction in ("differs", "not_contained"):
+                merge = RoleMerge([a, b], _day_of, owner=owner, contradiction=contradiction)
+                assert merge.kept == b
+                assert merge.superseded == []
+                assert merge.mismatch_days == []
+
+    def test_a_single_file_keeps_everything_under_the_ca_policy(self):
+        a = _file("A", [1, 1, 2])
+        merge = RoleMerge([a], _day_of, owner="most_rows", contradiction="not_contained")
+        assert merge.kept == a
+        assert merge.superseded == []
+
+    def test_undated_rows_and_empty_files_under_the_ca_policy(self):
+        undated = [_Row(None, "n", "A")]
+        merge = RoleMerge([undated, [], _file("B", [1])], _day_of, owner="most_rows", contradiction="not_contained")
+        assert merge.kept == [*undated, *_file("B", [1])]
+        assert merge.superseded == []
+        assert merge.mismatch_days == []
+
+    def test_a_day_the_bigger_file_does_not_cover_stays_with_the_other(self):
+        a = _file("A", [1, 2])
+        b = _file("B", [4, 5])
+        merge = RoleMerge([a, b], _day_of, owner="most_rows", contradiction="not_contained")
+        assert merge.kept == a + b
+        assert merge.superseded == []
+
+
 # =============================================================================
 # D. PAIRING: ONE TO ONE, NEVER A GUESS
 # =============================================================================
@@ -628,6 +780,98 @@ class TestBestAssignment:
         la, lb = _Left("a", "o1"), _Left("b", "o2")
         r1, ra, rb = _Right("x"), _Right("a"), _Right("b")
         assert core.best_assignment([la, lb], [r1, ra, rb], same_name=_same_name, outcome_of=_outcome) == [(la, ra), (lb, rb)]
+
+
+def _by_key(left: _Left, right: _Right):
+    """What a pair imports when the right row decides it (a plugin that reads an asset or a withholding from it)."""
+    return (left.outcome, right.key)
+
+
+class TestPairOutcome:
+    """``pair_outcome_of``: the outcome of a pair, not of its left row alone."""
+
+    def test_partners_that_differ_for_one_left_row_are_ambiguous(self):
+        left = _Left("a", "o1")
+        r1, r2 = _Right("x", "k1"), _Right("y", "k2")
+        # Without it, which partner the lone left row gets changes nothing it imports: the first one is taken.
+        assert core.best_assignment([left], [r1, r2], same_name=_never, outcome_of=_outcome) == [(left, r1)]
+        assert core.best_assignment([left], [r1, r2], same_name=_never, outcome_of=_outcome, pair_outcome_of=_by_key) is None
+
+    def test_interchangeable_partners_are_a_pair(self):
+        left = _Left("a", "o1")
+        r1, r2 = _Right("x", "same"), _Right("y", "same")
+        assert core.best_assignment([left], [r1, r2], same_name=_never, outcome_of=_outcome, pair_outcome_of=_by_key) == [(left, r1)]
+
+    def test_a_compatible_name_breaks_the_tie_between_partners(self):
+        left = _Left("a", "o1")
+        r1, r2 = _Right("a", "k1"), _Right("b", "k2")
+        assert core.best_assignment([left], [r1, r2], same_name=_same_name, outcome_of=_outcome, pair_outcome_of=_by_key) == [(left, r1)]
+
+    def test_twins_on_the_left_are_interchangeable_whoever_their_partners_are(self):
+        l1, l2 = _Left("x", "same"), _Left("y", "same")
+        r1, r2 = _Right("c", "k1"), _Right("d", "k2")
+        assert core.best_assignment([l1, l2], [r1, r2], same_name=_never, outcome_of=_outcome, pair_outcome_of=_by_key) == [(l1, r1), (l2, r2)]
+
+    def test_different_left_rows_with_different_partners_are_ambiguous(self):
+        l1, l2 = _Left("x", "o1"), _Left("y", "o2")
+        r1, r2 = _Right("c", "k1"), _Right("d", "k2")
+        assert core.best_assignment([l1, l2], [r1, r2], same_name=_never, outcome_of=_outcome, pair_outcome_of=_by_key) is None
+
+    def test_different_left_rows_with_interchangeable_partners_are_a_pair(self):
+        l1, l2 = _Left("x", "o1"), _Left("y", "o2")
+        r1, r2 = _Right("c", "k"), _Right("d", "k")
+        assert core.best_assignment([l1, l2], [r1, r2], same_name=_never, outcome_of=_outcome, pair_outcome_of=_by_key) == [(l1, r1), (l2, r2)]
+
+    def test_assign_skips_the_twins_shortcut(self):
+        left = _Left("a", "o1")
+        r1, r2 = _Right("acme", "k1"), _Right("acme", "k2")
+        # Same label on the right and a single outcome on the left: the shortcut pairs them without looking further...
+        assert core.assign([left], [r1, r2], max_candidates=4, same_name=_never, outcome_of=_outcome, label_of=_label) == [(left, r1)]
+        # ...but when the right row decides what is imported the partners are not twins, whatever their label says.
+        assert core.assign([left], [r1, r2], max_candidates=4, same_name=_never, outcome_of=_outcome, label_of=_label, pair_outcome_of=_by_key) is None
+
+    def test_assign_pairs_twins_with_the_same_partner_outcome(self):
+        l1, l2 = _Left("x", "same"), _Left("y", "same")
+        r1, r2 = _Right("acme", "k"), _Right("acme", "k")
+        assert core.assign([l1, l2], [r1, r2], max_candidates=4, same_name=_never, outcome_of=_outcome, label_of=_label, pair_outcome_of=_by_key) == [(l1, r1), (l2, r2)]
+
+    def test_assign_compares_the_assignments_by_what_each_pair_imports(self):
+        calls: List[tuple] = []
+
+        def spy(left: _Left, right: _Right):
+            calls.append((left.name, right.label))
+            return _by_key(left, right)
+
+        l1, l2 = _Left("x", "same"), _Left("y", "same")
+        r1, r2 = _Right("acme", "k"), _Right("acme", "k")
+        core.assign([l1, l2], [r1, r2], max_candidates=4, same_name=_never, outcome_of=_outcome, label_of=_label, pair_outcome_of=spy)
+        assert calls  # consulted: the shortcut for twins was not taken
+
+    def test_one_against_one_is_still_a_pair_without_asking(self):
+        def never_called(_left: _Left, _right: _Right):
+            raise AssertionError("a lone pair needs no comparison")
+
+        left, right = _Left("a", "o1"), _Right("zzz", "k")
+        assert core.assign([left], [right], max_candidates=4, same_name=_never, outcome_of=_outcome, label_of=_label, pair_outcome_of=never_called) == [(left, right)]
+
+    def test_above_max_candidates_nothing_is_tried(self):
+        lefts = [_Left("x", "same") for _ in range(3)]
+        rights = [_Right("acme", "k") for _ in range(3)]
+        assert core.assign(lefts, rights, max_candidates=2, same_name=_never, outcome_of=_outcome, label_of=_label, pair_outcome_of=_by_key) is None
+
+    def test_pair_by_key_lists_the_rows_of_a_group_whose_partners_differ(self):
+        left = _Left("a", "o1", "k1")
+        r1, r2 = _Right("x", "k1"), _Right("y", "k1")
+        # Both partners sit on the same pairing key; they differ in what they would import (the extra field ``label``).
+        pairs, ambiguous = core.pair_by_key(
+            [left],
+            [r1, r2],
+            left_key=lambda row: row.key,
+            right_key=lambda row: row.key,
+            assign_group=lambda lg, rg: core.assign(lg, rg, max_candidates=4, same_name=_never, outcome_of=_outcome, label_of=_label, pair_outcome_of=lambda a, b: (a.outcome, b.label)),
+        )
+        assert pairs == []
+        assert ambiguous == [left, r1, r2]
 
 
 def _group_pairer(left_group: List[_Left], right_group: List[_Right]):
