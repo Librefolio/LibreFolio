@@ -327,6 +327,22 @@ def parse_decimal(value: str) -> Optional[Decimal]:
 
 
 # =============================================================================
+# COST BASIS TODO
+# =============================================================================
+
+
+def needs_cost_basis_todo(transaction: TXCreateItem) -> bool:
+    """Whether a parsed row gets the blocking «inherited cost» todo: an incoming ADJUSTMENT with no cost.
+
+    A cost of 0 written by the user is a cost (a gift is received at 0): only a missing one asks for it (W6-5, J-64; the
+    decision Q-J57-3, «0 is a true cost»). An outgoing ADJUSTMENT takes no cost (N78-1), so it never asks.
+    """
+    if transaction.type != TransactionType.ADJUSTMENT or transaction.quantity <= 0:
+        return False
+    return transaction.cost_basis_override is None
+
+
+# =============================================================================
 # PLUGIN IMPLEMENTATION
 # =============================================================================
 
@@ -506,19 +522,16 @@ class GenericCSVBrokerProvider(BRIMProvider):
                     # value, N78-1)
                     if len(transactions) > tx_count_before:
                         added_tx = transactions[-1]
-                        if added_tx.type == TransactionType.ADJUSTMENT and added_tx.quantity > 0:
-                            cbo = added_tx.cost_basis_override
-                            has_cbo = cbo is not None and not (hasattr(cbo, "amount") and float(str(cbo.amount)) == 0)
-                            if not has_cbo:
-                                field_todos.append(
-                                    BRIMFieldTodo(
-                                        tx_index=len(transactions) - 1,
-                                        field="cost_basis_override",
-                                        severity="blocker",
-                                        reason_code="corporate_action",
-                                        message="Missing inherited per-unit cost basis (WAC). Enter the cost per single unit (not the total) to import.",
-                                    )
+                        if needs_cost_basis_todo(added_tx):
+                            field_todos.append(
+                                BRIMFieldTodo(
+                                    tx_index=len(transactions) - 1,
+                                    field="cost_basis_override",
+                                    severity="blocker",
+                                    reason_code="corporate_action",
+                                    message="Missing inherited per-unit cost basis (WAC). Enter the cost per single unit (not the total) to import.",
                                 )
+                            )
 
         except BRIMParseError:
             raise
