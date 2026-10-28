@@ -24,6 +24,8 @@
     import {assetDataSaveSummary, type AssetDataSaveCounts} from './assetDataSaveSummary';
     import PriceDataImportModal from './PriceDataImportModal.svelte';
     import EventDataImportModal from './EventDataImportModal.svelte';
+    import DataExportModal from '$lib/components/ui/data-editor/DataExportModal.svelte';
+    import {downloadAssetBackup} from '$lib/api/backupDownload';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {eventSaveErrorMessage} from '$lib/features/transactions/events/eventSaveError';
     import {rejectedMessage, saveErrorText, type Rejection} from '$lib/api/writeRefusal';
@@ -574,6 +576,9 @@
     <!-- Data Editor: Prices -->
     {#if activeTab === 'prices'}
         <DataEditor bind:rows={priceRows} bind:this={priceEditor} columns={priceColumns} onchange={handlePriceDataChange}>
+            {#snippet exportModal({open, setOpen})}
+                <DataExportModal {open} title={$t('dataEditor.exportPrices')} onexport={(format) => downloadAssetBackup(assetId, 'prices', format)} onclose={() => setOpen(false)} />
+            {/snippet}
             {#snippet importModal({open, setOpen, onimport})}
                 <PriceDataImportModal {open} {currency} {onimport} onclose={() => setOpen(false)} />
             {/snippet}
@@ -583,6 +588,9 @@
     <!-- Data Editor: Events -->
     {#if activeTab === 'events'}
         <DataEditor bind:rows={eventRows} bind:this={eventEditor} columns={eventColumns} importMatchKeys={['type']}>
+            {#snippet exportModal({open, setOpen})}
+                <DataExportModal {open} title={$t('dataEditor.exportEvents')} onexport={(format) => downloadAssetBackup(assetId, 'events', format)} onclose={() => setOpen(false)} />
+            {/snippet}
             {#snippet importModal({open, setOpen, onimport})}
                 <EventDataImportModal {open} onimport={(imported) => onimport(withoutProviderEvents(imported))} onclose={() => setOpen(false)} />
             {/snippet}
