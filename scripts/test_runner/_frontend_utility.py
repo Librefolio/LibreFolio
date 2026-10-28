@@ -42,6 +42,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/api/bulkBatchesGroups.test.ts",
             "src/lib/components/charts/__tests__/compactDensity.test.ts",
             "src/lib/components/charts/__tests__/stepTooltip.test.ts",
+            "src/lib/components/charts/__tests__/timeSeriesAggregation.yearly.test.ts",
             "src/lib/components/charts/__tests__/dayPointerSnap.test.ts",
             "src/lib/stores/__tests__/reducedPriceCache.test.ts",
             "src/lib/utils/__tests__/chartUtils.test.ts",

@@ -632,7 +632,7 @@
         return ladderActive ? getLadderData(candleWidth) : getResolutionData(currentResolution);
     }
 
-    function computeBucketCounts(startDate: string, endDate: string): {dailyCount: number; weeklyCount: number; monthlyCount: number} {
+    function computeBucketCounts(startDate: string, endDate: string): {dailyCount: number; weeklyCount: number; monthlyCount: number; yearlyCount: number} {
         return countBuckets(dates, startDate, endDate);
     }
 
