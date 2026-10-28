@@ -286,7 +286,10 @@
       "costBasisModeIncompatible": "❌ {type} ne prend pas de coût de base ici, donc aucun mode Auto ou Manuel : retirez-le.",
       "costBasisNegative": "Le coût de base ne peut pas être négatif : saisissez 0 ou plus.",
       "pairAdjustmentNotAllowed": "Deux Ajustements ne peuvent pas être liés : pour déplacer des titres entre courtiers, utilisez un Transfert d'Actif.",
-      "pairArrivalBeforeDeparture": "L'arrivée ({arrivalDate}) est datée avant le départ ({departureDate}). Elle a été enregistrée telle quelle : vérifiez les deux dates."
+      "pairArrivalBeforeDeparture": "L'arrivée ({arrivalDate}) est datée avant le départ ({departureDate}). Elle a été enregistrée telle quelle : vérifiez les deux dates.",
+      "pairCurrencyMismatch": "Les deux côtés d'un virement doivent être dans la même devise (trouvées {currencyA} et {currencyB}). Pour changer de devise, utilisez un change de devises",
+      "pairAmountMismatch": "Un virement doit faire sortir d'un courtier le même montant qu'il fait entrer dans l'autre (trouvés {amountA} et {amountB})",
+      "pairCurrencySame": "Les deux côtés d'un change de devises doivent être dans des devises différentes (les deux sont en {currency})"
     },
     "pydantic": {
       "greaterThan": "La valeur doit être supérieure à {gt}",
