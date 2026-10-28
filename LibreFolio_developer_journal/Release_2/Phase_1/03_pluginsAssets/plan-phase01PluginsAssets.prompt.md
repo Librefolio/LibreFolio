@@ -9271,3 +9271,33 @@ i valori li risolve il **genitore** e viaggiano col lavoro, come per il parse BR
 > - **⚠️ Fuori pista**: la guardia `test_only_the_split_loader_names_the_split_event_type` era rossa dal mio X5-3 (`currency_change.py` nominava `AssetEventType.SPLIT`). Ho aggiunto
 >   `split_event_condition()` e `not_split_event_condition()` a `financial_math/splits.py` e le uso in `currency_change.py`.
 > - **Non toccato** (R1–R5 dell'inventario di MF): i tetti di costo delle serie giornaliere, `ASSET_HISTORY_MIN_FALLBACK`, `SCHEDULE_MIN_DATE`; il pavimento di scrittura delle transazioni è di W.
+
+## Ondata 6 (28/10, base `32674edb8` = `dev_release2`, treni 12 e 13)
+
+Corsia 6209, `/tmp/librefolio-r13-o6-x`. Brief: `salvataggi-worktrees-20261021/ondata6/kickoff-X.md`. Ordine: X6-2 → X6-4 → X6-1 (checkpoint 1) → X6-3 → X6-5 + X-R39 → tetto di span (checkpoint 2) → FB-11 → FB-19 → MF-A13 (checkpoint 3).
+
+### Checkpoint 1
+
+#### X6-2 · X-R78: un limite vero dalla parte sbagliata della chiusura (28/10)
+
+> **Note implementazione** (✅ 28/10/2026): decisione del developer del 23/10, solo per i prezzi manuali. In `bulk_upsert_prices` (`services/assets/price_store.py`) un prezzo con
+> `source_plugin_key == "MANUAL"` il cui unico limite vero sta dalla parte sbagliata della chiusura (Low sopra, High sotto) è rifiutato `ohlc_inconsistent`, come la coppia
+> incoerente. Provider e scheduler continuano ad allargare i limiti fusi attorno alla chiusura; il rifiuto a due limiti veri vale per tutti, com'era (fissato dai test di X-R46).
+> **Rossi prima** (`asset-source-guards`, 4 rossi di 61): `…erasing_low_with_high_below_the_close_is_rejected` (era `…_is_saved_as_is`, il test di X-R78 che cambia con la decisione),
+> `…erasing_high_with_low_above_the_close_is_rejected`, `…only_a_high_below_the_close_is_rejected_not_widened` (il «vicino» del backlog: il High mandato da solo era allargato in silenzio).
+> Guardie verdi prima e dopo: un limite dalla parte giusta si salva; un provider con un limite solo sbagliato allarga (due parametri: High sotto, Low sopra).
+
+#### X6-4 · X-R70: il refresh conta le date rifiutate per OHLC (28/10)
+
+> **Note implementazione** (✅ 28/10/2026): `_persist_refresh_item` (`services/assets/refresh.py`) toglie dopo l'upsert le date che `bulk_upsert_prices` ha rifiutato (`rejected`)
+> da inserite/aggiornate e da `changed_points`; `_count_actual_price_changes` restituisce anche le date nuove per distinguere inserita da aggiornata.
+> Rosso prima: `test_a_provider_refresh_neither_counts_nor_announces_a_candle_the_upsert_refuses` (contava 2 inserite, 1 aggiornata, 3 punti; ora 1/0/1).
+
+#### X6-1 · X-R61 + X-R29: l'avviso del Sync di una card o riga (28/10)
+
+> **Note implementazione** (✅ 28/10/2026): nuovo endpoint `POST /assets/prices/stored-count` (corpo del sync: asset e intervallo; risposta per voce, nell'ordine, `stored_count` e
+> `manual_count`; `min` conta dal primo giorno, `resume` zero; tetto `MAX_BULK_ITEMS`). `handleSyncAsset` (`routes/(app)/assets/+page.svelte`) conta prima; con righe salvate apre una
+> conferma (`asset-sync-confirm`, `ConfirmModal`) che dice quanti prezzi sostituisce e quanti erano manuali; senza righe, o se il conteggio fallisce, parte come prima.
+> 4 chiavi nuove in 4 lingue (`assets.sync.confirm*`). Test: servizio `asset-source-guards` (conteggio per voce), API `assets-price` (2), E2E `asset-card-sync-confirm` (4, tutto mockato).
+> **⚠️ Fuori pista**: il servizio è stato scritto prima del suo test (nessun rosso vero: la funzione non esisteva). Non toccato: l'avviso di `SyncModalBase` («Sync all», selezione, pagina
+> dell'asset) conta ancora dai dati mostrati e non nomina i manuali; portarlo sull'endpoint è un seguito.
