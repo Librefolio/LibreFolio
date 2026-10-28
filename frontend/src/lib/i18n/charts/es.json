@@ -14,11 +14,13 @@
       "currentBucket": "En curso: {days} de {total} días",
       "originalValue": "orig. {value}",
       "fxRateDate": "cambio al {date}",
-      "fxDaysBack": "({days}d antes)"
+      "fxDaysBack": "({days}d antes)",
+      "yearLabel": "{year}"
     },
     "resolution": {
       "weekly": "Semanal",
-      "monthly": "Mensual"
+      "monthly": "Mensual",
+      "yearly": "Anual"
     },
     "marketPrice": "Precio de mercado",
     "showPercentage": "Mostrar porcentaje",

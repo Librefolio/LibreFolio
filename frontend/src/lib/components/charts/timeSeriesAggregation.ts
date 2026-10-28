@@ -13,7 +13,19 @@ import {daysBetween, utcMs} from '$lib/utils/dateOnly';
 
 import type {LineDataPoint} from './LineChart.svelte';
 
-export type ChartResolution = 'daily' | 'weekly' | 'monthly';
+/**
+ * The levels a chart groups its days into. `yearly` is the coarsest, for a history of many decades whose months are still too many
+ * for the plot: only a caller that counts years (`yearlyCount`) can reach it from the cascade.
+ */
+export type ChartResolution = 'daily' | 'weekly' | 'monthly' | 'yearly';
+
+/** How many buckets of each level the visible range holds; what the density cascade weighs. `yearlyCount` is optional: without it the year is never chosen. */
+export interface ResolutionCounts {
+    dailyCount: number;
+    weeklyCount: number;
+    monthlyCount: number;
+    yearlyCount?: number;
+}
 
 export interface BucketMeta {
     bucketStart: string;
@@ -160,6 +172,11 @@ export function mapDateToBucket(date: string, resolution: ChartResolution): {buc
     }
 
     const year = parsed.getUTCFullYear();
+
+    if (resolution === 'yearly') {
+        return {bucketStart: formatDate(utcMidnight(year, 0, 1)), bucketEnd: formatDate(utcMidnight(year, 11, 31))};
+    }
+
     const month = parsed.getUTCMonth();
     const monthStart = utcMidnight(year, month, 1);
     const monthEnd = utcMidnight(year, month + 1, 0);
@@ -561,7 +578,7 @@ export function stepForMaxPoints(counts: {days: number; weeks: number}, maxPoint
  * `grammar` defaults to 'line', so every existing caller keeps its exact previous behavior
  * by construction rather than by remembering to pass the old value.
  */
-export function chooseResolution(current: ChartResolution, counts: {dailyCount: number; weeklyCount: number; monthlyCount: number}, plotWidthPx: number, grammar: ChartGrammar = 'line'): ChartResolution {
+export function chooseResolution(current: ChartResolution, counts: ResolutionCounts, plotWidthPx: number, grammar: ChartGrammar = 'line'): ChartResolution {
     const {high, low} = DENSITY_THRESHOLDS[grammar];
 
     if (current === 'daily') {
@@ -578,8 +595,15 @@ export function chooseResolution(current: ChartResolution, counts: {dailyCount: 
         return 'weekly';
     }
 
+    if (current === 'yearly') {
+        return computeDensity(counts.monthlyCount, plotWidthPx) < low ? 'monthly' : 'yearly';
+    }
+
     const densityWeekly = computeDensity(counts.weeklyCount, plotWidthPx);
-    return densityWeekly < low ? 'weekly' : 'monthly';
+    if (densityWeekly < low) return 'weekly';
+    // The months are too many for the plot, and the caller counts years: the next level.
+    if (counts.yearlyCount !== undefined && computeDensity(counts.monthlyCount, plotWidthPx) > high) return 'yearly';
+    return 'monthly';
 }
 
 /**
@@ -601,10 +625,10 @@ export function chooseResolution(current: ChartResolution, counts: {dailyCount: 
  * correct answer depends on where you came from — cascading from the real `current`
  * preserves that "stay put" memory, it only closes the gap for multi-tier jumps.
  */
-export function cascadeResolution(current: ChartResolution, counts: {dailyCount: number; weeklyCount: number; monthlyCount: number}, plotWidthPx: number, grammar: ChartGrammar = 'line'): ChartResolution {
+export function cascadeResolution(current: ChartResolution, counts: ResolutionCounts, plotWidthPx: number, grammar: ChartGrammar = 'line'): ChartResolution {
     let resolution = current;
-    // At most 2 hops (daily->weekly->monthly, or the reverse) can ever be needed; loop defensively.
-    for (let i = 0; i < 3; i++) {
+    // At most 3 hops (daily->weekly->monthly->yearly, or the reverse) can ever be needed; loop defensively.
+    for (let i = 0; i < 4; i++) {
         const next = chooseResolution(resolution, counts, plotWidthPx, grammar);
         if (next === resolution) break;
         resolution = next;
@@ -617,7 +641,7 @@ export function cascadeResolution(current: ChartResolution, counts: {dailyCount:
  * resolution to be hysteretic about (e.g. first paint, or the visible range just reset
  * to the dataset's full span). Equivalent to cascading from 'daily'.
  */
-export function chooseInitialResolution(counts: {dailyCount: number; weeklyCount: number; monthlyCount: number}, plotWidthPx: number, grammar: ChartGrammar = 'line'): ChartResolution {
+export function chooseInitialResolution(counts: ResolutionCounts, plotWidthPx: number, grammar: ChartGrammar = 'line'): ChartResolution {
     return cascadeResolution('daily', counts, plotWidthPx, grammar);
 }
 

@@ -171,6 +171,14 @@ def front_portfolio_dashboard(verbose: bool = False, ui: bool = False, headed: b
     if not _ensure_test_users(): return False
     return _run_playwright("portfolio/dashboard.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
+def front_portfolio_dashboard_growth_long_history(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the growth chart's resolution badge on a 26-year served history (Y2 FB-6)."""
+    print_section("Frontend Portfolio Dashboard Growth Long History Tests")
+    if not _ensure_frontend_build(): return False
+    if not _ensure_db_populated(): return False
+    if not _ensure_test_users(): return False
+    return _run_playwright("portfolio/dashboard-growth-long-history.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
 
 def front_portfolio_chart_pixel_ratio(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the chart pixel-density E2E (DV) on the desktop project, the runner default: the Dashboard's charts follow a change of the screen's density in place, and a chart opened after it is born at the new one."""
@@ -563,6 +571,7 @@ def populate_registry(registry: dict) -> None:
     )
     add_test(cat, "allocation-negative-cash", front_portfolio_allocation_negative_cash, name="Negative Cash Allocation", desc="Decision 49 on an intercepted report: the type and sector tabs state the overdraft under the pie, signed and in the display currency, masked under privacy with the sign kept; the pie draws no arc for the cash; without the interception no note", tests="portfolio/allocation-negative-cash.spec.ts")
     add_test(cat, "dashboard", front_portfolio_dashboard, name="Dashboard Chart Tests", desc="PositionsPanel 2x2 view matrix (treemap + perf chart), toggle persistence, AllocationPanel now/history, loading state", tests="portfolio/dashboard.spec.ts")
+    add_test(cat, "dashboard-growth-long-history", front_portfolio_dashboard_growth_long_history, name="Dashboard Growth Chart, 26-Year History", desc="A served one-step-a-day history of 26 years: the growth chart groups the days and its resolution badge says how (Y2 FB-6)", tests="portfolio/dashboard-growth-long-history.spec.ts")
     add_test(
         cat,
         "chart-pixel-ratio",

@@ -263,3 +263,48 @@ describe('the tooltip of a step line', () => {
         expect(option.xAxis.axisPointer.snap).toBe(false);
     });
 });
+
+describe('the resolution badge on a long history (Y2 FB-6)', () => {
+    /** 26 years of one-day steps: 9 497 days over a 1 200 px plot is 7.9 a pixel, and their 1 357 weeks are 1.13, under the 1.3 the weekly line takes. */
+    const FIRST = '2000-01-03';
+    const DAYS = 9_497;
+    const longDaily: PortfolioHistoryPoint[] = Array.from({length: DAYS}, (_, index) => {
+        const day = addDays(FIRST, index);
+        return step(day, day, index);
+    });
+    const longRange = {start: FIRST, end: addDays(FIRST, DAYS - 1)};
+
+    it('shows the Weekly badge: the days are grouped in weeks', async () => {
+        const {getByTestId} = await mount({history: longDaily, range: longRange, mwrrLine: []});
+        await waitFor(() => expect(getByTestId('chart-resolution-badge')).toHaveAttribute('data-resolution', 'weekly'), {timeout: 5_000});
+    });
+});
+
+describe('a history of 140 years is grouped by year (Y2 FB-6)', () => {
+    /** One step every ten days from 1886: 5 110 steps, 1 680 months over a 1 200 px plot is 1.4 a pixel, more than a line takes. */
+    const FIRST = '1886-01-01';
+    const STEPS = 5_110;
+    const centuries: PortfolioHistoryPoint[] = Array.from({length: STEPS}, (_, index) => step(addDays(FIRST, index * 10), addDays(FIRST, index * 10 + 9), index));
+    const range = {start: FIRST, end: addDays(FIRST, STEPS * 10 - 1)};
+
+    it('is drawn a point a year, linear, and the badge says Yearly', async () => {
+        const {getByTestId} = await mount({history: centuries, range, mwrrLine: []});
+        await waitFor(() => expect(getByTestId('chart-resolution-badge')).toHaveAttribute('data-resolution', 'yearly'), {timeout: 5_000});
+        const lines = renderedSeries().filter((series) => series.type === 'line');
+        expect(
+            lines.some((series) => series.step === 'end'),
+            'a grouped resolution is the linear line',
+        ).toBe(false);
+        expect(lines[0].data.length, 'about a point a year: 140 of them').toBeGreaterThan(130);
+        expect(lines[0].data.length).toBeLessThan(160);
+    });
+
+    it('heads the tooltip of a yearly point with its year', async () => {
+        await mount({history: centuries, range, mwrrLine: []});
+        await waitFor(() => expect(renderedSeries().find((series) => series.type === 'line')?.data.length).toBeLessThan(160), {timeout: 5_000});
+        const html = tooltipFormatter()([{dataIndex: 70}]);
+        // The year of the 71st yearly bucket: 1886 + 70, as its own text and in no date form.
+        expect(html).toContain('1956');
+        expect(html).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+    });
+});

@@ -14,11 +14,13 @@
       "currentBucket": "In progress: {days} of {total} days",
       "originalValue": "orig. {value}",
       "fxRateDate": "fx @ {date}",
-      "fxDaysBack": "({days}d back)"
+      "fxDaysBack": "({days}d back)",
+      "yearLabel": "{year}"
     },
     "resolution": {
       "weekly": "Weekly",
-      "monthly": "Monthly"
+      "monthly": "Monthly",
+      "yearly": "Yearly"
     },
     "marketPrice": "Market Price",
     "showPercentage": "Show percentage",

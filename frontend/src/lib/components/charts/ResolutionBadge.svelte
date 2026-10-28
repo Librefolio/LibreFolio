@@ -8,9 +8,10 @@
 
     let {resolution}: Props = $props();
 
-    const LABEL_KEY: Record<'weekly' | 'monthly', string> = {
+    const LABEL_KEY: Record<'weekly' | 'monthly' | 'yearly', string> = {
         weekly: 'chart.resolution.weekly',
         monthly: 'chart.resolution.monthly',
+        yearly: 'chart.resolution.yearly',
     };
 </script>
 

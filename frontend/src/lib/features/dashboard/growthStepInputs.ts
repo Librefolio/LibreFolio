@@ -159,18 +159,19 @@ export function buildAggregationInputs(sources: StepSources, extra: readonly str
 }
 
 /**
- * The days to add for a weekly or monthly resolution: the Sunday of every ISO week, or the last day of every month, from the
+ * The days to add for a weekly, monthly or yearly resolution: the Sunday of every ISO week, the last day of every month or of every year, from the
  * one that holds the start of the range up to the end of the range. The chart then has a date in every bucket. Null when the
  * range has more buckets than `MAX_EXTRA_WITNESS_DAYS`.
  */
-export function bucketEndDays(range: {start: string; end: string}, resolution: 'weekly' | 'monthly'): string[] | null {
+export function bucketEndDays(range: {start: string; end: string}, resolution: 'weekly' | 'monthly' | 'yearly'): string[] | null {
     const counts = fillCounts(range.start, range.end);
-    if ((resolution === 'weekly' ? counts.weeks : counts.months) > MAX_EXTRA_WITNESS_DAYS) return null;
+    const years = Number(range.end.slice(0, 4)) - Number(range.start.slice(0, 4)) + 1;
+    if ((resolution === 'weekly' ? counts.weeks : resolution === 'monthly' ? counts.months : years) > MAX_EXTRA_WITNESS_DAYS) return null;
     const ends: string[] = [];
     let end = mapDateToBucket(range.start, resolution).bucketEnd;
     while (end <= range.end) {
         ends.push(end);
-        end = resolution === 'weekly' ? addDays(end, 7) : mapDateToBucket(addDays(end, 1), 'monthly').bucketEnd;
+        end = resolution === 'weekly' ? addDays(end, 7) : mapDateToBucket(addDays(end, 1), resolution).bucketEnd;
     }
     return ends;
 }
