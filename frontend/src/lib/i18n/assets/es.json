@@ -94,7 +94,11 @@
       "toastFailed": "Error de sincronización para {name}",
       "modalTitle": "Sincronizar Precios",
       "modalDescription": "Sincronice los precios de los proveedores configurados para el rango de fechas seleccionado.",
-      "assetsCount": "activos"
+      "assetsCount": "activos",
+      "confirmTitle": "¿Sincronizar {name}?",
+      "confirmMessage": "{stored, plural, one {# precio guardado} other {# precios guardados}} en este intervalo {stored, plural, one {se reemplazará} other {se reemplazarán}} con los valores del proveedor.",
+      "confirmManual": "{manual, plural, one {# se introdujo a mano y se reemplazará} other {# se introdujeron a mano y se reemplazarán}} también.",
+      "confirmAction": "Sincronizar"
     },
     "delete": {
       "confirmQuestion": "¿Eliminar \"{name}\"?",

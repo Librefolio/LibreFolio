@@ -22,7 +22,8 @@
       "navigate_fx": "Ver FX",
       "add_fx_pair": "Añadir par FX",
       "sync_fx_pair": "Sincronizar tipos de cambio",
-      "sync_asset_prices": "Sincronizar precios"
+      "sync_asset_prices": "Sincronizar precios",
+      "sync_stale_fx": "Sincronizar tipos de cambio"
     },
     "referencePriceFallback": "Lotes abiertos por un ajuste en un día sin cotización de mercado: su rendimiento abierto parte del último precio hasta ese día, una cotización anterior o el precio de una compra o una venta",
     "referencePriceUnavailable": "Lotes abiertos por un ajuste antes de cualquier precio: su rendimiento abierto parte de su propio coste de compra unitario, y no está disponible sin coste de compra",
@@ -43,6 +44,7 @@
     "nonIsoCurrencyCandidates": "Importes en «{value}», que no es un código de divisa ISO (puede equivaler a {candidates}) — sus conversiones pueden faltar, y sus filas no se pueden volver a guardar hasta que se corrija el código",
     "nonIsoCurrencyUnknown": "Importes en «{value}», que no es un código de divisa ISO — sus conversiones pueden faltar, y sus filas no se pueden volver a guardar hasta que se corrija el código",
     "nonIsoReportCurrency": "Este informe convierte a «{value}», que no es un código de divisa ISO (equivale a {suggestion}) — elige {suggestion} como «Divisa predeterminada» en Configuración › Preferencias",
-    "nonIsoReportCurrencyUnknown": "Este informe convierte a «{value}», que no es un código de divisa ISO — vuelve a elegir la «Divisa predeterminada» en Configuración › Preferencias"
+    "nonIsoReportCurrencyUnknown": "Este informe convierte a «{value}», que no es un código de divisa ISO — vuelve a elegir la «Divisa predeterminada» en Configuración › Preferencias",
+    "staleFx": "{count} tipos de cambio sin actualizar, el más antiguo desde hace {days} días — sincroniza los tipos para actualizar los totales"
   }
 }

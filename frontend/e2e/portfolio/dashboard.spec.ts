@@ -2670,3 +2670,41 @@ test.describe('Dashboard: Allocation by asset on real data (Y5-2, #48)', () => {
         await expect.poll(async () => (await pieAssetIds(page.getByTestId('allocation-panel'))).length, {message: 'after the reload the By Asset pie drew no asset arc', timeout: 15_000}).toBeGreaterThan(0);
     });
 });
+
+test.describe('Dashboard «All» period (FB-7)', () => {
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('«All» asks the report for the whole history ("min"), never for a 2000 floor', async ({page}) => {
+        const reports = await recordReports(page);
+        await page.goto('/dashboard');
+        await expect(page.getByTestId('dashboard-page')).toBeVisible({timeout: 15_000});
+        await expect(page.getByTestId('dashboard-page')).toHaveAttribute('data-busy', 'false', {timeout: 30_000});
+
+        const all = page.getByTestId('date-preset-max');
+        await expect(all).toHaveAttribute('data-active', 'false');
+        const callsBefore = reports.length;
+        await all.click();
+        await expect(all).toHaveAttribute('data-active', 'true');
+
+        const startOf = (call: ReportCall) => (call.body.date_range as {start?: string} | undefined)?.start;
+        await expect.poll(() => reports.slice(callsBefore).some((call) => startOf(call) === 'min'), {timeout: 30_000, message: 'picking «All» asks a report with the "min" sentinel'}).toBe(true);
+        expect(
+            reports.slice(callsBefore).filter((call) => startOf(call) === '2000-01-01'),
+            'no report is asked from the 2000-01-01 floor: a history before 2000 would be cut',
+        ).toHaveLength(0);
+        await expect(page.getByTestId('dashboard-page')).toHaveAttribute('data-busy', 'false', {timeout: 30_000});
+
+        // …and the backend answers from the first real movement, whatever its year: the answer starts on the date of the
+        // earliest transaction the user can read. (The mock book has no 1850 row; a pre-2000 one needs a row in
+        // `populate_mock_data.py`. The Vitest case pins the request, this pins what the backend makes of it.)
+        const asked = reports.slice(callsBefore).find((call) => startOf(call) === 'min');
+        const answeredFrom = (asked?.json?.range as {start?: string} | undefined)?.start;
+        const response = await page.request.get('/api/v1/transactions');
+        expect(response.ok(), 'the transactions list answers').toBe(true);
+        const dates = ((await response.json()) as Array<{date: string}>).map((tx) => tx.date).sort();
+        expect(dates.length, 'the seeded book has transactions').toBeGreaterThan(0);
+        expect(answeredFrom, 'the «All» report starts on the first movement').toBe(dates[0]);
+    });
+});
