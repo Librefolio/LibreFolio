@@ -146,7 +146,8 @@ PANEL_ENVIRONMENT = tuple(name for variable in (STATUS_TOKEN_VARIABLE, WAKE_TOKE
 #: H5-4: and ``owner_email_change`` (pending, blocked or null): seven keys.
 #: H5-7: and ``instance_key`` (``ok`` or ``mismatch``): eight keys.
 #: H5-8: and ``users_over_limit`` (a boolean: the active accounts outnumber ``LIBREFOLIO_MAX_USERS``): nine keys.
-PANEL_STATUS_KEYS = frozenset({"admin_setup", "setup_expires_at", "mode", "restore", "users_used", "users_limit", "owner_email_change", "instance_key", "users_over_limit"})
+#: CL-9: and ``owner_language`` (``en``, ``it``, ``fr``, ``es`` or null: the owner's language): ten keys.
+PANEL_STATUS_KEYS = frozenset({"admin_setup", "setup_expires_at", "mode", "restore", "users_used", "users_limit", "owner_email_change", "instance_key", "users_over_limit", "owner_language"})
 PANEL_RESTORE_KEYS = frozenset({"state", "reason", "waiting", "backup_created_at", "stage_id"})
 STAGE_ID = "0123456789abcdef0123456789abcdef"
 BACKUP_CREATED_AT = datetime(2026, 10, 23, 3, 0, 12, tzinfo=UTC)

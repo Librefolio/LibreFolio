@@ -63,6 +63,9 @@ from backend.app.services.platform.instance_key import INSTANCE_KEY_FILE, instan
 from backend.test_scripts.test_utils import print_section, print_success
 
 LOGIN_LIMIT_VARIABLE = "LIBREFOLIO_LOGIN_LIMIT"
+#: CL-1, CL-10 (checkpoint 1 of workstream H): two more variables the startup audit validates, like the login limit.
+MAX_USERS_VARIABLE = "LIBREFOLIO_MAX_USERS"
+DEFAULT_LANGUAGE_VARIABLE = "LIBREFOLIO_DEFAULT_LANGUAGE"
 CHECKS_MODULE = "backend.app.services.accounts.checks"
 THROTTLE_MODULE = "backend.app.services.accounts.login_throttle"
 CONFIG_AUDIT_MODULE = "backend.app.services.platform.config_audit"
@@ -163,7 +166,7 @@ def _isolate_platform(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
         monkeypatch.delenv(variable)
     for variable in [name for name in os.environ if name.startswith(("LIBREFOLIO_SMTP_", "LIBREFOLIO_ADMIN_"))]:
         monkeypatch.delenv(variable)
-    for variable in ("JWT_SECRET", "LIBREFOLIO_INSTANCE_KEY", "LIBREFOLIO_LOG_LEVEL", "LIBREFOLIO_DATA_DIR", "LIBREFOLIO_TEST_DATA_DIR", "LIBREFOLIO_BLOCKED", "LIBREFOLIO_DELETION_DATE", "LIBREFOLIO_PUBLIC_URL"):
+    for variable in ("JWT_SECRET", "LIBREFOLIO_INSTANCE_KEY", "LIBREFOLIO_LOG_LEVEL", "LIBREFOLIO_DATA_DIR", "LIBREFOLIO_TEST_DATA_DIR", "LIBREFOLIO_BLOCKED", "LIBREFOLIO_DELETION_DATE", "LIBREFOLIO_PUBLIC_URL", MAX_USERS_VARIABLE, DEFAULT_LANGUAGE_VARIABLE):
         monkeypatch.delenv(variable, raising=False)
     monkeypatch.setenv("LIBREFOLIO_TEST_MODE", "1")
     monkeypatch.setenv("LIBREFOLIO_TEST_DATA_DIR", str(tmp_path / "data"))
@@ -785,3 +788,100 @@ def test_the_startup_audit_says_nothing_while_no_change_waits(platform: Path, lo
     _assert_the_audit_ran(logged)
     assert _owner_records(logged) == [], f"nothing waits: nothing to log about it: {logged}"
     print_success("nothing logged")
+
+
+# =============================================================================
+# CL-1: an unusable LIBREFOLIO_MAX_USERS stops the start (workstream H, checkpoint 1)
+# =============================================================================
+
+
+# red until CL-1
+@pytest.mark.parametrize("value", ["0", "abc", "-3", "1.5"], ids=["zero", "word", "negative", "decimal"])
+def test_the_startup_audit_stops_on_an_unusable_max_users_before_any_check_is_logged(platform: Path, logged: list, monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    """CL-1a: ``LIBREFOLIO_MAX_USERS`` that is not a whole number of at least 1: ``log_configuration_audit()`` raises a ``ValueError`` naming the variable before any check is logged, and the server does not start (today ``registration_service`` turns it into a limit of 0 and the panel's status answers 500).
+
+    Barrier first: the same audit with the variable unset reaches the recorder, so «nothing logged» after the stop is an absence, not a deaf recorder.
+    """
+    print_section(f"CL-1a: the startup audit with {MAX_USERS_VARIABLE}={value!r}")
+    config_audit.log_configuration_audit()
+    _assert_the_audit_ran(logged)
+    logged.clear()
+    monkeypatch.setenv(MAX_USERS_VARIABLE, value)
+
+    try:
+        config_audit.log_configuration_audit()
+    except ValueError as exc:
+        raised = exc
+    else:
+        pytest.fail(f"red until CL-1: log_configuration_audit() went on with {MAX_USERS_VARIABLE}={value!r}; an unusable limit must stop the start with a ValueError naming the variable", pytrace=False)
+
+    assert MAX_USERS_VARIABLE in str(raised), f"the error that stops the start must name {MAX_USERS_VARIABLE}: {raised!r}"
+    assert logged == [], f"nothing is logged before the start is stopped: {logged}"
+    print_success(str(raised))
+
+
+# guard
+@pytest.mark.parametrize("value", [None, "", "   ", "5", " 5 "], ids=["unset", "empty", "blank", "five", "spaces-around-five"])
+def test_guard_the_startup_audit_goes_on_with_no_limit_or_a_valid_one(platform: Path, logged: list, monkeypatch: pytest.MonkeyPatch, value: str | None) -> None:
+    """CL-1b — guard, green today and to stay green: no limit (unset, empty, blank) or a whole number of at least 1: ``log_configuration_audit()`` returns, after running its checks (the barrier: their records reach the recorder)."""
+    print_section(f"CL-1b: the startup audit with {MAX_USERS_VARIABLE}={value!r} (guard)")
+    if value is None:
+        monkeypatch.delenv(MAX_USERS_VARIABLE, raising=False)
+    else:
+        monkeypatch.setenv(MAX_USERS_VARIABLE, value)
+
+    returned = config_audit.log_configuration_audit()
+
+    assert returned is None
+    _assert_the_audit_ran(logged)
+    print_success("the start goes on")
+
+
+# =============================================================================
+# CL-10: an unusable LIBREFOLIO_DEFAULT_LANGUAGE stops the start (workstream H, checkpoint 1)
+# =============================================================================
+
+
+# red until CL-10
+@pytest.mark.parametrize("value", ["de", "english", "it-IT", "1", "i t"], ids=["german", "word", "region-tag", "digit", "inner-space"])
+def test_the_startup_audit_stops_on_an_unsupported_default_language_before_any_check_is_logged(platform: Path, logged: list, monkeypatch: pytest.MonkeyPatch, value: str) -> None:
+    """CL-10d: ``LIBREFOLIO_DEFAULT_LANGUAGE`` that is not one of ``en``, ``it``, ``fr``, ``es`` (in any case, stripped): ``log_configuration_audit()`` raises a ``ValueError`` naming the variable before any check is logged, as for ``LIBREFOLIO_LOGIN_LIMIT``.
+
+    Barrier first: the audit with the variable unset reaches the recorder.
+    """
+    print_section(f"CL-10d: the startup audit with {DEFAULT_LANGUAGE_VARIABLE}={value!r}")
+    config_audit.log_configuration_audit()
+    _assert_the_audit_ran(logged)
+    logged.clear()
+    monkeypatch.setenv(DEFAULT_LANGUAGE_VARIABLE, value)
+
+    try:
+        config_audit.log_configuration_audit()
+    except ValueError as exc:
+        raised = exc
+    else:
+        pytest.fail(f"red until CL-10: log_configuration_audit() went on with {DEFAULT_LANGUAGE_VARIABLE}={value!r}; an unsupported language must stop the start with a ValueError naming the variable", pytrace=False)
+
+    assert DEFAULT_LANGUAGE_VARIABLE in str(raised), f"the error that stops the start must name {DEFAULT_LANGUAGE_VARIABLE}: {raised!r}"
+    assert logged == [], f"nothing is logged before the start is stopped: {logged}"
+    print_success(str(raised))
+
+
+# red until CL-10: the audit must READ the variable through default_language(), which does not exist yet
+@pytest.mark.parametrize("value", [None, "", "   ", "it", " IT ", "Fr", "es", "en"], ids=["unset", "empty", "blank", "it", "spaces-around-IT", "Fr", "es", "en"])
+def test_the_startup_audit_goes_on_with_no_default_language_or_a_supported_one(platform: Path, logged: list, monkeypatch: pytest.MonkeyPatch, value: str | None) -> None:
+    """CL-10e: unset, empty, blank or one of the four languages however written: ``log_configuration_audit()`` returns after running its checks. Red until CL-10 only because the function that reads the variable, ``backend.app.config.accounts.default_language``, does not exist: the test asks for it first, so the green of the audit means the audit and the reader agree."""
+    print_section(f"CL-10e: the startup audit with {DEFAULT_LANGUAGE_VARIABLE}={value!r}")
+    reader = getattr(accounts, "default_language", None)
+    if reader is None:
+        pytest.fail("red until CL-10: backend.app.config.accounts has no default_language", pytrace=False)
+    if value is None:
+        monkeypatch.delenv(DEFAULT_LANGUAGE_VARIABLE, raising=False)
+    else:
+        monkeypatch.setenv(DEFAULT_LANGUAGE_VARIABLE, value)
+
+    returned = config_audit.log_configuration_audit()
+
+    assert returned is None
+    _assert_the_audit_ran(logged)
+    print_success("the start goes on")

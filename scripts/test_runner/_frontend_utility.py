@@ -231,6 +231,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/i18n/importWizardAssetsCount.test.ts",
             "src/lib/i18n/ownerEmailChangeChecks.test.ts",
             "src/lib/i18n/instanceKeyChecks.test.ts",
+            "src/lib/i18n/frameKeys.test.ts",
             "src/lib/features/support/supportLinks.test.ts",
             "src/lib/features/settings/settingsTabs.test.ts",
             "src/lib/features/settings/security/securityChecksApi.test.ts",
@@ -443,6 +444,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/auth/SetupCard.test.ts",
             "src/routes/page.authFlash.test.ts",
             "src/routes/invite/page.test.ts",
+            "src/routes/errorPage.test.ts",
             "src/routes/reset-password/page.test.ts",
             "src/routes/setup/page.test.ts",
             "src/routes/verify-email/page.test.ts",
@@ -490,6 +492,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/layout/HelpMenu.managed.test.ts",
             "src/lib/components/layout/Sidebar.legal.test.ts",
             "src/lib/components/layout/Sidebar.changelog.test.ts",
+            "src/lib/components/layout/Sidebar.names.test.ts",
             "src/lib/components/layout/ConnectionSecurityIndicator.test.ts",
             "src/lib/features/update-check/UpdateAvailableModal.test.ts",
             "src/lib/features/settings/SettingControls.test.ts",
@@ -862,6 +865,18 @@ def front_page_policy(verbose: bool = False, ui: bool = False, headed: bool = Fa
     if not _ensure_test_users():
         return False
     return _run_playwright("layout/page-policy.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_unknown_address(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the unknown-address gate: a 404 of the web app leaves by itself, to the Dashboard or, signed out, to the login (FB-23)."""
+    print_section("Frontend Unknown Address Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("layout/unknown-address.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_api_docs(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -1323,6 +1338,15 @@ def populate_registry(registry: dict) -> None:
         desc="The page policy of H-42, enforced by every lane since H-55 v2 (security_headers.py): each main document read as the browser got it, exactly one Content-Security-Policy field with object-src 'none', base-uri 'self', form-action 'self', and frame-ancestors 'self' if and only if X-Frame-Options is SAMEORIGIN, with service workers blocked; positive controls on the sign-in page (a <base>, a form aimed at another origin and an <object> each raising an enforced violation, nothing else); the documentation with its search, the PDF viewer and the Dashboard with no enforced violation",
         prereq="Docs site built (dev.py mkdocs build), populated DB + test users (TEST_USER with no onboarding due)",
         tests="layout/page-policy.spec.ts",
+    )
+    add_test(
+        cat,
+        "unknown-address",
+        front_unknown_address,
+        name="Unknown Address",
+        desc="FB-23: an address the web app does not know (the SPA fallback renders its 404 view) leaves by itself: signed in it ends on /dashboard, signed out on the login, and the error card (data-testid error-page) is no longer on screen",
+        prereq="Populated DB + test users",
+        tests="layout/unknown-address.spec.ts",
     )
     add_test(
         cat,

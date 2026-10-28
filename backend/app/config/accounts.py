@@ -70,6 +70,25 @@ def max_users() -> int | None:
     return limit
 
 
+DEFAULT_LANGUAGE_VARIABLE = "LIBREFOLIO_DEFAULT_LANGUAGE"
+DEFAULT_LANGUAGES: tuple[str, ...] = ("en", "it", "fr", "es")
+
+
+def default_language() -> str | None:
+    """``LIBREFOLIO_DEFAULT_LANGUAGE``: the instance's language until an administrator saves the ``default_language`` setting.
+
+    None when unset or blank: the setting's own value decides. ``en``, ``it``, ``fr`` or ``es`` (any case) otherwise, in
+    lower case; any other value raises ``ValueError``, naming the variable.
+    """
+    value = _blank_to_none(DEFAULT_LANGUAGE_VARIABLE)
+    if value is None:
+        return None
+    language = value.lower()
+    if language not in DEFAULT_LANGUAGES:
+        raise ValueError(f"{DEFAULT_LANGUAGE_VARIABLE}={value!r}: expected one of {', '.join(DEFAULT_LANGUAGES)}")
+    return language
+
+
 LOGIN_LIMIT_VARIABLE = "LIBREFOLIO_LOGIN_LIMIT"
 
 

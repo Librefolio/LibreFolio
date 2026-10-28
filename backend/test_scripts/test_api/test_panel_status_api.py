@@ -72,6 +72,7 @@ import httpx
 import pytest
 import pytest_asyncio
 from fastapi import FastAPI
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from structlog.contextvars import merge_contextvars
 from structlog.testing import capture_logs
@@ -80,7 +81,7 @@ from backend.app.api.v1.auth import SESSION_COOKIE_NAME
 from backend.app.config import API_V1_PREFIX, is_test_mode
 from backend.app.config.platform import instance_blocked
 from backend.app.db.base import SQLModel  # imports every model: the in-memory database gets the whole ORM schema
-from backend.app.db.models import AccountTokenPurpose, User
+from backend.app.db.models import AccountTokenPurpose, User, UserSettings
 from backend.app.db.session import get_session_generator
 from backend.app.logging_config import get_logger
 from backend.app.services.accounts import instance_owner, registration_service, token_service, user_limit_service
@@ -126,7 +127,9 @@ BLOCKED_ANSWER = {"detail": {"code": "instance_blocked", "message": "This instan
 #: red until H5-7. Its own cases are in ``test_instance_key_check_api.py``.
 #: H5-8 adds ``users_over_limit`` (a boolean, required, declared right after ``instance_key``: whether the active accounts
 #: outnumber ``LIBREFOLIO_MAX_USERS``, never who): the ninth key, red until H5-8. Its cases are the last section.
-ANSWER_KEYS = {"admin_setup", "setup_expires_at", "mode", "restore", "users_used", "users_limit", "owner_email_change", "instance_key", "users_over_limit"}
+#: CL-9 (checkpoint 1 of workstream H) adds ``owner_language`` (``en``, ``it``, ``fr``, ``es`` or null: the owner's language, never anything else of the
+#: account): the tenth key, additive, red until CL-9. Its own cases are the last section.
+ANSWER_KEYS = {"admin_setup", "setup_expires_at", "mode", "restore", "users_used", "users_limit", "owner_email_change", "instance_key", "users_over_limit", "owner_language"}
 SETUP_STATES = ("none", "pending", "done", "expired")
 
 #: The OpenAPI document: the route's responses, exactly; its one tag; the scheme of its token.
@@ -155,7 +158,7 @@ STRAY_DATE = datetime(2026, 10, 17, 6, 5, 0, tzinfo=UTC)
 #: H5-4: and no change of the owner's address waiting (``owner_email_change`` null).
 #: H5-7: and no instance key to compare (no key, no check file, in this test's data directory): ``instance_key`` ``ok``.
 #: H5-8: and no limit, so the accounts cannot outnumber it: ``users_over_limit`` false.
-PENDING_ANSWER = {"admin_setup": "pending", "setup_expires_at": SETUP_EXPIRES_AT, "mode": "normal", "restore": None, "users_used": 0, "users_limit": None, "owner_email_change": None, "instance_key": "ok", "users_over_limit": False}
+PENDING_ANSWER = {"admin_setup": "pending", "setup_expires_at": SETUP_EXPIRES_AT, "mode": "normal", "restore": None, "users_used": 0, "users_limit": None, "owner_email_change": None, "instance_key": "ok", "users_over_limit": False, "owner_language": None}
 
 #: Logged through a logger of this file inside the capture first: a capture that sees nothing proves nothing.
 LOG_CANARY = "R1-04 canary: a line written inside the capture reaches it"
@@ -554,6 +557,7 @@ async def test_the_status_answers_the_setup_state_and_the_expiry_of_a_pending_se
         "owner_email_change": None,
         "instance_key": "ok",
         "users_over_limit": False,
+        "owner_language": None,
     }, f"the setup {state}, its status holding {held.isoformat()}: expected admin_setup {state!r} and setup_expires_at {answered.isoformat() if answered else None} (ISO 8601 with the UTC offset, for pending only), got {response.text}"
     assert len(reader.calls) == 1, f"admin_setup_status is called once per request: {reader.calls}"
     call = reader.calls[0]
@@ -998,19 +1002,19 @@ async def test_the_status_gives_the_state_of_the_owners_email_change(in_process,
 
 # red today: the answer has no owner_email_change
 @pytest.mark.asyncio
-async def test_the_owner_key_is_present_in_every_mode_and_the_answer_keeps_its_nine_keys(in_process, monkeypatch):
+async def test_the_owner_key_is_present_in_every_mode_and_the_answer_keeps_its_ten_keys(in_process, monkeypatch):
     """R1-14 (H5-4): the key is in the answer whatever the instance does: the default (nothing waits, real function on an empty
-    database: null), the awaiting-restore mode, and an unreadable restore; the answer holds exactly ``ANSWER_KEYS``, nine keys (H5-8)."""
-    print_section("R1-14: owner_email_change always present, nine keys")
-    assert len(ANSWER_KEYS) == 9, "Barrier: ANSWER_KEYS is the nine keys of the contract (H5-8)"
+    database: null), the awaiting-restore mode, and an unreadable restore; the answer holds exactly ``ANSWER_KEYS``, ten keys (H5-8, CL-9)."""
+    print_section("R1-14: owner_email_change always present, ten keys")
+    assert len(ANSWER_KEYS) == 10, "Barrier: ANSWER_KEYS is the ten keys of the contract (H5-8, CL-9)"
 
     response, body = await _status_body(in_process, monkeypatch)
-    assert set(body) == ANSWER_KEYS and body[OWNER_KEY] is None, f"default: exactly the nine keys, {OWNER_KEY} null (an empty database, no managed profile): {response.text}"
+    assert set(body) == ANSWER_KEYS and body[OWNER_KEY] is None, f"default: exactly the ten keys, {OWNER_KEY} null (an empty database, no managed profile): {response.text}"
 
     monkeypatch.setenv("LIBREFOLIO_AWAIT_RESTORE", "1")
     response, body = await _status_body(in_process, monkeypatch)
     assert body.get("mode") == "awaiting_restore", f"Barrier: the mode is awaiting_restore: {response.text}"
-    assert set(body) == ANSWER_KEYS and body[OWNER_KEY] is None, f"awaiting restore: exactly the nine keys: {response.text}"
+    assert set(body) == ANSWER_KEYS and body[OWNER_KEY] is None, f"awaiting restore: exactly the ten keys: {response.text}"
 
     def unreadable(_root: Any) -> Any:
         raise restore_apply.RestoreStateUnreadableError("invalid")
@@ -1019,8 +1023,8 @@ async def test_the_owner_key_is_present_in_every_mode_and_the_answer_keeps_its_n
     monkeypatch.setattr(restore_apply, "read_restore", unreadable)
     response, body = await _status_body(in_process, monkeypatch)
     assert (body.get("restore") or {}).get("state") == "unreadable", f"Barrier: the restore is unreadable: {response.text}"
-    assert set(body) == ANSWER_KEYS and body[OWNER_KEY] is None, f"unreadable restore: exactly the nine keys: {response.text}"
-    print_success("nine keys in every mode")
+    assert set(body) == ANSWER_KEYS and body[OWNER_KEY] is None, f"unreadable restore: exactly the ten keys: {response.text}"
+    print_success("ten keys in every mode")
 
 
 # red today: the answer has no owner_email_change, so the barrier on it fails
@@ -1072,7 +1076,18 @@ async def test_the_owner_change_does_not_change_the_other_answers_or_the_refusal
     print_section("R1-17: the owner change touches nothing else")
     stand_in = _stand_in_for_owner_change(monkeypatch, "blocked")
     response, body = await _status_body(in_process, monkeypatch)
-    assert body == {"admin_setup": "none", "setup_expires_at": None, "mode": "normal", "restore": None, "users_used": 0, "users_limit": None, OWNER_KEY: "blocked", "instance_key": "ok", "users_over_limit": False}, f"the whole answer, blocked change (nine keys): {response.text}"
+    assert body == {
+        "admin_setup": "none",
+        "setup_expires_at": None,
+        "mode": "normal",
+        "restore": None,
+        "users_used": 0,
+        "users_limit": None,
+        OWNER_KEY: "blocked",
+        "instance_key": "ok",
+        "users_over_limit": False,
+        "owner_language": None,
+    }, f"the whole answer, blocked change (ten keys): {response.text}"
 
     calls = len(stand_in.sessions)
     refused = await _send(in_process.app, "GET", STATUS_PATH, None)
@@ -1289,7 +1304,7 @@ async def test_users_over_limit_answers_on_a_blocked_awaiting_or_unreadable_rest
 # red today: PanelStatusResponse has no such property
 def test_openapi_documents_users_over_limit_as_a_required_boolean_after_instance_key(app):
     """R1-25 (H5-8): in the document, ``PanelStatusResponse.users_over_limit`` is a boolean, required (no default, so the
-    generated client reads it as always there), declared right after ``instance_key``, the last of nine properties;
+    generated client reads it as always there), declared right after ``instance_key`` (CL-9: ``owner_language`` follows it, the tenth property);
     ``additionalProperties`` stays false and the properties are exactly ``ANSWER_KEYS``."""
     print_section("R1-25: users_over_limit in the OpenAPI document")
     document = app.openapi()
@@ -1303,7 +1318,8 @@ def test_openapi_documents_users_over_limit_as_a_required_boolean_after_instance
     assert OVER_KEY in component.get("required", []), f"{OVER_KEY} is always in the answer, so it is required: {component.get('required')}"
     assert schema.get("description"), f"{OVER_KEY} is described: {schema}"
     order = list(properties)
-    assert order[order.index("instance_key") + 1 :] == [OVER_KEY], f"{OVER_KEY} is declared right after instance_key, last: {order}"
+    assert order[order.index("instance_key") + 1] == OVER_KEY, f"{OVER_KEY} is declared right after instance_key: {order}"
+    assert set(order[order.index("instance_key") + 1 :]) == {OVER_KEY, OWNER_LANGUAGE_KEY}, f"CL-9: nothing but {OVER_KEY} and {OWNER_LANGUAGE_KEY} follows instance_key: {order}"
     print_success("users_over_limit: boolean, required, right after instance_key")
 
 
@@ -1335,3 +1351,263 @@ async def test_the_refusals_are_unchanged_by_the_over_limit_key(in_process, monk
     assert _answer(refused) == (401, UNAUTHORIZED_ANSWER), f"without the token the 401 is unchanged: {refused.status_code} {refused.text}"
     assert read_when_refused == [], f"a refused request does not read the state of the limit: {read_when_refused}"
     print_success("401 unchanged, the state not read for it")
+
+
+# =============================================================================
+# CL-1 — an unusable LIBREFOLIO_MAX_USERS is no limit and never a 500 (workstream H, checkpoint 1)
+# =============================================================================
+
+
+# red today: the answer is a 500 (users_limit 0 against the schema's minimum of 1)
+@pytest.mark.asyncio
+@pytest.mark.parametrize("value", ["0", "abc", "-3"], ids=["zero", "word", "negative"])
+async def test_an_unusable_limit_of_users_answers_200_with_no_limit(in_process, monkeypatch, value):
+    """CL-1b: ``LIBREFOLIO_MAX_USERS`` that the instance cannot read (``0``, a word, a negative number; the startup audit refuses it, but a
+    panel that asks a running instance must still be answered): ``GET /panel/status`` answers 200, ``users_limit`` is null (there is no
+    usable limit) and ``users_over_limit`` is false, with two active accounts that a limit of 0 would have outnumbered. Never a 500. The
+    answer holds exactly ``ANSWER_KEYS``. Barrier: the same request with ``LIBREFOLIO_MAX_USERS=5`` says the limit 5, so the null comes
+    from the value."""
+    print_section(f"CL-1b: users_limit with {MAX_USERS_VARIABLE}={value!r}")
+    await _seed(in_process.session, active=2)
+    monkeypatch.setenv(MAX_USERS_VARIABLE, "5")
+    _, control = await _status_body(in_process, monkeypatch)
+    assert control.get("users_limit") == 5, f"Barrier: with a usable limit the answer says it: {control}"
+    monkeypatch.setenv(MAX_USERS_VARIABLE, value)
+
+    try:
+        response, body = await _status_body(in_process, monkeypatch)
+    except Exception as error:  # noqa: BLE001 — the in-process transport re-raises what the server would turn into a 500
+        pytest.fail(f"red until CL-1: GET {STATUS_PATH} with {MAX_USERS_VARIABLE}={value!r} fails instead of answering 200 (a 500 on the wire): {error!r}", pytrace=False)
+
+    assert set(body) == ANSWER_KEYS, f"{MAX_USERS_VARIABLE}={value!r}: the answer holds exactly {sorted(ANSWER_KEYS)}: {response.text}"
+    assert body["users_limit"] is None, f"{MAX_USERS_VARIABLE}={value!r} is no usable limit: users_limit is null: {response.text}"
+    assert body["users_over_limit"] is False, f"{MAX_USERS_VARIABLE}={value!r}: with no usable limit the accounts cannot outnumber it: {response.text}"
+    assert isinstance(body["users_used"], int) and not isinstance(body["users_used"], bool) and body["users_used"] >= 0, f"users_used is still a count: {response.text}"
+    print_success(f"{value!r}: 200, users_limit null, users_over_limit false")
+
+
+# =============================================================================
+# CL-6 — restore.reason "owner_assignment": a committed restore that still waits for its owner
+# =============================================================================
+
+#: A restore of this stage, committed or not, as a confirmation and the starts after it leave it on disk (the file the
+#: panel's route reads from the test's own data directory). ``owner_user_id`` is the account of the backup the restore names
+#: for the owner; ``owner_outcome`` what the first start did with it.
+RESTORE_STAGE_ID = "0123456789abcdef0123456789abcdef"
+RESTORE_BACKUP_CREATED_AT = datetime(2026, 10, 23, 3, 0, 12, tzinfo=UTC)
+RESTORE_FINISHED_AT = datetime(2026, 10, 23, 3, 30, tzinfo=UTC)
+OWNER_ASSIGNMENT = "owner_assignment"
+
+
+def _write_restore_state(status: str, *, owner_user_id: int | None = None, owner_outcome: str | None = None, reason: str | None = None) -> None:
+    """The restore state file of the test's data directory, in phase ``status`` (``committed`` or ``rolled_back``)."""
+    from backend.app.config import get_data_dir  # noqa: PLC0415 — resolved after the fixture pointed the data directory at tmp_path
+    from backend.app.services.platform.instance_backup.paths import restore_state_path  # noqa: PLC0415
+
+    root = get_data_dir()
+    fields: dict[str, Any] = {}
+    if status == "committed":
+        fields.update(applied_at=RESTORE_FINISHED_AT - timedelta(minutes=5), finished_at=RESTORE_FINISHED_AT, session_version=int(RESTORE_FINISHED_AT.timestamp() * 1000))
+    if status == "rolled_back":
+        fields.update(finished_at=RESTORE_FINISHED_AT)
+    state = restore_apply.RestoreState(
+        status=status,
+        stage_id=RESTORE_STAGE_ID,
+        data_dir=str(root.resolve()),
+        confirmed_at=datetime(2026, 10, 23, 2, 0, tzinfo=UTC),
+        confirmed_by="cl6_confirmer",
+        backup_created_at=RESTORE_BACKUP_CREATED_AT,
+        backup_app_version="v1.3.0",
+        action="same",
+        owner_user_id=owner_user_id,
+        owner_outcome=owner_outcome,
+        reason=reason,
+        **fields,
+    )
+    path = restore_state_path(root)
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    path.write_text(state.model_dump_json(), encoding="utf-8")
+    path.chmod(0o600)
+
+
+# red today: the committed restore with a pending or refused owner answers reason null
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("owner_user_id", "owner_outcome", "problem", "reason"),
+    [
+        pytest.param(7, None, "pending", OWNER_ASSIGNMENT, id="owner-pending"),
+        pytest.param(7, "error:OWNER_EMAIL_TAKEN", "OWNER_EMAIL_TAKEN", OWNER_ASSIGNMENT, id="owner-refused"),
+        pytest.param(7, "sent", None, None, id="owner-assigned-sent"),
+        pytest.param(7, "link_only", None, None, id="owner-assigned-link-only"),
+        pytest.param(None, None, None, None, id="restore-names-no-owner"),
+        pytest.param(None, "none", None, None, id="nobody-could-be-picked"),
+    ],
+)
+async def test_a_committed_restore_says_owner_assignment_while_the_owner_has_no_account(in_process, monkeypatch, owner_user_id, owner_outcome, problem, reason):
+    """CL-6a: ``restore`` of the panel's status for a committed restore: ``state`` ``committed`` and ``reason`` ``owner_assignment`` while
+    ``apply.owner_assignment_problem`` is not None (the owner is ``pending``, or the first start refused them with ``error:<CODE>``); the
+    reason stays what the state file says (null for a plain committed restore) when the owner was assigned (``sent``, ``link_only``) or the
+    restore names nobody. Barrier: ``owner_assignment_problem`` itself says what the case claims; the other fields of the summary are the
+    state file's."""
+    print_section(f"CL-6a: committed restore, owner_user_id {owner_user_id!r}, outcome {owner_outcome!r}")
+    _write_restore_state("committed", owner_user_id=owner_user_id, owner_outcome=owner_outcome)
+    from backend.app.config import get_data_dir  # noqa: PLC0415
+
+    assert restore_apply.owner_assignment_problem(get_data_dir()) == problem, f"Barrier: owner_assignment_problem says {problem!r} for this state file"
+
+    response, body = await _status_body(in_process, monkeypatch)
+
+    summary = body.get("restore")
+    assert isinstance(summary, dict), f"Barrier: the answer carries the restore: {response.text}"
+    assert summary.get("state") == "committed", f"a committed restore stays committed: {response.text}"
+    assert summary.get("reason") == reason, f"owner {owner_outcome!r} for owner_user_id {owner_user_id!r}: restore.reason is {reason!r}: {response.text}"
+    assert summary.get("stage_id") == RESTORE_STAGE_ID and summary.get("waiting") is None, f"the rest of the summary is the state file's: {response.text}"
+    print_success(f"reason {reason!r}")
+
+
+# guard: green today and to stay green
+@pytest.mark.asyncio
+async def test_a_rolled_back_restore_keeps_its_own_reason_whatever_its_owner(in_process, monkeypatch):
+    """CL-6b: a restore that rolled back says ``rolled_back`` and its own reason (``first_start_failed``), even when it names an owner that never got an account: ``owner_assignment`` is for a committed restore only. Guard, green today and to stay green."""
+    print_section("CL-6b: rolled_back keeps its reason")
+    _write_restore_state("rolled_back", owner_user_id=7, owner_outcome=None, reason="first_start_failed")
+
+    response, body = await _status_body(in_process, monkeypatch)
+
+    summary = body.get("restore") or {}
+    assert (summary.get("state"), summary.get("reason")) == ("rolled_back", "first_start_failed"), f"a rolled back restore keeps its own reason: {response.text}"
+    print_success("rolled_back / first_start_failed")
+
+
+def _enum_values(schema: dict[str, Any], document: dict[str, Any]) -> set[str]:
+    """Every string a schema (or any variant of its ``anyOf``) lists in an ``enum``, references followed."""
+    schema = _resolved(schema, document)
+    values = {value for value in schema.get("enum", []) if isinstance(value, str)}
+    for variant in schema.get("anyOf", []):
+        values |= _enum_values(variant, document)
+    return values
+
+
+# red today: owner_assignment is not among the reasons
+def test_openapi_lists_owner_assignment_among_the_restore_reasons(app):
+    """CL-6c: ``PanelRestoreSummary.reason`` in the document lists ``owner_assignment`` beside the four reasons a rollback gives, and stays nullable (a plain committed restore has none). Barrier: the four old reasons are there."""
+    print_section("CL-6c: PanelRestoreSummary.reason in the OpenAPI document")
+    document = app.openapi()
+    component = document.get("components", {}).get("schemas", {}).get("PanelRestoreSummary", {})
+    reason = component.get("properties", {}).get("reason", {})
+
+    values = _enum_values(reason, document)
+
+    assert {"first_start_failed", "swap_interrupted", "swap_failed", "stage_missing"} <= values, f"Barrier: the reasons of a rollback are documented: {reason}"
+    assert OWNER_ASSIGNMENT in values, f"PanelRestoreSummary.reason lists {OWNER_ASSIGNMENT!r}: {sorted(values)}"
+    assert any(variant == {"type": "null"} for variant in reason.get("anyOf", [])) or reason.get("default") is None, f"reason stays nullable: {reason}"
+    print_success(f"reasons: {sorted(values)}")
+
+
+# =============================================================================
+# CL-9 — owner_language: the owner's language, and nothing else of the account
+# =============================================================================
+
+#: The key CL-9 adds (``Literal["en", "it", "fr", "es"] | None``, default null): ``UserSettings.language`` of the user with
+#: ``is_instance_owner`` true; null without an owner, without a settings row for them, or with a language outside the four.
+OWNER_LANGUAGE_KEY = "owner_language"
+OWNER_LANGUAGES = ("en", "it", "fr", "es")
+
+
+async def _user_with_language(session: AsyncSession, *, owner: bool, language: str | None, marker: str | None = None) -> User:
+    """An active administrator account of the in-memory database (a non-owner one is the bait of a lookup by «first administrator»), the instance owner or not, with a ``user_settings`` row saying ``language`` (written as a row, the API's choices not applied) or none when ``language`` is None."""
+    username = marker or f"cl9_{uuid4().hex[:12]}"
+    account = User(username=username, email=f"{username}@canary.example", hashed_password="not-a-password-hash", is_active=True, is_superuser=True, is_instance_owner=owner)
+    session.add(account)
+    await session.commit()
+    if language is not None:
+        session.add(UserSettings(user_id=account.id, language=language))
+        await session.commit()
+    return account
+
+
+# red today: the answer has no owner_language
+@pytest.mark.asyncio
+@pytest.mark.parametrize("language", OWNER_LANGUAGES)
+async def test_the_status_gives_the_language_of_the_owner(in_process, monkeypatch, language):
+    """CL-9a: ``owner_language`` is ``UserSettings.language`` of the instance owner when it is one of ``en``, ``it``, ``fr``, ``es``. A
+    non-owner administrator beside them with another of the four does not leak. The answer shows neither the owner's username nor their
+    email (canaries of this test). Barrier: the owner's account is the one flagged, the other is not."""
+    print_section(f"CL-9a: owner_language {language!r}")
+    other = next(candidate for candidate in OWNER_LANGUAGES if candidate != language)
+    marker = f"cl9-canary-{uuid4().hex[:12]}"
+    owner = await _user_with_language(in_process.session, owner=True, language=language, marker=marker)
+    stranger = await _user_with_language(in_process.session, owner=False, language=other)
+    assert (owner.is_instance_owner, stranger.is_instance_owner) == (True, False), "Barrier: only the first account is the owner"
+
+    response, body = await _status_body(in_process, monkeypatch)
+
+    assert body.get(OWNER_LANGUAGE_KEY, "<missing>") == language, f"the owner's language is {language!r}, not the other account's {other!r}: {response.text}"
+    shown = _everything_shown(response)
+    assert marker not in shown and owner.email not in shown, f"nothing else of the owner's account is shown: {shown}"
+    print_success(f"owner_language {language!r}")
+
+
+# red today: the answer has no owner_language
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("case", "owner", "stranger"),
+    [
+        pytest.param("no-owner-at-all", None, None, id="no-account"),
+        pytest.param("no-owner-but-a-user-with-a-language", None, "it", id="no-owner-another-account-has-a-language"),
+        pytest.param("owner-without-settings", ("none",), "fr", id="owner-without-a-settings-row"),
+        pytest.param("owner-with-an-unsupported-language", ("de",), "fr", id="owner-with-an-unsupported-language"),
+        pytest.param("owner-with-an-empty-language", ("",), "fr", id="owner-with-an-empty-language"),
+    ],
+)
+async def test_the_language_of_the_owner_is_null_when_there_is_nothing_to_tell(in_process, monkeypatch, case, owner, stranger):
+    """CL-9b: ``owner_language`` is null, never absent and never another account's, when there is no owner, when the owner has no
+    ``user_settings`` row, and when the stored language is not one of the four. ``stranger`` is a non-owner account with that language (None:
+    no such account). Barrier: the key is in the answer (a missing key reads as ``<missing>``, not null)."""
+    print_section(f"CL-9b: owner_language null, {case}")
+    if owner is not None:
+        await _user_with_language(in_process.session, owner=True, language=None if owner == ("none",) else owner[0])
+    if stranger is not None:
+        await _user_with_language(in_process.session, owner=False, language=stranger)
+
+    response, body = await _status_body(in_process, monkeypatch)
+
+    assert body.get(OWNER_LANGUAGE_KEY, "<missing>") is None, f"{case}: owner_language is null: {response.text}"
+    print_success(f"{case}: null")
+
+
+# red today: the answer has no owner_language
+@pytest.mark.asyncio
+async def test_the_language_of_the_owner_follows_their_settings_at_the_next_request(in_process, monkeypatch):
+    """CL-9c: nothing is stored: the owner changes their language in their settings and the next request tells the new one. Barrier: the first answer is the first language."""
+    print_section("CL-9c: owner_language is read at each request")
+    owner = await _user_with_language(in_process.session, owner=True, language="it")
+    _, first = await _status_body(in_process, monkeypatch)
+    await in_process.session.execute(update(UserSettings).where(UserSettings.user_id == owner.id).values(language="es"))
+    await in_process.session.commit()
+
+    _, second = await _status_body(in_process, monkeypatch)
+
+    assert first.get(OWNER_LANGUAGE_KEY, "<missing>") == "it", f"Barrier: first answer it: {first}"
+    assert second.get(OWNER_LANGUAGE_KEY, "<missing>") == "es", f"the owner chose es: the next answer says it: {second}"
+    print_success("it, then es")
+
+
+# red today: PanelStatusResponse has no such property
+def test_openapi_documents_owner_language_as_a_nullable_enum_of_the_four_languages(app):
+    """CL-9d: in the document, ``PanelStatusResponse.owner_language`` is the enum ``en`` / ``it`` / ``fr`` / ``es`` or null (an ``anyOf`` of the two), described, with a default of null (so not required); ``additionalProperties`` stays false and the properties are exactly ``ANSWER_KEYS``."""
+    print_section("CL-9d: owner_language in the OpenAPI document")
+    document = app.openapi()
+    component = document.get("components", {}).get("schemas", {}).get("PanelStatusResponse", {})
+    properties = component.get("properties", {})
+
+    assert set(properties) == ANSWER_KEYS, f"PanelStatusResponse has exactly the properties {sorted(ANSWER_KEYS)}: {sorted(properties)}"
+    assert component.get("additionalProperties") is False, f"PanelStatusResponse forbids any other property: {component}"
+    schema = properties[OWNER_LANGUAGE_KEY]
+    variants = schema.get("anyOf", [])
+    enums = [_resolved(variant, document) for variant in variants if variant != {"type": "null"}]
+    assert len(variants) == 2 and {"type": "null"} in variants and len(enums) == 1, f"{OWNER_LANGUAGE_KEY} is an enum or null: {schema}"
+    assert (enums[0].get("type"), sorted(enums[0].get("enum", []))) == ("string", sorted(OWNER_LANGUAGES)), f"{OWNER_LANGUAGE_KEY} is one of the four languages when it is not null: {enums[0]}"
+    assert OWNER_LANGUAGE_KEY not in component.get("required", []), f"{OWNER_LANGUAGE_KEY} defaults to null, so it is not required: {component.get('required')}"
+    assert schema.get("default") is None and schema.get("description"), f"{OWNER_LANGUAGE_KEY} defaults to null and is described: {schema}"
+    print_success("owner_language: en | it | fr | es | null")

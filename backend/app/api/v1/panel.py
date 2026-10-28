@@ -3,26 +3,29 @@
 Owner: workstream H (platform). A hosting panel that created an instance with ``LIBREFOLIO_ADMIN_EMAIL`` reads here
 whether its customer has activated it: the state of the initial administrator's setup (workstream A,
 ``bootstrap_admin_service.admin_setup_status``) and, while a link works, until when; and, since H-62, the instance's
-``mode`` and its ``restore`` (state, reason, waiting, the backup's date and the stage; ``unreadable`` with its reason
+``mode`` and its ``restore`` (state, reason, waiting, the backup's date and the stage; ``owner_assignment`` as the reason of a committed restore whose owner has no account yet, CL-6; ``unreadable`` with its reason
 when the state of the restore cannot be read, D7), and ``users_used`` / ``users_limit`` (H5-1, the cloud's request C5:
-how many places the users take and how many the instance may hold). Nothing else: no email, no username. The route wants ``LIBREFOLIO_PANEL_STATUS_TOKEN`` (``services/platform/hosting_panel/access.py``):
+how many places the users take and how many the instance may hold), and, since CL-9, the owner's chosen ``owner_language``. Nothing else: no email, no username. The route wants ``LIBREFOLIO_PANEL_STATUS_TOKEN`` (``services/platform/hosting_panel/access.py``):
 unset, it answers 404. It answers on a blocked instance (``api/v1/instance_block.py``).
 """
 
 import asyncio
-from typing import Annotated
+from typing import Annotated, Literal, cast
 
 from fastapi import APIRouter, Depends
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.api.v1.backup.restore import _IN_PROGRESS
 from backend.app.config import get_data_dir
 from backend.app.config.platform import awaiting_restore
+from backend.app.db.models import User, UserSettings
 from backend.app.db.session import get_session_generator
 from backend.app.schemas.hosting_panel import PanelRestoreSummary, PanelStatusResponse
 from backend.app.services.accounts import instance_owner, user_limit_service
 from backend.app.services.accounts.bootstrap_admin_service import AdminSetupState, admin_setup_status
 from backend.app.services.accounts.registration_service import user_usage
+from backend.app.services.email.messages import supported_email_language
 from backend.app.services.platform.hosting_panel.access import PanelCaller, PanelScope, panel_access
 from backend.app.services.platform.instance_backup import apply as restore_apply
 from backend.app.services.platform.instance_key_check import instance_key_state
@@ -58,11 +61,20 @@ async def get_panel_status(
         mode="awaiting_restore" if awaiting_restore() else "normal",
         restore=await _restore_summary(),
         users_used=usage.used,
-        users_limit=usage.max_users,
+        # An unusable LIBREFOLIO_MAX_USERS reads as a limit of 0 for the registration (closed); the audit stops the start with it,
+        # and the status never fails on it (CL-1): no valid limit, no number.
+        users_limit=usage.max_users or None,
         owner_email_change=await instance_owner.owner_change_status(session),
         instance_key=await instance_key_state(session),
         users_over_limit=await user_limit_service.over_limit_state(session) is not None,
+        owner_language=await _owner_language(session),
     )
+
+
+async def _owner_language(session: AsyncSession) -> Literal["en", "it", "fr", "es"] | None:
+    """The language in the settings of the instance's owner (CL-9); None without an owner, a settings row, or a supported language."""
+    chosen = (await session.execute(select(UserSettings.language).join(User, User.id == UserSettings.user_id).where(User.is_instance_owner == True))).scalar_one_or_none()  # noqa: E712 — SQL `= 1`, the term of the partial index
+    return cast(Literal["en", "it", "fr", "es"] | None, supported_email_language(chosen))
 
 
 async def _restore_summary() -> PanelRestoreSummary | None:
@@ -71,8 +83,11 @@ async def _restore_summary() -> PanelRestoreSummary | None:
     it)."""
     try:
         state = await asyncio.to_thread(restore_apply.read_restore, get_data_dir())
+        owner_problem = await asyncio.to_thread(restore_apply.owner_assignment_problem, get_data_dir())
     except restore_apply.RestoreStateUnreadableError as exc:
         return PanelRestoreSummary(state="unreadable", reason=exc.reason)
     if state is None:
         return None
-    return PanelRestoreSummary(state="in_progress" if state.status in _IN_PROGRESS else state.status, reason=state.reason, waiting=state.waiting, backup_created_at=state.backup_created_at, stage_id=state.stage_id)
+    # CL-6: committed, but the owner of the restored data has no account yet (pending, or refused): the instance serves no data
+    reason = "owner_assignment" if state.status == "committed" and owner_problem is not None else state.reason
+    return PanelRestoreSummary(state="in_progress" if state.status in _IN_PROGRESS else state.status, reason=reason, waiting=state.waiting, backup_created_at=state.backup_created_at, stage_id=state.stage_id)

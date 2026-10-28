@@ -378,6 +378,9 @@ account is not ready**.
   until it is set`, and the instance stays closed. Its administrator stops LibreFolio, runs
   `./dev.py backup pending --recover owner`, which clears the recorded outcome and tries again, and
   starts LibreFolio again.
+- **Your panel sees it too.** The [status](hosting_panel_api.md#panel-status) answers `200` with `restore.state`
+  `committed` and `restore.reason` `owner_assignment` for as long as the owner has no account. Tell your
+  customer the instance is not ready yet and, if it does not open by itself, have its administrator run the command above.
 
 ---
 

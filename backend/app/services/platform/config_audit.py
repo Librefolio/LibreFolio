@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from backend.app.config import SecretFileError, get_data_dir, get_settings, is_test_mode, secrets_set_twice
-from backend.app.config.accounts import admin_bootstrap_config, login_limit_enabled
+from backend.app.config.accounts import admin_bootstrap_config, default_language, login_limit_enabled, max_users
 from backend.app.config.backup import PANEL_TOKEN_VARIABLE as BACKUP_PANEL_TOKEN_VARIABLE
 from backend.app.config.backup import BackupConfigError, backup_download_token
 from backend.app.config.hosting_panel import PANEL_STATUS_TOKEN_VARIABLE, HostingPanelConfigError, panel_audience, panel_clock_skew_seconds, panel_public_keys, panel_public_url_path, panel_status_token
@@ -359,8 +359,9 @@ def log_configuration_audit() -> None:
     on outside a test lane raises ``ManagedTestModeError`` (H-46): elsewhere it is an error of the checks. A
     ``LIBREFOLIO_BLOCKED``, ``LIBREFOLIO_AWAIT_RESTORE`` or ``LIBREFOLIO_DELETION_DATE`` that cannot be read raises ``ValueError``, and so do a
     ``LIBREFOLIO_ADMIN_*`` variable of the initial administrator that cannot be used (``AdminBootstrapConfigError``,
-    F02, workstream A) and a ``LIBREFOLIO_LOGIN_LIMIT`` other than ``on`` or ``off`` (F15, workstream A), each naming
-    its variable. A generated key file gone bad is logged as an error instead, like every check that is not ``ok`` (the
+    F02, workstream A), a ``LIBREFOLIO_LOGIN_LIMIT`` other than ``on`` or ``off`` (F15, workstream A), a
+    ``LIBREFOLIO_MAX_USERS`` that is not a whole number of at least 1 (CL-1) and a ``LIBREFOLIO_DEFAULT_LANGUAGE`` that is not
+    ``en``, ``it``, ``fr`` or ``es`` (CL-10), each naming its variable. A generated key file gone bad is logged as an error instead, like every check that is not ``ok`` (the
     backup's token and upload limit included, workstream B), and the start goes on.
     """
     secret = configured_jwt_secret()
@@ -385,6 +386,10 @@ def log_configuration_audit() -> None:
     admin_bootstrap_config()
     # F15 (workstream A): a LIBREFOLIO_LOGIN_LIMIT other than on or off raises ValueError, naming it
     login_limit_enabled()
+    # CL-1: a LIBREFOLIO_MAX_USERS that is not a whole number of at least 1 raises ValueError, naming it
+    max_users()
+    # CL-10: a LIBREFOLIO_DEFAULT_LANGUAGE other than en, it, fr or es raises ValueError, naming it
+    default_language()
     status = instance_key_status()
     if status.source == "configured" and status.problem is not None:
         raise InstanceKeyError(status.problem)
