@@ -11,10 +11,11 @@
 import {readFileSync} from 'node:fs';
 import {expect, test} from '../fixtures/playwright';
 import type {Locator, Page, Request} from '../fixtures/playwright';
-import {login, setLanguage} from '../fixtures/auth-helpers';
+import {login, openMobileMenu, setLanguage} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {waitForSettled} from '../fixtures/app-events';
 import {goToAssetDetailPage, goToAssetsPage} from './assets-helpers';
+import {createOwnedAsset, deleteOwned, type Owned} from './asset-events-owned';
 import {t} from '../fixtures/i18n-data';
 import {schemas} from '../../src/lib/api/generated';
 import {daysAgoIso} from '../fixtures/dates';
@@ -1164,7 +1165,7 @@ test.describe('Asset Detail Page', () => {
         const buildCalendarResult = (windowDays: CalendarWindow, status: CalendarSignalResultFixture['status'] = 'ok', responseAssetId: number = assetId, requestedRange?: PriceQueryRequest['date_range']): CalendarSignalResultFixture => {
             const [startValue, endValue] = calendarValuesForAsset(responseAssetId, windowDays);
             const exactBoundaryDate = requestedRange?.start && requestedRange.end && subtractDays(requestedRange.end, windowDays) === requestedRange.start ? requestedRange.end : null;
-            const readyFirstDate = responseAssetId === readyPeer.id && requestedRange?.start ? addDays(requestedRange.start, windowDays) : null;
+            const readyFirstDate = responseAssetId === readyPeer.id && requestedRange?.start ? addDays(requestedRange.start === 'min' ? '2000-01-01' : requestedRange.start, windowDays) : null;
             const requestedRangeEnd = requestedRange?.end;
             const readyRangeDates = readyFirstDate && requestedRangeEnd && readyFirstDate <= requestedRangeEnd ? [...new Set([readyFirstDate, '2026-08-01', '2026-08-02', requestedRangeEnd].filter((date) => date >= readyFirstDate && date <= requestedRangeEnd))].sort() : null;
             const readyRangePointSeeds = readyRangeDates?.map((date, index, dates) => ({date, value: index === dates.length - 1 ? endValue : startValue}));
@@ -7454,7 +7455,7 @@ test.describe('Asset Detail Page', () => {
                 if (request.method() !== 'POST' || new URL(request.url()).pathname !== '/api/v1/assets/prices/query') return false;
                 const queries = parseQueries(request.postDataJSON());
                 const mainQuery = queries.find((query) => query.asset_id === assetId);
-                return findCalendarSignal(queries) === undefined && mainQuery?.include_price !== false && mainQuery?.date_range?.start === '2000-01-01';
+                return findCalendarSignal(queries) === undefined && mainQuery?.include_price !== false && mainQuery?.date_range?.start === 'min';
             },
             {timeout: 10_000},
         );
@@ -7464,7 +7465,7 @@ test.describe('Asset Detail Page', () => {
         const provisionalMaxPriceRequest = await provisionalMaxPriceRequestPromise;
         const provisionalMaxMainQuery = parseQueries(provisionalMaxPriceRequest.postDataJSON()).find((query) => query.asset_id === assetId);
         const provisionalMaxEnd = provisionalMaxMainQuery?.date_range?.end;
-        expect(provisionalMaxMainQuery?.date_range?.start).toBe('2000-01-01');
+        expect(provisionalMaxMainQuery?.date_range?.start).toBe('min');
         expect(provisionalMaxEnd).toMatch(/^\d{4}-\d{2}-\d{2}$/);
         if (!provisionalMaxEnd) {
             throw new Error('The provisional MAX request did not include a concrete end date');
@@ -7491,7 +7492,7 @@ test.describe('Asset Detail Page', () => {
         assertCalendarRequest(overlongCalendarRequest.postDataJSON(), 365, true);
         assertCalendarBulkRequest(overlongCalendarRequest.postDataJSON(), 365);
         expect(parseQueries(overlongCalendarRequest.postDataJSON()).find((query) => query.asset_id === assetId)?.date_range).toEqual({
-            start: '2000-01-01',
+            start: 'min',
             end: provisionalMaxEnd,
         });
         expect(calendarRequestCount).toBe(provisionalMaxCalendarRequestCount + 1);
@@ -7538,7 +7539,7 @@ test.describe('Asset Detail Page', () => {
                 if (request.method() !== 'POST' || new URL(request.url()).pathname !== '/api/v1/assets/prices/query') return false;
                 const queries = parseQueries(request.postDataJSON());
                 const mainQuery = queries.find((query) => query.asset_id === assetId);
-                return findCalendarSignal(queries) === undefined && mainQuery?.include_price !== false && mainQuery?.date_range?.start === '2000-01-01';
+                return findCalendarSignal(queries) === undefined && mainQuery?.include_price !== false && mainQuery?.date_range?.start === 'min';
             },
             {timeout: 10_000},
         );
@@ -7596,7 +7597,7 @@ test.describe('Asset Detail Page', () => {
                 if (request.method() !== 'POST' || new URL(request.url()).pathname !== '/api/v1/assets/prices/query') return false;
                 const queries = parseQueries(request.postDataJSON());
                 const mainQuery = queries.find((query) => query.asset_id === assetId);
-                return findCalendarSignal(queries) === undefined && mainQuery?.date_range?.start === '2000-01-01' && mainQuery.date_range.end === concreteMaxRange.end;
+                return findCalendarSignal(queries) === undefined && mainQuery?.date_range?.start === 'min' && mainQuery.date_range.end === concreteMaxRange.end;
             },
             {timeout: 10_000},
         );
@@ -7606,7 +7607,7 @@ test.describe('Asset Detail Page', () => {
                 if (request.method() !== 'POST' || new URL(request.url()).pathname !== '/api/v1/assets/prices/query') return false;
                 const queries = parseQueries(request.postDataJSON());
                 const mainQuery = queries.find((query) => query.asset_id === assetId);
-                return findCalendarSignal(queries) === undefined && mainQuery?.date_range?.start === '2000-01-01' && mainQuery.date_range.end === concreteMaxRange.end;
+                return findCalendarSignal(queries) === undefined && mainQuery?.date_range?.start === 'min' && mainQuery.date_range.end === concreteMaxRange.end;
             },
             {timeout: 10_000},
         );
@@ -7615,7 +7616,7 @@ test.describe('Asset Detail Page', () => {
         const maxRefreshSync = await refreshThroughPageSync();
         const maxRefreshMainRequest = await maxRefreshMainRequestPromise;
         expect(parseQueries(maxRefreshMainRequest.postDataJSON()).find((query) => query.asset_id === assetId)?.date_range).toEqual({
-            start: '2000-01-01',
+            start: 'min',
             end: concreteMaxRange.end,
         });
         expect(priceQueryRequestCount).toBe(maxRefreshPriceQueriesBefore + 1);
@@ -7991,7 +7992,7 @@ test.describe('Asset Detail Page', () => {
         const shortMaxCalendarRequest = await shortMaxCalendarRequestPromise;
         assertCalendarRequest(shortMaxCalendarRequest.postDataJSON(), 365, true);
         expect(parseQueries(shortMaxCalendarRequest.postDataJSON()).find((query) => query.asset_id === assetId)?.date_range).toEqual({
-            start: '2000-01-01',
+            start: 'min',
             end: shortMaxRange.end,
         });
         expect(priceQueryRequestCount).toBe(shortMaxPriceQueriesBefore + 1);
@@ -8501,8 +8502,10 @@ async function mockCacheHitEventsAsset(page: Page, assetId: number) {
         const items = requested.map((item) => {
             const currency = item.target_currency ?? 'EUR';
             const start = item.date_range?.start ?? '';
+            // The server answers the sentinel `min` with the asset's first stored day
+            const rangeStart = start === 'min' ? history[0] : start;
             const end = item.date_range?.end ?? '9999-12-31';
-            const inRange = (date: string) => date >= start && date <= end;
+            const inRange = (date: string) => date >= rangeStart && date <= end;
             const dividend = (date: string, notes: string, id: number) => ({date, type: 'DIVIDEND', value: {code: currency, amount: '2.5000'}, notes, id, is_auto: false});
             return {
                 asset_id: item.asset_id,
@@ -8628,7 +8631,7 @@ test.describe('All-range event markers on a price-cache hit', () => {
 
     // Path B, inside the detail.
     // 1. "All" is a cache miss: prices and events are fetched, and the store is
-    //    marked from '2000-01-01'.
+    //    marked from the first price the answer holds.
     // 2. "1Y" is a cache hit with nothing to resolve, so its events are kept.
     // 3. "All" again is a cache hit that resolves the start, so its events-only
     //    answer was dropped. The chart kept the 1Y events, and the old dividend
@@ -8650,9 +8653,9 @@ test.describe('All-range event markers on a price-cache hit', () => {
         await expect(maxPreset, 'the detail opens on a shorter range, so All is a cache miss').toHaveAttribute('data-active', 'false', {timeout: 10_000});
         const allMark = log.length;
         await maxPreset.click();
-        await waitForDeliveredPriceQuery(log, allMark, (entry) => entry.assetId === assetId && entry.includePrice === true && entry.includeEvents === true && entry.start === '2000-01-01', 'the first All must fetch prices and events from the 2000-01-01 sentinel');
+        await waitForDeliveredPriceQuery(log, allMark, (entry) => entry.assetId === assetId && entry.includePrice === true && entry.includeEvents === true && entry.start === 'min', 'the first All must fetch prices and events from the `min` sentinel');
         await waitForSettled(detail, 20_000);
-        await expect.poll(readNotes, {message: 'the first All draws both dividends', timeout: 10_000}).toEqual([oldNotes, recentNotes('2000-01-01')].sort());
+        await expect.poll(readNotes, {message: 'the first All draws both dividends', timeout: 10_000}).toEqual([oldNotes, recentNotes('min')].sort());
 
         // "1Y" is a cache hit with nothing to resolve, so its events-only answer is kept.
         const oneYearMark = log.length;
@@ -8670,6 +8673,159 @@ test.describe('All-range event markers on a price-cache hit', () => {
 
         // Red before the fix: the answer was discarded, so the chart kept the 1Y events.
         await expect.poll(readNotes, {message: 'the second All must bring the old dividend back', timeout: 10_000}).toEqual([oldNotes, recentNotes(firstPriceDate)].sort());
+    });
+});
+
+// ============================================================================
+// FB-7b — asset detail: «All» starts at the first stored price
+// ============================================================================
+// «All» used to ask the prices from a placeholder start, the 2000-01-01 sentinel, and adopt the first point it got
+// back as the real start: an asset whose history begins before 2000 showed from 2000 on, and «All» hid its older
+// prices. The backend now takes `date_range: {start: 'min', end}` (the asset's first stored price); the page asks with
+// it while «All» is pending and adopts the first date of the answer.
+//
+// Served by the real backend. Each test owns a USD asset with closes in 1985 (the first two), on 1999-12-31 and in
+// the last weeks, deleted afterwards. The three tests are one contract in three halves, so a red names its half:
+//   · the range on screen starts on the first stored price (the picker's FROM field — compact, so an ISO date);
+//   · the request carries the `min` sentinel (the subject here is the request itself, so it is waited for on the wire);
+//   · a second visit, in the same page session, still starts there and does not ask for the `min` start again.
+// ============================================================================
+test.describe('FB-7b asset detail: All starts at the first stored price', () => {
+    // A ceiling, never a delay: a sign-in, an API seeding and the page loads each test waits for by name.
+    test.describe.configure({timeout: 60_000});
+
+    /** The first stored close, 15 years before the 2000-01-01 sentinel the page used to ask from. */
+    const FIRST_CLOSE_DAY = '1985-03-01';
+
+    /** What one price-query item of the page asks, reduced to the fields these tests read. */
+    type PriceAsk = {assetId: number; start: string | null; includePrice: boolean; pageUrl: string};
+
+    let owned: Owned = {assetIds: [], brokerIds: []};
+
+    test.beforeEach(async ({page}) => {
+        owned = {assetIds: [], brokerIds: []};
+        await login(page, TEST_USER);
+    });
+
+    test.afterEach(async ({page}) => {
+        await deleteOwned(page, owned);
+    });
+
+    /** The price-query items of a request that concern `assetId`; a request that is not that query, or has no readable body, concerns none. */
+    function priceAsksFor(request: Request, assetId: number, pageUrl: string): PriceAsk[] {
+        if (request.method() !== 'POST' || new URL(request.url()).pathname !== '/api/v1/assets/prices/query') return [];
+        let body: unknown;
+        try {
+            body = request.postDataJSON();
+        } catch {
+            return [];
+        }
+        if (!Array.isArray(body)) return [];
+        const asks: PriceAsk[] = [];
+        for (const raw of body) {
+            if (raw === null || typeof raw !== 'object') continue;
+            const item = raw as {asset_id?: unknown; include_price?: unknown; date_range?: unknown};
+            if (item.asset_id !== assetId) continue;
+            const range = Array.isArray(item.date_range) ? item.date_range[0] : item.date_range;
+            const start = range !== null && typeof range === 'object' ? (range as {start?: unknown}).start : undefined;
+            asks.push({assetId, start: typeof start === 'string' ? start : null, includePrice: item.include_price !== false, pageUrl});
+        }
+        return asks;
+    }
+
+    /**
+     * A USD asset of this test's own whose history begins in 1985: two closes that March, one on the last day of 1999
+     * (still before the sentinel), and four in the last weeks. The page polls `POST /assets/prices/current`, which may
+     * ask live providers and write today's price into the shared database: answered here, locally.
+     */
+    async function seedOldHistoryAsset(page: Page, label: string): Promise<number> {
+        await page.route('**/api/v1/assets/prices/current', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
+        const asset = await createOwnedAsset(page, owned, {
+            label,
+            closes: [
+                {date: FIRST_CLOSE_DAY, close: 10},
+                {date: '1985-03-04', close: 10.5},
+                {date: '1999-12-31', close: 20},
+                {date: daysAgoIso(35), close: 30},
+                {date: daysAgoIso(20), close: 31},
+                {date: daysAgoIso(10), close: 32},
+                {date: daysAgoIso(3), close: 33},
+            ],
+        });
+        return asset.id;
+    }
+
+    /** Opens the detail on «All» by URL and verifies, rather than assumes, that «All» is the range on screen; returns the start field of the range. */
+    async function openOnAll(page: Page, assetId: number): Promise<Locator> {
+        await goToAssetDetailPage(page, String(assetId), {start: 'min', end: 'max'});
+        const picker = page.getByTestId('asset-detail-controls').getByTestId('asset-detail-filter-bar').getByTestId('date-range-picker-root');
+        await expect(picker.getByTestId('date-preset-max'), '«All» is the active preset').toHaveAttribute('data-active', 'true', {timeout: 10_000});
+        return picker.getByTestId('date-range-input-start');
+    }
+
+    // The visible half. Red while the page asks from 2000-01-01: the first close it is handed is one of the recent ones,
+    // so the field reads the oldest of those and the 1985 prices are not on the chart at all.
+    test('FB-7b the range of All starts on the first stored price, even when it is before 2000', async ({page}) => {
+        const assetId = await seedOldHistoryAsset(page, 'E2E FB-7b all start');
+        const startInput = await openOnAll(page, assetId);
+
+        await expect(page.getByTestId('asset-detail-chart'), 'the prices are drawn').toHaveAttribute('data-series-state', 'ready', {timeout: 10_000});
+        await expect(startInput, `«All» starts on the first stored price (${FIRST_CLOSE_DAY}), not on a later one`).toHaveValue(FIRST_CLOSE_DAY, {timeout: 10_000});
+    });
+
+    // The wire half. Red while the page asks from the 2000-01-01 placeholder. Armed before the navigation: the request is
+    // sent while the page loads, and a listener armed after it would wait for one that already went by.
+    test('FB-7b the first prices request of All carries the min start', async ({page}) => {
+        const assetId = await seedOldHistoryAsset(page, 'E2E FB-7b min request');
+        const asked = page.waitForRequest((request) => priceAsksFor(request, assetId, '').some((ask) => ask.includePrice), {timeout: 30_000});
+        asked.catch(() => undefined);
+        await openOnAll(page, assetId);
+
+        const first = priceAsksFor(await asked, assetId, '').find((ask) => ask.includePrice);
+        expect(first?.start, 'the first prices request for this asset on «All» asks from the min sentinel').toBe('min');
+    });
+
+    // The memory half. In-app navigation keeps the page's in-memory stores, a reload empties them: the way away is the
+    // sidebar and the way back is the browser's back, both client-side. After the way back the field is settled by the
+    // page, not by a wait: the root has released its busy flag and the chart is drawn, so a `min` request that was going
+    // to be sent has been sent. The requests are taken from the moment of the way back, and only those the page sent
+    // while it was on this asset's detail (the Assets list asks for its cards in between).
+    test('FB-7b a second visit to All still starts on the first stored price and does not ask for min again', async ({page}) => {
+        const assetId = await seedOldHistoryAsset(page, 'E2E FB-7b second visit');
+        const asks: PriceAsk[] = [];
+        page.on('request', (request) => {
+            // Read synchronously: the page URL is the page that sent the request, not the one it will be on later.
+            asks.push(...priceAsksFor(request, assetId, page.url()));
+        });
+        const startInput = await openOnAll(page, assetId);
+        await expect(startInput, 'first visit: «All» starts on the first stored price').toHaveValue(FIRST_CLOSE_DAY, {timeout: 10_000});
+
+        // Away, in-app.
+        await openMobileMenu(page);
+        await page.getByTestId('nav-assets').click();
+        await expect(page).toHaveURL(/\/assets(?:[?#]|$)/, {timeout: 15_000});
+        const list = page.getByTestId('assets-page');
+        await expect(list).toBeVisible({timeout: 15_000});
+        await waitForSettled(list, 30_000);
+        await expect(page.getByTestId('asset-detail-page'), 'the detail really unmounted: otherwise nothing is remounted on the way back').toHaveCount(0);
+
+        // Back, in-app.
+        const mark = asks.length;
+        await page.goBack();
+        await expect(page, 'back on the detail of this asset').toHaveURL(new RegExp(`/assets/${assetId}(?:[?#]|$)`), {timeout: 15_000});
+        const detail = page.getByTestId('asset-detail-page');
+        await expect(detail).toBeVisible({timeout: 15_000});
+        await waitForSettled(detail, 30_000);
+        const picker = page.getByTestId('asset-detail-controls').getByTestId('asset-detail-filter-bar').getByTestId('date-range-picker-root');
+        await expect(picker.getByTestId('date-preset-max'), '«All» is still the active preset').toHaveAttribute('data-active', 'true', {timeout: 10_000});
+        await expect(page.getByTestId('asset-detail-chart'), 'the prices are drawn').toHaveAttribute('data-series-state', 'ready', {timeout: 10_000});
+        await expect(picker.getByTestId('date-range-input-start'), 'second visit: «All» still starts on the first stored price').toHaveValue(FIRST_CLOSE_DAY, {timeout: 10_000});
+
+        const onDetail = asks.slice(mark).filter((ask) => ask.pageUrl.includes(`/assets/${assetId}`) && ask.includePrice);
+        expect(
+            onDetail.filter((ask) => ask.start === 'min'),
+            'the first date is remembered for the session: the detail does not ask the prices from min again',
+        ).toEqual([]);
     });
 });
 
@@ -9367,7 +9523,9 @@ test.describe('X-R16 asset detail: an invalid signal result keeps the prices and
                     requested = [];
                 }
                 const items = requested.map((item) => {
-                    const start = item.date_range?.start ?? '';
+                    // The server answers the sentinel `min` with the asset's first stored day
+                    const askedStart = item.date_range?.start ?? '';
+                    const start = askedStart === 'min' ? history[0] : askedStart;
                     const end = item.date_range?.end ?? '9999-12-31';
                     return {
                         asset_id: item.asset_id,
@@ -9396,9 +9554,9 @@ test.describe('X-R16 asset detail: an invalid signal result keeps the prices and
         return picker.getByTestId('date-range-input-start');
     }
 
-    /** The first load was the «All» one: the main prices were asked for from the 2000-01-01 sentinel, answered, and drawn. */
+    /** The first load was the «All» one: the main prices were asked for from the `min` sentinel, answered, and drawn. */
     async function expectAllPricesDrawn(page: Page, delivered: DeliveredMainQuery[]): Promise<void> {
-        await expect.poll(() => delivered.some((query) => query.includePrice === true && query.start === '2000-01-01'), {message: 'the page asked for the «All» prices from the 2000-01-01 sentinel, and the route answered', timeout: 15_000}).toBe(true);
+        await expect.poll(() => delivered.some((query) => query.includePrice === true && query.start === 'min'), {message: 'the page asked for the «All» prices from the `min` sentinel, and the route answered', timeout: 15_000}).toBe(true);
         await expect(page.getByTestId('asset-detail-chart'), 'the prices are drawn').toHaveAttribute('data-series-state', 'ready', {timeout: 10_000});
     }
 

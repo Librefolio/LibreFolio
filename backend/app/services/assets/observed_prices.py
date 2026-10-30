@@ -4,9 +4,9 @@ The public series of ``POST /assets/prices/query`` is one point for every calend
 day (``_fill_point``), and, with a target currency, converted at the rate of that day. Built a day at a time that is a
 point and a conversion for every day of the load range, though the row changes on the days a price is stored and the rate
 on the days a rate is stored (``fx.conversion.unit_rate_steps``). This module resolves each day to its stored row and to
-the rate row it is converted under — two lookups, no conversion — and converts each **pair of rows once**, with the same
-``convert_bulk`` the day-by-day pass called: so every value, to the digit, is the one the per-day pass gave, and the
-conversions are one for each stretch of days on which both rows are the same.
+the rate row it is converted under — two lookups, no conversion — and converts each **pair of rows once**, as the stored
+prices times the day's unit rate (MF-A13: the engine's one formula, read from the steps, no division): the conversions are one
+for each stretch of days on which both rows are the same.
 
 What a day's point is, said once (``_point``):
 - no target, or a row already in the target: the row filled to the day (``_fill_point``);
@@ -20,7 +20,7 @@ the point the dense series has on that day. It is dense per day and converted pe
 row, conversion) for every calendar day of its range, not one for every observation, and a conversion is shared by the days
 of its stretch. Observations are the days a row is stored on (``observation_dates``); nothing here is sparse.
 
-Pure but for the two reads it asks (``unit_rate_steps``, ``convert_bulk``): no signal, no request model.
+Pure but for the one read it asks (``unit_rate_steps``): no signal, no request model.
 """
 
 from __future__ import annotations
@@ -35,7 +35,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.app.db.models import PriceHistory
 from backend.app.schemas import FAPricePoint
-from backend.app.schemas.common import Currency
 from backend.app.schemas.prices import AssetBackwardFillInfo
 from backend.app.services.fx import conversion as fx_conversion
 from backend.app.services.fx.stretch_conversion import rate_not_found_error
@@ -185,16 +184,11 @@ async def resolve_days(session: AsyncSession, rows: Sequence[PriceHistory], days
             asked.setdefault(key, (row, day, steps[(row.currency, target)].at(day)))
             plan.append((day, row, key))
 
-    converted: dict[tuple[date_type, date_type], object] = {}
+    # One conversion for each stretch (a stored row under one rate row): the row times the day's unit rate, the engine's formula.
+    # Nothing is asked of ``convert_bulk``: the rate day is the steps' own, a missing rate is written from the plan below, and the
+    # steps read only usable rows, so a stretch that has a rate day always converts
+    converted: dict[tuple[date_type, date_type], object] = {key: _converted(row, key[1], unit) for key, (row, _day, unit) in asked.items()}
     errors: list[str] = []
-    if asked:
-        keys = list(asked)
-        results, conversion_errors = await fx_conversion.convert_bulk(session, [(Currency(code=asked[key][0].currency, amount=asked[key][0].close), target, asked[key][1]) for key in keys], raise_on_error=False)
-        for key, result in zip(keys, results, strict=True):
-            converted[key] = _FAILED if result is None else _converted(asked[key][0], result[1], asked[key][2])
-        # ``convert_bulk`` numbers its errors by position in the list asked here (one item for each stretch), not by point: only a
-        # failure it raises itself, never the missing-rate error of a day, which is written below by the point's own position.
-        errors.extend(conversion_errors)
 
     resolved: list[_Resolved] = []
     position = 0  # index among the points that ask a conversion: the day-by-day pass numbered its errors by it
