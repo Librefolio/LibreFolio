@@ -143,3 +143,4 @@ him to answer by number. He reads better from a file than from a long chat messa
   test turned red after a cache-key change that the CI run itself accepted).
 - 30/10/2026 — A relative path in `git worktree add` resolves against the shell's directory: run from the main checkout,
   it creates the worktree inside the repository. Always pass an absolute path.
+- 30/10/2026 (from the cloud coordinator) — Never merge into, or edit, a worktree while a run is going on it (a real-data probe, a whole suite): the result no longer says which commit it tested. Wait for the run to end, or cancel your own queued run first.
