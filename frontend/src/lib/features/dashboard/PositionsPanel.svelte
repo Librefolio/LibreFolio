@@ -9,8 +9,11 @@
   - Performance / Map: stacked diverging bar chart (positive components right of zero, negative
     left of zero) + Other Period Effects rows
 
-  Holdings / Table also carries the return chart of the positions (Y5-2, #48): the rows the user ticks are
-  drawn as lines over the portfolio's own (Abs or «base 100»); the legend turns them on and off.
+  Holdings / Table and Performance / Table carry the return chart of the positions (Y5-2, #48; FB-12): the rows
+  the user ticks are drawn as lines over the portfolio's own (Abs or «base 100»); the legend turns them on and
+  off. Beside it, the allocation by asset (pie and history), as the Dashboard shows the portfolio's allocation.
+  The Portfolio table also lists, last and in italics, the positions sold out inside the period (FB-13): they
+  come from the period's contribution, which the Portfolio view therefore asks too.
 
   Data sources:
   - Holdings: summary.holdings from portfolioStore (engine snapshot at date_to)
@@ -36,9 +39,10 @@
     import OtherPeriodEffectsTable from './OtherPeriodEffectsTable.svelte';
     import PerformanceChart from './PerformanceChart.svelte';
     import PositionsReturnChart from './PositionsReturnChart.svelte';
+    import AllocationPanel from './AllocationPanel.svelte';
     import {PORTFOLIO_LINE_ID, portfolioLine, positionLines, selectionKeys, type HistoryPointLike, type PositionKey, type PositionsChartView, type PositionsSeriesResponse} from './positionsSeries';
 
-    import type {PortfolioSummary, PositionsContribution} from '$lib/stores/portfolio/portfolioStore.svelte';
+    import type {AllocationHistoryDimensions, PortfolioSummary, PositionsContribution} from '$lib/stores/portfolio/portfolioStore.svelte';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
 
     // =========================================================================
@@ -69,6 +73,11 @@
         onRequestPositionsSeries?: (keys: PositionKey[]) => void;
         /** The Dashboard's own history: the chart's portfolio line (its return, not the positions' P&L). */
         portfolioHistory?: ReadonlyArray<HistoryPointLike>;
+        /** The allocation by asset beside the chart (FB-12): the same inputs the Dashboard's allocation panel takes. */
+        brokerIds?: number[];
+        currentLanguage?: string;
+        allocationHistory?: AllocationHistoryDimensions | null;
+        onRequestAllocationHistory?: (dimension: 'type' | 'sector' | 'geo' | 'asset', brokerIds: number[] | undefined) => void | Promise<void>;
     }
 
     let {
@@ -86,6 +95,10 @@
         positionsSeriesFailed = false,
         onRequestPositionsSeries,
         portfolioHistory = [],
+        brokerIds,
+        currentLanguage = 'en',
+        allocationHistory = null,
+        onRequestAllocationHistory,
     }: Props = $props();
 
     // =========================================================================
@@ -141,9 +154,11 @@
     });
 
     // Request contribution data when user switches to the Performance view
-    // (needed for both the table and the chart, plus Other Period Effects).
+    // (needed for both the table and the chart, plus Other Period Effects), and with the Portfolio table:
+    // the positions sold out inside the period are its last rows (FB-13).
     $effect(() => {
-        if (semanticMode === 'performance' && !contribution && !contributionLoading) {
+        const needsContribution = semanticMode === 'performance' || (semanticMode === 'holdings' && visualMode === 'table');
+        if (needsContribution && !contribution && !contributionLoading) {
             onRequestContribution?.();
         }
     });
@@ -220,10 +235,40 @@
     let contributionPositions = $derived(contribution?.positions ?? []);
     let otherEffects = $derived(contribution?.other_effects ?? []);
 
+    /** The positions sold out inside the period: they are no longer holdings, but the Portfolio table lists them last (FB-13). */
+    let soldPositions = $derived(
+        contributionPositions
+            .filter((position) => position.is_fully_sold)
+            .map((position) => ({asset_id: position.asset_id, asset_name: position.asset_name, asset_type: position.asset_type, broker_id: position.broker_id, broker_name: position.broker_name, asset_ticker: typeof position.asset_ticker === 'string' ? position.asset_ticker : null})),
+    );
+
     let showLoading = $derived(loading || (semanticMode === 'performance' && contributionLoading));
     let showHoldingsEmpty = $derived(semanticMode === 'holdings' && holdings.length === 0);
     let showPerformanceEmpty = $derived(semanticMode === 'performance' && (!contribution || (contributionPositions.length === 0 && otherEffects.length === 0)));
 </script>
+
+{#snippet chartSection()}
+    <!-- The return chart (3/5) beside the allocation by asset (2/5): the proportions and the look of the Dashboard's Growth and Allocation (FB-12). -->
+    <div class="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-5" data-testid="positions-chart-section">
+        <div class="lg:col-span-3 rounded-xl border border-lf-subtle bg-lf-card p-4 shadow-sm shadow-lf-shadow-card">
+            <PositionsReturnChart
+                lines={chartLines}
+                view={chartView}
+                onviewchange={handleChartViewChange}
+                {hiddenIds}
+                ontoggle={toggleLine}
+                colorOf={colourOf}
+                currency={displayCurrency}
+                height="20rem"
+                loading={positionsSeriesLoading && selectedRows.length > 0}
+                failed={positionsSeriesFailed && selectedRows.length > 0}
+                portfolioLabel={$_('dashboard.positionsChart.portfolio')}
+                note={$_('dashboard.positionsChart.portfolioNote')}
+            />
+        </div>
+        <AllocationPanel {summary} {loading} {displayCurrency} {brokerIds} {currentLanguage} {allocationHistory} {onRequestAllocationHistory} lockedTab="asset" viewStorageKey="dashboard-positions-allocation-view" />
+    </div>
+{/snippet}
 
 <div class="bg-lf-card text-lf-primary rounded-xl border border-lf-subtle shadow-sm shadow-lf-shadow-card p-4 flex flex-col" data-testid="positions-panel" aria-busy={showLoading} data-busy={showLoading ? 'true' : 'false'}>
     <!-- Header -->
@@ -293,27 +338,14 @@
     {:else}
         <div class="flex-1 {visualMode === 'table' ? 'overflow-x-auto' : ''}">
             {#if semanticMode === 'holdings' && visualMode === 'table'}
-                <ExposureTable bind:this={exposureTableComponent} {holdings} {displayCurrency} {brokers} {onAnalyze} {analyzedAssetId} selectable {selectedKeys} onSelectionChange={handleSelectionChange} />
-                <div class="mt-4" data-testid="positions-chart-section">
-                    <PositionsReturnChart
-                        lines={chartLines}
-                        view={chartView}
-                        onviewchange={handleChartViewChange}
-                        {hiddenIds}
-                        ontoggle={toggleLine}
-                        colorOf={colourOf}
-                        currency={displayCurrency}
-                        loading={positionsSeriesLoading && selectedRows.length > 0}
-                        failed={positionsSeriesFailed && selectedRows.length > 0}
-                        portfolioLabel={$_('dashboard.positionsChart.portfolio')}
-                        note={$_('dashboard.positionsChart.portfolioNote')}
-                    />
-                </div>
+                <ExposureTable bind:this={exposureTableComponent} {holdings} {soldPositions} {displayCurrency} {brokers} {onAnalyze} {analyzedAssetId} selectable {selectedKeys} onSelectionChange={handleSelectionChange} />
+                {@render chartSection()}
             {:else if semanticMode === 'holdings' && visualMode === 'map'}
                 <ExposureTreemap {holdings} holdingGroups={summary?.holding_groups ?? []} {displayCurrency} {onAnalyze} />
             {:else if semanticMode === 'performance' && visualMode === 'table' && contribution}
-                <ContributionTable bind:this={contributionTableComponent} positions={contributionPositions} {holdings} {displayCurrency} {brokers} {onAnalyze} {analyzedAssetId} />
+                <ContributionTable bind:this={contributionTableComponent} positions={contributionPositions} {holdings} {displayCurrency} {brokers} {onAnalyze} {analyzedAssetId} selectable {selectedKeys} onSelectionChange={handleSelectionChange} />
                 <OtherPeriodEffectsTable effects={otherEffects} {displayCurrency} />
+                {@render chartSection()}
             {:else if semanticMode === 'performance' && visualMode === 'map' && contribution}
                 <PerformanceChart positions={contributionPositions} {otherEffects} {displayCurrency} {onAnalyze} />
             {/if}

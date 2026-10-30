@@ -104,7 +104,7 @@ vi.mock('$lib/api', () => ({
     ),
 }));
 
-import {fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
+import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import PositionsReturnChart from './PositionsReturnChart.svelte';
 import type {PositionLine, PositionsChartView} from './positionsSeries';
 
@@ -493,5 +493,25 @@ describe('PositionsReturnChart — the option', () => {
         await view.rerender({...props({view: 'percentage', lines: [line('12-3', [101, 102, 103])]})});
         await waitFor(() => expect(dataValues(lineSeries(ALL_IDS)[0])).toEqual([101, 102, 103]));
         expect(markLineLevels()).toContain(100);
+    });
+});
+
+// =============================================================================
+// FB-12 · Abs/% on the chart, the note under it
+// =============================================================================
+
+describe('PositionsReturnChart — the view toggle is on the chart and the note under it (FB-12)', () => {
+    it('Abs / % sit inside the plot area, not in the title row', async () => {
+        render(PositionsReturnChart, {props: props({lines: [PORTFOLIO()]})});
+        const plot = await screen.findByTestId('positions-chart-plot');
+        expect(within(plot).getByTestId('positions-chart-view-absolute')).toBeInTheDocument();
+        expect(within(plot).getByTestId('positions-chart-view-percentage')).toBeInTheDocument();
+    });
+
+    it('the note comes after the plot, below the chart', async () => {
+        render(PositionsReturnChart, {props: props({lines: [PORTFOLIO()]})});
+        const plot = await screen.findByTestId('positions-chart-plot');
+        const note = screen.getByTestId('positions-chart-note');
+        expect(plot.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
 });

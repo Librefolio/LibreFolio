@@ -135,3 +135,51 @@ describe('ContributionTable — the tooltips of Start Value and End Value (#49)'
         expect(await screen.findByRole('tooltip')).toHaveTextContent(expected);
     });
 });
+
+describe('ContributionTable — row selection, to draw the positions chart under Period too (FB-12)', () => {
+    const three = () => [position(11, 1), position(22, 1), position(33, 2, {is_fully_sold: true})];
+    const checkbox = (rowId: string) => screen.getByTestId(`dt-row-checkbox-${rowId}`);
+
+    async function mountSelectable(options: {selectable?: boolean; selectedKeys?: string[]} = {}) {
+        const onSelectionChange = vi.fn();
+        render(ContributionTable, {positions: three(), selectable: options.selectable ?? true, onSelectionChange, ...(options.selectedKeys === undefined ? {} : {selectedKeys: options.selectedKeys})});
+        await waitFor(() => expect(document.querySelectorAll('tbody tr[data-row-id]')).toHaveLength(3));
+        return {onSelectionChange};
+    }
+
+    it('without `selectable` there are no checkboxes (today’s behaviour)', async () => {
+        await mountSelectable({selectable: false});
+        expect(document.querySelectorAll('[data-testid^="dt-row-checkbox-"]')).toHaveLength(0);
+    });
+
+    it('with `selectable` every row has a checkbox, unchecked', async () => {
+        await mountSelectable();
+        for (const id of ['pos-1-11', 'pos-1-22', 'pos-2-33']) expect(checkbox(id)).toHaveAttribute('data-state', 'unchecked');
+    });
+
+    it('reports a ticked row with the key of a position (asset-broker), the same the chart asks for', async () => {
+        const {onSelectionChange} = await mountSelectable();
+
+        await fireEvent.click(checkbox('pos-2-33'));
+
+        await waitFor(() => expect(onSelectionChange).toHaveBeenCalledWith([{key: '33-2', assetId: 33, brokerId: 2}]));
+    });
+
+    it('ticking does not open the lots analysis', async () => {
+        const onAnalyze = vi.fn();
+        render(ContributionTable, {positions: three(), selectable: true, onAnalyze});
+        await waitFor(() => expect(document.querySelectorAll('tbody tr[data-row-id]')).toHaveLength(3));
+
+        await fireEvent.click(checkbox('pos-1-11'));
+
+        expect(onAnalyze).not.toHaveBeenCalled();
+    });
+
+    it('selectedKeys (position keys) seed the selection without announcing it back; unknown keys are ignored', async () => {
+        const {onSelectionChange} = await mountSelectable({selectedKeys: ['22-1', '999-9']});
+
+        expect(checkbox('pos-1-22')).toHaveAttribute('data-state', 'checked');
+        expect(checkbox('pos-1-11')).toHaveAttribute('data-state', 'unchecked');
+        expect(onSelectionChange).not.toHaveBeenCalled();
+    });
+});

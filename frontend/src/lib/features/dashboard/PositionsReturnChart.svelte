@@ -352,23 +352,7 @@
 </script>
 
 <div class="flex flex-col gap-2 text-lf-primary" data-testid="positions-return-chart" data-state={chartState} data-view={view} data-line-count={drawn.length}>
-    <div class="flex flex-wrap items-center justify-between gap-2">
-        <h3 class="text-sm font-semibold text-lf-primary">{$_('dashboard.positionsChart.title')}</h3>
-        <div class="inline-flex overflow-hidden rounded-md border border-lf-input" role="group" aria-label={$_('dashboard.positionsChart.title')}>
-            {#each VIEWS as option (option)}
-                <button
-                    type="button"
-                    class="px-2.5 py-1 text-xs font-medium focus-visible:outline-2 focus-visible:outline-lf-focus {view === option ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-secondary hover:bg-lf-panel'}"
-                    aria-pressed={view === option}
-                    title={option === 'absolute' ? $_('dashboard.positionsChart.viewAbsoluteHint') : $_('dashboard.positionsChart.viewPercentageHint')}
-                    data-testid="positions-chart-view-{option}"
-                    onclick={() => onviewchange?.(option)}
-                >
-                    {option === 'absolute' ? $_('dashboard.positionsChart.viewAbsolute') : $_('dashboard.positionsChart.viewPercentage')}
-                </button>
-            {/each}
-        </div>
-    </div>
+    <h3 class="text-sm font-semibold text-lf-secondary">{$_('dashboard.positionsChart.title')}</h3>
 
     {#if lines.length > 0}
         <div class="flex flex-wrap gap-1.5" role="group" aria-label={$_('dashboard.positionsChart.title')}>
@@ -397,22 +381,41 @@
                 </button>
             {/each}
         </div>
-        {#if hasPortfolioLine && note}
-            <p class="text-xs text-lf-muted" data-testid="positions-chart-note">{note}</p>
-        {/if}
     {/if}
 
-    {#if chartState === 'loading'}
-        <div class="animate-pulse rounded bg-lf-panel" style:height data-testid="positions-chart-skeleton" aria-busy="true" aria-label={$_('common.loading')}></div>
-    {:else if chartState === 'failed'}
-        <div class="flex items-center justify-center rounded border border-dashed border-lf-input px-4 text-center text-sm text-lf-danger" style:height data-testid="positions-chart-failed" role="alert">
-            {$_('dashboard.positionsChart.failed')}
+    <!-- The plot, with the view toggle on it (Abs / %), top right as the Growth chart's toggles are (FB-12) -->
+    <div class="relative" data-testid="positions-chart-plot">
+        <div class="absolute right-1 top-1 z-10 inline-flex overflow-hidden rounded-md border border-lf-input shadow-sm shadow-lf-shadow-card" role="group" aria-label={$_('dashboard.positionsChart.title')}>
+            {#each VIEWS as option (option)}
+                <button
+                    type="button"
+                    class="px-2.5 py-1 text-xs font-medium focus-visible:outline-2 focus-visible:outline-lf-focus {view === option ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-secondary hover:bg-lf-panel'}"
+                    aria-pressed={view === option}
+                    title={option === 'absolute' ? $_('dashboard.positionsChart.viewAbsoluteHint') : $_('dashboard.positionsChart.viewPercentageHint')}
+                    data-testid="positions-chart-view-{option}"
+                    onclick={() => onviewchange?.(option)}
+                >
+                    {option === 'absolute' ? $_('dashboard.positionsChart.viewAbsolute') : $_('dashboard.positionsChart.viewPercentage')}
+                </button>
+            {/each}
         </div>
-    {:else if chartState === 'empty'}
-        <div class="flex items-center justify-center rounded border border-dashed border-lf-input px-4 text-center text-sm text-lf-muted" style:height data-testid="positions-chart-hint">
-            {$_('dashboard.positionsChart.hint')}
-        </div>
-    {:else}
-        <div bind:this={chartContainer} class="w-full" style:height data-testid="positions-chart-canvas"></div>
+
+        {#if chartState === 'loading'}
+            <div class="animate-pulse rounded bg-lf-panel" style:height data-testid="positions-chart-skeleton" aria-busy="true" aria-label={$_('common.loading')}></div>
+        {:else if chartState === 'failed'}
+            <div class="flex items-center justify-center rounded border border-dashed border-lf-input px-4 text-center text-sm text-lf-danger" style:height data-testid="positions-chart-failed" role="alert">
+                {$_('dashboard.positionsChart.failed')}
+            </div>
+        {:else if chartState === 'empty'}
+            <div class="flex items-center justify-center rounded border border-dashed border-lf-input px-4 text-center text-sm text-lf-muted" style:height data-testid="positions-chart-hint">
+                {$_('dashboard.positionsChart.hint')}
+            </div>
+        {:else}
+            <div bind:this={chartContainer} class="w-full" style:height data-testid="positions-chart-canvas"></div>
+        {/if}
+    </div>
+
+    {#if lines.length > 0 && hasPortfolioLine && note}
+        <p class="text-xs text-lf-muted" data-testid="positions-chart-note">{note}</p>
     {/if}
 </div>
