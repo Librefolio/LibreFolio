@@ -124,6 +124,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/risk/assetSetLevels.test.ts",
             "src/lib/features/risk/assetSetI18n.test.ts",
             "src/lib/features/risk/warningTranslatorSites.test.ts",
+            "src/nativeDateInput.gate.test.ts",
             "src/lib/features/risk/syncTargets.test.ts",
             "src/lib/features/risk/stressBucketLabel.test.ts",
             "src/lib/components/assets/providerProbe.test.ts",

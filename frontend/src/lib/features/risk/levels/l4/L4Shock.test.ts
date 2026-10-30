@@ -300,6 +300,11 @@ const ITALY_EU_ANSWER = shockOutput('geography', ITALY_AND_EU, [
     holding(301, 0.3, 'geography', [slice('ITA', 1, ['ITA', 'european_union', 'Other'], 'ITA', -0.25, 'country')]),
     holding(302, 0.4, 'geography', [slice('DEU', 0.5, ['european_union', 'Other'], 'european_union', -0.2, 'geography_group'), slice('USA', 0.5, ['Other'], 'Other', 0, 'other')]),
 ]);
+
+/** A group the host defined, named per language by the host (T-GRP): the table shows that name, never the id. */
+const NORDICS_NAMES: Readonly<Record<SupportedLocale, string>> = {en: 'Nordic countries', it: 'Paesi nordici', fr: 'Pays nordiques', es: 'Países nórdicos'};
+const NORDICS_ANSWER = shockOutput('geography', {nordics: -0.2, Other: 0}, [holding(311, 0.3, 'geography', [slice('SWE', 1, ['nordics', 'Other'], 'nordics', -0.2, 'geography_group')]), holding(312, 0.2, 'geography', [slice('USA', 1, ['Other'], 'Other', 0, 'other')])]);
+const NORDICS_ROWS = ['bucket:nordics', 'bucket:Other'];
 const ITALY_EU_ROWS = ['bucket:ITA', 'bucket:european_union', 'bucket:Other'];
 
 /** A portfolio of bonds under two equity classes: nobody holds either bucket. */
@@ -392,7 +397,10 @@ function hypotheticalEntry(id: PresetId) {
 const SCENARIO_CATALOG = {
     items: (Object.keys(PRESETS) as PresetId[]).map(hypotheticalEntry),
     // As `built_in/geography/european_union.yml` ships it, members abridged.
-    geography_groups: [{schema_version: 1, id: 'european_union', name: {en: 'European Union', it: 'Unione Europea', fr: 'Union européenne', es: 'Unión Europea'}, members: ['DEU', 'FRA', 'ITA']}],
+    geography_groups: [
+        {schema_version: 1, id: 'european_union', name: {en: 'European Union', it: 'Unione Europea', fr: 'Union européenne', es: 'Unión Europea'}, members: ['DEU', 'FRA', 'ITA']},
+        {schema_version: 1, id: 'nordics', name: NORDICS_NAMES, members: ['DNK', 'FIN', 'NOR', 'SWE']},
+    ],
 };
 
 // ---------------------------------------------------------------------------
@@ -431,6 +439,7 @@ function shipped(key: string): string | null {
 function expectedLabel(bucket: string, dimension: Dimension): string {
     if (bucket === 'Other') return t('common.other');
     if (bucket === 'european_union') return t('risk.stress.europeanUnion');
+    if (bucket === 'nordics') return NORDICS_NAMES[lang()];
     if (dimension === 'asset_class') return shipped(`assets.types.${bucket}`) ?? bucket;
     if (dimension === 'sector') {
         const name = shipped(`sectors.${sectorI18nKey(bucket)}`);
@@ -793,6 +802,18 @@ describe('L4Shock — the rows are named, not coded (T-SHK, D5)', () => {
         expect(screen.queryByTestId('risk-shock-detail-toggle'), 'premise: no scenario is chosen').toBeNull();
 
         await waitFor(() => expect(rowLabels(ITALY_EU_ROWS), 'a geography row is not named — a country by the flag and name the country cache holds in the UI language, european_union by risk.stress.europeanUnion, Other by common.other').toEqual(expectedRows('geography', ITALY_EU_ROWS)));
+    });
+});
+
+describe('L4Shock — a geography group the host defined has a name (T-GRP)', () => {
+    it('names the host group by the host’s text in the UI language, not by its id', async () => {
+        const controller = mount(shockResult(NORDICS_ANSWER));
+        // The host's names live in the scenario catalogue, which the panel around the block loads.
+        await controller.loadScenarioCatalog();
+        flushSync();
+        expect(rowKeys(), 'barrier: the answer parsed and its buckets are drawn').toEqual(expect.arrayContaining(NORDICS_ROWS));
+
+        await waitFor(() => expect(rowLabels(NORDICS_ROWS), 'a host group row is not named: the table writes the group id instead of the name the host gave').toEqual(expectedRows('geography', NORDICS_ROWS)));
     });
 });
 

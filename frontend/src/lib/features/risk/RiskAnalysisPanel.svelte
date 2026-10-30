@@ -17,6 +17,7 @@
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
     import PageSyncModal from '$lib/components/ui/modals/PageSyncModal.svelte';
+    import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
     import TabBar from '$lib/components/ui/tabs/TabBar.svelte';
     import {buildHistoricalReplayParameters, buildHypotheticalShockParameters, buildSimulationParameters, STRESS_ASSET_CLASSES, uniformAssetClassShocks, type RiskScenarioDimension, type SimulationView} from '$lib/features/risk/riskRequest';
@@ -35,7 +36,7 @@
     import {numericArrows} from '$lib/actions/numericArrows';
     import {formatPercent as sharedFormatPercent} from '$lib/utils/core/formatPercent';
     import * as riskHelpers from './riskAnalysisHelpers';
-    import {stressBucketLabel as bucketLabel} from './stressBucketLabel';
+    import {geographyGroupNamer, stressBucketLabel as bucketLabel} from './stressBucketLabel';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {POLARITY_TONES} from '$lib/theme/toneClasses';
     import {RISK_OVERLAY_COLORS} from '$lib/theme/chartTheme';
@@ -345,7 +346,7 @@
 
     function stressBucketLabel(bucket: string, dimension: RiskScenarioDimension): string {
         void referenceLabelsVersion;
-        return bucketLabel(bucket, dimension, {translate: $t, sectorEmoji: getSectorEmoji, country: getCountryInfo});
+        return bucketLabel(bucket, dimension, {translate: $t, sectorEmoji: getSectorEmoji, country: getCountryInfo, geographyGroup: geographyGroupNamer(scenarioCatalog, $currentLanguage)});
     }
 
     function stressImpactDimension(value: unknown): RiskScenarioDimension {
@@ -357,6 +358,15 @@
         replayStart = scalarString(scenario.defaults.start) ?? dateStart;
         replayEnd = scalarString(scenario.defaults.end) ?? dateEnd;
         replayPresetInitialized = true;
+        controller.resetAnalysis('replay');
+    }
+
+    /** A quick range or a date typed by hand is no longer the crisis's period: the preset falls back to the custom one. */
+    function changeReplayPeriod(start: string, end: string): void {
+        const custom = historicalReplayScenarios.find((scenario) => scenario.id === 'custom_period');
+        replayPresetId = custom?.id ?? '';
+        replayStart = start;
+        replayEnd = end;
         controller.resetAnalysis('replay');
     }
 
@@ -885,14 +895,12 @@
                             <SimpleSelect value={replayPresetId} options={historicalReplayOptions} compact testId="risk-replay-preset" onchange={selectReplayPreset} />
                         </div>
                     </label>
-                    <label class="text-xs text-lf-muted">
-                        {$t('risk.replay.start')}
-                        <input class="mt-1 block w-full rounded border border-lf-input bg-lf-field px-2 py-1 text-sm text-lf-primary hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus" type="date" bind:value={replayStart} data-testid="risk-replay-start" />
-                    </label>
-                    <label class="text-xs text-lf-muted">
-                        {$t('risk.replay.end')}
-                        <input class="mt-1 block w-full rounded border border-lf-input bg-lf-field px-2 py-1 text-sm text-lf-primary hover:border-lf-input-hover focus:border-lf-focus focus:ring-1 focus:ring-lf-focus" type="date" bind:value={replayEnd} data-testid="risk-replay-end" />
-                    </label>
+                    <div class="text-xs text-lf-muted sm:col-span-2" data-testid="risk-replay-period">
+                        <span>{$t('risk.levels.l4.replayPeriod')}</span>
+                        <div class="mt-1">
+                            <DateRangePicker start={replayStart} end={replayEnd} excludePresets={['MAX']} showCustomWindow={false} compact onchange={changeReplayPeriod} />
+                        </div>
+                    </div>
                 </div>
                 <div class="mt-3 flex flex-wrap items-end gap-3">
                     <div>
