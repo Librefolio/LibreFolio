@@ -95,6 +95,9 @@ Then use the agent to fix reported differences (missing headings, broken links, 
   - The site serves Mermaid from its own pinned copy (`./dev.py cache js`), **without the ELK layout**: a diagram
     whose frontmatter says `layout: elk` is drawn with the default layout. Do not add the key to a new diagram;
     keep a complex one readable by splitting it, or by choosing `flowchart LR` or `TD`.
+  - Clicking a diagram opens it full screen with zoom and pan (`javascripts/diagram-zoom.js`). A script that must see
+    the diagram's SVG goes in the head of `overrides/main.html`, before Material's bundle, never in
+    `extra_javascript`: Material draws into a closed shadow root and the script must open it first.
 - Code blocks with correct language tag
 
 ## Gallery Images in Pages

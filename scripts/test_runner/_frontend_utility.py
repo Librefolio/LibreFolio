@@ -859,6 +859,18 @@ def front_docs_offline_mermaid(verbose: bool = False, ui: bool = False, headed: 
     return _run_playwright("layout/docs-offline-mermaid.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_docs_diagram_zoom(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the documentation's diagrams full screen: click or Enter opens, wheel/drag/keys zoom and pan, Esc closes, light and dark (H6-4)."""
+    print_section("Frontend Docs Diagram Zoom Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("layout/docs-diagram-zoom.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_docs_search_language(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the documentation's search by language: each language's home page finds its own pages only, the toggle widens it to all four, the preference holds (DOC-2)."""
     print_section("Frontend Docs Search Language Tests")
@@ -1345,6 +1357,15 @@ def populate_registry(registry: dict) -> None:
         desc="The documentation draws its diagrams without internet: on a page with a default-layout diagram and one whose frontmatter asks for layout: elk (ELK is dropped, the default layout draws it), every origin but the lane's refused, the template writes the site's own pinned Mermaid copy before Material's bundle (/mkdocs/javascripts/vendor/mermaid/mermaid.min.js, 200), Material's rendered SVG is visible with nodes and is not Mermaid's error drawing, no source block is left as code, and neither cdn.jsdelivr.net nor unpkg.com is ever requested (H6-3, M-22)",
         prereq="Docs site built with the Mermaid copy (dev.py cache js, then dev.py mkdocs build)",
         tests="layout/docs-offline-mermaid.spec.ts",
+    )
+    add_test(
+        cat,
+        "docs-diagram-zoom",
+        front_docs_diagram_zoom,
+        name="Docs Diagram Zoom",
+        desc="A Mermaid diagram of the documentation opens full screen (H6-4): Material's closed shadow root is opened by diagram-zoom.js (attachShadow patch, written in <head> ahead of Material's bundle); every diagram is a focusable button with a label in the page's language (English, Italian); a click opens a flowchart and a sequence diagram in a dialog; the wheel zooms around the pointer (the point under it stays still), + and - zoom, 0 and a double click fit; a drag pans without closing, a click on the diagram keeps it open, a click on the backdrop closes; Esc closes and the focus returns to the diagram; Enter and Space open, Tab and Shift+Tab stay on the four buttons and wrap; light and dark, the stage takes the page's background of that scheme and the diagram still opens after the palette toggle; every request to another origin refused and none made, no console or page error",
+        prereq="Docs site built with the script and the stylesheet (dev.py mkdocs build)",
+        tests="layout/docs-diagram-zoom.spec.ts",
     )
     add_test(
         cat,

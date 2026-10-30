@@ -1181,3 +1181,85 @@ class TestMermaidServedLocally:
                 if not (path.name == self.EARLY and re.fullmatch(pinned, found)):
                     offenders.append(f"{path.name}: {found}")
         assert offenders == []
+
+
+# ---------------------------------------------------------------------------
+# H6-4: the full screen view of a diagram, served by the site itself
+# ---------------------------------------------------------------------------
+#
+# ``diagram-zoom.js`` opens a Mermaid diagram full screen with zoom and pan. Material for MkDocs draws each diagram
+# into a *closed* shadow root of its ``div.mermaid``, so the script replaces ``Element.prototype.attachShadow`` to make
+# those roots open: it must run before Material's bundle, hence written in ``<head>`` by ``overrides/main.html`` next
+# to ``mermaid-early.js``, on the pages that have a diagram, and not listed in ``extra_javascript`` / ``extra_css``
+# (which come after the bundle). It loads nothing from outside and carries no word of the private repository.
+
+
+class TestDiagramZoomServedLocally:
+    """Source scan of the script, the template and the site config. The behaviour is pinned by the E2E ``docs-diagram-zoom``."""
+
+    SCRIPT = "diagram-zoom.js"
+    STYLE = "diagram-zoom.css"
+    EARLY = TestMermaidServedLocally.EARLY
+
+    @staticmethod
+    def _raw() -> str:
+        return (JAVASCRIPTS_DIR / TestDiagramZoomServedLocally.SCRIPT).read_text(encoding="utf-8")
+
+    @staticmethod
+    def _extra_css() -> str:
+        """The ``extra_css:`` block of mkdocs.yml, up to the next top-level key."""
+        site = (JAVASCRIPTS_DIR.parents[1] / "mkdocs.yml").read_text(encoding="utf-8")
+        match = re.search(r"^extra_css:[^\n]*\n((?:[ \t]+[^\n]*\n|[ \t]*\n)*)", site, re.M)
+        assert match, "mkdocs.yml has no extra_css block"
+        return match.group(1)
+
+    def test_the_stylesheet_exists_beside_the_other_stylesheets(self):
+        assert (JAVASCRIPTS_DIR.parent / "stylesheets" / self.STYLE).is_file()
+
+    def test_the_script_is_a_classic_script_that_loads_nothing(self):
+        code = TestMermaidServedLocally._code_of(self.SCRIPT)
+        assert not re.search(r"^\s*import\b", code, re.M), "a classic script: no static import"
+        assert not re.search(r"\bimport\s*\(", code), "no dynamic import either"
+        assert not re.search(r"\bexport\b", code), "a classic script: no export"
+        assert "fetch(" not in code, "it asks for nothing"
+        assert "XMLHttpRequest" not in code
+        raw = self._raw()
+        assert "http://" not in raw and "https://" not in raw, "not one address, not even in a comment"
+
+    def test_the_script_names_nothing_of_the_private_repository(self):
+        raw = self._raw().lower()
+        assert "business" not in raw, "the word of the private repository is not written in a public script"
+        assert "business-plan" not in raw
+
+    def test_the_script_opens_the_shadow_roots_of_the_diagrams(self):
+        code = TestMermaidServedLocally._code_of(self.SCRIPT)
+        assert "Element.prototype.attachShadow" in code, "the patch is the reason this script runs before Material's bundle"
+        assert re.search(r"""mode\s*:\s*["']open["']""", code), 'sets mode: "open"'
+        assert "mermaid" in code
+
+    def test_the_script_has_its_texts_in_the_four_languages(self):
+        code = TestMermaidServedLocally._code_of(self.SCRIPT)
+        for lang in ("en", "it", "fr", "es"):
+            assert re.search(rf"^\s*{lang}\s*:\s*\{{", code, re.M), f"texts for «{lang}»"
+        assert "document.documentElement.lang" in code, "the texts follow <html lang>"
+
+    def test_the_template_writes_the_stylesheet_and_the_script_in_the_same_condition_as_the_early_script(self):
+        head = TestMermaidServedLocally._extrahead()
+        condition = re.search(r"""\{%-?\s*if\b[^%]*class="mermaid"[^%]*%\}""", head)
+        assert condition, 'only a page whose content has class="mermaid" gets the scripts'
+        early = head.find(f"javascripts/{self.EARLY}")
+        assert early != -1, "the early script is written"
+        for written in (f"stylesheets/{self.STYLE}", f"javascripts/{self.SCRIPT}"):
+            at = head.find(written)
+            assert at != -1, f"{written} is written by the template"
+            assert condition.end() < at, f"{written} is inside the condition, not before it"
+            assert not re.search(r"\{%-?\s*(end)?if\b", head[condition.end() : at]), f"{written} is in the same condition as {self.EARLY}, with no other if or endif between"
+        end_if = re.search(r"\{%-?\s*endif\s*-?%\}", head[condition.end() :])
+        assert end_if, "the condition closes"
+        closes = condition.end() + end_if.start()
+        for written in (f"stylesheets/{self.STYLE}", f"javascripts/{self.SCRIPT}", f"javascripts/{self.EARLY}"):
+            assert head.find(written) < closes, f"{written} is written before the condition closes"
+
+    def test_the_site_config_does_not_list_them(self):
+        for block, name in ((TestMermaidServedLocally._extra_javascript(), self.SCRIPT), (self._extra_css(), self.STYLE)):
+            assert "diagram-zoom" not in block, f"{name}: it runs before Material's bundle, from the template; extra_javascript and extra_css come after"
