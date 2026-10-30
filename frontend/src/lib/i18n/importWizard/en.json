@@ -540,7 +540,12 @@
       "danske_combined_line_unknown_kind": "Line {line} of the combined file has an unknown kind ({kind}).",
       "danske_combined_line_incomplete": "Line {line} of the combined file is incomplete.",
       "danske_combined_line_not_cash": "Line {line} of the combined file is not a standalone cash row.",
-      "danske_no_dated_rows": "The custody exports have no dated rows: there is nothing to combine."
+      "danske_no_dated_rows": "The custody exports have no dated rows: there is nothing to combine.",
+      "credit_agricole_not_combined_file": "This is not a Crédit Agricole combined file.",
+      "credit_agricole_combined_columns_missing": "This is not a Crédit Agricole combined file: the columns {missing} are missing.",
+      "credit_agricole_combined_line_unknown_kind": "Line {line} of the combined file has an unknown kind ({kind}).",
+      "credit_agricole_combined_line_incomplete": "Line {line} of the combined file is incomplete.",
+      "credit_agricole_no_dated_rows": "The exports have no dated rows: there is nothing to combine."
     },
     "brimEvidence": {
       "scalable_unreadable_rows": "On these rows a date, an amount, a currency, the shares or the security is missing or cannot be read.",

@@ -540,7 +540,12 @@
       "danske_combined_line_unknown_kind": "La riga {line} del file combinato ha un tipo sconosciuto ({kind}).",
       "danske_combined_line_incomplete": "La riga {line} del file combinato è incompleta.",
       "danske_combined_line_not_cash": "La riga {line} del file combinato non è una riga di cassa autonoma.",
-      "danske_no_dated_rows": "Gli export di custodia non hanno righe con data: non c'è nulla da combinare."
+      "danske_no_dated_rows": "Gli export di custodia non hanno righe con data: non c'è nulla da combinare.",
+      "credit_agricole_not_combined_file": "Questo non è un file combinato di Crédit Agricole.",
+      "credit_agricole_combined_columns_missing": "Questo non è un file combinato di Crédit Agricole: mancano le colonne {missing}.",
+      "credit_agricole_combined_line_unknown_kind": "La riga {line} del file combinato ha un tipo sconosciuto ({kind}).",
+      "credit_agricole_combined_line_incomplete": "La riga {line} del file combinato è incompleta.",
+      "credit_agricole_no_dated_rows": "Gli export non hanno righe con data: non c'è nulla da combinare."
     },
     "brimEvidence": {
       "scalable_unreadable_rows": "In queste righe manca, o non si legge, una data, un importo, una valuta, le quote o il titolo.",

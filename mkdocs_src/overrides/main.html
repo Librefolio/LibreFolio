@@ -27,5 +27,9 @@
   {% if page and page.content and 'class="mermaid"' in page.content %}
   <script src="{{ 'javascripts/vendor/mermaid/mermaid.min.js' | url }}"></script>
   <script src="{{ 'javascripts/mermaid-early.js' | url }}"></script>
+  {#- H6-4: the full screen view of a diagram. Same place, same reason: it opens the shadow root Material draws the diagram
+      into, so it must run before Material's bundle draws -#}
+  <link rel="stylesheet" href="{{ 'stylesheets/diagram-zoom.css' | url }}">
+  <script src="{{ 'javascripts/diagram-zoom.js' | url }}"></script>
   {% endif %}
 {% endblock %}
