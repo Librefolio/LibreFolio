@@ -44,3 +44,22 @@ export function staleFxIssue(pairs: readonly StaleFxPairLike[] | null | undefine
         group_key: 'stale_fx',
     };
 }
+
+/** `EUR/usd`, `usd-EUR` → `EUR-USD`: the spelling the sync request and the report can both be compared in. */
+function pairKey(pair: string): string {
+    return pair
+        .split(/[-/]/)
+        .map((code) => code.trim().toUpperCase())
+        .filter(Boolean)
+        .sort()
+        .join('-');
+}
+
+/**
+ * The requested pairs that the report still lists as stale after a sync that worked (Y6-6): the provider has no newer rate for them yet.
+ * A pair the sync did bring up to date is no longer in `stale_fx_pairs`, so it is not here. In the order requested.
+ */
+export function pairsStillStale(requested: readonly string[], staleNow: readonly StaleFxPairLike[] | null | undefined): string[] {
+    const stale = new Set((staleNow ?? []).map((entry) => pairKey(entry.pair)));
+    return requested.filter((pair) => stale.has(pairKey(pair)));
+}

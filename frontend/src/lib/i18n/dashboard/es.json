@@ -154,7 +154,6 @@
     "endValueTooltip": "Valor de la posición al final del período, calculado como la columna Valor de la Cartera; 0 si la posición ya estaba cerrada.",
     "transfersAtMarketValue": "Transferencias a valor de mercado",
     "assetAllocation": "Por activo",
-    "backToPortfolio": "Cartera",
     "positionsChart": {
       "title": "Rendimiento de las posiciones",
       "viewAbsolute": "Abs",
@@ -167,7 +166,9 @@
       "failed": "No se han podido cargar las series de las posiciones.",
       "closedOn": "Cerrada el {date}",
       "incomplete": "Faltan algunos valores (un precio o un tipo de cambio): la línea los deja fuera.",
-      "rowSelect": "Selecciona la fila para dibujar su rendimiento"
+      "rowSelect": "Selecciona la fila para dibujar su rendimiento",
+      "viewRolling": "Móvil",
+      "viewRollingHint": "Porcentaje que se movió el precio del activo en una ventana móvil a lo largo del período: para comparar activos entre sí"
     }
   }
 }
