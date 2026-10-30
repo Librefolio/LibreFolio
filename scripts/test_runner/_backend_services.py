@@ -565,6 +565,16 @@ def services_balance_validator_cash_rule(verbose: bool = False, test_names: list
     return run_command(cmd, "Balance validator cash rule tests", verbose=verbose)
 
 
+def services_broker_update_bulk_refusal(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that BrokerService.update_bulk puts a refused item back in the session itself (checkpoint 6)."""
+    print_section("Services: Broker update_bulk Refusal")
+    print_info("Testing: backend/app/services/brokers/broker_service.py (update_bulk)")
+    print_info("Tests: a refused overdraft/shorting turn-off leaves the broker exactly as it was, in the session and after a caller's commit on a partial success; valid turn-offs, rename-only, unknown id, access denied and duplicate name keep their results")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_broker_update_bulk_refusal.py", test_names)
+    return run_command(cmd, "Broker update_bulk refusal tests", verbose=verbose)
+
+
 def services_linked_adjustment_pair(verbose: bool = False, test_names: list = None) -> bool:
     """Test that a batch refuses to link two ADJUSTMENTs (pairAdjustmentNotAllowed), and what it still lets through."""
     print_section("Services: Linked Adjustment Pair")
@@ -2531,6 +2541,15 @@ Note: No backend server required.
         services_balance_validator_cash_rule,
         name="Balance Validator Cash Rule",
         desc="W6-12: a broker without the overdraft flag refuses a negative opening cash on from_date even with no transaction from then on (the overdraft flag, a zero opening and a later healing deposit leave it alone); the error's code, day, currency, balance, params and batch index; same-day end-of-day and several currencies; cash vs asset (lowest day, tie to cash, flag combinations); ledgerUnreadable, unknown broker, both flags; a differential of a few hundred seeded random ledgers against a frozen copy of the old walk, but for that one rule",
+        # PURE: one private in-memory SQLite per test (create_all), disposed at teardown; no lane DB, server or network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "broker-update-bulk-refusal",
+        services_broker_update_bulk_refusal,
+        name="Broker update_bulk Refusal",
+        desc="Checkpoint 6: a refused overdraft/shorting turn-off in BrokerService.update_bulk leaves the broker exactly as it was (every field of the item, flag included), in the session before any commit and after the caller commits a partial success; valid turn-off, rename-only, unknown id, access denied, duplicate name keep their results",
         # PURE: one private in-memory SQLite per test (create_all), disposed at teardown; no lane DB, server or network.
         isolation="pure",
     )
