@@ -1,6 +1,6 @@
 """Write the common test vectors of the sealed nightly backup (contract L3, §9.1), once.
 
-The contract (``LibreFolio_prj/BACKUP-contratto-L3.md``, agreed on 2026-10-22 between the product and the cloud
+The contract (``LibreFolio_developer_journal/Release_2/Phase_1/07_backupDocker/notes/BACKUP-contratto-L3.md``, agreed on 2026-10-22 between the product and the cloud
 coordinator) fixes a ``.tar`` of three members, in this order: ``manifest.json`` (clear), ``password.age`` (the random
 password of the backup, encrypted with age for the instance's recipients) and ``backup.lfbk`` (the version-1 envelope
 that password opens). This script writes the files both sides test against, beside it, with ``vectors.json`` as their
