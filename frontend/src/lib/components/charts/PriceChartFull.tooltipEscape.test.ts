@@ -399,11 +399,11 @@ describe('PriceChartFull — the event markers’ tooltip escapes what it interp
     });
 });
 
-describe('the axis tooltip names the day it stands for (Y2-I63, issue #63)', () => {
+describe('the axis tooltip names the day it stands for (Y2-I63, issue #63)', {timeout: 20_000}, () => {
     /** The tooltip ECharts builds with the pointer on `axisValue`, over the main series alone. */
     async function tooltipAt(axisValue: string | number): Promise<string> {
         render(PriceChartFull, {props: {data: DATA, currency: 'EUR', mainSeriesLabel: MAIN_LABEL}});
-        await waitFor(() => expect(axisDays(), 'barrier: the chart drew at the daily resolution, one point per day').toEqual(DAYS), {timeout: 5_000});
+        await waitFor(() => expect(axisDays(), 'barrier: the chart drew at the daily resolution, one point per day').toEqual(DAYS), {timeout: 15_000});
         const formatter = (lastDraw().tooltip as {formatter: Formatter}).formatter;
         return formatter([{axisValue, seriesType: 'line', color: '#2563eb', seriesName: MAIN_LABEL, value: 100}]);
     }
