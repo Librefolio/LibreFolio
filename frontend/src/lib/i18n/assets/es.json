@@ -98,7 +98,8 @@
       "confirmTitle": "¿Sincronizar {name}?",
       "confirmMessage": "{stored, plural, one {# precio guardado} other {# precios guardados}} en este intervalo {stored, plural, one {se reemplazará} other {se reemplazarán}} con los valores del proveedor.",
       "confirmManual": "{manual, plural, one {# se introdujo a mano y se reemplazará} other {# se introdujeron a mano y se reemplazarán}} también.",
-      "confirmAction": "Sincronizar"
+      "confirmAction": "Sincronizar",
+      "overwriteManual": "{manual, plural, one {# se introdujo a mano} other {# se introdujeron a mano}}."
     },
     "delete": {
       "confirmQuestion": "¿Eliminar \"{name}\"?",

@@ -51,6 +51,7 @@ from backend.app.schemas.common import (
     BaseListResponse,
     Currency,
     DateRangeModel,
+    MinStartDateRangeModel,
     SafeDecimal,
     StrictModel,
     iso_currency_code,
@@ -112,7 +113,7 @@ class FXConversionRequest(BaseModel):
 
     from_amount: Currency = Field(..., description="Amount to convert with source currency")
     to_currency: str = Field(..., alias="to", min_length=3, max_length=3, description="Target currency (ISO 4217)")
-    date_range: DateRangeModel = Field(..., description="Date range for conversion (start required, end optional for single day)")
+    date_range: DateRangeModel | MinStartDateRangeModel = Field(..., description="Date range for conversion (start required, end optional for single day); `start` may be the sentinel min (with a required `end`): the day of the pair's first stored rate (FB-7b)")
     signals: List[SignalRequest] = Field(
         default_factory=list,
         description="Technical signal instances computed on effective FX rates",
