@@ -1388,6 +1388,71 @@ async def test_convert_end_after_tomorrow_stops_at_tomorrow(test_server):
 
 
 @pytest.mark.asyncio
+async def test_convert_start_min_reads_from_the_pairs_first_rate_before_2000(test_server):
+    """FB-7b: the FX pages asked «All» from a placeholder, 2000-01-01; ``date_range.start`` may now be ``"min"`` (``end``
+    required): the day of the pair's first stored rate, whatever its year.
+
+    Two manual rates of MWK→ZMW, on 1985-03-01 and 1985-03-04 (a pair no other test writes); converted from ``"min"`` to
+    1985-03-06 the answer starts on 1985-03-01 and its range echo says so. A pair with no stored rate answers the single
+    day ``end`` (the identity pair answers too); ``"min"`` with no ``end`` is a 422.
+    Red before FB-7b: 422, ``"min"`` is not a date.
+    """
+    print_section("FB-7b: conversion from min")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        rates = [FXUpsertItem(**{"date": day}, base="MWK", quote="ZMW", rate=Decimal("0.05"), source="MANUAL") for day in (date(1985, 3, 1), date(1985, 3, 4))]
+        upserted = await client.post(f"{API_BASE}/fx/currencies/rate", json=[r.model_dump(mode="json") for r in rates], timeout=TIMEOUT)
+        assert upserted.status_code == 200, upserted.text
+
+        body = [{"from_amount": {"code": "MWK", "amount": "100"}, "to": "ZMW", "date_range": {"start": "min", "end": "1985-03-06"}}]
+        response = await client.post(f"{API_BASE}/fx/currencies/convert", json=body, timeout=TIMEOUT)
+
+        assert response.status_code == 200, f"{response.status_code}: {response.text[:300]}"
+        days = [result["conversion_date"] for result in response.json()["results"]]
+        assert days[0] == "1985-03-01" and days[-1] == "1985-03-06", days
+        identity = await client.post(f"{API_BASE}/fx/currencies/convert", json=[{"from_amount": {"code": "ZMW", "amount": "1"}, "to": "ZMW", "date_range": {"start": "min", "end": "1985-03-06"}}], timeout=TIMEOUT)
+        assert identity.status_code == 200, identity.text
+        no_end = await client.post(f"{API_BASE}/fx/currencies/convert", json=[{"from_amount": {"code": "MWK", "amount": "1"}, "to": "ZMW", "date_range": {"start": "min"}}], timeout=TIMEOUT)
+        assert no_end.status_code == 422, no_end.text[:200]
+        print_success(f"✓ {len(days)} conversions from {days[0]}")
+
+
+@pytest.mark.asyncio
+async def test_convert_rate_is_the_stored_rates_unit_step_not_a_division_of_the_amounts(test_server):
+    """MF-A13: ``rate`` of a conversion is the unit rate of the day's step (the stored rate on a direct pair, one over it on an
+    inverse one), the one the engine reads; it is no longer ``to_amount / from_amount``, which differs from it at the last of
+    28 digits (a rounded quotient divided again).
+
+    One manual rate of LSL→SZL, 0.0123 (a pair no other test writes); 13 SZL converted to LSL on that day: ``to_amount``
+    13 / 0.0123, ``rate`` 1 / 0.0123 = 81.30081300813008130081300813 — the division of the amounts gives …815.
+    A direct conversion (LSL→SZL) answers the stored 0.0123.
+    Red before MF-A13: ``rate`` is …815.
+    """
+    print_section("MF-A13: conversion rate is the unit step")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        day = date(1990, 6, 1)
+        upserted = await client.post(f"{API_BASE}/fx/currencies/rate", json=[FXUpsertItem(**{"date": day}, base="LSL", quote="SZL", rate=Decimal("0.0123"), source="MANUAL").model_dump(mode="json")], timeout=TIMEOUT)
+        assert upserted.status_code == 200, upserted.text
+
+        async def rate_of(code: str, to: str, amount: str) -> tuple[Decimal, Decimal]:
+            body = [{"from_amount": {"code": code, "amount": amount}, "to": to, "date_range": {"start": day.isoformat(), "end": day.isoformat()}}]
+            response = await client.post(f"{API_BASE}/fx/currencies/convert", json=body, timeout=TIMEOUT)
+            assert response.status_code == 200, response.text
+            result = response.json()["results"][0]
+            return Decimal(str(result["rate"])), Decimal(str(result["to_amount"]["amount"]))
+
+        inverse_rate, inverse_amount = await rate_of("SZL", "LSL", "13")
+        direct_rate, _direct_amount = await rate_of("LSL", "SZL", "13")
+
+        assert inverse_rate == Decimal(1) / Decimal("0.0123"), f"{inverse_rate}: one over the stored rate, not {inverse_amount / 13}"
+        assert direct_rate == Decimal("0.0123"), direct_rate
+        print_success("✓ rate = the unit step on a direct and an inverse pair")
+
+
+@pytest.mark.asyncio
 async def test_convert_extreme_end_is_bounded(test_server):
     """RC-API-04 (X-R55, N75, guard): a conversion ending 9999-12-31 answers within EXTREME_SECONDS: 9999-12-01 …
     9999-12-31 lies wholly after the ceiling, ``latest_range_end()``, so it gives no result and no error (200, not the

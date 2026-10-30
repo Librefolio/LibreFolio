@@ -363,7 +363,28 @@
       "link": "Relier",
       "linkAll": "Relier toutes les lignes avec un seul événement",
       "linkError": "Rien n'a été relié : le serveur a refusé la modification.",
-      "close": "Fermer"
+      "close": "Fermer",
+      "colAsset": "Actif",
+      "colBroker": "Courtier",
+      "colEvent": "Événement",
+      "colStatus": "Statut",
+      "colAction": "Action",
+      "status": {
+        "unique": "Un événement ce jour-là",
+        "none": "Aucun événement ce jour-là",
+        "several": "Plusieurs événements ce jour-là"
+      },
+      "linkSelected": "Lier la sélection",
+      "createSelected": "Créer les événements",
+      "createOne": "Créer l'événement",
+      "nothingToLink": "Sélectionnez des lignes avec un événement ce jour-là pour les lier.",
+      "nothingToCreate": "Sélectionnez des lignes sans événement ce jour-là pour créer leurs événements.",
+      "createTitle": "Créer les événements manquants",
+      "createIntro": "Vérifiez le type et saisissez la valeur de chaque événement, dans la devise de l’actif. Les événements sont créés le jour de la transaction ; liez-les ensuite.",
+      "createValue": "Valeur",
+      "createServes": "{n} transactions",
+      "createHint": "Saisissez pour chaque événement une valeur supérieure à 0, avec 6 décimales au plus.",
+      "createConfirm": "{n, plural, one {Créer # événement} many {Créer # événements} other {Créer # événements}}"
     }
   }
 }

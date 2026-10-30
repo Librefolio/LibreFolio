@@ -363,7 +363,28 @@
       "link": "Link",
       "linkAll": "Link every row with one event",
       "linkError": "Nothing was linked: the server refused the change.",
-      "close": "Close"
+      "close": "Close",
+      "colAsset": "Asset",
+      "colBroker": "Broker",
+      "colEvent": "Event",
+      "colStatus": "Status",
+      "colAction": "Action",
+      "status": {
+        "unique": "One event that day",
+        "none": "No event that day",
+        "several": "Several events that day"
+      },
+      "linkSelected": "Link selected",
+      "createSelected": "Create events",
+      "createOne": "Create event",
+      "nothingToLink": "Select rows with one event that day to link them.",
+      "nothingToCreate": "Select rows with no event that day to create their events.",
+      "createTitle": "Create the missing events",
+      "createIntro": "Check the type and enter the value of each event, in the asset’s currency. The events are created on the day of the transaction; then link them.",
+      "createValue": "Value",
+      "createServes": "{n} transactions",
+      "createHint": "Enter a value above 0, with at most 6 decimals, for every event.",
+      "createConfirm": "{n, plural, one {Create # event} other {Create # events}}"
     }
   }
 }
