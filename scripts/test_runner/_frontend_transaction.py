@@ -776,7 +776,7 @@ def populate_registry(registry: dict) -> None:
         "tx-event-reconciliation",
         front_tx_event_reconciliation,
         name="TX Event Reconciliation Tests",
-        desc="N68, each test on a disposable account with its own broker, asset and events: the Transactions page's reconcile button opens the modal, which lists the unlinked event-type transactions with the server's verdict (unique / none / several) and offers the link on the unique rows only; linking one sends the commit, removes the row and reloads the page (API read-back), link all links every unique row with ONE commit and leaves none/several, the empty state, closing links nothing",
+        desc="N68, each test on a disposable account with its own broker, asset and events: the Transactions page's reconcile button opens the modal, which lists the unlinked event-type transactions with the server's verdict (unique / none / several) and offers the link on the unique rows only; linking one sends the commit, removes the row and reloads the page (API read-back), link all links every unique row with ONE commit and leaves none/several, the empty state, closing links nothing; FB-19: the table's event column (code, emoji, translated name), the asset and broker column filters (link all acts on the rows left), link selected, and the creation of the missing events (one row or the selection: suggested value, ONE create request, rows become unique; a refusal keeps the dialog and creates nothing)",
         tests="transactions/tx-event-reconciliation.spec.ts",
     )
     add_test(

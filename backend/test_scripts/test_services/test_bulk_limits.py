@@ -1035,3 +1035,53 @@ async def test_bls02_two_calendar_wide_items_seeded_from_year_one_are_refused_be
     error = await _within_guard(lambda: _refused_for_days(lambda: _query(private_db, _item(first, YEAR_ONE, LAST_DAY), _item(second, YEAR_ONE, LAST_DAY))))
 
     assert error.max_item_days == MAX_ITEM_DAYS and error.item_days > MAX_ITEM_DAYS, (error.item_days, error.max_item_days)
+
+
+# =============================================================================
+# BL-M — FB-7b: A START OF "min" READS FROM THE ASSET'S FIRST PRICE (get_prices_bulk, on a private database)
+# =============================================================================
+#
+# The Assets pages asked the history ("All") from a placeholder, 2000-01-01, because the price query wanted a real date: a
+# history that begins in 1985 showed from 2000. ``date_range.start`` now also takes the sentinel ``"min"``: the day of the asset's
+# first stored price, whatever its year (an asset with no price answers an empty series). RED until FB-7b: the item refuses
+# ``"min"`` (a validation error).
+
+
+def _min_item(asset_id: int, end: date) -> FAPriceQueryItem:
+    return FAPriceQueryItem.model_validate({"asset_id": asset_id, "date_range": {"start": "min", "end": end.isoformat()}})
+
+
+@pytest.mark.asyncio
+async def test_blm01_a_min_start_reads_from_the_first_price_before_2000(private_db, frozen_ceiling, no_market_holidays):
+    """BL-M01: closes on 1985-03-01 and 1985-03-04, and on FROZEN_TODAY. Asked from ``"min"`` to the ceiling: the series
+    starts on 1985-03-01 (the first price, not 2000-01-01) and holds that close."""
+    first = date(1985, 3, 1)
+    asset_id = await _asset(private_db, prices_on=[first, date(1985, 3, 4), FROZEN_TODAY])
+
+    (result,) = await _query(private_db, _min_item(asset_id, CEILING))
+
+    days = [point.date for point in result.prices]
+    assert (days[0], days[-1]) == (first, CEILING), f"{len(days)} points from {days[:1]}"
+    assert result.prices[0].close == Decimal("100")
+
+
+@pytest.mark.asyncio
+async def test_blm02_a_min_start_over_an_asset_without_prices_answers_an_empty_series(private_db, frozen_ceiling, no_market_holidays):
+    """BL-M02: no stored price, so no first day: an empty series, no error."""
+    asset_id = await _asset(private_db)
+
+    (result,) = await _query(private_db, _min_item(asset_id, CEILING))
+
+    assert result.prices == []
+
+
+@pytest.mark.asyncio
+async def test_blm03_each_item_starts_at_its_own_first_price_and_a_dated_item_is_untouched(private_db, frozen_ceiling, no_market_holidays):
+    """BL-M03: one request, three items: asset A from ``"min"`` (first price 1990-05-02), asset B from ``"min"`` (first price
+    2010-07-01), and asset A from a real day (2024-01-10). Each series starts where it should."""
+    a = await _asset(private_db, prices_on=[date(1990, 5, 2), FROZEN_TODAY])
+    b = await _asset(private_db, prices_on=[date(2010, 7, 1), FROZEN_TODAY])
+
+    min_a, min_b, dated_a = await _query(private_db, _min_item(a, CEILING), _min_item(b, CEILING), _item(a, date(2024, 1, 10), CEILING))
+
+    assert [min_a.prices[0].date, min_b.prices[0].date, dated_a.prices[0].date] == [date(1990, 5, 2), date(2010, 7, 1), date(2024, 1, 10)]

@@ -16,7 +16,7 @@ from sqlalchemy import select as sql_select
 from backend.app.db.models import FxRate
 from backend.app.db.precision import storable_fx_rate, usable_fx_rate_bounds
 from backend.app.logging_config import get_logger
-from backend.app.schemas.common import Currency
+from backend.app.schemas.common import Currency, DateRangeModel, MinStartDateRangeModel
 from backend.app.services.financial_math.fx_rates import oriented_rate
 from backend.app.services.fx.base import RateNotFoundError
 from backend.app.utils.sql_chunks import OR_TERMS_PER_QUERY
@@ -126,6 +126,33 @@ async def _usable_rates(session, spans: Mapping[tuple[str, str], tuple[date, dat
             dates.append(rate_date)
             values.append(rate_value)
     return rates
+
+
+async def resolve_min_start_ranges(session, conversions: list) -> list:
+    """The conversions with their ``"min"`` start replaced by the day of the pair's first stored usable rate (FB-7b).
+
+    A pair is read as stored (alphabetical, ``base < quote``), one grouped read per ``FX_PAIRS_PER_QUERY`` pairs, only usable
+    rates as everywhere (X-R38). A pair with no stored rate, one whose first rate is after the conversion's ``end``, and an
+    identity conversion (nothing stored for it) get the single day ``end``. Conversions with a real start come back as they are.
+    """
+    pairs = {tuple(sorted((conv.from_amount.code, conv.to_currency))) for conv in conversions if isinstance(conv.date_range, MinStartDateRangeModel) and conv.from_amount.code != conv.to_currency}
+    firsts: dict[tuple[str, str], date] = {}
+    if pairs:
+        smallest_rate, first_refused_rate = usable_fx_rate_bounds()
+        ordered = sorted(pairs)
+        for start in range(0, len(ordered), FX_PAIRS_PER_QUERY):
+            terms = [and_(FxRate.base == base, FxRate.quote == quote) for base, quote in ordered[start : start + FX_PAIRS_PER_QUERY]]
+            stmt = sql_select(FxRate.base, FxRate.quote, func.min(FxRate.date)).where(or_(*terms), FxRate.rate >= smallest_rate, FxRate.rate < first_refused_rate).group_by(FxRate.base, FxRate.quote)
+            for base, quote, first in (await session.execute(stmt)).all():
+                firsts[(base, quote)] = first
+    resolved = []
+    for conv in conversions:
+        if isinstance(conv.date_range, MinStartDateRangeModel):
+            end = conv.date_range.end
+            first = firsts.get(tuple(sorted((conv.from_amount.code, conv.to_currency))))
+            conv = conv.model_copy(update={"date_range": DateRangeModel(start=first if first is not None and first <= end else end, end=end)})
+        resolved.append(conv)
+    return resolved
 
 
 async def convert_bulk(  # noqa: C901 — per-item conversion dispatch with backward-fill search

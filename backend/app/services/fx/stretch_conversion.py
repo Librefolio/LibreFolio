@@ -19,6 +19,7 @@ from __future__ import annotations
 import re
 from collections.abc import Awaitable, Callable
 from datetime import date as date_type
+from decimal import Decimal
 
 from backend.app.schemas.common import Currency
 from backend.app.services.fx.conversion import convert_bulk, unit_rate_steps
@@ -45,8 +46,14 @@ async def convert_by_stretch(  # noqa: C901 — one pass over the items: identit
     *,
     convert: Callable[..., Awaitable[tuple[Results, list[str]]]] = convert_bulk,
     steps: Callable[..., Awaitable[dict]] = unit_rate_steps,
+    unit_rates: dict[int, Decimal] | None = None,
 ) -> tuple[Results, list[str]]:
-    """``convert_bulk(session, conversions, raise_on_error=False)`` with one conversion for each stretch (see the module)."""
+    """``convert_bulk(session, conversions, raise_on_error=False)`` with one conversion for each stretch (see the module).
+
+    ``unit_rates``, when given, is filled with the unit rate of each item that converted (by its position in ``conversions``):
+    the day's step, the stored rate on a direct pair and one over it on an inverse one (MF-A13). A reader that wants the rate
+    of a conversion reads it here: ``to / from`` is a rounded quotient divided again, and differs at the last digit.
+    """
     if not conversions:
         return [], []
 
@@ -93,6 +100,8 @@ async def convert_by_stretch(  # noqa: C901 — one pass over the items: identit
             continue
         converted, _rate_date, _applied = answer
         results[index] = (Currency(code=converted.code, amount=converted.amount), rate_day, rate_day < conversions[index][2])
+        if unit_rates is not None:
+            unit_rates[index] = pair_steps[(conversions[index][0].code, conversions[index][1])].at(conversions[index][2])
     if -1 in failures:  # an error that carries no number: kept as it came
         errors.append((len(conversions), failures[-1]))
     return results, [message for _index, message in sorted(errors, key=lambda item: item[0])]
