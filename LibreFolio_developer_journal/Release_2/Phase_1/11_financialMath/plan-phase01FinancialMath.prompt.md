@@ -5162,3 +5162,35 @@ Ambiente: `npm ci` e `api sync` fatti (nessuna differenza nei contratti); corsia
    stamp). Porte (`ondata6/MF-o6b-g2-*.log`): `financial-math` **4080**, `portfolio-engine` **41**,
    `lots-analysis-pure` **254**, `roi-fifo-utils` **2505**, `ai-export` **1139**, `ai-export-pure` **497**,
    `api portfolio` **58**; `front check` 0 errori; ruff, black, `diff --check` puliti. CHECKPOINT READY (6–8).
+   > **Note implementazione**: committato dal coordinatore come `b48694f3f`; il rosso di `utils all` era suo (chiave di
+   > cache del workflow), corretto altrove. Ramo unito in W2 (W6-12) e Y2 (punti frontend di MF-C2).
+
+#### B3 + MF-J3 → W-B94 → MF-A13 (28/10, base `b48694f3f`)
+1. ✅ **B3 + MF-J3** (28/10) — `daily_state._cash_transfer_pools`: una gamba CASH_TRANSFER / FX_CONVERSION con l'altra
+   fuori perimetro (`linked_external_*`) o orfana (`normal`: collegamento tolto, coppia non trovata) muove K/R come un
+   DEPOSIT (entrata: prima restituisce W in R, il resto in K) o un WITHDRAWAL (uscita: K, poi R → W), col segno
+   dell'importo; `_deposit_pools` / `_withdrawal_pools` condivise col DEPOSIT e il WITHDRAWAL veri. Capitale di
+   riferimento, NAV e P&L invariati. Esempio: vista {B}, 650 da A → versato 650 / generato 0 (prima 0 / 650); B con
+   100 / 100 → 750 / 100 (prima 425 / 425).
+   > **Note implementazione**: test-author: 104 test nuovi (65 rossi, 39 perni di parità; i 15 «gemelli» confrontano la
+   > gamba con un DEPOSIT/WITHDRAWAL dello stesso importo), azione `services external-cash-leg-pools`; 24 perni della
+   > regola vecchia da riparare (`test_single_replay::TestApplyPoolRule`, `test_transfer_keeps_returns::TestApplyPoolRuleWithSplits`).
+   > **⚠️ Fuori pista**: la proposta di MF-J3 diceva «in entrata senza il recupero di W»; la decisione dell'ondata 6 dice
+   > «come un versamento/prelievo»: applicata alla lettera (con il recupero di W), simmetrica all'uscita che alimenta W.
+   > Cambia solo quando W > 0. `_apply_pool_rule` oltre la complessità 10: i rami dei trasferimenti in `_cash_transfer_pools`.
+2. ⏸️ **W-B94** — domanda al developer (via coordinatore): (a) priorità TRADE come BUY/SELL (salto del NAV nel giorno
+   del trasferimento: ETF a 200 il venerdì, costo 50, trasferito il sabato → 50 sabato e domenica) o (b, consigliata) la
+   stima solo per un asset senza alcuna osservazione fino a quel giorno. Nessun codice fino alla risposta.
+3. ✅ **MF-A13 — misura** (sola lettura) — [analisi-MF-A13-misura-20261028](analisi-MF-A13-misura-20261028.md): diretta
+   0 differenze su 578, inversa 1 428 / 2 237 alla 28ª cifra, nessun arrotondato. Contratto (coordinatore, close (b)
+   `original_close × fx_rate`) girato a X; MF rivede e scrive i rossi di parità quando il diff è pronto.
+4. ✅ **B3 — riparazioni, docs, porte** (29/10) — 24 perni riscritti alla regola nuova (+ il perno `capital={B: 750}` in
+   `TestArrivalWithoutKnownDeparture`); docs-writer: `portfolio-engine/{index §6, deposited-capital}.en.md` (nuovo
+   esempio E `#e-cash-from-outside-the-view`), `user/dashboard/charts.en.md`, `developer/backend/financial_math.md`,
+   `developer/backend/transactions/service.md` (diceva il contrario). Build strict 0, check-links 97. Porte:
+   `portfolio-engine` 41, `financial-math` 4080, `roi-fifo-utils` 2609, `external-cash-leg-pools` 98 + 6,
+   `api portfolio` 58, `ai-export-pure` 497, `ai-export` 1139; ruff, black, `diff --check` puliti. CHECKPOINT READY.
+   > **⚠️ Fuori pista**: `test_portfolio_service::TestPortfolioFxCacheIdentity::test_irrelevant_fx_pair_does_not_change_identity`
+   > è rosso su una corsia popolata coi dati mock (`populate_mock_data.py:3063` semina EUR/THB, priorità 1, dal 31/08):
+   > verde solo perché il runner `services` ricrea il DB senza mock. Seguito per il test-author (una coppia che i mock
+   > non seminano).

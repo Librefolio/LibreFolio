@@ -39,6 +39,8 @@ The chart remembers your last view, P&L sub-view included, in this browser and f
 
 **Assets valued at their purchase price**, such as P2P loans with no live market price, keep NAV close to Purchase Cost, so the gap can be thin: read **Total P&L** in the tooltip.
 
+**Money from a broker outside the view.** On a broker's page, or with the broker filter on, money received from a broker outside the view is **Capital**, as a deposit would be — or **Returns** again, if it brings back returns you withdrew earlier. Money sent to a broker outside the view leaves **Capital** first, then **Returns**, as a withdrawal does. The same goes for the half of a transfer whose other half was deleted or unlinked, in every view.
+
 🔗 **Theory**: [Deposited Capital & Total P&L](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md) · [Cash Decomposition](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/deposited-capital.md#three-pool-cash-model)
 
 ### 📉 % — rate of return
@@ -127,7 +129,7 @@ The tooltip gives the period, **Open**, **Close**, **High**, and **Low**, plus a
 
 How to read it:
 
-- **New capital or reinvested.** A purchase first spends the returns already held as cash at that broker (**Reinvested**, green as in **Abs**); the rest is **New capital** (blue). Sales are never drawn.
+- **New capital or reinvested.** A purchase first spends the returns already held as cash at that broker (**Reinvested**, green as in **Abs**); the rest is **New capital** (blue). Money moved to or from a broker outside the view changes that cash as a deposit or a withdrawal would, as in **Abs** above. Sales are never drawn.
 - **Signs are kept.** A negative correction on a past dividend shrinks the dividend bar; fees and taxes stay below zero.
 - **It matches the KPIs.** For the same dates and brokers, **Dividend** and **Interest** add up exactly to the **Dividends & interest** row of the [Period P&L card](kpi-cards.md#card-1-period-pl).
 - **One legend entry.** Both purchase zones are named **Purchase Cost**: one click hides both, and the **Abs** area of the same name too.
