@@ -43,6 +43,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/components/charts/__tests__/compactDensity.test.ts",
             "src/lib/components/charts/__tests__/stepTooltip.test.ts",
             "src/lib/components/charts/__tests__/timeSeriesAggregation.yearly.test.ts",
+            "src/lib/utils/chartReady.test.ts",
             "src/lib/components/charts/lineShape.test.ts",
             "src/lib/components/charts/LineShapePicker.test.ts",
             "src/lib/components/charts/lineShapePreviewData.test.ts",
@@ -737,6 +738,16 @@ def front_chart_line_shape(verbose: bool = False, ui: bool = False, headed: bool
     return _run_playwright("chart-line-shape.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_chart_tooltip_days(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the day-under-the-pointer E2E (Y2-I63, issue #63): every chart with a time axis opens on the pointed day and reaches its newest and oldest day."""
+    print_section("Frontend Chart Tooltip Days Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("chart-tooltip-days.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_files_pdf_offline(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the PDF preview with every origin but the lane's refused (1.2 gap 7)."""
     print_section("Frontend Files PDF Offline Tests")
@@ -1244,6 +1255,15 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "settings", front_settings, name="Settings Tests", desc="User preferences, global settings (admin)", prereq="Login working", tests="settings.spec.ts")
     add_test(cat, "files", front_files, name="Files Tests", desc="Files page, tabs, URL filters", prereq="Login working", tests="files.spec.ts")
     add_test(cat, "chart-line-shape", front_chart_line_shape, name="Chart Line Shape Tests", desc="Line shape of every chart (segments, steps, smooth curve): the welcome page example, Settings Preferences, the asset detail chart settings", prereq="Login working, populated DB", tests="chart-line-shape.spec.ts")
+    add_test(
+        cat,
+        "chart-tooltip-days",
+        front_chart_tooltip_days,
+        name="Chart Tooltip Days Tests",
+        desc="Issue #63: every chart with a time axis opens its tooltip on the day under the pointer (a served day, at two widths, with steps) and reaches its newest and oldest day, at the edge of the plot and a little outside it",
+        prereq="Login working, populated DB",
+        tests="chart-tooltip-days.spec.ts",
+    )
     add_test(
         cat,
         "files-pdf-offline",

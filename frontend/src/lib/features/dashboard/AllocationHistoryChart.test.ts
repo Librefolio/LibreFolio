@@ -197,6 +197,7 @@ import {chartRoles, setRoleReader} from '$lib/theme/roleColors';
 import {notifyChartColorsChange} from '$lib/theme/themeMode';
 import {buildAllocationHierarchy} from '$lib/components/charts/allocationHierarchy';
 import {buildTooltipByThreshold, buildTooltipHeader, buildTooltipTheme} from '$lib/components/charts/echartsTooltipHelpers';
+import {withoutTooltipDays} from '$test/timeAxisPointer';
 import {timeAxisGridRight} from '$lib/components/charts/responsiveXAxis';
 import {getAssetTypeEmoji} from './allocationTypeEmoji';
 
@@ -1304,8 +1305,8 @@ describe('AllocationHistoryChart — sector and geography: grouped as before (D3
         const html = tooltipOf(option, 0);
 
         // WHY (plan 52, C2): the header writes its day in the interface language, never as raw ISO.
-        expect(html).toBe(buildTooltipHeader(uiDayWithWeekday(ONE_DATE), theme.mutedColor) + buildTooltipByThreshold(items, 3, theme, remainingLabel()));
-        expect(html).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+        expect(withoutTooltipDays(html)).toBe(buildTooltipHeader(uiDayWithWeekday(ONE_DATE), theme.mutedColor) + buildTooltipByThreshold(items, 3, theme, remainingLabel()));
+        expect(withoutTooltipDays(html)).not.toMatch(/\d{4}-\d{2}-\d{2}/);
         expect(html).not.toMatch(/data-allocation-(family|member)/);
     });
 });

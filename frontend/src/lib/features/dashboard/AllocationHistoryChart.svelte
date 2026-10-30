@@ -577,14 +577,14 @@
     function buildAllocationTooltipHeader(row: TemporalBucketRow, mutedColor: string): string {
         if (currentResolution === 'weekly') {
             const span = bucketSpanUpTo(row.date, row);
-            return buildTooltipHeader($t('chart.tooltip.weekRange', {values: {start: formatDay(span.bucketStart), end: formatDay(span.bucketEnd)}}), mutedColor) + buildTooltipHeader($t('chart.tooltip.valueAt', {values: {date: formatDay(row.date)}}), mutedColor);
+            return buildTooltipHeader($t('chart.tooltip.weekRange', {values: {start: formatDay(span.bucketStart), end: formatDay(span.bucketEnd)}}), mutedColor, {from: span.bucketStart, to: span.bucketEnd}) + buildTooltipHeader($t('chart.tooltip.valueAt', {values: {date: formatDay(row.date)}}), mutedColor);
         }
 
         if (currentResolution === 'monthly') {
-            return buildTooltipHeader($t('chart.tooltip.monthLabel', {values: {month: formatMonthLabel(row.bucketStart)}}), mutedColor) + buildTooltipHeader($t('chart.tooltip.valueAt', {values: {date: formatDay(row.date)}}), mutedColor);
+            return buildTooltipHeader($t('chart.tooltip.monthLabel', {values: {month: formatMonthLabel(row.bucketStart)}}), mutedColor, {from: row.bucketStart, to: row.date}) + buildTooltipHeader($t('chart.tooltip.valueAt', {values: {date: formatDay(row.date)}}), mutedColor);
         }
 
-        return buildTooltipHeader(formatDayWithWeekday(row.date), mutedColor);
+        return buildTooltipHeader(formatDayWithWeekday(row.date), mutedColor, {from: row.date, to: row.date});
     }
 
     function getDisplayName(rawName: string): string {
