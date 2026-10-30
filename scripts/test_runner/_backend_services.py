@@ -1213,6 +1213,19 @@ def services_dust_threshold(verbose: bool = False, test_names: list = None) -> b
     return run_command(cmd, "Daily state dust threshold tests", verbose=verbose)
 
 
+def services_external_cash_leg_pools(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that a cash leg crossing the perimeter, or orphan, moves K/R as a DEPOSIT or a WITHDRAWAL (B3, MF-J3)."""
+    print_section("Services: External Cash Leg Pools (B3 / MF-J3)")
+    print_info("Testing: backend/app/services/financial_math/portfolio/daily_state.py (_apply_pool_rule) and PortfolioService.get_history with broker_ids")
+    print_info("Tests: linked-external and orphan CASH_TRANSFER / FX_CONVERSION legs against their DEPOSIT / WITHDRAWAL twin (K, R, W, cash breakdown, BUY funding); parity of baseline, NAV, linked-internal pairs")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial/test_portfolio_engine/test_external_cash_leg_pools.py", test_names)
+    engine_ok = run_command(cmd, "External cash leg pools — engine", verbose=verbose)
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial/test_external_cash_leg_pools_service.py", test_names)
+    service_ok = run_command(cmd, "External cash leg pools — PortfolioService", verbose=verbose)
+    return engine_ok and service_ok
+
+
 def services_lone_transfer_legs(verbose: bool = False, test_names: list = None) -> bool:
     """Test decision 47's conversion of the lone giving TRANSFER legs a broker deletion left before 1.3."""
     print_section("Services: Lone Transfer Legs (decision 47)")
@@ -3002,6 +3015,18 @@ Note: No backend server required.
         # skips this action so that the file runs once there.
         in_all=False,
         # PURE: DailyStateBuilder over mock transactions; no DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "external-cash-leg-pools",
+        services_external_cash_leg_pools,
+        name="External Cash Leg Pools",
+        desc="B3 / MF-J3: a CASH_TRANSFER / FX_CONVERSION leg whose pair is outside the perimeter, or lost, moves K/R as a DEPOSIT (in) or a WITHDRAWAL (out): pools, withdrawn returns, cash breakdown and BUY funding against the twin ledger; capital baseline, NAV and linked-internal pairs unchanged; get_history with broker_ids",
+        # Both files sit in test_financial/, which roi-fifo-utils runs whole: the derived "all"
+        # skips this action so that they run once there.
+        in_all=False,
+        # PURE: DailyStateBuilder over mock transactions, and PortfolioService on a private SQLite file under tmp_path; no lane DB, no server, no network.
         isolation="pure",
     )
     add_test(

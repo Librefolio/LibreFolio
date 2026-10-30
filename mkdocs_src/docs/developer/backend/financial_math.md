@@ -330,7 +330,17 @@ bringing back what the departure took from K and R. The gap between the two legs
 conversion's spread, the rate move while the cash travels, two brokers owned at different shares —
 is already in the engine's P&L, since no leg is an external flow: it is booked as a result (a gain
 to R, a loss out of R then K). An arrival whose departure is unknown arrives in K, and one whose
-departure is on the same day is applied last on that day. The replay emits one
+departure is on the same day is applied last on that day. Any other CASH_TRANSFER or
+FX_CONVERSION leg — its partner outside the scope (`linked_external_inflow` /
+`linked_external_outflow`) or an orphan whose link was cleared or whose paired row is gone
+(`normal`) — is already an external flow of the capital baseline, and `_cash_transfer_pools()`
+moves its pools as that flow: an incoming leg through `_deposit_pools()` (it restores the
+withdrawn returns W into R first, the rest goes to K), an outgoing one through
+`_withdrawal_pools()` (K first, then R, which goes to W) — the same two helpers a DEPOSIT and a
+WITHDRAWAL use (B3, MF-J3). It never records or takes up a split in `transfer_splits`, and the
+capital baseline, the NAV and the P&L do not change; the cash breakdown
+(`cash_from_contributed_capital` / `cash_from_generated_returns`) and the BUY funding split of a
+broker-filtered view follow the pools it moved. The replay emits one
 `DailyPortfolioState` for every day of `[date_from, date_to]`,
 so a later `date_from` gets for its days exactly the states of the full replay. It evaluates only
 the **dirty** days, which `_collect_dirty_days()` lists: any other day carries the previous state,

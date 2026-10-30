@@ -181,6 +181,43 @@ class AssetMarks:
 # =============================================================================
 
 
+def _deposit_pools(bid: int, amount: Decimal, K: dict[int, Decimal], R: dict[int, Decimal], withdrawn: Decimal) -> Decimal:
+    """The pools of cash coming into the scope (a DEPOSIT): it first restores withdrawn returns into R, the rest is
+    capital in K. Returns the withdrawn pool after it."""
+    restore = min(amount, withdrawn)
+    R[bid] += restore
+    K[bid] += amount - restore
+    return withdrawn - restore
+
+
+def _withdrawal_pools(bid: int, amount: Decimal, K: dict[int, Decimal], R: dict[int, Decimal], withdrawn: Decimal) -> Decimal:
+    """The pools of cash leaving the scope (a WITHDRAWAL): capital first, then returns, which go to the withdrawn pool.
+    Returns the withdrawn pool after it."""
+    zero = Decimal("0")
+    from_k = min(amount, max(K[bid], zero))
+    K[bid] -= from_k
+    from_r = min(amount - from_k, max(R[bid], zero))
+    R[bid] -= from_r
+    return withdrawn + from_r
+
+
+def _cash_transfer_pools(ctxn: ClassifiedTransaction, amount: Decimal, K: dict[int, Decimal], R: dict[int, Decimal], withdrawn: Decimal, transfer_splits: dict[int, tuple[Decimal, Decimal]] | None) -> Decimal:
+    """The pools of one CASH_TRANSFER or FX_CONVERSION leg; returns the withdrawn pool after it.
+
+    A linked-internal leg moves its split between the two brokers (:func:`_move_linked_cash`, J2). A leg whose partner is
+    outside the scope, or an orphan, is an external flow of the capital baseline (the classifier counts it so): its pools
+    move as a deposit into the scope or a withdrawal out of it (B3, MF-J3).
+    """
+    if ctxn.classification == "linked_internal":
+        _move_linked_cash(ctxn, amount, K, R, transfer_splits)
+        return withdrawn
+    if ctxn.tx.amount > 0:
+        return _deposit_pools(ctxn.tx.broker_id, amount, K, R, withdrawn)
+    if ctxn.tx.amount < 0:
+        return _withdrawal_pools(ctxn.tx.broker_id, amount, K, R, withdrawn)
+    return withdrawn
+
+
 def _move_linked_cash(ctxn: ClassifiedTransaction, amount: Decimal, K: dict[int, Decimal], R: dict[int, Decimal], transfer_splits: dict[int, tuple[Decimal, Decimal]] | None) -> None:
     """The pools of one leg of a linked-internal cash transfer or currency conversion (J2, D-MF4).
 
@@ -1031,24 +1068,18 @@ class DailyStateBuilder:
         spends R first. A linked-internal cash transfer or currency conversion leaves R first, and its arrival brings back
         what the departure took from each pool, the gap between the two legs booked as a result (J2, D-MF4):
         ``transfer_splits`` keeps each departure's ``(from R, amount)`` by its id until its arrival takes it up. An arrival
-        whose departure is unknown arrives in K.
+        whose departure is unknown arrives in K. A cash transfer or currency conversion leg whose partner is outside the
+        scope, or an orphan, moves the pools as a deposit (incoming) or a withdrawal (outgoing) — the external flow the
+        capital baseline counts it as (B3, MF-J3).
         """
         zero = Decimal("0")
         tx = ctxn.tx
         bid = tx.broker_id
         buy_from_k = buy_from_r = zero
         if tx.type == TransactionType.DEPOSIT:
-            restore = min(amount, withdrawn)
-            R[bid] += restore
-            withdrawn -= restore
-            K[bid] += amount - restore
+            withdrawn = _deposit_pools(bid, amount, K, R, withdrawn)
         elif tx.type == TransactionType.WITHDRAWAL:
-            from_k = min(amount, max(K[bid], zero))
-            K[bid] -= from_k
-            remaining = amount - from_k
-            from_r = min(remaining, max(R[bid], zero))
-            R[bid] -= from_r
-            withdrawn += from_r
+            withdrawn = _withdrawal_pools(bid, amount, K, R, withdrawn)
         elif tx.type in (TransactionType.DIVIDEND, TransactionType.INTEREST):
             # Signed: preserve a legacy negative correction (plan §4.4). `amount` is abs(tx.amount) converted through
             # the same (sign-agnostic) FX rate — flip its sign to match the original tx.amount instead of re-querying.
@@ -1063,8 +1094,8 @@ class DailyStateBuilder:
             R[bid] -= buy_from_r
             buy_from_k = amount - buy_from_r
             K[bid] -= buy_from_k
-        elif tx.type in (TransactionType.CASH_TRANSFER, TransactionType.FX_CONVERSION) and ctxn.classification == "linked_internal":
-            _move_linked_cash(ctxn, amount, K, R, transfer_splits)
+        elif tx.type in (TransactionType.CASH_TRANSFER, TransactionType.FX_CONVERSION):
+            withdrawn = _cash_transfer_pools(ctxn, amount, K, R, withdrawn, transfer_splits)
         return withdrawn, buy_from_k, buy_from_r
 
     def _stale_turn_days(self) -> set[date_type]:

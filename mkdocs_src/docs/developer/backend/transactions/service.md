@@ -618,10 +618,11 @@ What the conversion changes in the figures:
 - **Cash halves.** Capital and P&L do not change: an unlinked `CASH_TRANSFER` or
   `FX_CONVERSION` already counted as an external cash flow
   (`ScopeAwareTransactionClassifier`), as the `DEPOSIT` or `WITHDRAWAL` it becomes
-  does. What reads the type now counts the converted row: the cash pools that fund
-  purchases from new capital or from reinvested returns (`K_b`, `R_b`, `W` of the
-  [Three-Pool Cash Model](../../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/index.md#6-three-pool-cash-model-per-broker-k_b-r_b-w)),
-  which ignored the unlinked leg; the portfolio summary's `total_deposited`,
+  does, and the cash pools that fund purchases from new capital or from reinvested returns
+  (`K_b`, `R_b`, `W` of the
+  [Three-Pool Cash Model](../../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/index.md#6-three-pool-cash-model-per-broker-k_b-r_b-w))
+  move for the unlinked leg exactly as for that `DEPOSIT` or `WITHDRAWAL` (B3, MF-J3). What
+  reads the type now counts the converted row: the portfolio summary's `total_deposited`,
   `total_withdrawn` and `net_deposited_capital`; and the deposits series of
   `get_deposit_history()` (`DEPOSIT` only).
 
