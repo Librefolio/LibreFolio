@@ -414,6 +414,27 @@ test.describe('Dashboard charts and view matrix', () => {
         await page.goForward();
         await expectDetail();
     });
+
+    test('Dashboard, Positions: the chart sits beside the allocation by asset, with Abs / % on the chart, under Portfolio and under Period (FB-12)', async ({page}) => {
+        test.setTimeout(90_000);
+        await openPositionsTab(page);
+
+        for (const mode of ['holdings', 'performance'] as const) {
+            await page.getByTestId(`positions-toggle-${mode}`).click();
+            await page.getByTestId('positions-toggle-table').click();
+            const section = page.getByTestId('positions-chart-section');
+            await expect(section, `${mode}: the chart section is under the table`).toBeVisible({timeout: 30_000});
+            await expect(section.getByTestId('positions-return-chart')).toBeVisible();
+            // Abs / % are on the plot, not in the title row.
+            await expect(section.getByTestId('positions-chart-plot').getByTestId('positions-chart-view-absolute')).toBeVisible();
+            // The allocation beside it is the one by asset only: pie and history, no dimension tabs.
+            const allocation = section.getByTestId('allocation-panel');
+            await expect(allocation).toBeVisible();
+            await expect(allocation.getByTestId('allocation-view-now')).toBeVisible();
+            await expect(allocation.getByTestId('allocation-view-history')).toBeVisible();
+            await expect(allocation.getByTestId('allocation-tab-type')).toHaveCount(0);
+        }
+    });
 });
 
 /**

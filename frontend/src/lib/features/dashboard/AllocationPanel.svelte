@@ -8,7 +8,7 @@
   Broker detail share the same keys, like PositionsPanel.
 -->
 <script lang="ts">
-    import {onMount} from 'svelte';
+    import {onMount, untrack} from 'svelte';
     import {_} from '$lib/i18n';
     import {PieChart, AreaChart} from 'lucide-svelte';
 
@@ -33,9 +33,13 @@
         currentLanguage: string;
         allocationHistory: AllocationHistoryDimensions | null;
         onRequestAllocationHistory?: (dimension: AllocationTab, brokerIds: number[] | undefined) => void | Promise<void>;
+        /** One dimension only, with no tabs to change it (the positions panel shows the allocation by asset, FB-12). The tab is not stored. */
+        lockedTab?: AllocationTab;
+        /** The key under which the pie / history choice is kept (per user); the default is the Dashboard's own, so a second panel keeps a choice of its own. */
+        viewStorageKey?: string;
     }
 
-    let {summary, loading, displayCurrency, brokerIds, currentLanguage, allocationHistory, onRequestAllocationHistory}: Props = $props();
+    let {summary, loading, displayCurrency, brokerIds, currentLanguage, allocationHistory, onRequestAllocationHistory, lockedTab, viewStorageKey}: Props = $props();
 
     const allocationTabs = [
         ['type', 'dashboard.typeAllocation'],
@@ -44,7 +48,7 @@
         ['asset', 'dashboard.assetAllocation'],
     ] as const satisfies readonly [AllocationTab, string][];
 
-    const VIEW_STORAGE_KEY = 'dashboard-allocation-view';
+    const VIEW_STORAGE_KEY = untrack(() => viewStorageKey) ?? 'dashboard-allocation-view';
     const TAB_STORAGE_KEY = 'dashboard-allocation-tab';
 
     // A stored value this version does not know (garbage, or a renamed option) falls
@@ -58,7 +62,7 @@
         return allocationTabs.find(([tab]) => tab === stored)?.[0] ?? 'type';
     }
 
-    let allocationTab = $state<AllocationTab>(readStoredTab());
+    let allocationTab = $state<AllocationTab>(untrack(() => lockedTab) ?? readStoredTab());
     let allocationView = $state<AllocationView>(readStoredView());
 
     function toAllocEntries(items: any[] | null | undefined): AllocEntry[] {
@@ -87,6 +91,7 @@
     }
 
     function selectTab(tab: AllocationTab) {
+        if (lockedTab) return;
         allocationTab = tab;
         setUserStorage(TAB_STORAGE_KEY, tab);
         if (allocationView === 'history') loadAllocationHistory(tab);
@@ -148,18 +153,20 @@
         </div>
     </div>
 
-    <div class="flex rounded-lg overflow-hidden border border-lf-subtle text-xs font-medium self-start">
-        {#each allocationTabs as [tab, labelKey]}
-            <button
-                class="px-3 py-1 transition-colors {allocationTab === tab ? 'bg-lf-action text-lf-on-action' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'} {tab !== 'type' ? 'border-l border-lf-subtle' : ''}"
-                onclick={() => selectTab(tab)}
-                aria-pressed={allocationTab === tab}
-                data-testid="allocation-tab-{tab}"
-            >
-                {$_(labelKey)}
-            </button>
-        {/each}
-    </div>
+    {#if !lockedTab}
+        <div class="flex rounded-lg overflow-hidden border border-lf-subtle text-xs font-medium self-start">
+            {#each allocationTabs as [tab, labelKey]}
+                <button
+                    class="px-3 py-1 transition-colors {allocationTab === tab ? 'bg-lf-action text-lf-on-action' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'} {tab !== 'type' ? 'border-l border-lf-subtle' : ''}"
+                    onclick={() => selectTab(tab)}
+                    aria-pressed={allocationTab === tab}
+                    data-testid="allocation-tab-{tab}"
+                >
+                    {$_(labelKey)}
+                </button>
+            {/each}
+        </div>
+    {/if}
 
     <div class="flex-1 min-h-0 relative">
         {#if loading || allocationHistoryLoading}
