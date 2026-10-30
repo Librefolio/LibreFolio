@@ -8,7 +8,8 @@
       "quantity": "Qté",
       "cash": "Espèces",
       "broker": "Courtier",
-      "links": "Liens"
+      "links": "Liens",
+      "unitPrice": "Prix unitaire"
     },
     "actions": {
       "clone": "Cloner",
@@ -164,7 +165,7 @@
       "serverError": "Sauvegarde impossible — erreur serveur"
     },
     "costBasisOverride": {
-      "tooltip": "Override du prix de revient unitaire. Si vide, calculé automatiquement à partir des achats lors de la sauvegarde. Remplacer pour Exit Tax, héritage ou règles fiscales particulières. Utilisez le sélecteur Total/Par unité ci-dessous pour choisir comment saisir ce montant.",
+      "tooltip": "Le coût que vous saisissez à la place du prix de revient moyen : pour l'Exit Tax, un héritage ou des règles fiscales particulières. Auto le calcule à partir de vos achats. Utilisez le sélecteur Total/Par unité ci-dessous pour choisir comment saisir ce montant.",
       "warningAdjustment": "Le coût de base manuel est vide : sans lui, la transaction ne peut pas être enregistrée. Saisissez ce que ces parts vous ont coûté : 0 pour les nouvelles parts d'une division d'actions. Pour un don, saisissez 0, ou ce que le donateur les a payées : le prix de revient unitaire, et la plus-value sur laquelle vous pourriez être imposé, restent ainsi plus proches de la réalité."
     },
     "wacPreview": {
@@ -187,7 +188,7 @@
         "add": "Pondérée",
         "reduce": "Quantité réduite",
         "addZeroCost": "Dilution",
-        "addAtWac": "Auto PRU"
+        "splitRescale": "Ajustement du split"
       },
       "pendingCreate": "Transaction en attente (nouvelle, pas encore enregistrée)",
       "pendingEdit": "Transaction en attente (modifiée, pas encore enregistrée)",

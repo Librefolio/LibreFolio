@@ -37,7 +37,8 @@
     import {getStringBadgeStyle, getStringColor} from '$lib/utils/colors';
     import {formatCurrencyAmountHtml, formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {formatTxQuantity} from './txDisplayHelpers';
-    import {getTransactionTypeIconUrl, getTxTypeDocUrl, TX_TYPES, getEventTypeEmoji} from '$lib/features/transactions/transactionTypeStore';
+    import {getTransactionTypeIconUrl, getTxTypeDocUrl, TX_TYPES, getEventTypeEmoji, typesVersion} from '$lib/features/transactions/transactionTypeStore';
+    import {unitPriceCellHtml} from './unitPriceCell';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {getRoleSvgHtml} from '$lib/utils/broker/brokerRoleHelpers';
     import {getBrokerRole, canEditBroker, getPairedAccessLevel, getBrokerInfo, brokerStoreVersion} from '$lib/stores/reference/brokerStore';
@@ -688,6 +689,21 @@
                     type: 'html',
                     html: `<span class="tx-cash-cell" data-testid="tx-cash-cell-${d.tx.id}">${inner}</span>`,
                 };
+            },
+        },
+        {
+            id: 'unitPrice',
+            header: () => $t('transactions.table.unitPrice'),
+            type: 'custom',
+            sortable: false,
+            filterable: false,
+            width: 120,
+            align: 'right',
+            cell: (d) => {
+                void $currencyStoreVersion;
+                void $assetStoreVersion;
+                void $typesVersion;
+                return {type: 'html', html: unitPriceCellHtml(d.tx, {testId: `tx-unit-price-cell-${d.tx.id}`, isPairLeg: d.tx.related_transaction_id != null})};
             },
         },
         {

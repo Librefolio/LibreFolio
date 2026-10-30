@@ -8,7 +8,8 @@
       "quantity": "Cant.",
       "cash": "Efectivo",
       "broker": "Bróker",
-      "links": "Enlaces"
+      "links": "Enlaces",
+      "unitPrice": "Precio unitario"
     },
     "actions": {
       "clone": "Clonar",
@@ -164,7 +165,7 @@
       "serverError": "Guardado imposible — error del servidor"
     },
     "costBasisOverride": {
-      "tooltip": "Override del precio medio de compra. Si está vacío, se calcula automáticamente de las compras al guardar. Sustituir por Exit Tax, herencia o reglas fiscales especiales. Usa el selector Total/Por unidad de abajo para elegir cómo introducir este importe.",
+      "tooltip": "El coste que introduces en lugar del precio medio de compra: para Exit Tax, herencia o reglas fiscales especiales. Auto lo calcula a partir de tus compras. Usa el selector Total/Por unidad de abajo para elegir cómo introducir este importe.",
       "warningAdjustment": "El coste base manual está vacío: sin él, la transacción no se puede guardar. Escribe lo que te costaron estas participaciones: 0 para las nuevas de un desdoblamiento. Para un regalo, escribe 0, o lo que pagó por ellas el donante: así el precio medio de compra, y la ganancia por la que podrías tributar, quedan más cerca de los reales."
     },
     "wacPreview": {
@@ -187,7 +188,7 @@
         "add": "Ponderada",
         "reduce": "Cantidad reducida",
         "addZeroCost": "Dilución",
-        "addAtWac": "Auto PMC"
+        "splitRescale": "Ajuste por split"
       },
       "pendingCreate": "Transacción pendiente (nueva, aún no guardada)",
       "pendingEdit": "Transacción pendiente (editada, aún no guardada)",

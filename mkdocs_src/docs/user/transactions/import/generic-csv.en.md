@@ -49,21 +49,29 @@ them by their names: there is nothing to map by hand.
   not the total value of the position. Only a row that adds units asks for it: one that removes
   units (a negative quantity) has no value.
 
-### 📅 Day and month order {: #day-month-order }
+### 📅 Date format {: #day-month-order }
 
-A date such as `03/04/2025` can mean 3 April or 4 March, depending on the country. LibreFolio lets
-you choose how the Generic CSV importer reads it. The choice is yours alone: other people of the same
-LibreFolio keep their own.
+A date such as `03/04/2025` can mean 3 April or 4 March, and a year can be written with two digits
+(`03/04/26`). LibreFolio lets you choose how the Generic CSV importer reads the dates of your files. The
+choice is yours alone: other people of the same LibreFolio keep their own.
 
-Open **Settings › Plugins**, find **Broker imports**, and set **Order of day and month**:
+Open **Settings › Plugins**, find **Broker imports**, and set **Date format**. Each option shows the
+shape of the date and a complete example:
 
-- **Day first** (the default): `03/04/2025` is **3 April 2025**. This is how LibreFolio always read it,
-  so nothing changes if you never open the setting.
-- **Month first**: `03/04/2025` is **4 March 2025**, the way it is written in the United States.
+| Option | Example |
+|--------|---------|
+| `dd/mm/yyyy` (the default) | `03/04/2025` = **3 April 2025** |
+| `mm/dd/yyyy` | `03/04/2025` = **4 March 2025**, as written in the United States |
+| `dd/mm/yy` | `03/04/26` = **3 April 2026** |
+| `mm/dd/yy` | `03/04/26` = **4 March 2026** |
+| `yy/mm/dd` | `26/04/03` = **3 April 2026** |
+| `yyyy-mm-dd` | `2026-04-03` = **3 April 2026** |
 
-A date that only one order can read is always read right, whatever you choose: `25/12/2025` is 25
-December, because there is no month 25. Dates written like `2025-12-25`, `20251225` or `25 Dec 2025` have
-a single meaning and never move.
+`dd/mm/yyyy` is how LibreFolio always read the dates, so nothing changes if you never open the setting.
+With `dd/mm/yyyy` and `mm/dd/yyyy`, a date that only one order can read is always read right: `25/12/2025`
+is 25 December, because there is no month 25. With the two-digit-year options the order you chose is the
+only one used, and `yy` follows the usual rule: `00`–`68` are 2000–2068, `69`–`99` are 1969–1999. Dates
+written like `2025-12-25`, `20251225` or `25 Dec 2025` have a single meaning and never move.
 
 !!! tip "Parse the file again after changing it"
 
