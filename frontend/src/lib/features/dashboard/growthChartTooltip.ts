@@ -88,14 +88,14 @@ export function buildTooltipBucketHeader(bucket: BucketInfo, theme: TooltipTheme
     // judged by its period: a week the series covers for one day still prints its week.
     const span = bucket.period ?? {start: bucket.bucketStart, end: bucket.bucketEnd};
     if (span.start === span.end) {
-        return `${buildTooltipHeader(formatDayWithWeekday(bucket.bucketEnd), theme.textColor)}${partialHtml}`;
+        return `${buildTooltipHeader(formatDayWithWeekday(bucket.bucketEnd), theme.textColor, {from: bucket.bucketEnd, to: bucket.bucketEnd})}${partialHtml}`;
     }
 
     if (ladderActive) {
         // "1M - Oct 1, 2026 → Oct 31, 2026": the calendar period the bucket stands for. The
         // old form said "Week" for every bucket wider than a day, which was simply false
         // on a three-day or fourteen-day rung.
-        const headerHtml = `${buildTooltipHeader(`${view.candleWidthCaption()} - ${formatDay(span.start)} → ${formatDay(span.end)}`, theme.textColor)}${partialHtml}`;
+        const headerHtml = `${buildTooltipHeader(`${view.candleWidthCaption()} - ${formatDay(span.start)} → ${formatDay(span.end)}`, theme.textColor, {from: span.start, to: span.end})}${partialHtml}`;
         // "Value at <date>" is true of a closing level and false of a sum, so the
         // Income submode — whose bars are sums over the bucket — does not claim it. The
         // date is the last day with data, never a day of the period still to come.
@@ -109,14 +109,14 @@ export function buildTooltipBucketHeader(bucket: BucketInfo, theme: TooltipTheme
     const contextLine = `<div style="font-size:10px;color:${theme.mutedColor};margin-bottom:4px">${t('chart.tooltip.valueAt', {values: {date: formatDay(upTo.bucketEnd)}})}</div>`;
 
     if (bucket.resolution === 'weekly') {
-        return `${buildTooltipHeader(t('chart.tooltip.weekRange', {values: {start: formatDay(upTo.bucketStart), end: formatDay(upTo.bucketEnd)}}), theme.textColor)}${contextLine}`;
+        return `${buildTooltipHeader(t('chart.tooltip.weekRange', {values: {start: formatDay(upTo.bucketStart), end: formatDay(upTo.bucketEnd)}}), theme.textColor, {from: upTo.bucketStart, to: upTo.bucketEnd})}${contextLine}`;
     }
 
     if (bucket.resolution === 'yearly') {
-        return `${buildTooltipHeader(t('chart.tooltip.yearLabel', {values: {year: String(Number(upTo.bucketEnd.slice(0, 4)))}}), theme.textColor)}${contextLine}`;
+        return `${buildTooltipHeader(t('chart.tooltip.yearLabel', {values: {year: String(Number(upTo.bucketEnd.slice(0, 4)))}}), theme.textColor, {from: upTo.bucketStart, to: upTo.bucketEnd})}${contextLine}`;
     }
 
-    return `${buildTooltipHeader(t('chart.tooltip.monthLabel', {values: {month: formatTooltipMonth(upTo.bucketEnd)}}), theme.textColor)}${contextLine}`;
+    return `${buildTooltipHeader(t('chart.tooltip.monthLabel', {values: {month: formatTooltipMonth(upTo.bucketEnd)}}), theme.textColor, {from: upTo.bucketStart, to: upTo.bucketEnd})}${contextLine}`;
 }
 
 /**

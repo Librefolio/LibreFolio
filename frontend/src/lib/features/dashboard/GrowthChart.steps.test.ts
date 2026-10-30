@@ -28,7 +28,9 @@ const {chartInstances, echartsModule} = vi.hoisted(() => {
         getDom: () => unknown;
         on: (name: string, handler: (event: unknown) => void) => void;
         off: () => void;
-        dispatchAction: () => void;
+        dispatchAction: (action: unknown) => void;
+        convertToPixel: (finder: unknown, value: number) => number;
+        getZr: () => {on: () => void; off: () => void};
         resize: () => void;
         isDisposed: () => boolean;
         dispose: () => void;
@@ -57,7 +59,13 @@ const {chartInstances, echartsModule} = vi.hoisted(() => {
                 chart.handlers.set(name, [...(chart.handlers.get(name) ?? []), handler]);
             },
             off: () => {},
-            dispatchAction: () => {},
+            // The pointer snap moves the pointer with a second `updateAxisPointer`: ECharts hands it back to the listeners
+            dispatchAction: (action) => {
+                const payload = action as {type?: string; axesInfo?: unknown};
+                if (payload.type === 'updateAxisPointer') for (const handler of chart.handlers.get('updateAxisPointer') ?? []) handler({axesInfo: payload.axesInfo});
+            },
+            convertToPixel: (_finder, value) => value / 1_000_000_000,
+            getZr: () => ({on: () => {}, off: () => {}}),
             resize: () => {},
             isDisposed: () => disposed,
             dispose: () => {
@@ -83,6 +91,7 @@ import {cleanup, fireEvent, render, setupI18n, waitFor} from '$test/component';
 import type {PortfolioHistoryPoint, PortfolioMwrrLinePoint} from '$lib/stores/portfolio/portfolioStore.svelte';
 import {uiLocale} from '$lib/stores/app/uiLocale';
 import {addDays} from '$lib/utils/dateOnly';
+import {MOMENTS_ON_THE_NEWEST_DAY, MOMENTS_ON_THE_OLDEST_DAY, firePointer, firePointerAt, tooltipHoldsDay, withoutTooltipDays} from '$test/timeAxisPointer';
 import GrowthChart from './GrowthChart.svelte';
 import {setGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
 
@@ -274,6 +283,44 @@ describe('the tooltip of a step line', () => {
     });
 });
 
+describe('the edges of the plot (Y2-I63, issue #63)', () => {
+    const handlers = () => chartInstances.at(-1)?.handlers.get('updateAxisPointer') ?? [];
+
+    // The pointer of the growth chart snaps to the nearest day, as the other step charts do (`attachDaySnap`, Y6-1): a pointer in the second half
+    // of the day before the newest day rests on the newest day. Red on a branch that does not snap yet, green once Y6-1 is merged.
+    // ECharts hands the formatter the drawn point nearest to the pointer; the tooltip must follow the day the pointer is on instead. The
+    // `dataIndex` given here is deliberately the wrong one (the first step), so a tooltip that read it would name another day.
+    it.each(MOMENTS_ON_THE_NEWEST_DAY)('opens on the newest day with the pointer at its $label', async (moment) => {
+        await mount({history: SPARSE, range: SPARSE_RANGE, mwrrLine: SPARSE_MWRR});
+        firePointerAt(handlers(), '2026-03-01', moment);
+        const html = tooltipFormatter()([{dataIndex: 0}]);
+        expect(tooltipHoldsDay(html, '2026-03-01')).toBe(true);
+        expect(html).toContain(money(1_060));
+    });
+
+    it.each(MOMENTS_ON_THE_OLDEST_DAY)('opens on the oldest day shown with the pointer at its $label', async (moment) => {
+        await mount({history: SPARSE, range: SPARSE_RANGE, mwrrLine: SPARSE_MWRR});
+        firePointerAt(handlers(), '2026-01-01', moment);
+        const html = tooltipFormatter()([{dataIndex: 4}]);
+        expect(tooltipHoldsDay(html, '2026-01-01')).toBe(true);
+        expect(html).toContain(money(1_010));
+    });
+
+    it('opens on the first day of a step and on its last, each with the step\'s own value', async () => {
+        await mount({history: SPARSE, range: SPARSE_RANGE, mwrrLine: SPARSE_MWRR});
+        for (const [day, value] of [
+            ['2026-01-11', 1_030],
+            ['2026-02-19', 1_030],
+            ['2026-02-20', 1_060],
+        ] as const) {
+            firePointer(handlers(), day);
+            const html = tooltipFormatter()([{dataIndex: 0}]);
+            expect(tooltipHoldsDay(html, day), day).toBe(true);
+            expect(html, day).toContain(money(value));
+        }
+    });
+});
+
 describe('the resolution badge on a long history (Y2 FB-6)', () => {
     /** 26 years of one-day steps: 9 497 days over a 1 200 px plot is 7.9 a pixel, and their 1 357 weeks are 1.13, under the 1.3 the weekly line takes. */
     const FIRST = '2000-01-03';
@@ -315,7 +362,7 @@ describe('a history of 140 years is grouped by year (Y2 FB-6)', () => {
         const html = tooltipFormatter()([{dataIndex: 70}]);
         // The year of the 71st yearly bucket: 1886 + 70, as its own text and in no date form.
         expect(html).toContain('1956');
-        expect(html).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+        expect(withoutTooltipDays(html)).not.toMatch(/\d{4}-\d{2}-\d{2}/);
     });
 });
 

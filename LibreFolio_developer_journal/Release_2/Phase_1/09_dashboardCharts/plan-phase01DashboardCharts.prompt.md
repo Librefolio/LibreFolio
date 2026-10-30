@@ -8793,3 +8793,25 @@ Il backend dà `value: null` per ogni fetta di una lista le cui fette sommano ze
 - `AllocationPanel`: se *tutte* le fette di una lista sono senza percentuale, al posto della torta (o della mappa) c'è il blocco `allocation-no-shares`: il testo `dashboard.allocationNoShares` e una riga per fetta con `—` e l'importo (`personal`, nascosto in privacy). La nota «cassa negativa» non si ripete (le righe mostrano già l'importo negativo).
 - `allocationHistorySteps`: `AllocationStepComponent.value` è `string | null`; `stepHasShares`; `allocationRows` **non fa riga** per un giorno senza percentuali (un 0 disegnerebbe una quota mai esistita). `AllocationHistoryChart`: se nessun giorno ha percentuali, `allocation-history-no-shares` (`dashboard.allocationHistoryNoShares`); le categorie nascono solo dai giorni con percentuali. I due `?? 0` segnalati da MF (`:415`, `:423`) restano: dopo questo, ai bucket arrivano solo righe con percentuali.
 - **Limite noto** (da dire al developer): in una storia con giorni senza percentuali *in mezzo* a giorni con percentuali, l'area collega i giorni che ci sono, senza interrompersi sul vuoto (una lacuna vera chiederebbe `null` nelle righe e in tutte le somme del tooltip).
+
+## 30/10 · Ondata 6 · Y2 — Y2-I63: il tooltip apre il giorno sotto il puntatore (issue #63)
+
+Il developer vuole che la issue GitHub #63 («Portfolio Growth»: cursore sul 25 ottobre, dati di un altro giorno; gli ultimi giorni non si aprivano) resti chiusa. Sulla nightly non si riproduce più: qui ci sono i test che la fissano su tutti i grafici con un asse del tempo.
+
+### Cosa serve a un test per sapere «quale giorno»
+
+| Pezzo | Dove | Perché |
+|---|---|---|
+| Il giorno nel tooltip | `buildTooltipHeader(text, color, {from, to})` → `data-tooltip-from` / `data-tooltip-to` (ISO) | il testo dell'intestazione è nella lingua dell'interfaccia: un test non può leggerlo (regola 5). Un giorno solo (`from === to`) o un bucket (settimana, mese, anno). Anche `PriceChartFull` e `LineChart`, che hanno il loro costruttore. |
+| Il grafico che si lascia interrogare | `attachChartReady` tiene l'istanza in `container.__lfChart` (già lo facevano 5 grafici) | l'E2E chiede al grafico, nel momento della prova, il pixel di un giorno e i giorni che ha disegnato. **Non** si pubblica la geometria in un attributo: restava quella di prima dopo un ridimensionamento (primo giro E2E, 10 rossi su 12 per questo). |
+| Helper E2E | `e2e/fixtures/timeAxisTooltip.ts` | `expectTooltipOnDay` (un giorno noto, puntato a metà mattina: a mezzanotte netta una frazione di pixel decide fra due giorni) e `expectEdgesReachable` (il giorno più recente e il più vecchio, sul bordo del disegno e 10 px fuori nel margine destro). Asse a tempo e asse a categorie (`PriceChartFull`, `LineChart`). |
+| Helper Vitest | `src/__tests__/timeAxisPointer.ts` | `firePointerAt(handlers, giorno, momento)` con i momenti raggiungibili: i grafici agganciati al giorno più vicino (`attachDaySnap`) aprono il giorno più recente dal mezzogiorno del giorno prima fino alla sua mezzanotte, e il più vecchio dalla sua mezzanotte a un minuto prima di mezzogiorno; `tooltipHoldsDay(html, giorno)`. I falsi ECharts rimandano a chi ascolta il secondo `updateAxisPointer` dell'aggancio, come fa ECharts. |
+
+### Cosa è coperto
+
+- **E2E** `chart-tooltip-days.spec.ts` (`front-utility chart-tooltip-days`): crescita, allocazione storica, posizioni, prezzo asset, prezzo FX, lotti (WAC e confronto); ognuno con i gradini e con i segmenti, a 1280 e 600 px: un giorno noto, il più recente e il più vecchio, sul bordo e nel margine. 12 test.
+- **Vitest**: gli stessi casi sui grafici a gradini (crescita, allocazione, posizioni, WAC, confronto), e il giorno nell'intestazione di `PriceChartFull` e `LineChart` (tempo e categorie).
+- **Non coperti**: i grafici di rischio con date (`UnderwaterChart` e gli altri) usano lo stesso `LineChart` (coperto da Vitest), ma la loro pagina vive di dati simulati in `risk-analysis.spec.ts`: nessun E2E dedicato. Le miniature delle schede non hanno tooltip. `PerformanceChart` è a barre per posizione, senza asse del tempo.
+- **Il difetto sul commit vecchio**: non riprodotto. Non ho provato un commit prima di D-P4 (il ramo non si può cambiare da qui); la prova di sensibilità è una mutazione del bordo di `paramsAtDay` (`>` → `>=`), che fa diventare rossi i test del giorno più recente.
+
+> **⚠️ Fuori pista**: la crescita non agganciava il puntatore al giorno più vicino (Y6-1, ramo di Y, lo aggiunge). I due casi della crescita sul giorno più recente sono rossi sul ramo senza quel commit, verdi dopo l'unione: la ragione è giusta (un puntatore nella seconda metà del giorno prima è ancora il giorno più recente).

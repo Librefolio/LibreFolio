@@ -29,7 +29,9 @@ const {chartInstances, echartsModule} = vi.hoisted(() => {
         getHeight: () => number;
         on: (event: string, handler: (event: unknown) => void) => void;
         off: (event: string, handler?: (event: unknown) => void) => void;
+        getZr: () => {on: () => void; off: () => void};
         dispatchAction: (action: unknown) => void;
+        convertToPixel: (finder: unknown, value: number) => number;
         resize: () => void;
         isDisposed: () => boolean;
         dispose: () => void;
@@ -59,7 +61,13 @@ const {chartInstances, echartsModule} = vi.hoisted(() => {
                         (chart.handlers.get(event) ?? []).filter((entry) => entry !== handler),
                     );
             },
-            dispatchAction: () => {},
+            getZr: () => ({on: () => {}, off: () => {}}),
+            // The pointer snap moves the pointer with a second `updateAxisPointer`: ECharts hands it back to the listeners
+            dispatchAction: (action) => {
+                const payload = action as {type?: string; axesInfo?: unknown};
+                if (payload.type === 'updateAxisPointer') for (const handler of chart.handlers.get('updateAxisPointer') ?? []) handler({axesInfo: payload.axesInfo});
+            },
+            convertToPixel: (_finder, value) => value / 1_000_000_000,
             resize: () => {},
             isDisposed: () => disposed,
             dispose: () => {
@@ -94,6 +102,7 @@ import {render, screen, setupI18n, waitFor} from '$test/component';
 import {formatPercent} from '$lib/utils/core/formatPercent';
 import {addDays} from '$lib/utils/dateOnly';
 import {setGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
+import {MOMENTS_ON_THE_NEWEST_DAY, MOMENTS_ON_THE_OLDEST_DAY, firePointerAt, tooltipHoldsDay} from '$test/timeAxisPointer';
 
 const GENERATED_TS = join(process.cwd(), 'src', 'lib', 'api', 'generated.ts');
 const CHART_CONTAINER_TESTID = 'allocation-history-chart';
@@ -247,6 +256,29 @@ describe('the tooltip of a step area', () => {
         const option = await mountChart(STEPS);
         expect(option.tooltip.axisPointer.snap).toBe(false);
         expect(option.xAxis.axisPointer.snap).toBe(false);
+    });
+});
+
+describe('the edges of the plot (Y2-I63, issue #63)', () => {
+    const handlers = () => chartInstances[0].handlers.get('updateAxisPointer') ?? [];
+    const share = (value: number) => formatPercent(value, {digits: 1, signed: false});
+
+    it.each(MOMENTS_ON_THE_NEWEST_DAY)('opens on the newest day with the pointer at its $label', async (moment) => {
+        const option = await mountChart(STEPS);
+        // 1 March is the last day of the last step (Alpha 70, Gamma 30); the row ECharts hands over is the first one.
+        firePointerAt(handlers(), '2026-03-01', moment);
+        const html = option.tooltip.formatter([{dataIndex: 0}]);
+        expect(tooltipHoldsDay(html, '2026-03-01')).toBe(true);
+        expect(html).toContain(share(70));
+        expect(html).not.toContain(share(60));
+    });
+
+    it.each(MOMENTS_ON_THE_OLDEST_DAY)('opens on the oldest day shown with the pointer at its $label', async (moment) => {
+        const option = await mountChart(STEPS);
+        firePointerAt(handlers(), '2026-01-01', moment);
+        const html = option.tooltip.formatter([{dataIndex: 3}]);
+        expect(tooltipHoldsDay(html, '2026-01-01')).toBe(true);
+        expect(html).toContain(share(60));
     });
 });
 

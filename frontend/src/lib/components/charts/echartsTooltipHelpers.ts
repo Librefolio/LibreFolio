@@ -42,11 +42,21 @@ export function buildDot(color: string): string {
     return `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:6px;flex-shrink:0"></span>`;
 }
 
+/** The days a tooltip header stands for, as ISO dates: one day (`from === to`) or a bucket (a week, a month). */
+export interface TooltipDaySpan {
+    from: string;
+    to: string;
+}
+
 /**
  * Build the tooltip date header line.
+ *
+ * `span` publishes the days the header stands for as `data-tooltip-from` / `data-tooltip-to` (ISO): the text is written in the
+ * interface language, so a test that asks which day a chart opened on reads these, never the text.
  */
-export function buildTooltipHeader(date: string, textColor: string): string {
-    return `<div style="font-size:11px;color:${textColor};margin-bottom:4px">${date}</div>`;
+export function buildTooltipHeader(date: string, textColor: string, span?: TooltipDaySpan): string {
+    const days = span ? ` data-tooltip-from="${span.from}" data-tooltip-to="${span.to}"` : '';
+    return `<div${days} style="font-size:11px;color:${textColor};margin-bottom:4px">${date}</div>`;
 }
 
 /**

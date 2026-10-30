@@ -14,6 +14,7 @@
     import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';
     import {chartInitOptions} from '$lib/components/charts/chartPixelRatio';
     import {attachChartReady} from '$lib/utils/chartReady';
+    import {dayOfAxisValue} from '$lib/utils/stepSeries';
     import {_ as t} from '$lib/i18n';
     import type {ChartType, ViewMode} from './ChartToolbar.svelte';
     import ChartToolbar from './ChartToolbar.svelte';
@@ -365,19 +366,23 @@
         }
     }
 
+    /** The tooltip header, tagged with the ISO days it stands for (`data-tooltip-from` / `data-tooltip-to`, read by the specs: the text is translated). */
     function buildTooltipHeader(date: string, currentResolution: ChartResolution, bucketInfo?: BucketInfo): string {
+        const asDay = (value: string): string => (/^\d+$/.test(value) ? dayOfAxisValue(Number(value)) : value.slice(0, 10));
         if (currentResolution === 'daily') {
-            return `<strong>${formatDayWithWeekday(date)}</strong>`;
+            const day = asDay(date);
+            return `<strong data-tooltip-from="${day}" data-tooltip-to="${day}">${formatDayWithWeekday(date)}</strong>`;
         }
 
         // The point stands for its bucket up to its own day, the last one with data: the period still running ends there.
         const info = bucketSpanUpTo(date, bucketInfo ?? {bucketStart: date, bucketEnd: date});
+        const span = `data-tooltip-from="${info.bucketStart}" data-tooltip-to="${info.bucketEnd}"`;
 
         if (currentResolution === 'weekly') {
-            return `<strong>${$t('chart.tooltip.weekRange', {values: {start: formatDay(info.bucketStart), end: formatDay(info.bucketEnd)}})}</strong>`;
+            return `<strong ${span}>${$t('chart.tooltip.weekRange', {values: {start: formatDay(info.bucketStart), end: formatDay(info.bucketEnd)}})}</strong>`;
         }
 
-        return `<strong>${$t('chart.tooltip.monthLabel', {values: {month: formatMonthLabel(info.bucketEnd)}})}</strong><br/><span style="font-size:11px;opacity:0.8">${$t('chart.tooltip.valueAt', {values: {date: formatDay(info.bucketEnd)}})}</span>`;
+        return `<strong ${span}>${$t('chart.tooltip.monthLabel', {values: {month: formatMonthLabel(info.bucketEnd)}})}</strong><br/><span style="font-size:11px;opacity:0.8">${$t('chart.tooltip.valueAt', {values: {date: formatDay(info.bucketEnd)}})}</span>`;
     }
 
     function getResolvedSeries(currentResolution: ChartResolution): ResolvedDataCacheEntry {
