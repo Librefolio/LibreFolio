@@ -34,7 +34,7 @@ explicit.
 | **Access scope and ordered mutations** | `transaction_batch_stages.py` (access), `batch_edits.py` and `batch_creates.py` (mutations) |
 | **Linked-pair persistence** | Stage code writes reciprocal `related_transaction_id` values |
 | **WAC** | `_compute_wac_for_auto_items()` delegates to `compute_wac_iterative()` |
-| **Balance validation** | The final mutation stage flushes, then replays each affected broker from its earliest affected date |
+| **Balance validation** | The final mutation stage flushes, then replays each affected broker from its earliest affected date. The cash is read by `financial_math.native_cash.first_negative_cash` (never summed by hand), and a broker without `allow_cash_overdraft` is refused on a negative cash even when it is the opening one and no transaction follows the first affected date (W6-12); the quantities walk the same days; the lowest day wins, the cash on a tie |
 | **Transaction completion** | The API caller commits or rolls back; the service does neither |
 
 ---

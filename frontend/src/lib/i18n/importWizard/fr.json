@@ -206,7 +206,9 @@
       "rows_not_recognized": "{count, plural, one {# ligne a été exclue ou importée en partie seulement} other {# lignes ont été exclues ou importées en partie seulement}} : l’import ne reconnaît pas, ou n’importe pas encore, ce qu’elles décrivent. Vérifiez les lignes ci-dessous ; si cela compte pour vos parts ou votre trésorerie, signalez le cas pour que nous le traitions :",
       "rows_unreadable": "{count, plural, one {# ligne a été exclue} other {# lignes ont été exclues}} car une valeur nécessaire est illisible. Vérifiez les lignes ci-dessous ; si le fichier est correct, signalez le cas pour que nous le traitions :",
       "possible_split": "Split possible de {ticker} : {added_quantity} actions nouvelles à coût nul. Liez un événement SPLIT ou créez-en un.",
-      "date_before_1900": "La date {date} est antérieure au 1er janvier 1900 : vérifiez l'année."
+      "date_before_1900": "La date {date} est antérieure au 1er janvier 1900 : vérifiez l'année.",
+      "date_unreadable": "Ligne {row} : {value} n’est pas une date valide au format {order, select, day_first {jj/mm/aaaa} month_first {mm/jj/aaaa} day_first_short {jj/mm/aa} month_first_short {mm/jj/aa} year_first_short {aa/mm/jj} year_first {aaaa-mm-jj} other {jj/mm/aaaa}}. Corrigez la date dans le fichier, ou changez le format dans Paramètres › Plugins › Imports des courtiers › CSV générique › « Format des dates », puis cliquez sur « Réanalyser tout ».",
+      "date_unreadable_more": "{n, plural, one {# autre ligne a} other {# autres lignes ont}} une date non valide dans ce format : la même correction s’applique."
     },
     "evidenceRowsTitle": "Lignes du fichier",
     "evidenceRowCount": "{n} lignes",
