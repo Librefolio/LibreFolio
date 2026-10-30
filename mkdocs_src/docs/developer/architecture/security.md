@@ -1499,14 +1499,31 @@ the Settings page, which asks before the tab is opened so that its badge counts,
 tab reads again on «check again». A member's app never asks. On a [blocked instance](#instance-block)
 the route is not on the allow-list: an administrator gets `423`.
 
-Each check has a guide, the section of the admin guide that explains it. The map is
+Each check has help, and who can solve it decides which (FB-27). The map is
 `frontend/src/lib/features/instance/checkGuides.json`: `server`, every check of `GET /security/checks`, in the order of
 its answer; `browser`, the findings the browser adds to the tab, today `accounts.openRegistration`
-(`OPEN_REGISTRATION_NOTICE_ID`, [The Open-Registration Warning](#open-registration-warning)). Each value is a path
-below `/mkdocs/` without the language, which `DocsLink` adds: `admin/<page>/#<anchor>`, such as
-`admin/configuration_security/#frame-protection` for `platform.frame_protection`. The tab's «Guide» button (workstream A, N69d)
-reads it through `checkGuidePath(id)` of `checkGuides.ts`, beside the map. A new check needs its entry, and its anchor
-must be an explicit `{: #… }` of the English page: `./dev.py test services config-audit` fails when a check of the
+(`OPEN_REGISTRATION_NOTICE_ID`, [The Open-Registration Warning](#open-registration-warning)) and `platform.blockedScript`.
+Each value is one of two objects:
+
+- `{"kind": "guide", "path": "admin/<page>/#<anchor>"}`: the administrator solves it alone. The path is below
+  `/mkdocs/` without the language, which `DocsLink` adds, such as `admin/configuration_security/#frame-protection` for
+  `platform.frame_protection`; it is the tab's «Guide» button (workstream A, N69d). A limit that applies to a
+  self-hosted instance too (`backup.upload_limit`, `backup.restore_limit`) is a `guide`.
+- `{"kind": "support"}`: only whoever hosts the instance solves it, today `platform.hosting_panel`,
+  `backup.panel_token` and `accounts.owner_email_change`. The tab shows «Contact support» instead of a guide.
+
+`checkGuides.ts` reads the map: `checkHelp(id)` gives the object, `checkGuidePath(id)` the path of a `guide` and
+`undefined` for a `support`. `CheckHelp.svelte` (`frontend/src/lib/features/instance/components/`, rendered by
+`SecurityTab.svelte` on every row, `passed` for the folded ones) draws the choice: `security-guide` for a guide;
+for a support check that has not passed, `check-support`, a link built by `supportChannel(supportUrl, {githubFallback:
+false})` and `reportHref()` (`frontend/src/lib/features/support/supportChannel.ts`) from the instance's
+`LIBREFOLIO_SUPPORT_URL` (`support_url` of `GET /system/instance`): a `mailto:` with subject and body, or the http(s)
+page, opened in a new tab, with `title` and `body` in its address. The report is `buildCheckReport()`
+(`checkSupportReport.ts`) and has no field for anything else than the check's code, its severity, the instance's
+address (`location.origin`), the app version and the date: no user, no email address, no secret, no parameter of the
+check. Without a usable address there is no link and no GitHub issue (it would be public): `check-support-missing`, a
+line that tells the user to contact whoever provides the service. A new check needs its entry, and the anchor of a
+`guide` must be an explicit `{: #… }` of the English page: `./dev.py test services config-audit` fails when a check of the
 server has no entry, or an entry no check, and `./dev.py test front-utility core-unit` (`checkGuides.test.ts`) when an
 anchor is missing, or when a translation gains or loses one: a ratchet, whose baseline in the test goes to zero after
 the release's translation.
@@ -1634,6 +1651,19 @@ All other endpoints — including Auth (profile, password), Settings (user setti
 !!! info "📁 Files are protected too"
 
     Uploaded files (`/uploads/file/{id}`) and plugin assets (`/uploads/plugin/{type}/{path}`) **require authentication**. Since auth uses HTTP-only cookies, the browser includes the session automatically for `<img>` tags — no special handling needed. A personal file needs more than a session: see [Uploaded Files: Common and Personal](#upload-scope).
+
+<a id="file-serving"></a>
+
+!!! info "📄 How a file is served: inline or attachment"
+
+    `GET /uploads/file/{id}` (`serve_file()`, `backend/app/api/v1/uploads.py`) sends `Content-Disposition: inline` only when the
+    file's stored type is in `INLINE_SAFE_MEDIA_TYPES` (`backend/app/services/files/inline_media.py`: `application/pdf`,
+    `application/json`, `text/plain`, `text/csv`, and the images `png`, `jpeg`, `gif`, `webp` and `bmp`), so that the PDF
+    fallback of the file preview, an `<iframe>`, shows the file instead of downloading it (H6-2). Any other type (HTML, SVG,
+    XML…) and every request with `?download=true` are an `attachment`: a type that can carry active content is never
+    shown on the app's own address. Every response carries `X-Content-Type-Options: nosniff`. The broker report route
+    (`GET /brokers/import/files/{id}/download`, `backend/app/api/v1/brokers.py`) imports the same list, so the two routes
+    cannot disagree about what is safe to show.
 
 For a complete endpoint reference, see the [API Overview](../api/overview.md).
 
@@ -2168,13 +2198,26 @@ and deleting a panel job still answer. In this state:
 
 **The web app.** `AwaitingRestoreGate.svelte` reads `instanceConfig.config.restore_interrupted`; while it is `true` it
 shows `InstanceRestoreInterruptedPage.svelte` instead of every route, and wins over the awaiting-restore page
-(`frontend/src/lib/features/instance/components/`). The page, on the login's `AnimatedBackground`, asks for the
-administrator, links `admin/cli_backup/#backup-pending-unreadable` in the interface language, asks `/system/instance`
-every 30 seconds and reloads once `restore_interrupted` reads `false`. When `instanceConfig.config.support_url`
-(`LIBREFOLIO_SUPPORT_URL`) gives a usable address, it adds a «Contact support» link
-(`data-testid="instance-restore-interrupted-support"`): `supportChannel(supportUrl, {githubFallback: false})`
-(`frontend/src/lib/components/assets/assetSearchReport.ts`) checks it again and keeps a `mailto:` address or an
-`http(s)` page, opened in a new tab; anything else shows no link, never the project's GitHub (D7). The API client's response interceptor
+(`frontend/src/lib/features/instance/components/`). The page, on the login's `AnimatedBackground`, asks `/system/instance`
+every 30 seconds and reloads once `restore_interrupted` reads `false`. The recovery is a command on the server
+(`./dev.py backup pending [--recover previous|owner]`), so the help depends on the prop `selfHosted` (default
+`selfHostedConfirmed()`, `frontend/src/lib/features/instance/profile.ts`; FB-27):
+
+- **Self-hosted**: the administrator is whoever runs the server, so the page links the recovery guide,
+  `data-testid="instance-restore-interrupted-docs"` («How to recover»: `admin/cli_backup/#backup-pending-unreadable`,
+  or `admin/hosting_panel_backups/#restore-owner-pending` when `reason` is `owner_assignment`), and still links the
+  support address when the instance has one. It never shows the «contact whoever provides the service» line.
+- **Managed**: the customer cannot run the command, so there is no guide link. When `instanceConfig.config.support_url`
+  (`LIBREFOLIO_SUPPORT_URL`, or the prop `supportUrl`) gives a usable address, the page shows a «Contact support» link
+  (`data-testid="instance-restore-interrupted-support"`): `supportChannel(supportUrl, {githubFallback: false})`
+  (`frontend/src/lib/features/support/supportChannel.ts`) checks it again and keeps a `mailto:` address or an
+  `http(s)` page, opened in a new tab, and `reportHref()` adds the report of `buildCheckReport()` with the code
+  `platform.restore_interrupted` (the same report as a [security check](#security-checks-endpoint)'s support button).
+  Anything else shows no link but a line, `instance-restore-interrupted-support-missing`
+  (`instance.restoreInterrupted.supportMissing`), telling the user to contact whoever provides the service; never the
+  project's GitHub (D7).
+
+The API client's response interceptor
 (`frontend/src/lib/api/zodios-client.ts`) reads the configuration again on a `423 instance_restore_interrupted`
 (`isInstanceRestoreInterruptedError()`, `frontend/src/lib/features/instance/instanceBlockState.ts`), so the gate shows
 the page even when the configuration was read before.
@@ -2193,8 +2236,8 @@ With several workers only the one holding the owner lock (`.restore/owner.lock`)
 find `pending` and would stay closed for good: the router dependency awaits `refresh_restore_state()` first, which, for
 `pending` only and at most every `OWNER_RECHECK_SECONDS` (2 s), asks again in a thread. A code is never asked again for
 the process: the way out is `./dev.py backup pending --recover owner` (B) and a restart. The page
-(`InstanceRestoreInterruptedPage.svelte`, prop `reason`) says «the owner's account is not ready», cites that command and
-links the section `admin/hosting_panel_backups/#restore-owner-pending`.
+(`InstanceRestoreInterruptedPage.svelte`, prop `reason`) says «the owner's account is not ready», cites that command and,
+on a self-hosted instance, links the section `admin/hosting_panel_backups/#restore-owner-pending`.
 
 Tests: `./dev.py test services restore-owner-guard` and `./dev.py test api restore-owner-guard`
 (`test_restore_owner_guard.py`, `test_restore_owner_guard_api.py`: the probe, the lazy recheck with a patched clock, two
@@ -3414,9 +3457,9 @@ document too, in every profile, and two switches add more, off on a self-hosted 
 | `Referrer-Policy` | `strict-origin-when-cross-origin` | Another site learns at most the origin of a page, never its path or query |
 
 - **A header the route set is kept.** The middleware adds a header only when the response has none of that name, in
-  any case: a route's `Referrer-Policy: no-referrer` stays, and the `nosniff` that the text preview of an upload
-  (`backend/app/api/v1/uploads.py`) and the download of a broker report (`backend/app/api/v1/brokers.py`) set
-  themselves is not repeated. Names are compared whole, never by prefix: `content-security-policy` is a prefix of
+  any case: a route's `Referrer-Policy: no-referrer` stays, and the `nosniff` that the file routes of the uploads
+  (`backend/app/api/v1/uploads.py`: the text preview and `serve_file()`) and the download of a broker report
+  (`backend/app/api/v1/brokers.py`) set themselves is not repeated. Names are compared whole, never by prefix: `content-security-policy` is a prefix of
   `content-security-policy-report-only`, so a prefix check would let a route's report-only policy suppress the enforced
   one, or the reverse. A route that sets its own `X-Frame-Options`, `Content-Security-Policy` or
   `Content-Security-Policy-Report-Only` keeps it alone, and the middleware still adds the others. WebSocket and
@@ -3472,8 +3515,8 @@ legitimate self-hosted use, controlled by frame protection alone. What each dire
 - **The trio on every document** (H-42, H-45, now always): no plugin content (`<object>`, `<embed>`), no injected
   `<base>` sending relative URLs elsewhere, no form sending its data to another site. LibreFolio uses none of them. Not a
   PDF: Chromium shows an inline PDF with a viewer it treats as a plugin, which `object-src 'none'` on the PDF's own
-  answer could stop. A user's SVG or XML never comes inline as a document (an upload is an attachment, its text preview
-  is `text/plain`), so the document types are defence in depth.
+  answer could stop. A user's SVG or XML never comes inline as a document (an upload of a type outside `INLINE_SAFE_MEDIA_TYPES` is an
+  attachment, its text preview is `text/plain`), so the document types are defence in depth.
 - **`script-src`** is the point of the lot: only the app's own scripts, and an inline script only by its hash.
   `'wasm-unsafe-eval'` lets WebAssembly compile, for the PDF viewer (EmbedPDF's PDFium). `'report-sample'` puts the first
   40 characters of a blocked script or `eval` in the page's own `securitypolicyviolation` event; there is no report

@@ -12,7 +12,7 @@
     import {AlertCircle, Copy, Download, Eye, FileImage, FileSpreadsheet, FileText, LoaderCircle, Minus, Plus, RotateCcw, X} from 'lucide-svelte';
     import katex from 'katex';
     import 'katex/dist/katex.min.css';
-    import {isDarkTheme} from '$lib/theme/themeMode';
+    import {isDarkTheme, onThemeClassChange} from '$lib/theme/themeMode';
 
     interface Props {
         open?: boolean;
@@ -98,6 +98,8 @@
     let markdownToken = 0;
     let pdfToken = 0;
     let tableToken = 0;
+    /** Counts the theme switches seen while a table is open: the grid draws on a canvas, so it is built again (R-7). */
+    let themeRevision = $state(0);
     let imageDragPointerId: number | null = null;
     let imageDragStartX = 0;
     let imageDragStartY = 0;
@@ -268,7 +270,17 @@
     });
 
     $effect(() => {
+        if (!browser || !open || previewType !== 'table') return;
+        const observer = onThemeClassChange(() => {
+            themeRevision += 1;
+        });
+        return () => observer.disconnect();
+    });
+
+    $effect(() => {
         const host = tableHost;
+        // A theme switch rebuilds the grid with the new colours (R-7)
+        void themeRevision;
         const rows = open && previewType === 'table' ? tableRows : [];
         const cols = open && previewType === 'table' ? tableCols : 0;
 
@@ -290,8 +302,8 @@
             try {
                 const cheetahGrid = (await import('cheetah-grid')) as CheetahGridModule;
                 if (token !== tableToken) return;
-                // The grid draws on a canvas: its colours are the roles read on the grid's own element, once, when the
-                // grid is built (a theme switch shows at the next preview). Firmer grid lines than the stock theme: with
+                // The grid draws on a canvas: its colours are the roles read on the grid's own element when the
+                // grid is built; a theme switch builds it again (`themeRevision`). Firmer grid lines than the stock theme: with
                 // faint borders there is no way to tell a short value from one the column is cutting off.
                 const dark = isDarkTheme();
                 const roles = chartRoles(dark, host);

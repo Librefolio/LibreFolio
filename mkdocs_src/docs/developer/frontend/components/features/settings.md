@@ -902,6 +902,12 @@ hands its own. The root, `security-tab`, carries `data-status` (the store's `sta
   `settings.securityTab.severity.error`, `.warning`, `.info`: *Error*, *Warning*, *Information*,
   then a colon), the message `$_(messageKey, {values: params})`, and the action as a link
   (`security-finding-action`).
+- **The help of a check** (FB-27): `CheckHelp.svelte` (`features/instance/components/`) on every finding and passed
+  check, from `checkGuides.json`: a `guide` shows the «Guide» `DocsLink` (`security-guide`); a `support` check that has
+  not passed shows «Contact support» (`check-support`, `settings.securityTab.support`), a link to the instance's
+  `LIBREFOLIO_SUPPORT_URL` with the report of `buildCheckReport()` (code, severity, instance address, version, date);
+  without a usable address, a line, `check-support-missing` (`settings.securityTab.supportMissing`), never a GitHub issue.
+  See [The Checks on Demand](../../../architecture/security.md#security-checks-endpoint).
 - **No finding**: `security-all-clear`, `settings.securityTab.allClear`
   (*Nothing needs your attention.*). An info is a finding, so it is not all clear.
 - **The passed checks**: a closed `<details>`, `security-passed`, whose summary counts them

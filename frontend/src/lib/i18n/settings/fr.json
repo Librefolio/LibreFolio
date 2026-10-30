@@ -418,7 +418,9 @@
         "info": "Information"
       },
       "blockedScript": "Cet onglet du navigateur a bloqué un script que LibreFolio n'a pas envoyé ({sources}) : un proxy, un CDN ou une extension du navigateur l'ajoute. Désactivez cette injection pour ce site.",
-      "guide": "Guide"
+      "guide": "Guide",
+      "support": "Contacter l'assistance",
+      "supportMissing": "Pour résoudre ce point, contactez le fournisseur du service."
     },
     "protectedEmail": {
       "title": "Vous ne pouvez pas changer l'e-mail ici",
