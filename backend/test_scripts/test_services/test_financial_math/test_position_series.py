@@ -391,6 +391,43 @@ class TestAnInternalTransfer:
         assert {p.base for p in expand(receiver.points)} == {D("1000")}
         assert points[day(6)].pnl_percent == D("200") / D("1000")
 
+    def test_the_asset_summed_over_its_brokers_keeps_the_base_of_units_that_were_in_transit_at_the_start(self):
+        """J5-4. The same transfer as above, but asked for the asset as a whole: the units are nobody's on 3 Jan (the sender's last frame
+        is 2 Jan) and nobody buys them, so the receiver's cost moved is the only base that holds them. The sum used to take every receiver's
+        «brought in» out as «not new capital», which is right only where the sender's start value holds the units: here it left a base of
+        0, and the pnl (150 on arrival, 200 from 6 Jan) had no percent."""
+        frames = (frame(1, 10, 1, 2, "10", "1100", "1000"), frame(2, 10, 5, 5, "10", "1150", "1000"), frame(2, 10, 6, 8, "10", "1200", "1000"))
+        in_transit = (InternalAssetTransfer(departure=day(2), arrival=day(5), asset_id=10, sender_broker_id=1, receiver_broker_id=2, value_at_arrival=D("1150"), cost_moved=D("1000")),)
+
+        [asset] = build([(None, 10)], date_from=3, date_to=8, frames=frames, transfers=in_transit)
+
+        points = points_of(asset)
+        assert {p.base for p in expand(asset.points)} == {D("1000")}
+        assert (points[day(5)].pnl, points[day(6)].pnl) == (D("150"), D("200"))
+        assert (points[day(5)].pnl_percent, points[day(6)].pnl_percent) == (D("150") / D("1000"), D("200") / D("1000"))
+
+    def test_a_transfer_that_leaves_on_the_first_day_of_the_window_is_in_transit_at_the_start_too(self):
+        """J5-4, the edge: `counted_tract` counts a transfer only if it leaves AFTER `date_from`, so one leaving ON it is in transit at the
+        start. The sender's last frame is the day before it leaves, so it does not hold the units on `date_from`: the base is the receiver's."""
+        frames = (frame(1, 10, 1, 2, "10", "1100", "1000"), frame(2, 10, 5, 5, "10", "1150", "1000"), frame(2, 10, 6, 8, "10", "1200", "1000"))
+        on_the_first_day = (InternalAssetTransfer(departure=day(3), arrival=day(5), asset_id=10, sender_broker_id=1, receiver_broker_id=2, value_at_arrival=D("1150"), cost_moved=D("1000")),)
+
+        [asset] = build([(None, 10)], date_from=3, date_to=8, frames=frames, transfers=on_the_first_day)
+
+        assert {p.base for p in expand(asset.points)} == {D("1000")}
+        assert points_of(asset)[day(6)].pnl_percent == D("200") / D("1000")
+
+    def test_a_transfer_with_no_value_on_arrival_that_leaves_after_the_start_is_still_not_new_capital_in_the_sum(self):
+        """J5-4, the guard against the wide cure. The value on arrival is unknown, so the transfer is not «counted», but it leaves AFTER the
+        start: the sender held the units on `date_from`, its start value is already their base, and the receiver's cost moved must not be
+        added to it a second time."""
+        frames = (frame(1, 10, 1, 3, "10", "1000", "900"), frame(2, 10, 5, 8, "10", "1100", "900"))
+        unknown = (InternalAssetTransfer(departure=day(4), arrival=day(5), asset_id=10, sender_broker_id=1, receiver_broker_id=2, value_at_arrival=None, cost_moved=D("900")),)
+
+        [asset] = build([(None, 10)], date_from=1, date_to=8, frames=frames, transfers=unknown)
+
+        assert {p.base for p in expand(asset.points)} == {D("1000")}
+
 
 # =============================================================================
 # What is asked for, and what is not
@@ -745,7 +782,9 @@ def _summed_oracle(singles, transfers, date_from: int | None, first: date, last:
             for t in transfers:
                 if (t.receiver_broker_id, t.asset_id) != single.key or start is None or t.arrival <= start or t.arrival > reach:
                     continue
-                counted = t.departure > start and t.value_at_arrival is not None and t.cost_moved is not None
+                if t.departure <= start:
+                    continue  # J5-4: in transit at the start, nobody's start value holds it: the receiver's base is the only one
+                counted = t.value_at_arrival is not None and t.cost_moved is not None
                 amount = t.value_at_arrival if counted else t.cost_moved
                 if amount is not None:
                     brought += amount

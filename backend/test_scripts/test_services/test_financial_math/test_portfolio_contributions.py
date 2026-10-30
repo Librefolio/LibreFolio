@@ -140,6 +140,20 @@ TRUTH_TABLE = list(itertools.product((True, False), repeat=4))
 TRUTH_IDS = ["-".join(name if flag else f"not-{name}" for name, flag in zip(("after-start", "by-end", "value", "cost"), row, strict=True)) for row in TRUTH_TABLE]
 
 
+class TestLeftAfterStart:
+    """The first condition of the tract, on its own (J5-4): the one place that says whether the sender held the units on the start day."""
+
+    def test_a_transfer_leaving_after_the_start_left_after_it(self):
+        assert contributions.left_after_start(_transfer(departure=AFTER_FROM), FROM) is True
+
+    def test_leaving_on_the_start_day_or_before_is_in_transit_at_the_start(self):
+        assert contributions.left_after_start(_transfer(departure=FROM), FROM) is False
+        assert contributions.left_after_start(_transfer(departure=date(2025, 1, 2)), FROM) is False
+
+    def test_a_period_with_no_start_has_no_transfer_in_transit_at_it(self):
+        assert contributions.left_after_start(_transfer(departure=date(2025, 1, 2)), None) is True
+
+
 class TestCountedTract:
     @pytest.mark.parametrize("conditions", TRUTH_TABLE, ids=TRUTH_IDS)
     def test_counted_only_when_every_condition_holds(self, conditions):

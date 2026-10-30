@@ -4,11 +4,13 @@
     import RiskMetricCard from '$lib/components/ui/display/RiskMetricCard.svelte';
     import KpiDivergingFlowBar from '$lib/components/ui/display/KpiDivergingFlowBar.svelte';
     import {_ as t} from '$lib/i18n';
+    import {currentLanguage} from '$lib/stores/app/language';
     import {riskOutput} from '$lib/features/risk/riskTypes';
     import type {RiskAnalyticResult} from '$lib/features/risk/riskStore.svelte';
     import {formatPercent} from '$lib/utils/core/formatPercent';
 
     import CorrelationHeatmap from '../CorrelationHeatmap.svelte';
+    import {createMatrixMetadata} from '../matrixMetadata.svelte';
     import {buildLookup, NEAR_IDENTICAL, topPairs} from '../correlationHelpers';
     import {buildConcentration, buildDivergenceRows, uncoveredWeight} from './levelHelpers';
     import {formatShare} from './shareFormat';
@@ -96,6 +98,11 @@
     let scale = $derived(Math.max(0.01, ...rows.map((row) => Math.abs(row.divergence))));
 
     let correlation = $derived(riskOutput(correlationResult, schemas.RiskCorrelationOutput));
+    /**
+     * The inputs of the matrix's orderings by type, sector and area (B7): the assets of the matrix and nothing else, read once through
+     * the module the Asset Global laboratory shares (K11). A failed read leaves the maps empty and the matrix keeps its two orderings.
+     */
+    const matrixMetadata = createMatrixMetadata(() => ({assetIds: correlation?.asset_ids ?? [], language: $currentLanguage}));
     /** The heatmap takes a Map; the panel hands every level a Record. */
     let assetLabels = $derived(new Map(Object.entries(assetNames).map(([assetId, label]) => [Number(assetId), label])));
 
@@ -354,7 +361,7 @@
                         {$t('risk.levels.l2.correlation.noRedundancy')}
                     </p>
                 {/if}
-                <CorrelationHeatmap output={correlation} {assetLabels} />
+                <CorrelationHeatmap output={correlation} {assetLabels} assetTypes={matrixMetadata.types} assetSectors={matrixMetadata.sectors} assetRegions={matrixMetadata.regions} />
             </div>
         {/if}
     {/if}
