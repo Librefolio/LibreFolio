@@ -14,6 +14,7 @@
     "prepare": "svelte-kit sync || echo ''",
     "precheck": "node scripts/i18n-catalog-build.mjs",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "check:e2e": "tsc -p tsconfig.e2e.json",
     "precheck:watch": "node scripts/i18n-catalog-build.mjs",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "format": "prettier --write 'src/**/*.{ts,svelte,js,css,html,json}' 'e2e/**/*.ts'",

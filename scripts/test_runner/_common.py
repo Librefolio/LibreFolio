@@ -153,6 +153,20 @@ def set_fail_fast(enabled: bool) -> None:
     _FAIL_FAST = enabled
 
 
+def line_buffer_output() -> None:
+    """Flush the runner's own stdout/stderr at every newline (H-20).
+
+    Redirected to a file or a pipe (``> run.log``, ``--log-file``, a CI step) Python
+    buffers in blocks, so the runner's lines such as «Shared backend ready» reached the
+    log only at exit. Child processes write straight to the file descriptor and were
+    never affected; only the runner's own prints were late.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(line_buffering=True)
+
+
 @contextmanager
 def tee_output(log_path):
     """

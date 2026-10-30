@@ -10827,3 +10827,50 @@ DOC-2 (ricerca per lingua), DOC-1 (riordino della guida admin, con le guide Tail
     > Intento dei test: lo stato `mismatch` lo decide il file di controllo (il verdetto del file viene prima del DB, che serve solo se il file manca): con la cura il DB privato non cambia nulla; la barriera `reached != []` è verde. `wake.py` non cambia: il singleton è il modo di tutti gli altri passi del backend, e un task staccato non ha una dipendenza da usare.
 16. ✅ **H5-13 · il nome del controllo del mismatch nei docs** (27/10). Solo documentazione.
     > **Note implementazione**: il mismatch di H5-7 è il controllo `platform.instance_key_check` (`instance_key_check.py` `CHECK_ID`); `platform.instance_key` è l'altro (chiave inutilizzabile o permessi, `config_audit.py`). `grep -rn "platform.instance_key" mkdocs_src/docs` ha dato due righe sbagliate: `admin/configuration_secrets.en.md` (riga 160) e `developer/architecture/security.md` (riga 848); le due righe della tabella dei controlli di `security.md` (1328-1329) erano già giuste. Nella pagina admin ho tolto anche «`check` è …» dal log: la riga di log del mismatch non ha un campo `check`, il nome appartiene al controllo della scheda Sicurezza. La pagina non ha traduzioni (solo `.en.md`): niente `translate-stamp`. `mkdocs build` e `check-links` verdi.
+
+
+## Ondata 6 · T (strumenti)
+
+Sessione figlia T, ondata 6, base `5efc0d973`, corsia 6221 (`/tmp/librefolio-r13-o6-t`). Lotti in ordine: C6-7, C6-8, C6-5
+(checkpoint 1), C6-6, W6-10 (2), B6-1, Z-37 (3), C6-2 (4, con il via del coordinatore).
+
+### C6-7 (V-17) ✅ (2026-10-30)
+
+> **Note implementazione**: `front_settings` passava `settings.spec.ts` a Playwright, che lo usa come espressione
+> regolare sul percorso: prendeva anche `settings/plugin-settings.spec.ts` e `fx/fx-chart-settings.spec.ts`. Ora passa
+> `e2e/settings.spec.ts`, che nel percorso compare una volta sola. Rosso prima, verde dopo:
+> `TestSettingsActionSelectsOneSpec` in `backend/test_scripts/test_utilities/test_test_runner_cli.py`.
+>
+> **⚠️ Fuori pista**: il secondo punto di V-17 (il setup di Playwright che ripopola il DB perché `LF_SETUP_DONE` non è
+> impostato) riguarda tutte le 42 azioni di `_frontend_utility.py`, non la sola riga 700: nessuna chiama
+> `_ensure_db_populated`, quindi `_ensure_test_users` non imposta mai la variabile. Non è nel perimetro del lotto, va
+> deciso dal coordinatore. Stesso difetto del pattern in `auth.spec.ts` (prende anche `layout/app-start-auth.spec.ts`).
+
+### C6-8 (H-20 + J-15) ✅ (2026-10-30)
+
+> **Note implementazione**: `_common.line_buffer_output()` mette lo stdout/stderr del runner a righe, chiamata
+> all'inizio di `_dispatch_test_command` e di `main`; `cmd_mkdocs_gallery` stampa con `flush=True`. Test:
+> `TestRunnerOutputIsLineBuffered`.
+
+### C6-5 (I-07) ⏳ (2026-10-30)
+
+> **Note implementazione**: in attesa di `npm ci` (il lock pesante è occupato da altre sessioni): senza `tsc` non si
+> rimisurano i TS2769.
+
+### C6-6 (C-51) 🟡 anticipato (2026-10-30)
+
+> **Note implementazione**: fatto prima del checkpoint 1 (file disgiunti, nessuna dipendenza). Le cinque righe della
+> vecchia forma piatta (RE Loan Milano, RE Loan Roma, Bitcoin, Ethereum, NVIDIA) ora scrivono `geographic_area.distribution`
+> e `sector_area.distribution`; per le due crypto non c'è `geographic_area` (`GLOBAL` non è un paese ISO). Rosso/verde:
+> `test_mock_asset_classification_params_validate_against_the_model` in `test_populate_reset.py`, 5 rossi → 5 verdi.
+>
+> **⚠️ Fuori pista**: altre 6 righe di `populate_mock_data.py` non validano: 878 e 899 (forma piatta), 912 e 981 (pesi che
+> sommano 0,86), 947 (`GLOBAL`), 964 (`ASIA`, `EUROPE`). Fuori dai 5 del lotto, non toccate. Il test sulle altre categorie
+> che leggono i mock non è ancora stato rilanciato.
+
+### C6-5 (I-07) ✅ (2026-10-30)
+
+> **Note implementazione**: `tsc -p tsconfig.e2e.json` rimisurato: nessun TS2769, 2 errori veri (TS1360 in
+> `e2e/fixtures/galleryBackup.ts`, TS2345 in `e2e/transactions/tx-bulk-possible-split.spec.ts`), corretti. Gate:
+> script `check:e2e` in `frontend/package.json`; `dev.py front check` lo esegue dopo svelte-check. Rosso/verde:
+> `TestFrontCheckCoversTheE2ESpecs`. `tsc` finale rc 0, 0 errori (log `ondata6/T-tsc-e2e2.log`).

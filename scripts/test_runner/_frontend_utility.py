@@ -697,7 +697,7 @@ def front_settings(verbose: bool = False, ui: bool = False, headed: bool = False
         return False
     if not _ensure_test_users():
         return False
-    return _run_playwright("settings.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+    return _run_playwright("e2e/settings.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_files(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:

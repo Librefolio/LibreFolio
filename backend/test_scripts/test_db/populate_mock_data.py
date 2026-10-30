@@ -811,8 +811,8 @@ def populate_assets(session: Session):
             "classification_params": json.dumps(
                 {
                     "short_description": "Real estate development loan in Milan (closed position)",
-                    "geographic_area": {"ITA": 1.0},
-                    "sector": "Real Estate",
+                    "geographic_area": {"distribution": {"ITA": 1.0}},
+                    "sector_area": {"distribution": {"Real Estate": 1.0}},
                 }
             ),
         },
@@ -823,8 +823,8 @@ def populate_assets(session: Session):
             "classification_params": json.dumps(
                 {
                     "short_description": "Residential project in Rome",
-                    "geographic_area": {"ITA": 1.0},
-                    "sector": "Real Estate",
+                    "geographic_area": {"distribution": {"ITA": 1.0}},
+                    "sector_area": {"distribution": {"Real Estate": 1.0}},
                 }
             ),
         },
@@ -837,8 +837,7 @@ def populate_assets(session: Session):
             "classification_params": json.dumps(
                 {
                     "short_description": "Digital gold, store of value",
-                    "geographic_area": {"GLOBAL": 1.0},
-                    "sector": "Cryptocurrency",
+                    "sector_area": {"distribution": {"Other": 1.0}},
                 }
             ),
         },
@@ -850,8 +849,7 @@ def populate_assets(session: Session):
             "classification_params": json.dumps(
                 {
                     "short_description": "Smart contract platform",
-                    "geographic_area": {"GLOBAL": 1.0},
-                    "sector": "Cryptocurrency",
+                    "sector_area": {"distribution": {"Other": 1.0}},
                 }
             ),
         },
@@ -864,8 +862,8 @@ def populate_assets(session: Session):
             "classification_params": json.dumps(
                 {
                     "short_description": "GPU and AI computing leader",
-                    "geographic_area": {"USA": 1.0},
-                    "sector": "Technology",
+                    "geographic_area": {"distribution": {"USA": 1.0}},
+                    "sector_area": {"distribution": {"Technology": 1.0}},
                 }
             ),
         },
