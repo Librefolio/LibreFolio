@@ -175,7 +175,7 @@ $$
 
 A position's start and end values are the portfolio's own valuation of it at the end of $t_0$ and of $t_1$, the two states of $\Delta\mathrm{UGL}$ ([Portfolio Engine — §3](index.md#3-position-state)):
 
-- its mark ([§2](index.md#2-valuation-price)): a market quote, or else a BUY/SELL price, a trade price being restated through any later split;
+- its mark ([§2](index.md#2-valuation-price)): a market quote, or else a BUY/SELL price — or, for an asset with nothing else yet, the cost of an incoming transfer as an estimate —, a trade price being restated through any later split;
 - its cost basis, for a holding whose asset has no mark at all (`ESTIMATED_AT_COST`);
 - converted at the exchange rate of the boundary day itself.
 

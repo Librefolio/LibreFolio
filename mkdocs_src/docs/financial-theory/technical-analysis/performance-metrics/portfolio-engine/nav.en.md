@@ -30,7 +30,7 @@ $$
 
 with $N_{b,c}(t)$ the balance broker $b$ holds in currency $c$ on $t$, scaled by the broker's [ownership share](../../../../user/brokers/sharing.md), and $\mathrm{fx}(c, C^*, t)$ the latest rate on or before $t$ ($1$ for $c = C^*$). Cash held in another currency therefore moves NAV when its exchange rate moves.
 
-A position whose asset has no mark yet — no quote, no BUY or SELL on or before $t$ — enters $\mathrm{MV}(t)$ at its cost basis $\mathrm{CB}(a,b,t)$ instead when that cost is complete, and is left out of NAV otherwise.
+A position whose asset has no mark yet — no quote, no BUY or SELL and no [transfer cost estimate](price-resolution.md#transfer-cost-estimate) on or before $t$ — enters $\mathrm{MV}(t)$ at its cost basis $\mathrm{CB}(a,b,t)$ instead when that cost is complete, and is left out of NAV otherwise.
 
 🔗 See **[Portfolio Engine — §3 Position State](index.md#3-position-state)** and **[§5 Aggregation](index.md#5-portfolio-aggregation)** for full derivation.
 
@@ -41,11 +41,11 @@ A position whose asset has no mark yet — no quote, no BUY or SELL on or before
 The mark $\operatorname{mark}(a,t)$ comes from the unified resolver:
 
 1. **MARKET** — same-day asset-system quote.
-2. **TRADE_AVG** — average same-day BUY/SELL observation.
+2. **TRADE_AVG** — average same-day BUY/SELL observation, or the cost of an incoming transfer for an asset with nothing else yet ([estimate](price-resolution.md#transfer-cost-estimate)).
 3. **CARRIED** — last observation before $t$, carried forward (LOCF).
 4. **MISSING** — no observation on or before $t$.
 
-An ADJUSTMENT is never an observation, with or without a cost basis: it records a cost, not a price.
+An ADJUSTMENT is never an observation, with or without a cost basis: it records a cost, not a price. An incoming transfer's cost counts only as an estimate, only while the asset has no quote and no other operation on or before that day.
 
 Marks remain in native currency until valuation, and so do cash balances, each in the currency it was recorded in; FX conversion happens at $t$. WAC is **never** a price: only a position with no mark at all is counted at its cost basis, a declared estimate (`ESTIMATED_AT_COST`) that keeps the exchange rates of its acquisition dates. See [Price Resolution](price-resolution.md).
 
@@ -83,4 +83,4 @@ $$
 
 `estimated=True` only applies to TRADE-origin marks. A stale carried MARKET quote is stale but not estimated.
 
-For an asset with a price provider, the Dashboard warns as of the valuation date: a trade-origin valuation, once the asset has had no market quote for more than the 14-day grace period, raises the “valued at their last transaction price” warning, and a valuation at cost, more than 14 days after the asset's first acquisition, raises the “valued at cost” warning. An asset without a provider raises neither: its trades, or its cost, are its intended value.
+For an asset with a price provider, the Dashboard warns as of the valuation date: a trade-origin valuation, once the asset has had no market quote for more than the 14-day grace period — counted from the transfer's arrival for an asset never quoted, bought or sold, valued at a transfer's cost —, raises the “valued at their last transaction price” warning, and a valuation at cost, more than 14 days after the asset's first acquisition, raises the “valued at cost” warning. An asset without a provider raises neither: its trades, or its cost, are its intended value.

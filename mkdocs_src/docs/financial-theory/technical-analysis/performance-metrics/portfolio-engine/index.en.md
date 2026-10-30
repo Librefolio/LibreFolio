@@ -27,14 +27,15 @@ $$
 \operatorname{mark}(a,t)=
 \begin{cases}
 \text{MARKET}(a,t) & \text{same-day asset-system quote}\\
-\operatorname{avg}(\text{TRADE}(a,t)) & \text{same-day BUY/SELL observations}\\
+\operatorname{avg}(\text{TRADE}(a,t)) & \text{same-day BUY/SELL observations, or transfer cost estimates}\\
 \text{last observation before }t & \text{carried forward (LOCF)}\\
 \varnothing & \text{no observation on or before }t
 \end{cases}
 $$
 
 - The unified resolver is the single valuation brain: `MARKET → TRADE_AVG → CARRIED → MISSING`.
-- Only market quotes and BUY/SELL trades are observations. An ADJUSTMENT never is, incoming or outgoing, with or without a cost basis: its cost basis is a cost, not what the asset was worth that day.
+- Market quotes and BUY/SELL trades are observations. An ADJUSTMENT never is, incoming or outgoing, with or without a cost basis: its cost basis is a cost, not what the asset was worth that day.
+- The cost of an incoming TRANSFER (its per-unit cost basis, in the cost basis's currency) is a TRADE observation, estimated, only while the asset has, on or before that day, no market quote and no other operation — no BUY or SELL, no ADJUSTMENT, no outgoing transfer; other incoming transfers do not stop it. It is carried forward until a real quote or trade replaces it, and never overrides one: a quoted security moved between brokers keeps its carried quote ([Transfer cost as an estimate](price-resolution.md#transfer-cost-estimate)).
 - `CARRIED` is last-observation-carried-forward. It carries `days_back` staleness metadata.
 - `estimated=True` means TRADE-origin. A stale carried MARKET quote is stale, not estimated.
 - Marks stay in native currency; each consumer converts to $C^*$ at valuation date $t$.
@@ -68,7 +69,7 @@ $$
 
 Where $w(a,b,t)$ is the [Weighted Average Cost](../weighted-average-cost.md) for position $(a,b)$ at date $t$, kept in $C^*$ at historical rates (§4): the cost basis takes no exchange rate at $t$, so for a foreign asset the exchange-rate effect is part of $\mathrm{UGL}$.
 
-The second case covers an asset with no observation yet — no quote, no BUY or SELL on or before $t$, as for a holding received through adjustments or transfers. The position is valued at its cost basis, valuation source `ESTIMATED_AT_COST`: a declared estimate, not a price. It reports no unit price, it does not move with exchange rates, and its $\mathrm{UGL}$ is zero, with neither a price effect nor an exchange-rate effect. The choice is made day by day, with no look-ahead: from the first observation on, the mark wins, even an old one carried forward. A position whose cost is incomplete (§4) has no market value on such a day (`MISSING`) and is left out of $\mathrm{MV}(t)$. The valuation sources therefore rank `MARKET_PRICE` > `LAST_TRADE_PRICE` > `ESTIMATED_AT_COST` > `MISSING` ([Price Resolution](price-resolution.md)).
+The second case covers an asset with no observation yet — no quote, no BUY or SELL and no transfer cost estimate on or before $t$, as for a holding received through adjustments, or through transfers without a cost basis. The position is valued at its cost basis, valuation source `ESTIMATED_AT_COST`: a declared estimate, not a price. It reports no unit price, it does not move with exchange rates, and its $\mathrm{UGL}$ is zero, with neither a price effect nor an exchange-rate effect. The choice is made day by day, with no look-ahead: from the first observation on, the mark wins, even an old one carried forward. A position whose cost is incomplete (§4) has no market value on such a day (`MISSING`) and is left out of $\mathrm{MV}(t)$. The valuation sources therefore rank `MARKET_PRICE` > `LAST_TRADE_PRICE` > `ESTIMATED_AT_COST` > `MISSING` ([Price Resolution](price-resolution.md)).
 
 A quantity of $\varepsilon$ units or fewer — the dust a sale of almost every unit can leave behind — is not held: it has no position state, so no market value, no cost basis, no allocation slice and no snapshot, and dust without a mark does not make the day incomplete. The same threshold decides which positions the Performance rows hold (§7), so the portfolio and its rows count the same positions; where the cost of the dust goes is in §7.
 

@@ -73,7 +73,7 @@ backend/app/services/financial_math/
 ├── trade_amount.py          a trade's unit price on the quote's axis, unrounded (`unit_price_on_quote_axis`), which the trade marks of price_marks.py read; amount ↔ unit price on quote_base_quantity, half-even to a given scale (the transaction form computes its own in the browser since W5-9)
 ├── fx_rates.py              the orientation of a stored FX rate: a pair read from source to destination, either way (oriented_rate, any number type); the unit rates a calculation reads by day, as steps answered on the asked days only (AskedDayRates)
 ├── interest.py              day count conventions (ACT/365, ACT/360, ACT/ACT, 30/360), simple interest and daily compounding over a span in closed form, at a cost independent of the span (compound_growth, memoized): the primitives the Scheduled Investment provider builds its accrual on
-├── price_marks.py           daily mark of an asset: MARKET, TRADE_AVG, CARRIED or MISSING; the days with an observation (observation_dates)
+├── price_marks.py           daily mark of an asset: MARKET, TRADE_AVG, CARRIED or MISSING; the days with an observation (observation_dates); an incoming TRANSFER's cost as an estimated trade observation while the asset has nothing else (W-B94)
 ├── series_steps.py          series as steps (D-P4): the point holding a day (value_at), the points of a window clipped (points_between), the steps of a list of change rows (steps_from_rows, Decimals compared with their exponent)
 ├── yield_on_cost.py         Yield on Cost of holdings, replayed from the transaction ledger
 ├── weights.py               a share of a total (none on a total ≤ 0), allocation slices (none on a sum ≤ 0), gross weights, concentration (largest weight, HHI)
