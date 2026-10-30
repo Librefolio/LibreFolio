@@ -27,12 +27,16 @@
  * Registered in `scripts/test_runner/_frontend_utility.py` (Vitest list of `front_component_unit`, action `component-unit`).
  */
 import {beforeEach, describe, expect, it, vi} from 'vitest';
-import {fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
+import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
+import {get} from 'svelte/store';
+import {_ as translate} from '$lib/i18n';
+import {mergeAssets} from '$lib/stores/reference/assetStore';
 
 const mocks = vi.hoisted(() => ({
     api: {
         event_reconciliation_api_v1_transactions_event_reconciliation_get: vi.fn(),
         commit_transactions_api_v1_transactions_commit_post: vi.fn(),
+        upsert_events_bulk_api_v1_assets_events_post: vi.fn(),
     },
 }));
 vi.mock('$lib/api', () => ({zodiosApi: mocks.api}));
@@ -44,6 +48,7 @@ import EventReconciliationModal from './EventReconciliationModal.svelte';
 
 const listCall = mocks.api.event_reconciliation_api_v1_transactions_event_reconciliation_get;
 const commitCall = mocks.api.commit_transactions_api_v1_transactions_commit_post;
+const createEventsCall = mocks.api.upsert_events_bulk_api_v1_assets_events_post;
 
 type ServerItem = ReturnType<typeof item>;
 
@@ -54,7 +59,7 @@ function candidate(id: number) {
 /** One item as the server lists it: the candidates follow the status unless a case gives them. */
 function item(transactionId: number, status: 'unique' | 'none' | 'several', candidateIds?: number[]) {
     const ids = candidateIds ?? (status === 'unique' ? [transactionId + 1000] : status === 'several' ? [transactionId + 1000, transactionId + 2000] : []);
-    return {transaction_id: transactionId, broker_id: 3, asset_id: 7, date: '2025-03-04', type: 'DIVIDEND', status, candidates: ids.map(candidate)};
+    return {transaction_id: transactionId, broker_id: 3, asset_id: 7, date: '2025-03-04', type: 'DIVIDEND', status, candidates: ids.map(candidate), amount: '5.00', currency: 'USD' as string | null, quantity: '0'};
 }
 
 /** The rows the fake server still lists. */
@@ -100,6 +105,7 @@ beforeEach(async () => {
     await setupI18n();
     listCall.mockReset();
     commitCall.mockReset();
+    createEventsCall.mockReset();
     serve([]);
 });
 
@@ -349,5 +355,187 @@ describe('EventReconciliationModal — closing', () => {
         await waitFor(() => expect(screen.queryByTestId('event-reconciliation-modal')).toBeNull());
         expect(commitCall).not.toHaveBeenCalled();
         expect(onlinked).not.toHaveBeenCalled();
+    });
+});
+
+// ---------------------------------------------------------------------------
+// FB-19: the event named with its emoji, the creation of the missing event
+// ---------------------------------------------------------------------------
+
+describe('EventReconciliationModal — the event and the creation of the missing one (FB-19)', () => {
+    beforeEach(() => {
+        mergeAssets([{id: 7, display_name: 'Acme Corp', currency: 'USD', active: true}]);
+        createEventsCall.mockReset();
+        createEventsCall.mockImplementation(async () => {
+            // The server now holds the event: the row that missed it has its one candidate.
+            pending = pending.map((entry) => (entry.status === 'none' ? {...entry, status: 'unique' as const, candidates: [candidate(entry.transaction_id + 1000)]} : entry));
+            return {results: []};
+        });
+    });
+
+    it('names the event with its emoji and its name in the interface language, never the code alone', async () => {
+        serve([item(11, 'unique'), {...item(12, 'none'), type: 'INTEREST'}]);
+        mount();
+        await listed();
+
+        const dividend = row(11)!.closest('tr')!.querySelector('[data-event-type]') as HTMLElement;
+        const interest = row(12)!.closest('tr')!.querySelector('[data-event-type]') as HTMLElement;
+        expect(dividend.dataset.eventType).toBe('DIVIDEND');
+        expect(dividend.textContent).toContain(get(translate)('assetDetail.eventType.DIVIDEND'));
+        expect(interest.dataset.eventType).toBe('INTEREST');
+        expect(interest.textContent).toContain(get(translate)('assetDetail.eventType.INTEREST'));
+        expect(dividend.textContent!.trim().length, 'an emoji comes before the name').toBeGreaterThan(get(translate)('assetDetail.eventType.DIVIDEND').length);
+    });
+
+    it('a row with no event offers «Create event»; a unique row offers «Link», a several row neither', async () => {
+        serve([item(11, 'unique'), item(12, 'none'), item(13, 'several')]);
+        mount();
+        await listed();
+
+        expect(screen.queryByTestId('event-reconciliation-create-12')).not.toBeNull();
+        expect(screen.queryByTestId('event-reconciliation-link-12')).toBeNull();
+        expect(screen.queryByTestId('event-reconciliation-create-11')).toBeNull();
+        expect(screen.queryByTestId('event-reconciliation-link-11')).not.toBeNull();
+        expect(screen.queryByTestId('event-reconciliation-create-13')).toBeNull();
+        expect(screen.queryByTestId('event-reconciliation-link-13')).toBeNull();
+    });
+
+    it('«Create event» on a row opens the dialog with the value suggested from the cash; Create sends ONE request and the row becomes linkable', async () => {
+        serve([item(12, 'none')]);
+        mount();
+        await listed();
+
+        await fireEvent.click(screen.getByTestId('event-reconciliation-create-12'));
+
+        const amount = (await screen.findByTestId('event-reconciliation-create-amount-12')) as HTMLInputElement;
+        expect(amount.value, 'the transaction’s cash, in the asset’s currency').toBe('5.00');
+        await fireEvent.click(screen.getByTestId('event-reconciliation-create-confirm'));
+
+        await waitFor(() => expect(createEventsCall).toHaveBeenCalledTimes(1));
+        expect(createEventsCall).toHaveBeenCalledWith([{asset_id: 7, mode: 'create', events: [{date: '2025-03-04', type: 'DIVIDEND', value: {code: 'USD', amount: '5.00'}}]}]);
+        await waitFor(() => expect(screen.queryByTestId('event-reconciliation-create-modal')).toBeNull());
+        await waitFor(() => expect(row(12)).toHaveAttribute('data-status', 'unique'));
+        expect(commitCall, 'nothing is linked by the creation').not.toHaveBeenCalled();
+    });
+
+    it('the value can be typed over; one that is no plain amount keeps Create disabled', async () => {
+        serve([item(12, 'none', [])]);
+        mount();
+        await listed();
+        await fireEvent.click(screen.getByTestId('event-reconciliation-create-12'));
+        const amount = (await screen.findByTestId('event-reconciliation-create-amount-12')) as HTMLInputElement;
+        const confirm = screen.getByTestId('event-reconciliation-create-confirm') as HTMLButtonElement;
+
+        await fireEvent.input(amount, {target: {value: '0.1234567'}});
+        expect(confirm.disabled, 'a seventh decimal is refused, never cut').toBe(true);
+        await fireEvent.input(amount, {target: {value: ''}});
+        expect(confirm.disabled).toBe(true);
+        await fireEvent.input(amount, {target: {value: '2,5'}});
+        expect(confirm.disabled).toBe(false);
+        await fireEvent.click(confirm);
+
+        await waitFor(() => expect(createEventsCall).toHaveBeenCalledTimes(1));
+        expect((createEventsCall.mock.calls[0][0] as Array<{events: Array<{value: {amount: string}}>}>)[0].events[0].value.amount).toBe('2.5');
+    });
+
+    it('a value the user typed stays when the assets’ cache refreshes behind the dialog', async () => {
+        serve([item(12, 'none')]);
+        mount();
+        await listed();
+        await fireEvent.click(screen.getByTestId('event-reconciliation-create-12'));
+        const amount = (await screen.findByTestId('event-reconciliation-create-amount-12')) as HTMLInputElement;
+
+        await fireEvent.input(amount, {target: {value: '2.5'}});
+        mergeAssets([{id: 7, display_name: 'Acme Corp', currency: 'USD', active: true}]);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(amount.value, 'a refresh of the cache does not write the suggestion back over the typed value').toBe('2.5');
+    });
+
+    it('a transaction with no cash in the asset’s currency has no suggestion: the user types the value', async () => {
+        serve([{...item(12, 'none'), currency: 'EUR'}]);
+        mount();
+        await listed();
+
+        await fireEvent.click(screen.getByTestId('event-reconciliation-create-12'));
+
+        expect(((await screen.findByTestId('event-reconciliation-create-amount-12')) as HTMLInputElement).value).toBe('');
+        expect((screen.getByTestId('event-reconciliation-create-confirm') as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    it('two rows of the same asset, day and type share ONE event: one line, saying how many transactions it serves', async () => {
+        serve([item(12, 'none'), item(14, 'none')]);
+        mount();
+        await listed();
+
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-12'));
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-14'));
+        await fireEvent.click(await screen.findByTestId('selection-bar-action-create'));
+
+        const line = await screen.findByTestId('event-reconciliation-create-row-12');
+        expect(line.dataset.transactions).toBe('2');
+        expect(screen.queryByTestId('event-reconciliation-create-row-14')).toBeNull();
+        await fireEvent.click(screen.getByTestId('event-reconciliation-create-confirm'));
+        await waitFor(() => expect(createEventsCall).toHaveBeenCalledTimes(1));
+        expect((createEventsCall.mock.calls[0][0] as Array<{events: unknown[]}>)[0].events).toHaveLength(1);
+    });
+
+    it('an adjustment asks its event’s type: a split or a price adjustment, a split first', async () => {
+        serve([{...item(12, 'none'), type: 'ADJUSTMENT', currency: null, amount: '0', quantity: '5'}]);
+        mount();
+        await listed();
+
+        await fireEvent.click(screen.getByTestId('event-reconciliation-create-12'));
+
+        const typeSelect = await screen.findByTestId('event-reconciliation-create-type-12');
+        expect(within(typeSelect).getByTestId('event-reconciliation-create-type-12-button').textContent).toContain(get(translate)('assetDetail.eventType.SPLIT'));
+        await fireEvent.input(screen.getByTestId('event-reconciliation-create-amount-12'), {target: {value: '2'}});
+        await fireEvent.click(screen.getByTestId('event-reconciliation-create-confirm'));
+        await waitFor(() => expect(createEventsCall).toHaveBeenCalledTimes(1));
+        expect((createEventsCall.mock.calls[0][0] as Array<{events: Array<{type: string}>}>)[0].events[0].type).toBe('SPLIT');
+    });
+
+    it('a refused creation keeps the dialog open with the reason and creates nothing', async () => {
+        serve([item(12, 'none')]);
+        createEventsCall.mockReset();
+        createEventsCall.mockRejectedValue({response: {status: 400, data: {detail: {error_code: 'EVENT_TOO_MANY_DIGITS', message: 'too many', params: {events: [{date: '2025-03-04', type: 'DIVIDEND'}], max_decimal_places: 6, max_significant_digits: 15, max_integer_digits: 12}}}}});
+        mount();
+        await listed();
+        await fireEvent.click(screen.getByTestId('event-reconciliation-create-12'));
+
+        await fireEvent.click(await screen.findByTestId('event-reconciliation-create-confirm'));
+
+        await waitFor(() => expect(screen.getByTestId('event-reconciliation-create-error')).toBeInTheDocument());
+        expect(screen.getByTestId('event-reconciliation-create-modal')).toBeInTheDocument();
+        expect(row(12), 'the list is not read again: nothing was created').toHaveAttribute('data-status', 'none');
+    });
+
+    it('«Create events» on a selection with no row that misses its event says so and opens nothing', async () => {
+        serve([item(11, 'unique')]);
+        mount();
+        await listed();
+
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-11'));
+        await fireEvent.click(await screen.findByTestId('selection-bar-action-create'));
+
+        expect(screen.getByTestId('event-reconciliation-notice')).toBeInTheDocument();
+        expect(screen.queryByTestId('event-reconciliation-create-modal')).toBeNull();
+    });
+
+    it('«Link selected» links the unique rows of the selection in ONE commit and leaves the others', async () => {
+        serve([item(11, 'unique', [501]), item(12, 'none'), item(15, 'unique', [505])]);
+        const {onlinked} = mount();
+        await listed();
+
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-11'));
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-12'));
+        await fireEvent.click(await screen.findByTestId('selection-bar-action-link'));
+
+        await waitFor(() => expect(commitCall).toHaveBeenCalledTimes(1));
+        expect(commitCall).toHaveBeenCalledWith({updates: [{id: 11, asset_event_id: 501}]});
+        await waitFor(() => expect(row(11)).toBeNull());
+        expect(row(12)).not.toBeNull();
+        expect(row(15), 'a unique row that was not selected stays').not.toBeNull();
+        expect(onlinked).toHaveBeenCalledTimes(1);
     });
 });

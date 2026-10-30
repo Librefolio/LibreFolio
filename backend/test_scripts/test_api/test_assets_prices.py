@@ -1134,6 +1134,44 @@ async def test_query_more_than_1000_items_is_refused(test_server):
 
 
 # ============================================================
+# FB-7b: a start of "min" asks the history from the asset's first stored price
+# ============================================================
+
+
+@pytest.mark.asyncio
+async def test_query_start_min_reads_from_the_first_stored_price_before_2000(test_server):
+    """The Assets pages asked «All» from a placeholder, 2000-01-01, which hid every history that began earlier. ``date_range.start``
+    may now be ``"min"`` (``end`` required): the series starts on the asset's first stored price.
+
+    Two manual closes, 1985-03-01 and 1985-03-04, on a new asset; asked from ``"min"`` to 1985-03-10: the series starts on
+    1985-03-01. An asset with no price answers 200 and an empty series; ``"min"`` without ``end`` is a 422.
+    Red before FB-7b: 422, ``"min"`` is not a date.
+    """
+    print_section("FB-7b: price query from min")
+
+    async with httpx.AsyncClient() as client:
+        await create_user_and_login(client)
+        asset_id = (await client.post(f"{API_BASE}/assets", json=[FAAssetCreateItem(display_name=f"Min start {unique_id('MS')}", currency="USD").model_dump(mode="json")], timeout=TIMEOUT)).json()["results"][0]["asset_id"]
+        empty_id = (await client.post(f"{API_BASE}/assets", json=[FAAssetCreateItem(display_name=f"Min empty {unique_id('ME')}", currency="USD").model_dump(mode="json")], timeout=TIMEOUT)).json()["results"][0]["asset_id"]
+        upsert = FAUpsert(asset_id=asset_id, prices=[FAPricePoint(date=date(1985, 3, 1), close=Decimal("10"), currency="USD"), FAPricePoint(date=date(1985, 3, 4), close=Decimal("11"), currency="USD")])
+        assert (await client.post(f"{API_BASE}/assets/prices", json=[upsert.model_dump(mode="json")], timeout=TIMEOUT)).status_code == 200
+
+        resp = await client.post(
+            f"{API_BASE}/assets/prices/query",
+            json=[{"asset_id": asset_id, "date_range": {"start": "min", "end": "1985-03-10"}}, {"asset_id": empty_id, "date_range": {"start": "min", "end": "1985-03-10"}}],
+            timeout=TIMEOUT,
+        )
+
+        assert resp.status_code == 200, f"{resp.status_code}: {resp.text[:300]}"
+        items = {item["asset_id"]: item for item in resp.json()["items"]}
+        assert items[asset_id]["prices"][0]["date"] == "1985-03-01", items[asset_id]["prices"][:1]
+        assert items[empty_id]["prices"] == []
+        no_end = await client.post(f"{API_BASE}/assets/prices/query", json=[{"asset_id": asset_id, "date_range": {"start": "min"}}], timeout=TIMEOUT)
+        assert no_end.status_code == 422, no_end.text[:200]
+        print_success("  ✓ start min: first stored price, empty series without prices, end required")
+
+
+# ============================================================
 # X-R29 (lot X6-1): POST /assets/prices/stored-count -- the stored prices of a range, and the manual ones
 # ============================================================
 
