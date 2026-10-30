@@ -84,6 +84,7 @@ import type {PortfolioHistoryPoint, PortfolioMwrrLinePoint} from '$lib/stores/po
 import {uiLocale} from '$lib/stores/app/uiLocale';
 import {addDays} from '$lib/utils/dateOnly';
 import GrowthChart from './GrowthChart.svelte';
+import {setGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
 
 const eur = (amount: number) => ({code: 'EUR', amount: amount.toFixed(2)});
 
@@ -153,6 +154,7 @@ beforeAll(async () => {
 });
 beforeEach(() => {
     chartInstances.length = 0;
+    setGlobalLineShape('steps');
 });
 afterEach(() => {
     cleanup();
@@ -256,6 +258,14 @@ describe('the tooltip of a step line', () => {
         expect(html).toContain(money(1_060));
     });
 
+    it('reads the drawn point under the pointer, not the pointed day, when the steps are not drawn', async () => {
+        setGlobalLineShape('segments');
+        await mount({history: SPARSE, range: SPARSE_RANGE, mwrrLine: SPARSE_MWRR});
+        pointAt('2026-02-18');
+        const html = tooltipFormatter()([{dataIndex: 3}]);
+        expect(html).toContain(money(1_060));
+    });
+
     it('reads the axis pointer with `snap: false`, so the pointed day is exact', async () => {
         await mount({history: SPARSE, range: SPARSE_RANGE, mwrrLine: SPARSE_MWRR});
         const option = lastOption((candidate) => candidate.tooltip !== undefined) as {tooltip: {axisPointer: {snap: boolean}}; xAxis: {axisPointer: {snap: boolean}}};
@@ -306,5 +316,22 @@ describe('a history of 140 years is grouped by year (Y2 FB-6)', () => {
         // The year of the 71st yearly bucket: 1886 + 70, as its own text and in no date form.
         expect(html).toContain('1956');
         expect(html).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+    });
+});
+
+describe('the line shape the user chose (Y2 FB-3)', () => {
+    const lineSeries = () => renderedSeries().filter((series) => series.type === 'line');
+
+    it('joins the steps by segments when the choice is segments, the default of a new account', async () => {
+        setGlobalLineShape('segments');
+        await mount({history: SPARSE, range: SPARSE_RANGE, mwrrLine: SPARSE_MWRR});
+        expect(lineSeries().length).toBeGreaterThan(0);
+        expect(lineSeries().every((series) => series.step === false && (series as {smooth?: boolean}).smooth === false)).toBe(true);
+    });
+
+    it('draws a spline that cannot overshoot when the choice is spline', async () => {
+        setGlobalLineShape('spline');
+        await mount({history: SPARSE, range: SPARSE_RANGE, mwrrLine: SPARSE_MWRR});
+        expect(lineSeries().every((series) => series.step === false && (series as {smooth?: boolean}).smooth === true && (series as {smoothMonotone?: string}).smoothMonotone === 'x')).toBe(true);
     });
 });

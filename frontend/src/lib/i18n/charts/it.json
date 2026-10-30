@@ -149,7 +149,12 @@
       "signal": "Asse {name}",
       "volume": "Asse dei volumi"
     },
-    "yAxisAuto": "Auto"
+    "yAxisAuto": "Auto",
+    "lineShape": "Forma delle linee",
+    "lineShapeDesc": "Come i grafici uniscono i punti. Vale solo per questo grafico.",
+    "lineShapeSegments": "Segmenti",
+    "lineShapeSteps": "Gradini",
+    "lineShapeSpline": "Curva morbida"
   },
   "measure": {
     "pending": "Inizio: {startDate} ({startValue}) — clicca sul grafico per il punto finale",

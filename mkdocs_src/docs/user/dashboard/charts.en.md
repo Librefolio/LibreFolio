@@ -10,6 +10,10 @@ The growth chart shows how your portfolio evolved over the selected period: the 
 
 On a long period the chart groups the days to stay readable: into weeks, then months, and, for a history of many decades, years. A **Weekly**, **Monthly** or **Yearly** badge at the top left of the chart says which. When nothing is grouped, there is no badge.
 
+### 〰️ How the lines are drawn {: #line-shape }
+
+Every chart joins its points in one of three shapes: **Segments** (the default, a straight line between two points), **Steps** (each value holds until the next one) or **Smooth curve** (a soft line that never goes above or below the two neighbouring points, so it draws no value that never existed). You pick the shape on the first page of the welcome tour and later in **Settings → Preferences**; it applies to every chart in this browser. On the asset and FX detail pages the chart settings also have a **Line shape** row, to give that one chart its own shape. The shape changes only how the points are joined: a day's value in the tooltip is always the one the report holds for that day. Where a chart shows weeks or months, the points are not steps, so **Steps** draws segments there.
+
 The chart remembers your last view, P&L sub-view included, in this browser and for each user, and shares it with the broker pages. It starts on **Abs**. Without rate-of-return data, **%** is greyed out and the chart shows **Abs**, but keeps your choice: **%** comes back as soon as there is data to draw — after you change the period or the broker, or the next time you open the chart — unless you pick another view in the meantime.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-growth" data-carousel-interval="5000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">

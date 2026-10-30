@@ -389,6 +389,19 @@ test.describe('Files Page', () => {
             await expect(page.getByTestId('view-mode-list')).toBeVisible();
         });
 
+        test('the view buttons say what they do in the design system tooltip, not a browser title (FB-8)', async ({page}) => {
+            ownedStaticFiles.push(await uploadStaticFile(page, `view-tooltip-${uniqueSuffix()}.md`, '# View tooltip\n', 'text/markdown'));
+            await openStaticTab(page);
+
+            for (const mode of ['grid', 'list'] as const) {
+                const button = page.getByTestId(`view-mode-${mode}`);
+                await expect(button).toBeVisible({timeout: 8_000});
+                await expect(button).not.toHaveAttribute('title', /.+/);
+                await button.hover();
+                await expect(page.getByTestId(`view-mode-${mode}-tooltip`)).toBeVisible({timeout: 5_000});
+            }
+        });
+
         test('can switch between grid and list view', async ({page}) => {
             // The toggle needs a file to list, and the views are told apart by this one: owned, deleted after the test.
             const fileId = await uploadStaticFile(page, `view-switch-${uniqueSuffix()}.md`, '# View switch\n', 'text/markdown');

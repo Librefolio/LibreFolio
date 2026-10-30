@@ -168,6 +168,8 @@
       "closedOn": "Closed on {date}",
       "incomplete": "Some values are missing (a price or a rate): the line leaves them out.",
       "rowSelect": "Select the row to draw its return"
-    }
+    },
+    "allocationNoShares": "No percentages to show: the slices add up to zero or less (for example, an overdraft that cancels your holdings). The amounts are listed below.",
+    "allocationHistoryNoShares": "No percentages to show: on these days the slices add up to zero or less."
   }
 }

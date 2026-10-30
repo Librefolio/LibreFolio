@@ -168,6 +168,8 @@
       "closedOn": "Clôturée le {date}",
       "incomplete": "Certaines valeurs manquent (un prix ou un taux) : la ligne les laisse de côté.",
       "rowSelect": "Sélectionnez la ligne pour tracer son rendement"
-    }
+    },
+    "allocationNoShares": "Aucun pourcentage à afficher : les parts totalisent zéro ou moins (par exemple un découvert qui annule vos positions). Les montants sont listés ci-dessous.",
+    "allocationHistoryNoShares": "Aucun pourcentage à afficher : ces jours-là, les parts totalisent zéro ou moins."
   }
 }

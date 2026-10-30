@@ -13,6 +13,7 @@
     import {PRICE_SERIES} from '$lib/theme/chartTheme';
     import ResolutionBadge from './ResolutionBadge.svelte';
     import type {ChartResolution} from './timeSeriesAggregation';
+    import type {LineShape} from './lineShape';
 
     interface Props {
         data: LineDataPoint[];
@@ -29,6 +30,8 @@
         showGridLines?: boolean;
         /** Show stale-data gradient (per-point opacity). Default: false for compact */
         showGradient?: boolean;
+        /** The shape of the lines (FB-3); without it the chart follows the global shape */
+        lineShape?: LineShape;
         /** Overlay signals to render as additional line series */
         overlaySignals?: RenderedSignal[];
         /** Scale profile for the active absolute/percentage primary axis. */
@@ -50,6 +53,7 @@
         baselineValue,
         showGridLines,
         showGradient = false,
+        lineShape,
         overlaySignals = [],
         axisScale,
         secondaryAxisScales = {},
@@ -75,6 +79,7 @@
         {data}
         {height}
         {lineColor}
+        {lineShape}
         {overlaySignals}
         {secondaryAxisScales}
         {showGradient}

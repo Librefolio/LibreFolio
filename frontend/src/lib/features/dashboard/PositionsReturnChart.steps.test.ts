@@ -86,6 +86,7 @@ import {escapeHtml} from '$lib/utils/core/escapeHtml';
 import {formatDay} from '$lib/utils/core/formatAxisDate';
 import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 import PositionsReturnChart from './PositionsReturnChart.svelte';
+import {setGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
 import type {PositionLine} from './positionsSeries';
 
 const stepped = (id: string, label: string, points: Array<[string, number | null]>, kind: PositionLine['kind'] = 'position'): PositionLine => ({id, label, points: points.map(([date, value]) => ({date, value})), closedOn: null, complete: true, kind, stepped: true});
@@ -137,6 +138,7 @@ beforeAll(async () => {
 afterAll(() => restoreRects?.());
 beforeEach(() => {
     chartInstances.length = 0;
+    setGlobalLineShape('steps');
 });
 
 async function mountChart(lines: PositionLine[]): Promise<DrawnOption> {
@@ -264,5 +266,31 @@ describe('the tooltip on a narrow chart (Y2 FB-5)', () => {
         expect(value.style.whiteSpace).toBe('nowrap');
         expect(value.style.flexShrink).toBe('0');
         expect(label.textContent).toContain(LONG);
+    });
+});
+
+describe('the line shape the user chose (Y2 FB-3)', () => {
+    const drawn = (option: DrawnOption) => option.series.filter((series) => series.id !== undefined);
+
+    it('joins the points by segments when the choice is segments', async () => {
+        setGlobalLineShape('segments');
+        const option = await mountChart([PORTFOLIO(), A(), B()]);
+        expect(drawn(option).map((series) => series.step)).toEqual([false, false, false]);
+    });
+
+    it('draws smooth lines when the choice is spline', async () => {
+        setGlobalLineShape('spline');
+        const option = await mountChart([PORTFOLIO(), A()]);
+        expect(drawn(option).every((series) => series.step === false && (series as {smooth?: boolean}).smooth === true)).toBe(true);
+    });
+
+    it('lists the points ECharts handed over, even with a pointed day, when the steps are not drawn', async () => {
+        setGlobalLineShape('segments');
+        const option = await mountChart([A()]);
+        pointAt('2026-01-21');
+        const html = option.tooltip.formatter([{seriesId: '12-3', value: ['2026-01-21', 0]}]);
+        expect(html).toContain('Alpha');
+        expect(html).toContain(money(0));
+        expect(html).not.toContain(money(-50));
     });
 });

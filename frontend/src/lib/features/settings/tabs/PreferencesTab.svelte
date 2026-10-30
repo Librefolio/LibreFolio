@@ -13,6 +13,8 @@
     import SettingSelect from '$lib/features/settings/SettingSelect.svelte';
     import SettingCurrency from '$lib/features/settings/SettingCurrency.svelte';
     import SettingTheme from '$lib/features/settings/SettingTheme.svelte';
+    import LineShapePicker from '$lib/components/charts/LineShapePicker.svelte';
+    import {getGlobalLineShape, setGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
     import InfoBanner from '$lib/components/ui/feedback/InfoBanner.svelte';
     import {notify} from '$lib/stores/app/notify.svelte';
     import LoadingSpinner from '$lib/components/ui/feedback/LoadingSpinner.svelte';
@@ -347,6 +349,19 @@
                     onundo={() => undoField('theme')}
                     onreset={() => resetField('theme')}
                 />
+            </div>
+        {/if}
+
+        <!-- Line shape of the charts: kept in this browser, applied as it is picked (FB-3) -->
+        {#if visibleFields.includes('theme')}
+            <div class="setting-row flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 py-4 border-b border-lf-subtle text-lf-primary" data-testid="preference-line-shape">
+                <div class="flex-1 min-w-0">
+                    <div class="text-sm font-medium text-lf-secondary">{$_('chartSettings.lineShape')}</div>
+                    <p class="text-xs text-lf-muted mt-1">{$_('settings.lineShapeHint')}</p>
+                </div>
+                <div class="self-end sm:self-auto">
+                    <LineShapePicker value={getGlobalLineShape()} onchange={setGlobalLineShape} testIdPrefix="preference-line-shape-picker" />
+                </div>
             </div>
         {/if}
 

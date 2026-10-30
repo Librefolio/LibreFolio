@@ -38,6 +38,8 @@
     import {formatDay, formatDayWithWeekday} from '$lib/utils/core/formatAxisDate';
     import {chartNeutrals, PRICE_SERIES} from '$lib/theme/chartTheme';
     import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
+    import {applyLineShape, type LineShape} from '$lib/components/charts/lineShape';
+    import {getGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
 
     // =========================================================================
     // Types
@@ -78,6 +80,8 @@
         areaFill?: boolean;
         /** Show stale-data gradient (per-point opacity) */
         showGradient?: boolean;
+        /** The shape of the lines (FB-3). Without it the chart follows the global shape. */
+        lineShape?: LineShape;
         /** Enable baseline coloring (red below baseline, green above) */
         colorByBaseline?: boolean;
         /**
@@ -125,6 +129,7 @@
         currency = '',
         areaFill = true,
         showGradient = true,
+        lineShape,
         colorByBaseline = true,
         baselineValue: baselineOverride,
         showGridLines = true,
@@ -235,6 +240,8 @@
             void baselineOverride;
             void showGridLines;
             void showGradient;
+            void lineShape;
+            void getGlobalLineShape();
             void viewMode;
             void compact;
             void showMiniAxis;
@@ -856,7 +863,7 @@
                           return html;
                       },
                   },
-            series,
+            series: applyLineShape(series, lineShape ?? getGlobalLineShape()),
         };
 
         // Single pass: render everything at once — no visualMap needed
@@ -885,4 +892,4 @@
     }
 </script>
 
-<div bind:this={chartContainer} class="w-full" style="height: {height};"></div>
+<div bind:this={chartContainer} class="w-full" style="height: {height};" data-line-shape={lineShape ?? getGlobalLineShape()}></div>
