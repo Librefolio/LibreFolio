@@ -358,7 +358,7 @@ test.describe('Dashboard charts and view matrix', () => {
         await expect(page.getByTestId('exposure-table')).toBeVisible({timeout: 15_000});
     });
 
-    test('Dashboard, Positions: the lot detail replaces the portfolio view and «← Portfolio» brings it back (Y5-2)', async ({page}) => {
+    test('Dashboard, Positions: the lot detail opens below the positions, the chart stays, and its ✕ or the browser’s back closes it (FB-12b)', async ({page}) => {
         test.setTimeout(90_000);
         await openPositionsTab(page);
 
@@ -370,7 +370,7 @@ test.describe('Dashboard charts and view matrix', () => {
         const table = page.getByTestId('exposure-table');
         await expect(table).toBeVisible({timeout: 15_000});
 
-        // A position to open, read from the table and checked: the id is `{assetId}-{brokerId}`, the table of a shared
+        // A position to open, read from the table: the id is `{assetId}-{brokerId}`, the table of a shared
         // dashboard changes under any test, so nothing here counts rows or names one.
         await expect.poll(() => table.locator('tbody tr[data-row-id]').count(), {message: 'the holdings table lists no position: check populate_mock_data.py', timeout: 15_000}).toBeGreaterThan(0);
         const rowIds = await table.locator('tbody tr[data-row-id]').evaluateAll((rows) => rows.map((row) => row.getAttribute('data-row-id') ?? ''));
@@ -386,31 +386,30 @@ test.describe('Dashboard charts and view matrix', () => {
             await page.getByTestId('context-menu-action-analyze-lots').click();
             await expectDetail();
         };
-        /** The lot detail is the view: lots panel and «← Portfolio» on screen, no positions panel, the asset in the URL. */
+        /** The lot detail is open below the positions: the positions panel and its chart stay, the lots panel and the asset in the URL are there. */
         const expectDetail = async () => {
             await expect(lots).toBeVisible({timeout: 15_000});
-            await expect(page.getByTestId('positions-back-to-portfolio')).toBeVisible();
-            await expect(positions, 'the lot detail replaces the portfolio view: the positions panel is not on the page').toHaveCount(0);
+            await expect(positions, 'the lot detail opens below: the positions panel stays on the page').toBeVisible();
+            await expect(positions.getByTestId('positions-return-chart'), 'and so does the chart of the positions').toBeVisible();
             await expect(page).toHaveURL(assetInUrl);
         };
-        /** The portfolio is the view: positions panel on screen, no lots panel, no «← Portfolio», no asset in the URL. */
-        const expectPortfolio = async () => {
-            await expect(positions).toBeVisible({timeout: 15_000});
-            await expect(lots).toBeHidden();
-            await expect(page.getByTestId('positions-back-to-portfolio')).toHaveCount(0);
+        /** Closed: no lots panel, no asset in the URL; the positions were there all the time. */
+        const expectClosed = async () => {
+            await expect(lots).toBeHidden({timeout: 15_000});
+            await expect(positions).toBeVisible();
             await expect(page).not.toHaveURL(/[?&]asset=/);
         };
 
-        // The detail replaces the portfolio; «← Portfolio» brings it back.
+        // The detail opens under the positions; the panel's ✕ closes it.
         await openDetail();
-        await page.getByTestId('positions-back-to-portfolio').click();
-        await expectPortfolio();
+        await page.getByTestId('lots-analysis-panel-close').click();
+        await expectClosed();
 
-        // The detail is a step of the history: the browser's Back returns to the portfolio view, Forward to the detail.
+        // The detail is a step of the history: the browser's Back closes it, Forward opens it again.
         await expect(positions).toHaveAttribute('data-busy', 'false', {timeout: 30_000});
         await openDetail();
         await page.goBack();
-        await expectPortfolio();
+        await expectClosed();
         await page.goForward();
         await expectDetail();
     });

@@ -22,8 +22,11 @@ import {safeDecimal, safeString} from '$lib/types';
 import {makePositionKey} from '$lib/utils/core/positionKey';
 import {indexHoldingDay} from '$lib/utils/stepSeries';
 
-/** The two views of the chart: the position's result in money, or its return in «base 100». */
-export type PositionsChartView = 'absolute' | 'percentage';
+/** The two views drawn from the positions' own series: the position's result in money, or its return in «base 100». */
+export type PositionsSeriesView = 'absolute' | 'percentage';
+
+/** The three views of the chart: those two, and the rolling return of the asset's price (FB-15, `positionsRolling.ts`). */
+export type PositionsChartView = PositionsSeriesView | 'rolling';
 
 /** A position asked for: an asset at one broker, or at all the brokers of the scope (`broker_id` null or absent). */
 export type PositionKey = z.infer<typeof schemas.PositionKey>;
@@ -85,7 +88,7 @@ export function positionLineId(key: PositionKey): string {
 }
 
 /** What a point draws in a view: its result in money, or its return in «base 100»; null when it is not known. */
-export function lineValue(point: Pick<PositionSeriesPoint, 'pnl' | 'pnl_percent'>, view: PositionsChartView): number | null {
+export function lineValue(point: Pick<PositionSeriesPoint, 'pnl' | 'pnl_percent'>, view: PositionsSeriesView): number | null {
     if (view === 'absolute') return safeDecimal(point.pnl);
     const fraction = safeDecimal(point.pnl_percent);
     return fraction === null ? null : 100 * (1 + fraction);
@@ -96,7 +99,7 @@ export function lineValue(point: Pick<PositionSeriesPoint, 'pnl' | 'pnl_percent'
  * holds from its `date` to its `through`): one point per step and a closing point on the last `through`, so the line reaches the
  * last day the position is known; drawn as steps.
  */
-export function positionLine(series: PositionSeries, view: PositionsChartView): PositionLine {
+export function positionLine(series: PositionSeries, view: PositionsSeriesView): PositionLine {
     const name = safeString(series.asset_ticker) || series.asset_name;
     const broker = safeString(series.broker_name);
     const steps = series.points ?? [];
@@ -126,7 +129,7 @@ export function lineOnDay(line: PositionLine, day: string): ChartPoint | null {
 }
 
 /** The lines of an answer, in the order the positions were asked. */
-export function positionLines(response: PositionsSeriesResponse | null | undefined, view: PositionsChartView): PositionLine[] {
+export function positionLines(response: PositionsSeriesResponse | null | undefined, view: PositionsSeriesView): PositionLine[] {
     return (response?.series ?? []).map((series) => positionLine(series, view));
 }
 
@@ -135,7 +138,7 @@ export function positionLines(response: PositionsSeriesResponse | null | undefin
  * since the first day of the window. One point per step of the history and a closing point on the last day of the last step, so the line
  * reaches the end of the window; drawn as steps. Null when the history is empty.
  */
-export function portfolioLine(history: ReadonlyArray<HistoryPointLike>, view: PositionsChartView, label: string): PositionLine | null {
+export function portfolioLine(history: ReadonlyArray<HistoryPointLike>, view: PositionsSeriesView, label: string): PositionLine | null {
     if (history.length === 0) return null;
     const origin = view === 'absolute' ? safeDecimal(history[0].total_pnl?.amount) : null;
     const points = history.map((point): ChartPoint => {

@@ -11,7 +11,7 @@
 
   Props:
   - lines: the lines to draw, in legend order (positions, then the portfolio)
-  - view / onviewchange: 'absolute' | 'percentage'
+  - view / onviewchange: 'absolute' | 'percentage' | 'rolling' (the percent the asset's price moved over a rolling window, FB-15)
   - hiddenIds / ontoggle: the lines switched off
   - colorOf: the colour of a line id (the same one the table's tick uses)
   - currency: the display currency of the Abs view
@@ -72,10 +72,22 @@
 
     let {lines, view, onviewchange, hiddenIds = new Set<string>(), ontoggle, colorOf, currency, loading = false, failed = false, portfolioLabel, note, height = '18rem'}: Props = $props();
 
-    const VIEWS: ReadonlyArray<PositionsChartView> = ['absolute', 'percentage'];
+    const VIEWS: ReadonlyArray<PositionsChartView> = ['absolute', 'percentage', 'rolling'];
 
-    /** Where each view draws its reference line: the start of the window (0 in money, base 100 in %). */
-    const REFERENCE_LEVEL: Record<PositionsChartView, number> = {absolute: 0, percentage: 100};
+    const VIEW_LABEL_KEYS: Record<PositionsChartView, string> = {
+        absolute: 'dashboard.positionsChart.viewAbsolute',
+        percentage: 'dashboard.positionsChart.viewPercentage',
+        rolling: 'dashboard.positionsChart.viewRolling',
+    };
+    const VIEW_HINT_KEY_NAMES: Record<PositionsChartView, string> = {
+        absolute: 'dashboard.positionsChart.viewAbsoluteHint',
+        percentage: 'dashboard.positionsChart.viewPercentageHint',
+        rolling: 'dashboard.positionsChart.viewRollingHint',
+    };
+    const VIEW_HINT_KEYS = $derived<Record<PositionsChartView, string>>({absolute: $_(VIEW_HINT_KEY_NAMES.absolute), percentage: $_(VIEW_HINT_KEY_NAMES.percentage), rolling: $_(VIEW_HINT_KEY_NAMES.rolling)});
+
+    /** Where each view draws its reference line: the start of the window (0 in money, base 100 in %), or no change (0 in the rolling return). */
+    const REFERENCE_LEVEL: Record<PositionsChartView, number> = {absolute: 0, percentage: 100, rolling: 0};
 
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chart: echarts.ECharts | null = null;
@@ -183,6 +195,8 @@
     /** One tooltip row's value: money in Abs; in %, the base-100 number with its signed percent (value − 100) beside it. */
     function tooltipValue(value: number, mutedColor: string): string {
         if (view === 'absolute') return escapeHtml(formatCurrencyAmountPlain(value, currency, {showSign: true}));
+        // Rolling: the backend's percentage points as they are, signed.
+        if (view === 'rolling') return escapeHtml(formatPercent(value, {digits: 2}));
         const level = formatPercent(value, {suffix: '', signed: false, digits: 2});
         // `value − 100` is a change of unit (base 100 → percent), the one `positionsSeries.ts` declares.
         const change = formatPercent(value - REFERENCE_LEVEL.percentage, {digits: 2});
@@ -319,7 +333,7 @@
                     color: neutrals.dashboard.text,
                     fontSize: 12,
                     // Abs: compact money, masked under privacy. %: the base-100 numbers as they are (112), public.
-                    formatter: (value: number) => (view === 'absolute' ? formatAxisCurrency(value, currency) : formatPercent(value, {suffix: '', signed: false, digits: 1, trim: true})),
+                    formatter: (value: number) => (view === 'absolute' ? formatAxisCurrency(value, currency) : view === 'rolling' ? formatPercent(value, {digits: 1, trim: true}) : formatPercent(value, {suffix: '', signed: false, digits: 1, trim: true})),
                 },
                 axisLine: {show: false},
                 splitLine: {lineStyle: {color: neutrals.dashboard.gridLine, type: 'dashed'}},
@@ -391,11 +405,11 @@
                     type="button"
                     class="px-2.5 py-1 text-xs font-medium focus-visible:outline-2 focus-visible:outline-lf-focus {view === option ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-secondary hover:bg-lf-panel'}"
                     aria-pressed={view === option}
-                    title={option === 'absolute' ? $_('dashboard.positionsChart.viewAbsoluteHint') : $_('dashboard.positionsChart.viewPercentageHint')}
+                    title={VIEW_HINT_KEYS[option]}
                     data-testid="positions-chart-view-{option}"
                     onclick={() => onviewchange?.(option)}
                 >
-                    {option === 'absolute' ? $_('dashboard.positionsChart.viewAbsolute') : $_('dashboard.positionsChart.viewPercentage')}
+                    {$_(VIEW_LABEL_KEYS[option])}
                 </button>
             {/each}
         </div>

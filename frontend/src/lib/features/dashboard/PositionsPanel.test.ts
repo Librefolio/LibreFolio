@@ -592,3 +592,83 @@ describe('PositionsPanel — the positions sold inside the period (FB-13)', () =
         await waitFor(() => expect(onRequestPositionsSeries).toHaveBeenCalledWith([keyOf(55, 1)]));
     });
 });
+
+// =============================================================================
+// FB-15 · the Rolling view: the percent the asset's price moved over a rolling window
+// =============================================================================
+
+describe('PositionsPanel — the Rolling view (FB-15)', () => {
+    /** The rolling return of an asset: one view of the signal, two points. */
+    const rollingView = (...values: number[]) => ({
+        state: 'ready' as const,
+        points: values.map((value, i) => ({date: `2026-01-0${i + 2}`, value})),
+        contextByDate: new Map(),
+        problem: null,
+    });
+    const rollingState = (entries: Array<[number, ReturnType<typeof rollingView>]>, extra: {loading?: boolean; failed?: boolean} = {}) => ({views: new Map(entries), loading: extra.loading ?? false, failed: extra.failed ?? false});
+
+    async function mountOnRolling(overrides: PanelProps = {}) {
+        storage.set(CHART_VIEW_KEY(), 'rolling');
+        return mountPanel(overrides);
+    }
+
+    it('a stored Rolling view is restored at mount, and it draws no portfolio line', async () => {
+        await mountOnRolling();
+        expect(screen.getByTestId('positions-chart-view-rolling')).toHaveAttribute('aria-pressed', 'true');
+        expect(chartRoot()).toHaveAttribute('data-view', 'rolling');
+        expect(screen.queryByTestId('positions-chart-legend-portfolio')).toBeNull();
+    });
+
+    it('asks nothing while no row is ticked', async () => {
+        const onRequestPositionsRolling = vi.fn();
+        await mountOnRolling({onRequestPositionsRolling});
+        expect(onRequestPositionsRolling).not.toHaveBeenCalled();
+    });
+
+    it('ticking positions asks the rolling return of their assets, once each', async () => {
+        const onRequestPositionsRolling = vi.fn();
+        await mountOnRolling({onRequestPositionsRolling});
+
+        await fireEvent.click(checkbox('22-1'));
+        await fireEvent.click(checkbox('11-1'));
+
+        await waitFor(() => expect(onRequestPositionsRolling).toHaveBeenLastCalledWith([22, 11]));
+    });
+
+    it('choosing Rolling with positions already ticked asks for them at once', async () => {
+        const onRequestPositionsRolling = vi.fn();
+        await mountPanel({onRequestPositionsRolling});
+        await fireEvent.click(checkbox('22-1'));
+        expect(onRequestPositionsRolling, 'the other views ask nothing of the kind').not.toHaveBeenCalled();
+
+        await fireEvent.click(screen.getByTestId('positions-chart-view-rolling'));
+
+        await waitFor(() => expect(onRequestPositionsRolling).toHaveBeenCalledWith([22]));
+        expect(storage.get(CHART_VIEW_KEY())).toBe('rolling');
+    });
+
+    it('draws one line per ticked position from the views of its asset, with the percentage points as they are', async () => {
+        await mountOnRolling({positionsRolling: rollingState([[22, rollingView(1.5, -2)]])});
+        await fireEvent.click(checkbox('22-1'));
+        await waitFor(() => expect(screen.getByTestId('positions-chart-legend-22-1')).toBeInTheDocument());
+        await waitFor(() => expect(valuesOfSeries('22-1')).toEqual([1.5, -2]));
+        expect(screen.getByTestId('positions-chart-legend-22-1')).toHaveTextContent('Asset 22');
+    });
+
+    it('two brokers holding the same asset share its line values', async () => {
+        const summary = summaryOf(holding(22, 1), holding(22, 2));
+        await mountOnRolling({summary, positionsRolling: rollingState([[22, rollingView(3, 4)]])});
+        await fireEvent.click(checkbox('22-1'));
+        await fireEvent.click(checkbox('22-2'));
+        await waitFor(() => expect(valuesOfSeries('22-2')).toEqual([3, 4]));
+        expect(valuesOfSeries('22-1')).toEqual([3, 4]);
+    });
+
+    it('says it is loading, or that it failed, only while a row is ticked', async () => {
+        const view = await mountOnRolling({positionsRolling: rollingState([], {loading: true})});
+        expect(chartRoot()).not.toHaveAttribute('data-state', 'loading');
+        await fireEvent.click(checkbox('22-1'));
+        await waitFor(() => expect(chartRoot()).toHaveAttribute('data-state', 'loading'));
+        view.unmount();
+    });
+});

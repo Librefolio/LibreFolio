@@ -24,6 +24,7 @@
     import GrowthChart from '$lib/features/dashboard/GrowthChart.svelte';
     import PositionsPanel from '$lib/features/dashboard/PositionsPanel.svelte';
     import {createPositionsSeriesController, type PositionsSeriesScope} from '$lib/features/dashboard/positionsSeriesController';
+    import {createPositionsRollingController, type RollingScope} from '$lib/features/dashboard/positionsRolling';
     import RiskLevelsPanel from '$lib/features/risk/levels/RiskLevelsPanel.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
@@ -112,10 +113,13 @@
     // The per-position return chart (Y5-2): the lines of the positions ticked, asked for this broker, period and currency,
     // and asked again when one of them or `refreshVersion` moves.
     const positionsSeriesCtl = createPositionsSeriesController();
+    // The Rolling view of that chart (FB-15): the rolling return of the ticked positions' assets over the same period.
+    const positionsRollingCtl = createPositionsRollingController();
     onDestroy(() => {
         candlesRetry.dispose();
         contributionRetry.dispose();
         positionsSeriesCtl.dispose();
+        positionsRollingCtl.dispose();
     });
     // The candles' loading flag must be a signal, as on the Dashboard: the loader's guard reads it inside GrowthChart's
     // effect, which has to wake when a request ends — to ask for the scope on screen once an old scope's answer was
@@ -125,6 +129,9 @@
     let positionsSeriesScope: PositionsSeriesScope;
     $: positionsSeriesScope = {brokerIds: [data.brokerId], start: historyStart(isMaxPending, dateFrom), end: dateTo || undefined, currency: targetCurrency || baseCurrency, ready: broker !== null, version: refreshVersion};
     $: positionsSeriesCtl.sync(positionsSeriesScope);
+    let positionsRollingScope: RollingScope;
+    $: positionsRollingScope = {start: dateFrom || undefined, end: dateTo || undefined, ready: broker !== null, version: refreshVersion};
+    $: positionsRollingCtl.sync(positionsRollingScope);
 
     /** The scope of a lazy report section: this broker, the period and the currency. An answer of another scope is not applied, and a failure counts for its own scope only (Y-24). */
     function reportScope(): string {
@@ -769,6 +776,8 @@
                     positionsSeriesLoading={$positionsSeriesCtl.loading}
                     positionsSeriesFailed={$positionsSeriesCtl.failed}
                     onRequestPositionsSeries={(keys) => positionsSeriesCtl.request(keys, positionsSeriesScope)}
+                    positionsRolling={$positionsRollingCtl}
+                    onRequestPositionsRolling={(assetIds) => positionsRollingCtl.request(assetIds, positionsRollingScope)}
                 />
                 <LotsAnalysisPanel open={activeAssetId != null} assetId={activeAssetId} brokerIds={[broker.id]} brokers={panelBrokers} currency={activeAsset?.currency ?? baseCurrency} assetName={activeAsset?.display_name ?? null} onClose={closeAssetPanel} {refreshVersion} />
             </div>
