@@ -76,6 +76,7 @@
     import {fxPointToLineDataPoint, renderBackendResults, renderCalendarComparisons, renderCalendarPairComparisons, renderLocalSignals, type SignalDataSources} from '$lib/charts/chartSignalRendering';
     import {buildAssetComparisonQuery} from '$lib/charts/crossTypeCalendar';
     import {buildFxDetailCalendarQuery, fxDetailCalendarViews} from '$lib/charts/fxDetailCalendar';
+    import {firstDateOf, forgetFirstDate, rememberFirstDate} from '$lib/stores/firstSeriesDates';
     import AssetChartModeToggle, {type AssetChartPrimaryMode} from '$lib/components/assets/detail/AssetChartModeToggle.svelte';
     import AssetCalendarWindowControls from '$lib/components/assets/detail/AssetCalendarWindowControls.svelte';
     import {formatSignalProblem} from '$lib/components/charts/chartSignalsHelpers';
@@ -840,6 +841,8 @@
      */
     function rearmMaxPendingBeforeReload() {
         if (activePreset !== 'MAX') return;
+        // FB-7b: a sync, a catch-up or Refresh may have moved the pair's first day: it is asked again
+        forgetFirstDate('fx', data.canonicalSlug);
         isMaxPending = true;
         dateStart = resolveDateSentinel('min');
         displayDateStart = 'min';
@@ -858,6 +861,18 @@
         const inverted = data.inverted;
         const canonicalBase = data.canonicalBase;
         const canonicalQuote = data.canonicalQuote;
+        // FB-7b: «All» still pending and the pair's first day already known this session: start from it, and from the cache
+        if (isMaxPending) {
+            const knownFirstDay = firstDateOf('fx', slug);
+            if (knownFirstDay !== undefined) {
+                dateStart = knownFirstDay;
+                displayDateStart = knownFirstDay;
+                isMaxPending = false;
+            }
+        }
+        // FB-7b: «All» pending, its first day unknown: the rates are asked from the sentinel `min` (the server answers the pair's first
+        // stored day, whatever its year), never from a made-up start; the store cannot answer a start it does not know
+        const askedFromMin = isMaxPending;
         const start = dateStart;
         const end = dateEnd;
         const sessionGeneration = getClientSessionGeneration();
@@ -870,7 +885,7 @@
         };
         error = null;
         const store = getFxStore(slug);
-        const gaps = store.getMissingIntervals(start, end);
+        const gaps = askedFromMin ? [{start, end}] : store.getMissingIntervals(start, end);
         const hasCachedRange = gaps.length === 0;
         // A store a catch-up marked stale that still holds points for the range (Y5-1, D3): they go on screen at once and the rates
         // are asked in background, with no loading state.
@@ -902,7 +917,7 @@
         const requestBody: FxConvertBulkBody = ranges.map((range) => ({
             from_amount: {code: withSignals ? base : canonicalBase, amount: '1'},
             to: withSignals ? quote : canonicalQuote,
-            date_range: {start: range.start, end: range.end},
+            date_range: {start: askedFromMin ? ('min' as const) : range.start, end: range.end},
             ...(withSignals ? {signals: requestPlan.requests} : {}),
         }));
         // N64: the same signal request, answered over the same rates (the generation of the pair's store, read now), comes
@@ -930,8 +945,12 @@
             if (canonicalPoints.length > 0) {
                 store.merge(canonicalPoints);
             }
-            for (const range of ranges) store.markFetched(range.start, range.end);
-            chartData = store.getRange(start, end).data;
+            // From the first day the server held, when the rates were asked from `min`: nothing exists before it, and the placeholder
+            // start the page waits on was never asked
+            const firstDay = askedFromMin && canonicalPoints.length > 0 ? canonicalPoints.reduce((earliest, point) => (point.date < earliest ? point.date : earliest), canonicalPoints[0].date) : null;
+            for (const range of ranges) store.markFetched(firstDay ?? range.start, range.end);
+            if (firstDay !== null) rememberFirstDate('fx', slug, firstDay);
+            chartData = store.getRange(firstDay ?? start, end).data;
 
             const signalGroup = withSignals ? response.signal_results?.find((group) => group.request_index === 0) : undefined;
             // X-R16: an invalid signal result fails the signals only, as a failed request does: nothing applied, the banner
