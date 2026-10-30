@@ -31,6 +31,7 @@ The warning printed for a DB outside the data dir is never asserted: its text is
 
 from __future__ import annotations
 
+import ast
 import json
 import uuid
 from pathlib import Path
@@ -44,6 +45,8 @@ setup_test_database()
 
 # populate_mock_data configures the test database again when imported and builds a lazy NullPool
 # engine: the import opens no connection. Nothing below hands it a path outside tmp_path.
+from backend.app.schemas.assets.metadata import FAClassificationParams
+from backend.test_scripts.test_db import populate_mock_data
 from backend.test_scripts.test_db.populate_mock_data import reset_broker_reports
 
 STATUS_FOLDERS = ("uploaded", "parsed", "failed")
@@ -518,3 +521,34 @@ def test_a_symlink_to_a_folder_is_removed_as_a_link(data_dir: Path, tmp_path: Pa
 
     assert _snapshot(outside) == before
     assert _status_folders(data_dir) == EMPTIED
+
+
+# ---------------------------------------------------------------------------
+# C6-6 (C-51): the mock assets write the shape the model reads
+# ---------------------------------------------------------------------------
+
+# The five assets that still wrote the old flat shape (`geographic_area: {"ITA": 1.0}`, `sector: "..."`):
+# the AI Export of an asset answered 503 on `asset.identity` for them.
+FLAT_SHAPE_MOCK_ASSETS = ("RE Loan Milano", "RE Loan Roma", "Bitcoin", "Ethereum", "NVIDIA Corporation")
+
+
+def _mock_classification_params() -> dict[str, dict]:
+    """``display_name`` -> the dict the mock asset passes to ``json.dumps`` (read as source, never run)."""
+    tree = ast.parse(Path(populate_mock_data.__file__).read_text(encoding="utf-8"))
+    found: dict[str, dict] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Dict):
+            continue
+        entries = {k.value: v for k, v in zip(node.keys, node.values, strict=True) if isinstance(k, ast.Constant)}
+        name, params = entries.get("display_name"), entries.get("classification_params")
+        if isinstance(name, ast.Constant) and isinstance(params, ast.Call) and params.args:
+            found[name.value] = ast.literal_eval(params.args[0])
+    return found
+
+
+@pytest.mark.parametrize("display_name", FLAT_SHAPE_MOCK_ASSETS)
+def test_mock_asset_classification_params_validate_against_the_model(display_name):
+    params = _mock_classification_params()
+    assert display_name in params, f"{display_name}: mock asset or its json.dumps literal not found"
+
+    FAClassificationParams.model_validate(params[display_name])

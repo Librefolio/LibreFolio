@@ -64,6 +64,9 @@ export const GALLERY_BACKUP_JOB = {
     warnings: [],
     error_code: null,
     encrypted: false,
+    instance_key_included: false,
+    sealed: false,
+    sealed_recipients: [],
 } satisfies InstanceBackupJob;
 
 /**
