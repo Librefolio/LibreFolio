@@ -8830,6 +8830,191 @@ test.describe('FB-7b asset detail: All starts at the first stored price', () => 
 });
 
 // ============================================================================
+// FB-7c — asset detail: «All» with a comparison that starts LATER than the main
+// ============================================================================
+// With «All» (`?start=min&end=max`) and an asset-comparison signal, the range starts at the oldest first day of the main
+// and the comparison. This pins the direction where the comparison starts later: the main's first stored price is in
+// 1985, the peer's first is in 2015, and the range must still begin on the main's 1985 day (the peer's later start must
+// neither move the range nor fail the page). The other direction (the comparison older than the main) waits on a design
+// decision and is not pinned here.
+//
+// Served by the real backend. Each test owns two USD assets, deleted afterwards: the main (closes in 1985, 1999, and on
+// the days the peer also has) and the peer (first close 2015-06-01). The peer's line is drawn on the main's date axis,
+// so the peer has a close on every day it is drawn on. The comparison is saved in this context's localStorage
+// (`seedChartComparisons`), which writes nothing shared. «Drawn» is read from the series the chart handed ECharts (the
+// one named after the peer, which is never a translated word), as the Y-41 FX test does for a pair.
+// ============================================================================
+test.describe('FB-7c asset detail: All starts at the main first day when the comparison starts later', () => {
+    // A ceiling, never a delay: a sign-in, two API seedings, the page loads and the calendar-return round trips each test waits for by name.
+    test.describe.configure({timeout: 90_000});
+
+    /** The main's first stored close, 30 years before the peer's. */
+    const MAIN_FIRST_DAY = '1985-03-01';
+    /** The peer's first stored close: the day its line must begin on. */
+    const PEER_FIRST_DAY = '2015-06-01';
+    /** The peer's first close, and the chart whose series are read. */
+    const PEER_FIRST_CLOSE = 100;
+    const CHART = 'asset-detail-chart';
+
+    let owned: Owned = {assetIds: [], brokerIds: []};
+
+    test.beforeEach(async ({page}) => {
+        owned = {assetIds: [], brokerIds: []};
+        await login(page, TEST_USER);
+    });
+
+    test.afterEach(async ({page}) => {
+        await deleteOwned(page, owned);
+    });
+
+    /** What the chart draws of the series named after one asset: its values, the first and last date it has one on, and how many entries are not finite numbers (a NaN or an infinity, never a gap). */
+    type NamedLine = {points: number; firstDate: string | null; lastDate: string | null; values: number[]; notFinite: number};
+
+    /** The line the chart `chartTestId` draws for the asset named `assetName`, the longest if several series carry its name; none reads as 0 points. */
+    async function readNamedLine(page: Page, chartTestId: string, assetName: string): Promise<NamedLine> {
+        return page.evaluate(
+            ({testId, wanted}): NamedLine => {
+                type ChartHost = HTMLElement & {__lfChart?: {getOption: () => {series?: unknown; xAxis?: unknown}}};
+                const none: NamedLine = {points: 0, firstDate: null, lastDate: null, values: [], notFinite: 0};
+                const root = document.querySelector<HTMLElement>(`[data-testid="${testId}"]`);
+                if (!root) return none;
+                const candidates = [root, ...root.querySelectorAll<HTMLElement>('*')];
+                const host = candidates.find((candidate) => typeof (candidate as ChartHost).__lfChart?.getOption === 'function') as ChartHost | undefined;
+                const option = host?.__lfChart?.getOption();
+                if (!option || !Array.isArray(option.series)) return none;
+                const axis = Array.isArray(option.xAxis) ? (option.xAxis[0] as {data?: unknown} | undefined) : undefined;
+                const dates: unknown[] = Array.isArray(axis?.data) ? axis.data : [];
+                const valueOf = (datum: unknown): unknown => (Array.isArray(datum) ? datum[1] : datum !== null && typeof datum === 'object' ? (datum as {value?: unknown}).value : datum);
+                let best = none;
+                for (const raw of option.series) {
+                    const series = raw as {name?: unknown; data?: unknown};
+                    if (typeof series.name !== 'string' || !series.name.includes(wanted) || !Array.isArray(series.data)) continue;
+                    const filled: number[] = [];
+                    const values: number[] = [];
+                    let notFinite = 0;
+                    series.data.forEach((datum, index) => {
+                        const value = valueOf(datum);
+                        if (typeof value !== 'number') return;
+                        if (!Number.isFinite(value)) notFinite += 1;
+                        else {
+                            filled.push(index);
+                            values.push(value);
+                        }
+                    });
+                    if (filled.length > best.points) {
+                        const first = dates[filled[0]];
+                        const last = dates[filled[filled.length - 1]];
+                        best = {points: filled.length, firstDate: typeof first === 'string' ? first.slice(0, 10) : null, lastDate: typeof last === 'string' ? last.slice(0, 10) : null, values, notFinite};
+                    }
+                }
+                return best;
+            },
+            {testId: chartTestId, wanted: assetName},
+        );
+    }
+
+    /**
+     * Two USD assets of this test's own and the comparison saved on the main. The main begins in 1985 and has a close on
+     * every day of the peer; the peer begins on `PEER_FIRST_DAY`. The page polls `POST /assets/prices/current`, which may ask
+     * live providers: answered here, locally. The precondition is read back through the API, not inferred: `min` resolves
+     * to each asset's first stored day.
+     */
+    async function seedMainAndLaterPeer(page: Page, label: string): Promise<{mainId: number; peerId: number; peerName: string}> {
+        await page.route('**/api/v1/assets/prices/current', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
+        const shared = [
+            {date: PEER_FIRST_DAY, close: PEER_FIRST_CLOSE},
+            {date: '2015-06-02', close: 101},
+            {date: '2015-06-03', close: 102},
+            {date: '2020-01-02', close: 150},
+            {date: daysAgoIso(35), close: 200},
+            {date: daysAgoIso(20), close: 201},
+            {date: daysAgoIso(10), close: 202},
+            {date: daysAgoIso(3), close: 203},
+        ];
+        const main = await createOwnedAsset(page, owned, {
+            label: `${label} main`,
+            closes: [{date: MAIN_FIRST_DAY, close: 10}, {date: '1985-03-04', close: 10.5}, {date: '1999-12-31', close: 20}, ...shared.map((close, index) => ({date: close.date, close: 40 + index}))],
+        });
+        const peer = await createOwnedAsset(page, owned, {label: `${label} peer`, closes: shared});
+        const firstDayOf = async (assetId: number): Promise<string | undefined> => {
+            const answer = await page.request.post('/api/v1/assets/prices/query', {data: [{asset_id: assetId, date_range: {start: 'min', end: daysAgoIso(0)}, include_price: true, include_events: false}]});
+            expect(answer.ok(), `query the prices of asset ${assetId} from min: HTTP ${answer.status()}`).toBe(true);
+            const body = (await answer.json()) as {items: Array<{asset_id: number; prices?: Array<{date: string}>}>};
+            return body.items.find((item) => item.asset_id === assetId)?.prices?.[0]?.date;
+        };
+        expect(await firstDayOf(main.id), `precondition: the main begins on ${MAIN_FIRST_DAY}`).toBe(MAIN_FIRST_DAY);
+        expect(await firstDayOf(peer.id), `precondition: the peer begins on ${PEER_FIRST_DAY}, after the main`).toBe(PEER_FIRST_DAY);
+        await seedChartComparisons(page, [[`asset-${main.id}`, [assetComparison('e2e-fb7c-peer', peer.id)]]]);
+        return {mainId: main.id, peerId: peer.id, peerName: peer.name};
+    }
+
+    /** Opens the main's detail on «All» by URL and verifies, rather than assumes, that «All» is the range on screen; returns the start field of the range. */
+    async function openMainOnAll(page: Page, mainId: number): Promise<Locator> {
+        await goToAssetDetailPage(page, String(mainId), {start: 'min', end: 'max'});
+        const picker = page.getByTestId('asset-detail-controls').getByTestId('asset-detail-filter-bar').getByTestId('date-range-picker-root');
+        await expect(picker.getByTestId('date-preset-max'), '«All» is the active preset').toHaveAttribute('data-active', 'true', {timeout: 10_000});
+        return picker.getByTestId('date-range-input-start');
+    }
+
+    // (1) The prices, with the comparison drawn on the main's axis. The range starts on the main's day, the page is not in a
+    // failed state, the peer's line is drawn and begins on its own first day; in the percentage view it begins at 0.
+    test('FB-7c prices: All starts on the main first day, the later comparison is drawn from its own first day, in Abs and in %', async ({page}) => {
+        const {mainId, peerName} = await seedMainAndLaterPeer(page, 'E2E FB-7c prices');
+        const startInput = await openMainOnAll(page, mainId);
+        const chart = page.getByTestId(CHART);
+
+        await expect(chart, 'the prices are drawn, the page is not in a failed state').toHaveAttribute('data-series-state', 'ready', {timeout: 15_000});
+        await expect(startInput, `«All» starts on the main first day (${MAIN_FIRST_DAY}), not on the peer's later one`).toHaveValue(MAIN_FIRST_DAY, {timeout: 10_000});
+        await expect.poll(async () => (await readNamedLine(page, CHART, peerName)).points, {message: 'the comparison line is drawn', timeout: 15_000}).toBeGreaterThan(0);
+
+        // Absolute. Over 41 years the chart draws weekly or monthly points, each dated within its bucket and valued by its last close,
+        // so the line begins in the bucket of the peer's first day (June 2015) at one of that month's closes, never before it.
+        await chart.getByTestId('chart-view-absolute').click();
+        await expect(chart, 'the prices are shown in absolute').toHaveAttribute('data-view-mode', 'absolute');
+        await expect.poll(async () => (await readNamedLine(page, CHART, peerName)).firstDate?.slice(0, 7), {message: 'in Abs the comparison begins in the month of its first day', timeout: 10_000}).toBe(PEER_FIRST_DAY.slice(0, 7));
+        const absolute = await readNamedLine(page, CHART, peerName);
+        expect((absolute.firstDate ?? '') >= PEER_FIRST_DAY, 'the comparison is not drawn before its own first day').toBe(true);
+        expect(absolute.values[0], 'in Abs the comparison begins at one of its first closes').toBeGreaterThanOrEqual(PEER_FIRST_CLOSE);
+        expect(absolute.values[0], 'in Abs the comparison begins at one of its first closes').toBeLessThanOrEqual(PEER_FIRST_CLOSE + 2);
+        expect(absolute.notFinite, 'no NaN or infinity in the Abs line').toBe(0);
+
+        // Percentage: the same points, measured from the peer's close on its first day (the base point the page hands the signal on
+        // a sampled chart, Z-29d-0): the first drawn point is that day's own 0 on a daily chart, and its change since that day on a bucketed one.
+        const expectedFirstPercent = ((absolute.values[0] - PEER_FIRST_CLOSE) / PEER_FIRST_CLOSE) * 100;
+        await chart.getByTestId('chart-view-percentage').click();
+        await expect(chart, 'the prices are shown in percent').toHaveAttribute('data-view-mode', 'percentage');
+        await expect.poll(async () => (await readNamedLine(page, CHART, peerName)).values[0], {message: 'in % the comparison is measured from its close on its first day', timeout: 10_000}).toBeCloseTo(expectedFirstPercent, 6);
+        const percentage = await readNamedLine(page, CHART, peerName);
+        expect(percentage.firstDate, 'the % line is drawn from the same first point').toBe(absolute.firstDate);
+        expect(percentage.points, 'the % line holds as many points as the Abs one').toBe(absolute.points);
+        expect(percentage.notFinite, 'no NaN or infinity in the % line').toBe(0);
+        await expect(chart, 'still drawn, not failed, after the switch').toHaveAttribute('data-series-state', 'ready');
+        await expect(startInput, '«All» still starts on the main first day after the switch').toHaveValue(MAIN_FIRST_DAY);
+        await expect(page.getByTestId('toast-error'), 'no error toast was raised').toHaveCount(0);
+    });
+
+    // (2) The calendar return as primary mode, with the same peer: the range still starts on the main's day and the chart settles.
+    test('FB-7c calendar return: All starts on the main first day and the chart settles with the later comparison', async ({page}) => {
+        const {mainId, peerId} = await seedMainAndLaterPeer(page, 'E2E FB-7c calendar');
+        const startInput = await openMainOnAll(page, mainId);
+        const chart = page.getByTestId(CHART);
+        await expect(chart, 'the prices are drawn before the mode changes').toHaveAttribute('data-series-state', 'ready', {timeout: 15_000});
+
+        await chart.getByTestId('asset-chart-primary-calendar-return').click();
+        await expect(chart, 'the chart shows the calendar return').toHaveAttribute('data-primary-mode', 'calendar-return');
+        // `partial` is drawn, with a coverage note: the peer has no data before 2015, which is exactly what it reports.
+        await expect(chart, 'the chart settles, drawn and not failed').toHaveAttribute('data-series-state', /^(ready|partial)$/, {timeout: 20_000});
+        await waitForSettled(page.getByTestId('asset-detail-page'), 20_000);
+
+        await expect(startInput, `«All» starts on the main first day (${MAIN_FIRST_DAY})`).toHaveValue(MAIN_FIRST_DAY);
+        await expect(page.getByTestId('asset-calendar-return-error'), 'the calendar return is not in a failed state').toHaveCount(0);
+        await expect(chart, 'no peer comparison failed').toHaveAttribute('data-calendar-comparison-error', '');
+        await expect.poll(async () => [(await chart.getAttribute('data-calendar-comparison-ready')) ?? '', (await chart.getAttribute('data-calendar-comparison-partial')) ?? ''].join(',').split(','), {message: 'the peer is answered, ready or partial', timeout: 10_000}).toContain(String(peerId));
+        await expect(page.getByTestId('toast-error'), 'no error toast was raised').toHaveCount(0);
+    });
+});
+
+// ============================================================================
 // G-4 — Provider chip names the provider once its catalogue arrives
 // ============================================================================
 // The header chip renders `getAssetProviderName(assetInfo.provider_code)`, a
