@@ -46,7 +46,7 @@
     import ConfirmModal from '$lib/components/ui/modals/ConfirmModal.svelte';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
-    import {hasStoredRowBehindSample, type AssetCreateSyncResult} from '$lib/utils/sync/syncHelpers';
+    import type {AssetCreateSyncResult} from '$lib/utils/sync/syncHelpers';
     import type {ChartPrimaryView, ChartSettings} from '$lib/stores/chartSettingsStore.svelte';
     import {effectiveCalendarReturnWindow, getGlobalSettings, getSettingsForPair, getSettingsVersion, setGlobalSettings, setItemPrimaryView, setPairSettings, setScopePrimaryView} from '$lib/stores/chartSettingsStore.svelte';
     import {CALENDAR_RETURN_INSTANCE_ID, CALENDAR_RETURN_SIGNAL_CODE, emptyCalendarReturnView, extractCalendarReturnView, type CalendarReturnView} from '$lib/components/charts/priceChartHelpers';
@@ -230,21 +230,6 @@
     let urlDateStart = $derived(activePreset === 'MAX' ? 'min' : dateStart);
     let urlDateEnd = $derived(activePreset === 'MAX' ? 'max' : dateEnd);
     let syncDateStart = $derived(activePreset === 'MAX' ? 'min' : dateStart);
-    /** The sync dialog's assets whose shown prices hold a stored row in its range (C-66): the dialog warns that the sync
-     * replaces them. The prices shown are a weekly or monthly sample on a wide range (Z-29b), so it reads the row behind each point. */
-    let syncModalWithData = $derived(
-        syncModalOpen
-            ? syncModalAssets
-                  .filter((a) =>
-                      hasStoredRowBehindSample(
-                          (assets.find((shown) => shown.id === a.id)?.chartData ?? []).map((point) => ({date: point.date, staleDays: point.staleDays ?? 0})),
-                          syncDateStart,
-                          dateEnd,
-                      ),
-                  )
-                  .map((a) => a.id)
-            : [],
-    );
 
     /** True when the date range ends today (or later) → show live prices from providers. Today on the user's calendar,
      *  like `dateEnd`: the UTC date is already tomorrow in the evening west of Greenwich (Z-3). */
@@ -2339,7 +2324,6 @@
     bind:open={syncModalOpen}
     {dateEnd}
     dateStart={syncDateStart}
-    withDataInRange={syncModalWithData}
     onclose={() => {
         syncModalOpen = false;
     }}

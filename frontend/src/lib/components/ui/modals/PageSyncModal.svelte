@@ -10,6 +10,7 @@
     import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {_ as t} from '$lib/i18n';
     import type {SyncRequestOptions, SyncResult, SyncSection} from '$lib/utils/sync/syncHelpers';
+    import {loadStoredPriceCounts, type StoredPriceCount} from '$lib/utils/sync/storedPriceCounts';
     import {DEFAULT_PROVIDER_COLOR, ensureAssetProvidersCached, getAssetProviderIconUrl, getFxProviderIconUrl, parseProviderChain, PROVIDER_COLORS} from '$lib/utils/providerHelpers';
     import {getCurrencyGraph} from '$lib/stores/currencyGraphStore';
     import {getCurrencyInfo} from '$lib/stores/reference/currencyStore';
@@ -36,15 +37,14 @@
         assets: AssetSyncItem[];
         /** FX pair slugs to sync (only configured ones) */
         fxPairs: string[];
-        /** The assets and pairs whose shown data already holds a stored row in the range: the dialog warns (C-66). */
-        assetsWithDataInRange?: number[];
+        /** The pairs whose shown rates already hold a stored row in the range: the dialog warns (C-66). The assets are counted by the server when it opens. */
         fxPairsWithDataInRange?: string[];
         /** Called after all syncs complete */
         onsynced: (detail: PageSyncCompletion) => void;
         onclose: () => void;
     }
 
-    let {open = $bindable(), dateStart, dateEnd, assets, fxPairs, assetsWithDataInRange = [], fxPairsWithDataInRange = [], onsynced, onclose}: Props = $props();
+    let {open = $bindable(), dateStart, dateEnd, assets, fxPairs, fxPairsWithDataInRange = [], onsynced, onclose}: Props = $props();
 
     let syncModalBase: SyncModalBase | undefined = $state(undefined);
     let acceptedInCurrentRun = false;
@@ -147,6 +147,27 @@
 
     let assetTargetIds = $derived(assets.filter((a) => !!a.provider_code).map((a) => a.id.toString()));
 
+    // The prices stored in the range the sync would replace, counted by the server (X-R29) when the dialog opens
+    let stored = $state<ReadonlyMap<number, StoredPriceCount>>(new Map());
+    let countGeneration = 0;
+    $effect(() => {
+        const ids = assetTargetIds.map(Number);
+        const range = {start: dateStart, end: dateEnd};
+        const mine = ++countGeneration;
+        if (!open || ids.length === 0) {
+            stored = new Map();
+            return;
+        }
+        loadStoredPriceCounts(ids, range)
+            .then((counts) => {
+                if (mine === countGeneration) stored = counts;
+            })
+            .catch((error) => {
+                console.error('Stored prices not counted before the sync', error);
+                if (mine === countGeneration) stored = new Map();
+            });
+    });
+
     let sections: SyncSection[] = $derived([
         {
             id: 'assets',
@@ -155,7 +176,8 @@
             targetIds: assetTargetIds,
             resultRow: assetResultRow,
             countLabel: $t('assets.sync.assetsCount') ?? 'assets',
-            existingIds: assetsWithDataInRange.map(String),
+            existingIds: [...stored].filter(([, count]) => count.stored > 0).map(([id]) => String(id)),
+            manualCount: [...stored.values()].reduce((sum, count) => sum + count.manual, 0),
         },
         {
             id: 'fx',

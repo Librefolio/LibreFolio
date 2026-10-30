@@ -93,6 +93,8 @@ interface Spec {
     doSyncFn: (ids: string[]) => Promise<SyncResult[]>;
     /** The targets that already hold stored data in the range; left out, the section has none. */
     existingIds?: string[];
+    /** Of the stored data, how many were entered by hand (an asset section's); left out, the warning names none. */
+    manualCount?: number;
 }
 
 function mount(specs: Spec[], props: Record<string, unknown> = {}) {
@@ -1245,6 +1247,38 @@ describe('SyncModalBase — the warning before a sync that replaces stored data'
 
         expect(warned()).toEqual([{section: 'alpha', existing: 1, total: 3}]);
         expect(warningText('alpha')).toBe(sentence(1, 3));
+    });
+
+    it('names the stored prices entered by hand when the section counts them (manualCount): once, in the same warning', async () => {
+        mount([
+            {id: 'alpha', targetIds: ['a1', 'a2'], existingIds: ['a1', 'a2'], manualCount: 3, doSyncFn: answersWith('ok')},
+            {id: 'beta', targetIds: ['b1'], existingIds: ['b1'], doSyncFn: answersWith('ok')},
+        ]);
+
+        const manualOf = (section: string): string | null =>
+            warnings()
+                .find((el) => el.getAttribute('data-section') === section)
+                ?.getAttribute('data-manual') ?? null;
+        expect(manualOf('alpha'), 'the count is republished as a number').toBe('3');
+        expect(manualOf('beta'), 'a section with no manual count says nothing of it').toBeNull();
+        const manualSentence = normalize(get(_)('assets.sync.overwriteManual', {values: {manual: 3}}));
+        expect(manualSentence, 'the key exists: a missing one resolves to itself').not.toBe('assets.sync.overwriteManual');
+        expect(warningText('alpha')).toContain(manualSentence);
+        expect(warningText('beta')).not.toContain(manualSentence);
+    });
+
+    it('a manual count of 0 says nothing, and never warns by itself: no stored data in the targets, no warning', async () => {
+        mount([
+            {id: 'alpha', targetIds: ['a1'], existingIds: ['a1'], manualCount: 0, doSyncFn: answersWith('ok')},
+            {id: 'beta', targetIds: ['b1'], existingIds: [], manualCount: 5, doSyncFn: answersWith('ok')},
+        ]);
+
+        expect(warned()).toEqual([{section: 'alpha', existing: 1, total: 1}]);
+        expect(
+            warnings()
+                .find((el) => el.getAttribute('data-section') === 'alpha')
+                ?.hasAttribute('data-manual'),
+        ).toBe(false);
     });
 
     it('withdraws the warning when the sync starts, and the results do not bring it back, a failure included', async () => {
