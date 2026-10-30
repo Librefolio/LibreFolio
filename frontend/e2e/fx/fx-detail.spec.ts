@@ -14,7 +14,7 @@ import {expect, test as base} from '../fixtures/playwright';
 import type {Locator, Page, Request, Response} from '../fixtures/playwright';
 import {schemas} from '../../src/lib/api/generated';
 import {eventSeq, waitForEvent, waitForSettled} from '../fixtures/app-events';
-import {login, navigateTo} from '../fixtures/auth-helpers';
+import {login, navigateTo, openMobileMenu} from '../fixtures/auth-helpers';
 import {expectChartCanvas} from '../fixtures/charts';
 import {assetComparison, assetIdByName, pairComparison, seedChartComparisons} from '../fixtures/chartComparisons';
 import {expectPairLineDrawn, expectPairLineReaches} from '../fixtures/pairLine';
@@ -2979,7 +2979,8 @@ test.describe('X-R16 FX detail: an invalid signal result keeps the rates and the
                 asks.forEach((ask, requestIndex) => {
                     const from = ask.from_amount?.code ?? 'EUR';
                     const to = ask.to ?? 'USD';
-                    const start = ask.date_range?.start ?? '';
+                    // FB-7b: the sentinel `min` is the pair's first stored day, as the server resolves it
+                    const start = ask.date_range?.start === 'min' ? history[0] : (ask.date_range?.start ?? '');
                     const end = ask.date_range?.end ?? start;
                     const days = history.flatMap((date, index) => (date >= start && date <= end ? [{date, rate: rateAt(index)}] : []));
                     for (const day of days) results.push({from_amount: {code: from, amount: '1'}, to_amount: {code: to, amount: day.rate}, conversion_date: day.date, rate: day.rate, backward_fill_info: null});
@@ -3019,12 +3020,13 @@ test.describe('X-R16 FX detail: an invalid signal result keeps the rates and the
     }
 
     /**
-     * The first load was the «All» one with the stored signal: the rates were asked for from the 2000-01-01 sentinel
-     * together with RSI, and answered. The page builds that request only from the catalog's RSI definition — with the
-     * catalog failed it falls back to the local definitions, which hold no RSI — so this also proves the catalog loaded.
+     * The first load was the «All» one with the stored signal: the rates were asked for from the `min` sentinel (FB-7b: the
+     * server resolves it to the pair's first stored day; the page no longer asks from a made-up 2000-01-01) together with
+     * RSI, and answered. The page builds that request only from the catalog's RSI definition — with the catalog failed it
+     * falls back to the local definitions, which hold no RSI — so this also proves the catalog loaded.
      */
     async function expectRsiAskedOverAll(delivered: DeliveredAsk[]): Promise<void> {
-        await expect.poll(() => delivered.some((ask) => ask.start === '2000-01-01' && ask.signalCodes.includes('RSI')), {message: 'the page asked for the «All» rates from the 2000-01-01 sentinel together with the stored RSI signal, and the route answered', timeout: 15_000}).toBe(true);
+        await expect.poll(() => delivered.some((ask) => ask.start === 'min' && ask.signalCodes.includes('RSI')), {message: 'the page asked for the «All» rates from the min sentinel together with the stored RSI signal, and the route answered', timeout: 15_000}).toBe(true);
     }
 
     /** Unfolds the signals panel, and returns it once it lists the stored RSI signal. */
@@ -3096,6 +3098,173 @@ test.describe('X-R16 FX detail: an invalid signal result keeps the rates and the
         await expect(root, 'the chart ends on the last rate answered').toHaveAttribute('data-chart-last-rate', rates.lastRate, {timeout: 10_000});
         const panel = await openSignalsPanel(page);
         await expect(panel.getByTestId('signal-backend-error'), 'a valid answer raises no banner').toHaveCount(0);
+    });
+});
+
+// ============================================================================
+// FB-7b — FX pair detail: «All» starts at the pair's first stored rate
+// ============================================================================
+// «All» used to ask the rates from a placeholder start, the 2000-01-01 sentinel, and adopt the first point it got back as
+// the real start: a pair whose rates begin before 2000 showed from 2000 on, and «All» hid its older rates. The backend
+// now takes `date_range: {start: 'min', end}` on `POST /fx/currencies/convert` (the pair's first stored rate day); the
+// page asks with it while «All» is pending and its first day is unknown, and adopts the first date of the answer.
+//
+// Served by the real backend. Each test owns a pair EUR-X with a MANUAL route (no provider, so nothing syncs by itself)
+// and manual rates on 1985-03-01, 1985-03-04, 1999-12-31 and in the last weeks, deleted and verified gone afterwards
+// (`ownedFxQuotes`). The three tests are one contract in three halves, so a red names its half:
+//   · the range on screen starts on the first stored rate (the picker's FROM field — compact, so an ISO date);
+//   · the request carries the `min` sentinel (the subject here is the request itself, so it is waited for on the wire);
+//   · a second visit, in the same page session, still starts there and does not ask for the `min` start again.
+// The request that carries `min` together with a stored signal is pinned by `expectRsiAskedOverAll` (X-R16 block above).
+// ============================================================================
+test.describe('FB-7b FX detail: All starts at the first stored rate', () => {
+    // A ceiling, never a delay: a sign-in, an API seeding and the page loads each test waits for by name.
+    test.describe.configure({timeout: 60_000});
+
+    /** The first stored rate, 15 years before the 2000-01-01 sentinel the page used to ask from. */
+    const FIRST_RATE_DAY = '1985-03-01';
+
+    /**
+     * The quote of each test's pair, per test and per Playwright project, because FX routes and rates are global rows.
+     * As for `RESERVED_QUOTE`: none is used by any seed, spec or other E2E test (grep of the whole worktree), and each
+     * sorts after EUR, so the pair is stored as EUR-X.
+     */
+    const QUOTE: Readonly<Record<string, Readonly<Record<'allStart' | 'minRequest' | 'secondVisit', string>>>> = {
+        desktop: {allStart: 'LAK', minRequest: 'KHR', secondVisit: 'MMK'},
+        mobile: {allStart: 'LKR', minRequest: 'MNT', secondVisit: 'MWK'},
+    };
+
+    function quoteFor(owner: 'allStart' | 'minRequest' | 'secondVisit'): string {
+        const project = test.info().project.name;
+        const quote = QUOTE[project]?.[owner];
+        if (!quote) throw new Error(`No currency is reserved for the FB-7b ${owner} test on project "${project}": reserve one that sorts after EUR and that no seed, spec or test uses`);
+        return quote;
+    }
+
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    /**
+     * EUR-`quote` with a MANUAL route and manual rates whose history begins in 1985: two that March, one on the last day of
+     * 1999 (still before the sentinel), and three in the last weeks. Registered for the teardown before it exists; the
+     * precondition is verified, not inferred: the pair's first stored rate, read through the API, is the 1985 one.
+     */
+    async function seedOldRatePair(page: Page, ownedFxQuotes: string[], quote: string): Promise<void> {
+        await test.step(`setup: EUR-${quote} with a manual route and rates from ${FIRST_RATE_DAY}`, async () => {
+            ownedFxQuotes.push(quote);
+            await resetReservedPair(page, quote, 'precondition');
+            const route = {base: 'EUR', quote, priority: 999, chain_steps: [{from: 'EUR', to: quote, provider: 'MANUAL'}]};
+            schemas.FXConversionRouteItem.parse(route);
+            const routeResponse = await page.request.post(FX_ROUTES_PATH, {data: [route]});
+            expect(routeResponse.status(), `create the EUR-${quote} MANUAL route: ${await routeResponse.text()}`).toBe(201);
+            const days = [FIRST_RATE_DAY, '1985-03-04', '1999-12-31', daysAgoIso(35), daysAgoIso(10), daysAgoIso(3)];
+            const rates = await page.request.post(FX_RATE_PATH, {data: days.map((date, index) => ({date, base: 'EUR', quote, rate: [1.1, 1.11, 1.2, 1.3, 1.4, 1.5][index], source: 'MANUAL'}))});
+            expect(rates.ok(), `store the EUR-${quote} rates: HTTP ${rates.status()} ${await rates.text()}`).toBe(true);
+            // `min` resolves to the first stored day: the answer's first point is the 1985 rate, whatever the page does.
+            const first = await page.request.post(FX_CONVERT_PATH, {data: [{from_amount: {code: 'EUR', amount: '1'}, to: quote, date_range: {start: 'min', end: todayIso()}}]});
+            const conversion = schemas.FXConvertResponse.parse(await jsonFrom(first, `convert 1 EUR to ${quote} from min`));
+            expect(conversion.results[0]?.conversion_date, `precondition: EUR-${quote} begins on ${FIRST_RATE_DAY}`).toBe(FIRST_RATE_DAY);
+        });
+    }
+
+    /** The items of a convert request that concern EUR-`quote`: `[]` for any other request, or one with no readable body. */
+    function convertAsksFor(request: Request, quote: string): Array<{start: string | null}> {
+        if (request.method() !== 'POST' || new URL(request.url()).pathname !== FX_CONVERT_PATH) return [];
+        let body: unknown;
+        try {
+            body = request.postDataJSON();
+        } catch {
+            return [];
+        }
+        if (!Array.isArray(body)) return [];
+        const asks: Array<{start: string | null}> = [];
+        for (const raw of body) {
+            if (raw === null || typeof raw !== 'object') continue;
+            const item = raw as {from_amount?: {code?: unknown}; to?: unknown; date_range?: {start?: unknown}};
+            if (item.to !== quote && item.from_amount?.code !== quote) continue;
+            const start = item.date_range?.start;
+            asks.push({start: typeof start === 'string' ? start : null});
+        }
+        return asks;
+    }
+
+    /** Opens EUR-`quote` on «All» by URL and verifies, rather than assumes, that «All» is the range on screen; returns the page's root and the start field of the range. */
+    async function openPairOnAllOf(page: Page, quote: string): Promise<{root: Locator; picker: Locator; startInput: Locator}> {
+        const root = await openSyntheticDetail(page, `/fx/EUR-${quote}?start=min&end=max`, 'fx-detail-page');
+        await expect(root, 'the page shows the pair this test created').toHaveAttribute('data-chart-pair', `EUR-${quote}`);
+        const picker = page.getByTestId('fx-detail-filter-bar').getByTestId('date-range-picker-root');
+        await expect(picker.getByTestId('date-preset-max'), '«All» is the active preset').toHaveAttribute('data-active', 'true', {timeout: 10_000});
+        return {root, picker, startInput: picker.getByTestId('date-range-input-start')};
+    }
+
+    // The visible half. Red while the page asks from 2000-01-01: the first rate it is handed is one of the recent ones,
+    // so the field reads the oldest of those and the 1985 and 1999 rates are not on the chart at all.
+    test('FB-7b the range of All starts on the first stored rate, even when it is before 2000', async ({page, ownedFxQuotes}) => {
+        const quote = quoteFor('allStart');
+        await seedOldRatePair(page, ownedFxQuotes, quote);
+        const {root, startInput} = await openPairOnAllOf(page, quote);
+
+        await expect(root, 'the rates are drawn').not.toHaveAttribute('data-chart-last-rate', '', {timeout: 10_000});
+        await expect(startInput, `«All» starts on the first stored rate (${FIRST_RATE_DAY}), not on a later one`).toHaveValue(FIRST_RATE_DAY, {timeout: 10_000});
+    });
+
+    // The wire half. Red while the page asks from the 2000-01-01 placeholder. Armed before the navigation: the request is
+    // sent while the page loads, and a listener armed after it would wait for one that already went by.
+    test('FB-7b the first rates request of All carries the min start', async ({page, ownedFxQuotes}) => {
+        const quote = quoteFor('minRequest');
+        await seedOldRatePair(page, ownedFxQuotes, quote);
+        const asked = armed(page.waitForRequest((request) => convertAsksFor(request, quote).length > 0, {timeout: 30_000}));
+        await openPairOnAllOf(page, quote);
+
+        const first = convertAsksFor(await asked, quote)[0];
+        expect(first?.start, 'the first rates request for this pair on «All» asks from the min sentinel').toBe('min');
+    });
+
+    // The memory half. In-app navigation keeps the page's in-memory stores, a reload empties them: the way away is the
+    // sidebar and the way back is the browser's back, both client-side. After the way back the page has released its busy
+    // flag and drawn the rates, so a `min` request that was going to be sent has been sent. The requests are taken from the
+    // moment of the way back, and only those the page sent while it was on this pair's detail (the FX list asks for its
+    // cards in between).
+    test('FB-7b a second visit to All still starts on the first stored rate and does not ask for min again', async ({page, ownedFxQuotes}) => {
+        const quote = quoteFor('secondVisit');
+        const pair = `EUR-${quote}`;
+        await seedOldRatePair(page, ownedFxQuotes, quote);
+        const asks: Array<{start: string | null; pageUrl: string}> = [];
+        page.on('request', (request) => {
+            // Read synchronously: the page URL is the page that sent the request, not the one it will be on later.
+            const pageUrl = page.url();
+            asks.push(...convertAsksFor(request, quote).map((ask) => ({...ask, pageUrl})));
+        });
+        const {startInput} = await openPairOnAllOf(page, quote);
+        await expect(startInput, 'first visit: «All» starts on the first stored rate').toHaveValue(FIRST_RATE_DAY, {timeout: 10_000});
+
+        // Away, in-app.
+        await openMobileMenu(page);
+        await page.getByTestId('nav-fx').click();
+        await expect(page).toHaveURL(/\/fx(?:[?#]|$)/, {timeout: 15_000});
+        const list = page.getByTestId('fx-page');
+        await expect(list).toBeVisible({timeout: 15_000});
+        await waitForSettled(list, 30_000);
+        await expect(page.getByTestId('fx-detail-page'), 'the detail really unmounted: otherwise nothing is remounted on the way back').toHaveCount(0);
+
+        // Back, in-app.
+        const mark = asks.length;
+        await page.goBack();
+        await expect(page, 'back on the detail of this pair').toHaveURL(new RegExp(`/fx/${pair}(?:[?#]|$)`), {timeout: 15_000});
+        const detail = page.getByTestId('fx-detail-page');
+        await expect(detail).toBeVisible({timeout: 15_000});
+        await waitForSettled(detail, 30_000);
+        const picker = page.getByTestId('fx-detail-filter-bar').getByTestId('date-range-picker-root');
+        await expect(picker.getByTestId('date-preset-max'), '«All» is still the active preset').toHaveAttribute('data-active', 'true', {timeout: 10_000});
+        await expect(detail, 'the rates are drawn').not.toHaveAttribute('data-chart-last-rate', '', {timeout: 10_000});
+        await expect(picker.getByTestId('date-range-input-start'), 'second visit: «All» still starts on the first stored rate').toHaveValue(FIRST_RATE_DAY, {timeout: 10_000});
+
+        const onDetail = asks.slice(mark).filter((ask) => ask.pageUrl.includes(`/fx/${pair}`));
+        expect(
+            onDetail.filter((ask) => ask.start === 'min'),
+            'the first day is remembered for the session: the detail does not ask the rates from min again',
+        ).toEqual([]);
     });
 });
 

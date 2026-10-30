@@ -43,7 +43,7 @@ from backend.app.db.models import FxRate
 from backend.app.schemas import SignalRequest
 from backend.app.schemas.common import Currency, DateRangeModel
 from backend.app.schemas.fx import FXConversionRequest
-from backend.app.services.fx.conversion import convert_bulk
+from backend.app.services.fx.conversion import convert_bulk, unit_rate_steps
 from backend.app.services.fx.stretch_conversion import convert_by_stretch
 from backend.app.utils.datetime_utils import utcnow
 
@@ -222,8 +222,19 @@ async def test_xq304_the_handler_answers_what_it_answered_with_every_day_convert
     through ``convert_bulk`` (the reference replaces ``convert_by_stretch`` by that call)."""
     request = HANDLER_CASES[name]
 
-    async def every_day(session, conversions, *, convert=None, steps=None):
-        return await convert_bulk(session, conversions, raise_on_error=False)
+    async def every_day(session, conversions, *, convert=None, steps=None, unit_rates=None):
+        answered = await convert_bulk(session, conversions, raise_on_error=False)
+        if unit_rates is not None:
+            # MF-A13: the handler's ``rate`` is the unit rate of the day's step, read from the steps, never ``to / from``
+            days_by_pair: dict[tuple[str, str], list[date]] = {}
+            for amount, destination, day in conversions:
+                if amount.code != destination:
+                    days_by_pair.setdefault((amount.code, destination), []).append(day)
+            pair_steps = await unit_rate_steps(session, {pair: [(min(days), max(days))] for pair, days in days_by_pair.items()}) if days_by_pair else {}
+            for index, (amount, destination, day) in enumerate(conversions):
+                if amount.code != destination and answered[0][index] is not None:
+                    unit_rates[index] = pair_steps[(amount.code, destination)].at(day)
+        return answered
 
     async def answer() -> Any:
         async with AsyncSession(world.engine, expire_on_commit=False) as session:

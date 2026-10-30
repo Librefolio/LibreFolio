@@ -73,6 +73,8 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/charts/__tests__/comparisonAssetsFeed.wiring.test.ts",
             "src/lib/services/fxCreationSync.test.ts",
             "src/lib/utils/sync/__tests__/syncToastHelpers.test.ts",
+            "src/lib/utils/sync/storedPriceCounts.test.ts",
+            "src/lib/stores/firstSeriesDates.test.ts",
             "src/lib/utils/sync/__tests__/syncRange.test.ts",
             "src/lib/utils/sync/__tests__/syncHelpers.test.ts",
             "src/lib/stores/reference/fxRoutesStore.test.ts",

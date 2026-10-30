@@ -261,6 +261,16 @@ def services_price_query_observations(verbose: bool = False, test_names: list = 
     return run_command(cmd, "Price query observation tests", verbose=verbose)
 
 
+def services_price_point_fx_rate_parity(verbose: bool = False, test_names: list = None) -> bool:
+    """MF-A13: a converted price point is its native price times the day's unit rate, the portfolio engine's formula."""
+    print_section("Services: Price Point FX Rate Parity (MF-A13)")
+    print_info("Testing: FAPricePoint.fx_rate, observed_prices (via get_prices_bulk), against unit_rate_steps and AskedDayRates")
+    print_info("Direct pair: every point bit-identical to the pre-MF-A13 pass (a copy in the test); inverse pair: the last of 28 digits at most, a rounded value only across a tie")
+    print_info("One formula: original_* x AskedDayRates[(src, tgt, day)] is the point's close/open/high/low to the digit; fx_rate is the day's step, None on a point that did not convert")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_price_point_fx_rate_parity.py", test_names)
+    return run_command(cmd, "Price point FX rate parity tests", verbose=verbose)
+
+
 def services_fx_stretch_conversion(verbose: bool = False, test_names: list = None) -> bool:
     """X-Q3: POST /fx/currencies/convert converts once for each stretch of days on which the rate row is the same."""
     print_section("Services: FX Stretch Conversion (X-Q3)")
@@ -2399,6 +2409,15 @@ Note: No backend server required.
         name="Price Query Observations",
         desc="X-Q1/Q2/S1: get_prices_bulk reads a series by observation and converts once for each stretch of unchanged price row and rate row; the public points and conversion errors equal the 1fd80c481 pipeline's (18 cases, 7 with signals); convert_bulk handed the stretches, not the days; ObservedPrices (first_point_date, observation_dates, point_on) for the risk",
         # PURE: a private SQLite file under tmp_path built with create_all; the market holiday table replaced by monkeypatch; no lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "price-point-fx-rate-parity",
+        services_price_point_fx_rate_parity,
+        name="Price Point FX Rate Parity",
+        desc="MF-A13 (financial math's view): get_prices_bulk's converted point is original_* x the day's unit rate; direct pair (EUR->USD) bit-identical to the pre-MF-A13 pass, inverse pair (USD, GBP->EUR) the last of 28 digits at most and a value quantized to 1e-12, 1e-6, cents changes only across a rounding tie; original_* x AskedDayRates built from unit_rate_steps (the engine's rate map) is the point's close, open, high, low to the digit, both orientations; fx_rate = unit_rate_steps(...).at(day), None on native, zero-close and rate-less points",
+        # PURE: the corpus of test_price_query_observations.py on a private SQLite file under tmp_path built with create_all; the market holiday table replaced by monkeypatch; no lane DB, no server, no network.
         isolation="pure",
     )
     add_test(

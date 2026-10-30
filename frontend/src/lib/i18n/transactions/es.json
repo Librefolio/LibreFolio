@@ -363,7 +363,28 @@
       "link": "Vincular",
       "linkAll": "Vincular todas las filas con un solo evento",
       "linkError": "No se vinculó nada: el servidor rechazó el cambio.",
-      "close": "Cerrar"
+      "close": "Cerrar",
+      "colAsset": "Activo",
+      "colBroker": "Bróker",
+      "colEvent": "Evento",
+      "colStatus": "Estado",
+      "colAction": "Acción",
+      "status": {
+        "unique": "Un evento ese día",
+        "none": "Ningún evento ese día",
+        "several": "Varios eventos ese día"
+      },
+      "linkSelected": "Vincular los seleccionados",
+      "createSelected": "Crear los eventos",
+      "createOne": "Crear evento",
+      "nothingToLink": "Selecciona filas con un evento ese día para vincularlas.",
+      "nothingToCreate": "Selecciona filas sin evento ese día para crear sus eventos.",
+      "createTitle": "Crear los eventos que faltan",
+      "createIntro": "Revisa el tipo e introduce el valor de cada evento, en la moneda del activo. Los eventos se crean el día de la transacción; luego vincúlalos.",
+      "createValue": "Valor",
+      "createServes": "{n} transacciones",
+      "createHint": "Introduce para cada evento un valor mayor que 0, con 6 decimales como máximo.",
+      "createConfirm": "{n, plural, one {Crear # evento} other {Crear # eventos}}"
     }
   }
 }

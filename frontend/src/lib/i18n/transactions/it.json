@@ -363,7 +363,28 @@
       "link": "Collega",
       "linkAll": "Collega tutte le righe con un solo evento",
       "linkError": "Non è stato collegato nulla: il server ha rifiutato la modifica.",
-      "close": "Chiudi"
+      "close": "Chiudi",
+      "colAsset": "Asset",
+      "colBroker": "Broker",
+      "colEvent": "Evento",
+      "colStatus": "Stato",
+      "colAction": "Azione",
+      "status": {
+        "unique": "Un evento quel giorno",
+        "none": "Nessun evento quel giorno",
+        "several": "Più eventi quel giorno"
+      },
+      "linkSelected": "Collega i selezionati",
+      "createSelected": "Crea gli eventi",
+      "createOne": "Crea evento",
+      "nothingToLink": "Seleziona righe con un evento quel giorno per collegarle.",
+      "nothingToCreate": "Seleziona righe senza evento quel giorno per crearne gli eventi.",
+      "createTitle": "Crea gli eventi mancanti",
+      "createIntro": "Controlla il tipo e inserisci il valore di ogni evento, nella valuta dell’asset. Gli eventi sono creati nel giorno della transazione; poi collegali.",
+      "createValue": "Valore",
+      "createServes": "{n} transazioni",
+      "createHint": "Inserisci per ogni evento un valore maggiore di 0, con al massimo 6 decimali.",
+      "createConfirm": "{n, plural, one {Crea # evento} other {Crea # eventi}}"
     }
   }
 }
