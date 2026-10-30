@@ -90,7 +90,7 @@ async function keepOffline(page: Page, origin: string): Promise<void> {
         (route) => route.abort('blockedbyclient'),
     );
     // Answered empty: the live providers are not asked, and today's price row of the shared seeded assets is not written.
-    await page.route('**/api/v1/assets/prices/current', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
+    await page.route('**/api/v1/assets/prices/current*', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
 }
 
 interface Hop {

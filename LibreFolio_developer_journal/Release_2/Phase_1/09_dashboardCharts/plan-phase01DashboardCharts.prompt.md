@@ -8815,3 +8815,35 @@ Il developer vuole che la issue GitHub #63 («Portfolio Growth»: cursore sul 25
 - **Il difetto sul commit vecchio**: non riprodotto. Non ho provato un commit prima di D-P4 (il ramo non si può cambiare da qui); la prova di sensibilità è una mutazione del bordo di `paramsAtDay` (`>` → `>=`), che fa diventare rossi i test del giorno più recente.
 
 > **⚠️ Fuori pista**: la crescita non agganciava il puntatore al giorno più vicino (Y6-1, ramo di Y, lo aggiunge). I due casi della crescita sul giorno più recente sono rossi sul ramo senza quel commit, verdi dopo l'unione: la ragione è giusta (un puntatore nella seconda metà del giorno prima è ancora il giorno più recente).
+
+## 28/10 · Ondata 6 — checkpoint 3a (day snap · common.totalValue · Y6-1)
+
+Base: `19c9928ae` (checkpoint 2 `0f7709fc6` + checkpoint 1 di Y2 `8537f3a99`).
+
+- ✅ (28/10) **`attachDaySnap` nel grafico di crescita** (richiesta di Y2): `GrowthChart.svelte` chiama `attachDaySnap(zoomInstance)` dopo il suo `updateAxisPointer`. Nuovo `GrowthChart.daySnap.test.ts` (2 casi: il puntatore a metà fra due giorni è riportato sul giorno più vicino, 1 rosso prima; già su un giorno non si tocca).
+- ✅ (28/10) **`common.totalValue`** tolta dai 4 cataloghi (nessun uso dopo la tolta del ramo morto del broker).
+- ✅ (28/10) **Y6-1 (Y-32)**, la lista degli asset: il poll dei prezzi live porta con sé il Δ del backend e porta la testa della serie.
+  - `fetchCurrentPrices(ids, {rangeStart})` manda `range_start` a ogni lotto; `LivePriceResult` ha `asOfDate` e `rangeChange`.
+  - La lista chiede `range_start` solo quando l'intervallo finisce oggi e «Tutto» ha già un primo giorno vero (non mentre è in attesa): il Δ della card segue il prezzo mostrato (`applyLiveRangeDeltas`, `assetRangeDelta`).
+  - L'ultimo punto della serie in cache e della card si porta sul prezzo live **sul posto**, senza invalidare né richiedere (`withLiveHead` in `utils/liveHead.ts`, `ReducedPriceCache.applyLiveHead`): giornaliera, il punto del giorno prende il prezzo oppure se ne aggiunge uno; settimanale/mensile, l'ultimo punto si sposta, i bucket restano gli stessi (lo step che la cache serve non cambia). Una risposta di un intervallo passato nel frattempo non si applica.
+  - Rossi prima, verdi dopo: `livePriceService.test.ts` (5 rossi, 81/81 dopo; 4 aspettative del mappatore aggiornate con i due campi nuovi), `liveHead.test.ts` (10), `reducedPriceCache.test.ts` (+5).
+  - **Glob degli E2E** (avviso del backlog): le richieste ora hanno una query, quindi le glob esatte `**/api/v1/assets/prices/current` non le vedevano e la lista avrebbe interrogato i provider veri e scritto nel DB condiviso. Allargate con `*` in nove file che aprono la lista (`asset-list`, `asset-browse`, `asset-card-sync-confirm`, `asset-event-delete`, `asset-data-editor`, `asset-events-owned`, `asset-modal`, `app-start-auth`, `onboarding-tour`, `tx-import-asset-inspector`). Lasciati esatti `asset-detail:90` e `fx-detail:427` (pagine di dettaglio).
+  - Nuovo E2E «Asset List Page — the live poll brings the Δ with the quote»: il poll chiede `range_start` e la card mostra il Δ.
+  > **⚠️ Fuori pista**: l'E2E l'ho scritto con la cura (nessun rosso eseguito); il rosso eseguito è Vitest.
+- ✅ **Prove (28/10)**: Vitest `services`, `stores`, `utils`, `features/dashboard`, `components/assets`, `components/charts` 214 file / 7028; `front check` 0/0; `front-asset asset-list` 54/54; `front-asset asset-browse` 8/8; `front-portfolio dashboard` 33/33; `i18n check` stretto; `check-orphans` verde.
+
+## 29/10 · Ondata 6 — checkpoint 3b (FB-12 · FB-13)
+
+Base: `21016b21e` (checkpoint 3a `37c7aa68b` + X). `front check` sul ramo unito: 0/0.
+
+- ✅ (29/10) **FB-13, asset venduti dentro il periodo nella tabella Portfolio.** Il report non ha bisogno di campi nuovi: i venduti sono le posizioni di `positions_contribution` con `is_fully_sold`. `ExposureTable` ha la prop `soldPositions`: righe **dopo** le aperte, **in corsivo**, senza valore/peso/rendimento (la colonna YOC dice «—»), una per posizione che non sia aperta presso lo stesso broker, con spunta e azioni (vedi asset, analizza lotti). La spunta fa disegnare la loro linea nel grafico (la chiave è quella di una posizione aperta). `PositionsPanel` chiede la contribution anche con la vista Portfolio/Table.
+  > **Nota**: la contribution è la seconda richiesta che il developer trova lenta (FB-14, MF): finché non è unificata, la vista Portfolio ne paga il costo. Nessun campo mancante nel backend.
+  > Venduti in `ExposureTable.test.ts` (5, 4 rossi prima) e in `PositionsPanel.test.ts` (3).
+- ✅ (29/10) **FB-12, il grafico delle posizioni.**
+  - **Accanto**: sezione `positions-chart-section` a griglia 5 colonne come Crescita/Allocazione della Dashboard: il grafico «Return of the positions» a 3/5 (in una card), l'allocazione **per asset** a 2/5, torta e storico (`AllocationPanel` con `lockedTab="asset"`, senza i tab delle dimensioni). La scelta torta/storico ha una chiave sua (`dashboard-positions-allocation-view`): non muove quella dell'allocazione della Dashboard.
+  - **Anche sotto Period**: `ContributionTable` ha la selezione (`selectable`, `selectedKeys`, `onSelectionChange`, con chiavi di posizione `asset-broker`, mentre gli id di riga restano `pos-broker-asset`); il grafico e l'allocazione compaiono sotto la tabella e le altre spese del periodo. Nella vista Mappa nessun grafico, come prima.
+  - **Abs/% sul grafico**: nell'area del grafico (`positions-chart-plot`, in alto a destra), non nella riga del titolo. **La frase sul TWRR sotto il grafico.**
+  - **Con il dettaglio dei lotti aperto**: nel broker il grafico resta (i lotti si aprono sotto); nella Dashboard il dettaglio prende il posto della vista, com'era e come il test E2E del lotto lo fissa: non cambio nulla.
+  - Rossi prima, verdi dopo: `PositionsReturnChart.test.ts` (2), `PositionsPanel.test.ts` (5 nuovi/cambiati), `ContributionTable.test.ts` (4 + 6 di guardia).
+- ✅ **Prove (29/10)**: Vitest `features/dashboard`, `features/brokers`, `components/table`: 61 file / 2111; `front check` 0/0; `front-portfolio dashboard` 34/34 (c'è il nuovo E2E del layout, sotto Portfolio e sotto Period); `front-broker detail` 41/41; `check-orphans` verde.
+- 📝 **FB-15** (vista Rolling) parte dopo il commit: modulo `positionsRolling` (richiesta del segnale `ASSET_CALENDAR_ROLLING_RETURN`, linea, controller) già scritto e provato in isolamento (15 casi), tenuto fuori dall'albero finché non è collegato (il lint delle esportazioni inutilizzate).

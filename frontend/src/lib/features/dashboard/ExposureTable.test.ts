@@ -1115,3 +1115,53 @@ describe('ExposureTable — row selection (Y5-2)', () => {
         ]);
     });
 });
+
+describe('ExposureTable — the positions sold inside the period (FB-13)', () => {
+    /** A position the period's contribution lists as closed by its end: no longer a holding, still a row of the Portfolio. */
+    const sold = (asset_id: number, broker_id: number) => ({asset_id, asset_name: `Sold ${asset_id}`, asset_type: 'STOCK', broker_id, broker_name: `Broker ${broker_id}`});
+    const open = () => [holding(11, 1, {yieldOnCost: noIncomeYieldOnCost()}), holding(22, 1, {yieldOnCost: noIncomeYieldOnCost()})];
+
+    it('lists them after the open positions, in italics', async () => {
+        render(ExposureTable, {holdings: open(), soldPositions: [sold(55, 1)], displayCurrency: 'EUR'});
+
+        await waitFor(() => expect(document.querySelectorAll('tbody tr[data-row-id]')).toHaveLength(3));
+        // Open ones sort by value descending (22, 11); the sold one comes last.
+        expect(renderedRowIds()).toEqual(['22-1', '11-1', '55-1']);
+        expect(rowEl(55, 1).className).toContain('italic');
+        expect(rowEl(11, 1).className).not.toContain('italic');
+    });
+
+    it('lists only the sold positions that are not open at the same broker: one row per position', async () => {
+        render(ExposureTable, {holdings: open(), soldPositions: [sold(11, 1), sold(11, 2)], displayCurrency: 'EUR'});
+
+        // 11 sold at broker 1 is still open there (a partial sale then a purchase): no second row. At broker 2 it is sold out.
+        await waitFor(() => expect(document.querySelectorAll('tbody tr[data-row-id]')).toHaveLength(3));
+        expect(renderedRowIds()).toEqual(['22-1', '11-1', '11-2']);
+        expect(rowEl(11, 2).className).toContain('italic');
+    });
+
+    it('a sold position can be ticked, to draw its line: the key is the one of an open position', async () => {
+        const onSelectionChange = vi.fn();
+        render(ExposureTable, {holdings: open(), soldPositions: [sold(55, 1)], displayCurrency: 'EUR', selectable: true, onSelectionChange});
+        await waitFor(() => expect(document.querySelectorAll('tbody tr[data-row-id]')).toHaveLength(3));
+
+        await fireEvent.click(screen.getByTestId('dt-row-checkbox-55-1'));
+
+        await waitFor(() => expect(onSelectionChange).toHaveBeenCalledWith([{key: '55-1', assetId: 55, brokerId: 1}]));
+    });
+
+    it('a sold position keeps its broker and its type, and has no value, no weight', async () => {
+        render(ExposureTable, {holdings: open(), soldPositions: [sold(55, 1)], displayCurrency: 'EUR'});
+        await waitFor(() => expect(document.querySelectorAll('tbody tr[data-row-id]')).toHaveLength(3));
+
+        const row = rowEl(55, 1);
+        expect(row.textContent).toContain('Sold 55');
+        expect(row.textContent).toContain('Broker 1');
+    });
+
+    it('nothing sold, nothing more: the table is as it was', async () => {
+        render(ExposureTable, {holdings: open(), displayCurrency: 'EUR'});
+        await waitFor(() => expect(document.querySelectorAll('tbody tr[data-row-id]')).toHaveLength(2));
+        expect(document.querySelector('tbody tr.italic')).toBeNull();
+    });
+});
