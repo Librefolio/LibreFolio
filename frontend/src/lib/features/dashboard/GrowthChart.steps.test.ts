@@ -321,6 +321,14 @@ describe('the edges of the plot (Y2-I63, issue #63)', () => {
     });
 });
 
+/**
+ * The ceilings of the long-history cases, which mount a series of thousands of steps and wait for the resolution cascade to settle: a ceiling,
+ * never a delay (`waitFor` returns as soon as the badge says so). Left at 5 s, the same as the default of the case itself, they went red whenever
+ * the machine ran other lanes' work at the same time (the cascade is CPU-bound).
+ */
+const LONG_HISTORY_MS = 25_000;
+const TEST_CEILING_MS = 40_000;
+
 describe('the resolution badge on a long history (Y2 FB-6)', () => {
     /** 26 years of one-day steps: 9 497 days over a 1 200 px plot is 7.9 a pixel, and their 1 357 weeks are 1.13, under the 1.3 the weekly line takes. */
     const FIRST = '2000-01-03';
@@ -333,8 +341,8 @@ describe('the resolution badge on a long history (Y2 FB-6)', () => {
 
     it('shows the Weekly badge: the days are grouped in weeks', async () => {
         const {getByTestId} = await mount({history: longDaily, range: longRange, mwrrLine: []});
-        await waitFor(() => expect(getByTestId('chart-resolution-badge')).toHaveAttribute('data-resolution', 'weekly'), {timeout: 5_000});
-    });
+        await waitFor(() => expect(getByTestId('chart-resolution-badge')).toHaveAttribute('data-resolution', 'weekly'), {timeout: LONG_HISTORY_MS});
+    }, TEST_CEILING_MS);
 });
 
 describe('a history of 140 years is grouped by year (Y2 FB-6)', () => {
@@ -346,7 +354,7 @@ describe('a history of 140 years is grouped by year (Y2 FB-6)', () => {
 
     it('is drawn a point a year, linear, and the badge says Yearly', async () => {
         const {getByTestId} = await mount({history: centuries, range, mwrrLine: []});
-        await waitFor(() => expect(getByTestId('chart-resolution-badge')).toHaveAttribute('data-resolution', 'yearly'), {timeout: 5_000});
+        await waitFor(() => expect(getByTestId('chart-resolution-badge')).toHaveAttribute('data-resolution', 'yearly'), {timeout: LONG_HISTORY_MS});
         const lines = renderedSeries().filter((series) => series.type === 'line');
         expect(
             lines.some((series) => series.step === 'end'),
@@ -354,16 +362,16 @@ describe('a history of 140 years is grouped by year (Y2 FB-6)', () => {
         ).toBe(false);
         expect(lines[0].data.length, 'about a point a year: 140 of them').toBeGreaterThan(130);
         expect(lines[0].data.length).toBeLessThan(160);
-    });
+    }, TEST_CEILING_MS);
 
     it('heads the tooltip of a yearly point with its year', async () => {
         await mount({history: centuries, range, mwrrLine: []});
-        await waitFor(() => expect(renderedSeries().find((series) => series.type === 'line')?.data.length).toBeLessThan(160), {timeout: 5_000});
+        await waitFor(() => expect(renderedSeries().find((series) => series.type === 'line')?.data.length).toBeLessThan(160), {timeout: LONG_HISTORY_MS});
         const html = tooltipFormatter()([{dataIndex: 70}]);
         // The year of the 71st yearly bucket: 1886 + 70, as its own text and in no date form.
         expect(html).toContain('1956');
         expect(withoutTooltipDays(html)).not.toMatch(/\d{4}-\d{2}-\d{2}/);
-    });
+    }, TEST_CEILING_MS);
 });
 
 describe('the line shape the user chose (Y2 FB-3)', () => {

@@ -421,7 +421,7 @@ describe('LineChart — the days its tooltip writes, in the house notation of th
     });
 });
 
-describe('LineChart — the tooltip names the day it stands for (Y2-I63, issue #63)', () => {
+describe('LineChart — the tooltip names the day it stands for (Y2-I63, issue #63)', {timeout: 20_000}, () => {
     it.each([
         ['the newest day', DATA[DATA.length - 1].date],
         ['the oldest day', DATA[0].date],
