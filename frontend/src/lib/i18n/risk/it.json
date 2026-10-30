@@ -357,8 +357,6 @@
       "title": "Replay storico",
       "compositionNotice": "Applica i rendimenti storici osservati alla composizione corrente; non ricostruisce il possesso passato.",
       "preset": "Preset periodo",
-      "start": "Data iniziale",
-      "end": "Data finale",
       "proxy": "Proxy storico manuale",
       "exclude": "Escludi questo asset dal replay",
       "results": "Risultati replay storico",

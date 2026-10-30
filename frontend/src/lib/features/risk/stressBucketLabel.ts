@@ -11,6 +11,7 @@
  * catalogue and the reference stores where Svelte tracks them, and reloads them per language.
  */
 import type {RiskScenarioDimension} from '$lib/features/risk/riskRequest';
+import {localizedScenarioText} from '$lib/features/risk/riskAnalysisHelpers';
 import {sectorI18nKey} from '$lib/utils/assetTypes';
 import {translateOr} from '$lib/utils/core/translateOr';
 
@@ -22,6 +23,20 @@ export interface StressBucketVocabulary {
     sectorEmoji: (sector: string) => string;
     /** A country by its ISO alpha-3 code (`getCountryInfo`): an unknown code has an empty `iso2`. */
     country: (iso3: string) => {iso2: string; flag_emoji: string; name: string};
+    /** A geography group's name in the reader's language (`geographyGroupNamer`): `''` for an id the catalogue does not carry. */
+    geographyGroup?: (id: string) => string;
+}
+
+/**
+ * The names of the host's geography groups, from the scenario catalogue, in one language.
+ *
+ * The host writes each group's name per language, so it is shown as given and never translated here.
+ * An id with no name, or no catalogue yet, answers `''` and the caller shows the id as written.
+ */
+export function geographyGroupNamer(catalog: {geography_groups?: {id: string; name?: unknown}[] | null} | null | undefined, language: string): (id: string) => string {
+    const names = new Map<string, string>();
+    for (const group of catalog?.geography_groups ?? []) names.set(group.id, localizedScenarioText(group.name, language));
+    return (id) => names.get(id) ?? '';
 }
 
 /**
@@ -38,6 +53,8 @@ export function stressBucketLabel(bucket: string, dimension: RiskScenarioDimensi
         const emoji = words.sectorEmoji(bucket);
         return emoji ? `${emoji} ${name}` : name;
     }
+    const group = words.geographyGroup?.(bucket) ?? '';
+    if (group !== '') return group;
     const country = words.country(bucket);
     return country.iso2 === '' ? bucket : `${country.flag_emoji} ${country.name}`;
 }
