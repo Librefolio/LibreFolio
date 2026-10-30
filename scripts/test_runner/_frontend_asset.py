@@ -169,6 +169,15 @@ def front_asset_event_delete(verbose: bool = False, ui: bool = False, headed: bo
     return _run_playwright("assets/asset-event-delete.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_asset_select_portal(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the SimpleSelect-above-the-DataTable-header E2E test (lot H6-1)."""
+    print_section("Frontend Asset Select Portal Tests")
+    if not _ensure_frontend_build(): return False
+    if not _ensure_db_populated(): return False
+    if not _ensure_test_users(): return False
+    return _run_playwright("assets/asset-select-portal.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_asset_event_editor_save(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the Events tab save-order and row-currency E2E tests (release 1.3, W E1b)."""
     print_section("Frontend Asset Event Editor Save Tests")
@@ -266,6 +275,14 @@ def populate_registry(registry: dict) -> None:
         name="Asset Event Editor Save",
         desc="Release 1.3 (W E1b), each test on an asset of its own: one save deletes an event and retypes another onto its key — deletions go first and both are kept (I-10); a CSV line in another currency is sent with its own code and refused, nothing of the save kept (I-11c, decision 22); a refused save is an error toast and keeps nothing (guard)",
         tests="assets/asset-event-editor-save.spec.ts",
+    )
+    add_test(
+        cat,
+        "asset-select-portal",
+        front_asset_select_portal,
+        name="Asset Select Portal",
+        desc="H6-1: the list of the Type select in the Events editor opens over the DataTable's sticky header and is painted above it: the topmost element at the centre of every option is inside the list, and a click on an option under the header chooses it",
+        tests="assets/asset-select-portal.spec.ts",
     )
     add_test(cat, "asset-name-xss", front_asset_name_xss, name="Asset Name XSS", desc="A stored asset name and icon URL carrying markup stay text in the table and card views of /assets, and run nothing (K step 13, item 0)", tests="assets/asset-name-xss.spec.ts")
     add_test(

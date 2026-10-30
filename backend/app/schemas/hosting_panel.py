@@ -87,6 +87,46 @@ class PanelStatusResponse(BaseModel):
     )
 
 
+class PanelConfigWarning(BaseModel):
+    """One check of the Security tab that is not ``ok``: its id and how serious it is, never its detail (CL-M1)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    check_id: str = Field(..., description="The check's id, as `GET /security/checks` lists it (`platform.jwt_secret`)")
+    severity: Literal["info", "warning", "error"] = Field(..., description="How serious the check found it; an `ok` check is not listed")
+
+
+class PanelMetricsResponse(BaseModel):
+    """``GET /api/v1/panel/metrics``: read-only figures of the instance for the hosting provider (CL-M1).
+
+    Figures, never who or what: no email, user or broker name, path or secret. Every key is always present; a figure
+    that could not be measured is ``null`` (and logged), never an error, and each one fails alone. Sizes are in MiB
+    (1024 * 1024), to a tenth.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    started_at: datetime | None = Field(..., description="When this server process started, in UTC (a restart of the instance moves it)")
+    storage_used_mb: float | None = Field(..., description="Space used on the volume that holds the instance's data directory, in MiB: everything on it, not only LibreFolio's files")
+    storage_limit_mb: float | None = Field(..., description="Size of that volume, in MiB: the room the plan gives the instance")
+    database_mb: float | None = Field(..., description="Size of the SQLite database file with its write-ahead log, in MiB")
+    uploads_mb: float | None = Field(..., description="Size of the uploaded files (the `custom-uploads` folder, symbolic links not followed), in MiB")
+    config_warnings: list[PanelConfigWarning] | None = Field(..., description="The Security tab's checks that are not ok, as `check_id` and `severity` only: no detail, no message, no value; in the tab's order")
+    price_refresh_last_ok_at: datetime | None = Field(..., description="When a price refresh of the scheduler (current prices or history sync) last ended ok, from the job log; null when none is in the log")
+    price_refresh_errors_24h: int | None = Field(..., ge=0, description="Items the scheduler's price refreshes failed on in the last 24 hours, in total (current prices: the failed items; history sync: the failed assets and rates), from the job log")
+    jobs_failed_24h: int | None = Field(
+        ...,
+        ge=0,
+        description="Scheduler runs, of any job, that ended in error in the last 24 hours. Counted from the job log, which keeps the last 500 entries only: on a busy instance it can reach back less than 24 hours",
+    )
+    brokers_count: int | None = Field(..., ge=0, description="How many brokers the instance holds (there is no portfolio table)")
+    transactions_count: int | None = Field(..., ge=0, description="How many transactions the instance holds")
+    assets_count: int | None = Field(..., ge=0, description="How many assets the instance holds")
+    plugins_enabled: list[str] | None = Field(..., description="The price providers in use: the sorted codes of the providers some asset is assigned to")
+    market_data_credits_used: int | None = Field(..., description="Always null today: no price provider has credits")
+    market_data_credits_limit: int | None = Field(..., description="Always null today: no price provider has credits")
+
+
 class PanelRestoreStageReport(BaseModel):
     """What a restore of the checked archive would do, as the panel sees it (contract L3 §5, R1): the admin's report
     without its personal or portfolio data — the administrators become their count, the totals their verdict and the

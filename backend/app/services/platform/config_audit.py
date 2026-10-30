@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from backend.app.config import SecretFileError, get_data_dir, get_settings, is_test_mode, secrets_set_twice
-from backend.app.config.accounts import admin_bootstrap_config, default_language, login_limit_enabled, max_users
+from backend.app.config.accounts import admin_bootstrap_config, default_currency, default_language, default_timezone, login_limit_enabled, max_users
 from backend.app.config.backup import PANEL_TOKEN_VARIABLE as BACKUP_PANEL_TOKEN_VARIABLE
 from backend.app.config.backup import BackupConfigError, backup_download_token
 from backend.app.config.hosting_panel import PANEL_STATUS_TOKEN_VARIABLE, HostingPanelConfigError, panel_audience, panel_clock_skew_seconds, panel_public_keys, panel_public_url_path, panel_status_token
@@ -390,6 +390,8 @@ def log_configuration_audit() -> None:
     max_users()
     # CL-10: a LIBREFOLIO_DEFAULT_LANGUAGE other than en, it, fr or es raises ValueError, naming it
     default_language()
+    default_currency()
+    default_timezone()
     status = instance_key_status()
     if status.source == "configured" and status.problem is not None:
         raise InstanceKeyError(status.problem)

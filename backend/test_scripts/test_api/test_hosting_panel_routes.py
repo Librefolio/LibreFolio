@@ -174,8 +174,13 @@ RESTORE_ROUTES = (
     PanelRoute("restore-status", "GET", "/api/v1/backup/panel/restore/status", f"{_RESTORE}.get_panel_restore_status", "get_panel_restore_status_api_v1_backup_panel_restore_status_get", None),
     PanelRoute("restore-cancel", "DELETE", "/api/v1/backup/panel/restore/pending", f"{_RESTORE}.cancel_panel_pending_restore", "cancel_panel_pending_restore_api_v1_backup_panel_restore_pending_delete", None),
 )
-#: Every route of the hosting panel: the six with a token scope and, since H-62, the seven of the restore.
-PANEL_ROUTES = TOKEN_ROUTES + RESTORE_ROUTES
+#: CL-M1: the figures route, scope ``metrics``, a signed ticket only (like the restore: no token opens it), its own
+#: bearer scheme ``PanelMetricsTicket``. Not in ``TOKEN_ROUTES``: HPR-004 is about the three token schemes. Red until CL-M1.
+METRICS_SCHEME = "PanelMetricsTicket"
+METRICS_ROUTE = PanelRoute("metrics", "GET", "/api/v1/panel/metrics", "backend.app.api.v1.panel.get_panel_metrics", "get_panel_metrics_api_v1_panel_metrics_get", METRICS_SCHEME)
+METRICS_ROUTES = (METRICS_ROUTE,)
+#: Every route of the hosting panel: the six with a token scope, the seven of the restore (H-62) and the figures (CL-M1).
+PANEL_ROUTES = TOKEN_ROUTES + RESTORE_ROUTES + METRICS_ROUTES
 RESTORE_CASES = [pytest.param(route, id=route.name) for route in RESTORE_ROUTES]
 #: H-62: what the restore routes document besides: 409 ``restore_mode_required`` and 423 ``instance_blocked``.
 RESTORE_GATE_ANSWERS = frozenset({"409", "423"})
@@ -467,3 +472,70 @@ def test_the_panel_status_restore_documents_the_unreadable_state_and_its_reasons
     assert SUMMARY_STATES <= states, f"D7: PanelRestoreSummary.state must admit {sorted(SUMMARY_STATES)}: missing {sorted(SUMMARY_STATES - states)}, documented {sorted(states)}"
     assert SUMMARY_REASONS <= reasons and reason_nullable, f"D7: PanelRestoreSummary.reason must admit {sorted(SUMMARY_REASONS)} or null: missing {sorted(SUMMARY_REASONS - reasons)}, documented {sorted(reasons)}, nullable {reason_nullable}"
     print_success(f"PanelRestoreSummary: state {sorted(states)}, reason {sorted(reasons)} or null")
+
+
+# =============================================================================
+# HPR-010..011 (CL-M1): the figures route, ticket only
+# =============================================================================
+
+
+def test_the_metrics_route_asks_for_one_bearer_scheme_of_its_own_and_no_other_operation_does(document):
+    """HPR-010 (CL-M1): ``GET /api/v1/panel/metrics`` asks for exactly one security scheme, ``PanelMetricsTicket``, an HTTP
+    bearer that is neither of the three token schemes nor the restore's, asked for by this operation alone; and it asks for
+    nothing else."""
+    operations = _operations(document)
+    schemes = document.get("components", {}).get("securitySchemes", {})
+    operation = operations.get(METRICS_ROUTE.operation)
+    assert operation is not None, f"{METRICS_ROUTE.operation} must be in the document"
+
+    restore_scheme = {name for route in RESTORE_ROUTES for name in _asked(operations.get(route.operation) or {})}
+    asking = sorted(name for name, candidate in operations.items() if METRICS_SCHEME in _asked(candidate))
+
+    assert _asked(operation) == [METRICS_SCHEME] and operation.get("security") == [{METRICS_SCHEME: []}], f"the route asks for {METRICS_SCHEME} and nothing else: {operation.get('security')}"
+    assert ((schemes.get(METRICS_SCHEME) or {}).get("type"), (schemes.get(METRICS_SCHEME) or {}).get("scheme")) == ("http", "bearer"), f"{METRICS_SCHEME} is an HTTP bearer scheme: {schemes.get(METRICS_SCHEME)}"
+    assert METRICS_SCHEME not in SCHEMES and METRICS_SCHEME not in restore_scheme, "its scheme is its own"
+    assert asking == [METRICS_ROUTE.operation], f"{METRICS_SCHEME} is asked for by the figures route alone: {asking}"
+    assert (schemes.get(METRICS_SCHEME) or {}).get("description"), "the scheme says in the document that only a signed ticket opens the route"
+
+
+def test_the_metrics_route_documents_its_own_codes_and_the_limit_of_the_job_log(document):
+    """HPR-011 (CL-M1): beside 200, the route documents 401 (naming ``panel_metrics_unauthorized`` and the ``panel_ticket_*``
+    codes a signed refusal keeps, ``panel_ticket_wrong_scope`` and ``panel_ticket_replayed`` among them), 404, 429 and 503
+    (``panel_metrics_unavailable``); the 200 is ``PanelMetricsResponse``, with the 15 keys required and no other
+    (``additionalProperties`` false); and ``jobs_failed_24h`` declares in its description that the job log keeps the last
+    500 entries only."""
+    operation = _operations(document).get(METRICS_ROUTE.operation)
+    assert operation is not None, f"{METRICS_ROUTE.operation} must be in the document"
+    responses = operation.get("responses", {})
+
+    assert {"200", "401", "404", "429", "503"} <= set(responses), f"documented answers: {sorted(responses)}"
+    text_401 = responses["401"].get("description", "")
+    missing_401 = [name for name in ("panel_metrics_unauthorized", "panel_ticket_wrong_scope", "panel_ticket_replayed", "panel_ticket_expired") if name not in text_401]
+    assert missing_401 == [], f"the 401 names {missing_401}: {text_401!r}"
+    assert "panel_metrics_unavailable" in responses["503"].get("description", ""), f"the 503 names panel_metrics_unavailable: {responses['503']}"
+    assert "panel_too_many_attempts" in responses["429"].get("description", ""), f"the 429 names panel_too_many_attempts: {responses['429']}"
+
+    reference = (((responses["200"].get("content") or {}).get("application/json") or {}).get("schema") or {}).get("$ref", "")
+    assert reference.rsplit("/", 1)[-1] == "PanelMetricsResponse", f"the 200 is PanelMetricsResponse: {reference!r}"
+    schema = document.get("components", {}).get("schemas", {}).get("PanelMetricsResponse", {})
+    expected_keys = {
+        "started_at",
+        "storage_used_mb",
+        "storage_limit_mb",
+        "database_mb",
+        "uploads_mb",
+        "config_warnings",
+        "price_refresh_last_ok_at",
+        "price_refresh_errors_24h",
+        "jobs_failed_24h",
+        "brokers_count",
+        "transactions_count",
+        "assets_count",
+        "plugins_enabled",
+        "market_data_credits_used",
+        "market_data_credits_limit",
+    }
+    assert set(schema.get("properties", {})) == expected_keys and schema.get("additionalProperties") is False, f"the 15 keys and no other: {sorted(schema.get('properties', {}))}"
+    assert set(schema.get("required", [])) == expected_keys, f"every key is required (null when a measure fails, never absent): {sorted(expected_keys - set(schema.get('required', [])))}"
+    description = (schema.get("properties", {}).get("jobs_failed_24h") or {}).get("description", "")
+    assert "500" in description, f"jobs_failed_24h declares the limit of the job log (500 entries): {description!r}"

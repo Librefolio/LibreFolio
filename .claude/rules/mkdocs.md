@@ -92,17 +92,9 @@ Then use the agent to fix reported differences (missing headings, broken links, 
 - **Emoji in headings**: H1-H3 always have 1 emoji
 - **Diagrams**: Mermaid inline (no PNG). 
   - Standard engine (Dagre) is the default, best for simple graphs.
-  - For complex architectural diagrams, force the ELK engine by adding frontmatter:
-    ````markdown
-    ```mermaid
-    ---
-    config:
-      layout: elk
-    ---
-    flowchart LR
-        A --> B
-    ```
-    ````
+  - The site serves Mermaid from its own pinned copy (`./dev.py cache js`), **without the ELK layout**: a diagram
+    whose frontmatter says `layout: elk` is drawn with the default layout. Do not add the key to a new diagram;
+    keep a complex one readable by splitting it, or by choosing `flowchart LR` or `TD`.
 - Code blocks with correct language tag
 
 ## Gallery Images in Pages

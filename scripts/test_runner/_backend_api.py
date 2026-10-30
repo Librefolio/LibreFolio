@@ -969,6 +969,14 @@ def api_panel_status(verbose: bool = False, test_names: list[str] | None = None)
     return run_command(cmd, "Hosting panel status API tests", verbose=verbose)
 
 
+def api_panel_metrics(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the hosting panel's figures route tests: GET /panel/metrics, a signed ticket of scope metrics only (CL-M1)."""
+    print_section("Hosting Panel Metrics API")
+    print_info("Testing: GET /api/v1/panel/metrics: off 404 without the panel's keys, no token opens it (panel_metrics_unauthorized), wrong scope, replay, 429 shared limiter, 503, blocked / awaiting restore / interrupted, the one log line, no user activity, a failing measure is a null in a 200")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_panel_metrics_api.py", test_names)
+    return run_command(cmd, "Hosting panel metrics API tests", verbose=verbose)
+
+
 def api_broker_multiuser(verbose: bool = False, test_names: list[str] | None = None) -> bool:
     """Run broker multi-user role tests."""
     print_section("Broker Multi-User Role Tests")
@@ -1524,6 +1532,15 @@ Tests for REST API endpoints (server auto-started):
         api_panel_status,
         name="Hosting Panel Status API",
         desc="H-61 R1: GET /panel/status off 404 without a token, panel_status_unauthorized, the four states of the initial administrator's setup with the expiry of a pending one only, no personal data, answered on a blocked instance, its OpenAPI schema; the places taken and the limit, owner_email_change, instance_key (nine keys in all); H5-8 users_over_limit: true only while the ACTIVE accounts outnumber LIBREFOLIO_MAX_USERS (invitations and waiting accounts do not count, a deactivated one neither), recomputed at each request, never who, on a blocked, awaiting-restore or unreadable-restore instance, a required boolean right after instance_key in the OpenAPI; CL-1 an unusable LIBREFOLIO_MAX_USERS answers 200 with users_limit null; CL-6 restore.reason owner_assignment for a committed restore whose owner has no account (and the OpenAPI enum); CL-9 owner_language (the owner's language, null otherwise; ten keys in all)",
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "panel-metrics",
+        api_panel_metrics,
+        name="Hosting Panel Metrics API",
+        desc="CL-M1 (security): GET /panel/metrics with the ticket-only scope metrics: 404 without LIBREFOLIO_PANEL_PUBLIC_KEYS (no line, no count), 401 panel_metrics_unauthorized to no credential, any static token, garbage, a tampered signature, another scheme or a ticket in the query (counted), panel_ticket_wrong_scope for another scope's ticket and for the metrics ticket at every other panel route (not counted, the jti kept), replay, expired / not yet valid / wrong audience / too long-lived, 429 from the limiter shared with the other scopes even to a valid ticket, 503 panel_metrics_unavailable; 200 with the 15 keys and the figures of an instance the test made, no name, email, path or ticket in it; the one Hosting panel request line without the ticket; not user activity; each failing measure a null in a 200; allowed on a blocked instance, while awaiting the restore and with an interrupted restore, the refusals of every day there, never a 423",
+        # PURE: the app of main.py in this process (ASGI) from a public peer, the panel's keys and tickets of test_panel_restore_api.py, the data directory under tmp_path, an in-memory database the test owns, disk_usage stood in for, the limiter and the activity record the test's own: no lane server, DB or network is reached.
         isolation="pure",
     )
     add_test(
