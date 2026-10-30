@@ -570,6 +570,15 @@ def api_uploads_serve_file(verbose: bool = False, test_names: list = None) -> bo
     return run_command(cmd, "Uploads serve-file tests", verbose=verbose)
 
 
+def api_uploads_file_disposition(verbose: bool = False, test_names: list = None) -> bool:
+    """Run /uploads/file/{id} inline-vs-attachment disposition tests (H6-2)."""
+    print_section("Uploads File Disposition API Tests (H6-2)")
+    print_info("Testing GET /uploads/file/{id}: inline for safe types, attachment otherwise, nosniff, download flag")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_uploads_file_disposition.py", test_names)
+    return run_command(cmd, "Uploads file disposition tests", verbose=verbose)
+
+
 def api_brokers(verbose: bool = False, test_names: list = None) -> bool:
     """Run Brokers API endpoint tests."""
     print_section("Brokers API Endpoint Tests")
@@ -1390,6 +1399,7 @@ Tests for REST API endpoints (server auto-started):
     )
     add_test(api, "backup-export-extras", api_backup_export_extras, name="Backup Export Extras", desc="Events + FX rates export")
     add_test(api, "uploads-serve-file", api_uploads_serve_file, name="Uploads Serve File", desc="Preview, download, MIME")
+    add_test(api, "uploads-file-disposition", api_uploads_file_disposition, name="Uploads File Disposition", desc="H6-2: inline for safe types, attachment otherwise, nosniff, download flag")
     add_test(api, "brokers", api_brokers, name="Brokers API", desc="CRUD broker endpoints")
     add_test(api, "brim", api_brim, name="BRIM API", desc="Upload, parse, import flow")
     add_test(api, "brim-date-order", api_brim_date_order, name="BRIM Date Order API", desc="W5-8 (CP12): the user's own date_order reaches the generic CSV parse, a change makes the file stale until parsed again, the fingerprint is never served")

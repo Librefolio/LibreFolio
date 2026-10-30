@@ -312,9 +312,24 @@ findings keep the order of this table.
 | Open registration, checked by your browser | ⚠️ **Registration** is **Open**, and you reached LibreFolio at an address outside your local network, as for [the warning above the pages](#open-registration-warning) | **Change who can sign up**, to **Global Settings**. None when `LIBREFOLIO_REGISTRATION` sets the mode: the finding names that variable instead |
 | A blocked script, checked by your browser | ⚠️ A script that LibreFolio did not send, added by a proxy, a CDN or a browser extension, was blocked in this browser tab: the finding names its sources. It goes when you close the tab. Not fixed on the server, but in the proxy, the CDN or the extension: [A Script You Did Not Send](configuration_security.md#csp-blocked-script) | — |
 
-Every row has a 📖 **Guide** button, passed checks included, that opens the page of this guide which
-explains that check, in a new tab and in your language when it is translated. A check that has no
-page of its own has no button.
+Every row has a help button, and which one depends on who can solve the check:
+
+- 📖 **Guide**: you can solve it alone, on the server. The button, shown on passed checks too, opens
+  the page of this guide which explains that check, in a new tab and in your language when it is
+  translated.
+- 🛟 **Contact support**: only whoever hosts the instance can solve it. Three checks are like that:
+  `platform.hosting_panel`, `backup.panel_token` and `accounts.owner_email_change`. The button opens
+  a message to the support address of the instance, `LIBREFOLIO_SUPPORT_URL`: your email app with a
+  `mailto:` address, or the support page in a new tab when it is a web page, which receives the
+  message as `title` and `body` in its address (see «Main Options» in
+  [Configuration](configuration.md)). The message holds the check's code, how serious it
+  is, the address of the instance, the LibreFolio version and the date, and nothing personal or
+  secret. A passed check has nothing to report, so it shows no button. When the instance has no
+  support address that LibreFolio can use, there is no button, only a line that tells you to
+  contact whoever provides the service. LibreFolio never opens a public GitHub issue for these
+  checks, since it would publish your instance's address.
+
+A check that has no page of its own and no support has no button.
 
 The findings without a link are fixed on the server, in its configuration, and need a restart: what
 to do for each one is in the table of «Startup Checks» in [Configuration](configuration.md), where

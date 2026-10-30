@@ -18,6 +18,12 @@
  * from English in it, fr and es; an invented key is reported missing.
  *
  * Red today: the four keys are in none of the sources, and the layout still writes the English sentence.
+ *
+ * FB-27 («guide or support» help for the checks). Three more keys, read the same way (sources, exactly one folder per
+ * language, non-empty, no placeholder): `settings.securityTab.support` («Contact support» next to a check the host solves),
+ * `settings.securityTab.supportMissing` and `instance.restoreInterrupted.supportMissing` (the note shown when the instance
+ * names no support address). The two notes are read by a customer, not by an administrator: their English text names no
+ * implementation («backend», «server», «env», «variable» are not allowed in it). Red until the main agent adds the keys.
  */
 import {existsSync, readFileSync, readdirSync} from 'node:fs';
 import {join} from 'node:path';
@@ -96,4 +102,54 @@ describe('frame texts of the app shell — the catalogue sources (TC-5)', () => 
         expect(source, 'the English sentence is gone from the layout').not.toMatch(/Checking authentication/i);
         expect(source, 'the panel reads the catalogue').toContain('nav.checkingAuthentication');
     });
+});
+
+const SUPPORT_KEYS = ['settings.securityTab.support', 'settings.securityTab.supportMissing', 'instance.restoreInterrupted.supportMissing'] as const;
+const SUPPORT_MISSING_KEYS = ['settings.securityTab.supportMissing', 'instance.restoreInterrupted.supportMissing'] as const;
+/** What a customer must not be told to look at: the implementation of the instance. */
+const IMPLEMENTATION_WORDS = /\b(backend|servers?|env|environment|variables?)\b/i;
+
+describe('support texts of the checks — the catalogue sources (FB-27)', () => {
+    it('Control: the word filter refuses each forbidden word and lets a plain sentence through', () => {
+        for (const sentence of ['Set the backend', 'The Server is down', 'Check the ENV file', 'an environment variable', 'two variables']) {
+            expect(sentence, `Control: «${sentence}» is refused`).toMatch(IMPLEMENTATION_WORDS);
+        }
+        expect('Ask whoever hosts this instance to add a support address.', 'Control: a plain sentence is not refused').not.toMatch(IMPLEMENTATION_WORDS);
+    });
+
+    for (const key of SUPPORT_KEYS) {
+        for (const lang of LANGUAGES) {
+            it(`${key} exists once in the ${lang} sources, as a non-empty text without placeholders`, () => {
+                const texts = found(lang, key);
+
+                expect(texts, `${key} is in exactly one ${lang} source folder`).toHaveLength(1);
+                expect(texts[0].trim().length, `${key} in ${lang} is not empty`).toBeGreaterThan(0);
+                expect(texts[0], `${key} in ${lang} takes no parameter`).not.toMatch(/[{}]/);
+            });
+        }
+    }
+
+    for (const key of SUPPORT_MISSING_KEYS) {
+        it(`${key} in English names no implementation: no backend, server, env or variable`, () => {
+            const [english] = found('en', key);
+
+            expect(english, `barrier: ${key} exists in English`).toBeTypeOf('string');
+            expect(english).not.toMatch(IMPLEMENTATION_WORDS);
+        });
+    }
+});
+
+/** The docs link of the interrupted-restore page, shown to the administrator of a self-hosted instance (not to a customer). */
+const DOCS_LINK_KEY = 'instance.restoreInterrupted.docs';
+
+describe('the docs link of an interrupted restore — the catalogue sources (self-hosted help)', () => {
+    for (const lang of LANGUAGES) {
+        it(`${DOCS_LINK_KEY} exists once in the ${lang} sources, as a non-empty text without placeholders`, () => {
+            const texts = found(lang, DOCS_LINK_KEY);
+
+            expect(texts, `${DOCS_LINK_KEY} is in exactly one ${lang} source folder`).toHaveLength(1);
+            expect(texts[0].trim().length, `${DOCS_LINK_KEY} in ${lang} is not empty`).toBeGreaterThan(0);
+            expect(texts[0], `${DOCS_LINK_KEY} in ${lang} takes no parameter`).not.toMatch(/[{}]/);
+        });
+    }
 });

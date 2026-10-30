@@ -335,12 +335,22 @@ The state of the restore cannot be read: LibreFolio serves no data until the adm
   same `401` or `404` as always): a backup of data in doubt would take the place of a good one among
   those you keep. Following a job, downloading its archive and deleting it still answer.
 - Users who open the instance get a full page instead of every page of the app, the sign-in page
-  included: **The restore stopped half way**, on the sign-in page's background. It asks them to
-  contact their administrator, links the steps to recover, asks the instance every 30 seconds
-  whether it serves the data again, and reloads itself when it does; **Try again** reloads it at
-  once. When `LIBREFOLIO_SUPPORT_URL` holds an address the page can use, a `mailto:` address or an
-  `http://` or `https://` page (the page checks it again), it adds a **Contact support** link to it.
-  Not set or not usable: no link, and no fallback to the project's GitHub.
+  included: **The restore stopped half way**, on the sign-in page's background. It asks the instance
+  every 30 seconds whether it serves the data again, and reloads itself when it does; **Try again**
+  reloads it at once. What else it offers depends on who runs the instance, because the way out is a
+  command on the server:
+    - On a **self-hosted** instance (the server confirms it) the administrator is whoever runs the
+      server, so the page links **How to recover**, the guide of the recovery
+      ([unreadable state](cli_backup.md#backup-pending-unreadable), or
+      [the owner's account](#restore-owner-pending) when the owner has no account yet). When
+      `LIBREFOLIO_SUPPORT_URL` holds an address the page can use, it also links **Contact support**. It never
+      tells the user to contact whoever provides the service.
+    - On a **managed** instance the customer cannot run the command, so there is no guide link. When
+      `LIBREFOLIO_SUPPORT_URL` holds an address the page can use, a `mailto:` address or an `http://` or
+      `https://` page (the page checks it again), the page links **Contact support** with a message that
+      holds the code `platform.restore_interrupted`, the instance's address, the version and the date, and
+      nothing personal. Not set or not usable: no link, a line that tells the user to contact whoever
+      provides the service, and no fallback to the project's GitHub.
 
 **The way out is on the machine**, for whoever runs it: stop LibreFolio, run
 `./dev.py backup pending` to see what happened, then `./dev.py backup pending --recover previous`, which puts
