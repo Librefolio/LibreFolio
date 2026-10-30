@@ -41,8 +41,8 @@
  * report leaves the preview as a request: a viewer left without a document asks to
  * close the preview — a viewer the preview drops itself never does.
  */
-import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
-import {flushSync} from 'svelte';
+import {afterEach, beforeAll, beforeEach, describe, expect, it, vi, type Mock} from 'vitest';
+import {flushSync, tick} from 'svelte';
 import {PdfErrorCode} from '@embedpdf/models';
 import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import type {FilePreviewResponse} from '$lib/types';
@@ -210,6 +210,38 @@ vi.mock('$lib/utils/files/pdfViewerAssets', async (importOriginal) => ({
         return viewerAssets.next;
     },
 }));
+
+/**
+ * A fake cheetah-grid: every `ListGrid` the preview builds, with the `theme` it was given, its `makeVisibleCell` calls
+ * and whether it was disposed. The light theme is `MATERIAL_DESIGN.extends(...)` and the dark one the preview's own
+ * object (`buildDarkSpreadsheetTheme`), so the mock marks the light one (`__light`) to tell the two apart.
+ */
+const cheetah = vi.hoisted(() => {
+    interface FakeGrid {
+        options: {theme?: {__light?: boolean}};
+        dispose: ReturnType<typeof vi.fn>;
+        makeVisibleCell: ReturnType<typeof vi.fn>;
+    }
+    const grids: FakeGrid[] = [];
+    class ListGrid implements FakeGrid {
+        options: FakeGrid['options'];
+        dispose = vi.fn();
+        makeVisibleCell = vi.fn();
+        listen = vi.fn();
+        constructor(options: FakeGrid['options']) {
+            this.options = options;
+            grids.push(this);
+        }
+    }
+    return {
+        grids,
+        ListGrid,
+        themes: {MATERIAL_DESIGN: {extends: (over: object) => ({__light: true, ...over})}},
+        /** The grids built and not disposed yet. */
+        live: () => grids.filter((grid) => grid.dispose.mock.calls.length === 0),
+    };
+});
+vi.mock('cheetah-grid', () => ({ListGrid: cheetah.ListGrid, themes: cheetah.themes}));
 
 // jsdom does not implement Element.scrollTo; the image viewport reset calls it on
 // mount. Real browsers have it (files.spec.ts drives the same path in Chromium), so
@@ -900,5 +932,161 @@ describe('FilePreviewModal — PDF stage state (fake EmbedPDF)', () => {
         expect(screen.queryByTestId('file-preview-pdf-fallback')).not.toBeNull();
         expect(screen.queryByTestId('file-preview-pdf')).toBeNull();
         expect(onRequestClose).not.toHaveBeenCalled();
+    });
+});
+
+describe('FilePreviewModal — table preview follows the live theme', () => {
+    const WAIT = {timeout: 3_000};
+    let scrollTo: ReturnType<typeof vi.spyOn>;
+    /** The observers that watch <html>: who asked to, and whether they were let go. */
+    let htmlObservers: Array<{observer: MutationObserver; disconnect: Mock<() => void>}>;
+    const OriginalObserver = globalThis.MutationObserver;
+
+    beforeAll(async () => {
+        await import('cheetah-grid');
+    });
+
+    beforeEach(async () => {
+        await setupI18n();
+        cheetah.grids.length = 0;
+        environment.browser = true;
+        scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+        document.documentElement.classList.remove('dark');
+        htmlObservers = [];
+        globalThis.MutationObserver = class extends OriginalObserver {
+            constructor(callback: MutationCallback) {
+                super(callback);
+            }
+            observe(target: Node, options?: MutationObserverInit) {
+                const disconnect = vi.fn<() => void>();
+                if (target === document.documentElement) htmlObservers.push({observer: this, disconnect});
+                return super.observe(target, options);
+            }
+            disconnect() {
+                htmlObservers.find((entry) => entry.observer === this)?.disconnect();
+                return super.disconnect();
+            }
+        };
+    });
+
+    afterEach(() => {
+        cleanup();
+        globalThis.MutationObserver = OriginalObserver;
+        document.documentElement.classList.remove('dark');
+        environment.browser = false;
+        scrollTo.mockRestore();
+    });
+
+    /** Switches the page to `dark` (or back) and waits until every observer of <html> and every pending import has run. */
+    async function switchTheme(dark: boolean): Promise<void> {
+        const heard = new Promise<void>((resolve) => {
+            // Created after the preview's own observer, so it is called after it, in the same microtask checkpoint.
+            const mine = new OriginalObserver(() => {
+                mine.disconnect();
+                resolve();
+            });
+            mine.observe(document.documentElement, {attributes: true, attributeFilter: ['class']});
+        });
+        document.documentElement.classList.toggle('dark', dark);
+        await heard;
+        await tick();
+        await vi.dynamicImportSettled();
+    }
+
+    async function firstGrid() {
+        await waitFor(() => expect(cheetah.grids).toHaveLength(1), WAIT);
+        return cheetah.grids[0];
+    }
+
+    it('rebuilds the grid with the other theme when the page switches theme, disposing the old one', async () => {
+        mount({preview: tablePreview()});
+        const first = await firstGrid();
+        expect(first.options.theme?.__light, 'precondition: the light page builds the light theme').toBe(true);
+
+        await switchTheme(true);
+
+        await waitFor(() => expect(cheetah.grids).toHaveLength(2), WAIT);
+        const second = cheetah.grids[1];
+        expect(second.options.theme?.__light, 'the dark page builds the dark theme').toBeUndefined();
+        expect(second.options.theme).not.toBe(first.options.theme);
+        expect(first.dispose, 'the grid of the old theme is let go').toHaveBeenCalled();
+        expect(second.dispose).not.toHaveBeenCalled();
+    });
+
+    it('scrolls to the highlighted rows again on the rebuilt grid, as on a first build', async () => {
+        mount({preview: tablePreview(), highlightRows: [2]});
+        const first = await firstGrid();
+        await waitFor(() => expect(first.makeVisibleCell).toHaveBeenCalledWith(0, 2), WAIT);
+
+        await switchTheme(true);
+
+        await waitFor(() => expect(cheetah.grids).toHaveLength(2), WAIT);
+        await waitFor(() => expect(cheetah.grids[1].makeVisibleCell).toHaveBeenCalledWith(0, 2), WAIT);
+    });
+
+    it('keeps exactly one live grid across further switches', async () => {
+        mount({preview: tablePreview()});
+        await firstGrid();
+
+        await switchTheme(true);
+        await waitFor(() => expect(cheetah.grids).toHaveLength(2), WAIT);
+        await switchTheme(false);
+        await waitFor(() => expect(cheetah.grids).toHaveLength(3), WAIT);
+        await switchTheme(true);
+        await waitFor(() => expect(cheetah.grids).toHaveLength(4), WAIT);
+
+        await waitFor(() => expect(cheetah.live()).toHaveLength(1), WAIT);
+        expect(cheetah.live()[0], 'the live grid is the last one built').toBe(cheetah.grids[3]);
+        // light, dark, light, dark: each switch changed the theme the grid is built with
+        expect(cheetah.grids.map((grid) => grid.options.theme?.__light === true)).toEqual([true, false, true, false]);
+    });
+
+    it('builds nothing and lets the observer go once the modal closes', async () => {
+        const view = mount({preview: tablePreview()});
+        await firstGrid();
+        // Barrier: the switch works while open, so "nothing built" below is not just a slow page.
+        await switchTheme(true);
+        await waitFor(() => expect(cheetah.grids).toHaveLength(2), WAIT);
+        expect(htmlObservers.length, 'an open table preview watches <html>').toBeGreaterThan(0);
+
+        await view.rerender({open: false});
+        await waitFor(() => expect(cheetah.live()).toHaveLength(0), WAIT);
+        const built = cheetah.grids.length;
+
+        await switchTheme(false);
+        await switchTheme(true);
+
+        expect(cheetah.grids, 'a closed preview builds no grid').toHaveLength(built);
+        for (const {disconnect} of htmlObservers) expect(disconnect, 'the observer of <html> is disconnected on close').toHaveBeenCalled();
+    });
+
+    it('builds nothing and lets the observer go once the component is destroyed', async () => {
+        const view = mount({preview: tablePreview()});
+        await firstGrid();
+        await switchTheme(true);
+        await waitFor(() => expect(cheetah.grids).toHaveLength(2), WAIT);
+        expect(htmlObservers.length, 'an open table preview watches <html>').toBeGreaterThan(0);
+
+        view.unmount();
+        const built = cheetah.grids.length;
+        expect(cheetah.live(), 'the grid is disposed with the component').toHaveLength(0);
+
+        await switchTheme(false);
+        await switchTheme(true);
+
+        expect(cheetah.grids, 'a destroyed preview builds no grid').toHaveLength(built);
+        for (const {disconnect} of htmlObservers) expect(disconnect, 'the observer of <html> is disconnected on destroy').toHaveBeenCalled();
+    });
+
+    it('builds no grid on a theme switch when the preview is not a table', async () => {
+        mount({preview: textPreview()});
+        // Presence barrier: the text body is there, so the absence of a grid is not a preview that has not rendered yet.
+        expect(await screen.findByTestId('file-preview-text')).toBeInTheDocument();
+
+        await switchTheme(true);
+        await switchTheme(false);
+
+        expect(cheetah.grids).toHaveLength(0);
+        expect(screen.queryByTestId('file-preview-grid')).toBeNull();
     });
 });

@@ -317,7 +317,11 @@
   "nav": {
     "dashboard": "Dashboard",
     "settings": "Impostazioni",
-    "toggleMenu": "Apri o chiudi il menu"
+    "toggleMenu": "Apri o chiudi il menu",
+    "checkingAuthentication": "Controllo dell'accesso…",
+    "closeSidebar": "Chiudi il menu",
+    "expandSidebar": "Espandi il menu",
+    "collapseSidebar": "Comprimi il menu"
   },
   "prices": {
     "sync": {

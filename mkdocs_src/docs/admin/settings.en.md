@@ -79,8 +79,8 @@ header to unlock it. Only administrators (superusers) have this tab.
 | 🛡️ Security | **Require Email Verification** | Off | New accounts must open a link emailed to their address before they can sign in; the first account never waits, and existing accounts are not affected. It turns on only while email works and `LIBREFOLIO_PUBLIC_URL` can be used: until then the switch is greyed out. See *Email Verification* in [Email](email.md). |
 | 🔄 Update Job | **Scheduler Enabled** | On | Turns the automatic price and exchange-rate updates on or off: see [Market Data Scheduler](#market-data-scheduler). |
 | 🧠 Memory | **Max File Upload Size** | 10 MB | The largest file users can upload, broker reports included. Raise it if a large export is refused. |
-| 🌍 Defaults | **Default Currency** | `EUR` | The currency new users report in. |
-| 🌍 Defaults | **Default Language** | `en` | 🇬🇧 `en`, 🇮🇹 `it`, 🇫🇷 `fr` or 🇪🇸 `es`. |
+| 🌍 Defaults | **Default Currency** | `EUR` | The currency new users report in. Until you save it for the first time, `LIBREFOLIO_DEFAULT_CURRENCY` in the `.env` file, if set, decides; from your first save, your value wins, even when it is `EUR` again ([Environment Variables](configuration_accounts.md#accounts)). |
+| 🌍 Defaults | **Default Language** | `en` | 🇬🇧 `en`, 🇮🇹 `it`, 🇫🇷 `fr` or 🇪🇸 `es`. It is also the language of the emails sent to people who have no account yet. Until you save it for the first time, `LIBREFOLIO_DEFAULT_LANGUAGE` in the `.env` file, if set, decides; from your first save, your value wins, even when it is English again ([Environment Variables](configuration_accounts.md#accounts)). |
 | 🌍 Defaults | **Default Theme** | `auto` | ☀️ `light`, 🌙 `dark`, or 🖥️ `auto`, which follows the device. |
 
 New users start from the three defaults: the [Welcome setup](../user/getting-started.md#welcome-setup)
@@ -208,7 +208,7 @@ The dialog has its own **Save** button.
 
 | Field | Default | What it sets |
 |---|---|---|
-| **Timezone** | `UTC` | The timezone of the times and days below; the server's UTC clock is shown next to it. |
+| **Timezone** | `UTC` | The timezone of the times and days below; the server's UTC clock is shown next to it. Until you save the schedule for the first time, `LIBREFOLIO_DEFAULT_TIMEZONE` in the `.env` file, if set, decides; from your first save, your value wins, even when it is `UTC` again ([Environment Variables](configuration_accounts.md#accounts)). |
 | **Refresh every** | 10 minutes | How often current prices are refreshed, from 1 to 1440 minutes. |
 | **Sync times** | `06:00`, `23:00` | When the history sync runs; **Add time** adds a slot. |
 | **Sync days** | Mon to Sat | The days of the history sync. |
@@ -312,9 +312,24 @@ findings keep the order of this table.
 | Open registration, checked by your browser | ⚠️ **Registration** is **Open**, and you reached LibreFolio at an address outside your local network, as for [the warning above the pages](#open-registration-warning) | **Change who can sign up**, to **Global Settings**. None when `LIBREFOLIO_REGISTRATION` sets the mode: the finding names that variable instead |
 | A blocked script, checked by your browser | ⚠️ A script that LibreFolio did not send, added by a proxy, a CDN or a browser extension, was blocked in this browser tab: the finding names its sources. It goes when you close the tab. Not fixed on the server, but in the proxy, the CDN or the extension: [A Script You Did Not Send](configuration_security.md#csp-blocked-script) | — |
 
-Every row has a 📖 **Guide** button, passed checks included, that opens the page of this guide which
-explains that check, in a new tab and in your language when it is translated. A check that has no
-page of its own has no button.
+Every row has a help button, and which one depends on who can solve the check:
+
+- 📖 **Guide**: you can solve it alone, on the server. The button, shown on passed checks too, opens
+  the page of this guide which explains that check, in a new tab and in your language when it is
+  translated.
+- 🛟 **Contact support**: only whoever hosts the instance can solve it. Three checks are like that:
+  `platform.hosting_panel`, `backup.panel_token` and `accounts.owner_email_change`. The button opens
+  a message to the support address of the instance, `LIBREFOLIO_SUPPORT_URL`: your email app with a
+  `mailto:` address, or the support page in a new tab when it is a web page, which receives the
+  message as `title` and `body` in its address (see «Main Options» in
+  [Configuration](configuration.md)). The message holds the check's code, how serious it
+  is, the address of the instance, the LibreFolio version and the date, and nothing personal or
+  secret. A passed check has nothing to report, so it shows no button. When the instance has no
+  support address that LibreFolio can use, there is no button, only a line that tells you to
+  contact whoever provides the service. LibreFolio never opens a public GitHub issue for these
+  checks, since it would publish your instance's address.
+
+A check that has no page of its own and no support has no button.
 
 The findings without a link are fixed on the server, in its configuration, and need a restart: what
 to do for each one is in the table of «Startup Checks» in [Configuration](configuration.md), where

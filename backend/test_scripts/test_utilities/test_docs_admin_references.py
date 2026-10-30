@@ -375,7 +375,7 @@ class TestRepositoryReferences:
     def test_the_scan_finds_the_references(self) -> None:
         assert len(REFERENCES) >= 20, f"the scan found {len(REFERENCES)} references; the repository has more than that"
         guides = json.loads(CHECK_GUIDES.read_text(encoding="utf-8"))
-        wanted = {guide for half in guides.values() for guide in half.values()}
+        wanted = {help_["path"] for half in guides.values() for help_ in half.values() if help_["kind"] == "guide"}  # a "support" entry has no page
         scanned = {f"admin/{ref.page}/#{ref.anchor}" for ref in REFERENCES if ref.source.endswith("checkGuides.json")}
         assert wanted, "checkGuides.json holds guides"
         assert wanted <= scanned, f"the scan missed guides of checkGuides.json: {sorted(wanted - scanned)}"
