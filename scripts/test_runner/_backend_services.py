@@ -555,6 +555,16 @@ def services_transaction_cost_basis_rule(verbose: bool = False, test_names: list
     return run_command(cmd, "Transaction cost basis rule tests", verbose=verbose)
 
 
+def services_balance_validator_cash_rule(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the batch balance validator's cash rule (W6-12): the opening cash of a broker without the overdraft flag, and the walk against the frozen one."""
+    print_section("Services: Balance Validator Cash Rule")
+    print_info("Testing: backend/app/services/transactions/balances.py (_validate_broker_balances) over financial_math/native_cash.py (first_negative_cash)")
+    print_info("Tests: a negative opening cash with no transaction from from_date refused without the overdraft flag; the error fields, batch index, same-day and cash-vs-asset order; a differential against a frozen copy of the old walk")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_balance_validator_cash_rule.py", test_names)
+    return run_command(cmd, "Balance validator cash rule tests", verbose=verbose)
+
+
 def services_linked_adjustment_pair(verbose: bool = False, test_names: list = None) -> bool:
     """Test that a batch refuses to link two ADJUSTMENTs (pairAdjustmentNotAllowed), and what it still lets through."""
     print_section("Services: Linked Adjustment Pair")
@@ -2514,6 +2524,15 @@ Note: No backend server required.
         services_transaction_cost_basis_rule,
         name="Transaction Cost Basis Rule",
         desc="Which rows need a cost basis, read from TX_TYPE_METADATA; creates refused without one; updates held to it only when they change type, quantity or cost; notes/tags edits of rows stored without a cost commit",
+    )
+    add_test(
+        cat,
+        "balance-validator-cash-rule",
+        services_balance_validator_cash_rule,
+        name="Balance Validator Cash Rule",
+        desc="W6-12: a broker without the overdraft flag refuses a negative opening cash on from_date even with no transaction from then on (the overdraft flag, a zero opening and a later healing deposit leave it alone); the error's code, day, currency, balance, params and batch index; same-day end-of-day and several currencies; cash vs asset (lowest day, tie to cash, flag combinations); ledgerUnreadable, unknown broker, both flags; a differential of a few hundred seeded random ledgers against a frozen copy of the old walk, but for that one rule",
+        # PURE: one private in-memory SQLite per test (create_all), disposed at teardown; no lane DB, server or network.
+        isolation="pure",
     )
     add_test(
         cat,

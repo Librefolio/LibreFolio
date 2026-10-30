@@ -206,7 +206,9 @@
       "rows_not_recognized": "{count, plural, one {# riga è stata esclusa o importata solo in parte} other {# righe sono state escluse o importate solo in parte}}: l'importazione non riconosce, o non importa ancora, ciò che descrivono. Controlla le righe qui sotto; se contano per le tue quote o la tua liquidità, segnala il caso così possiamo gestirlo:",
       "rows_unreadable": "{count, plural, one {# riga è stata esclusa} other {# righe sono state escluse}} perché un valore necessario non è leggibile. Controlla le righe qui sotto; se il file è giusto, segnala il caso così possiamo gestirlo:",
       "possible_split": "Possibile split di {ticker}: {added_quantity} azioni nuove a costo zero. Collega un evento SPLIT o creane uno.",
-      "date_before_1900": "La data {date} è anteriore al 1° gennaio 1900: controlla l'anno."
+      "date_before_1900": "La data {date} è anteriore al 1° gennaio 1900: controlla l'anno.",
+      "date_unreadable": "Riga {row}: {value} non è una data valida nel formato {order, select, day_first {gg/mm/aaaa} month_first {mm/gg/aaaa} day_first_short {gg/mm/aa} month_first_short {mm/gg/aa} year_first_short {aa/mm/gg} year_first {aaaa-mm-gg} other {gg/mm/aaaa}}. Correggi la data nel file, oppure cambia il formato in Impostazioni › Plugin › Importazione dai broker › CSV generico › «Formato delle date» e poi premi «Rianalizza tutti».",
+      "date_unreadable_more": "{n, plural, one {# altra riga ha} other {# altre righe hanno}} una data non valida in questo formato: vale la stessa correzione."
     },
     "evidenceRowsTitle": "Righe del file",
     "evidenceRowCount": "{n} righe",

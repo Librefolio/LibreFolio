@@ -206,7 +206,9 @@
       "rows_not_recognized": "{count, plural, one {# row was} other {# rows were}} left out, or only partly imported, because the importer does not recognise or does not yet import what {count, plural, one {it describes} other {they describe}}. Check the rows below; if this matters for your shares or cash, report it so we can handle the case:",
       "rows_unreadable": "{count, plural, one {# row was} other {# rows were}} left out because a value {count, plural, one {it needs} other {they need}} cannot be read. Check the rows below; if the file is right, report it so we can handle the case:",
       "possible_split": "Possible stock split of {ticker}: {added_quantity} new shares at no cost. Link a SPLIT event, or create one.",
-      "date_before_1900": "The date {date} is before 1 January 1900: check the year."
+      "date_before_1900": "The date {date} is before 1 January 1900: check the year.",
+      "date_unreadable": "Row {row}: {value} is not a valid date in the format {order, select, day_first {dd/mm/yyyy} month_first {mm/dd/yyyy} day_first_short {dd/mm/yy} month_first_short {mm/dd/yy} year_first_short {yy/mm/dd} year_first {yyyy-mm-dd} other {dd/mm/yyyy}}. Fix the date in the file, or change the format in Settings › Plugins › Broker imports › Generic CSV › “Date format”, then press “Re-parse all”.",
+      "date_unreadable_more": "{n, plural, one {# more row has} other {# more rows have}} a date that is not valid in this format: the same fix applies."
     },
     "evidenceRowsTitle": "Source rows",
     "evidenceRowCount": "{n} rows",
