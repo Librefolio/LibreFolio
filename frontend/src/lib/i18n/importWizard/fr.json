@@ -540,7 +540,12 @@
       "danske_combined_line_unknown_kind": "La ligne {line} du fichier combiné a un type inconnu ({kind}).",
       "danske_combined_line_incomplete": "La ligne {line} du fichier combiné est incomplète.",
       "danske_combined_line_not_cash": "La ligne {line} du fichier combiné n'est pas une ligne de trésorerie autonome.",
-      "danske_no_dated_rows": "Les exports de dépôt n'ont aucune ligne datée : il n'y a rien à combiner."
+      "danske_no_dated_rows": "Les exports de dépôt n'ont aucune ligne datée : il n'y a rien à combiner.",
+      "credit_agricole_not_combined_file": "Ce n'est pas un fichier combiné Crédit Agricole.",
+      "credit_agricole_combined_columns_missing": "Ce n'est pas un fichier combiné Crédit Agricole : les colonnes {missing} sont absentes.",
+      "credit_agricole_combined_line_unknown_kind": "La ligne {line} du fichier combiné a un type inconnu ({kind}).",
+      "credit_agricole_combined_line_incomplete": "La ligne {line} du fichier combiné est incomplète.",
+      "credit_agricole_no_dated_rows": "Les exports n'ont aucune ligne datée : il n'y a rien à combiner."
     },
     "brimEvidence": {
       "scalable_unreadable_rows": "Sur ces lignes, une date, un montant, une devise, les parts ou le titre manque ou est illisible.",
