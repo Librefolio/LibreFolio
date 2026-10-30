@@ -1226,6 +1226,20 @@ def services_external_cash_leg_pools(verbose: bool = False, test_names: list = N
     return engine_ok and service_ok
 
 
+def services_transfer_cost_estimate(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that an unpriced asset transferred in from outside the scope is valued at the transfer's cost as a price (W-B94 road (b))."""
+    print_section("Services: Transfer Cost Estimate (W-B94 road (b))")
+    print_info("Testing: backend/app/services/financial_math/price_marks.py (build_asset_price_series) through DailyStateBuilder")
+    print_info("Tests: an orphan or linked-external TRANSFER-in of an asset with no price, LAST_TRADE_PRICE at its cost at each day's rate, transaction-implied, the leg neutral on its day; a quoted asset transferred in at a weekend keeps its carried quote")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial/test_portfolio_engine/test_transfer_cost_estimate.py", test_names)
+    engine_ok = run_command(cmd, "Transfer cost estimate — engine", verbose=verbose)
+    print_info("Tests: the TRANSACTION_IMPLIED grace of such an asset counts from its arrival (PortfolioService.get_summary on a private SQLite file)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial/test_transfer_cost_estimate_grace.py", test_names)
+    grace_ok = run_command(cmd, "Transfer cost estimate — data-quality grace", verbose=verbose)
+    return engine_ok and grace_ok
+
+
 def services_lone_transfer_legs(verbose: bool = False, test_names: list = None) -> bool:
     """Test decision 47's conversion of the lone giving TRANSFER legs a broker deletion left before 1.3."""
     print_section("Services: Lone Transfer Legs (decision 47)")
@@ -3025,6 +3039,18 @@ Note: No backend server required.
         desc="B3 / MF-J3: a CASH_TRANSFER / FX_CONVERSION leg whose pair is outside the perimeter, or lost, moves K/R as a DEPOSIT (in) or a WITHDRAWAL (out): pools, withdrawn returns, cash breakdown and BUY funding against the twin ledger; capital baseline, NAV and linked-internal pairs unchanged; get_history with broker_ids",
         # Both files sit in test_financial/, which roi-fifo-utils runs whole: the derived "all"
         # skips this action so that they run once there.
+        in_all=False,
+        # PURE: DailyStateBuilder over mock transactions, and PortfolioService on a private SQLite file under tmp_path; no lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "transfer-cost-estimate",
+        services_transfer_cost_estimate,
+        name="Transfer Cost Estimate",
+        desc="W-B94 road (b): an asset with no quote and no BUY/SELL, received by an orphan or linked-external TRANSFER at a cost of 50 USD, report EUR: LAST_TRADE_PRICE at 50 USD converted at each day's rate (450, 400, 350), transaction-implied, the closing position's price 50 USD from the transfer day; the leg's in-kind capital equals its value on its day (P&L 0); an asset quoted before a weekend transfer keeps the carried quote; through get_summary, such an asset with a provider is listed under TRANSACTION_IMPLIED only after the 14-day grace counted from its arrival (an asset with a BUY keeps the BUY's date)",
+        # The file sits in test_financial/, which roi-fifo-utils runs whole: the derived "all"
+        # skips this action so that the file runs once there.
         in_all=False,
         # PURE: DailyStateBuilder over mock transactions, and PortfolioService on a private SQLite file under tmp_path; no lane DB, no server, no network.
         isolation="pure",

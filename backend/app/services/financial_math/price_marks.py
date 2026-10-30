@@ -9,7 +9,8 @@ all read from the **same** numbers.
 Daily model (per asset, per day ``D``)::
 
     1. asset-system price exists on D            -> MARKET     (exact real quote)
-    2. else same-day BUY/SELL exist              -> TRADE_AVG  (average of their unit prices)
+    2. else same-day BUY/SELL exist              -> TRADE_AVG  (average of their unit prices; for an asset with
+                                                    nothing else yet, an incoming TRANSFER's cost, W-B94)
     3. else carry the last observation <= D      -> CARRIED    (LOCF; may be MARKET- or TRADE-origin)
     4. else (nothing on/before D)                -> MISSING    (the engine then values a holding of
                                                     known cost at that cost, ESTIMATED_AT_COST)
@@ -71,7 +72,7 @@ class ObservationKind(StrEnum):
     """Origin of a single price observation fed into the resolver."""
 
     MARKET = "MARKET"  # an asset-system quote (price_history)
-    TRADE = "TRADE"  # a transaction-implied unit price (BUY/SELL; never an ADJUSTMENT)
+    TRADE = "TRADE"  # a transaction-implied unit price (BUY/SELL, or W-B94's transfer cost estimate; never an ADJUSTMENT)
 
 
 @dataclass(frozen=True, slots=True)
@@ -280,7 +281,9 @@ def build_asset_price_series(
       which are per-unit and therefore multiplied by ``quote_base_quantity`` to reach the market
       scale. Split-linked rows are skipped. An ADJUSTMENT is never a price, with or without a
       cost basis (developer's decision P2, J-17): its ``cost_basis_override`` is a cost — often a
-      WAC — not what the asset was worth that day. A holding left without any observation is
+      WAC — not what the asset was worth that day. The cost of an incoming TRANSFER is an estimated
+      TRADE observation only for an asset with no quote and no other operation yet (W-B94,
+      :func:`_transfer_cost_estimates`). A holding left without any observation is
       valued at its book cost by the engine, as a declared estimate (``ESTIMATED_AT_COST``).
 
     ``ohlc_by_date`` (G1b, optional, additive — deliberately NOT a new element in ``price_rows``
@@ -314,4 +317,34 @@ def build_asset_price_series(
         unit_price = unit_price_on_quote_axis(abs(quantity), abs(tx.amount), quote_base_quantity)
         observations.append(PriceObservation(date=tx.date, unit_price=unit_price, currency=tx.currency or asset_currency, kind=ObservationKind.TRADE))
 
+    observations.extend(_transfer_cost_estimates(transactions, split_linked_tx_ids, [obs.date for obs in observations], quote_base_quantity))
     return AssetPriceSeries(observations)
+
+
+def _is_incoming_transfer(tx: Transaction) -> bool:
+    return str(getattr(tx.type, "value", tx.type)) == "TRANSFER" and (tx.quantity or Decimal("0")) > 0
+
+
+def _transfer_cost_estimates(transactions: Sequence[Transaction], split_linked_tx_ids: set[int], quote_days: Sequence[date_type], quote_base_quantity: int) -> list[PriceObservation]:
+    """W-B94 (the developer's decision, road b): the cost of an incoming TRANSFER as an estimated price, for an asset that
+    has nothing else to be priced by yet.
+
+    An incoming TRANSFER leg with a cost (``cost_basis_override``, per unit, in ``cost_basis_currency``) is a TRADE
+    observation, estimated as a trade's, only while the asset has, on or before its day, no market quote and no other
+    movement of its units — no BUY or SELL, no ADJUSTMENT (a cost, never a price: P2, J-17), no outgoing leg; a row that
+    moves no units (a dividend, a fee) does not count. Another incoming leg
+    does not stop it: before any real observation each one is the best estimate of its day. A quote or a trade is never
+    overridden, so a security moved between brokers on a weekend keeps its carried quote.
+    """
+    counted = [tx for tx in transactions if tx.id not in split_linked_tx_ids and (tx.quantity or Decimal("0")) != 0]
+    other_days = [tx.date for tx in counted if not _is_incoming_transfer(tx)]
+    first_real = min([*quote_days, *other_days], default=None)
+    estimates: list[PriceObservation] = []
+    for tx in counted:
+        if not _is_incoming_transfer(tx) or (first_real is not None and tx.date >= first_real):
+            continue
+        cost = tx.cost_basis_override
+        if cost is None or cost <= 0 or not tx.cost_basis_currency:
+            continue
+        estimates.append(PriceObservation(date=tx.date, unit_price=cost * quote_base_quantity, currency=tx.cost_basis_currency, kind=ObservationKind.TRADE))
+    return estimates

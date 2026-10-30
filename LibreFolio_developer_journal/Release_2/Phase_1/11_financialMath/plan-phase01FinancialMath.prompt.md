@@ -5194,3 +5194,32 @@ Ambiente: `npm ci` e `api sync` fatti (nessuna differenza nei contratti); corsia
    > è rosso su una corsia popolata coi dati mock (`populate_mock_data.py:3063` semina EUR/THB, priorità 1, dal 31/08):
    > verde solo perché il runner `services` ricrea il DB senza mock. Seguito per il test-author (una coppia che i mock
    > non seminano).
+   > **Note implementazione**: committato dal coordinatore come `b6a8b1625` (con l'analisi di MF-A13). Decisioni del
+   > developer (30/10): restituzione di W confermata; la variazione di un giorno resta l'ultima quotazione di mercato,
+   > senza punti di prezzo «—» (verificato: `last_market_price_at` None → nessuna variazione).
+
+#### W-B94 (b) → revisione MF-A13 → FB-14 (30/10, base `b6a8b1625`)
+1. ✅ **W-B94, strada (b)** (30/10) — `price_marks._transfer_cost_estimates`: il costo per unità d'una TRANSFER in
+   entrata (`cost_basis_override × qbq`, in `cost_basis_currency`) è un'osservazione TRADE stimata solo se, fino al
+   suo giorno compreso, l'asset non ha né quotazione né altri movimenti delle sue unità (BUY/SELL, ADJUSTMENT,
+   uscite); un'altra entrata non la ferma. Esempio dei test: 10 unità a 50 USD, report in EUR, cambio 0,9 / 0,8 / 0,7
+   → valore 450 / 400 / 350 (prima 450 fisso, al costo); un ETF quotato 200 il venerdì e spostato il sabato resta 200.
+   > **⚠️ Fuori pista — la regola di mezzo**: la prima simulazione del test-author (bloccano solo quotazioni e BUY/SELL)
+   > dava un guadagno finto su due libri esistenti (#3: ADJUSTMENT a 20 poi trasferimento a 40 → +200; #4 05f: B con un
+   > ADJUSTMENT senza costo → +50). Letta alla lettera la decisione («né quotazione né operazione»), un ADJUSTMENT o
+   > un'uscita prima fermano la stima: #3 e #4 restano come oggi; i trasferimenti interni sono esclusi da sé (il
+   > mittente ha già un movimento prima).
+   > **⚠️ Fuori pista — la grazia**: un asset con fornitore arrivato solo per trasferimento finiva in
+   > TRANSACTION_IMPLIED dal primo giorno (la grazia partiva dalle sole date di BUY/SELL): `get_summary` ora la conta
+   > dalla sua prima riga di lotto (l'arrivo) quando non ha BUY/SELL (trovato dal docs-writer; test di grazia rosso
+   > senza la cura).
+   > **Note implementazione**: test-author: 27 puri + 9 di motore + 5 di grazia, azione `services transfer-cost-estimate`;
+   > riparati 3 perni (2 di `test_daily_state_builder`, il caso 05e «ricevuto a 12»: B ora vale al prezzo stimato
+   > 10 × 10 = 100, non al suo costo 120). docs-writer: 16 pagine inglesi + 5 developer, ancora `#transfer-cost-estimate`;
+   > build strict 0, check-links 97.
+2. ✅ **Revisione MF-A13** (diff di X `cb9a720f4`, sola lettura) — va bene col contratto (close (b)). Test di parità
+   (24) verdi sul suo albero, rossi sul mio per la ragione giusta; portati fuori dal mio worktree in
+   `ondata6/MF-A13-parity/` (file + registrazione) perché il coordinatore li porti sul ramo di X.
+   > **⚠️ Fuori pista — correzione dell'analisi**: «nessun valore arrotondato cambia» è falso a un pareggio
+   > d'arrotondamento: GBP→EUR del 20/06/2025, `399.5129875` → `399.5129874999…9` (a 1e-6: …988 → …987); 3 volte a
+   > 1e-6 sul corpus, mai a 1e-12 né ai centesimi. Segnalato per il bump di AIX.

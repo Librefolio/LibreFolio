@@ -923,6 +923,26 @@ def _at_cost_problems(position, value: str) -> list[str]:
     return [f"{position.date}/asset {position.asset_id}: {name}={getattr(position, name)!r}, expected {want!r}" for name, want in expected.items() if getattr(position, name) != want]
 
 
+def _transfer_cost_mark_problems(position, value: str, cost: str, unit_price: str, reference_date: date) -> list[str]:
+    """What keeps ``position`` from being valued at the estimated price an incoming TRANSFER's cost gave it (W-B94 road
+    (b)): LAST_TRADE_PRICE at ``unit_price`` EUR, observed on ``reference_date``, never stale here, no rate needed."""
+    expected = {
+        "valuation_source": ValuationSource.LAST_TRADE_PRICE,
+        "market_value": Decimal(value),
+        "cost_basis": Decimal(cost),
+        "unrealized_pnl": Decimal(value) - Decimal(cost),
+        "valuation_effective_unit_price": Decimal(unit_price),
+        "valuation_effective_currency": "EUR",
+        "valuation_reference_date": reference_date,
+        "valuation_reference_unit_price": Decimal(unit_price),
+        "valuation_reference_currency": "EUR",
+        "valuation_stale": False,
+        "missing_fx_pair": None,
+        "cost_complete": True,
+    }
+    return [f"{position.date}/asset {position.asset_id}: {name}={getattr(position, name)!r}, expected {want!r}" for name, want in expected.items() if getattr(position, name) != want]
+
+
 def _day_problems(states, day: date, **expected) -> list[str]:
     """Mismatches between the DailyPortfolioState of ``day`` and ``expected`` (field -> value)."""
     state = next((s for s in states if s.date == day), None)
@@ -944,6 +964,11 @@ class TestValuedAtCostWithoutObservation:
     fake gain. The pool counts an unknown cost as zero, so a leg moves its known cost whether the pool
     is complete or not, as an in-kind ADJUSTMENT does: nothing is left in the capital once the units
     are gone.
+
+    W-B94 road (b) (developer, 30/10/2026): an incoming TRANSFER with a cost, while the asset has no quote and no
+    other operation on or before its day, makes that cost an estimated price (LAST_TRADE_PRICE), so such an asset is
+    no longer valued at cost: its legs are capital at that price, which is the cost they move — the same numbers.
+    An ADJUSTMENT, a BUY/SELL or an outgoing leg before it keeps the rule above.
 
     Built like ``PortfolioCalculationEngine.calculate``: the mark series from the transactions and the
     quotes (``_builder``), the average costs from the same rate map.
@@ -1123,11 +1148,15 @@ class TestValuedAtCostWithoutObservation:
         assert not problems, "\n".join(problems)
         assert (closing.valuation_source, closing.market_value, closing.valuation_reference_date) == ("MARKET_PRICE", Decimal("520"), date(2025, 1, 4))
 
-    def test_orphan_transfer_in_of_an_unpriced_asset_is_capital_at_cost(self):
+    def test_orphan_transfer_in_of_an_unpriced_asset_is_priced_at_its_cost_as_an_estimate(self):
         """(e) An orphan TRANSFER-in (no partner) of 10 units with a 30 EUR cost basis, on 01-02, of an
-        asset never quoted nor traded: valued at its cost 300, and the same 300 is in-kind capital, so
-        NAV 300, capital 300, total P&L 0 — unchanged by the transfer. Not a cash flow of the day.
+        asset never quoted nor traded: its cost is the asset's estimated price (W-B94 road (b)), so it is
+        valued at 10 x 30 = 300 (LAST_TRADE_PRICE, reference 01-02 at 30, transaction-implied), and the leg
+        is in-kind capital at that market value, the same 300: NAV 300, capital 300, total P&L 0 —
+        unchanged by the transfer. Not a cash flow of the day.
 
+        Before W-B94 (formerly ``test_orphan_transfer_in_of_an_unpriced_asset_is_capital_at_cost``): the
+        same numbers, but ESTIMATED_AT_COST — no effective or reference price, not transaction-implied.
         Before J-17: MISSING — no value (NAV 0), no capital (the leg could not be valued), the asset
         missing and the NAV incomplete from 01-02.
         """
@@ -1145,10 +1174,11 @@ class TestValuedAtCostWithoutObservation:
                 total_pnl=Decimal("0"),
                 external_cash_flow=Decimal("0"),
                 missing_price_asset_ids=set(),
+                transaction_implied_asset_ids={306},
                 nav_complete=True,
             )
         (position,) = result.position_states_end
-        problems += _at_cost_problems(position, "300")
+        problems += _transfer_cost_mark_problems(position, "300", "300", "30", date(2025, 1, 2))
         assert not problems, "\n".join(problems)
         contribution = next(s for s in result.daily_states if s.date == date(2025, 1, 3)).broker_contributions[10]
         assert (contribution.nav_contribution, contribution.capital_contribution, contribution.pnl_contribution) == (Decimal("300"), Decimal("300"), Decimal("0"))
@@ -1244,11 +1274,16 @@ class TestValuedAtCostWithoutObservation:
         (closing,) = result.position_states_end
         assert (closing.valuation_source, closing.market_value, closing.valuation_reference_date, closing.valuation_effective_unit_price) == ("LAST_TRADE_PRICE", Decimal("330"), date(2025, 1, 3), Decimal("55"))
 
-    def test_orphan_transfer_out_of_an_at_cost_position_takes_its_cost_out_of_capital(self):
+    def test_orphan_transfer_out_of_a_position_priced_at_its_transfer_cost_takes_its_value_out_of_capital(self):
         """(e), the other way: an orphan TRANSFER-in of 10 units with a 30 EUR cost basis on 01-01 (an
-        asset never quoted nor traded: at cost 300, capital 300), then an orphan TRANSFER-out of 4 on
-        01-02. The leg leaves at the 120 of cost it takes from the pool, so the capital falls to 180 with
-        the NAV (6 units at cost, 180): total P&L 0 on every day, and no cash flow of the day.
+        asset never quoted nor traded: its cost is the estimated price, W-B94 road (b) — value 300, capital
+        300), then an orphan TRANSFER-out of 4 on 01-02 (an outgoing leg after the estimate: no new price).
+        The leg leaves at its market value, 4 x 30 = 120, the cost it takes from the pool too, so the
+        capital falls to 180 with the NAV (6 units at 30, 180): total P&L 0 on every day, and no cash flow
+        of the day. The position is LAST_TRADE_PRICE, reference 01-01 at 30.
+
+        Before W-B94 (formerly ``test_orphan_transfer_out_of_an_at_cost_position_takes_its_cost_out_of_capital``):
+        the same numbers, ESTIMATED_AT_COST — the leg at the 120 of cost it took from the pool.
 
         Before J-17: neither leg could be valued (no capital) and the units were MISSING: NAV 0,
         capital 0, the asset missing and the NAV incomplete from 01-01.
@@ -1271,7 +1306,7 @@ class TestValuedAtCostWithoutObservation:
                 nav_complete=True,
             )
         (position,) = result.position_states_end
-        problems += _at_cost_problems(position, "180")
+        problems += _transfer_cost_mark_problems(position, "180", "180", "30", date(2025, 1, 1))
         assert not problems, "\n".join(problems)
 
     def test_orphan_transfer_emptying_a_pool_of_unknown_cost_moves_its_known_cost(self):
