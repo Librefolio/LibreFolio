@@ -782,6 +782,7 @@ def _refused_test_names(args) -> str | None:
 
 def _dispatch_test_command(args):
     """Dispatch test command from dev.py, optionally teeing the full log to a file."""
+    _common.line_buffer_output()
     refusal = _refused_test_names(args)
     if refusal:
         print_error(refusal)
@@ -1292,6 +1293,7 @@ def _dispatch_test_command_body(args):  # noqa: C901 — flat sequential step dr
 
 def main():
     """Main entry point, optionally teeing the full log to a file."""
+    _common.line_buffer_output()
     parser = create_parser()
 
     argcomplete.autocomplete(parser)

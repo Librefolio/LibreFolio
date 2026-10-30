@@ -762,7 +762,11 @@ def cmd_fe_build(args):
 def cmd_fe_check(args):
     """Run svelte-check for type errors."""
     print(Colors.success("Running svelte-check for type errors..."))
-    return run_command_live(["npm", "run", "check"], cwd=PROJECT_ROOT / "frontend")
+    result = run_command_live(["npm", "run", "check"], cwd=PROJECT_ROOT / "frontend")
+    # The E2E specs have their own tsconfig (I-07): svelte-check never sees them.
+    print(Colors.success("Running tsc on the E2E specs..."))
+    e2e_result = run_command_live(["npm", "run", "check:e2e"], cwd=PROJECT_ROOT / "frontend")
+    return result or e2e_result
 
 
 def cmd_fe_format(args):
@@ -1216,7 +1220,7 @@ def cmd_mkdocs_gallery(args):
             )
         output_lines = []
         for line in proc.stdout:
-            print(line, end='')
+            print(line, end='', flush=True)
             output_lines.append(line)
         proc.wait()
         returncode = proc.returncode
