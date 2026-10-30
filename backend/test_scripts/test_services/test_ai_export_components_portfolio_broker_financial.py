@@ -34,6 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from backend.app.schemas.common import Currency
 from backend.app.schemas.portfolio import (
+    AllocationItem,
     AssetPeriodContribution,
     LotAnalysisType,
     LotCustodySummarySchema,
@@ -663,6 +664,56 @@ class TestAutonomousGeneralEvidence:
             ("EUR", Decimal("400")),
         ]
         assert envelope.payload["currency_coverage"]["unknown_position_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_portfolio_allocations_copy_null_slice_percents_and_keep_the_amounts(self, monkeypatch):
+        """MF-C2 (developer's decision, ondata 6): an emptied portfolio's slices add up to zero (``{Liquidity: 0}``) and an
+        overdraft's cancel out (stocks 500, cash -500): the engine gives ``AllocationItem.value`` None, and
+        ``portfolio.allocations_cash`` copies it as ``percent`` null, amounts and order (the summary's) kept.
+
+        RED on the tree of 2026-10-28 (HEAD 01f1da513): ``AllocationItem(value=None)`` is refused (``ValidationError``),
+        and ``AllocationSlice.percent`` is required, so the component would fail its payload validation too.
+        """
+        scope = _scope()
+        summary = _summary(
+            holdings=[_holding(1, 1, current_value=500).model_copy(update={"nav_weight_percent": None, "valuation_effective_currency": "USD"})],
+            net_worth=_money(0),
+            cash_total=_money(-500),
+            market_value=_money(500),
+            allocation_by_type=[AllocationItem(name="Stock", value=None, amount=Decimal("500")), AllocationItem(name="Liquidity", value=None, amount=Decimal("-500"))],
+            allocation_by_sector=[AllocationItem(name="Technology", value=None, amount=Decimal("500")), AllocationItem(name="Liquidity", value=None, amount=Decimal("-500"))],
+            allocation_by_geography=[AllocationItem(name="US", value=Decimal("100.00"), amount=Decimal("500"))],
+        )
+        report = _report(scope, summary=summary)
+        _patch_report(monkeypatch, report)
+        _patch_metadata(monkeypatch)
+        registry = _registry(portfolio_financial.PORTFOLIO_FINANCIAL_COMPONENTS)
+        context = _make_context(scope, registry, _make_async_session())
+
+        payload = (await context.resolve("portfolio.allocations_cash", required=True)).payload
+
+        assert [(row["name"], row["percent"], Decimal(row["amount"]["amount"])) for row in payload["by_type"]] == [("Stock", None, Decimal("500")), ("Liquidity", None, Decimal("-500"))]
+        assert [(row["name"], row["percent"]) for row in payload["by_sector"]] == [("Technology", None), ("Liquidity", None)]
+        assert [(row["name"], Decimal(row["percent"])) for row in payload["by_geography"]] == [("US", Decimal("100.00"))]
+
+    @pytest.mark.asyncio
+    async def test_emptied_portfolio_allocations_build_with_a_null_liquidity_percent(self, monkeypatch):
+        scope = _scope()
+        summary = _summary(
+            holdings=[],
+            net_worth=_money(0),
+            total_invested=_money(0),
+            allocation_by_type=[AllocationItem(name="Liquidity", value=None, amount=Decimal("0"))],
+            allocation_by_sector=[AllocationItem(name="Liquidity", value=None, amount=Decimal("0"))],
+        )
+        _patch_report(monkeypatch, _report(scope, summary=summary))
+        _patch_metadata(monkeypatch)
+        context = _make_context(scope, _registry(portfolio_financial.PORTFOLIO_FINANCIAL_COMPONENTS), _make_async_session())
+
+        payload = (await context.resolve("portfolio.allocations_cash", required=True)).payload
+
+        assert [(row["name"], row["percent"], Decimal(row["amount"]["amount"])) for row in payload["by_type"]] == [("Liquidity", None, Decimal("0"))]
+        assert [(row["name"], row["percent"]) for row in payload["by_sector"]] == [("Liquidity", None)]
 
     @pytest.mark.asyncio
     async def test_fifo_summary_exports_per_asset_economics_and_coverage(self, monkeypatch):

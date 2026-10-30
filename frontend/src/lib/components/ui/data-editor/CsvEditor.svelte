@@ -505,12 +505,12 @@
     <!-- Status bar -->
     <div class="flex items-center justify-between px-3 py-1.5 bg-lf-panel border-b border-lf-subtle text-xs">
         <span class="text-lf-muted">
-            {validDataCount} valid row{validDataCount !== 1 ? 's' : ''}
+            {$t('csvImport.statusValidRows', {values: {count: validDataCount}})}
             {#if errorCount > 0}
-                <span class="text-lf-danger ml-2" data-state="invalid">• {errorCount} error{errorCount !== 1 ? 's' : ''}</span>
+                <span class="text-lf-danger ml-2" data-state="invalid">• {$t('csvImport.statusErrors', {values: {count: errorCount}})}</span>
             {/if}
             {#if hasDuplicates}
-                <span class="text-lf-warning ml-2">• duplicate {identityLabel}s</span>
+                <span class="text-lf-warning ml-2">• {$t('csvImport.statusDuplicates', {values: {label: identityLabel}})}</span>
             {/if}
         </span>
         <span class="inline-flex items-center gap-1.5 text-lf-muted text-[10px]">

@@ -69,14 +69,15 @@ export interface ImportableSuggestion {
 
 /**
  * The database search's answer, reduced to the candidates the editor does not hold yet, per asked row
- * still in the editor. `tempIdOfKey` maps an asked id back to its row (undefined: the row is gone).
+ * still in the editor. `tempIdOfKey` maps an asked id back to its row (undefined: the row is gone). `isLoaded` says whether the
+ * saved row is in the transaction store: the picker the 💡 opens lists only those, so a candidate that is not loaded is not counted (C-45).
  */
-export function importableSuggestions(results: ReadonlyMap<number, readonly SuggestCandidate[]>, tempIdOfKey: (key: number) => string | undefined, idsInEditor: ReadonlySet<number>): ImportableSuggestion[] {
+export function importableSuggestions(results: ReadonlyMap<number, readonly SuggestCandidate[]>, tempIdOfKey: (key: number) => string | undefined, idsInEditor: ReadonlySet<number>, isLoaded: (id: number) => boolean): ImportableSuggestion[] {
     const importable: ImportableSuggestion[] = [];
     for (const [key, candidates] of results) {
         const tempId = tempIdOfKey(key);
         if (tempId === undefined) continue;
-        const missing = candidates.filter((candidate) => !idsInEditor.has(candidate.id));
+        const missing = candidates.filter((candidate) => !idsInEditor.has(candidate.id) && isLoaded(candidate.id));
         if (missing.length > 0) importable.push({key, tempId, candidates: missing});
     }
     return importable;

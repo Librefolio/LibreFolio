@@ -181,7 +181,11 @@
       "invalidNumber": "Numero non valido in \"{column}\": \"{value}\"",
       "invalidValue": "Valore non valido in \"{column}\": \"{value}\"",
       "duplicate": "Valore duplicato per {label}: {key}"
-    }
+    },
+    "statusValidRows": "{count, plural, one {# riga valida} other {# righe valide}}",
+    "statusErrors": "{count, plural, one {# errore} other {# errori}}",
+    "statusDuplicates": "{label} duplicato",
+    "duplicatesShort": "duplicati"
   },
   "dataEditor": {
     "staleTooltip": "Nascondi righe riempite all'indietro (⚠️ non aggiornate). Sono punti di riempimento copiati dal dato reale più vicino.",
