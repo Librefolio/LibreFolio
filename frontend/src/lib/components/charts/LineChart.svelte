@@ -21,6 +21,7 @@
     import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';
     import {chartInitOptions} from '$lib/components/charts/chartPixelRatio';
     import {attachChartReady} from '$lib/utils/chartReady';
+    import {dayOfAxisValue} from '$lib/utils/stepSeries';
     import {t} from '$lib/i18n';
     import type {RenderedSignal} from '$lib/charts/signals';
     import type {AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
@@ -786,7 +787,9 @@
                           const items = Array.isArray(params) ? params : [params];
                           if (!items.length) return '';
                           const date = items[0].axisValue || items[0].name;
-                          let html = `<strong>${formatDayWithWeekday(String(date))}</strong>`;
+                          // `data-tooltip-from` / `data-tooltip-to`: the ISO day the header stands for, which the specs read (the text is translated)
+                          const shownDay = /^\d+$/.test(String(date)) ? dayOfAxisValue(Number(date)) : String(date).slice(0, 10);
+                          let html = `<strong data-tooltip-from="${shownDay}" data-tooltip-to="${shownDay}">${formatDayWithWeekday(String(date))}</strong>`;
 
                           // Build a set of band helper series names to skip in tooltip
                           const bandHelperNames = new Set<string>();

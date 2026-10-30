@@ -1497,7 +1497,8 @@
             .filter((row): row is string => row != null);
 
         if (rows.length === 0) return '';
-        return `<div style="font-size:11px;color:${theme.textColor}">${buildTooltipHeader(escapeHtml(formatDayWithWeekday(rawDate)), theme.textColor)}${buildTooltipDivider(theme.border)}${rows.join('')}</div>`;
+        const day = typeof rawDate === 'number' ? dayOfAxisValue(rawDate) : String(rawDate).slice(0, 10);
+        return `<div style="font-size:11px;color:${theme.textColor}">${buildTooltipHeader(escapeHtml(formatDayWithWeekday(rawDate)), theme.textColor, {from: day, to: day})}${buildTooltipDivider(theme.border)}${rows.join('')}</div>`;
     }
 
     /** Legend names, excluding internal helper series that shouldn't appear as toggles: the per-lot

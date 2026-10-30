@@ -426,19 +426,22 @@
 
     function buildTooltipBucketHeader(params: any[], fallbackDate: number | string, theme: ReturnType<typeof buildTooltipTheme>): string {
         const bucket = tooltipBucketInfo(params);
-        if (!bucket || bucket.resolution === 'daily') return buildTooltipHeader(escapeHtml(formatDayWithWeekday(fallbackDate)), theme.textColor);
+        if (!bucket || bucket.resolution === 'daily') {
+            const day = typeof fallbackDate === 'number' ? dayOfAxisValue(fallbackDate) : fallbackDate.slice(0, 10);
+            return buildTooltipHeader(escapeHtml(formatDayWithWeekday(fallbackDate)), theme.textColor, {from: day, to: day});
+        }
 
         // The point stands for its bucket up to its own day, the last one with data: the period still running ends there.
         const span = bucketSpanUpTo(bucket.date, bucket);
         const contextLine = `<div style="font-size:10px;color:${theme.mutedColor};margin-bottom:4px">${escapeHtml($_('chart.tooltip.valueAt', {values: {date: formatLongDate(span.bucketEnd)}}))}</div>`;
         if (bucket.resolution === 'weekly') {
             const label = $_('chart.tooltip.weekRange', {values: {start: formatLongDate(span.bucketStart), end: formatLongDate(span.bucketEnd)}});
-            return `${buildTooltipHeader(escapeHtml(label), theme.textColor)}${contextLine}`;
+            return `${buildTooltipHeader(escapeHtml(label), theme.textColor, {from: span.bucketStart, to: span.bucketEnd})}${contextLine}`;
         }
 
         const month = formatTooltipMonth(span.bucketEnd);
         const label = $_('chart.tooltip.monthLabel', {values: {month}});
-        return `${buildTooltipHeader(escapeHtml(label), theme.textColor)}${contextLine}`;
+        return `${buildTooltipHeader(escapeHtml(label), theme.textColor, {from: span.bucketStart, to: span.bucketEnd})}${contextLine}`;
     }
 
     const modeLabels = $derived.by(() => ({
