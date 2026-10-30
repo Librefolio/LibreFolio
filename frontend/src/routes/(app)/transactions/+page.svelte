@@ -1,5 +1,5 @@
 <script lang="ts">
-    import {onMount, tick} from 'svelte';
+    import {onDestroy, onMount, tick} from 'svelte';
     import {browser} from '$app/environment';
     import {goto, replaceState} from '$app/navigation';
     import {page} from '$app/stores';
@@ -475,18 +475,29 @@
     }
 
     let highlightClearTimer: ReturnType<typeof setTimeout> | null = null;
+    /** The row marked by the last highlight: the mark stays on it until the next highlight or the end of the page (W-B76). */
+    let markedRow: HTMLElement | null = null;
 
     function pulseElement(el: HTMLElement) {
         if (highlightClearTimer != null) clearTimeout(highlightClearTimer);
+        if (markedRow && markedRow !== el) markedRow.removeAttribute('data-highlighted');
         el.classList.remove('tx-row-highlight');
         void el.offsetWidth; // force reflow → restart animation
         el.classList.add('tx-row-highlight');
+        // The pulse is over in 1.4 s; this mark says which row was opened, to the user (a bar on the row) and to a test.
+        el.setAttribute('data-highlighted', 'true');
+        markedRow = el;
         el.scrollIntoView({behavior: 'smooth', block: 'center'});
         highlightClearTimer = setTimeout(() => {
             el.classList.remove('tx-row-highlight');
             highlightClearTimer = null;
         }, 1600);
     }
+
+    onDestroy(() => {
+        markedRow?.removeAttribute('data-highlighted');
+        markedRow = null;
+    });
 
     function parseHighlightId(raw: string | null): number | null {
         if (!raw) return null;

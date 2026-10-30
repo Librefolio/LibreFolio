@@ -474,6 +474,8 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/utils/core/sanitizeHtml.test.ts",
             "src/lib/features/brokers/BrokerModal.test.ts",
             "src/lib/features/brokers/BrokerSharingPanel.test.ts",
+            "src/lib/components/table/ColumnVisibilityToggle.test.ts",
+            "src/lib/components/charts/__tests__/staleDaysPlural.test.ts",
             "src/lib/features/brokers/BrokerCard.test.ts",
             "src/lib/features/brokers/BrokerImportFilesModal.test.ts",
             "src/lib/components/assets/AssetTable.test.ts",
