@@ -70,6 +70,65 @@ def max_users() -> int | None:
     return limit
 
 
+DEFAULT_LANGUAGE_VARIABLE = "LIBREFOLIO_DEFAULT_LANGUAGE"
+DEFAULT_LANGUAGES: tuple[str, ...] = ("en", "it", "fr", "es")
+
+
+def default_language() -> str | None:
+    """``LIBREFOLIO_DEFAULT_LANGUAGE``: the instance's language until an administrator saves the ``default_language`` setting.
+
+    None when unset or blank: the setting's own value decides. ``en``, ``it``, ``fr`` or ``es`` (any case) otherwise, in
+    lower case; any other value raises ``ValueError``, naming the variable.
+    """
+    value = _blank_to_none(DEFAULT_LANGUAGE_VARIABLE)
+    if value is None:
+        return None
+    language = value.lower()
+    if language not in DEFAULT_LANGUAGES:
+        raise ValueError(f"{DEFAULT_LANGUAGE_VARIABLE}={value!r}: expected one of {', '.join(DEFAULT_LANGUAGES)}")
+    return language
+
+
+DEFAULT_CURRENCY_VARIABLE = "LIBREFOLIO_DEFAULT_CURRENCY"
+DEFAULT_TIMEZONE_VARIABLE = "LIBREFOLIO_DEFAULT_TIMEZONE"
+
+
+def _checked_setting(variable: str, key: str) -> str | None:
+    """``variable`` checked as the global setting ``key`` is checked when an administrator saves it: None when unset or blank.
+
+    The same rule as the setting (``validate_global_setting_value``), so the variable accepts exactly what the setting
+    accepts; any other value raises ``ValueError``, naming the variable and the value.
+    """
+    value = _blank_to_none(variable)
+    if value is None:
+        return None
+    # The schemas import the models, which import this package: imported here, at the call, not at the top
+    from backend.app.schemas.settings import validate_global_setting_value  # noqa: PLC0415 — avoids a cycle
+
+    try:
+        return validate_global_setting_value(key, value, "str")
+    except ValueError as exc:
+        raise ValueError(f"{variable}={value!r}: {exc}") from exc
+
+
+def default_currency() -> str | None:
+    """``LIBREFOLIO_DEFAULT_CURRENCY``: the instance's currency until an administrator saves the ``default_currency`` setting (CL-13).
+
+    None when unset or blank: the setting's own value decides. An ISO 4217 code LibreFolio knows (any case, returned in
+    upper case) otherwise; any other value raises ``ValueError``, naming the variable.
+    """
+    return _checked_setting(DEFAULT_CURRENCY_VARIABLE, "default_currency")
+
+
+def default_timezone() -> str | None:
+    """``LIBREFOLIO_DEFAULT_TIMEZONE``: the app's timezone until an administrator saves the ``scheduler_timezone`` setting (CL-13).
+
+    None when unset or blank: the setting's own value decides. An IANA name the server resolves otherwise (the server
+    works in UTC; this is the one timezone of the app); any other value raises ``ValueError``, naming the variable.
+    """
+    return _checked_setting(DEFAULT_TIMEZONE_VARIABLE, "scheduler_timezone")
+
+
 LOGIN_LIMIT_VARIABLE = "LIBREFOLIO_LOGIN_LIMIT"
 
 

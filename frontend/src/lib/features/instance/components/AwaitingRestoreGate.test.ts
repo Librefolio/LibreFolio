@@ -44,6 +44,11 @@
  * the restore-state one (also absent and null) the `#backup-pending-unreadable` anchor. Red until H5-3:
  * the gate ignores the prop and the field, so the owner cases still show the restore-state link.
  *
+ * Checkpoint 2 triage (who can solve an interrupted restore alone?): the interrupted page picks its help from the profile
+ * the server confirmed (`selfHosted`, by default `selfHostedConfirmed()`). The H5-3 cases above run on a SELF-HOSTED
+ * instance (the docs link is that page); the describe «a managed instance» runs with `profile: 'managed'`: no docs link
+ * for any reason, and either the support link (the config holds `support_url`) or the support-missing line.
+ *
  * Registered in `front_component_unit` (`scripts/test_runner/_frontend_utility.py`, action `component-unit`).
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
@@ -56,7 +61,7 @@ const mocks = await vi.hoisted(async () => {
     const {reactiveBox} = await import('$test/runes.svelte');
     return {
         // What the fake `instanceConfig.config` returns: a config with or without `mode`.
-        config: reactiveBox<{value: {profile: string; mode?: string; restore_interrupted?: unknown; restore_interrupted_reason?: unknown}}>({value: {profile: 'managed'}}),
+        config: reactiveBox<{value: {profile: string; mode?: string; restore_interrupted?: unknown; restore_interrupted_reason?: unknown; support_url?: unknown}}>({value: {profile: 'managed'}}),
         load: vi.fn(() => Promise.resolve()).mockName('instanceConfig.load'),
         getInstanceConfig: vi.fn(() => new Promise(() => {})).mockName('zodiosApi.get_instance_config_api_v1_system_instance_get'),
     };
@@ -306,6 +311,11 @@ describe('AwaitingRestoreGate — the reason of an interrupted restore (H5-3)', 
 
     type Reason = 'restore_state' | 'owner_assignment' | null | undefined;
 
+    // The docs link is the self-hosted page's help: the server answered `selfhosted` (the mocked store is `loaded`).
+    beforeEach(() => {
+        mocks.config.value = {profile: 'selfhosted'};
+    });
+
     function docsHref(): string | null {
         return screen.getByTestId(DOCS).getAttribute('href');
     }
@@ -390,7 +400,7 @@ describe('AwaitingRestoreGate — the reason of an interrupted restore (H5-3)', 
 
     describe('defaults: instanceConfig.config.restore_interrupted_reason', () => {
         it('reads owner_assignment: the page links the backup and restore guide; flips to restore_state with the config', async () => {
-            mocks.config.value = {profile: 'managed', mode: 'normal', restore_interrupted: true, restore_interrupted_reason: 'owner_assignment'};
+            mocks.config.value = {profile: 'selfhosted', mode: 'normal', restore_interrupted: true, restore_interrupted_reason: 'owner_assignment'};
             const {children, mounts} = childrenProbe();
             render(AwaitingRestoreGate, {props: {children}});
             flushSync();
@@ -398,7 +408,7 @@ describe('AwaitingRestoreGate — the reason of an interrupted restore (H5-3)', 
             expect(docsHref()).toBe(OWNER_HREF);
             expect(mounts.count, 'the app was never mounted').toBe(0);
 
-            mocks.config.value = {profile: 'managed', mode: 'normal', restore_interrupted: true, restore_interrupted_reason: 'restore_state'};
+            mocks.config.value = {profile: 'selfhosted', mode: 'normal', restore_interrupted: true, restore_interrupted_reason: 'restore_state'};
             await tick();
             expect(docsHref()).toBe(RESTORE_STATE_HREF);
         });
@@ -408,7 +418,7 @@ describe('AwaitingRestoreGate — the reason of an interrupted restore (H5-3)', 
             ['null', null],
             ['absent (an older server)', undefined],
         ])('shows today’s page when the reason is %s', (_case, value) => {
-            mocks.config.value = value === undefined ? {profile: 'managed', mode: 'normal', restore_interrupted: true} : {profile: 'managed', mode: 'normal', restore_interrupted: true, restore_interrupted_reason: value};
+            mocks.config.value = value === undefined ? {profile: 'selfhosted', mode: 'normal', restore_interrupted: true} : {profile: 'selfhosted', mode: 'normal', restore_interrupted: true, restore_interrupted_reason: value};
             const {children} = childrenProbe();
             render(AwaitingRestoreGate, {props: {children}});
             flushSync();
@@ -418,7 +428,7 @@ describe('AwaitingRestoreGate — the reason of an interrupted restore (H5-3)', 
         });
 
         it('a reason alone, with restore_interrupted false, shows the app', () => {
-            mocks.config.value = {profile: 'managed', mode: 'normal', restore_interrupted: false, restore_interrupted_reason: 'owner_assignment'};
+            mocks.config.value = {profile: 'selfhosted', mode: 'normal', restore_interrupted: false, restore_interrupted_reason: 'owner_assignment'};
             const {children} = childrenProbe();
             render(AwaitingRestoreGate, {props: {children}});
             flushSync();
@@ -426,5 +436,61 @@ describe('AwaitingRestoreGate — the reason of an interrupted restore (H5-3)', 
             expectChildrenOnly('restore_interrupted false');
             expect(screen.queryByTestId(INTERRUPTED), 'no interrupted page').toBeNull();
         });
+    });
+});
+
+describe('AwaitingRestoreGate — a managed instance: support is the help, not the guide', () => {
+    const INTERRUPTED = 'instance-restore-interrupted';
+    const DOCS = 'instance-restore-interrupted-docs';
+    const SUPPORT = 'instance-restore-interrupted-support';
+    const SUPPORT_MISSING = 'instance-restore-interrupted-support-missing';
+
+    const REASONS = [
+        ['restore_state', 'restore_state'],
+        ['owner_assignment', 'owner_assignment'],
+        ['null', null],
+    ] as const;
+
+    function mountManaged(reason: 'restore_state' | 'owner_assignment' | null, supportUrl?: string) {
+        mocks.config.value = {profile: 'managed', mode: 'normal', restore_interrupted: true, restore_interrupted_reason: reason, ...(supportUrl === undefined ? {} : {support_url: supportUrl})};
+        const {children, mounts} = childrenProbe();
+        render(AwaitingRestoreGate, {props: {children}});
+        flushSync();
+        expect(screen.getByTestId(INTERRUPTED), 'Barrier: the interrupted page is on screen').toBeInTheDocument();
+        expect(mounts.count, 'the app was never mounted').toBe(0);
+    }
+
+    describe.each(REASONS)('reason %s', (_label, reason) => {
+        it('has no docs link, and the support-missing line when the configuration names no support address', () => {
+            mountManaged(reason);
+
+            expect(screen.getByTestId(SUPPORT_MISSING), 'the customer is told to contact whoever provides the service').toBeInTheDocument();
+            expect(screen.queryByTestId(DOCS), 'no docs link').toBeNull();
+            expect(screen.queryByTestId(SUPPORT), 'no support link').toBeNull();
+            expect(
+                [...document.body.querySelectorAll('a')].filter((link) => (link.getAttribute('href') ?? '').includes('/mkdocs/')),
+                'no link to the documentation',
+            ).toEqual([]);
+        });
+
+        it('has no docs link, and the support link with the report, when the configuration holds support_url', () => {
+            mountManaged(reason, 'mailto:help@example.org');
+
+            const support = screen.getByTestId(SUPPORT);
+            expect(support.getAttribute('href'), 'a mailto to the instance’s address, with the report').toMatch(/^mailto:help@example\.org\?subject=/);
+            expect(decodeURIComponent(support.getAttribute('href') ?? ''), 'the report names the check').toContain('platform.restore_interrupted');
+            expect(screen.queryByTestId(DOCS), 'no docs link').toBeNull();
+            expect(screen.queryByTestId(SUPPORT_MISSING), 'no missing line when there is a link').toBeNull();
+        });
+    });
+
+    it('the same configuration with profile selfhosted shows the docs link: control that the profile is what decides', () => {
+        mocks.config.value = {profile: 'selfhosted', mode: 'normal', restore_interrupted: true, restore_interrupted_reason: 'restore_state'};
+        const {children} = childrenProbe();
+        render(AwaitingRestoreGate, {props: {children}});
+        flushSync();
+
+        expect(screen.getByTestId(DOCS).getAttribute('href')).toBe('/mkdocs/admin/cli_backup/#backup-pending-unreadable');
+        expect(screen.queryByTestId(SUPPORT_MISSING), 'the administrator is the host: no missing line').toBeNull();
     });
 });

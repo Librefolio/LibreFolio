@@ -26,7 +26,7 @@
     import {t} from 'svelte-i18n';
     import BrimEvidenceTable from './BrimEvidenceTable.svelte';
     import {resolveBrimEvidenceComment, resolveBrimNoticeMessage} from '$lib/features/transactions/resolveBrimNotice';
-    import {GITHUB_NEW_ISSUE_URL} from '$lib/components/assets/assetSearchReport';
+    import {GITHUB_NEW_ISSUE_URL} from '$lib/features/support/supportChannel';
     import type {BrimNotice} from '$lib/types';
 
     interface Props {

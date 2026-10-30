@@ -166,6 +166,25 @@ canceled request is not a failure.
 - A console line is for the human who investigates; it is never the signal a test or a component reads («Publish
   state, do not print it»).
 
+## Help for a check: guide or support (FB-27)
+
+A check or state that tells the user something is wrong ends in one of two kinds of help, and the choice is data, never
+a component's guess. `lib/features/instance/checkGuides.json` gives every check an entry: `guide` (the administrator
+solves it alone → the section of the administrator's guide, a `DocsLink`) or `support` (whoever hosts the instance
+solves it → «Contact support»). A limit that applies to a self-hosted instance too (`backup.upload_limit`,
+`backup.restore_limit`) is a `guide`. `CheckHelp.svelte` renders the choice; a new check needs its entry, and the table
+test fails without it.
+
+- **Support goes through `lib/features/support/supportChannel.ts`** (`supportChannel`, `reportHref`): the instance's
+  `LIBREFOLIO_SUPPORT_URL`, a `mailto:` or an http(s) page, with a report as the subject and body (`title` and `body`
+  in the query of a page). The report of a check is `buildCheckReport` (`features/instance/checkSupportReport.ts`):
+  the code, the severity, the instance's address, the version and the date; never a personal datum, a secret or the
+  check's details.
+- **The page of an interrupted restore splits by who can act**: the recovery is a command on the server, so on a self-hosted
+  instance (`selfHostedConfirmed()`) it links the recovery guide, on a managed one only the support (or the line below).
+- **No address → no link and no GitHub issue** (a public issue would publish the instance's address): a line tells the
+  user to contact whoever provides the service. A check that passed has no support control.
+
 ## Chart Components (`lib/components/charts/`)
 
 14 files, ~5100 lines. Key components:
