@@ -112,6 +112,8 @@ ALLOWED_WHEN_AWAITING_RESTORE_ROUTES = {
     "backend.app.api.v1.system.instance.get_instance_config": ("GET", "/api/v1/system/instance"),
     "backend.app.api.v1.system.wake.wake_sync": ("POST", "/api/v1/system/wake-sync"),
     "backend.app.api.v1.panel.get_panel_status": ("GET", "/api/v1/panel/status"),
+    # CL-M1: the panel's figures, ticket only; also allowed while the restore is interrupted (the same set). Red until CL-M1.
+    "backend.app.api.v1.panel.get_panel_metrics": ("GET", "/api/v1/panel/metrics"),
     "backend.app.api.v1.backup.panel.start_panel_backup": ("POST", "/api/v1/backup/panel/jobs"),
     "backend.app.api.v1.backup.panel.get_panel_backup_job": ("GET", "/api/v1/backup/panel/jobs/{job_id}"),
     "backend.app.api.v1.backup.panel.download_panel_backup": ("GET", "/api/v1/backup/panel/jobs/{job_id}/file"),

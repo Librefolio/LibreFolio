@@ -339,6 +339,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/ui/input/PasswordInput.test.ts",
             "src/lib/components/ui/input/PasswordStrength.test.ts",
             "src/lib/components/ui/select/SimpleSelect.test.ts",
+            "src/lib/components/ui/select/SimpleSelect.portal.test.ts",
             "src/lib/components/ui/select/SearchSelect.test.ts",
             "src/lib/components/ui/select/SearchSelect.reopen.test.ts",
             "src/lib/components/ui/select/CurrencySearchSelect.test.ts",
@@ -846,6 +847,18 @@ def front_docs_offline_math(verbose: bool = False, ui: bool = False, headed: boo
     return _run_playwright("layout/docs-offline-math.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_docs_offline_mermaid(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the documentation's diagrams without internet: Mermaid from the site's own pinned copy, jsDelivr and unpkg never asked (H6-3, M-22)."""
+    print_section("Frontend Docs Offline Mermaid Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("layout/docs-offline-mermaid.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_docs_search_language(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the documentation's search by language: each language's home page finds its own pages only, the toggle widens it to all four, the preference holds (DOC-2)."""
     print_section("Frontend Docs Search Language Tests")
@@ -1323,6 +1336,15 @@ def populate_registry(registry: dict) -> None:
         desc="The documentation draws its formulas without internet: on a nested page in English and its Italian twin a folder deeper, every origin but the lane's refused, lib-loader.js loads MathJax from the site's root (/mkdocs/javascripts/vendor/mathjax/tex-mml-chtml.js, 200), every formula gets its mjx-container, every MathJax font is a 200 from the site's copy (vendor/mathjax/output/chtml/fonts/woff-v2/) with at least one MJX face loaded and none in error, MathJax is never asked of another origin (jsDelivr included), and mathjax.js raises no typesetPromise page error (M-19, batch 25)",
         prereq="Docs site built with the MathJax copy and its fonts (dev.py cache js, then dev.py mkdocs build)",
         tests="layout/docs-offline-math.spec.ts",
+    )
+    add_test(
+        cat,
+        "docs-offline-mermaid",
+        front_docs_offline_mermaid,
+        name="Docs Offline Mermaid",
+        desc="The documentation draws its diagrams without internet: on a page with a default-layout diagram and one whose frontmatter asks for layout: elk (ELK is dropped, the default layout draws it), every origin but the lane's refused, the template writes the site's own pinned Mermaid copy before Material's bundle (/mkdocs/javascripts/vendor/mermaid/mermaid.min.js, 200), Material's rendered SVG is visible with nodes and is not Mermaid's error drawing, no source block is left as code, and neither cdn.jsdelivr.net nor unpkg.com is ever requested (H6-3, M-22)",
+        prereq="Docs site built with the Mermaid copy (dev.py cache js, then dev.py mkdocs build)",
+        tests="layout/docs-offline-mermaid.spec.ts",
     )
     add_test(
         cat,

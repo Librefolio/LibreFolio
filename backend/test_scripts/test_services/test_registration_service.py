@@ -140,7 +140,10 @@ PUBLIC_URL_VARIABLE = "LIBREFOLIO_PUBLIC_URL"
 BILLING_URL_VARIABLE = "LIBREFOLIO_BILLING_URL"
 #: CL-10 (checkpoint 1 of workstream H): the language of the instance before an administrator chose one.
 DEFAULT_LANGUAGE_VARIABLE = "LIBREFOLIO_DEFAULT_LANGUAGE"
-ACCOUNTS_VARIABLES = (REGISTRATION_VARIABLE, MAX_USERS_VARIABLE, PUBLIC_URL_VARIABLE, BILLING_URL_VARIABLE, DEFAULT_LANGUAGE_VARIABLE)
+#: CL-13: the currency and the timezone of the instance before an administrator chose them (cases in ``test_default_currency_timezone_variables.py``).
+DEFAULT_CURRENCY_VARIABLE = "LIBREFOLIO_DEFAULT_CURRENCY"
+DEFAULT_TIMEZONE_VARIABLE = "LIBREFOLIO_DEFAULT_TIMEZONE"
+ACCOUNTS_VARIABLES = (REGISTRATION_VARIABLE, MAX_USERS_VARIABLE, PUBLIC_URL_VARIABLE, BILLING_URL_VARIABLE, DEFAULT_LANGUAGE_VARIABLE, DEFAULT_CURRENCY_VARIABLE, DEFAULT_TIMEZONE_VARIABLE)
 ENV_EXAMPLE = PROJECT_ROOT / ".env.example"
 SECTION_BAR = re.compile(r"# =+")
 
@@ -606,13 +609,13 @@ def _env_example_section(title: str) -> list[str]:
 
 
 def test_each_variable_is_a_commented_line_of_the_accounts_section_of_env_example() -> None:
-    """Contract 3: the variables are listed in ``.env.example``'s Accounts section, commented: an install that copies the file sets none of them. CL-10 adds ``LIBREFOLIO_DEFAULT_LANGUAGE`` to them (red until the line is written)."""
+    """Contract 3: the variables are listed in ``.env.example``'s Accounts section, commented: an install that copies the file sets none of them. CL-10 adds ``LIBREFOLIO_DEFAULT_LANGUAGE`` to them, CL-13 ``LIBREFOLIO_DEFAULT_CURRENCY`` and ``LIBREFOLIO_DEFAULT_TIMEZONE`` (red until the lines are written)."""
     print_section("Contract 3: .env.example, Accounts")
     section = _env_example_section("Accounts")
 
     missing = [name for name in ACCOUNTS_VARIABLES if not any(re.fullmatch(rf"#\s*{name}=.*", line) for line in section)]
     assert not missing, f"the Accounts section of {ENV_EXAMPLE.name} must list {missing} as commented lines ('# NAME=default'): {section}"
-    print_success("LIBREFOLIO_REGISTRATION, LIBREFOLIO_MAX_USERS, LIBREFOLIO_PUBLIC_URL, LIBREFOLIO_BILLING_URL, LIBREFOLIO_DEFAULT_LANGUAGE: commented, under Accounts")
+    print_success("LIBREFOLIO_REGISTRATION, LIBREFOLIO_MAX_USERS, LIBREFOLIO_PUBLIC_URL, LIBREFOLIO_BILLING_URL, LIBREFOLIO_DEFAULT_LANGUAGE, LIBREFOLIO_DEFAULT_CURRENCY, LIBREFOLIO_DEFAULT_TIMEZONE: commented, under Accounts")
 
 
 # =============================================================================

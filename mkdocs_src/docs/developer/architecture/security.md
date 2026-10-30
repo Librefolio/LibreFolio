@@ -1679,6 +1679,7 @@ dependency checks all its routes: `panel_access(scope)` in `backend/app/services
 | `wake` | `POST /system/wake-sync`, `backend/app/api/v1/system/wake.py` (workstream Z) | `wake_token()`: `SecretFileError`, `SleepWakeConfigError` | `WakeToken` | `wake_unauthorized` / `wake_unavailable` |
 | `status` | `GET /panel/status`, the [setup status](../../admin/hosting_panel_api.md#panel-status), read by [`admin_setup_status()`](access_control.md#setup-status), with the instance's `mode` and its `restore` (lot H-62), the two counts `users_used` and `users_limit` (lot H5-1), `owner_email_change` (lot H5-4), `instance_key` (lot H5-7, [The Key Check](#instance-key-check)) and `users_over_limit` (lot H5-8: a yes or no, [Over the limit](access_control.md#user-limit)) | `panel_status_token()` (`backend/app/config/hosting_panel.py`): `SecretFileError`, `HostingPanelConfigError` | `PanelStatusToken` | `panel_status_unauthorized` / `panel_status_unavailable` |
 | `backup:restore` (`PanelScope.BACKUP_RESTORE`) | The seven `/backup/panel/restore…` routes, `backend/app/api/v1/backup/panel_restore.py` (lot H-62): see [Awaiting Restore](#await-restore) | None: `read_token` always answers `None`, so no token opens it and, without the panel's public keys, it is off (`404`); a signed ticket of this scope only | `BackupRestorePanelTicket` | `backup_restore_unauthorized` / `backup_restore_unavailable` |
+| `metrics` (`PanelScope.METRICS`) | `GET /panel/metrics`, `get_panel_metrics` in `backend/app/api/v1/panel.py` (lot CL-M1): the read-only figures of the instance, collected by `collect_panel_metrics()` in `backend/app/services/platform/hosting_panel/metrics.py`, answer `PanelMetricsResponse`, see [The Metrics](../../admin/hosting_panel_api.md#panel-metrics) | None: `read_token` always answers `None`, so no token opens it and, without the panel's public keys, it is off (`404`); a signed ticket of this scope only | `PanelMetricsTicket` | `panel_metrics_unauthorized` / `panel_metrics_unavailable` |
 
 `panel_access(scope)` returns the same function for the same scope, so FastAPI runs it once per request. It takes the
 `Request` and the scope's `HTTPBearer(auto_error=False)`, and returns `PanelCaller(scope, credential="token")`, a frozen
@@ -1701,7 +1702,7 @@ Every refusal but the `404` has the body `{"detail": {"code": …, "message": �
 routes are the ones they had before.
 
 - **The limiter.** `PANEL_ATTEMPTS`, built by `new_panel_attempts()`: one
-  [sliding-window limiter](../backend/email.md#rate-window) for the four scopes, `PANEL_ATTEMPT_LIMIT` (20) refused
+  [sliding-window limiter](../backend/email.md#rate-window) for the five scopes, `PANEL_ATTEMPT_LIMIT` (20) refused
   credentials per key in `PANEL_ATTEMPT_WINDOW_SECONDS` (600), in memory and per process. The dependency reads the
   module attribute at each call, so a test puts one of its own in place:
   `monkeypatch.setattr(access, "PANEL_ATTEMPTS", SlidingWindowLimiter(20, 600, clock=fake))`. In every test process
@@ -1713,7 +1714,7 @@ routes are the ones they had before.
   query) and `credential` (`"token"`), with the `request_id` from structlog's context variables
   ([Request Logs](#request-logs)). Never the token, the value sent, a header, the query or the client's address:
   uvicorn's access line has the address.
-- **The OpenAPI tag.** `HOSTING_PANEL_TAG`, «Hosting panel», is the only tag of the thirteen routes. FastAPI adds the tags
+- **The OpenAPI tag.** `HOSTING_PANEL_TAG`, «Hosting panel», is the only tag of the fourteen routes. FastAPI adds the tags
   of a router to those of what it includes, and never replaces them, so the tag sits on each include and the parent
   routers have none: `backend/app/api/v1/backup/__init__.py` includes `panel.panel_router` and
   `panel_restore.panel_restore_router` with it and its other
@@ -1722,9 +1723,9 @@ routes are the ones they had before.
   and the tag. Paths, methods and endpoint names did not move, so the operation ids and the aliases of the web app's
   client are those of before.
 - **The bearer schemes.** Each route asks for its scope's scheme alone, `BackupPanelToken`, `WakeToken`,
-  `PanelStatusToken` or `BackupRestorePanelTicket`, an HTTP bearer whose description names its variable: the OpenAPI
+  `PanelStatusToken`, `BackupRestorePanelTicket` or `PanelMetricsTicket`, an HTTP bearer whose description names its variable: the OpenAPI
   document tells which token, or ticket, opens which route.
-- **On a blocked instance** the thirteen routes stay allowed: see [Instance Block](#instance-block). The seven restore
+- **On a blocked instance** the fourteen routes stay allowed: see [Instance Block](#instance-block). The seven restore
   routes then answer `423 instance_blocked` themselves, past the ticket ([Awaiting Restore](#await-restore)).
 
 **Level L2: signed tickets.** Beside the tokens, `panel_access()` accepts a ticket signed by the panel's Ed25519
@@ -2003,6 +2004,7 @@ path, so the allow-list `ALLOWED_WHEN_BLOCKED` is a `frozenset` of endpoint func
 | `GET /system/test-lane-health` | `health.test_lane_health` | The test runner's probe, `404` outside test mode |
 | `POST /system/wake-sync` | `wake.wake_sync` | The [scheduled wake-up](../../admin/wake_sync.md#wake-sync), with its own token instead of a session: on a blocked instance it runs no job and answers `200` with `status: "blocked"` (decision D-W3) |
 | `GET /panel/status` | `panel.get_panel_status` | The hosting panel's [setup status](../../admin/hosting_panel_api.md#panel-status), read by [`admin_setup_status()`](access_control.md#setup-status), with its own token instead of a session (lot H-61): it answers as on any other instance. Besides the setup, the `mode` and the `restore`, it holds two counts, `users_used` and `users_limit` (lot H5-1), `owner_email_change` (lot H5-4: `pending`, `blocked` or `null`, never an address), `instance_key` (lot H5-7) and `users_over_limit` (lot H5-8, a yes or no), never a name or an address |
+| `GET /panel/metrics` | `panel.get_panel_metrics` | The hosting panel's [figures of the instance](../../admin/hosting_panel_api.md#panel-metrics), with a signed ticket of scope `metrics` instead of a session (lot CL-M1): it answers as on any other instance |
 | The seven `/backup/panel/restore…` routes | `_PANEL_RESTORE_ROUTES` of `instance_block.py` (`backup_panel_restore.*`) | The panel's restore, with its ticket instead of a session (lot H-62): past the ticket each route answers `423 instance_blocked` itself, so a caller without a valid ticket learns nothing of the block. No restore happens on a blocked instance ([Awaiting Restore](#await-restore)) |
 
 **The refusal.** On a blocked instance, an endpoint outside the list first runs `get_current_user()`
@@ -2103,6 +2105,7 @@ since the volume is empty or holds the data being restored. The list:
 | `GET /system/instance` | `instance.get_instance_config` |
 | `POST /system/wake-sync` | `wake.wake_sync`: `_wake_run()` answers `status: "awaiting_restore"` and runs no job |
 | `GET /panel/status` | `panel.get_panel_status` |
+| `GET /panel/metrics` | `panel.get_panel_metrics` |
 | The four `/backup/panel/jobs…` routes | `backup_panel.start_panel_backup`, `get_panel_backup_job`, `download_panel_backup`, `delete_panel_backup_job`: in the mode a start answers `409 backup_awaiting_restore` (`backup/panel.py`, `_awaiting_restore()`), so a backup of the empty data never starts |
 | The seven `/backup/panel/restore…` routes | `_PANEL_RESTORE_ROUTES` |
 
