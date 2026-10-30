@@ -1,7 +1,7 @@
 {
   "chart": {
     "tooltip": {
-      "stale": "Obsoleto: {days} giorno/i",
+      "stale": "Obsoleto: {days, plural, one {# giorno} other {# giorni}}",
       "fxStale": "Tasso FX: {days}g fa",
       "percentNote": "% relativo alla data di inizio intervallo",
       "upper": "Superiore",
@@ -14,7 +14,8 @@
       "currentBucket": "In corso: {days} su {total} giorni",
       "originalValue": "orig. {value}",
       "fxRateDate": "cambio al {date}",
-      "fxDaysBack": "({days}g prima)"
+      "fxDaysBack": "({days}g prima)",
+      "staleBadge": "{days}g"
     },
     "resolution": {
       "weekly": "Settimanale",

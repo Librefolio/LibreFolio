@@ -1536,6 +1536,13 @@ describe('buildStaleTooltipHtml', () => {
         expect(html.match(/⚠/g)).toHaveLength(2);
     });
 
+    it('takes a function of the days as the label, so the language can inflect the plural (T-ST)', () => {
+        const html = buildStaleTooltipHtml(1, 2, WARNING, (days) => `price ${days === 1 ? 'one day' : `${days} days`}`, (days) => `fx ${days === 1 ? 'one day' : `${days} days`}`);
+        expect(html).toContain('price one day');
+        expect(html).toContain('fx 2 days');
+        expect(html.match(/⚠/g)).toHaveLength(2);
+    });
+
     it('substitutes {days} into a provided (translated) template', () => {
         const html = buildStaleTooltipHtml(4, 0, WARNING, 'Vecchio: {days}g');
         expect(html).toContain('Vecchio: 4g');

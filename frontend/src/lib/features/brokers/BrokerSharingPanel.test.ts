@@ -53,7 +53,7 @@
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 import {flushSync, tick} from 'svelte';
 import {get} from 'svelte/store';
-import {locale, waitLocale} from 'svelte-i18n';
+import {_ as translate, locale, waitLocale} from 'svelte-i18n';
 import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 
 // --- Mocks --------------------------------------------------------------
@@ -112,6 +112,7 @@ import BrokerSharingPanelHarness from '$test/harness/BrokerSharingPanelHarness.s
 import {zodiosApi} from '$lib/api';
 import {goto} from '$app/navigation';
 import {currentLanguage} from '$lib/stores/app/language';
+import {formatPercent} from '$lib/utils/core/formatPercent';
 import {toasts} from '$lib/stores/app/toastStore.svelte';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1646,6 +1647,20 @@ describe('BrokerSharingPanel — percentages in the UI language', () => {
         expect(shareOf(2), 'bob, editors column').toBe(ENGLISH.noShare);
         expect(shareOf(3), 'carol, viewers column').toBe(ENGLISH.noShare);
         expect(await maxHintRow(), 'the add dialog’s max hint').toContain(`(max ${ENGLISH.max})`);
+    });
+
+    it('Spanish UI (P-15): the «max» hint is the catalogue’s own text, not an English literal', async () => {
+        await setupI18n();
+        await waitLocale('es');
+        currentLanguage.set('es');
+        await waitLocale('es');
+        flushSync();
+        await tick();
+        await mountPanel({accesses: ACCESSES});
+
+        const expected = get(translate)('brokers.sharing.maxShare', {values: {max: formatPercent(MAX_NEW_SHARE, {signed: false, digits: 1})}});
+        expect(expected, 'control: the key exists in the catalogue').not.toBe('brokers.sharing.maxShare');
+        expect(await maxHintRow(), 'the add dialog’s max hint').toContain(expected);
     });
 
     it('French UI: allocated and available over the donut are written in French notation', async () => {
