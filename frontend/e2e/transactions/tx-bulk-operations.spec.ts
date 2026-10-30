@@ -12,6 +12,7 @@
  * - C-97b guard: an untouched one-satoshi SELL opens as original, shows 0.00000001, and closing writes nothing
  * - W-B65: an untouched Apply on a SELL, a BUY or a DEPOSIT keeps the row original, as the editor holds it, and closing asks nothing
  * - B-47: a focus and a blur on a saved DEPOSIT's cash, then Apply, keep the row original, and closing asks nothing
+ * - W2-6: the read-only unit price column (|cash| / |quantity|) of a BUY and a SELL, in the table and in the editor's grid
  *
  * Prerequisites: backend test mode (port 6041), mock data populated.
  * Mock data contract: populate_mock_data.py creates multiple TX types on
@@ -1069,6 +1070,89 @@ test.describe('Transaction Bulk Operations — commit on owned rows', () => {
         await expect(page.getByTestId('tx-bulk-modal'), 'an untouched Apply leaves nothing to discard: the editor closes at once').toBeHidden({timeout: 5_000});
         const after = await readStoredRow(page, ledger.rowId);
         expect(storedState(after), 'the stored DEPOSIT is still as seeded').toEqual(storedState(seeded));
+    });
+
+    /**
+     * W2-6 — the read-only «unit price» column, in the transactions table and in the editor's grid. Red before the cure:
+     * neither draws the cell.
+     *
+     * Our own ledger on the owned broker, in the seeded Bitcoin's currency, far in the past: a DEPOSIT, a BUY of 0.000002
+     * for 0.04 (unit price 20000) and a SELL of 0.000001 for 0.03 (30000). The BUY has a negative cash and a positive
+     * quantity, the SELL the opposite: both prices are positive. The price is read as digits, so the test does not depend
+     * on the locale's separators nor on the words around the amount. The grid shows the same price for the same rows.
+     */
+    test('W2-6: the unit price column shows |cash| / |quantity| of a BUY and a SELL, in the table and in the editor', async ({page}) => {
+        const mine: OwnedRows = {marker: `E2E-w26-unit-price-${uniqueSuffix()}`, ids: []};
+        owned = mine;
+        const brokerId = await ownedMockBrokerId(page);
+        const bitcoin = await seededAsset(page, 'BTC-USD');
+        const assetResp = await page.request.get(`${API}/assets/query?ticker=BTC-USD`);
+        const [assetRow] = (await assetResp.json()) as Array<{quote_base_quantity?: number | null}>;
+        expect(assetRow?.quote_base_quantity ?? 1, 'premise: the seeded Bitcoin is quoted per unit').toBe(1);
+
+        const setup = await commitViaApi(
+            page,
+            {
+                creates: [
+                    depositPayload(brokerId, daysAgoIso(306), '0.05', `${mine.marker} funding`, bitcoin.currency),
+                    {broker_id: brokerId, asset_id: bitcoin.id, type: 'BUY', date: daysAgoIso(305), quantity: '0.000002', cash: {code: bitcoin.currency, amount: '-0.04'}, tags: [], description: `${mine.marker} buy`},
+                    {broker_id: brokerId, asset_id: bitcoin.id, type: 'SELL', date: daysAgoIso(304), quantity: '-0.000001', cash: {code: bitcoin.currency, amount: '0.03'}, tags: [], description: `${mine.marker} sell`},
+                ],
+            },
+            'setup commit',
+        );
+        mine.ids.push(...setup.results.flatMap((r) => r.ids ?? []));
+        const createdId = (index: number): number => {
+            const id = setup.results.find((r) => r.operation === 'create' && r.index === index)?.ids?.[0];
+            if (id == null) throw new Error(`setup commit reported no id for create #${index}: ${JSON.stringify(setup.results)}`);
+            return id;
+        };
+        const fundingId = createdId(0);
+        const buyId = createdId(1);
+        const sellId = createdId(2);
+        // The digits of «20,000.00 $ 🇺🇸 USD» in any locale: the amount at two decimals; the symbol, the flag and the code carry none.
+        const BUY_DIGITS = '2000000';
+        const SELL_DIGITS = '3000000';
+        const digitsOf = (locator: Locator) => async () => ((await locator.textContent()) ?? '').replace(/\D/g, '');
+
+        // The table.
+        await goToTransactionsByIds(page, [fundingId, buyId, sellId]);
+        const buyCell = page.getByTestId(`tx-unit-price-cell-${buyId}`);
+        const sellCell = page.getByTestId(`tx-unit-price-cell-${sellId}`);
+        await expect(buyCell, 'the BUY row draws its unit price').toBeVisible({timeout: 5_000});
+        await expect(sellCell, 'the SELL row draws its unit price').toBeVisible({timeout: 5_000});
+        await expect.poll(digitsOf(buyCell), {message: 'BUY: |−0.04| / |0.000002| = 20000'}).toBe(BUY_DIGITS);
+        await expect.poll(digitsOf(sellCell), {message: 'SELL: |0.03| / |−0.000001| = 30000'}).toBe(SELL_DIGITS);
+        // The DEPOSIT has no quantity: the column is drawn on its row (a dash) and holds no digit. The column cell of the
+        // BUY row, drawn in the same table, is the presence barrier.
+        const fundingTd = page.locator(`[data-testid="tx-table"] tbody tr[data-row-id="tx-${fundingId}"] td[data-column-id="unitPrice"]`);
+        await expect(fundingTd, 'the DEPOSIT row draws the column').toBeVisible({timeout: 5_000});
+        await expect.poll(digitsOf(fundingTd), {message: 'a DEPOSIT has no unit price'}).toBe('');
+
+        // The editor: two rows selected → Edit opens the grid without auto-opening the Form.
+        await ensureChecked(page.getByTestId(`dt-row-checkbox-tx-${buyId}`));
+        await ensureChecked(page.getByTestId(`dt-row-checkbox-tx-${sellId}`));
+        const editBtn = page.getByTestId('toolbar-action-edit');
+        await expect(editBtn).toBeEnabled({timeout: 5_000});
+        await editBtn.click();
+        await expect(page.getByTestId('tx-bulk-modal')).toBeVisible({timeout: 5_000});
+        const modalRows = page.getByTestId('tx-bulk-body').locator('tbody tr[data-row-id]');
+        const buyRow = modalRows.filter({hasText: `${mine.marker} buy`});
+        const sellRow = modalRows.filter({hasText: `${mine.marker} sell`});
+        await expect(buyRow).toHaveCount(1);
+        await expect(sellRow).toHaveCount(1);
+        const buyBulk = buyRow.getByTestId('tx-bulk-unit-price');
+        const sellBulk = sellRow.getByTestId('tx-bulk-unit-price');
+        await expect(buyBulk, 'the editor draws the BUY price').toBeVisible({timeout: 5_000});
+        await expect.poll(digitsOf(buyBulk), {message: 'editor, BUY'}).toBe(BUY_DIGITS);
+        await expect.poll(digitsOf(sellBulk), {message: 'editor, SELL'}).toBe(SELL_DIGITS);
+        // Read-only: the column holds no input.
+        await expect(buyRow.locator('td[data-column-id="unit_price"]'), 'the unit price column is drawn on the row (barrier for the read-only check)').toHaveCount(1);
+        await expect(buyRow.locator('td[data-column-id="unit_price"] input'), 'the unit price column cannot be edited').toHaveCount(0);
+
+        // Nothing was edited: closing asks nothing.
+        await page.getByTestId('tx-bulk-cancel').click();
+        await expect(page.getByTestId('tx-bulk-modal')).toBeHidden({timeout: 5_000});
     });
 
     /**

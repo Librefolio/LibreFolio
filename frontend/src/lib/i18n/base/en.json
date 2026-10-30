@@ -181,7 +181,11 @@
       "invalidNumber": "Invalid number in \"{column}\": \"{value}\"",
       "invalidValue": "Invalid value in \"{column}\": \"{value}\"",
       "duplicate": "Duplicate {label}: {key}"
-    }
+    },
+    "statusValidRows": "{count, plural, one {# valid row} other {# valid rows}}",
+    "statusErrors": "{count, plural, one {# error} other {# errors}}",
+    "statusDuplicates": "duplicate {label}s",
+    "duplicatesShort": "duplicates"
   },
   "dataEditor": {
     "staleTooltip": "Hide backward-filled rows (⚠️ stale). These are gap-fill points copied from the nearest real data point.",

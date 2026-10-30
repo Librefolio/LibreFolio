@@ -4,7 +4,7 @@ Workstream MF (release 1.3), lot MF5-2a. Pure: no database, no server, no networ
 
 WHY. ``DailyStateBuilder._valuation_rate_change_days`` (``financial_math/portfolio/daily_state.py``) finds the frame days
 on which a rate the valuation reads changes from the day before. Today (HEAD ``352d48ff3``) it builds
-``_calendar(replay_from - 1 day, date_to)`` — every calendar day — and hands it to ``native_cash.change_days`` with
+``_calendar(replay_from - 1 day, date_to)`` — every calendar day — and hands it to ``change_days`` (then in ``native_cash``, now ``financial_math/change_days.py``) with
 ``self._read_rate`` (``fx_rate_map.get((currency, target, day))``), once for the currencies of the securities and once
 per cash in-transit interval. A book with a deposit on 1900-01-02 and activity in 2025 is read on ~46 000 days per
 currency, although the map changes on a handful of them. And ``replay_from - timedelta(days=1)`` raises
@@ -60,7 +60,7 @@ alone: ``./dev.py test services financial-math test_rate_change_days_on_steps``.
 
 Reference: backend/app/services/financial_math/portfolio/daily_state.py (_valuation_rate_change_days, _read_rate,
 _calendar), backend/app/services/financial_math/fx_rates.py (AskedDayRates, merged_windows, UnitRateReader),
-backend/app/services/financial_math/native_cash.py (change_days).
+backend/app/services/financial_math/change_days.py (change_days, reading_change_days).
 """
 
 from __future__ import annotations

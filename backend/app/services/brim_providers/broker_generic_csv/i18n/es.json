@@ -9,15 +9,19 @@
     "brim": {
       "broker_generic_csv": {
         "label": {
-          "date_order": "Orden del día y del mes"
+          "date_order": "Formato de las fechas"
         },
         "description": {
-          "date_order": "Cómo se lee una fecha como 03/04/2025 en un CSV genérico: primero el día (3 de abril) o primero el mes (4 de marzo). Una fecha que no se puede leer de la primera forma se lee de la otra (25/12/2025 es siempre el 25 de diciembre)."
+          "date_order": "Cómo están escritas las fechas de un CSV genérico: el orden de día, mes y año, con el año de cuatro o de dos cifras (aa: 00–68 son 2000–2068, 69–99 son 1969–1999). Con dd/mm/aaaa y mm/dd/aaaa, una fecha que no se puede leer como se eligió se lee del otro modo (25/12/2025 es siempre el 25 de diciembre); una fecha con el año de cuatro cifras también se lee en los formatos de año de dos cifras."
         },
         "option": {
           "date_order": {
-            "day_first": "Primero el día (03/04 = 3 de abril)",
-            "month_first": "Primero el mes (03/04 = 4 de marzo)"
+            "day_first": "dd/mm/aaaa — 03/04/2025 = 3 de abril de 2025",
+            "month_first": "mm/dd/aaaa — 03/04/2025 = 4 de marzo de 2025",
+            "day_first_short": "dd/mm/aa — 03/04/26 = 3 de abril de 2026",
+            "month_first_short": "mm/dd/aa — 03/04/26 = 4 de marzo de 2026",
+            "year_first_short": "aa/mm/dd — 26/04/03 = 3 de abril de 2026",
+            "year_first": "aaaa-mm-dd — 2026-04-03 = 3 de abril de 2026"
           }
         }
       }
