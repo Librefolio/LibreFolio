@@ -78,6 +78,10 @@ le consegne hanno aspettato») — the morning reader must not wonder about a ga
   another lot: let the owner decide with a triage, then re-run only the red units on the candidate.
 - **Do not wait in silence**: background commands notify on completion; never poll in a loop. When nothing is running and
   nothing can be started, stop and let the notifications wake you.
+- **Arm a 30-minute heartbeat before he leaves** (developer decision, 30/10/2026): a recurring session-scoped timer that
+  re-enters the coordinator, reads the idle children's last turn and any `CHECKPOINT READY` waiting, and ends at once
+  when there is nothing. Child notes alone do not reliably wake the coordinator. Remove the timer when he is back for
+  good.
 - **Respect one-writer-per-file**: before giving a child a new lot, check who owns the files this wave.
 
 ## 5. The morning handover
@@ -127,3 +131,15 @@ him to answer by number. He reads better from a file than from a long chat messa
 - 24/10/2026 — When the developer questions a contract already approved (D-P4: `max_points` vs his «a gradini»), stop every child that was about to write code on it at once, and keep only analysis running: the cost of a paused session is minutes, the cost of a wrong contract in three branches is days.
 - 24/10/2026 — A lot that adds a field to a public response (here `restore_interrupted_reason` in `/instance`) breaks every test that asserts the exact key set, in other units than the lot's own: before committing it, grep the tests for the neighbouring keys and run those units too (H5-3 passed its own units and turned 27 API tests red on the train).
 - 26/10/2026 — A message to a session in the middle of a turn is only queued: a «pause» or a design change reaches it after it finishes. Before redirecting a lot already in progress, check the session is idle (or wait for its next turn) — B delivered a whole lot on a superseded design; it was archived on a side branch with a temporary index (`GIT_INDEX_FILE`, `write-tree`, `commit-tree`), without touching its worktree.
+- 30/10/2026 — Child notes may not wake the coordinator, after many automated turns in a row or while it is idle: on 29/10
+  deliveries waited 32 hours, on 30/10 five deliveries waited an hour. Hence the 30-minute heartbeat in §4.
+- 30/10/2026 — The app cuts a new session's worktree from `origin`, not from the local branch: pass `source_branch` (or
+  check the child's base in its first turn) whenever the local integration branch is ahead of `origin`.
+- 30/10/2026 — `start_session` is refused in turns started by an automated event (a child's note, a timer): new sessions
+  open only in a turn the developer started; keep them as a ready list.
+- 30/10/2026 — `pkill -f <pattern>` kills the matching processes of every session on the machine (a child killed others'
+  `svelte-check`): stop only your own PID, never `pkill -f` or `killall`; put the rule in every child kickoff.
+- 30/10/2026 — A CI workflow change is verified also with the tests that read the workflow file (a release-image contract
+  test turned red after a cache-key change that the CI run itself accepted).
+- 30/10/2026 — A relative path in `git worktree add` resolves against the shell's directory: run from the main checkout,
+  it creates the worktree inside the repository. Always pass an absolute path.
