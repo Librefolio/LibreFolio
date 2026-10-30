@@ -34,7 +34,7 @@ from backend.app.schemas.settings import (
     UserSettingsUpdate,
     validate_global_setting_value,
 )
-from backend.app.services.accounts.global_settings_service import get_setting_value
+from backend.app.services.accounts.global_settings_service import effective_stored_value, get_setting_value
 from backend.app.utils.datetime_utils import utcnow
 
 logger = structlog.get_logger(__name__)
@@ -189,7 +189,7 @@ async def get_global_setting(key: str, session: AsyncSession) -> Optional[Global
     if setting:
         return GlobalSettingRead(
             key=setting.key,
-            value=setting.value,
+            value=effective_stored_value(setting.key, setting) or setting.value,
             value_type=setting.value_type,
             description=setting.description,
             updated_at=setting.updated_at,
@@ -205,7 +205,7 @@ async def get_all_global_settings(session: AsyncSession) -> list[GlobalSettingRe
     return [
         GlobalSettingRead(
             key=s.key,
-            value=s.value,
+            value=effective_stored_value(s.key, s) or s.value,
             value_type=s.value_type,
             description=s.description,
             updated_at=s.updated_at,

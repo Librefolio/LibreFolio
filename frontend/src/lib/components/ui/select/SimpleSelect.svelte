@@ -11,6 +11,7 @@
     import {firstSelectable, isSelectable, lastSelectable, stepSelectable} from './optionFilter';
     import {Check, ChevronDown} from 'lucide-svelte';
     import {_} from '$lib/i18n';
+    import {portal} from '$lib/actions/portal';
 
     interface Props {
         /** Currently selected value */
@@ -314,7 +315,7 @@
         {/if}
     </button>
 
-    <!-- Dropdown Menu — fixed position to escape overflow clipping -->
+    <!-- Dropdown Menu — fixed position, moved to <body> so no ancestor's stacking context (a table's sticky header) can paint over it (H6-1) -->
     {#if isOpen}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
@@ -328,6 +329,7 @@
             style="top: {fixedTop}px; left: {fixedLeft}px; min-width: {fixedWidth}px; width: {dropdownWidth}; max-width: calc(100vw - 40px); max-height: {dropdownMaxHeight};"
             onwheel={(e) => e.stopPropagation()}
             ontouchmove={(e) => e.stopPropagation()}
+            use:portal
             use:adjustFixedPositionAction
         >
             {#if loading}

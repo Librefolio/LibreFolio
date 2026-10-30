@@ -209,17 +209,17 @@ function choicesIn(dropdown: HTMLElement): string[] {
     return [...dropdown.querySelectorAll<HTMLElement>('[data-testid^="report-set-read-as-option-"]')].map((option) => (option.dataset.testid ?? '').replace(/^report-set-read-as-option-/, ''));
 }
 
-/** Open means usable: the trigger says so, and the select's own dropdown is there. */
-function expectReadAsOpen(root: HTMLElement, trigger: HTMLElement, why: string) {
+/** Open means usable: the trigger says so, and the select's own dropdown is there. The open list is a child of <body> (H6-1), not of the select's container. */
+function expectReadAsOpen(_root: HTMLElement, trigger: HTMLElement, why: string) {
     expect(trigger, why).toHaveAttribute('aria-expanded', 'true');
-    expect(within(root).queryByTestId('report-set-read-as-dropdown'), why).not.toBeNull();
+    expect(screen.queryByTestId('report-set-read-as-dropdown'), why).not.toBeNull();
 }
 
 /** Closed means gone: the trigger says so, and the select has no dropdown, no listbox at all. */
-function expectReadAsClosed(root: HTMLElement, trigger: HTMLElement, why: string) {
+function expectReadAsClosed(_root: HTMLElement, trigger: HTMLElement, why: string) {
     expect(trigger, why).toHaveAttribute('aria-expanded', 'false');
-    expect(within(root).queryByTestId('report-set-read-as-dropdown'), why).toBeNull();
-    expect(within(root).queryByRole('listbox'), why).toBeNull();
+    expect(screen.queryByTestId('report-set-read-as-dropdown'), why).toBeNull();
+    expect(screen.queryByRole('listbox'), why).toBeNull();
 }
 
 /**
@@ -231,7 +231,7 @@ async function openReadAs(root: HTMLElement, trigger: HTMLElement) {
     trigger.focus();
     await fireEvent.click(trigger);
     expectReadAsOpen(root, trigger, 'premise: a click on the trigger opens the «Read as» list');
-    const dropdown = within(root).getByTestId('report-set-read-as-dropdown');
+    const dropdown = screen.getByTestId('report-set-read-as-dropdown');
     expect(choicesIn(dropdown).sort(), 'premise: the list offers the choices of the set').toEqual([...READ_AS_CHOICES].sort());
     expect(trigger, 'premise: the open select keeps the focus on its trigger').toHaveFocus();
     expect(trigger, 'premise: the trigger drives the open list, naming its highlighted option').toHaveAttribute('aria-activedescendant');

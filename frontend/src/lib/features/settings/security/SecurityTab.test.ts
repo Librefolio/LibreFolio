@@ -47,10 +47,11 @@
  * own budget (see «The modules under test»), so each case fails on its own with the contract in its message rather than
  * the whole file at import, and the type check does not depend on the modules landing first.
  */
-import {beforeAll, beforeEach, describe, expect, it, vi, type Mock} from 'vitest';
+import {afterEach, beforeAll, beforeEach, describe, expect, it, vi, type Mock} from 'vitest';
 import {tick, type Component} from 'svelte';
-import {fireEvent, render, screen, waitFor, within} from '$test/component';
+import {cleanup, fireEvent, render, screen, waitFor, within} from '$test/component';
 import guides from '$lib/features/instance/checkGuides.json';
+import {DEFAULT_INSTANCE_CONFIG, instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
 import {currentLanguage} from '$lib/stores/app/language';
 import en from '$lib/i18n/en.json';
 import itCatalogue from '$lib/i18n/it.json';
@@ -229,6 +230,9 @@ async function settle(call: unknown): Promise<void> {
 }
 
 const tabRoot = (): HTMLElement => screen.getByTestId('security-tab');
+
+/** The «Guide» button of a row. */
+const guideOfRow = (row: HTMLElement): HTMLElement => within(row).getByTestId('security-guide');
 
 async function waitForStatus(status: Status): Promise<void> {
     await waitFor(() => expect(tabRoot()).toHaveAttribute('data-status', status));
@@ -653,6 +657,9 @@ describe('SecurityTab — its words', () => {
         ['settings.securityTab.openEmail', []],
         ['settings.securityTab.openPlugins', []],
         ['settings.securityTab.guide', []],
+        // FB-27: «Contact support» next to a check the host solves, and the note when the instance names no address
+        ['settings.securityTab.support', []],
+        ['settings.securityTab.supportMissing', []],
     ];
 
     // red until A8b
@@ -675,7 +682,10 @@ describe('SecurityTab — its words', () => {
 // button is added to the row: the in-app link of a finding (`security-finding-action`) stays. Red until N69d.
 describe('SecurityTab — the guide of each check (SGUIDE-01…08, N69d)', () => {
     const GUIDE = 'settings.securityTab.guide';
-    const SERVER_IDS = Object.keys(guides.server);
+    // FB-27: only the `guide` entries have the button; the three `support` entries have «Contact support» instead
+    const SERVER_IDS = Object.entries(guides.server)
+        .filter(([, help]) => (help as unknown as {kind?: string}).kind === 'guide')
+        .map(([id]) => id);
     const guideOf = (row: HTMLElement) => within(row).getByTestId('security-guide');
 
     /** Clicks the button and returns what the browser was asked to open. */
@@ -760,6 +770,7 @@ describe('SecurityTab — the guide of each check (SGUIDE-01…08, N69d)', () =>
         const missing = SERVER_IDS.filter((id) => within(passedCheck(id)).queryByTestId('security-guide') === null);
         expect(missing, 'checks of the map with no button').toEqual([]);
         expect(screen.getAllByTestId('security-guide')).toHaveLength(SERVER_IDS.length);
+        expect(SERVER_IDS.length, 'Barrier: the guide checks are fewer than the table, the support ones are not among them').toBeLessThan(Object.keys(guides.server).length);
     });
 
     it('SGUIDE-07: the button is added to the in-app link of a finding, not put in its place', async () => {
@@ -779,5 +790,137 @@ describe('SecurityTab — the guide of each check (SGUIDE-01…08, N69d)', () =>
         await waitForStatus('ready');
 
         expect(await opened(guideOf(finding('platform.blockedScript')))).toEqual(['/mkdocs/admin/configuration_security/#csp', '_blank', 'noopener']);
+    });
+});
+
+// Lot FB-27 («guide or support», release 1.3): each row of the tab renders `CheckHelp` — the «Guide» button for a check the
+// administrator solves alone, «Contact support» (a link with the report in its href) for one whoever hosts the instance solves
+// (`platform.hosting_panel`, `backup.panel_token`, `accounts.owner_email_change`), the note `check-support-missing` when the
+// instance names no usable address, nothing for a passed support check. The component itself is pinned by `CheckHelp.test.ts`;
+// here is the wiring: the severity and the passed state of the row reach it, and the address is the instance configuration's.
+// Red until FB-27: the tab renders the guide for every id and the support entries do not exist.
+describe('SecurityTab — guide or support (FB-27)', () => {
+    const SUPPORT_MAILTO = 'mailto:help@example.org';
+    const HOSTING_PANEL_WARNING = check('platform.hosting_panel', 'warning', 'instance.checks.hostingPanel.incomplete');
+    const HOSTING_PANEL_OK = check('platform.hosting_panel', 'ok', 'instance.checks.hostingPanel.ok');
+
+    function passedRow(id: string): HTMLElement {
+        const row = screen.queryAllByTestId('security-passed-check').find((candidate) => candidate.getAttribute('data-check-id') === id);
+        if (!row) throw new Error(`no security-passed-check with data-check-id="${id}" is rendered`);
+        return row;
+    }
+
+    async function useSupportUrl(value: string | null): Promise<void> {
+        await instanceConfig.load({force: true, fetchConfig: async () => ({...DEFAULT_INSTANCE_CONFIG, support_url: value})});
+    }
+
+    beforeEach(() => {
+        currentLanguage.set('en');
+    });
+
+    afterEach(async () => {
+        await instanceConfig.load({force: true, fetchConfig: async () => DEFAULT_INSTANCE_CONFIG});
+    });
+
+    it('FB-27-01: a hosting-panel warning, with a mailto support address, shows «Contact support» with the report in its mailto, and no guide button', async () => {
+        await useSupportUrl(SUPPORT_MAILTO);
+        const mounted = await mountTab(SILENT);
+        await answer(mounted, 0, [HOSTING_PANEL_WARNING]);
+        await waitForStatus('ready');
+
+        const row = finding('platform.hosting_panel');
+
+        const link = within(row).getByTestId('check-support');
+        expect(link.tagName).toBe('A');
+        expect(link).toHaveAccessibleName(containing(say('settings.securityTab.support')));
+        const href = link.getAttribute('href') ?? '';
+        expect(href).toMatch(/^mailto:help@example\.org\?subject=/);
+        const body = decodeURIComponent(/&body=(.*)$/.exec(href)?.[1] ?? '').split('\r\n');
+        expect(body).toContain('Check: platform.hosting_panel');
+        expect(body, 'the severity of the finding reaches the report').toContain('Severity: warning');
+        expect(within(row).queryByTestId('security-guide'), 'a support check has no guide button').toBeNull();
+        expect(within(row).queryByTestId('check-support-missing')).toBeNull();
+    });
+
+    it.each<[Exclude<Severity, 'ok'>]>([['error'], ['info']])('FB-27-02: the severity of the row is the report’s — a %s finding says so', async (severity) => {
+        await useSupportUrl(SUPPORT_MAILTO);
+        const mounted = await mountTab(SILENT);
+        await answer(mounted, 0, [check('backup.panel_token', severity, 'backup.checks.panelToken.problem')]);
+        await waitForStatus('ready');
+
+        const href = within(finding('backup.panel_token')).getByTestId('check-support').getAttribute('href') ?? '';
+
+        expect(decodeURIComponent(/&body=(.*)$/.exec(href)?.[1] ?? '').split('\r\n')).toContain(`Severity: ${severity}`);
+    });
+
+    it('FB-27-03: without a support address the row says so and offers no link — and no GitHub one', async () => {
+        await useSupportUrl(null);
+        const mounted = await mountTab(SILENT);
+        await answer(mounted, 0, [HOSTING_PANEL_WARNING]);
+        await waitForStatus('ready');
+
+        const row = finding('platform.hosting_panel');
+
+        const missing = within(row).getByTestId('check-support-missing');
+        expect(missing).toHaveTextContent(containing(say('settings.securityTab.supportMissing')));
+        expect(within(row).queryByTestId('check-support')).toBeNull();
+        expect(within(row).queryByTestId('security-guide')).toBeNull();
+        expect(row.innerHTML).not.toContain('github.com');
+    });
+
+    it('FB-27-04: a check the administrator solves (platform.log_level) keeps its guide button, with or without a support address', async () => {
+        for (const address of [SUPPORT_MAILTO, null]) {
+            await useSupportUrl(address);
+            const mounted = await mountTab(SILENT);
+            await answer(mounted, 0, [LOG_VERBOSE]);
+            await waitForStatus('ready');
+
+            const row = finding('platform.log_level');
+
+            expect(guideOfRow(row), `support ${address}: the guide button`).toBeInTheDocument();
+            expect(within(row).queryByTestId('check-support')).toBeNull();
+            expect(within(row).queryByTestId('check-support-missing')).toBeNull();
+            cleanup();
+        }
+    });
+
+    it('FB-27-05: the passed hosting-panel row shows neither the support link nor the note nor the guide', async () => {
+        for (const address of [SUPPORT_MAILTO, null]) {
+            await useSupportUrl(address);
+            const mounted = await mountTab(SILENT);
+            await answer(mounted, 0, [HOSTING_PANEL_OK, check('platform.session_cookie', 'ok', 'instance.checks.sessionCookie.ok')]);
+            await waitForStatus('ready');
+
+            const row = passedRow('platform.hosting_panel');
+
+            // Presence barrier: the neighbour passed row has its guide, so the absences below are not "nothing rendered yet"
+            expect(guideOfRow(passedRow('platform.session_cookie'))).toBeInTheDocument();
+            expect(within(row).queryByTestId('check-support'), `support ${address}`).toBeNull();
+            expect(within(row).queryByTestId('check-support-missing')).toBeNull();
+            expect(within(row).queryByTestId('security-guide')).toBeNull();
+            cleanup();
+        }
+    });
+
+    it('FB-27-06: every support check of the table gets «Contact support» on its finding row, and no other check does', async () => {
+        await useSupportUrl(SUPPORT_MAILTO);
+        const supportIds = Object.entries({...guides.server, ...guides.browser})
+            .filter(([, help]) => (help as unknown as {kind?: string}).kind === 'support')
+            .map(([id]) => id);
+        expect(supportIds.sort(), 'Barrier: the three support checks').toEqual(['accounts.owner_email_change', 'backup.panel_token', 'platform.hosting_panel']);
+        const mounted = await mountTab(SILENT);
+        await answer(
+            mounted,
+            0,
+            Object.keys(guides.server).map((id) => check(id, 'warning', `instance.checks.${id}`)),
+        );
+        await waitForStatus('ready');
+
+        const withSupport = screen
+            .queryAllByTestId('security-finding')
+            .filter((row) => within(row).queryByTestId('check-support') !== null)
+            .map((row) => row.getAttribute('data-check-id'))
+            .sort();
+        expect(withSupport).toEqual(supportIds);
     });
 });

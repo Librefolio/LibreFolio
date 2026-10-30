@@ -942,7 +942,7 @@ describe('GlobalSettingsTab — the three picker rows', () => {
         expect(within(row).queryByTitle('common.save')).toBeNull();
 
         await fireEvent.click(within(row).getByRole('combobox'));
-        await fireEvent.click(await within(row).findByRole('option', {name: /Italiano/}));
+        await fireEvent.click(await screen.findByRole('option', {name: /Italiano/}));
 
         await waitFor(() => expect(within(row).queryByTitle('common.save')).not.toBeNull());
         await fireEvent.click(within(row).getByTitle('common.save'));
@@ -984,7 +984,7 @@ describe('GlobalSettingsTab — the three picker rows', () => {
         await mountUnlocked([setting('default_language', 'en')]);
         const row = pickerRow('Default Language');
         await fireEvent.click(within(row).getByRole('combobox'));
-        await fireEvent.click(await within(row).findByRole('option', {name: /Italiano/}));
+        await fireEvent.click(await screen.findByRole('option', {name: /Italiano/}));
         await waitFor(() => expect(within(row).queryByTitle('common.undo')).not.toBeNull());
 
         await fireEvent.click(within(row).getByTitle('common.undo'));
@@ -1152,7 +1152,7 @@ describe('GlobalSettingsTab — registration_mode, who may create an account (A5
     /** Opens the select of an unlocked, unpinned row and picks `value`. */
     async function pick(value: Mode): Promise<void> {
         await fireEvent.click(modeSelect());
-        await fireEvent.click(await within(row()).findByTestId(option(value)));
+        await fireEvent.click(await screen.findByTestId(option(value)));
         await waitFor(() => expect(within(row()).queryByTitle('common.save'), 'premise: the pick made the row modified').not.toBeNull());
     }
 
@@ -1180,11 +1180,11 @@ describe('GlobalSettingsTab — registration_mode, who may create an account (A5
 
         expect(textInput('registration_mode'), 'not the generic text row').toBeNull();
         await fireEvent.click(modeSelect());
-        await waitFor(() => expect(within(row()).queryByTestId(option('open'))).not.toBeNull());
+        await waitFor(() => expect(screen.queryByTestId(option('open'))).not.toBeNull());
 
-        const offered = Array.from(row().querySelectorAll('[data-testid^="setting-select-option-"]'), (el) => el.getAttribute('data-testid'));
+        const offered = Array.from(document.body.querySelectorAll('[data-testid^="setting-select-option-"]'), (el) => el.getAttribute('data-testid'));
         expect(offered.sort()).toEqual(MODES.map(option).sort());
-        for (const value of MODES) expect(within(row()).getByTestId(option(value))).toHaveTextContent(label(value));
+        for (const value of MODES) expect(screen.getByTestId(option(value))).toHaveTextContent(label(value));
     });
 
     it('is an ordinary row while the server does not pin the mode: unlocked, the stored mode, a reset off the default', async () => {
@@ -1734,7 +1734,7 @@ describe('GlobalSettingsTab — Runes reactive and lifecycle boundaries', () => 
         expect(screen.getByTestId('settings-reset-all')).toBeEnabled();
 
         await fireEvent.click(language);
-        await fireEvent.click(await within(row('default_language')).findByRole('option', {name: /Italiano/}));
+        await fireEvent.click(await screen.findByRole('option', {name: /Italiano/}));
         expect(within(row('default_language')).getByTestId('setting-save')).toBeEnabled();
 
         // Editing back, not an undo helper, exercises two nested record writes.
@@ -1745,7 +1745,7 @@ describe('GlobalSettingsTab — Runes reactive and lifecycle boundaries', () => 
         expect(screen.getByTestId('settings-reset-all')).toBeEnabled();
 
         await fireEvent.click(language);
-        await fireEvent.click(await within(row('default_language')).findByRole('option', {name: /English/}));
+        await fireEvent.click(await screen.findByRole('option', {name: /English/}));
         expect(language).toHaveTextContent('English');
         expect(within(row('default_language')).queryByTestId('setting-save')).not.toBeInTheDocument();
         expect(screen.queryByTestId('settings-save-all')).not.toBeInTheDocument();
