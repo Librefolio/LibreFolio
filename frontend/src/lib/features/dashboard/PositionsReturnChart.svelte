@@ -45,6 +45,8 @@
     import {formatDay, formatDayWithWeekday} from '$lib/utils/core/formatAxisDate';
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {dayOfAxisValue} from '$lib/utils/stepSeries';
+    import {applyLineShape, effectiveLineShape} from '$lib/components/charts/lineShape';
+    import {getGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
     import {attachDaySnap} from '$lib/components/charts/dayPointerSnap';
     import {lineOnDay, type PositionLine, type PositionsChartView} from './positionsSeries';
 
@@ -201,9 +203,14 @@
         return known.map((here, i) => here && !known[i - 1] && !known[i + 1]);
     }
 
+    /** The shape of the lines (FB-3): the user's choice, with steps only when every drawn line is the Dashboard's steps. */
+    function drawnShape() {
+        return effectiveLineShape(getGlobalLineShape(), drawn.every((line) => line.stepped));
+    }
+
     function buildSeries(closedMarkerFill: string, referenceColor: string): echarts.SeriesOption[] {
         const level = REFERENCE_LEVEL[view];
-        return drawn.map((line, index) => {
+        const built = drawn.map((line, index) => {
             const color = colorOf(line.id);
             const isolated = isolatedPoints(line);
             const series: echarts.SeriesOption & Record<string, unknown> = {
@@ -211,9 +218,6 @@
                 name: labelOf(line),
                 type: 'line',
                 data: line.points.map((point) => namedPoint(point.date, point.value)),
-                smooth: false,
-                // The portfolio's line is the Dashboard's history: its steps hold to the next date.
-                ...(line.stepped ? {step: 'end' as const} : {}),
                 connectNulls: false,
                 showSymbol: isolated.some(Boolean),
                 symbol: (_value: unknown, params: {dataIndex: number}) => (isolated[params.dataIndex] ? 'circle' : 'none'),
@@ -248,6 +252,7 @@
             }
             return series;
         });
+        return applyLineShape(built, drawnShape());
     }
 
     function buildOption(isDark: boolean, skipAnimation: boolean): echarts.EChartsOption {
@@ -260,6 +265,7 @@
         const xAxisPolicy = buildResponsiveXAxisPolicy({width, values: dates, locale: uiLocale(), axisType: 'time'});
         const gridRight = timeAxisGridRight({width, values: dates, locale: uiLocale(), base: '4%', measure: axisLabelMeasure(chart, 12)});
         const labelById = new Map(lines.map((line) => [line.id, labelOf(line)]));
+        const steps = drawnShape() === 'steps';
 
         return {
             ...(skipAnimation ? {animation: false, animationDuration: 0, animationDurationUpdate: 0} : CHART_ANIMATION_CONFIG),
@@ -279,7 +285,7 @@
                     // The steps: each drawn line says what it says on the pointed day (the point holding it), a line that does not
                     // exist that day is not listed. ECharts would hand each line the point nearest to the pointer.
                     const day = pointedDay;
-                    if (day !== null && drawn.some((line) => line.stepped)) {
+                    if (day !== null && steps) {
                         const onDay = drawn
                             .map((line) => ({id: line.id, value: lineOnDay(line, day)?.value ?? null}))
                             .filter((row): row is {id: string; value: number} => row.value !== null)

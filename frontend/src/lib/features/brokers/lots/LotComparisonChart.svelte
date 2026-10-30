@@ -66,6 +66,8 @@
     import {themed} from '$lib/theme/themePair';
     import {CHART_GAIN_LOSS, chartNeutrals, LOT_COMPARISON_COLORS} from '$lib/theme/chartTheme';
     import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
+    import {applyLineShape, drawsSteps} from '$lib/components/charts/lineShape';
+    import {getGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type LotValueHistoryPoint = z.infer<typeof schemas.LotValueHistoryPoint>;
@@ -1064,13 +1066,12 @@
         return attachIncomeMarkers(series);
     }
 
-    /** The lines hold each value to the next date while the chart draws the steps themselves (the daily resolution); a coarser one joins its buckets. */
-    function withStepLines(series: echarts.SeriesOption[]): echarts.SeriesOption[] {
-        if (currentResolution !== 'daily') return series;
-        return series.map((entry) => (entry.type === 'line' && (entry as {step?: unknown}).step === undefined ? ({...entry, step: 'end'} as echarts.SeriesOption) : entry));
+    /** The user's line shape (FB-3); the steps themselves are the daily resolution, a coarser one joins its buckets. */
+    function withLineShape(series: echarts.SeriesOption[]): echarts.SeriesOption[] {
+        return applyLineShape(series, getGlobalLineShape(), {holdsValue: currentResolution === 'daily'});
     }
 
-    const plottedBaseSeries = $derived.by(() => ensureAxisTriggerAnchor(withStepLines(mode === 'value' ? buildValueSeries() : buildReturnSeries())));
+    const plottedBaseSeries = $derived.by(() => ensureAxisTriggerAnchor(withLineShape(mode === 'value' ? buildValueSeries() : buildReturnSeries())));
 
     const autoYAxisRange = $derived.by(() => computeAutoYAxisRange(plottedBaseSeries));
 
@@ -1189,7 +1190,7 @@
                 },
                 formatter: (params: any) => {
                     // The steps themselves: each line says what it says on the pointed day, not at the drawn point nearest to it.
-                    const items = Array.isArray(params) ? paramsAtDay(params, currentResolution === 'daily' ? pointedDay : null, baseSeries as Array<{id?: unknown; data?: unknown}>) : [params];
+                    const items = Array.isArray(params) ? paramsAtDay(params, drawsSteps(getGlobalLineShape(), currentResolution === 'daily') ? pointedDay : null, baseSeries as Array<{id?: unknown; data?: unknown}>) : [params];
                     if (mode === 'value') return buildValueTooltip(items);
                     return buildReturnTooltip(items);
                 },

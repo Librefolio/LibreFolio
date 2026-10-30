@@ -29,6 +29,10 @@ article table:first-of-type td:nth-child(-n + 2) {
     `14,788.01` and `Oct 12, 2026`, and a browser in another language gets the British format, `14,788.01` and
     `12 Oct 2026`.
 
+!!! tip "Line shape of the charts"
+
+    **Preferences** also holds the **Line shape** of every chart — segments, steps or a smooth curve. It is kept in this browser and applies as soon as you pick it, without **Save**. How the shapes look: **[Dashboard charts](../dashboard/charts.md#line-shape)**.
+
 Pick a category in the sidebar — on a phone, in the **Category** menu — to show only its settings;
 **All Settings** shows everything.
 

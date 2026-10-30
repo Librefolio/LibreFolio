@@ -54,7 +54,8 @@
         type SignalDefinition,
         type SignalInstanceResult,
     } from '$lib/charts/signals';
-    import {DEFAULT_AXIS_SCALE, effectiveCalendarReturnWindow, getSettingsForPair, normalizeAxisScaleSettings, setPairSettings, type AxisScaleSettings, type ChartPrimaryView} from '$lib/stores/chartSettingsStore.svelte';
+    import {DEFAULT_AXIS_SCALE, effectiveCalendarReturnWindow, getGlobalLineShape, getSettingsForPair, normalizeAxisScaleSettings, resolveLineShape, setPairSettings, type AxisScaleSettings, type ChartPrimaryView} from '$lib/stores/chartSettingsStore.svelte';
+    import type {LineShape} from '$lib/components/charts/lineShape';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {currentLanguage} from '$lib/stores/app/language';
     import {defaultDisplayCurrency} from '$lib/stores/app/settings';
@@ -1402,6 +1403,11 @@
         });
     }
 
+    /** A shape equal to the global one is no override: the chart keeps following the global choice (FB-3). */
+    function handleLineShapeChange(shape: LineShape) {
+        setPairSettings(data.canonicalSlug, {...settings, lineShape: shape === getGlobalLineShape() ? undefined : shape, signals: [...signals]});
+    }
+
     function handleAxisScaleChange(key: string, scale: AxisScaleSettings) {
         const normalized = normalizeAxisScaleSettings(scale, DEFAULT_AXIS_SCALE);
         const axisScales = {
@@ -1767,7 +1773,7 @@
                     <button class="absolute top-0 right-0 p-1 rounded-lg text-lf-muted hover:text-lf-secondary hover:bg-lf-hover transition-colors" onclick={() => (showAesthetics = false)} title={$t('common.close')}>
                         <X size={16} />
                     </button>
-                    <ChartAestheticsSection colorByBaseline={settings.colorByBaseline} areaFill={settings.areaFill} gridLines={settings.gridLines} staleGradient={settings.staleGradient} axisRows={aestheticsAxisRows} onchange={handleAestheticsChange} onaxischange={handleAxisScaleChange} />
+                    <ChartAestheticsSection colorByBaseline={settings.colorByBaseline} areaFill={settings.areaFill} gridLines={settings.gridLines} staleGradient={settings.staleGradient} lineShape={resolveLineShape(settings)} onlineshapechange={handleLineShapeChange} axisRows={aestheticsAxisRows} onchange={handleAestheticsChange} onaxischange={handleAxisScaleChange} />
                 </div>
             {/if}
 
@@ -1860,6 +1866,7 @@
                         areaFill={settings.areaFill}
                         showGridLines={settings.gridLines}
                         showGradient={settings.staleGradient}
+                        lineShape={resolveLineShape(settings)}
                         yAxisMode={activePrimaryAxisScale.mode}
                         yAxisMin={activePrimaryAxisScale.min}
                         yAxisMax={activePrimaryAxisScale.max}

@@ -424,6 +424,7 @@
       "title": "You can't change the email here",
       "message": "This is the email address of the owner of the subscription, so it can't be changed from LibreFolio. Ask the host of this instance to change it.",
       "support": "Contact support"
-    }
+    },
+    "lineShapeHint": "Applies to every chart, in this browser. A single chart can have its own shape in its chart settings."
   }
 }

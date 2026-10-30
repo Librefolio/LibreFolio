@@ -63,7 +63,8 @@
         type SignalInstanceResult,
         type SignalProblem,
     } from '$lib/charts/signals';
-    import {DEFAULT_AXIS_SCALE, detailModesForPrimaryView, effectiveCalendarReturnWindow, normalizeAxisScaleSettings, primaryViewForDetailModes, setPairSettings, getSettingsForPair, type AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
+    import {DEFAULT_AXIS_SCALE, detailModesForPrimaryView, effectiveCalendarReturnWindow, normalizeAxisScaleSettings, primaryViewForDetailModes, resolveLineShape, setPairSettings, getGlobalLineShape, getSettingsForPair, type AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
+    import type {LineShape} from '$lib/components/charts/lineShape';
     import {ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
     import {invalidateFxRoutes} from '$lib/stores/reference/fxRoutesStore';
     import {currentLanguage} from '$lib/stores/app/language';
@@ -1996,6 +1997,11 @@
         });
     }
 
+    /** A shape equal to the global one is no override: the chart keeps following the global choice (FB-3). */
+    function handleLineShapeChange(shape: LineShape) {
+        setPairSettings(`asset-${data.assetId}`, {...settings, lineShape: shape === getGlobalLineShape() ? undefined : shape, signals: [...signals]});
+    }
+
     function handleAxisScaleChange(key: string, scale: AxisScaleSettings) {
         const normalized = normalizeAxisScaleSettings(scale, DEFAULT_AXIS_SCALE);
         const axisScales = {
@@ -2573,6 +2579,8 @@
                             areaFill={settings.areaFill}
                             gridLines={settings.gridLines}
                             staleGradient={settings.staleGradient}
+                            lineShape={resolveLineShape(settings)}
+                            onlineshapechange={handleLineShapeChange}
                             axisRows={aestheticsAxisRows}
                             onchange={handleAestheticsChange}
                             onaxischange={handleAxisScaleChange}
@@ -2671,6 +2679,7 @@
                             areaFill={settings.areaFill}
                             showGridLines={settings.gridLines}
                             showGradient={settings.staleGradient}
+                            lineShape={resolveLineShape(settings)}
                             yAxisMode={activePrimaryAxisScale.mode}
                             yAxisMin={activePrimaryAxisScale.min}
                             yAxisMax={activePrimaryAxisScale.max}

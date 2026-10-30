@@ -272,6 +272,7 @@
                 colorByBaseline={chartSettings?.colorByBaseline}
                 showGridLines={chartSettings?.gridLines}
                 showGradient={chartSettings?.staleGradient ?? true}
+                lineShape={chartSettings?.lineShape}
                 {overlaySignals}
                 secondaryAxisScales={chartSettings?.axisScales.secondary}
             />

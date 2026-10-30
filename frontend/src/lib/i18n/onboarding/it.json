@@ -13,7 +13,9 @@
       "skip": "Salta definitivamente la configurazione",
       "completed": "Configurazione salvata. Puoi continuare in LibreFolio.",
       "skipped": "Configurazione saltata. Puoi ripeterla più tardi dalle Impostazioni.",
-      "logout": "Disconnettiti"
+      "logout": "Disconnettiti",
+      "lineShapeLabel": "Come i grafici disegnano le linee",
+      "lineShapeHint": "Scegline una e guarda come cambia l'esempio. Potrai cambiarla dopo, nelle Impostazioni o per un solo grafico."
     },
     "errors": {
       "loadTitle": "Non siamo riusciti a caricare le guide",

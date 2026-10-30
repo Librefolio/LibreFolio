@@ -5,6 +5,7 @@
  * halves (positive green, negative red) must change sign AT the next date, not at the interpolated crossing a slope has;
  * and the history's MWRR, a line of a few true values, stays joined by slopes whatever the rest does.
  */
+import type {LineShape} from '$lib/components/charts/lineShape';
 import {describe, expect, it} from 'vitest';
 import {namedPoint} from '$lib/components/charts/echartsAnimationConfig';
 import type {AggregationInputs, SeriesPoint} from './growthChartData';
@@ -52,7 +53,7 @@ describe('buildGrowthFullSeries with a stepped entry', () => {
         {key: 'mwrrCum', name: 'MWRR', values: [], lineStyle: 'solid', colorKey: 'nav'},
         {key: 'twrr', name: 'TWRR', values: [], lineStyle: 'dashed', colorKey: 'invested'},
     ];
-    const context = (viewMode: 'eur' | 'pct' | 'pnl', stepped: boolean): GrowthSeriesContext => ({viewMode, pnlSubmode: 'line', eurLabels: labels, pnlLabels, pctSeries: pct, aggregationInputs: {} as AggregationInputs, stepped});
+    const context = (viewMode: 'eur' | 'pct' | 'pnl', stepped: boolean, lineShape: LineShape = stepped ? 'steps' : 'segments'): GrowthSeriesContext => ({viewMode, pnlSubmode: 'line', eurLabels: labels, pnlLabels, pctSeries: pct, aggregationInputs: {} as AggregationInputs, lineShape});
     const data = (count: number): GrowthSeriesData[] => Array.from({length: count}, (_, index) => ({name: `s${index}`, data: [point('2026-01-01', 1)]}));
     const stepOf = (series: unknown) => (series as {step?: unknown}).step;
 
@@ -62,7 +63,7 @@ describe('buildGrowthFullSeries with a stepped entry', () => {
     });
 
     it('draws no step when the entry is not the steps', () => {
-        expect(buildGrowthFullSeries(context('eur', false), false, data(5)).map(stepOf)).toEqual([undefined, undefined, undefined, undefined, undefined]);
+        expect(buildGrowthFullSeries(context('eur', false), false, data(5)).map(stepOf)).toEqual([false, false, false, false, false]);
     });
 
     it('steps the P&L halves and the brokers, and the reference line too', () => {
@@ -74,6 +75,13 @@ describe('buildGrowthFullSeries with a stepped entry', () => {
         const series = buildGrowthFullSeries(context('pct', true), false, data(2));
         expect(series.map(stepOf)).toEqual([false, 'end']);
         expect(series.map((entry) => (entry as {connectNulls?: boolean}).connectNulls)).toEqual([true, false]);
+    });
+
+    it('draws a spline that cannot overshoot, on every line including the MWRR', () => {
+        const series = buildGrowthFullSeries(context('pct', false, 'spline'), false, data(2));
+        expect(series.map((entry) => (entry as {smooth?: boolean}).smooth)).toEqual([true, true]);
+        expect(series.map((entry) => (entry as {smoothMonotone?: string}).smoothMonotone)).toEqual(['x', 'x']);
+        expect(series.map(stepOf)).toEqual([false, false]);
     });
 
     it('joins the MWRR across a gap even when nothing is stepped', () => {
