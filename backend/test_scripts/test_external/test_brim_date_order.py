@@ -587,11 +587,139 @@ def test_a_file_with_year_first_dates_is_read_under_the_year_first_orders(tmp_pa
 
 
 def test_the_same_two_digit_file_over_the_default_is_unparsed_as_today(tmp_path: Path):
-    """Non-regression guard, green before and after: a user who chose nothing (or the old orders) gets a warning row and no
-    transaction for a two-digit-year date, exactly as before FB-18."""
+    """A user who chose nothing (or the old orders) gets no transaction for a two-digit-year date, exactly as before FB-18. The
+    warning is the structured ``date_unreadable`` notice since FB-18b (red until then: the plugin sent a plain string)."""
     path = _write_csv(tmp_path, ["03/04/26,BUY,5,-500.00,EUR,MSFT,short"])
 
     for plugin in (_plugin(bind=False), _plugin("day_first"), _plugin("month_first")):
         output = plugin.parse(path, BROKER_ID)
         assert [tx.description for tx in output.transactions] == []
-        assert any("Invalid date format: '03/04/26'" in notice.message for notice in output.warnings), output.warnings
+        notices = _date_notices(output)
+        assert [(n.context or {}).get("value") for n in notices] == ["03/04/26"], output.warnings
+
+
+# =============================================================================
+# E. FB-18b: AN UNREADABLE DATE IS REPORTED AS A STRUCTURED NOTICE (``date_unreadable``)
+# =============================================================================
+#
+# The row is still NOT read (no transaction), but the plugin appends a ``BRIMNotice`` (severity warning, code ``date_unreadable``,
+# context ``{row, value, order}``): ``row`` counts as the parse loop does (header = 1, first data row = 2), ``value`` is the date text
+# as written in the file, stripped, ``order`` the ``date_order`` in force. Only the first 20 such rows get their own notice; the rest
+# are summed in ONE ``date_unreadable_more`` notice (``n`` = rows not covered), after them. An EMPTY date cell and every other row
+# error keep their plain warning. Red before FB-18b: the plugin appends the plain string ``"Row N: Invalid date format: '...'"``.
+
+NOTICE_CODE = "date_unreadable"
+MORE_CODE = "date_unreadable_more"
+NOTICE_CAP = 20
+
+#: Dates no format of the order reads, in every order (impossible day or month, junk).
+UNREADABLE_EVERYWHERE = ["31/02/2026", "13/13/2013", "hello"]
+#: ``25/12/26`` is read by ``day_first_short`` (25 Dec) and ``year_first_short`` (2025-12-26); under these four it is unreadable.
+ORDERS_WHERE_SHORT_25_IS_UNREADABLE = {"day_first", "month_first", "month_first_short", "year_first"}
+
+UNREADABLE_CASES = [(order, value) for order in ALL_ORDERS for value in UNREADABLE_EVERYWHERE + (["25/12/26"] if order in ORDERS_WHERE_SHORT_25_IS_UNREADABLE else [])]
+
+
+def _codes(output) -> list[str]:
+    return [notice.code for notice in output.warnings]
+
+
+def _date_notices(output) -> list:
+    """The ``date_unreadable`` notices of a parse, in the order the plugin gave them."""
+    return [notice for notice in output.warnings if notice.code == NOTICE_CODE]
+
+
+def _more_notices(output) -> list:
+    return [notice for notice in output.warnings if notice.code == MORE_CODE]
+
+
+@pytest.mark.parametrize(("order", "value"), UNREADABLE_CASES, ids=[f"{o}-{v}" for o, v in UNREADABLE_CASES])
+def test_an_unreadable_date_is_one_structured_notice_and_its_row_is_not_read(tmp_path: Path, order: str, value: str):
+    """Row 4 holds the unreadable date between readable rows: one notice with row/value/order, no transaction for it, the
+    readable rows are read."""
+    path = _write_csv(tmp_path, ["2026-02-03,DEPOSIT,0,1000.00,EUR,,before", "2026-02-04,DEPOSIT,0,200.00,EUR,,between", f"{value},DEPOSIT,0,500.00,EUR,,broken", "2026-02-05,DEPOSIT,0,100.00,EUR,,after"])
+
+    output = _plugin(order).parse(path, BROKER_ID)
+
+    notices = _date_notices(output)
+    assert len(notices) == 1, output.warnings
+    notice = notices[0]
+    assert notice.severity == "warning"
+    assert notice.context == {"row": 4, "value": value, "order": order}
+    assert "4" in notice.message and value in notice.message, notice.message
+    assert set(_by_description(output)) == {"before", "between", "after"}, "the unreadable row is not a transaction, the readable ones are"
+    assert not _more_notices(output)
+
+
+def test_the_value_of_the_notice_is_the_date_as_written_and_stripped(tmp_path: Path):
+    path = _write_csv(tmp_path, ["2026-02-03,DEPOSIT,0,1000.00,EUR,,ok", "   hello   ,DEPOSIT,0,500.00,EUR,,broken"])
+
+    output = _plugin("day_first").parse(path, BROKER_ID)
+
+    assert [n.context for n in _date_notices(output)] == [{"row": 3, "value": "hello", "order": "day_first"}]
+
+
+def test_the_order_in_the_notice_is_the_one_in_force(tmp_path: Path):
+    """Same file, two orders in force: the notice names the one the parse ran with; with no settings bound it is the default."""
+    path = _write_csv(tmp_path, ["25/12/26,DEPOSIT,0,500.00,EUR,,broken"])
+
+    assert [n.context["order"] for n in _date_notices(_plugin("month_first_short").parse(path, BROKER_ID))] == ["month_first_short"]
+    assert [n.context["order"] for n in _date_notices(_plugin("month_first").parse(path, BROKER_ID))] == ["month_first"]
+    assert [n.context["order"] for n in _date_notices(_plugin(bind=False).parse(path, BROKER_ID))] == ["day_first"]
+
+
+def test_the_notices_follow_the_rows(tmp_path: Path):
+    path = _write_csv(
+        tmp_path,
+        ["hello,DEPOSIT,0,1.00,EUR,,a", "2026-02-03,DEPOSIT,0,1000.00,EUR,,ok", "13/13/2013,DEPOSIT,0,2.00,EUR,,b", "31/02/2026,DEPOSIT,0,3.00,EUR,,c"],
+    )
+
+    output = _plugin("day_first").parse(path, BROKER_ID)
+
+    assert [(n.context["row"], n.context["value"]) for n in _date_notices(output)] == [(2, "hello"), (4, "13/13/2013"), (5, "31/02/2026")]
+
+
+@pytest.mark.parametrize(("bad", "own", "more"), [(20, 20, 0), (21, 20, 1), (25, 20, 5)], ids=["exactly-20", "21", "25"])
+def test_only_the_first_twenty_unreadable_rows_get_their_own_notice(tmp_path: Path, bad: int, own: int, more: int):
+    """Row 2 is readable; the unreadable rows are 3...(bad + 2). 25 bad rows: 20 own notices, then ONE ``_more`` with n = 5;
+    exactly 20: no ``_more``."""
+    lines = ["2026-02-03,DEPOSIT,0,1000.00,EUR,,ok"] + [f"hello{i},DEPOSIT,0,1.00,EUR,,bad{i}" for i in range(bad)]
+    path = _write_csv(tmp_path, lines)
+
+    output = _plugin("day_first").parse(path, BROKER_ID)
+
+    notices = _date_notices(output)
+    assert len(notices) == own, _codes(output)
+    assert [n.context["row"] for n in notices] == list(range(3, 3 + own)), "the FIRST rows, in order"
+    assert [n.context["value"] for n in notices] == [f"hello{i}" for i in range(own)]
+    extra = _more_notices(output)
+    assert len(extra) == (1 if more else 0), _codes(output)
+    if more:
+        assert extra[0].severity == "warning"
+        assert extra[0].context == {"n": bad - own} == {"n": more}
+        codes = _codes(output)
+        assert codes.index(MORE_CODE) > max(i for i, c in enumerate(codes) if c == NOTICE_CODE), "the summary comes after the notices it summarises"
+        assert codes[-1] == MORE_CODE, "and it closes the notices"
+    assert set(_by_description(output)) == {"ok"}, "none of the unreadable rows is a transaction"
+
+
+def test_an_empty_date_and_other_row_errors_keep_their_plain_warning(tmp_path: Path):
+    """Not part of FB-18b: the empty cell, an unknown type, stay plain ``Row N: ...`` strings (coerced by the schema), not the structured notice."""
+    path = _write_csv(tmp_path, ["2026-02-03,DEPOSIT,0,1000.00,EUR,,ok", ",DEPOSIT,0,5.00,EUR,,nodate", "2026-02-05,NOSUCHTYPE,0,5.00,EUR,,badtype", "hello,DEPOSIT,0,5.00,EUR,,unreadable"])
+
+    output = _plugin("day_first").parse(path, BROKER_ID)
+
+    by_row = {notice.message.split(":")[0]: notice for notice in output.warnings if notice.message.startswith("Row ")}
+    assert "Empty date value" in by_row["Row 3"].message and by_row["Row 3"].code not in {NOTICE_CODE, MORE_CODE}
+    assert "Unknown transaction type" in by_row["Row 4"].message and by_row["Row 4"].code not in {NOTICE_CODE, MORE_CODE}
+    assert [n.context["row"] for n in _date_notices(output)] == [5], "only the unreadable date is the structured notice"
+    assert set(_by_description(output)) == {"ok"}
+
+
+def test_a_clean_file_has_none_of_the_unreadable_date_notices(tmp_path: Path):
+    path = _write_csv(tmp_path, ["2026-02-03,DEPOSIT,0,1000.00,EUR,,one", "2026-02-04,DEPOSIT,0,200.00,EUR,,two"])
+
+    for order in ALL_ORDERS:
+        output = _plugin(order).parse(path, BROKER_ID)
+        assert set(_by_description(output)) == {"one", "two"}, order
+        assert NOTICE_CODE not in _codes(output) and MORE_CODE not in _codes(output), order

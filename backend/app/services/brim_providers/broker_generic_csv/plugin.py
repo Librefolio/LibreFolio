@@ -36,7 +36,7 @@ from typing import Dict, List, Optional
 import structlog
 
 from backend.app.db.models import TransactionType
-from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMFieldTodo, BRIMParseOutput, BRIMRefusal, BRIMValidationIssue
+from backend.app.schemas.brim import FAKE_ASSET_ID_BASE, BRIMExtractedAssetInfo, BRIMFieldTodo, BRIMNotice, BRIMParseOutput, BRIMRefusal, BRIMValidationIssue
 from backend.app.schemas.common import Currency
 from backend.app.schemas.transactions.transactions import TXCreateItem
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider
@@ -373,6 +373,40 @@ def needs_cost_basis_todo(transaction: TXCreateItem) -> bool:
 # =============================================================================
 
 
+#: How many rows with an unreadable date get a notice of their own (FB-18b): past them one notice counts the rest.
+MAX_UNREADABLE_DATE_NOTICES = 20
+
+#: The shape of each ``date_order``, in English letters, for the notice's own ``message`` (the interface translates it).
+_DATE_ORDER_PATTERNS = {
+    DAY_FIRST: "dd/mm/yyyy",
+    MONTH_FIRST: "mm/dd/yyyy",
+    DAY_FIRST_SHORT: "dd/mm/yy",
+    MONTH_FIRST_SHORT: "mm/dd/yy",
+    YEAR_FIRST_SHORT: "yy/mm/dd",
+    YEAR_FIRST: "yyyy-mm-dd",
+}
+
+
+class UnreadableDateError(ValueError):
+    """A row whose date cell holds text no format of the chosen ``date_order`` reads: a date that does not exist (31/02/2026) or is
+    written another way. The row is left out and the parse says why (FB-18b)."""
+
+    def __init__(self, value: str) -> None:
+        super().__init__(f"Invalid date format: '{value}'")
+        self.value = value
+
+
+def _unreadable_date_notice(row_num: int, value: str, order: str) -> BRIMNotice:
+    """The notice of one row whose date cannot be read; the interface writes it in its language from ``code`` and ``context``."""
+    pattern = _DATE_ORDER_PATTERNS.get(order, _DATE_ORDER_PATTERNS[DAY_FIRST])
+    return BRIMNotice(
+        severity="warning",
+        code="date_unreadable",
+        message=(f"Row {row_num}: {value} is not a valid date in the format {pattern}. Fix the date in the file, or change the date format in the plugin settings (Settings > Plugins > Broker imports > Generic CSV > Date format), then re-parse."),
+        context={"row": row_num, "value": value, "order": order},
+    )
+
+
 @register_provider(BRIMProviderRegistry)
 class GenericCSVBrokerProvider(BRIMProvider):
     """
@@ -495,7 +529,8 @@ class GenericCSVBrokerProvider(BRIMProvider):
         - Assigns consistent fake IDs (same asset = same fake ID)
         """
         transactions: List[TXCreateItem] = []
-        warnings: List[str] = []
+        warnings: List[str | BRIMNotice] = []
+        unreadable_dates = 0
         validation_issues: List[BRIMValidationIssue] = []
         field_todos: List[BRIMFieldTodo] = []
 
@@ -544,6 +579,11 @@ class GenericCSVBrokerProvider(BRIMProvider):
                             validation_issues=validation_issues,
                             date_order=date_order,
                         )
+                    except UnreadableDateError as e:
+                        unreadable_dates += 1
+                        if unreadable_dates <= MAX_UNREADABLE_DATE_NOTICES:
+                            warnings.append(_unreadable_date_notice(row_num, e.value, date_order))
+                        continue
                     except Exception as e:
                         warnings.append(f"Row {row_num}: {e!s}")
                         continue
@@ -567,6 +607,16 @@ class GenericCSVBrokerProvider(BRIMProvider):
             raise
         except Exception as e:
             raise BRIMParseError(f"Error reading CSV file: {e!s}", details={"file": file_path.name, "code": "file_unreadable", "context": {"error": str(e)}}) from e
+
+        if unreadable_dates > MAX_UNREADABLE_DATE_NOTICES:
+            warnings.append(
+                BRIMNotice(
+                    severity="warning",
+                    code="date_unreadable_more",
+                    message=f"{unreadable_dates - MAX_UNREADABLE_DATE_NOTICES} more rows have a date that is not valid in this format: the same fix applies.",
+                    context={"n": unreadable_dates - MAX_UNREADABLE_DATE_NOTICES},
+                )
+            )
 
         if not transactions:
             warnings.append("No valid transactions found in file")
@@ -646,7 +696,7 @@ class GenericCSVBrokerProvider(BRIMProvider):
 
         tx_date = parse_date(date_str, date_order)
         if not tx_date:
-            raise ValueError(f"Invalid date format: '{date_str}'")
+            raise UnreadableDateError(date_str.strip())
 
         # Parse type (required)
         type_str = get_val("type")

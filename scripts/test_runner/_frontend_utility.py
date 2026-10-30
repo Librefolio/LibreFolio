@@ -239,6 +239,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/i18n/transactionsEntryModeKeys.test.ts",
             "src/lib/i18n/transactionsWacPreviewEffectKeys.test.ts",
             "src/lib/i18n/csvImportStatusKeys.test.ts",
+            "src/lib/i18n/brimDateUnreadableKeys.test.ts",
             "src/lib/features/support/supportLinks.test.ts",
             "src/lib/features/settings/settingsTabs.test.ts",
             "src/lib/features/settings/security/securityChecksApi.test.ts",

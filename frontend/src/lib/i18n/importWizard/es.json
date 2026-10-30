@@ -206,7 +206,9 @@
       "rows_not_recognized": "{count, plural, one {# fila se excluyó o se importó solo en parte} other {# filas se excluyeron o se importaron solo en parte}}: la importación no reconoce, o aún no importa, lo que describen. Revisa las filas de abajo; si afecta a tus participaciones o a tu efectivo, notifica el caso para que podamos tratarlo:",
       "rows_unreadable": "{count, plural, one {# fila se excluyó} other {# filas se excluyeron}} porque un valor necesario no se puede leer. Revisa las filas de abajo; si el archivo es correcto, notifica el caso para que podamos tratarlo:",
       "possible_split": "Posible split de {ticker}: {added_quantity} acciones nuevas a coste cero. Vincula un evento SPLIT o crea uno.",
-      "date_before_1900": "La fecha {date} es anterior al 1 de enero de 1900: comprueba el año."
+      "date_before_1900": "La fecha {date} es anterior al 1 de enero de 1900: comprueba el año.",
+      "date_unreadable": "Fila {row}: {value} no es una fecha válida en el formato {order, select, day_first {dd/mm/aaaa} month_first {mm/dd/aaaa} day_first_short {dd/mm/aa} month_first_short {mm/dd/aa} year_first_short {aa/mm/dd} year_first {aaaa-mm-dd} other {dd/mm/aaaa}}. Corrige la fecha en el archivo, o cambia el formato en Configuración › Plugins › Importaciones de brókeres › CSV genérico › «Formato de las fechas» y luego pulsa «Reanalizar todos».",
+      "date_unreadable_more": "{n, plural, one {# fila más tiene} other {# filas más tienen}} una fecha no válida en este formato: vale la misma corrección."
     },
     "evidenceRowsTitle": "Filas del archivo",
     "evidenceRowCount": "{n} filas",

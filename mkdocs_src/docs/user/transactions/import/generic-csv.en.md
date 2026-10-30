@@ -73,6 +73,11 @@ is 25 December, because there is no month 25. With the two-digit-year options th
 only one used, and `yy` follows the usual rule: `00`–`68` are 2000–2068, `69`–`99` are 1969–1999. Dates
 written like `2025-12-25`, `20251225` or `25 Dec 2025` have a single meaning and never move.
 
+A row whose date cannot be read in the chosen format is left out, and the analysis says so for each row
+(*Row 4: 25/12/26 is not a valid date in the format mm/dd/yy…*), with where to fix it: correct the date
+in the file, or change the **Date format** in **Settings › Plugins** and press **Re-parse all**. After the
+twentieth such row one note counts the rest.
+
 !!! tip "Parse the file again after changing it"
 
     A file you already parsed keeps the dates it was read with. After you change the setting, the file

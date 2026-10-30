@@ -138,8 +138,9 @@ el menú **⋮** de una fila, abre los detalles, con las advertencias y las nota
 
 - **Advertencias y notas**: **Continuar** lista primero las advertencias, luego las notas; léelas y
   después haz clic en **Continuar de todos modos**.
-- **Un archivo ha fallado**: un aviso indica por qué. Corrige su plugin en **Seleccionar** y luego haz clic en
-  **Reanalizar todos**.
+- **Un archivo ha fallado**: un aviso indica por qué. Corrige su plugin en **Seleccionar** y vuelve a analizar.
+  **Reanalizar todos** solo aparece en el análisis cuando se ha leído al menos un archivo; si no se ha leído
+  ninguno, vuelve a **Seleccionar** y haz clic en **Analizar (N)**.
 
 ### 🧩 Pasos que aparecen solo cuando hacen falta {: #only-when-needed }
 
