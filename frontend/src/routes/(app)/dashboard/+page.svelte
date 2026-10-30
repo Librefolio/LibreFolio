@@ -16,7 +16,7 @@
     import {onDestroy, onMount, tick, untrack} from 'svelte';
     import {page} from '$app/stores';
     import {_} from '$lib/i18n';
-    import {ArrowLeft, RefreshCw, Briefcase, TrendingUp, ArrowRightLeft, Wallet, Shield} from 'lucide-svelte';
+    import {RefreshCw, Briefcase, TrendingUp, ArrowRightLeft, Wallet, Shield} from 'lucide-svelte';
     import AiExportMenu from '$lib/features/ai-export/AiExportMenu.svelte';
     import {prepareAiExport, type PreparedAiExport} from '$lib/features/ai-export/aiExportClipboard';
     import type {AiExportOptionsSelection} from '$lib/features/ai-export/aiExportOptions';
@@ -72,10 +72,11 @@
     import RiskLevelsPanel from '$lib/features/risk/levels/RiskLevelsPanel.svelte';
     import PositionsPanel from '$lib/features/dashboard/PositionsPanel.svelte';
     import {createPositionsSeriesController, type PositionsSeriesScope} from '$lib/features/dashboard/positionsSeriesController';
+    import {createPositionsRollingController, type RollingScope} from '$lib/features/dashboard/positionsRolling';
     import LotsAnalysisPanel from '$lib/features/brokers/lots/LotsAnalysisPanel.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
-    import {STALE_FX_ACTION, staleFxIssue, type StaleFxPairLike} from '$lib/features/dashboard/staleFxIssue';
+    import {pairsStillStale, STALE_FX_ACTION, STALE_FX_CODE, staleFxIssue, type StaleFxPairLike} from '$lib/features/dashboard/staleFxIssue';
     import {todayIso} from '$lib/utils/dateOnly';
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
     import {invalidateFxRoutes} from '$lib/stores/reference/fxRoutesStore';
@@ -168,8 +169,8 @@
     /** Whether the lot detail on screen was opened by a step of this page (not by a reload on its URL): going back then undoes it. */
     let assetPanelOpenedHere = false;
 
-    // The lot detail takes the place of the portfolio view (#48): opening it is a step of the browser's history, so «back»
-    // (or «← Portfolio») returns to the portfolio.
+    // The lot detail opens below the positions (#48, FB-12b): opening it is a step of the browser's history, so «back»
+    // (or the panel's ✕) closes it.
     function openAssetPanel(assetId: number) {
         assetPanelOpenedHere = true;
         void goto(buildAssetPanelUrl($page.url, assetId), {noScroll: true});
@@ -414,6 +415,8 @@
             // No reload after a transport error: the backend may still be writing those rates.
             let remaining: DataQualityIssue | undefined;
             let stillMissing: boolean | null = null;
+            // «Old exchange rate» (Y6-6): the sync worked and, once the report is read again, the pair is still stale: the provider has no newer rate.
+            let stillStale: string[] = [];
             if (!transportError) {
                 invalidateFxRoutes();
                 invalidate();
@@ -423,6 +426,7 @@
                     await loadAll(true, true);
                     remaining = dataQualityIssues.find((candidate) => candidate.cta_action === 'sync_fx_pair' && coversRequestedPair(candidate));
                     stillMissing = remaining !== undefined;
+                    if (issue.code === STALE_FX_CODE) stillStale = pairsStillStale(request.pairs, (summary?.data_quality as {stale_fx_pairs?: StaleFxPairLike[]} | undefined)?.stale_fx_pairs);
                 } catch {
                     stillMissing = null;
                 }
@@ -449,9 +453,13 @@
                 })}`;
                 if (variant === 'success') variant = 'warning';
             }
+            if (stillStale.length > 0 && (outcome === 'ok' || outcome === 'partial')) {
+                message += `\n\n${$_('dataQuality.staleFxAfterSync', {values: {pairs: stillStale.map((slug) => fxPairHtml(slug, pairOptions)).join(', ')}})}`;
+                if (variant === 'success') variant = 'warning';
+            }
             notify({
                 name: 'fx.rates.synced',
-                detail: {origin: 'dashboard-banner', pairs: request.pairs, start: request.start, end: request.end, outcome, stillMissing},
+                detail: {origin: 'dashboard-banner', pairs: request.pairs, start: request.start, end: request.end, outcome, stillMissing, stillStale: stillStale.length > 0},
                 toast: {variant, message},
             });
         } finally {
@@ -725,6 +733,15 @@
         untrack(() => positionsSeriesCtl.sync(scope));
     });
     onDestroy(() => positionsSeriesCtl.dispose());
+
+    // The Rolling view of that chart (FB-15): the rolling return of the ticked positions' assets over the same period.
+    const positionsRollingCtl = createPositionsRollingController();
+    const positionsRollingScope = $derived<RollingScope>({start: dateRangeCtl.start, end: dateRangeCtl.end || undefined, ready: canAsk, version: refreshVersion});
+    $effect(() => {
+        const scope = positionsRollingScope;
+        untrack(() => positionsRollingCtl.sync(scope));
+    });
+    onDestroy(() => positionsRollingCtl.dispose());
 
     /** Lazy-load the synthetic P&L candle series (G1b — called by GrowthChart's
      *  onRequestPnlCandles when the user first activates the candles submode; caller
@@ -1117,47 +1134,40 @@
         </div>
     {:else if activeTab === 'posizioni'}
         <div data-testid="dashboard-positions-tab">
-            {#if activeAssetId != null}
-                <!-- «Lot detail» takes the place of the portfolio view; «← Portfolio» (or the browser's back) returns to it (#48). -->
-                <div class="mb-3">
-                    <button type="button" class="inline-flex items-center gap-1.5 rounded-lg border border-lf-subtle bg-lf-card px-2.5 py-1.5 text-xs font-medium text-lf-secondary transition-colors hover:bg-lf-hover" onclick={closeAssetPanel} data-testid="positions-back-to-portfolio">
-                        <ArrowLeft size={14} />
-                        {$_('dashboard.backToPortfolio')}
-                    </button>
-                </div>
-                <LotsAnalysisPanel
-                    open={true}
-                    assetId={activeAssetId}
-                    brokerIds={activeBrokerIds ?? allBrokers.map((b) => b.id)}
-                    brokers={allBrokers}
-                    currency={activeAsset?.currency ?? appliedCurrency}
-                    assetName={activeAsset?.display_name ?? null}
-                    onClose={closeAssetPanel}
-                    ready={canAsk}
-                    {refreshVersion}
-                />
-            {:else}
-                <!-- F2: nothing is asked before the owned brokers are known — the prop arrives with them. -->
-                <PositionsPanel
-                    {summary}
-                    contribution={positionsContribution}
-                    loading={summaryLoading}
-                    {contributionLoading}
-                    {assetsHref}
-                    brokers={allBrokers}
-                    onRequestContribution={canAsk ? () => void pageBusy.join('dashboard-contribution', loadContribution) : undefined}
-                    onAnalyze={openAssetPanel}
-                    analyzedAssetId={activeAssetId}
-                    portfolioHistory={history}
-                    brokerIds={activeBrokerIds}
-                    currentLanguage={$currentLanguage}
-                    allocationHistory={allocationHistoryFromReport}
-                    positionsSeries={$positionsSeriesCtl.response}
-                    positionsSeriesLoading={$positionsSeriesCtl.loading}
-                    positionsSeriesFailed={$positionsSeriesCtl.failed}
-                    onRequestPositionsSeries={(keys) => positionsSeriesCtl.request(keys, positionsSeriesScope)}
-                />
-            {/if}
+            <!-- F2: nothing is asked before the owned brokers are known — the prop arrives with them. -->
+            <PositionsPanel
+                {summary}
+                contribution={positionsContribution}
+                loading={summaryLoading}
+                {contributionLoading}
+                {assetsHref}
+                brokers={allBrokers}
+                onRequestContribution={canAsk ? () => void pageBusy.join('dashboard-contribution', loadContribution) : undefined}
+                onAnalyze={openAssetPanel}
+                analyzedAssetId={activeAssetId}
+                portfolioHistory={history}
+                brokerIds={activeBrokerIds}
+                currentLanguage={$currentLanguage}
+                allocationHistory={allocationHistoryFromReport}
+                positionsSeries={$positionsSeriesCtl.response}
+                positionsSeriesLoading={$positionsSeriesCtl.loading}
+                positionsSeriesFailed={$positionsSeriesCtl.failed}
+                onRequestPositionsSeries={(keys) => positionsSeriesCtl.request(keys, positionsSeriesScope)}
+                positionsRolling={$positionsRollingCtl}
+                onRequestPositionsRolling={(assetIds) => positionsRollingCtl.request(assetIds, positionsRollingScope)}
+            />
+            <!-- The lot detail opens below the positions, as on a broker's page (FB-12b): the chart stays; the panel's ✕ or the browser's back closes it. -->
+            <LotsAnalysisPanel
+                open={activeAssetId != null}
+                assetId={activeAssetId}
+                brokerIds={activeBrokerIds ?? allBrokers.map((b) => b.id)}
+                brokers={allBrokers}
+                currency={activeAsset?.currency ?? appliedCurrency}
+                assetName={activeAsset?.display_name ?? null}
+                onClose={closeAssetPanel}
+                ready={canAsk}
+                {refreshVersion}
+            />
         </div>
     {:else if activeTab === 'rischio'}
         <div data-testid="dashboard-risk-tab">

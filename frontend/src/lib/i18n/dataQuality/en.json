@@ -45,6 +45,7 @@
     "nonIsoCurrencyUnknown": "Amounts in “{value}”, not an ISO currency code — their conversions may be missing, and their rows cannot be saved again until the code is corrected",
     "nonIsoReportCurrency": "This report converts to “{value}”, not an ISO currency code (it stands for {suggestion}) — choose {suggestion} as “Default Currency” in Settings › Preferences",
     "nonIsoReportCurrencyUnknown": "This report converts to “{value}”, not an ISO currency code — choose the “Default Currency” again in Settings › Preferences",
-    "staleFx": "{count} exchange rate(s) are out of date, the oldest by {days} days — sync the rates to update the totals"
+    "staleFx": "{count} exchange rate(s) are out of date, the oldest by {days} days — sync the rates to update the totals",
+    "staleFxAfterSync": "The provider has no newer rates for {pairs} yet: try again later."
   }
 }

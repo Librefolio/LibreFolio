@@ -464,11 +464,11 @@ async function showCostColumns(page: Page, scope: Locator, row: Locator): Promis
 }
 
 /**
- * «← Portfolio»: the lot detail replaced the portfolio view (Y5-2), so pressing it takes the lots panel off the page and
- * puts the positions panel back. Ends on both facts.
+ * Closes the lot detail with its ✕: the lots panel goes off the page; the positions panel stays under it (FB-12b), so it is on
+ * screen all along. Ends on both facts.
  */
 async function backToPortfolio(page: Page): Promise<void> {
-    await page.getByTestId('positions-back-to-portfolio').click();
+    await page.getByTestId('lots-analysis-panel-close').click();
     await expect(page.getByTestId('lots-analysis-panel')).toBeHidden({timeout: 15_000});
     await expect(page.getByTestId('positions-panel')).toBeVisible({timeout: 15_000});
 }
@@ -482,7 +482,7 @@ async function openLotDetail(page: Page, row: Locator, assetId: number): Promise
     await page.getByTestId('context-menu-action-analyze-lots').click();
     await expect(page.getByTestId('lots-analysis-panel')).toBeVisible({timeout: 15_000});
     await expect(page).toHaveURL(new RegExp(`[?&]asset=${assetId}(?:&|$)`));
-    await expect(page.getByTestId('positions-panel'), 'the lot detail replaces the portfolio view: no positions panel beside it').toHaveCount(0);
+    await expect(page.getByTestId('positions-panel'), 'the lot detail opens below the positions: the panel stays (FB-12b)').toBeVisible();
 }
 
 /**
@@ -521,7 +521,7 @@ async function expectNoUnknownCost(page: Page, load: DashboardLoad, assetId: num
 
     const dashboard = page.getByTestId('dashboard-page');
     await waitForSettled(dashboard, 25_000);
-    // The URL opened the lot detail alone (Y5-2): the lots panel first, then «← Portfolio» for the positions and the banner.
+    // The URL opened the lot detail below the positions (FB-12b): the lots panel first, then its ✕ for the positions and the banner.
     const lotIssuesNow = lotIssues(load.lots);
     expect(
         lotIssuesNow.filter((issue) => issue.code === 'MISSING_COST_BASIS'),
@@ -630,7 +630,7 @@ test.describe('Data quality on real data — items 21, 22, 23 (issue #32)', () =
             await expect(fxRow).toHaveAttribute('data-severity', 'warning');
             for (const text of ['EUR', quote, d1, d2]) await expect(fxRow, `the banner row shows ${text}`).toContainText(text);
 
-            // The URL opened the lot detail alone (Y5-2): the lots panel first, then «← Portfolio» for the positions.
+            // The URL opened the lot detail below the positions (FB-12b): the lots panel first, then its ✕ for the positions.
             expect(
                 lotIssues(load.lots).map((issue) => issue.code),
                 'precondition: the lots analysis reports the missing rate too',
