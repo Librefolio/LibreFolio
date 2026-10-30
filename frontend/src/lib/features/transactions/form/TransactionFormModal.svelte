@@ -72,7 +72,7 @@
     import {generateUUID} from '$lib/utils/core/uuid';
     import {normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
     import {preFloorDates} from '$lib/features/transactions/preFloorDate';
-    import {calculateTradeValue, type TradeAmountDriver} from '$lib/features/transactions/form/txTradeAmount';
+    import {calculateTradeValue, tradeHasUnitPrice, type TradeAmountDriver} from '$lib/features/transactions/form/txTradeAmount';
     import {computeTxFormChecks, type TxFormCell, type TxFormCheckKind} from '$lib/features/transactions/form/txFormChecks';
     import {deduplicateIssues, signLabel, signHintKey} from '$lib/features/transactions/form/txFormFields';
     import {isBulkBalanceIssue} from '$lib/features/transactions/bulk/bulkDisplay';
@@ -867,7 +867,7 @@
     /** The unit price: the text typed in the amount field while it is read as one (the total is then calculated into `draft.cash`), the calculated value while the amount is the total. Never part of the payload. */
     let unitPrice = $state('');
     /** A BUY or SELL and any single type with a quantity and a cash amount both: the only ones with a unit price. A pair has none. Shown in view mode too, so a saved trade reads in both forms. */
-    let showTradePrice = $derived(!pairLayout && rule.quantityMode !== 'forbidden' && rule.cashField !== 'forbidden' && rule.assetField !== 'forbidden');
+    let showTradePrice = $derived(!pairLayout && tradeHasUnitPrice(rule));
     /** The asset's quote base, `null` while the asset is not in the store (the store's version makes this follow its loading). */
     let tradeQuoteBase = $derived.by<number | null>(() => {
         void $assetStoreVersion;

@@ -73,7 +73,7 @@ Questo registra capitale in natura, non P&L: la rettifica crea o modifica lotti,
 
     | Scenario | Cosa impostare |
     |----------|------------|
-    | **Trasferimento normale** | Lasciare vuoto — calcolato automaticamente |
+    | **Trasferimento normale** | Lasciare il costo su **Auto** — calcolato dai tuoi acquisti |
     | **Exit Tax** | Valore di mercato alla data del trasferimento (specifico per giurisdizione) |
     | **Eredità** | Valore equo di mercato alla data del decesso (o stepped-up basis) |
     | **Regalo** | Costo di carico originale del donante (carryover basis) |

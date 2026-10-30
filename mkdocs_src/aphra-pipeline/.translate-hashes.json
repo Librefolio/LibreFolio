@@ -4159,7 +4159,7 @@
     }
   },
   "financial-theory/instruments/transaction-types/adjustment.en.md": {
-    "md5": "120fa534deaffcd7d2900f36de8d9196",
+    "md5": "fc3bcb704ef688799b88f73e155fb819",
     "langs_done": [
       "es",
       "fr",
@@ -4179,7 +4179,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 184.2,
-        "stamped_at": "2026-10-11T16:16:40.261232+00:00",
+        "stamped_at": "2026-10-28T22:01:16.483685+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -4192,7 +4192,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 233.8,
-        "stamped_at": "2026-10-11T16:16:40.261232+00:00",
+        "stamped_at": "2026-10-28T22:01:16.483685+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -4205,7 +4205,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 168.0,
-        "stamped_at": "2026-10-11T16:16:40.261232+00:00",
+        "stamped_at": "2026-10-28T22:01:16.483685+00:00",
         "stamped_by": "translate-stamp"
       }
     }
