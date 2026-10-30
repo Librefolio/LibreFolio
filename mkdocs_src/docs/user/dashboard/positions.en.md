@@ -200,8 +200,8 @@ What are the selected lots worth, and what have they earned since opening? With 
 **How to read it**
 
 - **Comprehensive value above Opening value**: the lots gained, sales and income included.
-- **A dashed line** in **Value** means a lot's current value is estimated at cost: its asset has no price at all — no market price, and no purchase or sale up to the end date.
-- **A flat start**: until the asset's first price — market price, purchase or sale — a lot, for example one you received through an adjustment, is valued at what it cost you, with no gain or loss. A day whose price has no exchange rate is left out instead.
+- **A dashed line** in **Value** means a lot's current value is estimated at cost: its asset has no price at all — no market price, no purchase or sale, and no transfer whose cost counts as its price up to the end date.
+- **A flat start**: until the asset's first price — market price, purchase or sale, or the cost of a transfer that brought it in before anything else — a lot, for example one you received through an adjustment, is valued at what it cost you, with no gain or loss. A day whose price has no exchange rate is left out instead.
 
 ### 🧾 5. Lot Detail
 
@@ -223,7 +223,7 @@ The whole story of one lot. Open it with **View lot detail** (⋮) or by clickin
 
     - **A folded banner** lists what is missing — a rate, a price, a purchase cost — with a chip per affected lot that finds its bubble. Fix it as for the [Data Quality banner](index.md#data-quality-banner). The folded banner also lists income and costs that no lot could take — a dividend paid after every lot was sold, for example — each with its own amount and date.
     - **A red message** means the quantities or transfers of some of the asset's transactions do not add up, so its lots cannot be rebuilt. It lists each transaction to fix with its day, its broker, what is wrong and a **Go to transaction** button. Meanwhile the panel hides the lots, their timeline and the comparison, and the first chart keeps only its **Avg. Cost** lines and the **Market Price**. Fix those transactions and the lots come back.
-    - **Valued at cost**: on the days before the asset's first price — no market price, no purchase or sale — its lots are valued at what they cost, with no market gain or loss, and the banner names those days. With no price at all up to the end date, the lot's bubble has a dashed border.
+    - **Valued at cost**: on the days before the asset's first price — no market price, no purchase or sale, no transfer whose cost counts as its price — its lots are valued at what they cost, with no market gain or loss, and the banner names those days. With no price at all up to the end date, the lot's bubble has a dashed border.
 
 ---
 

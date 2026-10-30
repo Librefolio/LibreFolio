@@ -966,6 +966,14 @@ class PortfolioService:
         for (_b_id, a_id), d in first_position_dates.items():
             if a_id not in first_position_date_by_asset or d < first_position_date_by_asset[a_id]:
                 first_position_date_by_asset[a_id] = d
+        # W-B94: an asset priced only by the cost of the transfer that brought it in has no BUY or SELL; its grace counts
+        # from its first lot movement, the arrival, as the at-cost grace does
+        first_lot_date_by_asset: dict[int, date_type] = {}
+        for (_b_id, a_id), d in first_lot_txn_dates.items():
+            if a_id not in first_lot_date_by_asset or d < first_lot_date_by_asset[a_id]:
+                first_lot_date_by_asset[a_id] = d
+        for a_id, d in first_lot_date_by_asset.items():
+            first_position_date_by_asset.setdefault(a_id, d)
 
         implied_asset_ids: set[int] = set()
         if last_state is not None:
@@ -1011,9 +1019,9 @@ class PortfolioService:
         manual_implied_ids = implied_asset_ids - assets_with_provider
         transaction_implied_assets = [a for a in transaction_implied_assets if a.asset_id not in manual_implied_ids]
 
-        # VALUED_AT_COST: an open position with no price at all (no quote, no BUY or SELL), counted at its
-        # book cost (J-17). Same grace as TRANSACTION_IMPLIED, counted from the asset's first acquisition:
-        # it has no quote, and no BUY or SELL (an ADJUSTMENT or a TRANSFER opened it), so the BUY/SELL
+        # VALUED_AT_COST: an open position with no price at all (no quote, no BUY or SELL, no transfer-cost estimate:
+        # W-B94), counted at its book cost (J-17). Same grace as TRANSACTION_IMPLIED, counted from the asset's first
+        # acquisition: it has no quote, and no BUY or SELL (an ADJUSTMENT or a TRANSFER opened it), so the BUY/SELL
         # first position date would list it at once. Only for an asset with a provider: for a manual
         # asset the cost is its intended value.
         first_acquisition_by_asset: dict[int, date_type] = {}

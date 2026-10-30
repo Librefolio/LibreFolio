@@ -52,7 +52,8 @@ Modules:
   30/360), simple interest and daily compounding over a span in closed form: the primitives the Scheduled
   Investment provider builds its accrual on.
 * ``price_marks`` — the daily mark of an asset for valuation: the market quote, the
-  same-day trade average, or the last observation carried forward.
+  same-day trade average (for an asset with nothing else yet, an incoming transfer's cost, as an
+  estimate), or the last observation carried forward.
 * ``yield_on_cost`` — Yield on Cost of holdings, replayed from the transaction ledger.
 * ``splits`` — the ADJUSTMENT rows linked to a SPLIT asset event, loaded with one query, the ids
   an average-cost replay marks as a rescale, and the rule for a usable split ratio.

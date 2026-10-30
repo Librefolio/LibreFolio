@@ -396,7 +396,7 @@ price_series = build_asset_price_series(
 mark = price_series.resolve(current_date)
 ```
 
-The series is built once, before the FIFO engine runs, from the `price_history` rows `_load_prices()` reads — the window and the last quote before it — and from the loaded transactions, those of the brokers in scope: each of their `BUY` and `SELL` rows with an amount is a trade observation. It decides three things:
+The series is built once, before the FIFO engine runs, from the `price_history` rows `_load_prices()` reads — the window and the last quote before it — and from the loaded transactions, those of the brokers in scope: each of their `BUY` and `SELL` rows with an amount is a trade observation, and so is the cost of an incoming `TRANSFER` while the asset has nothing else on or before its day ([Transfer cost as an estimate](price_resolver.md#transfer-cost-estimate)). The series reads these rows as loaded, before the scope's edge is read: a leg from a broker outside the scope is still a `TRANSFER` there. It decides three things:
 
 1. **The reference price** of a lot opened by an `ADJUSTMENT_IN`, which the engine reads while it replays (see [Reference Price](#reference-price)).
 2. **The days valued at cost**: those with no observation on or before them, up to `at_cost_until` (see [Estimated-at-Cost Fallback](#estimated-at-cost-fallback)).
@@ -407,7 +407,7 @@ Resolution tiers are owned by `AssetPriceSeries.resolve()`:
 | Tier | `MarkSource` | Meaning |
 |------|--------------|---------|
 | 1 | `MARKET` | Same-day asset-system `price_history.close`. |
-| 2 | `TRADE_AVG` | Same-day `BUY`/`SELL` average. An `ADJUSTMENT` is never an observation, with or without a cost basis. |
+| 2 | `TRADE_AVG` | Same-day `BUY`/`SELL` average, or an incoming `TRANSFER`'s cost as an estimate for an asset with nothing else yet. An `ADJUSTMENT` is never an observation, with or without a cost basis. |
 | 3 | `CARRIED` | Last observation carried forward (LOCF), market- or trade-origin. |
 | 4 | `MISSING` | No observation on/before the day. |
 
@@ -435,7 +435,7 @@ A lot's reference price is the denominator of its Open Return, `relative_return 
 
 The lots banner groups the issues of one code that name a lot into a single message, with a chip for each lot, so the two messages (`dataQuality.referencePriceFallback`, `dataQuality.referencePriceUnavailable`) say how the reference is chosen and never a price: one price could not stand for every lot of the group (J-36). The `reference_price` param of `REFERENCE_PRICE_FALLBACK` stays in `message_params`, unread by the texts.
 
-An `ADJUSTMENT` is never an observation (developer decision P2): a lot opened by an opening position, a succession or a transfer from an untracked broker is compared with the market — the last quote, or a `BUY` / `SELL` more recent than it — and with its own cost basis only when the asset has no observation on or before its opening day.
+An `ADJUSTMENT` is never an observation (developer decision P2): a lot opened by an opening position, a succession or a transfer from an untracked broker is compared with the market — the last quote, or a `BUY` / `SELL` more recent than it — and with its own cost basis only when the asset has no observation on or before its opening day. A leg from a broker outside the scope, read here as an `ADJUSTMENT_IN`, on an asset with no quote and no other operation on or before its day, is itself that day's observation (its cost, estimated): its reference is that cost, `"fallback"`, with `REFERENCE_PRICE_FALLBACK` where it used to be `"unavailable"`.
 
 `opening_reference_price(lot, price_series, quote_base_quantity)` (`financial_math/lots/prices.py`) gives the lot summary, the return history and `collect_fx_needs()` the reference as `(price, currency, date, source)`:
 
@@ -568,12 +568,12 @@ Outside `estimated_mode` the end date always has a mark — every observation is
 
 Implications:
 
-- `LotSummarySchema.value_source = "ESTIMATED_AT_COST"` only for an asset with no observation up to the end date — one held only through adjustments or transfers, with no quote
+- `LotSummarySchema.value_source = "ESTIMATED_AT_COST"` only for an asset with no observation up to the end date — one held only through adjustments, or through transfers that gave no estimate, with no quote
 - `total_value`, `total_pnl`, `cash_yield`, `total_return` remain usable, as long as the proceeds and realized P&L they read convert (see [FX Conversion](#fx-conversion))
 - `relative_return` stays `None`: there is no market price to compare with the reference
 - data quality report adds `CURRENT_PRICE_ASSUMED_AT_COST`, from the first transaction to the end date
 
-A TRADE-origin mark is a price: valuation uses it, the lot summary's `value_source` is then `MARKET_PRICE` — the label of any mark — and its point in either price series carries `estimated=True`. Only a `BUY` or a `SELL` gives one: an `ADJUSTMENT` never does, with or without a cost basis (see [Price Resolver](price_resolver.md#the-daily-model)).
+A TRADE-origin mark is a price: valuation uses it, the lot summary's `value_source` is then `MARKET_PRICE` — the label of any mark — and its point in either price series carries `estimated=True`. A `BUY` or a `SELL` gives one, and so does an incoming `TRANSFER`'s cost while the asset has nothing else ([Transfer cost as an estimate](price_resolver.md#transfer-cost-estimate)): an asset that arrived only by such transfers has no day at cost and a point, `estimated=True`, from its first transfer. An `ADJUSTMENT` never does, with or without a cost basis (see [Price Resolver](price_resolver.md#the-daily-model)).
 
 `build_performance_history()` reads the same days at cost (J-33). On a day `<= at_cost_until` without a mark, `_nav_at_cost()` values the open fragments in the scope at their lot's cost converted at the opening date (`_cost_at_opening()`, the value history's own rule); a day where one of them belongs to a SHORT lot, or its cost has no rate, has no NAV point. A transfer that day moves the cost of its units, never an unknown market value: a leg read at the scope's edge brings its own cost basis when it arrives and, when it leaves — handed over at its own cost — the cost of the pieces it closes (`_boundary_leg_cost()`); a transfer the re-run holds moves the cost of the pieces of its pair (`_moved_cost()`, from the pair's fragments). So the series starts on the first day held, ROI and TWRR are 0 while the position sits at cost, and the TWRR chain holds the move from cost to the first price, as the ROI does: before, the first NAV was the first mark, the base of the TWRR, and that move fell outside its chain. An asset with no observation has ROI and TWRR 0 every day. Neither price series has a point on the days at cost.
 
