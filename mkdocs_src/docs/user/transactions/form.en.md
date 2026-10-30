@@ -24,7 +24,7 @@ The transaction form adds or edits one transaction — or one linked pair — in
 
 A few rules keep entries quick:
 
-- **Amounts are totals** — the amount you save is the total paid or received, never the price per share (*Total amount (not per share)*). On a purchase or a sale you can type either one: the total, or the unit price and let the form work out the total — see [Total amount or unit price](#unit-price).
+- **Amounts are totals** — the amount you save is the total paid or received, never the price per share (*Total amount (not per share)*). On a purchase or a sale you can write either one: the total, or the unit price (the buttons next to the field say which), and the form works out the other — see [Total or unit price](#unit-price).
 - **Type positive numbers** — the form adds the minus sign where money or units go out: a purchase's payment, a sale's units, a withdrawal, a fee, a tax. Only an **Adjustment** quantity takes a sign: positive adds units, negative removes them.
 - **Checks as you go** — once the required fields are filled, the form checks the entry against your ledger and the other workspace rows, and lists any problem at the top. The form also spots some mistakes by itself: a date it cannot read, or one in the future, stays on screen in red, and the previous date is not used in its place; a quantity or amount with the wrong sign or format, such as a negative quantity on a purchase, turns red; and a warning at the top flags a transfer with the same broker on both sides, or an exchange with the same currency. Until you fix them, nothing is checked, *valid* does not appear and **Apply** stays disabled. **⚡ Validate now** finds them all at once — see [Validate now](#validate-now). Transaction dates can go back as far as the year 1 and up to tomorrow, but the form itself stops at today. A date before 1900 is almost always a typo, so the form warns you with an amber banner and **Apply** stays disabled until you press **Yes, the date is right**; change the date and it asks again, and once confirmed the date is saved like any other. A date after tomorrow is refused with a message such as *Date: Not after 2026-10-18*, when today is 17 October 2026.
 - **Missing broker or asset?** — **Create new** in the broker list, or **New asset** in the asset list, creates it without leaving the form.
@@ -45,24 +45,24 @@ A few rules keep entries quick:
 
 ---
 
-## 🧮 Total amount or unit price {: #unit-price }
+## 🧮 Total or unit price {: #unit-price }
 
-On a **Buy** or a **Sell**, the cash field has two small buttons, **Total amount** and **Unit price**, like the **Auto / Manual** buttons of the average cost. They choose which of the two values you type; the other one is calculated for you.
+On a **Buy** or a **Sell** (and on any other single type that has both a quantity and a cash amount), the label of the cash field has two small buttons, **Total** and **Unit price**. The form stays a single amount and its currency: the buttons only say **how to read the number you typed** in that field.
 
-- **Total amount** (the default) — you type the amount, and the unit price is shown, calculated from the amount and the quantity.
-- **Unit price** — you type the price, and the amount is calculated and filled in for you. It stays visible and you can still edit it. If you edit the amount, the buttons go back to **Total amount** and the unit price is recalculated from what you typed.
+- **Total** (the default) — the number is the amount paid or received. Under the field the form shows the unit price it works out: *= 83.40 per unit*.
+- **Unit price** — the number is the price of one unit. Under the field the form shows the total it works out: *= 1,000.80 in total*.
 
-The amount stays editable because price × quantity can differ from what the broker really charged, because of rounding or fees: the amount you type is the one that is saved.
+Switching the buttons keeps the number you wrote and reads it the other way. What is saved is always the **total**: with **Unit price** on, the total shown under the field is the one that goes into the transaction. When you open a saved transaction the field shows the total, with the buttons on **Total**.
 
-The calculation is made by the form itself, at once, on the exact digits you typed (no rounding errors from floating-point numbers). It uses the same price convention as the rest of the app: the quantity is divided by the asset's *price per N units* and multiplied by the price, so a bond quoted per 100 works the way its quote is read. The result is rounded to what is stored: amounts keep 6 decimals and unit prices 12. Ties round to the even digit (*half-even*). A value that is too long is flagged in red, as usual. The unit price is in the same currency as the amount. The asset must be known to the form (it is, once the list of assets has loaded); without it nothing is calculated.
+The calculation is made by the form itself, at once, on the exact digits you typed (no rounding errors from floating-point numbers). It uses the same price convention as the rest of the app: the quantity is divided by the asset's *price per N units* and multiplied by the price, so a bond quoted per 100 works the way its quote is read (*= 98.55 per 100 units*). The result is rounded to what is stored: amounts keep 6 decimals and unit prices 12. Ties round to the even digit (*half-even*). A value that is too long is flagged in red, as usual. The unit price is in the same currency as the amount. The asset and the quantity must be filled in; without them nothing is worked out and the field shows its usual hint (what to enter).
 
 !!! example "Example"
 
-    You bought 12 shares at 83.40. Choose **Unit price**, type *83.40*, and the amount *1,000.80* appears by itself. Your broker actually charged 1,000.90, so you change the amount to *1,000.90*: the buttons go back to **Total amount** and the unit price becomes *83.408333333333*.
+    You bought 12 shares at 83.40. Press **Unit price**, type *83.40* in the cash field, and under it you read *= 1,000.80 in total*. Your broker actually charged 1,000.90: press **Total**, type *1,000.90*, and under it you read *= 83.408333333333 per unit*. The amount saved is *1,000.90*.
 
-When you open a saved **Buy** or **Sell** just to look at it, you see both forms: the total amount and, under it, the unit price calculated from the amount and the quantity. The buttons only appear while you can edit.
+When you open a saved transaction just to look at it, you see the total and, under it, the unit price worked out from the total and the quantity. The buttons only appear while you can edit.
 
-Only **Buy** and **Sell** have the buttons: the other types, and transfers and exchanges, do not. The [bulk editor](index.md#bulk-workspace) grid does not have them yet.
+The types without a quantity or without an amount, transfers and exchanges have no buttons. The [bulk editor](index.md#bulk-workspace) grid does not have them yet.
 
 ---
 

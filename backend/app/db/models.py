@@ -2,9 +2,10 @@
 Database models for LibreFolio.
 
 All models use SQLModel (SQLAlchemy 2.x) with the following conventions:
-- Decimal columns: RealDecimal(18, 6) for amounts and event values (W-B60), RealDecimal(22, 10) for quantities and
-  RealDecimal(24, 12) for prices and the per-unit cost basis, read back as the decimal written (C-97,
-  db/real_decimal.py); Numeric(24, 10) for FX
+- Decimal columns: RealDecimal(18, 6) for amounts and event values (W-B60), RealDecimal(22, 10) for quantities,
+  RealDecimal(24, 12) for prices and the per-unit cost basis, RealDecimal(24, 0) for the volume and RealDecimal(24, 10)
+  for the FX rate (W-B63), read back as the decimal written (C-97, db/real_decimal.py); the one plain Numeric left is
+  the owner's share of a broker (Numeric(7, 6))
 - Timestamps in UTC (created_at, updated_at, fetched_at), written by utcnow() and stored without an offset:
   every datetime field declares sa_type=DateTime, the plain column; SQLModel >= 0.0.48 would otherwise map it to
   its UTCDateTime, which refuses naive values and reads aware ones back (D-UTC, 1.4: moving to aware datetimes)
@@ -1020,7 +1021,7 @@ class PriceHistory(SQLModel, table=True):
     high: Optional[Decimal] = Field(default=None, sa_column=Column(RealDecimal(24, 12)))
     low: Optional[Decimal] = Field(default=None, sa_column=Column(RealDecimal(24, 12)))
     close: Optional[Decimal] = Field(default=None, sa_column=Column(RealDecimal(24, 12)))
-    volume: Optional[Decimal] = Field(default=None, sa_column=Column(Numeric(24, 0)))
+    volume: Optional[Decimal] = Field(default=None, sa_column=Column(RealDecimal(24, 0)))
     adjusted_close: Optional[Decimal] = Field(default=None, sa_column=Column(RealDecimal(24, 12)))
 
     currency: str = Field(nullable=False)  # ISO 4217
@@ -1115,7 +1116,7 @@ class FxRate(SQLModel, table=True):
     date: date_type = Field(nullable=False)
     base: str = Field(nullable=False)  # ISO 4217
     quote: str = Field(nullable=False)  # ISO 4217
-    rate: Decimal = Field(sa_column=Column(Numeric(24, 10), nullable=False))
+    rate: Decimal = Field(sa_column=Column(RealDecimal(24, 10), nullable=False))
 
     source: str = Field(default="ECB")
     fetched_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)

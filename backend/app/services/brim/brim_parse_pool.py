@@ -45,12 +45,13 @@ is submitted directly rather than through a closure.
 from __future__ import annotations
 
 import asyncio
+import enum
 import multiprocessing
 import multiprocessing.forkserver
 import os
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
-from typing import Any, Optional
+from typing import Optional
 
 import structlog
 
@@ -58,6 +59,7 @@ from backend.app.config.brim import BrimConfigError, brim_prewarm_enabled
 from backend.app.schemas.brim import BRIMParseOutput
 from backend.app.services.brim import brim_provider
 from backend.app.services.brim.registry import BRIMProviderRegistry
+from backend.app.services.plugin_settings.contract import BoundSettings
 from backend.app.services.plugin_settings.runtime import bound_settings_for
 from backend.app.utils.runtime.secret_masking import mask_exception, secrets_in_flight
 
@@ -129,11 +131,17 @@ def prewarm() -> None:
         logger.warning("BRIM parse pool prewarm failed; the first parse will start the pool", error=str(exc))
 
 
-_RESOLVE: Any = object()
+class _Resolve(enum.Enum):
+    """The type of the default of ``bound``, so that the parameter is ``BoundSettings | None | _Resolve`` and not ``Any``."""
+
+    HERE = enum.auto()
+
+
+_RESOLVE = _Resolve.HERE
 """Default of ``bound``: «resolve the values here, for ``user_id``» (``None`` is a value: no settings)."""
 
 
-async def parse_file_offloaded(file_id: str, plugin_code: str, broker_id: int, *, user_id: Optional[int] = None, bound: Any = _RESOLVE) -> BRIMParseOutput:
+async def parse_file_offloaded(file_id: str, plugin_code: str, broker_id: int, *, user_id: Optional[int] = None, bound: BoundSettings | None | _Resolve = _RESOLVE) -> BRIMParseOutput:
     """
     Parse a file without blocking the event loop, on a real core when possible.
 
@@ -150,7 +158,7 @@ async def parse_file_offloaded(file_id: str, plugin_code: str, broker_id: int, *
     ``bound`` is for a caller that resolved the values itself (the parse route, which also stores their fingerprint with the
     result, so that both come from one reading): given, the database is not read again, and ``None`` means «no settings».
     """
-    if bound is _RESOLVE:
+    if isinstance(bound, _Resolve):
         bound = await bound_settings_for(BRIMProviderRegistry, plugin_code, user_id=user_id)
     if bound is None:
         return await _parse_offloaded((file_id, plugin_code, broker_id))

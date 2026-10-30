@@ -181,7 +181,11 @@
       "invalidNumber": "Nombre invalide dans \"{column}\" : \"{value}\"",
       "invalidValue": "Valeur invalide dans \"{column}\" : \"{value}\"",
       "duplicate": "Valeur en double pour {label} : {key}"
-    }
+    },
+    "statusValidRows": "{count, plural, one {# ligne valide} other {# lignes valides}}",
+    "statusErrors": "{count, plural, one {# erreur} other {# erreurs}}",
+    "statusDuplicates": "{label} en double",
+    "duplicatesShort": "doublons"
   },
   "dataEditor": {
     "staleTooltip": "Masquer les lignes remplies rétroactivement (⚠️ obsolètes). Ce sont des points de remplissage copiés à partir du point réel le plus proche.",

@@ -73,7 +73,7 @@ Esto registra capital en especie, no P&L: el ajuste crea o modifica lotes, pero 
 
     | Escenario | Qué establecer |
     |----------|------------|
-    | **Transferencia normal** | Dejar vacío — calculado automáticamente |
+    | **Transferencia normal** | Dejar el coste en **Auto** — calculado a partir de tus compras |
     | **Impuesto de salida (Exit Tax)** | Valor de mercado en la fecha de transferencia (específico de la jurisdicción) |
     | **Herencia** | Valor justo de mercado en la fecha del fallecimiento (o base actualizada) |
     | **Regalo** | Coste base original del donante (base transferida) |
