@@ -7603,9 +7603,9 @@ Più il test di guardia di H-17: un valore di prova nella tabella di H, e la fun
 
 ### L3 — il backup notturno sigillato (ondata 4, dal 2026-10-22)
 
-> **Fonti**: decisioni `LibreFolio_prj/BACKUP-decisioni-20261022.md` §10 (il formato: `.lfbk` v1 con password casuale,
+> **Fonti**: decisioni `LibreFolio_developer_journal/Release_2/Phase_1/07_backupDocker/notes/BACKUP-decisioni-20261022.md` §10 (il formato: `.lfbk` v1 con password casuale,
 > password cifrata con `age` via `pyrage`, i due file in un `.tar`) e il contratto **CONCORDATO** il 22/10 con il
-> coordinatore cloud, `LibreFolio_prj/BACKUP-contratto-L3.md`. La rotta di ripristino del pannello e il modo «ripristino
+> coordinatore cloud, `LibreFolio_developer_journal/Release_2/Phase_1/07_backupDocker/notes/BACKUP-contratto-L3.md`. La rotta di ripristino del pannello e il modo «ripristino
 > in corso» sono di H (H-62), sullo stesso contratto. Base: `c97c96dd6` (`pyrage==1.4.0` nel lock).
 >
 > **⚠️ Fuori pista — il formato** (22/10): la prima analisi metteva a confronto `.lfbk` v2 e `age` v1 scritto da noi

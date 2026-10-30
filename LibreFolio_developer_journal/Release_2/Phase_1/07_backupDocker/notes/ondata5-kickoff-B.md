@@ -9,7 +9,7 @@ Regole comuni: `kickoff-common.md` (leggilo per primo).
 **Worktree**: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/LibreFolio-worktrees/e-alfy-miniature-telegram` · **Branch**: `e-alfy-b-backup-e-docker`
 **HEAD di partenza (da verificare)**: `1fd80c481` (= `dev_release2`, treni 9 e 10 dentro: il backup L3 e il ripristino del pannello sono già in dev).
 **Corsia**: porta `6192`, cartella dati `/tmp/librefolio-r13-b`.
-**Piano**: `LibreFolio_developer_journal/Release_2/Phase_1/07_backupDocker/plan-phase01BackupDocker.prompt.md` (sezione nuova «Ondata 5»; M-1: backlog ~1120). Decisioni del developer sul backup: `LibreFolio_prj/BACKUP-decisioni-20261022.md` (fonte di verità). _(parte del servizio gestito: nel repo privato `librefolio-cloud`)_
+**Piano**: `LibreFolio_developer_journal/Release_2/Phase_1/07_backupDocker/plan-phase01BackupDocker.prompt.md` (sezione nuova «Ondata 5»; M-1: backlog ~1120). Decisioni del developer sul backup: `LibreFolio_developer_journal/Release_2/Phase_1/07_backupDocker/notes/BACKUP-decisioni-20261022.md` (fonte di verità). _(parte del servizio gestito: nel repo privato `librefolio-cloud`)_
 
 ## Decisioni del developer che ti riguardano
 - **Ripristino con scelta del titolare**: solo per i ripristini della **web GUI dell'admin** (backup caricato a mano), **non** per quelli del pannello (copie notturne, `panel_restore.py` resta com'è, di H). La modale della scelta la scrive **A** (componente nuovo in `features/backup/`); **tu la monti**.

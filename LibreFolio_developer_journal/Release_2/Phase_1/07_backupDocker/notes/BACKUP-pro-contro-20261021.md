@@ -35,7 +35,7 @@ La seconda metà è la più importante: decide quasi tutto il resto (§4).
 | Fatto | Fonte |
 |---|---|
 | **Litestream non cifra più lato client.** L'ultima versione è la v0.5.17 (31/8/2026). La cifratura `age` è stata tolta con la riscrittura "LTX" del 2025 e il codice oggi rifiuta la configurazione. La guida ufficiale dice che sarà reimplementata "per pagina", **senza data** (tracciata nella issue #458). Resta solo la cifratura del fornitore dello storage (SSE-C/SSE-KMS) | litestream.io/docs/migration, github.com/benbjohnson/litestream/releases |
-> _(parte del servizio gestito: nel repo privato `librefolio-cloud`)_
+> _(parte del servizio gestito: nel repo privato `librefolio-cloud`, `devJournal/coordinamento/`)_
 | **Nessuno strumento di backup incrementale cifra con chiave pubblica** (restic, kopia, rclone, borg, Litestream: no; duplicity e Duplicacy sì, con limiti) | ricerca del 20/10 *(non riverificata oggi)* |
 
 **Conseguenza.** "Una stessa chiave per Litestream e per gli zip del pannello" non si può fare. Con Litestream la chiave per riaprire le copie deve stare sull'istanza. Con L3 non ci deve mai stare.
@@ -54,7 +54,7 @@ La seconda metà è la più importante: decide quasi tutto il resto (§4).
 
 **Esempio.** La chiave K1 è la chiave di casa copiata: ce l'hanno la casa e la portineria; se entri dalla portineria, apri tutto. K2 è una cassetta delle lettere: chiunque può imbucare, solo il postino con la chiave del pannello apre.
 
-> _(parte del servizio gestito: nel repo privato `librefolio-cloud`)_
+> _(parte del servizio gestito: nel repo privato `librefolio-cloud`, `devJournal/coordinamento/`)_
 
 **Costo di K2:** il ripristino dipende dal pannello. Se la macchina del coordinatore e la copia offline delle chiavi vanno perse, **le copie sono perse**. Serve una copia offline delle chiavi e un ripristino manuale di emergenza.
 
@@ -90,7 +90,7 @@ L'istanza stessa manda a un bucket DB e file nuovi, cifrati verso il pannello (L
   - 29-37 giorni di prodotto + 8-10 sul pannello = **4-6 settimane di calendario**.
   - Non è "al secondo": con modifiche continue, un punto ogni 5 minuti.
   - Il ripristino dipende dal pannello (K2).
-> _(parte del servizio gestito: nel repo privato `librefolio-cloud`)_
+> _(parte del servizio gestito: nel repo privato `librefolio-cloud`, `devJournal/coordinamento/`)_
   - Lo spike richiede **Docker**, che qui non c'è.
 - **RPO:** ≤ 5 min / 0. **Rischio 1.3:** medio.
 
@@ -132,14 +132,14 @@ Snapshot deduplicati ogni pochi minuti, password sull'istanza.
 | Rischio per la 1.3 | nullo | basso-medio | medio | alto | medio |
 | Serve Docker per provare | no | poco | sì (spike) | sì | sì |
 
-> _(parte del servizio gestito: nel repo privato `librefolio-cloud`)_
+> _(parte del servizio gestito: nel repo privato `librefolio-cloud`, `devJournal/coordinamento/`)_
 
 ---
 
 ## 6. Il compromesso vero: tempo, non soldi
 
 - Il documento stima **4-6 settimane** per l'Opzione 2, solo se si parte entro una settimana con lo spike. Il 19/10 si parlava di "1.3 fra circa due settimane": **le due cose non stanno insieme**.
-> _(parte del servizio gestito: nel repo privato `librefolio-cloud`)_
+> _(parte del servizio gestito: nel repo privato `librefolio-cloud`, `devJournal/coordinamento/`)_
 - La tua frase "deve uscire tutta assieme, ben architettata" si può leggere in due modi:
   1. **tutta assieme come funzione** (DB + file + report, un solo disegno, un solo interruttore) — l'Opzione 2 lo fa;
   2. **tutta nella 1.3** — questo è il vincolo che costa la data.
@@ -190,7 +190,7 @@ Le risposte tra parentesi sono quelle consigliate dal documento, adattate al cal
 | 2 | Chi decifra la copia continua: istanza o solo pannello | **solo pannello (K2)** |
 | 3 | Quando copiare | 60 s dopo l'ultima modifica, max ogni 5 min, sempre prima di sospendersi |
 | 4 | Conservazione | replica 3 giorni, archivio 7/4/3 |
-> _(parte del servizio gestito: nel repo privato `librefolio-cloud`)_
+> _(parte del servizio gestito: nel repo privato `librefolio-cloud`, `devJournal/coordinamento/`)_
 | 6 | Chiave L3: una per istanza o una per tutto | **una per istanza**, busta con più destinatari da subito (la chiave del cliente arriverà dopo) |
 | 7 | Self-hosted | replica nell'immagine pubblica, S3 e cartella, niente SFTP |
 | 8 | Litestream | fuori dalla 1.3 |
@@ -205,20 +205,20 @@ Le risposte tra parentesi sono quelle consigliate dal documento, adattate al cal
 
 ## 9. Privacy, in breve
 
-> _(parte del servizio gestito: nel repo privato `librefolio-cloud`)_
+> _(parte del servizio gestito: nel repo privato `librefolio-cloud`, `devJournal/coordinamento/`)_
 - **GDPR art. 32** (inquadramento, non parere): chiede cifratura, disponibilità e resilienza, ripristino tempestivo e prove regolari. Le opzioni 1 e 2 coprono cifratura e ripristino; la prova regolare è il test T3 prima del lancio e una prova mensile. Titolare/responsabile e trasferimenti fuori UE: con un consulente.
 
 ---
 
 ## 10. Cosa resta da provare prima di fidarsi
 
-> _(parte del servizio gestito: nel repo privato `librefolio-cloud`)_
+> _(parte del servizio gestito: nel repo privato `librefolio-cloud`, `devJournal/coordinamento/`)_
 2. `VACUUM INTO` e compressione sui **tuoi dati reali** (13 MB di DB): quanto pesa un punto, quanto dura.
-> _(parte del servizio gestito: nel repo privato `librefolio-cloud`)_
+> _(parte del servizio gestito: nel repo privato `librefolio-cloud`, `devJournal/coordinamento/`)_
 4. Quanto spazio serve sul volume durante un punto in preparazione più il ripristino.
 5. Un ripristino completo a volume vuoto (test T3) con i totali di controllo uguali.
 6. Peso e memoria del client S3 (`boto3` è grande; alternativa: firma S3 a mano con `httpx`).
-> _(parte del servizio gestito: nel repo privato `librefolio-cloud`)_
+> _(parte del servizio gestito: nel repo privato `librefolio-cloud`, `devJournal/coordinamento/`)_
 
 **Strumenti:** lo spike richiede **Docker** (qui non è installato) e i tuoi dati reali (qui non ci sono). Si possono fare sul Mac, oppure si installa Docker su questa macchina e si porta una copia dei dati.
 

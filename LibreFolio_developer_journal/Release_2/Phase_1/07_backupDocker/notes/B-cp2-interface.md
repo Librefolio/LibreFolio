@@ -1,6 +1,6 @@
 # B · L3-2 (CP2): the interface the red tests pin (2026-10-22)
 
-Contract: `/home/alfy/Documenti/02_myRepo/LibreFolio_prj/BACKUP-contratto-L3.md` (AGREED; read §2, §3, §4, §7, §8, §9).
+Contract: `LibreFolio_developer_journal/Release_2/Phase_1/07_backupDocker/notes/BACKUP-contratto-L3.md` (AGREED; read §2, §3, §4, §7, §8, §9).
 Vectors: `backend/test_scripts/fixtures/backup_l3/` (`vectors.json` + 10 `.tar` + 2 test identities; generator
 `generate_vectors.py` shows exactly how the files are built). Base HEAD `5b71e0666`.
 

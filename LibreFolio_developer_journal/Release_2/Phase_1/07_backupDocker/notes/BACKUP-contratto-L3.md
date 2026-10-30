@@ -53,7 +53,7 @@ libreria `pyrage` 1.4.0 su entrambi i lati.
 Niente `kid` ⇄: lo sostituisce la stringa `age1…` stessa. Sta nel manifest (§3.2) e nella vista del job (§4).
 
 La privata (`AGE-SECRET-KEY-1…`) non è mai sull'istanza:
-> _(parte del servizio gestito: nel repo privato `librefolio-cloud`)_
+> _(parte del servizio gestito: nel repo privato `librefolio-cloud`, `devJournal/coordinamento/`)_
 - un self-hoster la crea con `./dev.py backup keygen` (§8).
 
 ## 3. Il file: `.tar` sigillato
@@ -481,7 +481,7 @@ Il developer apre `password.age` dei vettori con il comando `age` di riferimento
 
 ### 9.3 Lato coordinatore (lo scrive il cloud)
 
-> _(parte del servizio gestito: nel repo privato `librefolio-cloud`)_
+> _(parte del servizio gestito: nel repo privato `librefolio-cloud`, `devJournal/coordinamento/`)_
 
 ## 10. Punti aperti
 
@@ -492,29 +492,29 @@ Il developer apre `password.age` dei vettori con il comando `age` di riferimento
   scelta K2. **Deciso dal developer il 22/10: `503`.**
 - **D2** (H con il cloud): la rotta di ripristino accetta **solo un `.lfbk`** (`restore_envelope_required`)?
   Il prodotto propone di sì. **Cloud ⇄: sì**, il coordinatore manda sempre e solo il membro `backup.lfbk`.
-> _(parte del servizio gestito: nel repo privato `librefolio-cloud`)_
+> _(parte del servizio gestito: nel repo privato `librefolio-cloud`, `devJournal/coordinamento/`)_
 - **D4** (cloud e prodotto): `pyrage` fissato a **1.4.0** sui due lati. **Cloud ⇄: d'accordo** sul piano tecnico: il
   coordinatore lo usa solo per aprire `password.age`. **Approvato dal developer il 22/10** anche come dipendenza del
   coordinatore.
 - **D5** (cloud): il default di `LIBREFOLIO_BACKUP_MAX_UPLOAD_MB` nel managed (500?) e lo spazio sul volume
   durante uno stage (busta caricata + zip decifrato + copia scompattata). Si decide con lo spike. **Cloud ⇄:**
-> _(parte del servizio gestito: nel repo privato `librefolio-cloud`)_
+> _(parte del servizio gestito: nel repo privato `librefolio-cloud`, `devJournal/coordinamento/`)_
 
   **Deciso il 22/10** (coordinatore della 1.3, a nome del developer): `500` provvisori, più il controllo dello spazio del
   coordinatore prima del caricamento.
 
 - **D6 — confermata dal developer il 23/10** (H-3 nel managed, posizione del cloud del 22/10; si realizza con H-3):
-> _(parte del servizio gestito: nel repo privato `librefolio-cloud`)_
+> _(parte del servizio gestito: nel repo privato `librefolio-cloud`, `devJournal/coordinamento/`)_
   - con la chiave che non corrisponde l'istanza non serve i dati; `GET /api/v1/panel/status` risponde comunque, con
     `instance_key: "ok" | "mismatch"` (mai l'impronta);
   - i job di backup del pannello sono rifiutati con un `409` (una copia fatta con la chiave sbagliata passerebbe i
     controlli del cloud e spingerebbe fuori una copia buona delle 7 tenute);
   - `wake-sync` non fa nulla e risponde con lo stato, come per un'istanza bloccata;
-> _(parte del servizio gestito: nel repo privato `librefolio-cloud`)_
+> _(parte del servizio gestito: nel repo privato `librefolio-cloud`, `devJournal/coordinamento/`)_
 - **D7 — confermata dal developer il 23/10, opzione A — FATTA** (H, ramo `e-alfy-h-piattaforma`, entra con il treno 10) (B-33 nel managed, posizione del cloud del 22/10):
   - con lo stato del ripristino illeggibile l'istanza non serve i dati; `panel/status` riporta
     `restore.state = "unreadable"`; i job di backup del pannello sono rifiutati come in D6;
-> _(parte del servizio gestito: nel repo privato `librefolio-cloud`)_
+> _(parte del servizio gestito: nel repo privato `librefolio-cloud`, `devJournal/coordinamento/`)_
   - la scelta si fa a mano con l'admin: chiudere o annullare il ripristino con gli strumenti dell'istanza, oppure rimettere
     l'ultima copia notturna con la catena di D5, avviata a mano.
   - Con `LIBREFOLIO_SUPPORT_URL` impostata, la pagina dell'istanza ferma (D6 e D7) mostra il link «Scrivi all'assistenza»
@@ -543,7 +543,7 @@ Il developer apre `password.age` dei vettori con il comando `age` di riferimento
   - **R2**: §3.5.1, con la tabella dei 52 byte, la formula del `check` e l'avviso su `hashlib.scrypt`.
   - **R3**: già così per costruzione; test.
   - **R4**: confermato, a patto che il cambio di variabili sia un solo aggiornamento della macchina; test.
-> _(parte del servizio gestito: nel repo privato `librefolio-cloud`)_
+> _(parte del servizio gestito: nel repo privato `librefolio-cloud`, `devJournal/coordinamento/`)_
   - **§3.5 punto 2**: accetta anche i destinatari ancora validi dopo una rotazione.
 - 22/10/2026, cloud: risposte R1-R4 accettate, compresa la condizione di R4 (un solo aggiornamento della macchina).
   Con il via del developer: **CONCORDATO** lato cloud, D1 = `503`, D4 = `pyrage` 1.4.0 nel coordinatore. D5 resta

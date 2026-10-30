@@ -1,6 +1,6 @@
 """The sealed nightly backup of a hosting panel (L3): a ``.tar`` whose password only the provider's key opens.
 
-The contract agreed with the cloud coordinator (``LibreFolio_prj/BACKUP-contratto-L3.md``, 2026-10-22) fixes the file:
+The contract agreed with the cloud coordinator (``LibreFolio_developer_journal/Release_2/Phase_1/07_backupDocker/notes/BACKUP-contratto-L3.md``, 2026-10-22) fixes the file:
 a POSIX ustar archive, not compressed, of exactly three members in this order:
 
 1. ``manifest.json``, in clear: what the archive is (``format`` ``lfbk-tar``, ``version`` 1), whom its password is

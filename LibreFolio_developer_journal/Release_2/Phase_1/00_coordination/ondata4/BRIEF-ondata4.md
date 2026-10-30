@@ -17,7 +17,7 @@ Il developer vuole il piano prima di qualunque avvio.
 
 ## B. Backup del cloud — L3 da rivedere a fondo
 
-Decisioni del developer: `LibreFolio_prj/BACKUP-decisioni-20261022.md` (Opzione 1 nella 1.3), schema e attacchi in
+Decisioni del developer: `LibreFolio_developer_journal/Release_2/Phase_1/07_backupDocker/notes/BACKUP-decisioni-20261022.md` (Opzione 1 nella 1.3), schema e attacchi in
 `BACKUP-schema-20261021.md`. Il vecchio piano L3 sta in
 `LibreFolio/LibreFolio_developer_journal/Release_2/Phase_1/07_backupDocker/plan-phase01BackupDocker.prompt.md`
 (7 602 righe, scritto prima delle decisioni): va **rivisto a fondo** alla luce del disegno nuovo, non applicato com'è.
