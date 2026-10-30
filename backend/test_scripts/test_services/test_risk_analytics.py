@@ -71,6 +71,7 @@ from backend.app.services.risk.metrics import (
     summarize_drawdown,
 )
 from backend.app.services.risk.quant import models as simulation_models
+from backend.app.services.risk.quant import optimization_models
 from backend.app.services.risk.quant.engine import (
     MAX_HISTORY_CELLS,
     MAX_PORTFOLIO_CELLS,
@@ -111,6 +112,7 @@ from backend.app.services.risk_plugins.historical_var.plugin import (
     HistoricalVarAnalytic,
     HistoricalVarParams,
 )
+from backend.app.services.risk_plugins.portfolio_optimization import plugin as optimization_plugin
 from backend.app.services.risk_plugins.portfolio_optimization.plugin import (
     PortfolioOptimizationAnalytic,
     PortfolioOptimizationParams,
@@ -2841,6 +2843,37 @@ async def test_portfolio_optimization_executes_for_supported_scopes():
         await shutdown_quant_worker_pools()
 
     assert all(sum(item.weight for item in output.weights) == pytest.approx(1.0, abs=1e-6) for output in outputs)
+
+
+@pytest.mark.asyncio
+async def test_optimization_over_the_asset_cap_is_a_resource_limit_that_never_reaches_the_engine(monkeypatch):
+    """A6: 101 usable assets used to fail the engine request's own `max_length` and come back as INVALID_PARAMETERS ("you sent a
+    bad value") for a selection that is only too big. It is a size limit, refused as every other one is (D379), before any request exists."""
+    limit = optimization_models.MAX_OPTIMIZATION_ASSETS
+    over = limit + 1
+    reached: list[int] = []
+
+    async def engine_stub(request, *, algorithm_version):
+        reached.append(len(request.asset_ids))
+        raise RuntimeError("the engine was reached")
+
+    monkeypatch.setattr(optimization_plugin, "run_optimization", engine_stub)
+
+    def context_of(count: int):
+        returns_by_asset = {asset_id: [0.001 + 0.01 * math.sin((index + asset_id) / 4) for index in range(60)] for asset_id in range(1, count + 1)}
+        return make_context(returns_by_asset, scope_kind=RiskScopeKind.ASSET_SET, scope_asset_ids=tuple(range(1, count + 1)))
+
+    with pytest.raises(RiskUnavailableError) as refused:
+        await PortfolioOptimizationAnalytic().execute(PortfolioOptimizationParams(), context_of(over))
+
+    assert refused.value.code == RiskErrorCode.RESOURCE_LIMIT
+    assert refused.value.details == {"metric": "assets", "actual": over, "limit": limit, "remedy": "positions"}
+    assert reached == [], "the engine must never see a selection over the cap"
+
+    # CONTROL -- exactly the cap, same process and parameters, reaches the engine.
+    with pytest.raises(RuntimeError, match="the engine was reached"):
+        await PortfolioOptimizationAnalytic().execute(PortfolioOptimizationParams(), context_of(limit))
+    assert reached == [limit]
 
 
 # ---------------------------------------------------------------------------

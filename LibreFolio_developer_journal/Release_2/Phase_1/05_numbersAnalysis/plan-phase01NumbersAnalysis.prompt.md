@@ -9760,3 +9760,21 @@ Base `0cd7c637a`, corsia 6213 (`/tmp/librefolio-r13-o6-j`). Checkpoint 1 (treno 
     `brought_in` (tutto, per la base del singolo broker) da `capital_in_transit` o simile (solo i non-partiti-dopo-l'inizio), e la somma toglie solo la parte «partita dopo l'inizio».
   - Rossi da scrivere in `test_position_series.py` (classe `TestAnInternalTransfer`, accanto a `test_a_transfer_in_transit_at_the_start_enters_the_receivers_base_at_its_cost`): (1) `[asset] = build([(None, 10)], date_from=3, date_to=8, …)` con partenza 2, arrivo 5, costo spostato 1 000, valori 1 150/1 200: oggi base 0 e `pnl_percent` None; atteso base 1 000 e `pnl_percent` = 200/1 000 dal 6 gen; (2) il confine `departure == date_from`; (3) controllo di non regressione: trasferimento partito dopo `date_from` con valore ignoto → la base resta quella del mittente (non si raddoppia). Da aggiornare: `_summed_oracle` (`:724`, ora toglie sempre) e `_random_book`/il test dei libri casuali, perché l'oracolo segua la stessa regola.
   - Conflitto: la stessa funzione `_sum_over_brokers` è nel cammino di FB-14 di MF (un solo calcolo del motore per report, contribution e positions-series): serve sapere se MF tocca `position_series.py`.
+
+### Ondata 6 · J — checkpoint 2 (30/10/2026), base `fca03e28d`
+
+- **A6** — ✅ 30/10/2026. `optimization_models.MAX_OPTIMIZATION_ASSETS = 100` (usata anche dal `max_length` della richiesta); `PortfolioOptimizationAnalytic.execute` rifiuta
+  prima della richiesta con `resource_limit_error(metric="assets", actual, limit)` → `RESOURCE_LIMIT`, `details = {metric, actual, limit, remedy: "positions"}` (la stessa forma della simulazione).
+  > **Note implementazione**: rosso `test_optimization_over_the_asset_cap_is_a_resource_limit_that_never_reaches_the_engine` (`test_risk_analytics.py`): prima `invalid_parameters`
+  > invece di `resource_limit`; controllo a 100 titoli che arriva al motore (stub). Verde: `test_risk_analytics.py` + `test_risk_optimization.py` 157 passati.
+- **J5-4** — ✅ 30/10/2026. Vedi la diagnosi sopra. `_single` ora separa `brought_in` (tutti gli arrivi, per la base del singolo broker) da `already_in_senders_base` (solo i trasferimenti
+  partiti dopo `date_from`), che è ciò che `_sum_over_brokers` toglie. Un trasferimento in viaggio all'inizio resta nella base della somma.
+  > **Note implementazione**: rossi (2) + guardia (1) in `TestAnInternalTransfer`; `_summed_oracle` allineato. Verde: `test_position_series.py` 63, `test_financial_math/` 3791,
+  > `services roi-fifo-utils positions_series` 30 (corsia 6213).
+- **J-35** — frase nella guida dei lotti (`fifo-lot-analysis.en.md`, «An adjustment without a cost basis»), docs-writer, solo inglese.
+- **J5-4 · ritocchi di MF (2b, 30/10/2026)** — ✅. La regola «il mittente teneva le quote il giorno `date_from`» ora ha una sola casa: `contributions.left_after_start(transfer, date_from)`, letta da `counted_tract` e da `position_series` (`already_in_senders_base`).
+  > **Note implementazione**: `_summed_oracle` senza la condizione ormai sempre vera; `TestLeftAfterStart` (3 test) in `test_portfolio_contributions.py`. Verde: `test_financial_math/` 3 794; `services roi-fifo-utils` su `positions_series|contribution|period|transfer|performance` 541 (la categoria intera la fa il coordinatore).
+- **B7** — ✅ 30/10/2026. `L2Diversification.svelte` chiama `createMatrixMetadata` con gli id della matrice (`correlation.asset_ids`) e passa `assetTypes/assetSectors/assetRegions` alla `CorrelationHeatmap`.
+  > **Note implementazione**: nuovo `levels/L2DiversificationMatrix.test.ts` (3 test); rossi: 2 (nessuna lettura chiesta; i 3 ordinamenti assenti). Verde: 20 con `L2Diversification.test.ts`.
+- **B6 · tooltip dell'istogramma** — ✅ 30/10/2026. `ReturnHistogram.svelte`: il `title` nativo diventa il `Tooltip` del design system (`interactiveChild`, 40 barre senza 40 stop di tabulazione), testo = intervallo come gli estremi dell'asse; `binTooltip()` è l'unico punto dove aggiungere «N giorni (x %)» (D-B6a).
+  > **Note implementazione**: nuovo `l1/ReturnHistogram.test.ts` (4 test), 3 rossi prima. Verde: `features/risk/levels` 21 file / 707 test.
