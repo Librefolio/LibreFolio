@@ -37,6 +37,7 @@
     import {getBrokerRole} from '$lib/stores/reference/brokerStore';
     import {txStoreSetAll, txStoreGet, txStoreCanEdit} from '$lib/features/transactions/txStore.svelte';
     import {guardEditableRows} from '$lib/features/transactions/bulk/selectionGuards';
+    import {promoteNotesDiverge} from '$lib/features/transactions/bulk/promoteHelpers';
     import {invalidate as invalidatePortfolioCache} from '$lib/stores/portfolio/portfolioStore.svelte';
     import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
     import {applyTransactionColumnFilters, buildTransactionsFiltersUrl, parseTransactionFilters, toTransactionColumnFilters, type TransactionFilterMap} from './filterState';
@@ -385,7 +386,7 @@
             dateB = b.date;
         const cbA = a.cost_basis_override ?? '',
             cbB = b.cost_basis_override ?? '';
-        const diverges = descA !== descB || JSON.stringify(tagsA) !== JSON.stringify(tagsB) || dateA !== dateB || cbA !== cbB;
+        const diverges = promoteNotesDiverge(a, b);
         if (diverges) {
             promoteMergeData = {
                 txA: {label: `#${a.id}`, description: descA, tags: tagsA, date: dateA, cost_basis_override: cbA},

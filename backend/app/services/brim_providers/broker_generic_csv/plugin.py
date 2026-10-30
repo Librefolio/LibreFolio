@@ -229,9 +229,35 @@ MONTH_FIRST_DATE_FORMATS = [
 ]
 
 
+#: The orders that name the shape of the date, FB-18: each tries its own formats first and then the whole list of the order it
+#: belongs to, so a value written with a four-digit year still reads. A two-digit year is Python's ``%y``: 00-68 are 2000-2068,
+#: 69-99 are 1969-1999. ``DAY_FIRST`` and ``MONTH_FIRST`` above are untouched, bit for bit.
+DAY_FIRST_SHORT = "day_first_short"  # dd/mm/yy: 03/04/26 is 3 April 2026
+MONTH_FIRST_SHORT = "month_first_short"  # mm/dd/yy: 03/04/26 is 4 March 2026
+YEAR_FIRST_SHORT = "year_first_short"  # yy/mm/dd: 26/04/03 is 3 April 2026
+YEAR_FIRST = "year_first"  # yyyy-mm-dd: 2026-04-03 is 3 April 2026
+
+
+def _joined(*lists: List[str]) -> List[str]:
+    """The lists joined in order, a format kept at its first place only."""
+    joined: List[str] = []
+    for formats in lists:
+        joined.extend(fmt for fmt in formats if fmt not in joined)
+    return joined
+
+
+_ORDER_FORMATS = {
+    MONTH_FIRST: MONTH_FIRST_DATE_FORMATS,
+    DAY_FIRST_SHORT: _joined(["%Y-%m-%d", "%d/%m/%y", "%d-%m-%y", "%d.%m.%y"], DATE_FORMATS),
+    MONTH_FIRST_SHORT: _joined(["%Y-%m-%d", "%m/%d/%y", "%m-%d-%y", "%m.%d.%y"], MONTH_FIRST_DATE_FORMATS),
+    YEAR_FIRST_SHORT: _joined(["%Y-%m-%d", "%y/%m/%d", "%y-%m-%d", "%y.%m.%d"], DATE_FORMATS),
+    YEAR_FIRST: _joined(["%Y-%m-%d", "%Y/%m/%d", "%Y.%m.%d", "%Y%m%d"], DATE_FORMATS),
+}
+
+
 def _date_formats(order: str) -> List[str]:
     """The formats of ``order``: ``DATE_FORMATS`` untouched for ``day_first`` (and for a value the plugin does not know)."""
-    return MONTH_FIRST_DATE_FORMATS if order == MONTH_FIRST else DATE_FORMATS
+    return _ORDER_FORMATS.get(order, DATE_FORMATS)
 
 
 def parse_date(value: str, order: str = DAY_FIRST) -> Optional[date]:
@@ -240,7 +266,7 @@ def parse_date(value: str, order: str = DAY_FIRST) -> Optional[date]:
 
     Args:
         value: Date string to parse
-        order: ``day_first`` (default) or ``month_first``: which of 03/04/2025 and 04/03/2025 style wins when both read
+        order: ``day_first`` (default), ``month_first`` or one of the short and year-first orders (FB-18): which reading wins when more than one fits
 
     Returns:
         date object or None if parsing fails
@@ -367,12 +393,16 @@ class GenericCSVBrokerProvider(BRIMProvider):
             key="date_order",
             type=SettingType.SELECT,
             scope=SettingScope.USER,
-            label="Order of day and month",
-            description="How a date such as 03/04/2025 is read: the day first (3 April) or the month first (4 March).",
+            label="Date format",
+            description="How the dates of the file are written: the order of day, month and year, with a four-digit or a two-digit year.",
             default=DAY_FIRST,
             options=(
-                SettingOption(DAY_FIRST, "Day first", label_key="pluginSettings.brim.broker_generic_csv.option.date_order.day_first"),
-                SettingOption(MONTH_FIRST, "Month first", label_key="pluginSettings.brim.broker_generic_csv.option.date_order.month_first"),
+                SettingOption(DAY_FIRST, "dd/mm/yyyy: 03/04/2025 = 3 April 2025", label_key="pluginSettings.brim.broker_generic_csv.option.date_order.day_first"),
+                SettingOption(MONTH_FIRST, "mm/dd/yyyy: 03/04/2025 = 4 March 2025", label_key="pluginSettings.brim.broker_generic_csv.option.date_order.month_first"),
+                SettingOption(DAY_FIRST_SHORT, "dd/mm/yy: 03/04/26 = 3 April 2026", label_key="pluginSettings.brim.broker_generic_csv.option.date_order.day_first_short"),
+                SettingOption(MONTH_FIRST_SHORT, "mm/dd/yy: 03/04/26 = 4 March 2026", label_key="pluginSettings.brim.broker_generic_csv.option.date_order.month_first_short"),
+                SettingOption(YEAR_FIRST_SHORT, "yy/mm/dd: 26/04/03 = 3 April 2026", label_key="pluginSettings.brim.broker_generic_csv.option.date_order.year_first_short"),
+                SettingOption(YEAR_FIRST, "yyyy-mm-dd: 2026-04-03 = 3 April 2026", label_key="pluginSettings.brim.broker_generic_csv.option.date_order.year_first"),
             ),
             label_key="pluginSettings.brim.broker_generic_csv.label.date_order",
             description_key="pluginSettings.brim.broker_generic_csv.description.date_order",

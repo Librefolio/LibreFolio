@@ -8,7 +8,8 @@
       "quantity": "Qtà",
       "cash": "Importo",
       "broker": "Broker",
-      "links": "Link"
+      "links": "Link",
+      "unitPrice": "Prezzo unitario"
     },
     "actions": {
       "clone": "Clona",
@@ -164,7 +165,7 @@
       "serverError": "Salvataggio impossibile — errore del server"
     },
     "costBasisOverride": {
-      "tooltip": "Override del prezzo medio di carico. Se vuoto, calcolato automaticamente dagli acquisti al salvataggio. Sovrascrivi per Exit Tax, eredità o regole fiscali particolari. Usa il selettore Totale/Per unità sotto per scegliere come inserire questo importo.",
+      "tooltip": "Il costo che inserisci al posto del prezzo medio di carico: per Exit Tax, eredità o regole fiscali particolari. Auto lo calcola dai tuoi acquisti. Usa il selettore Totale/Per unità sotto per scegliere come inserire questo importo.",
       "warningAdjustment": "Il costo di carico manuale è vuoto: senza, la transazione non si può salvare. Scrivi quanto ti sono costate queste quote: 0 per le quote nuove di uno split. Per un regalo, scrivi 0, oppure quanto le ha pagate il donante: così il prezzo medio di carico, e l'utile su cui potresti pagare le tasse, restano più vicini a quelli veri."
     },
     "wacPreview": {
@@ -187,7 +188,7 @@
         "add": "Pesata",
         "reduce": "Quantità ridotta",
         "addZeroCost": "Diluizione",
-        "addAtWac": "Auto PMC"
+        "splitRescale": "Adeguamento split"
       },
       "pendingCreate": "Transazione in attesa (nuova, non ancora salvata)",
       "pendingEdit": "Transazione in attesa (modificata, non ancora salvata)",

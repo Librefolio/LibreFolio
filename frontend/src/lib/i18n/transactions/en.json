@@ -8,7 +8,8 @@
       "quantity": "Qty",
       "cash": "Cash",
       "broker": "Broker",
-      "links": "Links"
+      "links": "Links",
+      "unitPrice": "Unit price"
     },
     "actions": {
       "clone": "Clone",
@@ -164,7 +165,7 @@
       "serverError": "Save failed — server error"
     },
     "costBasisOverride": {
-      "tooltip": "Override of the weighted avg cost. If empty, auto-calculated from purchases at save. Override for Exit Tax, inheritance, or special fiscal rules. Use the Total/Per unit toggle below to choose how this amount is entered.",
+      "tooltip": "The cost you enter instead of the weighted average cost: for Exit Tax, inheritance or special fiscal rules. Auto calculates it from your purchases. Use the Total/Per unit toggle below to choose how this amount is entered.",
       "warningAdjustment": "The manual cost basis is empty: the transaction can't be saved without it. Enter what these units cost you: 0 for the new shares of a stock split. For a gift, enter 0, or what the donor paid for them: that keeps the weighted average cost, and the gain you may be taxed on, closer to the real ones."
     },
     "wacPreview": {
@@ -187,7 +188,7 @@
         "add": "Weighted",
         "reduce": "Quantity reduced",
         "addZeroCost": "Dilution",
-        "addAtWac": "Auto WAC"
+        "splitRescale": "Split adjustment"
       },
       "pendingCreate": "Pending transaction (new, not yet saved)",
       "pendingEdit": "Pending transaction (edited, not yet saved)",
