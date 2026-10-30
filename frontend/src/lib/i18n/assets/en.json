@@ -98,7 +98,8 @@
       "confirmTitle": "Sync {name}?",
       "confirmMessage": "{stored, plural, one {# stored price} other {# stored prices}} in this range will be replaced with the provider's values.",
       "confirmManual": "{manual, plural, one {# was entered by hand} other {# were entered by hand}} and will be replaced too.",
-      "confirmAction": "Sync"
+      "confirmAction": "Sync",
+      "overwriteManual": "{manual, plural, one {# of them was entered by hand} other {# of them were entered by hand}}."
     },
     "delete": {
       "confirmQuestion": "Delete \"{name}\"?",

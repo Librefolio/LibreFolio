@@ -616,6 +616,18 @@ class StepSpan(StrictModel):
         return self
 
 
+class MinStartDateRangeModel(StrictModel):
+    """A range from the first stored day of a series to ``end`` (FB-7b): ``start`` is the sentinel ``min``.
+
+    The service that reads the series answers it with the day of the series' first price (or rate), whatever its year: a page
+    that asks «All» no longer needs a placeholder start (2000-01-01 hid every history that began earlier). A series with
+    nothing stored answers an empty result. ``end`` is required: the range closes where the caller says.
+    """
+
+    start: Literal["min"] = Field(..., description="The sentinel: the first stored day of the series")
+    end: date_type = Field(..., description="Last day (inclusive)")
+
+
 class DateRangeModel(BaseModel):
     """
     Reusable date range model for FA and FX operations.

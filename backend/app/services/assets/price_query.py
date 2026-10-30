@@ -36,6 +36,7 @@ from backend.app.schemas.common import (
     Currency,
     DateRangeModel,
     FxBackwardFillInfo,
+    MinStartDateRangeModel,
 )
 from backend.app.schemas.prices import FACurrentPriceItem, FACurrentValue, FAPriceQueryItem, FAPriceQueryResult, FAPriceSampleBounds
 from backend.app.schemas.provider import (
@@ -224,6 +225,26 @@ class PriceQueryOperations:
         """The fill's point on ``day`` from ``row`` (``observed_prices.fill_point``): one rule for the daily fill, the sample and
         the series read by observation (Z-29, X-Q1)."""
         return fill_point(row, day)
+
+    @staticmethod
+    async def _resolve_min_starts(requests: list, session: AsyncSession) -> list:
+        """The items with their ``"min"`` start replaced by the day of the asset's first stored price (FB-7b), in one grouped read.
+
+        An asset with no price, or whose first price is after the item's ``end``, gets the single day ``end``: its series is empty.
+        Items with a real start come back as they are.
+        """
+        wanted = {req.asset_id for req in requests if isinstance(req.date_range, MinStartDateRangeModel)}
+        if not wanted:
+            return requests
+        firsts = dict((await session.execute(select(PriceHistory.asset_id, func.min(PriceHistory.date)).where(PriceHistory.asset_id.in_(wanted)).group_by(PriceHistory.asset_id))).all())
+        resolved = []
+        for req in requests:
+            if isinstance(req.date_range, MinStartDateRangeModel):
+                end = req.date_range.end
+                first = firsts.get(req.asset_id)
+                req = req.model_copy(update={"date_range": DateRangeModel(start=first if first is not None and first <= end else end, end=end)})
+            resolved.append(req)
+        return resolved
 
     @staticmethod
     async def observed_prices(request: FAPriceQueryItem, session: AsyncSession) -> ObservedPrices:
@@ -488,6 +509,8 @@ class PriceQueryOperations:
             return []
         # Z-29: every sample_like names an item of the request, before anything is read
         resolve_sample_references(requests)
+        # FB-7b: a start of "min" is the day of the asset's first stored price; from here every range holds real days
+        requests = await PriceQueryOperations._resolve_min_starts(requests, session)
 
         latest_end = latest_range_end()
         clamped: list = []
