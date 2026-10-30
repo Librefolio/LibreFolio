@@ -7064,7 +7064,7 @@
     }
   },
   "financial-theory/technical-analysis/performance-metrics/fifo-engine/fifo-lot-analysis.en.md": {
-    "md5": "145f00bb64deaa9bfae151599151a2a1",
+    "md5": "b3ef507e72e5505a04d1acdc597cc796",
     "langs_done": [
       "es",
       "fr",
@@ -7084,7 +7084,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 184.2,
-        "stamped_at": "2026-09-04T15:19:26.757961+00:00",
+        "stamped_at": "2026-10-30T18:51:32.195678+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -7097,7 +7097,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 8190.8,
-        "stamped_at": "2026-09-04T15:19:26.757961+00:00",
+        "stamped_at": "2026-10-30T18:51:32.195678+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -7112,7 +7112,7 @@
         "elapsed_s": 4807.4,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=53, translated=56 (Δ+3)\n  L19: src=0 trn=1\n    EN: When a SELL occurs, the oldest still-open lots are closed first. This creates a lot-by-lot history:\n    TR: Cuando ocurre una VENTA, los lotes **aún** abiertos más antiguos se cierran primero. Esto crea un historial lote por lot\n  L198: src=0 trn=2\n    EN: Dividends and interest linked to an asset are allocated **pro-rata across the LONG lots that are eligible as\n    TR: Los dividendos e intereses vinculados a un activo se asignan **de forma prorrateada entre los lotes LONG que son elegibl\n  L199: src=1 trn=0\n    EN: of the day before the income date (D-1)**, and only across lots held **at the paying broker**.\n    TR: \n  L215: src=0 trn=1\n    EN: - $\\text{Convert}(I, ccy, D)$ = income converted into target currency on date $D$\n    TR: - $\\text{EligibleQty}_i(D)$ = cantidad del lote $i$ abierta en el **bróker pagador** en $D-1$ (la cantidad que salió de \n  L216: src=1 trn=0\n    EN: - $\\text{EligibleQty}_i(D)$ = quantity of lot $i$ open at the **paying broker** on $D-1$ (quantity that left\n    TR: - solo los lotes LONG participan en el denominador\n  L218: src=0 trn=1\n    EN: - only LONG lots participate in the denominator\n    TR: La regla **D-1** mantiene intacto el día de registro: una compra realizada *en* la fecha del ingreso no devenga esa dist\n  L220: src=1 trn=0\n    EN: The **D-1** rule keeps the day of record clean: a purchase made *on* the income date does not earn that\n    TR: !!! warning \"Cambiado en FIFO v5\"\n  L222: src=0 trn=2\n    EN: lots held at other brokers, or not yet (or no longer) eligible, receive nothing.\n    TR: Las versiones anteriores utilizaban la fecha del ingreso en sí misma con **todos** los brókers ($\\text{OpenQty}_i(t)$ so\n  … and more (showing first 8 mismatches)\n\nSOURCE_OUTLINE (for reference):\n  # 🔬 FIFO Lot Analysis\n    ## 💡 What is FIFO Lot Analysis?\n    ## 🧮 Open Return per Lot\n    ## 💰 Total Return per Lot\n    ## ⚙️ qbq Scaling\n    ## 🛟 Estimated-at-Cost\n    ## 💸 Income Allocation Across Lots {: #income-allocation-across-lots }\n    ## 💸 Costs & Net Metrics {: #costs-and-net-metrics }\n      ### 🧭 Deterministic cost allocation\n      ### ⚖️ Gross vs net\n    ## 📝 Worked Example\n    ## 📚 From Lots to Aggregate Metrics\n    ## 🔗 Related",
         "final_structural_issues": 1,
-        "stamped_at": "2026-09-04T15:19:26.757961+00:00",
+        "stamped_at": "2026-10-30T18:51:32.195678+00:00",
         "stamped_by": "translate-stamp"
       }
     }
