@@ -33,6 +33,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from datetime import date, timedelta
+from decimal import Decimal
 from typing import Any
 
 import httpx
@@ -48,7 +49,7 @@ API_BASE = f"http://localhost:{settings.TEST_PORT}/api/v1"
 TIMEOUT = 30
 ENDPOINT = f"{API_BASE}/transactions/event-reconciliation"
 WIDE_RANGE = {"start": "2000-01-01", "end": (date.today() + timedelta(days=365)).isoformat()}
-ITEM_KEYS = ["asset_id", "broker_id", "candidates", "date", "status", "transaction_id", "type"]
+ITEM_KEYS = ["amount", "asset_id", "broker_id", "candidates", "currency", "date", "quantity", "status", "transaction_id", "type"]
 CANDIDATE_KEYS = ["asset_id", "currency", "date", "distance_days", "id", "is_auto", "type", "value"]
 
 
@@ -273,7 +274,12 @@ async def test_each_compatible_type_gets_its_unique_candidate_of_the_matching_ty
         assert sorted(candidate) == CANDIDATE_KEYS, f"candidate keys: {sorted(candidate)}"
         assert (candidate["asset_id"], candidate["date"], candidate["distance_days"], candidate["is_auto"]) == (asset_id, day.isoformat(), 0, False), candidate
     assert items[adjustment_tx]["candidates"][0]["type"] == "PRICE_ADJUSTMENT"
-    print_success("DIVIDEND/INTEREST/ADJUSTMENT: unique, right type, exact keys")
+    # FB-19: the item carries the transaction's own cash and quantity, so that the window can suggest the value of the event it
+    # offers to create (the form suggests the cash too). The helper books a dividend and an interest of 5 USD, an adjustment of 5 units
+    for tx_id, amount, currency, quantity in ((dividend_tx, "5", "USD", "0"), (interest_tx, "5", "USD", "0"), (adjustment_tx, "0", None, "5")):
+        item = items[tx_id]
+        assert (Decimal(str(item["amount"])), item["currency"], Decimal(str(item["quantity"]))) == (Decimal(amount), currency, Decimal(quantity)), item
+    print_success("DIVIDEND/INTEREST/ADJUSTMENT: unique, right type, exact keys, the transaction's cash and quantity")
 
 
 @pytest.mark.asyncio

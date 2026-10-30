@@ -166,7 +166,8 @@ def _valuation_point(
     native_currency = point.original_currency or point.currency
     native_close = point.original_close if point.original_close is not None else point.close
     converted = native_currency != target_currency
-    fx_rate = point.close / native_close if converted else Decimal("1")
+    # MF-A13: the unit rate the point was converted with, read, never derived by a division of the closes
+    fx_rate = (point.fx_rate if point.fx_rate is not None else point.close / native_close) if converted else Decimal("1")
     fx_rate_date = (info.fx_rate_date if info is not None else None) or (point.date if converted else None)
     is_fx_carried_forward = bool(info is not None and info.fx_days_back is not None and info.fx_days_back > 0)
     warnings: list[str] = []

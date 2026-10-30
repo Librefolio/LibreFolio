@@ -116,7 +116,8 @@ async function mockDetailAssetWithGlobalTransactions(page: Page, assetId: number
 async function goToSeededAssetDetail(page: import('@playwright/test').Page) {
     await goToAssetsPage(page);
     const card = page.locator('[data-testid^="asset-card-"]').filter({hasText: /Apple/i}).first();
-    await expect(card, 'the seeded Apple asset must be on the list').toBeVisible({timeout: 10_000});
+    // 30 s: the first visit of the list in a server session loads it cold, and under load 10 s was not enough once (triage, 30/10)
+    await expect(card, 'the seeded Apple asset must be on the list').toBeVisible({timeout: 30_000});
     await card.click();
     await expect(page, 'the card click navigates to the asset detail page').toHaveURL(/\/assets\/\d+(?:\?|$)/, {timeout: 30_000});
     await expect(page.getByTestId('asset-detail-page'), 'the asset detail page renders once its URL has landed').toBeVisible({timeout: 10_000});
