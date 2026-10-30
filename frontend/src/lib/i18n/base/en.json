@@ -371,7 +371,8 @@
       "empty": "No options"
     },
     "confirmBulkAction": "Are you sure you want to perform this action on",
-    "filterLabel": "Filter"
+    "filterLabel": "Filter",
+    "resetLayout": "Reset layout"
   },
   "date": {
     "today": "Today",

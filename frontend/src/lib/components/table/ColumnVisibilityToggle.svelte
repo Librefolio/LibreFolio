@@ -162,9 +162,9 @@
             {/snippet}
         </OrderableList>
 
-        <button type="button" class="w-full flex items-center justify-center gap-1.5 mt-2 px-2 py-1.5 text-xs text-lf-muted hover:text-lf-secondary hover:bg-lf-hover rounded-md border border-lf-subtle transition-colors" onclick={handleReset}>
+        <button type="button" class="w-full flex items-center justify-center gap-1.5 mt-2 px-2 py-1.5 text-xs text-lf-muted hover:text-lf-secondary hover:bg-lf-hover rounded-md border border-lf-subtle transition-colors" onclick={handleReset} data-testid="column-visibility-reset">
             <RotateCcw size={12} />
-            Reset layout
+            {$t('table.resetLayout')}
         </button>
     </div>
 {/if}

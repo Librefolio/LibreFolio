@@ -371,7 +371,8 @@
       "empty": "Nessuna opzione"
     },
     "confirmBulkAction": "Sei sicuro di voler eseguire questa azione su",
-    "filterLabel": "Filtro"
+    "filterLabel": "Filtro",
+    "resetLayout": "Ripristina disposizione"
   },
   "date": {
     "today": "Oggi",

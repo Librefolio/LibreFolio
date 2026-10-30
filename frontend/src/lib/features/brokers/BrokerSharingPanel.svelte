@@ -827,7 +827,7 @@
                                     }}
                                     class="w-20 px-2 py-1.5 text-sm text-center border border-lf-input hover:border-lf-input-hover rounded-lg bg-lf-field text-lf-primary"
                                 />
-                                <span class="text-xs text-lf-muted">% (max {formatPercent(maxNewShare, {signed: false, digits: 1})})</span>
+                                <span class="text-xs text-lf-muted" data-testid="sharing-add-share-max">{$_('brokers.sharing.maxShare', {values: {max: formatPercent(maxNewShare, {signed: false, digits: 1})}})}</span>
                             </div>
                         </div>
                     {/if}
