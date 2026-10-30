@@ -73,6 +73,7 @@
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
     import {ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
     import {getAssetPriceStore, invalidateAssetPriceStore, apiPricesToAssetPricePoints} from '$lib/stores/assetPriceStoreRegistry';
+    import {firstDateOf, forgetFirstDate, rememberFirstDate} from '$lib/stores/firstSeriesDates';
     import {hasStoredPointInRange} from '$lib/utils/sync/syncHelpers';
     import {buildIdentifiersList} from '$lib/utils/assetTypes';
     import {ensureAssetProvidersCached, getAssetProviderIconUrl, getAssetProviderName, isParametricProvider, assetProvidersVersion} from '$lib/utils/providerHelpers';
@@ -1077,7 +1078,7 @@
         error = null;
         // Reset state for new asset
         // «All» resolves against the new asset's own history, not the earliest date of the one before.
-        rearmMaxPendingBeforeReload();
+        rearmMaxPendingBeforeReload(false);
         assetInfo = null;
         providerAssignment = null;
         providerAssignmentLoaded = false;
@@ -1289,8 +1290,11 @@
      * and re-arming isMaxPending lets resolveMaxStartFromChartData() pick up
      * the new true earliest date once the fresh (wide) query returns.
      */
-    function rearmMaxPendingBeforeReload() {
+    function rearmMaxPendingBeforeReload(dataChanged = true) {
         if (activePreset !== 'MAX') return;
+        // FB-7b: a sync, a save or Refresh may have moved the asset's first day: it is asked again. A page that only loads the
+        // asset (`reloadPage`) changed no data, and keeps the first day the session already knows
+        if (dataChanged) forgetFirstDate('asset', data.assetId);
         isMaxPending = true;
         dateStart = resolveDateSentinel('min');
         displayDateStart = 'min';
@@ -1337,6 +1341,15 @@
         const sessionGeneration = getClientSessionGeneration();
         const current = () => pageAlive && data.assetId === requestedAssetId && isClientSessionCurrent(sessionGeneration);
         if (!current()) return;
+        // FB-7b: «All» still pending and the asset's first day already known this session: start from it, and from the cache
+        if (isMaxPending) {
+            const knownFirstDay = firstDateOf('asset', requestedAssetId);
+            if (knownFirstDay !== undefined) {
+                dateStart = knownFirstDay;
+                displayDateStart = knownFirstDay;
+                isMaxPending = false;
+            }
+        }
         let requestedStart = dateStart;
         const requestedEnd = dateEnd;
         const requestedDisplayCurrency = displayCurrency;
@@ -1393,8 +1406,12 @@
                 backward_fill_info: p.backwardFillInfo ? {days_back: p.backwardFillInfo.daysBack} : null,
             }));
 
+        // FB-7b: «All» still pending, its first day unknown: the series is asked from the sentinel `min` (the server answers the asset's
+        // first stored day, whatever its year) and never from a made-up start; the store cannot answer a start it does not know
+        const askedFromMin = isMaxPending;
+
         // Cache-first: check if the price store already covers this range
-        if (!force && effectiveCurrency) {
+        if (!force && effectiveCurrency && !askedFromMin) {
             const store = getAssetPriceStore(data.assetId, effectiveCurrency);
             const gaps = store.getMissingIntervals(dateStart, dateEnd);
             if (gaps.length > 0 && store.isStale) {
@@ -1431,7 +1448,7 @@
         const requestBody: AssetPriceBulkQueryBody = [
             {
                 asset_id: data.assetId,
-                date_range: {start: dateStart, end: dateEnd},
+                date_range: {start: askedFromMin ? ('min' as const) : dateStart, end: dateEnd},
                 include_price: !pricesFromCache,
                 include_events: true,
                 target_currency: targetCurrency,
@@ -1439,7 +1456,8 @@
             },
             ...calendarComparisonAssetIds.map((assetId) => ({
                 asset_id: assetId,
-                date_range: {start: dateStart, end: dateEnd},
+                // every item of the bulk shares the main one's range: the peer's own first day, when the main one asks from `min`
+                date_range: {start: askedFromMin ? ('min' as const) : dateStart, end: dateEnd},
                 include_price: false,
                 include_events: true,
                 target_currency: effectiveCurrency || undefined,
@@ -1525,7 +1543,10 @@
                 if (!pricesFromCache && cacheCurrency && chartData.length > 0) {
                     const store = getAssetPriceStore(data.assetId, cacheCurrency);
                     store.merge(apiPricesToAssetPricePoints(chartData));
-                    store.markFetched(dateStart, dateEnd);
+                    // From the first day the server held, when the series was asked from `min`: nothing exists before it, and the
+                    // placeholder start the page waits on was never asked
+                    store.markFetched(askedFromMin ? chartData[0].date : dateStart, dateEnd);
+                    if (askedFromMin) rememberFirstDate('asset', requestedAssetId, chartData[0].date);
                 }
             } else {
                 if (!pricesFromCache) chartData = [];
@@ -1879,9 +1900,7 @@
 
     let syncAllFxPairs = $derived(requiredFxPairs.filter((p) => p.status !== 'missing').map((p) => p.slug));
 
-    /** The sync dialog's targets whose shown data holds a stored row in its range (C-66), for its warning: this asset
-     * from its chart, a pair from its rate store; a comparison asset is not counted. */
-    let syncAssetsWithData = $derived(showPageSyncModal && hasStoredPointInRange(chartData, syncDateStart, dateEnd) ? [data.assetId] : []);
+    /** The sync dialog's pairs whose rate store holds a stored row in its range (C-66), for its warning; its assets are counted by the server. */
     let syncFxPairsWithData = $derived(showPageSyncModal ? syncAllFxPairs.filter((slug) => hasStoredPointInRange(getFxStore(slug).getRange(dateStart, dateEnd).data, syncDateStart, dateEnd)) : []);
 
     function handleSync() {
@@ -2979,16 +2998,6 @@
 
     <!-- Page Sync Modal (sync all assets + FX pairs) -->
     {#if assetInfo}
-        <PageSyncModal
-            bind:open={showPageSyncModal}
-            dateStart={syncDateStart}
-            {dateEnd}
-            assets={syncAllAssets}
-            fxPairs={syncAllFxPairs}
-            assetsWithDataInRange={syncAssetsWithData}
-            fxPairsWithDataInRange={syncFxPairsWithData}
-            onsynced={handlePageSyncComplete}
-            onclose={() => (showPageSyncModal = false)}
-        />
+        <PageSyncModal bind:open={showPageSyncModal} dateStart={syncDateStart} {dateEnd} assets={syncAllAssets} fxPairs={syncAllFxPairs} fxPairsWithDataInRange={syncFxPairsWithData} onsynced={handlePageSyncComplete} onclose={() => (showPageSyncModal = false)} />
     {/if}
 </div>

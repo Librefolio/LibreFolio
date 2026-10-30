@@ -36,7 +36,7 @@ from backend.app.schemas.refresh import FXSyncBulkResponse, FXSyncPairRequest
 from backend.app.schemas.signals import SignalCadence, SignalCatalogResponse, SignalDomain, SignalExecutionContext, SignalPricePoint
 from backend.app.services.assets.price_sampling import SampleReferenceError, resolve_sample_references, sample_reference_detail
 from backend.app.services.fx.base import FXServiceError
-from backend.app.services.fx.conversion import convert_bulk, unit_rate_steps
+from backend.app.services.fx.conversion import convert_bulk, resolve_min_start_ranges, unit_rate_steps
 from backend.app.services.fx.period_changes import get_fx_period_changes_bulk
 from backend.app.services.fx.sampling import plan_conversion_samples
 from backend.app.services.fx.storage import FXRateNotStorableError, delete_rates_bulk, fx_rate_refusal, normalize_storable_rate, upsert_rates_bulk
@@ -474,6 +474,8 @@ async def convert_currency_bulk(  # noqa: C901 — sequential bulk pipeline: exp
         references = resolve_sample_references(request)
     except SampleReferenceError as error:
         raise HTTPException(status_code=422, detail=sample_reference_detail(error)) from error
+    # FB-7b: a start of "min" is the day of the pair's first stored rate; from here every range holds real days
+    request = await resolve_min_start_ranges(session, request)
 
     signal_service = SignalService()
     signal_plans: dict[int, SignalExecutionPlan] = {}
@@ -558,20 +560,24 @@ async def convert_currency_bulk(  # noqa: C901 — sequential bulk pipeline: exp
 
     # X-Q3: one conversion for each stretch of days on which the rate row is the same, the results of every day as if each
     # had been converted (``convert_by_stretch``)
+    unit_rates: dict[int, Decimal] = {}
     bulk_results, bulk_errors = await convert_by_stretch(
         session,
         bulk_conversions,
         convert=convert_bulk,
         steps=unit_rate_steps,
+        unit_rates=unit_rates,
     )
 
     results = []
     signal_points: dict[int, list[SignalPricePoint]] = {index: [] for index in signal_plans}
 
-    for metadata, bulk_result in zip(
-        conversion_metadata,
-        bulk_results,
-        strict=True,
+    for position, (metadata, bulk_result) in enumerate(
+        zip(
+            conversion_metadata,
+            bulk_results,
+            strict=True,
+        )
     ):
         if bulk_result is None:
             continue
@@ -602,13 +608,14 @@ async def convert_currency_bulk(  # noqa: C901 — sequential bulk pipeline: exp
 
         rate = None
         if conversion.from_amount.amount == 0:
-            # X-R41: converted as one unit (the daily blocks above), so no 0/0: the rate is that unit's value, the
+            # X-R41: converted as one unit (the daily blocks above), so no 0/0: the rate is that unit's step, the
             # result is zero
             if from_cur != to_cur:
-                rate = converted_currency.amount
+                rate = unit_rates.get(position, converted_currency.amount)
             converted_currency = Currency(code=converted_currency.code, amount=Decimal("0"))
         elif from_cur != to_cur:
-            rate = converted_currency.amount / conversion.from_amount.amount
+            # MF-A13: the unit rate of the day's step, never ``to / from`` (a rounded quotient divided again)
+            rate = unit_rates.get(position, converted_currency.amount / conversion.from_amount.amount)
         results.append(
             FXConversionResult(
                 from_amount=conversion.from_amount,
