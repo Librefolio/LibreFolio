@@ -168,6 +168,8 @@
       "closedOn": "Chiusa il {date}",
       "incomplete": "Mancano alcuni valori (un prezzo o un cambio): la linea li lascia fuori.",
       "rowSelect": "Seleziona la riga per disegnarne il rendimento"
-    }
+    },
+    "allocationNoShares": "Nessuna percentuale da mostrare: le fette sommano zero o meno (per esempio uno scoperto che annulla le posizioni). Gli importi sono elencati qui sotto.",
+    "allocationHistoryNoShares": "Nessuna percentuale da mostrare: in questi giorni le fette sommano zero o meno."
   }
 }

@@ -59,6 +59,8 @@
     import {formatDay, formatDayWithWeekday} from '$lib/utils/core/formatAxisDate';
     import {chartNeutrals} from '$lib/theme/chartTheme';
     import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
+    import {applyLineShape, type LineShape} from '$lib/components/charts/lineShape';
+    import {getGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
 
     // =========================================================================
     // Event Marker types and constants
@@ -115,6 +117,8 @@
         areaFill?: boolean;
         showGridLines?: boolean;
         showGradient?: boolean;
+        /** The shape of the lines (FB-3). Without it the chart follows the global shape. */
+        lineShape?: LineShape;
         yAxisMode?: 'auto' | 'include0' | 'custom';
         yAxisMin?: number;
         yAxisMax?: number;
@@ -189,6 +193,7 @@
         areaFill = true,
         showGridLines = true,
         showGradient = true,
+        lineShape,
         yAxisMode = 'auto',
         yAxisMin,
         yAxisMax,
@@ -310,6 +315,8 @@
             void colorByBaseline;
             void showGridLines;
             void showGradient;
+            void lineShape;
+            void getGlobalLineShape();
             void viewMode;
             void displayData;
             void resolution;
@@ -1103,7 +1110,7 @@
                     return chartWidth > 0 ? fitTooltipToWidth(html, chartWidth - 32) : html;
                 },
             },
-            series,
+            series: applyLineShape(series, lineShape ?? getGlobalLineShape()),
         };
 
         // Resolution switch: the number of data points/series changes drastically
@@ -1170,7 +1177,7 @@
             </div>
         </div>
         {#if chartType === 'line'}
-            <div bind:this={chartContainer} class="w-full" style="height: {chartHeight};" class:cursor-crosshair={measureMode} data-measure-hover={measureHover ?? undefined}></div>
+            <div bind:this={chartContainer} class="w-full" style="height: {chartHeight};" class:cursor-crosshair={measureMode} data-measure-hover={measureHover ?? undefined} data-line-shape={lineShape ?? getGlobalLineShape()}></div>
         {:else}
             <CandlestickChart
                 data={candleSeries}

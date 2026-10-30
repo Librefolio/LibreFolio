@@ -90,9 +90,10 @@ vi.mock('$lib/api', () => ({
     ),
 }));
 
-import {render, setupI18n, waitFor} from '$test/component';
+import {render, screen, setupI18n, waitFor} from '$test/component';
 import {formatPercent} from '$lib/utils/core/formatPercent';
 import {addDays} from '$lib/utils/dateOnly';
+import {setGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
 
 const GENERATED_TS = join(process.cwd(), 'src', 'lib', 'api', 'generated.ts');
 const CHART_CONTAINER_TESTID = 'allocation-history-chart';
@@ -119,6 +120,7 @@ beforeAll(async () => {
 afterAll(() => restoreLayout?.());
 beforeEach(() => {
     chartInstances.length = 0;
+    setGlobalLineShape('steps');
 });
 
 const component = (name: string, value: number) => ({name, value: String(value), amount: String(value * 100)});
@@ -200,7 +202,7 @@ describe('dense steps are the weekly line they always were', () => {
             {timeout: 5_000},
         );
         const option = lastFullOption()!;
-        expect(option.series.every((series) => series.step === undefined)).toBe(true);
+        expect(option.series.every((series) => !series.step)).toBe(true);
         expect(option.series[0].data.length).toBeGreaterThan(150);
     });
 });
@@ -245,5 +247,40 @@ describe('the tooltip of a step area', () => {
         const option = await mountChart(STEPS);
         expect(option.tooltip.axisPointer.snap).toBe(false);
         expect(option.xAxis.axisPointer.snap).toBe(false);
+    });
+});
+
+describe('the line shape the user chose (Y2 FB-3)', () => {
+    it('joins the areas by segments when the choice is segments', async () => {
+        setGlobalLineShape('segments');
+        const option = await mountChart(STEPS);
+        expect(option.series.length).toBeGreaterThan(0);
+        expect(option.series.every((series) => series.step === false)).toBe(true);
+    });
+
+    it('draws smooth areas when the choice is spline', async () => {
+        setGlobalLineShape('spline');
+        const option = await mountChart(STEPS);
+        expect(option.series.every((series) => series.step === false && (series as {smooth?: boolean}).smooth === true)).toBe(true);
+    });
+});
+
+describe('days without percentages (MF-C2)', () => {
+    const noShare = (name: string, amount: number) => ({name, value: null, amount: String(amount * 100)});
+    const OVERDRAFT = (date: string, through: string) => ({date, through, components: [noShare('Alpha', 5), noShare('Liquidity', -5)]});
+
+    it('says so when no day has percentages, instead of drawing a chart of zeros', async () => {
+        render(AllocationHistoryChart, {props: {data: [OVERDRAFT('2026-01-01', '2026-03-01')] as never, dimension: 'sector', height: '400px'}});
+        await waitFor(() => expect(screen.getByTestId('allocation-history-no-shares')).toBeInTheDocument());
+        expect(screen.getByTestId('allocation-history-chart').classList.contains('invisible')).toBe(true);
+        expect(lastFullOption(), 'nothing is drawn').toBeUndefined();
+    });
+
+    it('draws the days that have percentages and leaves the others out, with no message', async () => {
+        const option = await mountChart([STEPS[0], OVERDRAFT('2026-01-11', '2026-02-19') as never, STEPS[2]]);
+        expect(screen.queryByTestId('allocation-history-no-shares')).toBeNull();
+        const alpha = option.series.find((series) => series.id === 'Alpha')!;
+        expect(alpha.data.map((point) => point.value[0])).not.toContain('2026-01-11');
+        expect(alpha.data[0].value[0]).toBe('2026-01-01');
     });
 });

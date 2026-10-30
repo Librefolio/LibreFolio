@@ -38,6 +38,8 @@
     import {todayIso} from '$lib/utils/dateOnly';
     import {coveredRange, dayOfAxisValue, nearestPoint} from '$lib/utils/stepSeries';
     import ResolutionBadge from '$lib/components/charts/ResolutionBadge.svelte';
+    import {effectiveLineShape, type LineShape} from '$lib/components/charts/lineShape';
+    import {getGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
     import {cascadeResolution, chooseInitialResolution, computeDensity, type ChartGrammar} from '$lib/components/charts/timeSeriesAggregation';
     import type {ChartResolution} from '$lib/components/charts/timeSeriesAggregation';
     import type {
@@ -283,8 +285,8 @@
      *  under the P&L line changes this list, which the partial path cannot express: it sends
      *  `{name, data}` only, and ECharts would keep the old series and legend entries. */
     let lastRenderedSeriesKey: string | null = null;
-    /** Whether the series on screen were built stepped: `step` is set when a series is created, so a change needs a full rebuild. */
-    let lastRenderedStepped: boolean | null = null;
+    /** The shape the series on screen were built in: `step` and `smooth` are set when a series is created, so a change needs a full rebuild. */
+    let lastRenderedShape: LineShape | null = null;
     /** The day the pointer is on, kept from ECharts' `updateAxisPointer` (the tooltip of a step line reads it). */
     let pointedDay: string | null = null;
     let lastHistoryRef: PortfolioHistoryPoint[] | null = null;
@@ -590,9 +592,18 @@
         return bucketEndDays(coveredDays, resolution) === null ? 'daily' : resolution;
     }
 
-    /** The steps are drawn as they are: the daily resolution of the density cascade, never the ladder. */
-    function isStepped(entry: AggregatedResolutionData | null): boolean {
+    /** The entry is the steps themselves: the daily resolution of the density cascade, never the ladder. */
+    function isStepData(entry: AggregatedResolutionData | null): boolean {
         return entry !== null && !entry.ladder && entry.resolution === 'daily';
+    }
+
+    /** The shape the entry is drawn in: the user's choice (FB-3), with steps only where the points are steps. */
+    function shapeOf(entry: AggregatedResolutionData | null): LineShape {
+        return effectiveLineShape(getGlobalLineShape(), isStepData(entry));
+    }
+
+    function isStepped(entry: AggregatedResolutionData | null): boolean {
+        return shapeOf(entry) === 'steps';
     }
 
     function getResolutionData(resolution: ChartResolution): AggregatedResolutionData {
@@ -788,16 +799,16 @@
     }
 
     /** The view on screen, read now: what the series are built for. */
-    function seriesContext(stepped: boolean): GrowthSeriesContext {
-        return {viewMode, pnlSubmode, eurLabels, pnlLabels, pctSeries, aggregationInputs, stepped};
+    function seriesContext(lineShape: LineShape): GrowthSeriesContext {
+        return {viewMode, pnlSubmode, eurLabels, pnlLabels, pctSeries, aggregationInputs, lineShape};
     }
 
     function buildChartUpdateSeries(_isDark: boolean, entry: AggregatedResolutionData, referenceDate: string | null = null): GrowthSeriesData[] {
-        return buildGrowthUpdateSeries(seriesContext(isStepped(entry)), entry, referenceDate);
+        return buildGrowthUpdateSeries(seriesContext(shapeOf(entry)), entry, referenceDate);
     }
 
     function buildFullSeries(isDark: boolean, seriesData: GrowthSeriesData[]): echarts.SeriesOption[] {
-        return buildGrowthFullSeries(seriesContext(isStepped(activeChartData)), isDark, seriesData);
+        return buildGrowthFullSeries(seriesContext(shapeOf(activeChartData)), isDark, seriesData);
     }
 
     /**
@@ -841,11 +852,11 @@
             chartInstance.dispatchAction({type: 'hideTip'});
         }
 
-        // `step` is set when a series is created: going from the steps to a coarser resolution (or back) rebuilds the series.
-        const stepped = isStepped(entry);
-        if (lastRenderedStepped !== null && stepped !== lastRenderedStepped) {
+        // `step` and `smooth` are set when a series is created: going from the steps to a coarser resolution (or back) rebuilds the series.
+        const shape = shapeOf(entry);
+        if (lastRenderedShape !== null && shape !== lastRenderedShape) {
             applyFullOption(isDark, buildFullSeries(isDark, seriesData), zoomWindow);
-            lastRenderedStepped = stepped;
+            lastRenderedShape = shape;
             return;
         }
 
@@ -1099,7 +1110,7 @@
             lastRenderedDark = null;
             lastRenderedMasked = null;
             lastRenderedSeriesKey = null;
-            lastRenderedStepped = null;
+            lastRenderedShape = null;
             lastLadderPlanKey = null;
         }
 
@@ -1161,8 +1172,8 @@
         const masked = shouldMaskAmount();
         const seriesData = buildChartUpdateSeries(isDark, activeData, logicalRange.startDate);
         const seriesKey = seriesData.map((series) => series.name).join('\u0000');
-        const stepped = isStepped(activeData);
-        const needsFullInit = forceFullXAxisRebuild || lastRenderedMode !== renderedModeKey || lastRenderedDark !== isDark || lastRenderedMasked !== masked || lastRenderedSeriesKey !== seriesKey || lastRenderedStepped !== stepped;
+        const shape = shapeOf(activeData);
+        const needsFullInit = forceFullXAxisRebuild || lastRenderedMode !== renderedModeKey || lastRenderedDark !== isDark || lastRenderedMasked !== masked || lastRenderedSeriesKey !== seriesKey || lastRenderedShape !== shape;
 
         if (needsFullInit) {
             applyFullOption(isDark, buildFullSeries(isDark, seriesData), zoomWindow);
@@ -1174,7 +1185,7 @@
         lastRenderedDark = isDark;
         lastRenderedMasked = masked;
         lastRenderedSeriesKey = seriesKey;
-        lastRenderedStepped = stepped;
+        lastRenderedShape = shape;
     }
 
     function applyFullOption(isDark: boolean, series: echarts.SeriesOption[], zoomWindow: {start: number; end: number}) {

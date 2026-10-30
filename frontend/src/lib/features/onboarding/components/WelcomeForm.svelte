@@ -1,5 +1,9 @@
 <script lang="ts">
+    import {_ as t} from '$lib/i18n';
     import {availableLanguages} from '$lib/stores/app/language';
+    import LineShapePicker from '$lib/components/charts/LineShapePicker.svelte';
+    import LineShapePreview from '$lib/components/charts/LineShapePreview.svelte';
+    import {getGlobalLineShape, setGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
     import SettingCurrency from '$lib/features/settings/SettingCurrency.svelte';
     import SettingSelect from '$lib/features/settings/SettingSelect.svelte';
     import {LogOut} from 'lucide-svelte';
@@ -93,6 +97,17 @@
         <p class="pt-3 text-xs text-lf-muted" data-testid="welcome-theme-hint">
             {copy.themeHint}
         </p>
+    </section>
+
+    <section class="space-y-3 rounded-2xl border border-lf-subtle p-4" aria-labelledby="welcome-line-shape-label" data-testid="welcome-line-shape">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="min-w-0">
+                <h2 id="welcome-line-shape-label" class="text-sm font-semibold text-lf-primary">{$t('onboarding.welcome.lineShapeLabel')}</h2>
+                <p class="mt-1 text-xs text-lf-muted">{$t('onboarding.welcome.lineShapeHint')}</p>
+            </div>
+            <LineShapePicker value={getGlobalLineShape()} onchange={setGlobalLineShape} testIdPrefix="welcome-line-shape-picker" disabled={busy} />
+        </div>
+        <LineShapePreview shape={getGlobalLineShape()} />
     </section>
 
     <div class="flex items-center justify-between gap-3">

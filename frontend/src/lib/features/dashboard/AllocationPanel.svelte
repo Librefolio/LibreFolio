@@ -19,6 +19,7 @@
     import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
     import {rankAssetsByWeight} from './positionsSeries';
+    import {sectorI18nKey} from '$lib/utils/assetTypes';
 
     type AllocationTab = 'type' | 'sector' | 'geo' | 'asset';
     type AllocationView = 'now' | 'history';
@@ -64,10 +65,28 @@
     function toAllocEntries(items: any[] | null | undefined): AllocEntry[] {
         if (!items) return [];
         return (items as any[]).flatMap((i) => {
-            const v = parseFloat(i?.value ?? '0');
-            if (v <= 0) return [];
+            // A slice without a percentage (MF-C2) has nothing to draw: `null` is not 0.
+            if (i?.value == null) return [];
+            const v = parseFloat(i.value);
+            if (!(v > 0)) return [];
             return [{name: i.name ?? '', value: v, amount: parseFloat(i?.amount ?? '0'), id: i?.id ?? null}];
         });
+    }
+
+    /** The slices add up to zero or less: every slice has a `null` percentage and keeps its amount (MF-C2). */
+    function hasNoShares(items: any[] | null | undefined): boolean {
+        return !!items && items.length > 0 && items.every((i) => i?.value == null);
+    }
+
+    /** A slice's name as its pie says it: an asset type or a sector translated, an asset as sent. */
+    function sliceName(name: string, tab: AllocationTab): string {
+        if (tab === 'asset') return name;
+        if (tab === 'sector') {
+            const key = `sectors.${sectorI18nKey(name)}`;
+            return $_(key) !== key ? $_(key) : name.replace(/_/g, ' ');
+        }
+        const key = `assets.types.${name.toUpperCase()}`;
+        return $_(key) !== key ? $_(key) : name;
     }
 
     /** The cash the backend reports in a list when it is below zero: an overdraft the pie cannot draw (decision 49). */
@@ -112,9 +131,12 @@
             allocationHistoryAsset.map((point) => ({date: point.date, through: point.through, components: (point.components ?? []).map((component) => ({id: component?.id ?? null, amount: parseFloat(component?.amount ?? '0')}))})),
         ),
     );
+    /** The list of the tab on screen, as the backend sent it. */
+    const shownItems = $derived(allocationTab === 'type' ? summary?.allocation_by_type : allocationTab === 'sector' ? summary?.allocation_by_sector : allocationTab === 'geo' ? summary?.allocation_by_geography : allocationByAssetItems) as any[] | null | undefined;
+    const shownHasNoShares = $derived(allocationView === 'now' && hasNoShares(shownItems));
     // Type and sector carry the cash; geography never does. The history chart draws it below zero by itself.
     const shownNegativeCash = $derived(
-        allocationView !== 'now' ? null : allocationTab === 'type' ? negativeCash(summary?.allocation_by_type as any) : allocationTab === 'sector' ? negativeCash(summary?.allocation_by_sector as any) : allocationTab === 'asset' ? negativeCash(allocationByAssetItems) : null,
+        allocationView !== 'now' || shownHasNoShares ? null : allocationTab === 'type' ? negativeCash(summary?.allocation_by_type as any) : allocationTab === 'sector' ? negativeCash(summary?.allocation_by_sector as any) : allocationTab === 'asset' ? negativeCash(allocationByAssetItems) : null,
     );
     const allocationByGeoMap = $derived(Object.fromEntries(allocationByGeo.map((e) => [e.name, e.value / 100])));
     const allocationByGeoAmounts = $derived(Object.fromEntries(allocationByGeo.filter((e) => e.amount > 0).map((e) => [e.name, e.amount])));
@@ -173,20 +195,35 @@
                 <div class="absolute inset-0 flex items-center justify-center text-sm text-lf-muted">
                     {$_('common.noData')}
                 </div>
+            {:else if shownHasNoShares}
+                <div class="absolute inset-0 overflow-y-auto flex flex-col items-center gap-3 px-2 py-3" data-testid="allocation-no-shares">
+                    <p class="text-sm text-lf-muted text-center">{$_('dashboard.allocationNoShares')}</p>
+                    <ul class="w-full max-w-sm text-sm">
+                        {#each shownItems ?? [] as slice (slice?.id ?? slice?.name)}
+                            <li class="flex items-center justify-between gap-3 border-b border-lf-subtle py-1" data-testid="allocation-no-shares-row" data-slice={slice?.name}>
+                                <span class="min-w-0 truncate text-lf-secondary">{sliceName(slice?.name ?? '', allocationTab)}</span>
+                                <span class="shrink-0 tabular-nums">
+                                    <span class="text-lf-muted" data-testid="allocation-no-shares-percent">—</span>
+                                    <span class="ml-2" data-testid="allocation-no-shares-amount">{formatCurrencyAmountPlain(parseFloat(slice?.amount ?? '0'), displayCurrency, {sensitivity: 'personal'})}</span>
+                                </span>
+                            </li>
+                        {/each}
+                    </ul>
+                </div>
             {:else if allocationTab === 'type'}
-                <div class="absolute inset-0">
+                <div class="absolute inset-0" data-testid="allocation-now-chart">
                     <AllocationPieChart data={allocationByType} height="100%" mode="type" legendPosition="bottom" currency={displayCurrency} />
                 </div>
             {:else if allocationTab === 'sector'}
-                <div class="absolute inset-0">
+                <div class="absolute inset-0" data-testid="allocation-now-chart">
                     <AllocationPieChart data={allocationBySector} height="100%" legendPosition="bottom" currency={displayCurrency} />
                 </div>
             {:else if allocationTab === 'asset'}
-                <div class="absolute inset-0">
+                <div class="absolute inset-0" data-testid="allocation-now-chart">
                     <AllocationPieChart data={allocationByAsset} height="100%" mode="asset" colorRanks={assetColorRanks} legendPosition="bottom" currency={displayCurrency} />
                 </div>
             {:else}
-                <div class="absolute inset-0">
+                <div class="absolute inset-0" data-testid="allocation-now-chart">
                     <GeographyMap data={allocationByGeoMap} amounts={allocationByGeoAmounts} currency={displayCurrency} height="100%" language={currentLanguage} />
                 </div>
             {/if}

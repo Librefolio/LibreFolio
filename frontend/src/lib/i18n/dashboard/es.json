@@ -168,6 +168,8 @@
       "closedOn": "Cerrada el {date}",
       "incomplete": "Faltan algunos valores (un precio o un tipo de cambio): la línea los deja fuera.",
       "rowSelect": "Selecciona la fila para dibujar su rendimiento"
-    }
+    },
+    "allocationNoShares": "No hay porcentajes que mostrar: las porciones suman cero o menos (por ejemplo, un descubierto que anula tus posiciones). Los importes se listan debajo.",
+    "allocationHistoryNoShares": "No hay porcentajes que mostrar: en estos días las porciones suman cero o menos."
   }
 }

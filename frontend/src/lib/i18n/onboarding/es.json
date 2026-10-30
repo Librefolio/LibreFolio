@@ -13,7 +13,9 @@
       "skip": "Omitir la configuración permanentemente",
       "completed": "Configuración guardada. Puedes continuar a LibreFolio.",
       "skipped": "Configuración omitida. Puedes repetirla más tarde desde Configuración.",
-      "logout": "Cerrar sesión"
+      "logout": "Cerrar sesión",
+      "lineShapeLabel": "Cómo dibujan las líneas los gráficos",
+      "lineShapeHint": "Elige una y mira cómo cambia el ejemplo. Podrás cambiarla después en Ajustes o para un solo gráfico."
     },
     "errors": {
       "loadTitle": "No se pudo cargar la introducción",

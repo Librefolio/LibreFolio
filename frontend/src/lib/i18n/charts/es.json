@@ -149,7 +149,12 @@
       "signal": "Eje {name}",
       "volume": "Eje de volúmenes"
     },
-    "yAxisAuto": "Auto"
+    "yAxisAuto": "Auto",
+    "lineShape": "Forma de las líneas",
+    "lineShapeDesc": "Cómo los gráficos unen sus puntos. Solo vale para este gráfico.",
+    "lineShapeSegments": "Segmentos",
+    "lineShapeSteps": "Escalones",
+    "lineShapeSpline": "Curva suave"
   },
   "measure": {
     "pending": "Inicio: {startDate} ({startValue}) — haga clic en el gráfico para el punto final",

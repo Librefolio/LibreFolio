@@ -424,6 +424,7 @@
       "title": "Qui non puoi cambiare l'email",
       "message": "È l'indirizzo email del titolare dell'abbonamento, quindi non si può cambiare da LibreFolio. Chiedi di cambiarlo a chi ospita questa istanza.",
       "support": "Contatta l'assistenza"
-    }
+    },
+    "lineShapeHint": "Vale per tutti i grafici, in questo browser. Un singolo grafico può avere una forma sua nelle impostazioni del grafico."
   }
 }

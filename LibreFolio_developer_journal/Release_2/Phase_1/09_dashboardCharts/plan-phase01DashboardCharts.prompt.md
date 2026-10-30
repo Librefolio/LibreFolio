@@ -8760,3 +8760,36 @@ Base `03ecb80b0` (checkpoint 1 e 2 committati, ramo di Y unito con Y6-4).
 
 **Livello annuale** (✅ 28/10): `ChartResolution` ha `'yearly'` (anno di calendario, fine periodo come gli altri); `chooseResolution`/`cascadeResolution`/`chooseInitialResolution` salgono da mensile ad annuale solo se il chiamante passa `yearlyCount` (oggi solo `GrowthChart`: gli altri grafici mantengono i loro tre livelli), con la stessa isteresi (1,3 sale, 0,8 scende); `bucketEndDays` dà i fine-anno; il tooltip di un punto annuale ha come intestazione l'anno (`chart.tooltip.yearLabel`); il badge dice «Annuale» (`chart.resolution.yearly`, 4 lingue). Una storia di 140 anni (1 680 mesi su 1 200 px: 1,4 a pixel) ora è un punto l'anno, lineare, con il badge Yearly (componente e browser vero).
 > **Note implementazione**: il compilatore ha indicato gli unici quattro punti esaustivi (`ResolutionBadge`, `PriceChartCompact` `COARSENESS`, i due `bucketEndDays` di Allocation History e GrowthChart): nessun altro grafico sceglie l'anno. Documentato in `user/dashboard/charts.en.md` (solo inglese: debito di traduzione).
+
+## 28/10 notte · Ondata 6 · Y2 — checkpoint 4: FB-3 (forma delle linee), `files/+page.svelte`, MF-C2 lato frontend
+
+Base `fc0c0cbb1` (X e MF uniti nel ramo; `api sync` e `front check` verdi prima di partire).
+
+### FB-3 — la forma delle linee (✅ 28/10)
+
+Decisione di progetto, in una riga: **una forma sola per tutti i grafici (globale, nello store dei grafici), con un'eccezione per grafico nelle impostazioni di asset e FX**.
+
+| Pezzo | Dove | Nota |
+|---|---|---|
+| L'helper | `components/charts/lineShape.ts` | `LineShape` = `segments` (predefinita) / `steps` / `spline`; `lineShapeOptions` dà sempre le tre chiavi (`step`, `smooth`, `smoothMonotone: 'x'`), così un cambio di forma sovrascrive il precedente in un merge parziale; `applyLineShape(series, shape, {holdsValue, isTrueValues})` è **l'aggancio di una riga** di ogni grafico. `smoothMonotone` e non una spline libera: una spline libera disegna valori mai esistiti. |
+| I gradini solo dove i punti sono gradini | `effectiveLineShape(shape, holdsValue)` | un grafico a settimane o a mesi unisce i bucket con segmenti anche se la scelta è «gradini» (un bucket non tiene un valore fino al successivo). L'MWRR (linea di valori veri, `step: false`) non prende mai i gradini. |
+| Lo store | `chartSettingsStore.svelte.ts` | `getGlobalLineShape` / `setGlobalLineShape` (campo di primo livello nel JSON già in `localStorage`, nessuna colonna nel DB, nessuna nuova versione di storage: il campo mancante vale `segments`); `ChartSettings.lineShape?` è l'eccezione di un grafico (assente = segue il globale), `resolveLineShape(settings)` la legge. Il globale cancella le eccezioni: «l'ultima parola vince». Un valore sconosciuto vale `segments`. |
+| I grafici agganciati | `LineChart` (schede, anteprime, rischio), `PriceChartFull` (dettagli asset/FX), `GrowthChart` (+ `growthChartSeries`), `PositionsReturnChart`, `AllocationHistoryChart`, `LotWacPriceChart`, `LotComparisonChart` | `GrowthChart` perde `lastRenderedStepped` e prende `lastRenderedShape`: la forma si fissa alla creazione della serie. Il tooltip «per giorno puntato» (D-P4) vale solo con i gradini disegnati: con segmenti o curva legge il punto disegnato più vicino, come ai livelli settimanale e mensile. Non toccati: `PerformanceChart` (disegno `custom`), grafici a dispersione del rischio. |
+| Il selettore | `LineShapePicker.svelte` (tre pulsanti, `aria-pressed`, `data-value`) | usato in tre posti, vedi sotto. |
+| Parametro di impostazione | `ChartAestheticsSection` (riga `chart-aesthetic-line-shape-row`, solo se la pagina passa `onlineshapechange`) | pagine di dettaglio asset e FX: scegliere la forma uguale al globale **toglie** l'eccezione. Le liste (modali di scope) non mostrano la riga: il globale è uno solo. |
+| Impostazioni utente | `PreferencesTab` (`preference-line-shape`) | applicata subito, senza Salva: è del browser (come le altre scelte locali), non dell'account. |
+| Welcome tour | `WelcomeForm` (prima pagina del tour) | selettore + `LineShapePreview` (grafico finto con un segnale sopra, dati deterministici di `lineShapePreviewData.ts`) che cambia forma dal vivo. Testi in `onboarding.welcome.lineShape*`; nessun testo annuncia un'altra guida (regola 3 della skill). Nessuna nuova versione del flusso: la pagina non è un passo del controller. |
+
+> **Note implementazione**: i test che affermavano i gradini (Growth, Allocation, Positions, LotWac, LotComparison, `growthChartSeries.stepped`) ora scelgono i gradini con `setGlobalLineShape('steps')` nel `beforeEach`; ognuno ha in più i casi «segmenti» e «curva». La forma predefinita cambia ciò che il developer vede: D-P4 resta nei dati (gli step), non nel disegno.
+> **⚠️ Fuori pista**: i colori segmentati per baseline (verde sopra, rosso sotto) in vista % sono più serie con un punto di incrocio interpolato: con **gradini** il gradino cade nel punto d'incrocio. Non corretto qui; se non piace, è un lotto a parte.
+
+### `files/+page.svelte` (✅ 28/10)
+
+I due pulsanti griglia/lista avevano `title="Grid view"`/`"List view"` (inglese, suggerimento del browser). Ora tooltip del design system con `sharedResource.viewGrid/viewTable` e nome accessibile tradotto, come FB-8 (`ViewModeToggle`); `on:click|stopPropagation` perché il clic non fissi il suggerimento. E2E in `files.spec.ts`.
+
+### MF-C2 lato frontend (✅ 28/10)
+
+Il backend dà `value: null` per ogni fetta di una lista le cui fette sommano zero o meno. Il frontend la leggeva come 0 (`toAllocEntries`: `parseFloat(null ?? '0')`), quindi la torta restava vuota o, peggio, **teneva il disegno di prima** (`AllocationPieChart` non pulisce con zero voci).
+- `AllocationPanel`: se *tutte* le fette di una lista sono senza percentuale, al posto della torta (o della mappa) c'è il blocco `allocation-no-shares`: il testo `dashboard.allocationNoShares` e una riga per fetta con `—` e l'importo (`personal`, nascosto in privacy). La nota «cassa negativa» non si ripete (le righe mostrano già l'importo negativo).
+- `allocationHistorySteps`: `AllocationStepComponent.value` è `string | null`; `stepHasShares`; `allocationRows` **non fa riga** per un giorno senza percentuali (un 0 disegnerebbe una quota mai esistita). `AllocationHistoryChart`: se nessun giorno ha percentuali, `allocation-history-no-shares` (`dashboard.allocationHistoryNoShares`); le categorie nascono solo dai giorni con percentuali. I due `?? 0` segnalati da MF (`:415`, `:423`) restano: dopo questo, ai bucket arrivano solo righe con percentuali.
+- **Limite noto** (da dire al developer): in una storia con giorni senza percentuali *in mezzo* a giorni con percentuali, l'area collega i giorni che ci sono, senza interrompersi sul vuoto (una lacuna vera chiederebbe `null` nelle righe e in tutte le somme del tooltip).

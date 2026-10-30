@@ -63,6 +63,8 @@
     import {paramsAtDay} from '$lib/components/charts/stepTooltip';
     import {dayOfAxisValue} from '$lib/utils/stepSeries';
     import {attachDaySnap} from '$lib/components/charts/dayPointerSnap';
+    import {applyLineShape, drawsSteps} from '$lib/components/charts/lineShape';
+    import {getGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
 
     type BrokerWACHistoryPoint = z.infer<typeof schemas.BrokerWACHistoryPoint>;
     type CumulativeWACHistoryPoint = z.infer<typeof schemas.CumulativeWACHistoryPoint>;
@@ -249,8 +251,8 @@
     /** The day the pointer is on, kept from ECharts' `updateAxisPointer`: the tooltip of a step line reads it. */
     let pointedDay: string | null = null;
 
-    /** The lines hold each value to the next date while the chart draws the steps themselves (the daily resolution); a coarser one joins its buckets. */
-    const stepLine = (): {step?: 'end'} => (currentResolution === 'daily' ? {step: 'end'} : {});
+    /** The user's line shape (FB-3); the steps themselves are the daily resolution, a coarser one joins its buckets. */
+    const withLineShape = (series: echarts.SeriesOption[]): echarts.SeriesOption[] => applyLineShape(series, getGlobalLineShape(), {holdsValue: currentResolution === 'daily'});
 
     let displayMode = $state<DisplayMode>('absolute');
     // #3: absolute Y axis — automatic (data-fit) or anchored at 0. Mirrors the LotComparisonChart
@@ -1281,8 +1283,6 @@
                 showSymbol: false,
                 symbol: 'circle',
                 connectNulls: false,
-                smooth: false,
-                ...stepLine(),
                 lineStyle: {width: 2, color},
                 itemStyle: {color},
             });
@@ -1300,8 +1300,6 @@
                     showSymbol: false,
                     symbol: 'circle',
                     connectNulls: false,
-                    smooth: false,
-                    ...stepLine(),
                     lineStyle: {width: 2.5, color, type: 'dashed'},
                     itemStyle: {color},
                 });
@@ -1324,8 +1322,6 @@
                 showSymbol: false,
                 symbol: 'circle',
                 connectNulls: false,
-                smooth: false,
-                ...stepLine(),
                 lineStyle: {width: 2.5, color: marketColor},
                 itemStyle: {color: marketColor},
             });
@@ -1599,7 +1595,7 @@
                 formatter: (params: any) => {
                     if (!Array.isArray(params)) return buildTooltip([params]);
                     // The steps themselves: each line says what it says on the pointed day, not at the drawn point nearest to it. The event markers are not lines.
-                    const day = currentResolution === 'daily' ? pointedDay : null;
+                    const day = drawsSteps(getGlobalLineShape(), currentResolution === 'daily') ? pointedDay : null;
                     const lines = params.filter((param) => param?.seriesType === 'line');
                     const others = params.filter((param) => param?.seriesType !== 'line');
                     return buildTooltip([...paramsAtDay(lines, day, series as Array<{id?: unknown; data?: unknown}>), ...others]);
@@ -1642,7 +1638,7 @@
                     formatter: (value: number) => (displayMode === 'absolute' ? formatAxisNumber(value) : sharedFormatPercent(normalizeZero(value), {digits: 0, signed: false})),
                 },
             },
-            series,
+            series: withLineShape(series),
             // Preserve the shared zoom window across re-renders: setOption otherwise resets
             // dataZoom to 0-100 on every data/label change, silently desyncing this chart from
             // the Gantt (whose window stayed put). Applying the external window here keeps the

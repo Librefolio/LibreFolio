@@ -86,6 +86,7 @@ vi.mock('$lib/api', () => ({
 import {render, setupI18n, waitFor} from '$test/component';
 import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 import LotComparisonChart from './LotComparisonChart.svelte';
+import {setGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
 
 const value = (lot_id: number, date: string, through: string, open_value: number) => ({lot_id, date, through, open_value: String(open_value), proceeds: '0', total_value: String(open_value), original_cost: '100', pnl: String(open_value - 100)});
 const ret = (lot_id: number, date: string, through: string, total_return: number) => ({lot_id, date, through, total_return: String(total_return), relative_return: String(total_return)});
@@ -129,6 +130,7 @@ beforeAll(async () => {
 afterAll(() => restoreRects?.());
 beforeEach(() => {
     chartInstances.length = 0;
+    setGlobalLineShape('steps');
 });
 
 async function mountChart(): Promise<DrawnOption> {
@@ -203,5 +205,22 @@ describe('the tooltip of a step line', () => {
         const option = await mountChart();
         const html = option.tooltip.formatter([nearestParam(option, '2026-01-11')]);
         expect(html).toContain(money(170));
+    });
+});
+
+describe('the line shape the user chose (Y2 FB-3)', () => {
+    const linesOf = (option: DrawnOption) => option.series.filter((series) => series.type === 'line');
+
+    it('joins the points by segments when the choice is segments', async () => {
+        setGlobalLineShape('segments');
+        const option = await mountChart();
+        expect(linesOf(option).length).toBeGreaterThan(0);
+        expect(linesOf(option).every((series) => series.step === false)).toBe(true);
+    });
+
+    it('draws smooth lines when the choice is spline', async () => {
+        setGlobalLineShape('spline');
+        const option = await mountChart();
+        expect(linesOf(option).every((series) => series.step === false && (series as {smooth?: boolean}).smooth === true)).toBe(true);
     });
 });
