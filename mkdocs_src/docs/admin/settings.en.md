@@ -79,7 +79,7 @@ header to unlock it. Only administrators (superusers) have this tab.
 | 🛡️ Security | **Require Email Verification** | Off | New accounts must open a link emailed to their address before they can sign in; the first account never waits, and existing accounts are not affected. It turns on only while email works and `LIBREFOLIO_PUBLIC_URL` can be used: until then the switch is greyed out. See *Email Verification* in [Email](email.md). |
 | 🔄 Update Job | **Scheduler Enabled** | On | Turns the automatic price and exchange-rate updates on or off: see [Market Data Scheduler](#market-data-scheduler). |
 | 🧠 Memory | **Max File Upload Size** | 10 MB | The largest file users can upload, broker reports included. Raise it if a large export is refused. |
-| 🌍 Defaults | **Default Currency** | `EUR` | The currency new users report in. |
+| 🌍 Defaults | **Default Currency** | `EUR` | The currency new users report in. Until you save it for the first time, `LIBREFOLIO_DEFAULT_CURRENCY` in the `.env` file, if set, decides; from your first save, your value wins, even when it is `EUR` again ([Environment Variables](configuration_accounts.md#accounts)). |
 | 🌍 Defaults | **Default Language** | `en` | 🇬🇧 `en`, 🇮🇹 `it`, 🇫🇷 `fr` or 🇪🇸 `es`. It is also the language of the emails sent to people who have no account yet. Until you save it for the first time, `LIBREFOLIO_DEFAULT_LANGUAGE` in the `.env` file, if set, decides; from your first save, your value wins, even when it is English again ([Environment Variables](configuration_accounts.md#accounts)). |
 | 🌍 Defaults | **Default Theme** | `auto` | ☀️ `light`, 🌙 `dark`, or 🖥️ `auto`, which follows the device. |
 
@@ -208,7 +208,7 @@ The dialog has its own **Save** button.
 
 | Field | Default | What it sets |
 |---|---|---|
-| **Timezone** | `UTC` | The timezone of the times and days below; the server's UTC clock is shown next to it. |
+| **Timezone** | `UTC` | The timezone of the times and days below; the server's UTC clock is shown next to it. Until you save the schedule for the first time, `LIBREFOLIO_DEFAULT_TIMEZONE` in the `.env` file, if set, decides; from your first save, your value wins, even when it is `UTC` again ([Environment Variables](configuration_accounts.md#accounts)). |
 | **Refresh every** | 10 minutes | How often current prices are refreshed, from 1 to 1440 minutes. |
 | **Sync times** | `06:00`, `23:00` | When the history sync runs; **Add time** adds a slot. |
 | **Sync days** | Mon to Sat | The days of the history sync. |

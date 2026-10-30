@@ -117,6 +117,7 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       `LIBREFOLIO_DISABLE_WHATS_NEW` (both hidden switches, set by `./dev.py server --test` on every
       test lane, decision D-A7; the second turns off the «What's new» window of lot C-54),
       `LIBREFOLIO_REGISTRATION`, `LIBREFOLIO_MAX_USERS`, `LIBREFOLIO_DEFAULT_LANGUAGE`,
+      `LIBREFOLIO_DEFAULT_CURRENCY`, `LIBREFOLIO_DEFAULT_TIMEZONE`,
       `LIBREFOLIO_PUBLIC_URL`, `LIBREFOLIO_BILLING_URL`, `LIBREFOLIO_LOGIN_LIMIT`, `LIBREFOLIO_SUPPORT_URL`, `LIBREFOLIO_TOS_URL`,
       `LIBREFOLIO_PRIVACY_URL`, `LIBREFOLIO_TEST_LANE_ID`, `LF_APP_VERSION` (the version a release
       job or `./dev.py docker build` freezes), `LIBREFOLIO_BLOCKED`, `LIBREFOLIO_DELETION_DATE`,
@@ -197,10 +198,13 @@ system: see [Plugin Settings](patterns/plugin_settings.md).
       `registration_service.py` logs it and falls back safely — registration closed for the first,
       the bare path or no billing link for the URLs
       ([Registration Modes](access_control.md#registration-modes)). A `LIBREFOLIO_MAX_USERS` that is not a
-      whole number of at least 1 and a `LIBREFOLIO_DEFAULT_LANGUAGE` that is not `en`, `it`, `fr` or `es` do stop it:
-      `log_configuration_audit()` calls `max_users()` and `default_language()`. Until an administrator saves the
-      `default_language` setting, `global_settings_service.effective_stored_value()` answers with the variable
-      (CL-10). An invalid
+      whole number of at least 1, a `LIBREFOLIO_DEFAULT_LANGUAGE` that is not `en`, `it`, `fr` or `es`, a
+      `LIBREFOLIO_DEFAULT_CURRENCY` that is not an ISO 4217 code and a `LIBREFOLIO_DEFAULT_TIMEZONE` that is not an
+      IANA name the server knows do stop it: `log_configuration_audit()` calls `max_users()`, `default_language()`,
+      `default_currency()` and `default_timezone()`. The last two check the value as the global setting is checked
+      when an administrator saves it (`validate_global_setting_value`), and name the variable in the error. Until an
+      administrator saves the `default_language`, `default_currency` or `scheduler_timezone` setting,
+      `global_settings_service.effective_stored_value()` answers with the variable (CL-10, CL-13). An invalid
       `LIBREFOLIO_SUPPORT_URL` does not stop it either: `support_link()`
       (`services/platform/instance_links.py`) logs it once, and `GET /system/instance` answers
       `support_url: null`, so the app keeps its link to the project's GitHub issues. Nor does an

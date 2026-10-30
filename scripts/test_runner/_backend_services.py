@@ -657,6 +657,16 @@ def services_default_language_variable(verbose: bool = False, test_names: list =
     return run_command(cmd, "Default language variable tests", verbose=verbose)
 
 
+def services_default_currency_timezone_variables(verbose: bool = False, test_names: list = None) -> bool:
+    """Test LIBREFOLIO_DEFAULT_CURRENCY and LIBREFOLIO_DEFAULT_TIMEZONE: the instance defaults until an administrator chose them (CL-13)."""
+    print_section("Services: LIBREFOLIO_DEFAULT_CURRENCY and LIBREFOLIO_DEFAULT_TIMEZONE")
+    print_info("Testing: backend/app/config/accounts.py (default_currency, default_timezone), global_settings_service.py (effective_stored_value, get_setting_value), settings_service.py, scheduler/settings.py")
+    print_info("Tests: the readers, the per-key rule (row missing or never saved gives way, an administrator's save wins even as the default), the settings page, the scheduler, a new account's currency")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_default_currency_timezone_variables.py", test_names)
+    return run_command(cmd, "Default currency and timezone variables tests", verbose=verbose)
+
+
 def services_registration(verbose: bool = False, test_names: list = None) -> bool:
     """Test who may create an account: registration modes, invitations, the user limit, and their variables."""
     print_section("Services: Registration")
@@ -1708,6 +1718,14 @@ def services_hosting_panel_vectors(verbose: bool = False, test_names: list = Non
     return run_command(cmd, "Hosting panel ticket vector tests", verbose=verbose)
 
 
+def services_panel_metrics(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the figures the hosting panel reads of an instance (CL-M1): the schema, each measure, the job-log windows, the files, the checks, the privacy."""
+    print_section("Services: Hosting Panel Metrics")
+    print_info("Testing: backend/app/services/platform/hosting_panel/metrics.py and PanelMetricsResponse (backend/app/schemas/hosting_panel.py)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_panel_metrics_service.py", test_names)
+    return run_command(cmd, "Hosting panel metrics service tests", verbose=verbose)
+
+
 def services_pdf_fonts(verbose: bool = False, test_names: list = None) -> bool:
     """Test the PDF viewer's CJK fonts served by the instance (H-55): the hash list, the cache, a wrong hash thrown away, the route."""
     print_section("Services: PDF Fonts")
@@ -2563,6 +2581,16 @@ Note: No backend server required.
         name="Default Language Variable",
         desc="CL-10: LIBREFOLIO_DEFAULT_LANGUAGE is the instance default language while the default_language row was never saved by an administrator (missing, or updated_by_user_id NULL); once saved, even as en, the row wins; get_setting_value, get_global_setting / get_all_global_settings, instance_language, account_language and get_or_create_user_settings follow; no other setting moves",
         # PURE: a private SQLite file under tmp_path with the ORM schema and the seeded global settings; the variable through
+        # monkeypatch. No lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "default-currency-timezone-variables",
+        services_default_currency_timezone_variables,
+        name="Default Currency and Timezone Variables",
+        desc="CL-13: LIBREFOLIO_DEFAULT_CURRENCY (default_currency) and LIBREFOLIO_DEFAULT_TIMEZONE (scheduler_timezone) follow the CL-10 rule: the variable is the value while the row is missing or never saved by an administrator; once saved, even as the default, the row wins; per key; readers validate like the setting and name the variable; get_setting_value, the settings page readers, the scheduler and a new account's currency follow",
+        # PURE: a private SQLite file under tmp_path with the ORM schema and the seeded global settings; the variables through
         # monkeypatch. No lane DB, no server, no network.
         isolation="pure",
     )
@@ -3461,6 +3489,15 @@ Note: No backend server required.
         name="Hosting Panel Ticket Test Vectors",
         desc="H-61 L2: the JSON block after #panel-api-test-vectors in the admin guide: the seed derives the public key and LIBREFOLIO_PANEL_PUBLIC_KEYS, the ticket is the header and payload signed by it (byte for byte), each verdict row is what verify_ticket answers through the real readers, and the rows cover both tolerance edges, the wrong scope and the wrong audience",
         # PURE: reads one docs page from the repository; variables through monkeypatch; no clock, DB or server.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "panel-metrics-service",
+        services_panel_metrics,
+        name="Hosting Panel Metrics Service",
+        desc="CL-M1 (security): collect_panel_metrics and PanelMetricsResponse (15 required keys, extra forbidden, config_warnings items = check_id + severity): the figures of an instance the test made (counts of brokers, transactions, assets; the sorted distinct providers; the database file with its wal, uploads recursive with no link followed, the disk of the data directory, in MiB to a tenth; the job log: last ok of current_price / history_sync by ts and never partial or error, the errors of the price jobs and the failed jobs of any kind over 24 h with the 23h59 / 24h01 edges, offsets of the ts, a damaged log, an empty one = None, 0, 0); the Security tab's checks that are not ok in its order, never their detail; each of the eight measures raising alone nulls its keys only and is logged once with its traceback; a failed flush or an OperationalError does not poison the session for the next measure; no name, email, path or secret in the JSON; a metrics call is not user activity",
+        # PURE: a data directory of its own under tmp_path (job log, database file, uploads), an in-memory database the test owns entirely, shutil.disk_usage stood in for. No lane DB, no server, no network.
         isolation="pure",
     )
     add_test(

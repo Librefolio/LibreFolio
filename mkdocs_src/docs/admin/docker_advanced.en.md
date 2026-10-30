@@ -173,7 +173,7 @@ Without a checkout, the plain commands do the day-to-day work: `docker compose u
 
 ??? warning "🧱 When `./dev.py docker build` stops"
 
-    **A resource cannot be downloaded.** The build caches a few external resources, such as the Noto Color Emoji font (flags on Windows) and MathJax (formulas in the documentation), so that the image works fully offline. If one cannot be downloaded and no cached copy exists yet, the build stops instead of shipping a broken image:
+    **A resource cannot be downloaded.** The build caches a few external resources, such as the Noto Color Emoji font (flags on Windows), MathJax (formulas in the documentation) and Mermaid (diagrams in the documentation), so that the image works fully offline. If one cannot be downloaded and no cached copy exists yet, the build stops instead of shipping a broken image:
 
     ```text
     ❌ Resource cache incomplete — the build would ship without these:
