@@ -8,7 +8,7 @@ Fonte dei lavori: `BRIEF-ondata4.md` (coordinatore, 22/10). Tutto quanto segue �
 `dev_release2` il 22/10, in sola lettura; dove non ho potuto controllare lo dico.
 
 ## Decisioni già prese (del developer, 21-22/10)
-- **Backup del cloud: Opzione 1 nella 1.3** (`LibreFolio_prj/BACKUP-decisioni-20261022.md`): busta `.lfbk` chiusa con la
+- **Backup del cloud: Opzione 1 nella 1.3** (`LibreFolio_developer_journal/Release_2/Phase_1/07_backupDocker/notes/BACKUP-decisioni-20261022.md`): busta `.lfbk` chiusa con la
   chiave pubblica dell'istanza (L3), modo «ripristino in corso» su volume vuoto, rotta di ripristino del pannello solo con
   biglietto L2 di scopo `backup:restore`. Solo il coordinatore decifra (K2). Niente Litestream, niente replica continua.
   Chiave d'istanza fuori dal backup (decisione 39). Il piano di dettaglio è `PIANO-backup-L3.md`, in questa cartella.

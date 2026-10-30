@@ -4,7 +4,7 @@ Esito del brainstorming del 21-22/10 fra il developer e la sessione «compagno d
 `BACKUP-pro-contro-20261021.md` §11 e **sostituisce** l'architettura B di `backup-architettura-cloud-20261020.md`.
 Schema visivo e analisi degli attacchi: `BACKUP-schema-20261021.md`. Nessun codice scritto, nessun commit.
 
-> _(parte del servizio gestito: nel repo privato `librefolio-cloud`)_
+> _(parte del servizio gestito: nel repo privato `librefolio-cloud`, `devJournal/coordinamento/`)_
 
 ---
 
@@ -19,26 +19,26 @@ fino a 24 ore di dati (il lavoro inserito dopo l'ultima copia) in caso di guasto
 | # | Domanda | Decisione |
 |---|---|---|
 | 1 | Calendario | **Opzione 1 nella 1.3** (L3 + «ripristino in corso» + rotta di ripristino). **Nessuna replica continua in programma**: l'Opzione 2 e Litestream escono dal piano. Calendario B ridotto: ~13-17 giorni di prodotto, ~2-3 settimane in parallelo con la catena grafici |
-> _(parte del servizio gestito: nel repo privato `librefolio-cloud`)_
+> _(parte del servizio gestito: nel repo privato `librefolio-cloud`, `devJournal/coordinamento/`)_
 | 4 | Self-hosted | **Niente replica nell'immagine pubblica.** Lo zip notturno (già esistente) in una cartella; una pagina di documentazione per chi vuole metterci sopra backrest/restic. *(Proposta accettata implicitamente: il developer non ha obiettato.)* |
 
 ## 3. Il disegno
 
-> _(parte del servizio gestito: nel repo privato `librefolio-cloud`)_
+> _(parte del servizio gestito: nel repo privato `librefolio-cloud`, `devJournal/coordinamento/`)_
 
 ## 4. Le chiavi
 
-> _(parte del servizio gestito: nel repo privato `librefolio-cloud`)_
+> _(parte del servizio gestito: nel repo privato `librefolio-cloud`, `devJournal/coordinamento/`)_
 - La busta `.lfbk` attuale si tiene (AES-256-GCM a blocchi, controlli, `.part`); si aggiunge un secondo tipo di
   chiave nell'intestazione: «chiave del file casuale, chiusa con la pubblica» accanto a «scrypt dalla password». Il
   backup che l'admin scarica dalla UI resta con password. Più avanti: più destinatari (pannello + password del cliente).
 - Il ripristino nell'istanza deve accettare «busta + chiave del file» oltre a «busta + password».
 
-> _(parte del servizio gestito: nel repo privato `librefolio-cloud`)_
+> _(parte del servizio gestito: nel repo privato `librefolio-cloud`, `devJournal/coordinamento/`)_
 
 ## 6. Condizioni d'uso
 
-> _(parte del servizio gestito: nel repo privato `librefolio-cloud`)_
+> _(parte del servizio gestito: nel repo privato `librefolio-cloud`, `devJournal/coordinamento/`)_
 
 ## 7. Lavoro che ne deriva
 
@@ -49,9 +49,9 @@ avviso «si entra con le credenziali del backup, le sessioni di oggi si chiudono
 conferma non esiste nel backup · CSP `script-src` **applicata** (oggi solo rapporto, H-52) · documentazione self-hosted
 (zip in cartella + backrest/restic) · test E2E di ripristino.
 
-> _(parte del servizio gestito: nel repo privato `librefolio-cloud`)_
+> _(parte del servizio gestito: nel repo privato `librefolio-cloud`, `devJournal/coordinamento/`)_
 
-> _(parte del servizio gestito: nel repo privato `librefolio-cloud`)_
+> _(parte del servizio gestito: nel repo privato `librefolio-cloud`, `devJournal/coordinamento/`)_
 
 **Dopo la 1.3 (TODO futuri):** rotta `admin:reset` del pannello (link di reset password all'email dell'abbonato, per
 l'admin rimasto fuori dopo un ripristino; al lancio l'assistenza rimette la copia della notte prima) · secondo fattore
@@ -61,9 +61,9 @@ ieri» · più destinatari nella busta.
 
 ## 8. Nota di sicurezza per il report finale
 
-> _(parte del servizio gestito: nel repo privato `librefolio-cloud`)_
+> _(parte del servizio gestito: nel repo privato `librefolio-cloud`, `devJournal/coordinamento/`)_
 
-> _(parte del servizio gestito: nel repo privato `librefolio-cloud`)_
+> _(parte del servizio gestito: nel repo privato `librefolio-cloud`, `devJournal/coordinamento/`)_
 
 ## 10. La busta del backup notturno (decisione del developer, 22/10 pomeriggio)
 

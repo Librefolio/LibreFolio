@@ -133,7 +133,7 @@
 9. **Q-N78-1j · le gambe al bordo dell'ambito di J-10** (analisi dei lotti di un sottoinsieme di broker) restano lette al prezzo di mercato del giorno? (nessun codice da cambiare; è una lettura, non un dato salvato)
 10. **Y-41 · il confronto con un asset nella lista dei cambi.** Le impostazioni delle schede dei cambi offrono un confronto con un asset, ma la scheda non lo disegna. (a, consiglio di Y) nasconderlo nelle impostazioni dei cambi, piccolo, nella 1.3; (b) caricare le serie degli asset confrontati come fa la lista asset, circa 1 giorno, dopo la 1.3 se serve.
 11. **H-55 R4 · una politica anche per i worker** (proposta della revisione di sicurezza, non fatta): la vuoi nella 1.3 o dopo?
-12. ✅ **Backup nel cloud: deciso dal developer** (22/10, `LibreFolio_prj/BACKUP-decisioni-20261022.md`). Nella 1.3 entra l'Opzione 1 (L3, pagina «ripristino in corso», rotta di ripristino con biglietto L2), circa 13-17 giorni di prodotto; backup notturno, ultime 7 copie, perdita fino a 24 h; solo il coordinatore decifra.
+12. ✅ **Backup nel cloud: deciso dal developer** (22/10, `LibreFolio_developer_journal/Release_2/Phase_1/07_backupDocker/notes/BACKUP-decisioni-20261022.md`). Nella 1.3 entra l'Opzione 1 (L3, pagina «ripristino in corso», rotta di ripristino con biglietto L2), circa 13-17 giorni di prodotto; backup notturno, ultime 7 copie, perdita fino a 24 h; solo il coordinatore decifra.
 > _(parte del servizio gestito: nel repo privato `librefolio-cloud`)_
 13. **Coordinatore cloud**: va informato che il codice e i vettori di prova di H-61 CP2 sono committati (la sua sessione non era raggiungibile dopo il riavvio). Il messaggio lo mandi tu o me lo detti?
 

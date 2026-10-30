@@ -1,6 +1,6 @@
 # Backup del cloud — piano del lavoro di prodotto (L3, ripristino del pannello, modo «ripristino in corso»)
 
-Bozza del pianificatore per il coordinatore, 22/10/2026. Fonte di verità: `LibreFolio_prj/BACKUP-decisioni-20261022.md`
+Bozza del pianificatore per il coordinatore, 22/10/2026. Fonte di verità: `LibreFolio_developer_journal/Release_2/Phase_1/07_backupDocker/notes/BACKUP-decisioni-20261022.md`
 (Opzione 1 nella 1.3). Schema e attacchi: `BACKUP-schema-20261021.md`. Codice letto su `dev_release2` = `e2d3b8a51`, in sola lettura.
 
 **Tutto ciò che qui è scritto come «proposta» è una proposta**: lo decide il developer con l'ok alla specifica (passo B1).
