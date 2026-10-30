@@ -121,7 +121,8 @@ import {notify} from '$lib/stores/app/notify.svelte';
 import {toasts} from '$lib/stores/app/toastStore.svelte';
 import {writeTextToClipboard} from '$lib/utils/clipboard';
 import {APP_VERSION} from '$lib/version';
-import {GITHUB_NEW_ISSUE_URL, buildSearchReport, reportHref, type ProviderOutcome, type SearchReportContext} from './assetSearchReport';
+import {buildSearchReport, type ProviderOutcome, type SearchReportContext} from './assetSearchReport';
+import {GITHUB_NEW_ISSUE_URL, reportHref} from '$lib/features/support/supportChannel';
 
 const listProviders = vi.mocked(zodiosApi.list_providers_api_v1_assets_provider_get);
 const restSearch = vi.mocked(zodiosApi.search_assets_via_providers_api_v1_assets_provider_search_get);
