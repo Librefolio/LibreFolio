@@ -1013,7 +1013,7 @@ test.describe('NR — One price sync per asset creation (O-20)', () => {
         await page.route(`**${API_BASE}/assets/provider/probe`, async (route) => {
             await route.fulfill({json: offlineProbeAnswer(route.request().postDataJSON() as ProbeBody)});
         });
-        await page.route(`**${API_BASE}/assets/prices/current`, async (route) => {
+        await page.route(`**${API_BASE}/assets/prices/current*`, async (route) => {
             await route.fulfill({json: offlineCurrentPricesAnswer(route.request().postDataJSON() as number[])});
         });
         // The subject: every sync this page posts, recorded before it is answered.

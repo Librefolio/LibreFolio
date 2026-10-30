@@ -29,6 +29,10 @@ export interface LivePriceResult {
     errorCode: string | null;
     /** With `RATE_LIMITED`: seconds until the provider's pause ends. */
     retryAfter: number | null;
+    /** The day the quote belongs to (`as_of_date`): the day of the last point of the series it extends. */
+    asOfDate: string | null;
+    /** With a range start (`fetchCurrentPrices`): the backend's `range_change` from the range's reference to this price, as sent (read it with `assetRangeDelta`). */
+    rangeChange: unknown;
 }
 
 /** One item of `POST /api/v1/assets/prices/current`, as the pages read it. */
@@ -42,6 +46,8 @@ export function toLivePriceResult(raw: any): LivePriceResult {
         error: raw.error ?? null,
         errorCode: raw.error_code ?? null,
         retryAfter: Number.isFinite(retryAfter) ? retryAfter : null,
+        asOfDate: typeof raw.as_of_date === 'string' ? raw.as_of_date : null,
+        rangeChange: raw.range_change ?? null,
     };
 }
 
@@ -50,13 +56,16 @@ export function toLivePriceResult(raw: any): LivePriceResult {
  * Wraps POST /api/v1/assets/prices/current, which answers at most 1,000 ids per request (R13-SEC9-1): a longer list goes
  * in batches (`sendBulkBatches`, lot Z-27), one after the other, the answers in order (X-R64). All or nothing: a failed
  * batch rejects with its own error, as axios raised it, so that `livePollFailure` still reads its `Retry-After`.
+ *
+ * With `rangeStart` each result also carries `rangeChange`, the Δ from the range's reference to the quote (`range_start`, X-R59): the
+ * list asks it while its range ends today, so that price, card and Δ agree on the latest quote (Y6-1).
  */
-export async function fetchCurrentPrices(ids: number[]): Promise<LivePriceResult[]> {
+export async function fetchCurrentPrices(ids: number[], options: {rangeStart?: string | null} = {}): Promise<LivePriceResult[]> {
     if (ids.length === 0) return [];
     const outcome = await sendBulkBatches(
         ids,
         () => 0,
-        (batch) => axiosInstance.post('/api/v1/assets/prices/current', batch),
+        (batch) => axiosInstance.post('/api/v1/assets/prices/current', batch, options.rangeStart ? {params: {range_start: options.rangeStart}} : undefined),
     );
     if (outcome.failed) throw outcome.error;
     const results: any[] = outcome.answers.flatMap(({answer}) => answer.data?.results ?? []);

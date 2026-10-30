@@ -91,7 +91,7 @@ function standaloneNumber(n: number): RegExp {
 async function openAssetsList(page: Page): Promise<Locator> {
     // The list polls POST /assets/prices/current for every listed asset, which may ask live providers and
     // write today's price into the shared database. Nothing here is about live prices: answered locally.
-    await page.route('**/api/v1/assets/prices/current', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
+    await page.route('**/api/v1/assets/prices/current*', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
     await navigateTo(page, '/assets');
     const assetsPage = page.getByTestId('assets-page');
     // The cards render first and are re-rendered when the bulk price request lands. Clicking during that
