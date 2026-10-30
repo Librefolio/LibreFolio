@@ -1149,6 +1149,9 @@
                     onAnalyze={openAssetPanel}
                     analyzedAssetId={activeAssetId}
                     portfolioHistory={history}
+                    brokerIds={activeBrokerIds}
+                    currentLanguage={$currentLanguage}
+                    allocationHistory={allocationHistoryFromReport}
                     positionsSeries={$positionsSeriesCtl.response}
                     positionsSeriesLoading={$positionsSeriesCtl.loading}
                     positionsSeriesFailed={$positionsSeriesCtl.failed}

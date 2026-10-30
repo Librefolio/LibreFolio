@@ -1,7 +1,8 @@
 <!--
   ExposureTable — Holdings snapshot table for open positions at the selected end date.
 
-  Shows open holdings only (snapshot at date_to).
+  Shows open holdings (snapshot at date_to), then, in italics at the bottom, the positions sold out inside the period
+  (FB-13): they are no longer holdings, but they were part of the period and the chart of the positions can draw them.
   Columns: Asset, Δ P&L 1D, Δ P&L % 1D, P&L, P&L %, Annualized, YOC, Value,
   Weight, Quantity, Price (hidden), PMC (hidden), Oldest open lot (hidden), Broker.
   Sorted by value descending.
@@ -77,8 +78,20 @@
         };
     }
 
+    /** A position the period's contribution lists as closed by its end (`is_fully_sold`): name, type and broker, nothing to value. */
+    export interface SoldPosition {
+        asset_id: number;
+        asset_name: string;
+        asset_ticker?: string | null;
+        asset_type: string;
+        broker_id?: number | null;
+        broker_name?: string | null;
+    }
+
     interface Props {
         holdings: Holding[];
+        /** The positions sold out inside the period (FB-13): rows after the open ones, in italics, with no value; one row per position that is not open at the same broker. */
+        soldPositions?: SoldPosition[];
         displayCurrency: string;
         brokers?: ReadonlyArray<BrokerLike>;
         onAnalyze?: (assetId: number) => void;
@@ -121,9 +134,11 @@
         price: number | null;
         wacPerUnit: number | null;
         oldestOpenLotDate: string | null;
+        /** A position sold out inside the period: no value, no weight, no yield (FB-13). */
+        sold?: boolean;
     }
 
-    let {holdings = [], displayCurrency = 'EUR', brokers = [], onAnalyze, analyzedAssetId = null, selectable = false, selectedKeys = undefined, onSelectionChange, ..._legacyProps}: Props & Record<string, unknown> = $props();
+    let {holdings = [], soldPositions = [], displayCurrency = 'EUR', brokers = [], onAnalyze, analyzedAssetId = null, selectable = false, selectedKeys = undefined, onSelectionChange, ..._legacyProps}: Props & Record<string, unknown> = $props();
     void _legacyProps;
 
     let tableRef: DataTable<DisplayRow> | undefined = $state(undefined);
@@ -179,10 +194,13 @@
         return translated === key ? fallback : translated;
     }
 
+    /** The yield of a row that has none: the table reads a status, and this one says there is nothing to show. */
+    const NO_YIELD: YieldOnCostLike = {status: 'unavailable', provenance: {window_start: '', window_end: ''}};
+
     let rows = $derived.by<DisplayRow[]>(() => {
         const brokerMap = new Map(brokers.map((broker) => [broker.id, broker]));
 
-        return [...holdings]
+        const openRows = [...holdings]
             .map((holding) => {
                 const brokerId = safeNumber(holding.broker_id);
                 const broker = brokerId == null ? null : (brokerMap.get(brokerId) ?? null);
@@ -215,6 +233,41 @@
             })
             .filter((row) => row.quantity == null || row.quantity !== 0)
             .sort((a, b) => (b.currentValue ?? 0) - (a.currentValue ?? 0));
+
+        // The positions sold out inside the period come last, once each, unless the position is open at that broker (FB-13).
+        const known = new Set(openRows.map((row) => row.key));
+        const soldRows: DisplayRow[] = [];
+        for (const position of soldPositions) {
+            const brokerId = position.broker_id ?? null;
+            const key = makePositionKey(position.asset_id, brokerId);
+            if (known.has(key)) continue;
+            known.add(key);
+            soldRows.push({
+                key,
+                assetId: position.asset_id,
+                assetName: position.asset_name,
+                assetType: position.asset_type,
+                brokerId,
+                brokerName: position.broker_name || (brokerId == null ? null : (brokerMap.get(brokerId)?.name ?? null)) || '—',
+                broker: brokerId == null ? null : (brokerMap.get(brokerId) ?? null),
+                currentValue: null,
+                navWeight: null,
+                unrealizedPnl: null,
+                unrealizedPnlPercent: null,
+                annualizedReturn: null,
+                yieldOnCost: NO_YIELD,
+                yieldOnCostStatus: 'unavailable',
+                yieldOnCostValue: null,
+                gainLossChange1d: null,
+                gainLossChange1dPercent: null,
+                quantity: null,
+                price: null,
+                wacPerUnit: null,
+                oldestOpenLotDate: null,
+                sold: true,
+            });
+        }
+        return [...openRows, ...soldRows];
     });
 
     let columns = $derived.by<ColumnDef<DisplayRow>[]>(() => {
@@ -352,11 +405,14 @@
                 resizable: true,
                 sortable: true,
                 getValue: (row) => (row.yieldOnCostStatus === 'no_income' ? 0 : row.yieldOnCostStatus === 'available' ? row.yieldOnCostValue : null),
-                cell: (row) => ({
-                    type: 'custom',
-                    component: YieldOnCostCell,
-                    props: {result: row.yieldOnCost},
-                }),
+                cell: (row) =>
+                    row.sold
+                        ? '—'
+                        : {
+                              type: 'custom',
+                              component: YieldOnCostCell,
+                              props: {result: row.yieldOnCost},
+                          },
             },
             {
                 id: 'value',
@@ -528,7 +584,7 @@
         enableContextMenu={true}
         tableLayout="fixed"
         {rowActions}
-        getRowClass={(row) => (row.assetId === analyzedAssetId ? 'row-analyzed' : '')}
+        getRowClass={(row) => `${row.sold ? 'italic' : ''} ${row.assetId === analyzedAssetId ? 'row-analyzed' : ''}`.trim()}
         emptyMessage={tableEmptyMessage}
     />
 </div>

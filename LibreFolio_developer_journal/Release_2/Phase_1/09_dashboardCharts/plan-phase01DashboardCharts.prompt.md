@@ -8737,3 +8737,19 @@ Base: `19c9928ae` (checkpoint 2 `0f7709fc6` + checkpoint 1 di Y2 `8537f3a99`).
   - Nuovo E2E «Asset List Page — the live poll brings the Δ with the quote»: il poll chiede `range_start` e la card mostra il Δ.
   > **⚠️ Fuori pista**: l'E2E l'ho scritto con la cura (nessun rosso eseguito); il rosso eseguito è Vitest.
 - ✅ **Prove (28/10)**: Vitest `services`, `stores`, `utils`, `features/dashboard`, `components/assets`, `components/charts` 214 file / 7028; `front check` 0/0; `front-asset asset-list` 54/54; `front-asset asset-browse` 8/8; `front-portfolio dashboard` 33/33; `i18n check` stretto; `check-orphans` verde.
+
+## 29/10 · Ondata 6 — checkpoint 3b (FB-12 · FB-13)
+
+Base: `21016b21e` (checkpoint 3a `37c7aa68b` + X). `front check` sul ramo unito: 0/0.
+
+- ✅ (29/10) **FB-13, asset venduti dentro il periodo nella tabella Portfolio.** Il report non ha bisogno di campi nuovi: i venduti sono le posizioni di `positions_contribution` con `is_fully_sold`. `ExposureTable` ha la prop `soldPositions`: righe **dopo** le aperte, **in corsivo**, senza valore/peso/rendimento (la colonna YOC dice «—»), una per posizione che non sia aperta presso lo stesso broker, con spunta e azioni (vedi asset, analizza lotti). La spunta fa disegnare la loro linea nel grafico (la chiave è quella di una posizione aperta). `PositionsPanel` chiede la contribution anche con la vista Portfolio/Table.
+  > **Nota**: la contribution è la seconda richiesta che il developer trova lenta (FB-14, MF): finché non è unificata, la vista Portfolio ne paga il costo. Nessun campo mancante nel backend.
+  > Venduti in `ExposureTable.test.ts` (5, 4 rossi prima) e in `PositionsPanel.test.ts` (3).
+- ✅ (29/10) **FB-12, il grafico delle posizioni.**
+  - **Accanto**: sezione `positions-chart-section` a griglia 5 colonne come Crescita/Allocazione della Dashboard: il grafico «Return of the positions» a 3/5 (in una card), l'allocazione **per asset** a 2/5, torta e storico (`AllocationPanel` con `lockedTab="asset"`, senza i tab delle dimensioni). La scelta torta/storico ha una chiave sua (`dashboard-positions-allocation-view`): non muove quella dell'allocazione della Dashboard.
+  - **Anche sotto Period**: `ContributionTable` ha la selezione (`selectable`, `selectedKeys`, `onSelectionChange`, con chiavi di posizione `asset-broker`, mentre gli id di riga restano `pos-broker-asset`); il grafico e l'allocazione compaiono sotto la tabella e le altre spese del periodo. Nella vista Mappa nessun grafico, come prima.
+  - **Abs/% sul grafico**: nell'area del grafico (`positions-chart-plot`, in alto a destra), non nella riga del titolo. **La frase sul TWRR sotto il grafico.**
+  - **Con il dettaglio dei lotti aperto**: nel broker il grafico resta (i lotti si aprono sotto); nella Dashboard il dettaglio prende il posto della vista, com'era e come il test E2E del lotto lo fissa: non cambio nulla.
+  - Rossi prima, verdi dopo: `PositionsReturnChart.test.ts` (2), `PositionsPanel.test.ts` (5 nuovi/cambiati), `ContributionTable.test.ts` (4 + 6 di guardia).
+- ✅ **Prove (29/10)**: Vitest `features/dashboard`, `features/brokers`, `components/table`: 61 file / 2111; `front check` 0/0; `front-portfolio dashboard` 34/34 (c'è il nuovo E2E del layout, sotto Portfolio e sotto Period); `front-broker detail` 41/41; `check-orphans` verde.
+- 📝 **FB-15** (vista Rolling) parte dopo il commit: modulo `positionsRolling` (richiesta del segnale `ASSET_CALENDAR_ROLLING_RETURN`, linea, controller) già scritto e provato in isolamento (15 casi), tenuto fuori dall'albero finché non è collegato (il lint delle esportazioni inutilizzate).
