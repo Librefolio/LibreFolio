@@ -19,7 +19,25 @@
 5. Le voci chiuse dalla 1.3 che nascono in `Phase_0` si marcano ✅ anche lì (decisione del
    developer): le marca il coordinatore a ogni treno.
 
-## Sessioni
+## Stato al 30/10 (ondata 6)
+
+Le ondate 1–5 sono in `dev_release2` (treni 5–11, tabella «Treni» qui sotto). Le carte di lavoro del coordinatore delle
+ondate 1–5 (piani, recap, kickoff, controlli) sono in [`00_coordination/`](00_coordination/README.md), senza le parti del
+servizio gestito. L'ondata 6 è in corso su rami `claude/o6-*`, ciascuno nel suo worktree sotto `.claude/worktrees/`; le
+sue carte si aggiungono a `00_coordination/` a fine ondata. Base: `dev_release2` = `fac4fc0d7`.
+
+| Sessione | Ramo | Committato sul ramo (30/10) | In corso |
+|---|---|---|---|
+| W (poi H) | `claude/o6-w-credit-agricole-a23dc5` | W5-7 Crédit Agricole 2.0.0; H cp1 (CL-1, CL-6, CL-9, CL-10, FB-23, TC-5) | H cp2 (FB-27, H6-2), poi CL-13, CL-M1, H6-1, H6-3 |
+| MF | `claude/o6-mf-motore-2af5ba` | MF6-1, K3, A3, MF-C2, MF6-2, change-days, B3 + MF-J3 | W-B94 (strada b), poi FB-14, MF6-3 |
+| W2 | `claude/o6-w2-transazioni-32f333` | MF-L, W6-7, W6-5, W-B63, FB-16, FB-17, W6-1…W6-9, W6-6, W6-2, W2-6, FB-18 | FB-18b, W6-12, W6-11 |
+| X | `claude/o6-x-asset-341e2f` | cp1–cp4: conferma del sync delle card sui prezzi salvati, import degli eventi con `source`, FB-11 (Rolling Return fra tipi), FB-30 (modale del formato di export), FB-19 (Relink events), MF-A13 (`fx_rate`), FB-7b backend (`min`) | FB-7b frontend |
+| Y | `claude/o6-y-cruscotto-9f5341` | FB-7 (storia dal primo movimento), banner dei cambi vecchi, scheletro delle candele, avviso dei buchi, Y6-1 (Δ live sulle card), FB-12, FB-13 | FB-12b, FB-15, Y6-6; poi Y6-2, Y6-3, Y-9, Y6-7 (pagina unica Dashboard/broker) |
+| Y2 | `claude/o6-y2-grafici-e84a7d` | giorno della settimana nei tooltip, puntatore agganciato al giorno, zoom delle posizioni, selettore degli asset (cp1–cp2), FB-6 (livello annuale), FB-3 (forma delle linee), MF-C2 lato frontend | Y2-I63 (test di non regressione della issue #63), FB-10 |
+
+Da aprire: J, A, T, G, AIX, WT, D, B. Treno 12: non ancora costruito (manca J).
+
+## Sessioni (stato al 19/10, storico)
 
 Ramo di integrazione: `dev_release2` (condiviso con il programma colori). Corsie: preambolo
 `PIPENV_CUSTOM_VENV_NAME=LibreFolio-SAUMUTtc pipenv run python dev.py test --test-port <PORTA> --data-dir <DIR> …`.
@@ -493,3 +511,8 @@ Sono tutti locali: la push la fa il developer.
 | 21/10-T6 | 21/10 | Y-39a (un solo modulo per i segnali di card e anteprima), H-61 R1 (`GET /api/v1/panel/status`), Z-29s-a (segnali ridotti sui secchi del prezzo) | `861a38567` |
 | 21/10-T7 | 21/10 | Ondata 2 (7 sessioni): Y-39b (anteprima come il dettaglio, colore della base sulle schede), O1 + Z-29b (serie dei segnali allineate, schede ridotte nella lista Assets), H-61 CP2 (biglietti Ed25519 del pannello), Fineco W-B92 (commissioni non più contate due volte, guida a 6 immagini, beta tolta), W-B86/W-B87 (avvisi sulle righe lasciate fuori), K3a + #58 (Bulk e Form sicuri, asset e broker bloccati in modifica), colori C1 (broker, impostazioni, PAC, dettaglio asset e cambi) e C2 (serie dei grafici sui ruoli) | `9e3575452` |
 | 22/10-T8 | 22/10 | Ondata 3 (10 lavori): Y-40 (vista Rolling Return su liste asset e cambi, dettaglio nella vista della scheda), Z-29fx + Z-29d (conversioni dei cambi campionate), H-55 v2 (CSP applicata ovunque, revisione di sicurezza) + Esc dei modali, E-25 + E-26 (verifica email al clic, email trattenuta detta), A-62 + E-7 (menu tradotto, badge «In attesa di verifica»), TC-23 + L1b + Q-G29-1 (aggiungi coppia dal rischio, lotti a gradini, tooltip del Gantt), Y-42 + N64 (dettagli sul modulo comune, indicatori in cache), N78-1 (rettifica in uscita senza valore), colori C1 (transazioni) e C2 (tipi dai ruoli) | `3c09d3052` |
+| 22/10-T9 | 22/10 | Ondata 4 (10 sessioni: MF, D, Y, Z, X, A, J, W, H) | `5172fbb7d` |
+| 23/10-T10 | 23/10 | Ondata 4, coda: backup L3 e H-62 (H + B), contatori e attese delle email (A) | `e2c9803d2` |
+| 26–27/10-T11 | 26–27/10 | Ondata 5 (MF, J, Z, Y, X, W, A, B, H), D-P4 L4–L5 (niente pavimento del 1900), integrazione | `8f7282ff6` |
+| 27–28/10 | 27–28/10 | Base dell'ondata 6: chiave della cache CI, regola BRIM della data dell'ordine, `tzdata` nel Pipfile, J-39 e ribilanciatore del PAC nei TODO futuri | `32674edb8` |
+| 30/10 | 28–30/10 | Annotazioni OCI delle immagini su GHCR, test della chiave della cache | `fac4fc0d7` |
