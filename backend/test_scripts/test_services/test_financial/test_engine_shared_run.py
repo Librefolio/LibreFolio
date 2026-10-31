@@ -282,7 +282,7 @@ class _OldEngineRun:
         self.query: PortfolioReportQuery | None = None
         self.calls: list[str] = []
 
-    async def __call__(self, service: PortfolioService, *, user_id, broker_ids, date_from, date_to, target_currency, include_candles: bool = False):
+    async def __call__(self, service: PortfolioService, *, user_id, broker_ids, date_from, date_to, target_currency, include_candles: bool = False, apply_ownership_share: bool = True):
         assert self.caller is not None, "the test did not say which caller the old run stands for"
         self.calls.append(self.caller)
         flags: dict[str, Any]
@@ -302,7 +302,8 @@ class _OldEngineRun:
             flags = {"include_acquisition_funding": True}
         else:  # pragma: no cover — a typo in the test
             raise AssertionError(f"unknown caller {self.caller!r}")
-        return await PortfolioCalculationEngine(service.db).calculate(user_id=user_id, broker_ids=broker_ids, date_from=None, date_to=date_to, target_currency=target_currency, **flags)
+        # MF6-3: the owner's share is not one of the per-caller flags FB-14 unified: it goes to the engine as asked.
+        return await PortfolioCalculationEngine(service.db).calculate(user_id=user_id, broker_ids=broker_ids, date_from=None, date_to=date_to, target_currency=target_currency, apply_ownership_share=apply_ownership_share, **flags)
 
     def as_method(self):
         """A plain function, so that it binds to the service as ``_engine_run`` does (an instance would not)."""

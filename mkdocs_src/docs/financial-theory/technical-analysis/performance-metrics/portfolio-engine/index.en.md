@@ -150,6 +150,12 @@ The engine reports two unrealized figures:
 
 They differ only by the securities in transit: on a day when none is travelling, they are equal. A security in transit on a period boundary is in NAV, so in the period P&L, but in no position's state: its part of the result is in the residual of §7, not in $\Delta\mathrm{UGL}$.
 
+### 🏦 The Whole Broker {: #whole-broker }
+
+Every amount of broker $b$ — its quantities, cash and flows — counts at the broker's [ownership share](../../../../user/brokers/sharing.md) $s_b$: an owner's share, $1$ for an editor or a viewer. The **whole-broker** view, meant for the broker page, sets $s_b = 1$ for every broker, as an editor sees it, whatever the user's share; the Dashboard keeps the owner's share. A broker worth 10 000 € owned at 30 % is 3 000 € on the Dashboard and 10 000 € whole; owned at 0 %, 0 € and 10 000 €.
+
+For a single broker the ratios are the same in both views: every flow and every value is multiplied by the same constant $s_b$, which cancels in TWRR, MWRR, simple ROI, the weights and the period percentages. Only the amounts change.
+
 ---
 
 ## 📐 6. Three-Pool Cash Model — Per-Broker $(K_b, R_b, W)$ {: #6-three-pool-cash-model-per-broker-k_b-r_b-w }
