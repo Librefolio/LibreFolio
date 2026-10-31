@@ -292,6 +292,6 @@
 {:else}
     <!-- Loading while checking auth -->
     <div class="min-h-screen flex items-center justify-center bg-lf-app" data-testid="app-auth-checking">
-        <div class="text-lf-link text-xl">Checking authentication...</div>
+        <div class="text-lf-link text-xl">{$_('nav.checkingAuthentication')}</div>
     </div>
 {/if}

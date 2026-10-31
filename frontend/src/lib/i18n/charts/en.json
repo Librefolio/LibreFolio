@@ -1,7 +1,7 @@
 {
   "chart": {
     "tooltip": {
-      "stale": "Stale: {days} day(s) old",
+      "stale": "Stale: {days, plural, one {# day} other {# days}} old",
       "fxStale": "FX rate: {days}d old",
       "percentNote": "% relative to range start date",
       "upper": "Upper",
@@ -15,7 +15,8 @@
       "originalValue": "orig. {value}",
       "fxRateDate": "fx @ {date}",
       "fxDaysBack": "({days}d back)",
-      "yearLabel": "{year}"
+      "yearLabel": "{year}",
+      "staleBadge": "{days}d"
     },
     "resolution": {
       "weekly": "Weekly",

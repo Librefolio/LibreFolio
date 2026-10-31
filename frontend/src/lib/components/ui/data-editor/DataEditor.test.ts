@@ -1606,3 +1606,169 @@ describe('DataEditor — a readonly row’s number keeps the digits a price need
         expect((await readonlyRates())[FIVE_DECIMALS]).toBe('1.2346');
     });
 });
+
+/**
+ * W6-3 — the status words of the CSV editor bar and of the import modal footer come from the catalogue.
+ *
+ * The bar of `CsvEditor` wrote «N valid row(s)», «N error(s)» and «duplicate <label>s» in English in the template, and the
+ * footer of `DataImportModal` wrote «• N error(s)» and «• duplicates»: English in Italian, French and Spanish. The contract:
+ *   - CsvEditor: `csvImport.statusValidRows` (ICU plural on `count`), `csvImport.statusErrors` (plural on `count`),
+ *     `csvImport.statusDuplicates` (`label` = the identity column label, shown as is);
+ *   - DataImportModal footer: `csvImport.statusErrors` (`count`) for the errors and `csvImport.duplicatesShort` for the duplicates.
+ *
+ * Two readings, neither of which types a translation.
+ *   - The marker locale (above): every key — and each key the cure adds, with the names of its values — reads as a marker of
+ *     itself, so the test asks whether the component uses the key and hands it the right value; a literal left in the
+ *     template reads as itself and is caught by the «no English left once the markers are taken out» check.
+ *   - The shipped catalogues in `it` and `fr`: the text of the bar is the catalogue's own message for those keys, for a
+ *     singular and a plural count — which proves the plural reaches the formatter as `count`.
+ * Whether the four sources carry the keys is the business of `lib/i18n/csvImportStatusKeys.test.ts`.
+ *
+ * Selection. The counts are not typed: they are what the component itself publishes — `onvalidchange(rows, errorCount,
+ * hasDuplicates)` for the editor, `data-valid-rows` / `data-error-count` / `data-has-duplicates` on the modal's confirm
+ * button —, so the expected markers follow the data. The bar is read as the whole text of the editor (its status words are
+ * the only ones that are not markers); the footer status is the element right before the footer's buttons (the confirm
+ * button's parent is the buttons group), because it publishes no test id of its own.
+ *
+ * Red today: the bar and the footer print English, and none of the four keys exists in any catalogue.
+ */
+describe('CsvEditor / DataImportModal — the status words come from the catalogue (W6-3)', () => {
+    const STATUS_KEYS = {'csvImport.statusValidRows': ['count'], 'csvImport.statusErrors': ['count'], 'csvImport.statusDuplicates': ['label'], 'csvImport.duplicatesShort': []} as const;
+
+    /** One valid line, one bad number and two lines on one day: 1 valid row, errors, duplicates. */
+    const ONE_VALID = 'date;note;amount\n2024-01-02;ok;1\n2024-01-03;bad;x\n2024-01-05;d1;3\n2024-01-05;d2;4';
+    /** Three valid lines, two bad numbers and two lines on one day: 3 valid rows, 2+ errors, duplicates. */
+    const THREE_VALID = 'date;note;amount\n2024-01-02;a;1\n2024-01-03;b;2\n2024-01-04;c;3\n2024-01-06;bad1;x\n2024-01-07;bad2;y\n2024-01-09;d1;3\n2024-01-09;d2;4';
+    /** An identity editor whose label is mixed case: the duplicates word must show it as written. */
+    const ISIN: CsvIdentityDef = {key: 'isin', label: 'ISIN', parse: (raw: string) => raw.trim() || null};
+    const ISIN_COLUMNS: CsvColumnDef[] = [{key: 'amount', label: 'amount', type: 'number', required: true}];
+    const ISIN_CSV = 'ISIN;amount\nAAA;1\nBBB;x\nCCC;3\nCCC;4';
+
+    /** The words of the key's own message in the current language, with its values. */
+    const said = (key: string, values: Record<string, string | number> = {}): string => get(translate)(`csvImport.${key}`, {values});
+
+    /** Mount a CsvEditor on `csv` and wait for it to publish; returns what it published. */
+    async function mountEditor(csv: string, columns: CsvColumnDef[] = CSV_COLUMNS, identity?: CsvIdentityDef) {
+        const onvalidchange = vi.fn();
+        const {container} = render(CsvEditor, {columns, identity, value: csv, onvalidchange});
+        await waitFor(() => expect(onvalidchange).toHaveBeenCalled());
+        await tick();
+        const [rows, errorCount, hasDuplicates] = onvalidchange.mock.calls.at(-1) as [ParsedRow[], number, boolean];
+        return {container, valid: rows.length, errorCount, hasDuplicates};
+    }
+
+    /** The text of `element` with every marker taken out: what is left is words written in the component. */
+    const withoutMarkers = (element: Element | null): string => (element?.textContent ?? '').replace(/⟦[^⟧]*⟧/g, '');
+    /** The words a hard-coded status would use. */
+    const ENGLISH_STATUS = /valid rows?|errors?|duplicates?/i;
+
+    describe('in the marker locale', () => {
+        beforeEach(async () => {
+            await useMarkerLocale(STATUS_KEYS);
+        });
+
+        afterEach(async () => {
+            await setupI18n('en');
+        });
+
+        it.each([
+            {name: 'one valid row', csv: ONE_VALID},
+            {name: 'three valid rows', csv: THREE_VALID},
+        ])('CsvEditor, $name: the bar reads statusValidRows and statusErrors with the counts it published, statusDuplicates with the label', async ({csv}) => {
+            const {container, valid, errorCount, hasDuplicates} = await mountEditor(csv);
+            expect(hasDuplicates, 'premise: the lines on one day are duplicates').toBe(true);
+            expect(errorCount, 'premise: the bad numbers are errors').toBeGreaterThan(0);
+            expect(valid, 'premise: valid lines were read').toBeGreaterThan(0);
+            expect(container, 'control: the marker locale is live — the separator word of the bar is its marker').toHaveTextContent(marked('csvImport.sep'));
+
+            expect.soft(container).toHaveTextContent(marked('csvImport.statusValidRows', {count: valid}));
+            expect.soft(container).toHaveTextContent(marked('csvImport.statusErrors', {count: errorCount}));
+            expect.soft(container).toHaveTextContent(marked('csvImport.statusDuplicates', {label: 'date'}));
+            expect.soft(withoutMarkers(container), 'no English status word is left written in the component').not.toMatch(ENGLISH_STATUS);
+        });
+
+        it('CsvEditor, an identity editor: statusDuplicates shows the identity label as written, not lowercased and not pluralised', async () => {
+            const {container, hasDuplicates} = await mountEditor(ISIN_CSV, ISIN_COLUMNS, ISIN);
+            expect(hasDuplicates, 'premise: the repeated identity is a duplicate').toBe(true);
+            expect(container, 'control: the marker locale is live').toHaveTextContent(marked('csvImport.sep'));
+
+            expect(container).toHaveTextContent(marked('csvImport.statusDuplicates', {label: 'ISIN'}));
+        });
+
+        it('DataImportModal, footer: the errors read statusErrors with the error count, the duplicates read duplicatesShort', async () => {
+            render(DataImportModal, {open: true, columns: CSV_COLUMNS});
+            const confirm = await enterDistributionCsv(THREE_VALID);
+            await settled(confirm, 3);
+            const errorCount = Number(confirm.getAttribute('data-error-count'));
+            expect(errorCount, 'premise: the bad numbers are errors').toBeGreaterThan(0);
+
+            // The footer's text sits right before its buttons group, the parent of the confirm button.
+            const footerStatus = confirm.parentElement?.previousElementSibling ?? null;
+            expect(footerStatus, 'control: the footer status is found, and its «N valid rows» is already a key (csvImport.validRows)').toHaveTextContent(marked('csvImport.validRows'));
+
+            expect.soft(footerStatus).toHaveTextContent(marked('csvImport.statusErrors', {count: errorCount}));
+            expect.soft(footerStatus).toHaveTextContent(marked('csvImport.duplicatesShort'));
+            expect.soft(withoutMarkers(footerStatus), 'no English status word is left written in the footer').not.toMatch(ENGLISH_STATUS);
+        });
+    });
+
+    describe.each(['it', 'fr'])('in %s, with the shipped catalogue', (lang) => {
+        beforeEach(async () => {
+            await setupI18n(lang);
+        });
+
+        afterEach(async () => {
+            await setupI18n('en');
+        });
+
+        it('CsvEditor, one valid row: the bar is the catalogue message of statusValidRows (singular), statusErrors and statusDuplicates', async () => {
+            const {container, valid, errorCount} = await mountEditor(ONE_VALID);
+            expect(valid, 'premise: one valid row').toBe(1);
+            expect(errorCount, 'premise: errors').toBeGreaterThan(0);
+
+            for (const [key, values] of [
+                ['statusValidRows', {count: valid}],
+                ['statusErrors', {count: errorCount}],
+                ['statusDuplicates', {label: 'date'}],
+            ] as const) {
+                expect.soft(said(key, values), `control: csvImport.${key} is a catalogue entry in ${lang} (a missing key reads as itself)`).not.toBe(`csvImport.${key}`);
+                expect.soft(container, `the bar says csvImport.${key}`).toHaveTextContent(said(key, values));
+            }
+        });
+
+        it('CsvEditor, several valid rows: the plural form of statusValidRows and statusErrors', async () => {
+            const {container, valid, errorCount} = await mountEditor(THREE_VALID);
+            expect(valid, 'premise: three valid rows').toBe(3);
+            expect(errorCount, 'premise: more than one error').toBeGreaterThan(1);
+
+            for (const [key, count] of [
+                ['statusValidRows', valid],
+                ['statusErrors', errorCount],
+            ] as const) {
+                expect.soft(said(key, {count}), `control: csvImport.${key} is a catalogue entry in ${lang}`).not.toBe(`csvImport.${key}`);
+                expect.soft(container, `the bar says csvImport.${key} in the plural`).toHaveTextContent(said(key, {count}));
+            }
+        });
+
+        it('DataImportModal, footer: statusErrors and duplicatesShort', async () => {
+            render(DataImportModal, {open: true, columns: CSV_COLUMNS});
+            const confirm = await enterDistributionCsv(ONE_VALID);
+            await settled(confirm, 1);
+            const errorCount = Number(confirm.getAttribute('data-error-count'));
+            const footerStatus = confirm.parentElement?.previousElementSibling ?? null;
+
+            expect.soft(said('statusErrors', {count: errorCount}), `control: csvImport.statusErrors is a catalogue entry in ${lang}`).not.toBe('csvImport.statusErrors');
+            expect.soft(said('duplicatesShort'), `control: csvImport.duplicatesShort is a catalogue entry in ${lang}`).not.toBe('csvImport.duplicatesShort');
+            expect.soft(footerStatus).toHaveTextContent(said('statusErrors', {count: errorCount}));
+            expect.soft(footerStatus).toHaveTextContent(said('duplicatesShort'));
+        });
+    });
+
+    /** The modal has parsed the CSV: it publishes `validRows` valid lines and the duplicates flag. */
+    async function settled(confirm: HTMLElement, validRows: number): Promise<void> {
+        await waitFor(() => {
+            expect(confirm).toHaveAttribute('data-valid-rows', String(validRows));
+            expect(confirm).toHaveAttribute('data-has-duplicates', 'true');
+        });
+    }
+});

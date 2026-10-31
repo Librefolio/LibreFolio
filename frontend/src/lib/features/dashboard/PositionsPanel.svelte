@@ -40,7 +40,8 @@
     import PerformanceChart from './PerformanceChart.svelte';
     import PositionsReturnChart from './PositionsReturnChart.svelte';
     import AllocationPanel from './AllocationPanel.svelte';
-    import {PORTFOLIO_LINE_ID, portfolioLine, positionLines, selectionKeys, type HistoryPointLike, type PositionKey, type PositionsChartView, type PositionsSeriesResponse} from './positionsSeries';
+    import {PORTFOLIO_LINE_ID, portfolioLine, positionLines, selectionKeys, type HistoryPointLike, type PositionKey, type PositionLine, type PositionsChartView, type PositionsSeriesResponse} from './positionsSeries';
+    import {rollingLine, type PositionsRollingState} from './positionsRolling';
 
     import type {AllocationHistoryDimensions, PortfolioSummary, PositionsContribution} from '$lib/stores/portfolio/portfolioStore.svelte';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
@@ -71,6 +72,10 @@
         positionsSeriesFailed?: boolean;
         /** Asks the series of the ticked positions; called once per change of the selection, never with an empty one. */
         onRequestPositionsSeries?: (keys: PositionKey[]) => void;
+        /** The Rolling view (FB-15): the rolling return of the ticked positions' assets, by asset, as the page's controller holds it. */
+        positionsRolling?: PositionsRollingState | null;
+        /** Asks the rolling return of these assets (each once); called when the Rolling view is on and the selection changes, never with none. */
+        onRequestPositionsRolling?: (assetIds: number[]) => void;
         /** The Dashboard's own history: the chart's portfolio line (its return, not the positions' P&L). */
         portfolioHistory?: ReadonlyArray<HistoryPointLike>;
         /** The allocation by asset beside the chart (FB-12): the same inputs the Dashboard's allocation panel takes. */
@@ -94,6 +99,8 @@
         positionsSeriesLoading = false,
         positionsSeriesFailed = false,
         onRequestPositionsSeries,
+        positionsRolling = null,
+        onRequestPositionsRolling,
         portfolioHistory = [],
         brokerIds,
         currentLanguage = 'en',
@@ -170,7 +177,8 @@
     const CHART_VIEW_KEY = 'dashboard-positions-chart-view';
 
     function readChartView(): PositionsChartView {
-        return getUserStorage(CHART_VIEW_KEY, 'percentage') === 'absolute' ? 'absolute' : 'percentage';
+        const stored = getUserStorage(CHART_VIEW_KEY, 'percentage');
+        return stored === 'absolute' || stored === 'rolling' ? stored : 'percentage';
     }
 
     type SelectedRow = {key: string; assetId: number; brokerId: number | null};
@@ -216,12 +224,44 @@
     }
 
     let selectedKeys = $derived(selectedRows.map((row) => row.key));
-    let chartLines = $derived.by(() => {
+
+    // The Rolling view asks the rolling return of the ticked positions' assets; the controller keeps what it already has.
+    $effect(() => {
+        if (chartView !== 'rolling' || selectedRows.length === 0) return;
+        onRequestPositionsRolling?.([...new Set(selectedRows.map((row) => row.assetId))]);
+    });
+
+    /** A ticked position's name for the legend of the Rolling view: its ticker or name, then the broker, as the positions' own lines say it. */
+    function rollingLabel(row: SelectedRow): string {
+        const open = holdings.find((holding) => holding.asset_id === row.assetId && (safeNumberOrNull(holding.broker_id) ?? null) === row.brokerId);
+        const sold = soldPositions.find((position) => position.asset_id === row.assetId && (position.broker_id ?? null) === row.brokerId);
+        const source = open ?? sold;
+        if (!source) return `#${row.assetId}`;
+        const ticker = typeof source.asset_ticker === 'string' ? source.asset_ticker : '';
+        const name = ticker || source.asset_name;
+        const broker = typeof source.broker_name === 'string' ? source.broker_name : '';
+        return broker ? `${name} · ${broker}` : name;
+    }
+
+    function safeNumberOrNull(value: unknown): number | null {
+        return typeof value === 'number' ? value : null;
+    }
+
+    let chartLines = $derived.by<PositionLine[]>(() => {
+        if (chartView === 'rolling') {
+            // No portfolio line: the portfolio has no price. A ticked position whose asset has no view yet draws nothing.
+            return selectedRows.flatMap((row) => {
+                const view = positionsRolling?.views.get(row.assetId);
+                return view ? [rollingLine(row.key, rollingLabel(row), view)] : [];
+            });
+        }
         const portfolio = portfolioLine(portfolioHistory, chartView, $_('dashboard.positionsChart.portfolio'));
         const picked = new Set(selectedKeys);
         const positions = positionLines(positionsSeries, chartView).filter((line) => picked.has(line.id));
         return portfolio ? [portfolio, ...positions] : positions;
     });
+    let chartLoading = $derived(chartView === 'rolling' ? !!positionsRolling?.loading && selectedRows.length > 0 : positionsSeriesLoading && selectedRows.length > 0);
+    let chartFailed = $derived(chartView === 'rolling' ? !!positionsRolling?.failed && selectedRows.length > 0 : positionsSeriesFailed && selectedRows.length > 0);
 
     // =========================================================================
     // Derived data
@@ -260,8 +300,8 @@
                 colorOf={colourOf}
                 currency={displayCurrency}
                 height="20rem"
-                loading={positionsSeriesLoading && selectedRows.length > 0}
-                failed={positionsSeriesFailed && selectedRows.length > 0}
+                loading={chartLoading}
+                failed={chartFailed}
                 portfolioLabel={$_('dashboard.positionsChart.portfolio')}
                 note={$_('dashboard.positionsChart.portfolioNote')}
             />

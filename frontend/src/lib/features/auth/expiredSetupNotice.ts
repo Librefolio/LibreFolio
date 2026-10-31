@@ -8,7 +8,7 @@
  *
  * Every other case — a used, withdrawn or unknown link, no token, a self-hosted instance — keeps the generic line.
  */
-import {supportChannel} from '$lib/components/assets/assetSearchReport';
+import {supportChannel} from '$lib/features/support/supportChannel';
 
 export interface SetupLinkNotice {
     /** The i18n key of the line under the message. */

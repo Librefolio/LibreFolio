@@ -44,6 +44,7 @@ from backend.app.services.files.file_preview import (
     build_preview_response,
     preview_failure_detail,
 )
+from backend.app.services.files.inline_media import INLINE_SAFE_MEDIA_TYPES
 from backend.app.services.files.static_uploads import (
     UploadSecurityError,
     can_manage_upload,
@@ -528,10 +529,16 @@ async def serve_file(  # noqa: C901 — flat preview-mode dispatch with early re
     # Get original filename for downloads
     filename = info.original_name if download else None
 
+    # Shown in place (the PDF fallback of the preview is an <iframe>) only when the stored type cannot carry active
+    # content; a download, and every other type, is an attachment (H-44, H6-2)
+    inline = not download and mime_type in INLINE_SAFE_MEDIA_TYPES
+
     return FileResponse(
         path=file_path,
         media_type=mime_type,
         filename=filename or file_path.name,
+        content_disposition_type="inline" if inline else "attachment",
+        headers={"X-Content-Type-Options": "nosniff"},
     )
 
 

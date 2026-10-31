@@ -381,7 +381,7 @@
                 </div>
             </div>
 
-            <button class="p-2 text-lf-muted hover:text-lf-link hover:bg-lf-selected rounded-lg transition-colors disabled:opacity-50" data-testid="brokers-refresh" data-busy={pageBusy.busy ? 'true' : 'false'} disabled={pageBusy.busy} on:click={handleRefresh} title="Refresh">
+            <button class="p-2 text-lf-muted hover:text-lf-link hover:bg-lf-selected rounded-lg transition-colors disabled:opacity-50" data-testid="brokers-refresh" data-busy={pageBusy.busy ? 'true' : 'false'} disabled={pageBusy.busy} on:click={handleRefresh} title={$_('dashboard.syncData')}>
                 <RefreshCw class={pageBusy.busy ? 'animate-spin' : ''} size={18} />
             </button>
             <button class="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-lf-action text-lf-on-action rounded-lg hover:bg-lf-action-hover transition-all" data-testid="add-broker-button" use:guideAnchor={'broker.page.add'} on:click={openCreateModal}>

@@ -1,7 +1,7 @@
 {
   "chart": {
     "tooltip": {
-      "stale": "Obsoleto: {days} día(s)",
+      "stale": "Obsoleto: {days, plural, one {# día} other {# días}}",
       "fxStale": "Tipo FX: {days}d",
       "percentNote": "% relativo a la fecha de inicio del rango",
       "upper": "Superior",
@@ -15,7 +15,8 @@
       "originalValue": "orig. {value}",
       "fxRateDate": "cambio al {date}",
       "fxDaysBack": "({days}d antes)",
-      "yearLabel": "{year}"
+      "yearLabel": "{year}",
+      "staleBadge": "{days}d"
     },
     "resolution": {
       "weekly": "Semanal",

@@ -1,5 +1,5 @@
 <script lang="ts">
-    import {onMount, tick} from 'svelte';
+    import {onDestroy, onMount, tick} from 'svelte';
     import {browser} from '$app/environment';
     import {goto, replaceState} from '$app/navigation';
     import {page} from '$app/stores';
@@ -36,6 +36,8 @@
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import {getBrokerRole} from '$lib/stores/reference/brokerStore';
     import {txStoreSetAll, txStoreGet, txStoreCanEdit} from '$lib/features/transactions/txStore.svelte';
+    import {guardEditableRows} from '$lib/features/transactions/bulk/selectionGuards';
+    import {promoteNotesDiverge} from '$lib/features/transactions/bulk/promoteHelpers';
     import {invalidate as invalidatePortfolioCache} from '$lib/stores/portfolio/portfolioStore.svelte';
     import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
     import {applyTransactionColumnFilters, buildTransactionsFiltersUrl, parseTransactionFilters, toTransactionColumnFilters, type TransactionFilterMap} from './filterState';
@@ -273,27 +275,9 @@
         selectedRows = [];
     }
 
-    /** Filter out rows on viewer-only brokers. Returns editable + skipped. */
-    function filterEditableRows(rows: TXReadItem[]): {editable: TXReadItem[]; skipped: TXReadItem[]} {
-        const editable: TXReadItem[] = [];
-        const skipped: TXReadItem[] = [];
-        for (const r of rows) {
-            (txStoreCanEdit(r.id) ? editable : skipped).push(r);
-        }
-        return {editable, skipped};
-    }
-
-    /** Show toast warning for skipped viewer-only rows. Returns false if all skipped. */
+    /** The rows of the selection the user can edit; `null` (with the reason shown) when there are none. The rule is shared with the broker page (`selectionGuards.ts`). */
     function guardViewerOnly(rows: TXReadItem[]): TXReadItem[] | null {
-        const {editable, skipped} = filterEditableRows(rows);
-        if (skipped.length > 0 && editable.length > 0) {
-            toasts.warning($_('transactions.bulk.skippedViewerOnly', {values: {n: skipped.length}}) || `${skipped.length} transactions excluded: Editor access required`);
-        }
-        if (editable.length === 0) {
-            toasts.error($_('transactions.bulk.allViewerOnly') || 'No editable transactions in selection');
-            return null;
-        }
-        return editable;
+        return guardEditableRows(rows, txStoreCanEdit, toasts, $_);
     }
 
     function onEditBulk() {
@@ -402,7 +386,7 @@
             dateB = b.date;
         const cbA = a.cost_basis_override ?? '',
             cbB = b.cost_basis_override ?? '';
-        const diverges = descA !== descB || JSON.stringify(tagsA) !== JSON.stringify(tagsB) || dateA !== dateB || cbA !== cbB;
+        const diverges = promoteNotesDiverge(a, b);
         if (diverges) {
             promoteMergeData = {
                 txA: {label: `#${a.id}`, description: descA, tags: tagsA, date: dateA, cost_basis_override: cbA},
@@ -491,18 +475,29 @@
     }
 
     let highlightClearTimer: ReturnType<typeof setTimeout> | null = null;
+    /** The row marked by the last highlight: the mark stays on it until the next highlight or the end of the page (W-B76). */
+    let markedRow: HTMLElement | null = null;
 
     function pulseElement(el: HTMLElement) {
         if (highlightClearTimer != null) clearTimeout(highlightClearTimer);
+        if (markedRow && markedRow !== el) markedRow.removeAttribute('data-highlighted');
         el.classList.remove('tx-row-highlight');
         void el.offsetWidth; // force reflow → restart animation
         el.classList.add('tx-row-highlight');
+        // The pulse is over in 1.4 s; this mark says which row was opened, to the user (a bar on the row) and to a test.
+        el.setAttribute('data-highlighted', 'true');
+        markedRow = el;
         el.scrollIntoView({behavior: 'smooth', block: 'center'});
         highlightClearTimer = setTimeout(() => {
             el.classList.remove('tx-row-highlight');
             highlightClearTimer = null;
         }, 1600);
     }
+
+    onDestroy(() => {
+        markedRow?.removeAttribute('data-highlighted');
+        markedRow = null;
+    });
 
     function parseHighlightId(raw: string | null): number | null {
         if (!raw) return null;

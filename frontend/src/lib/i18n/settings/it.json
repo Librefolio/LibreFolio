@@ -418,7 +418,9 @@
         "info": "Informazione"
       },
       "blockedScript": "Questa scheda del browser ha bloccato uno script che LibreFolio non ha inviato ({sources}): lo aggiunge un proxy, una CDN o un'estensione del browser. Spegni quell'iniezione per questo sito.",
-      "guide": "Guida"
+      "guide": "Guida",
+      "support": "Contatta l'assistenza",
+      "supportMissing": "Per risolvere questo punto, contatta chi ti fornisce il servizio."
     },
     "protectedEmail": {
       "title": "Qui non puoi cambiare l'email",

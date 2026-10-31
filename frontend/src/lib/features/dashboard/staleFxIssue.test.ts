@@ -3,7 +3,7 @@
  */
 import {describe, expect, it} from 'vitest';
 import {buildMissingFxRatesSyncRequest} from '$lib/utils/sync/syncRange';
-import {staleFxIssue} from './staleFxIssue';
+import {pairsStillStale, staleFxIssue} from './staleFxIssue';
 
 const TODAY = '2026-10-28';
 
@@ -56,5 +56,29 @@ describe('staleFxIssue', () => {
             TODAY,
         );
         expect(issue?.message_params).toMatchObject({days: 88, date_from: '2026-08-01', date_to: TODAY});
+    });
+});
+
+describe('pairsStillStale — the sync worked, the rate is still old: the provider has no newer one (Y6-6)', () => {
+    const stale = (pair: string) => ({pair, last_rate_date: '2026-08-01', stale_days: 88});
+
+    it('is the requested pairs that the report still lists as stale, in the order requested', () => {
+        expect(pairsStillStale(['EUR-USD', 'CHF-EUR'], [stale('CHF/EUR'), stale('USD/EUR')])).toEqual(['EUR-USD', 'CHF-EUR']);
+    });
+
+    it('reads the same pair in either spelling and either order of its two codes', () => {
+        expect(pairsStillStale(['EUR-USD'], [stale('usd/eur')])).toEqual(['EUR-USD']);
+        expect(pairsStillStale(['USD-EUR'], [stale('EUR/USD')])).toEqual(['USD-EUR']);
+    });
+
+    it('leaves out a pair that is no longer stale: its sync found a newer rate', () => {
+        expect(pairsStillStale(['EUR-USD', 'CHF-EUR'], [stale('CHF/EUR')])).toEqual(['CHF-EUR']);
+        expect(pairsStillStale(['EUR-USD'], [])).toEqual([]);
+        expect(pairsStillStale(['EUR-USD'], null)).toEqual([]);
+        expect(pairsStillStale(['EUR-USD'], undefined)).toEqual([]);
+    });
+
+    it('ignores a stale pair that was not requested', () => {
+        expect(pairsStillStale(['EUR-USD'], [stale('GBP/EUR')])).toEqual([]);
     });
 });

@@ -385,7 +385,7 @@ async def test_while_interrupted_the_panel_status_without_a_restore_answers_200(
 @pytest.mark.parametrize(("accounts", "limit", "over"), [pytest.param(0, None, False, id="no-limit"), pytest.param(3, "2", True, id="over-the-limit")])
 async def test_while_interrupted_the_panel_status_says_whether_the_instance_is_over_its_limit(instance, accounts, limit, over):
     """RI-030c (H5-8): interrupted, ``GET /panel/status`` with its token → 200 carrying ``users_over_limit``, true with three
-    active accounts against ``LIBREFOLIO_MAX_USERS=2``, false with no limit, as on any instance; the nine keys, mode normal.
+    active accounts against ``LIBREFOLIO_MAX_USERS=2``, false with no limit, as on any instance; the ten keys, mode normal.
     Barrier: the accounts are in the database the request reads (``users_used``)."""
     async with AsyncSession(instance.engine) as session:
         for index in range(accounts):
@@ -401,7 +401,7 @@ async def test_while_interrupted_the_panel_status_says_whether_the_instance_is_o
     assert response.status_code == 200, f"the panel's status is allowed while interrupted: {shown(response)}"
     body = response.json()
     assert (body.get("mode"), body.get("users_used")) == ("normal", accounts), f"Barrier: mode normal, the {accounts} accounts counted: {body}"
-    assert set(body) == PANEL_STATUS_KEYS and body.get("users_over_limit") is over, f"H5-8: interrupted, {accounts} active accounts against {limit!r}: users_over_limit is {over!r}, nine keys: {body}"
+    assert set(body) == PANEL_STATUS_KEYS and body.get("users_over_limit") is over, f"H5-8: interrupted, {accounts} active accounts against {limit!r}: users_over_limit is {over!r}, ten keys: {body}"
 
 
 @pytest.mark.asyncio

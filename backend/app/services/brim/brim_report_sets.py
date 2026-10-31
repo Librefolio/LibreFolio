@@ -439,8 +439,8 @@ async def apply_history(
     """Bring the broker history into the parse of a combined file (design D-S25).
 
     Returns the checkpoints to keep, the verifications and the history start (H0).
-    On the first import H0 is the day after the first checkpoint (or the oldest
-    imported row when the plugin imports the rows before it); checkpoints before
+    On the first import H0 is the day after the first checkpoint (or, when the plugin
+    imports the rows before it, the oldest imported row if that is earlier); checkpoints before
     the eve of H0 are dropped, because what precedes the history is already
     represented in LibreFolio. On a later import a checkpoint from H0 on closes a
     gap in a history that already exists: it is a ``gap``, whatever the plugin
@@ -451,6 +451,10 @@ async def apply_history(
     if start is None:
         if plugin.pre_checkpoint_policy == "import" and output.transactions:
             start = min(tx.date for tx in output.transactions)
+            if output.checkpoints:
+                # The opening checkpoint belongs to the history even when the first imported row comes days after it (no row
+                # before the bank's opening balance): H0 is never later than the day after the first checkpoint.
+                start = min(start, shift_date(min(checkpoint.as_of for checkpoint in output.checkpoints), 1))
         elif output.checkpoints:
             start = shift_date(min(checkpoint.as_of for checkpoint in output.checkpoints), 1)
     if start is None:

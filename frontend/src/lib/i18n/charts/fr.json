@@ -1,7 +1,7 @@
 {
   "chart": {
     "tooltip": {
-      "stale": "Périmé : {days} jour(s)",
+      "stale": "Périmé : {days, plural, one {# jour} other {# jours}}",
       "fxStale": "Taux FX : {days}j",
       "percentNote": "% par rapport à la date de début",
       "upper": "Supérieure",
@@ -15,7 +15,8 @@
       "originalValue": "orig. {value}",
       "fxRateDate": "change au {date}",
       "fxDaysBack": "({days}j avant)",
-      "yearLabel": "{year}"
+      "yearLabel": "{year}",
+      "staleBadge": "{days}j"
     },
     "resolution": {
       "weekly": "Hebdomadaire",

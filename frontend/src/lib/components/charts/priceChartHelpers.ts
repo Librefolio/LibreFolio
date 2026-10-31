@@ -645,13 +645,20 @@ export function buildDeltaHtml(value: number, firstValue: number, isPercentage: 
  * the built-in English fallbacks are code constants used only when no template
  * is given.
  */
-export function buildStaleTooltipHtml(priceStaleDays: number | undefined, fxStaleDays: number | undefined, warningColor: string, staleLabel?: string, fxStaleLabel?: string): string {
+export type StaleLabel = string | ((days: number) => string);
+
+/** A label as text for `days`: a template with a `{days}` placeholder, or a function of the days (so the language can inflect a plural). */
+function staleText(label: StaleLabel, days: number): string {
+    return typeof label === 'function' ? label(days) : label.replace('{days}', String(days));
+}
+
+export function buildStaleTooltipHtml(priceStaleDays: number | undefined, fxStaleDays: number | undefined, warningColor: string, staleLabel?: StaleLabel, fxStaleLabel?: StaleLabel): string {
     if (priceStaleDays === undefined) return '';
     const warn = (text: string) => `<br/><span style="color:${warningColor};font-size:11px">⚠ ${text}</span>`;
-    const priceText = staleLabel ? staleLabel.replace('{days}', String(priceStaleDays)) : `Stale: ${priceStaleDays}d`;
+    const priceText = staleLabel ? staleText(staleLabel, priceStaleDays) : `Stale: ${priceStaleDays}d`;
 
     if (fxStaleDays !== undefined && fxStaleDays > 0) {
-        const fxText = fxStaleLabel ? fxStaleLabel.replace('{days}', String(fxStaleDays)) : `FX rate: ${fxStaleDays}d old`;
+        const fxText = fxStaleLabel ? staleText(fxStaleLabel, fxStaleDays) : `FX rate: ${fxStaleDays}d old`;
         return warn(priceText) + warn(fxText);
     }
     return warn(priceText);

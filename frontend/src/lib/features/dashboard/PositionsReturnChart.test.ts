@@ -515,3 +515,48 @@ describe('PositionsReturnChart — the view toggle is on the chart and the note 
         expect(plot.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
 });
+
+// =============================================================================
+// FB-15 · the third view: the rolling return of the asset's price
+// =============================================================================
+
+describe('PositionsReturnChart — the Rolling view (FB-15)', () => {
+    it('offers Abs, %, Rolling, and a click on Rolling reports it', async () => {
+        const onviewchange = vi.fn();
+        render(PositionsReturnChart, {props: props({onviewchange})});
+        for (const option of ['absolute', 'percentage', 'rolling']) expect(screen.getByTestId(`positions-chart-view-${option}`)).toBeInTheDocument();
+
+        await fireEvent.click(screen.getByTestId('positions-chart-view-rolling'));
+
+        expect(onviewchange).toHaveBeenCalledWith('rolling');
+    });
+
+    it('marks the Rolling view as the pressed one when it is the view', () => {
+        render(PositionsReturnChart, {props: props({view: 'rolling', lines: [A()]})});
+        expect(screen.getByTestId('positions-chart-view-rolling')).toHaveAttribute('aria-pressed', 'true');
+        expect(screen.getByTestId('positions-return-chart')).toHaveAttribute('data-view', 'rolling');
+    });
+
+    it('draws the percentage points as they are, with the reference at 0', async () => {
+        await mountReady({view: 'rolling', lines: [line('12-3', [1.5, -2, 4])]});
+        const byId = new Map(lineSeries(['12-3']).map((s) => [s.id as string, s]));
+        expect(dataValues(byId.get('12-3')!)).toEqual([1.5, -2, 4]);
+        expect(markLineLevels()).toContain(0);
+        expect(markLineLevels()).not.toContain(100);
+    });
+
+    it('writes the axis in percent', async () => {
+        await mountReady({view: 'rolling', lines: [line('12-3', [1.5, -2, 4])]});
+        const option = [...chartInstances]
+            .reverse()
+            .flatMap((chart) => [...chart.setOptionCalls].reverse())
+            .find((call) => call.option.yAxis)?.option as Json;
+        const formatter = ((option.yAxis as Json).axisLabel as Json).formatter as (value: number) => string;
+        expect(formatter(2.5)).toContain('%');
+    });
+
+    it('has no portfolio line in this view, so no note about it', async () => {
+        render(PositionsReturnChart, {props: props({view: 'rolling', lines: [A()], note: NOTE})});
+        expect(screen.queryByTestId('positions-chart-note')).toBeNull();
+    });
+});

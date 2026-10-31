@@ -154,7 +154,6 @@
     "endValueTooltip": "Valeur de la position à la fin de la période, calculée comme la colonne Valeur du Portefeuille ; 0 si la position était déjà fermée.",
     "transfersAtMarketValue": "Transferts à la valeur de marché",
     "assetAllocation": "Par actif",
-    "backToPortfolio": "Portefeuille",
     "positionsChart": {
       "title": "Rendement des positions",
       "viewAbsolute": "Abs",
@@ -167,7 +166,9 @@
       "failed": "Les séries des positions n'ont pas pu être chargées.",
       "closedOn": "Clôturée le {date}",
       "incomplete": "Certaines valeurs manquent (un prix ou un taux) : la ligne les laisse de côté.",
-      "rowSelect": "Sélectionnez la ligne pour tracer son rendement"
+      "rowSelect": "Sélectionnez la ligne pour tracer son rendement",
+      "viewRolling": "Glissant",
+      "viewRollingHint": "Pourcentage dont le prix de l'actif a bougé sur une fenêtre glissante le long de la période : pour comparer les actifs entre eux"
     },
     "allocationNoShares": "Aucun pourcentage à afficher : les parts totalisent zéro ou moins (par exemple un découvert qui annule vos positions). Les montants sont listés ci-dessous.",
     "allocationHistoryNoShares": "Aucun pourcentage à afficher : ces jours-là, les parts totalisent zéro ou moins."

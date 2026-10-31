@@ -96,6 +96,15 @@ LIBRARIES = {
             "dir": "output/chtml/fonts/woff-v2",
         },
     },
+    # H6-3 (M-22): the documentation's diagrams are drawn by our own copy, pinned to one version and to the hash of that
+    # file; without internet they still draw. The ELK layout is not served (its ESM build is ~100 chunks).
+    "mermaid": {
+        "type": "js",
+        "url": "https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.min.js",
+        "target": "mermaid.min.js",
+        "sha256": "581ed7d74bd9048d0e3a91363927d72ef22942d7722546b27f7cc29e35390eb8",
+        "vendor_dir_key": "mkdocs",
+    },
     "noto-color-emoji": {
         "type": "font",
         "css_url": "https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=swap",
@@ -448,6 +457,14 @@ def _update_js_file(vendor_dir: Path, manifest: dict, name: str, config: dict, f
         else:
             print("  ❌ Download failed and no cached version exists")
             _hard_fail(name, "download failed, no cached version")
+        return False
+
+    # A library pinned by `sha256` is served only if the download is exactly the file that was reviewed: anything
+    # else is not written, and the cached copy, if any, stays (H6-3)
+    expected_sha256 = config.get("sha256")
+    if expected_sha256 and hashlib.sha256(content).hexdigest() != expected_sha256:
+        print("  ❌ The download does not match the pinned sha256, keeping what is cached")
+        _hard_fail(name, f"the download does not match the pinned sha256 {expected_sha256[:12]}…")
         return False
 
     # Calculate hash

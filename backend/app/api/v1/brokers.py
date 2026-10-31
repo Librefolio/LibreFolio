@@ -98,6 +98,7 @@ from backend.app.services.files.file_preview import (
     build_preview_response,
     preview_failure_detail,
 )
+from backend.app.services.files.inline_media import INLINE_SAFE_MEDIA_TYPES
 from backend.app.services.files.static_uploads import BLOCKED_EXTENSIONS
 from backend.app.services.plugin_settings.runtime import bound_settings_for
 
@@ -106,21 +107,6 @@ logger = get_logger(__name__)
 broker_router = APIRouter(prefix="/brokers", tags=["BR (Broker)"])
 
 brim_router = APIRouter(prefix="/import", tags=["BR Import"])
-
-# Report types a browser may display in place. HTML, SVG, XML and every other type are always served as a download.
-INLINE_SAFE_MEDIA_TYPES = frozenset(
-    {
-        "application/pdf",
-        "application/json",
-        "text/plain",
-        "text/csv",
-        "image/png",
-        "image/jpeg",
-        "image/gif",
-        "image/webp",
-        "image/bmp",
-    }
-)
 
 
 async def _get_brim_file_with_access(

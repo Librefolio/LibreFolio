@@ -1539,7 +1539,7 @@
             </div>
         {:else if viewMode === 'pnl' && pnlSubmode === 'candles' && pnlCandlesLoading && pnlCandles == null}
             <!-- The candles are asked on the first activation: until they arrive the chart is empty, so say it is waiting (Y-18). -->
-            <div class="absolute inset-0 z-10 bg-lf-panel rounded animate-pulse" data-testid="growth-pnl-candles-loading" aria-hidden="true"></div>
+            <div class="pointer-events-none absolute inset-0 z-10 bg-lf-panel rounded animate-pulse" data-testid="growth-pnl-candles-loading" aria-hidden="true"></div>
         {/if}
         <!-- Persistent chart container — never destroyed -->
         <div bind:this={chartContainer} style="height: 100%; width: 100%;" class:invisible={loading || history.length === 0}></div>

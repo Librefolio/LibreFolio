@@ -411,7 +411,14 @@ both legs of an `FX_CONVERSION` (`pairBrokerMismatch`, params `brokerA`/`brokerB
 A `TRANSFER` pair must also move one asset
 (`pairAssetMismatch`, params `assetA`/`assetB`) by exactly opposite quantities,
 compared as `Decimal` (`pairQuantityMismatch`, params `qtyA`/`qtyB`): what leaves one
-broker arrives at the other, and no unit is created or lost. The first rule that
+broker arrives at the other, and no unit is created or lost. A `CASH_TRANSFER` pair
+must move one currency (`pairCurrencyMismatch`, params `currencyA`/`currencyB`) by
+exactly opposite amounts, again compared as `Decimal` (`pairAmountMismatch`, params
+`amountA`/`amountB`), and an `FX_CONVERSION` pair must change currency
+(`pairCurrencySame`, param `currency`) (W6-7). These are the `pair_field_constraints` of
+`TX_TYPE_METADATA`; `test_linked_cash_pair.py` fails when the table declares a constraint
+the function does not know. Only a pair being created is judged: a pair a database already
+holds is never read by these rules. The first rule that
 fails is the group's only issue, on operation `create` at the first leg's index, and
 the two rows stay unlinked. Pair description and tags are checked separately by
 `_validate_pair_description_tags()`.

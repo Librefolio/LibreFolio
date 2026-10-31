@@ -575,6 +575,26 @@ def services_linked_adjustment_pair(verbose: bool = False, test_names: list = No
     return run_command(cmd, "Linked adjustment pair tests", verbose=verbose)
 
 
+def services_linked_cash_pair(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that a batch refuses a linked CASH_TRANSFER or FX_CONVERSION that contradicts its type (W6-7)."""
+    print_section("Services: Linked Cash Pair")
+    print_info("Testing: backend/app/services/transactions/validation.py (_validate_linked_pair) + batch_creates.py (the link_uuid groups)")
+    print_info("Tests: a CASH_TRANSFER pair in two currencies or with amounts that are not opposite, and an FX_CONVERSION in one currency, refused on the first create (commit and validate); coherent pairs and stored pairs untouched; the rule follows TX_TYPE_METADATA; the messages in 4 languages")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_linked_cash_pair.py", test_names)
+    return run_command(cmd, "Linked cash pair tests", verbose=verbose)
+
+
+def services_generic_csv_cost_todo(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that the generic CSV asks for an inherited cost only where it is missing: a typed 0 is a cost (W6-5)."""
+    print_section("Services: Generic CSV Cost Todo")
+    print_info("Testing: backend/app/services/brim_providers/broker_generic_csv/plugin.py (needs_cost_basis_todo)")
+    print_info("Tests: an incoming ADJUSTMENT with a cost of 0 is not asked again; without a cost it is; an outgoing one and other types never are; the todos of a parsed file")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_generic_csv_cost_todo.py", test_names)
+    return run_command(cmd, "Generic CSV cost todo tests", verbose=verbose)
+
+
 def services_transfer_pair_order(verbose: bool = False, test_names: list = None) -> bool:
     """Test that a linked TRANSFER / CASH_TRANSFER arriving before it departs is saved as sent and warned (pairArrivalBeforeDeparture)."""
     print_section("Services: Transfer Pair Order")
@@ -655,6 +675,26 @@ def services_accounts_checks(verbose: bool = False, test_names: list = None) -> 
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_accounts_checks.py", test_names)
     return run_command(cmd, "Accounts configuration check tests", verbose=verbose)
+
+
+def services_default_language_variable(verbose: bool = False, test_names: list = None) -> bool:
+    """Test LIBREFOLIO_DEFAULT_LANGUAGE: the instance default language until an administrator chose one (CL-10)."""
+    print_section("Services: LIBREFOLIO_DEFAULT_LANGUAGE")
+    print_info("Testing: backend/app/services/accounts/global_settings_service.py (get_setting_value), settings_service.py (readers, get_or_create_user_settings), email/flows.py")
+    print_info("Tests: the variable wins over a row nobody saved, the administrator's row wins even when it says en, the emails and a new account follow")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_default_language_variable.py", test_names)
+    return run_command(cmd, "Default language variable tests", verbose=verbose)
+
+
+def services_default_currency_timezone_variables(verbose: bool = False, test_names: list = None) -> bool:
+    """Test LIBREFOLIO_DEFAULT_CURRENCY and LIBREFOLIO_DEFAULT_TIMEZONE: the instance defaults until an administrator chose them (CL-13)."""
+    print_section("Services: LIBREFOLIO_DEFAULT_CURRENCY and LIBREFOLIO_DEFAULT_TIMEZONE")
+    print_info("Testing: backend/app/config/accounts.py (default_currency, default_timezone), global_settings_service.py (effective_stored_value, get_setting_value), settings_service.py, scheduler/settings.py")
+    print_info("Tests: the readers, the per-key rule (row missing or never saved gives way, an administrator's save wins even as the default), the settings page, the scheduler, a new account's currency")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_default_currency_timezone_variables.py", test_names)
+    return run_command(cmd, "Default currency and timezone variables tests", verbose=verbose)
 
 
 def services_registration(verbose: bool = False, test_names: list = None) -> bool:
@@ -1150,6 +1190,16 @@ def services_brim_report_sets(verbose: bool = False, test_names: list = None) ->
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_report_sets.py", test_names)
     return run_command(cmd, "BRIM report sets tests", verbose=verbose)
+
+
+def services_brim_report_set_core(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the shared core of the report-set BRIM plugins: helpers, readers, rule M, pairing, timeline."""
+    print_section("Services: BRIM Report-set Core")
+    print_info("Testing: backend/app/services/brim/brim_report_set_core.py (shared by the Danske Bank and Crédit Agricole plugins)")
+    print_info("Tests: norm/plain/money/business days, layout and header scan, xlsx/csv readers, RoleMerge (rule M), assign/pair_by_key, merge_spans/build_timeline/zone")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_report_set_core.py", test_names)
+    return run_command(cmd, "BRIM report-set core tests", verbose=verbose)
 
 
 def services_brim_gap_fix(verbose: bool = False, test_names: list = None) -> bool:
@@ -1708,6 +1758,14 @@ def services_hosting_panel_vectors(verbose: bool = False, test_names: list = Non
     return run_command(cmd, "Hosting panel ticket vector tests", verbose=verbose)
 
 
+def services_panel_metrics(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the figures the hosting panel reads of an instance (CL-M1): the schema, each measure, the job-log windows, the files, the checks, the privacy."""
+    print_section("Services: Hosting Panel Metrics")
+    print_info("Testing: backend/app/services/platform/hosting_panel/metrics.py and PanelMetricsResponse (backend/app/schemas/hosting_panel.py)")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_panel_metrics_service.py", test_names)
+    return run_command(cmd, "Hosting panel metrics service tests", verbose=verbose)
+
+
 def services_pdf_fonts(verbose: bool = False, test_names: list = None) -> bool:
     """Test the PDF viewer's CJK fonts served by the instance (H-55): the hash list, the cache, a wrong hash thrown away, the route."""
     print_section("Services: PDF Fonts")
@@ -1818,6 +1876,15 @@ def services_app_lifecycle(verbose: bool = False, test_names: list = None) -> bo
     print_info("Testing: backend/app/services/platform/lifecycle.py, app_lifespan.py, middleware.py, static_site.py")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_app_lifecycle.py", test_names)
     return run_command(cmd, "App lifecycle tests", verbose=verbose)
+
+
+def services_static_unknown_addresses(verbose: bool = False, test_names: list = None) -> bool:
+    """Test what the backend answers for an address it does not know under api/ and /mkdocs/: a redirect to the app for a browser navigation, a JSON 404 for the rest (FB-23)."""
+    print_section("Services: Unknown Addresses")
+    print_info("Testing: backend/app/services/platform/static_site.py (frontend_catchall, mkdocs_static)")
+    print_info("Tests: navigation (Sec-Fetch-Mode navigate, or Accept text/html without Sec-Fetch-Mode) -> 302 /; everything else -> JSON 404; what exists is unchanged")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_static_unknown_addresses.py", test_names)
+    return run_command(cmd, "Unknown addresses tests", verbose=verbose)
 
 
 def services_static_cache_policy(verbose: bool = False, test_names: list = None) -> bool:
@@ -2513,6 +2580,20 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "linked-cash-pair",
+        services_linked_cash_pair,
+        name="Linked Cash Pair",
+        desc="W6-7: a CASH_TRANSFER pair in two currencies or with amounts that are not opposite, and an FX_CONVERSION in one currency, are refused on the first create (pairCurrencyMismatch, pairAmountMismatch, pairCurrencySame; commit and validate); coherent and stored pairs are not touched; the rule follows TX_TYPE_METADATA; the messages exist in EN/IT/FR/ES",
+    )
+    add_test(
+        cat,
+        "generic-csv-cost-todo",
+        services_generic_csv_cost_todo,
+        name="Generic CSV Cost Todo",
+        desc="W6-5: the generic CSV asks for the inherited cost only where it is missing: an incoming ADJUSTMENT with a cost of 0 is not asked again, one without a cost is, an outgoing one and other types never are",
+    )
+    add_test(
+        cat,
         "transfer-pair-order",
         services_transfer_pair_order,
         name="Transfer Pair Order",
@@ -2551,9 +2632,29 @@ Note: No backend server required.
         "accounts-checks",
         services_accounts_checks,
         name="Accounts Configuration Checks",
-        desc="LIBREFOLIO_LOGIN_LIMIT (A8a): unset/on/off, any other value a ValueError; accounts.login_limit ok/warning/error in CONFIG_CHECKS; the startup audit stops on an invalid value before logging anything",
+        desc="LIBREFOLIO_LOGIN_LIMIT (A8a): unset/on/off, any other value a ValueError; accounts.login_limit ok/warning/error in CONFIG_CHECKS; the startup audit stops on an invalid value before logging anything; CL-1: the audit stops on an unusable LIBREFOLIO_MAX_USERS (0, a word, a negative number, a decimal) naming it; CL-10: and on a LIBREFOLIO_DEFAULT_LANGUAGE that is not en/it/fr/es",
         # PURE: environment through monkeypatch, the audit's logger recorded; three fresh interpreters check the import
         # order, as email-checks does. No DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "default-language-variable",
+        services_default_language_variable,
+        name="Default Language Variable",
+        desc="CL-10: LIBREFOLIO_DEFAULT_LANGUAGE is the instance default language while the default_language row was never saved by an administrator (missing, or updated_by_user_id NULL); once saved, even as en, the row wins; get_setting_value, get_global_setting / get_all_global_settings, instance_language, account_language and get_or_create_user_settings follow; no other setting moves",
+        # PURE: a private SQLite file under tmp_path with the ORM schema and the seeded global settings; the variable through
+        # monkeypatch. No lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "default-currency-timezone-variables",
+        services_default_currency_timezone_variables,
+        name="Default Currency and Timezone Variables",
+        desc="CL-13: LIBREFOLIO_DEFAULT_CURRENCY (default_currency) and LIBREFOLIO_DEFAULT_TIMEZONE (scheduler_timezone) follow the CL-10 rule: the variable is the value while the row is missing or never saved by an administrator; once saved, even as the default, the row wins; per key; readers validate like the setting and name the variable; get_setting_value, the settings page readers, the scheduler and a new account's currency follow",
+        # PURE: a private SQLite file under tmp_path with the ORM schema and the seeded global settings; the variables through
+        # monkeypatch. No lane DB, no server, no network.
         isolation="pure",
     )
     add_test(
@@ -2561,7 +2662,7 @@ Note: No backend server required.
         "registration",
         services_registration,
         name="Registration",
-        desc="registration_mode in the registry, LIBREFOLIO_REGISTRATION/MAX_USERS/PUBLIC_URL/BILLING_URL accessors, effective mode, usage, invitations, register_user rule, limit under a race, bcrypt off the loop",
+        desc="registration_mode in the registry, LIBREFOLIO_REGISTRATION/MAX_USERS/PUBLIC_URL/BILLING_URL accessors, CL-10 LIBREFOLIO_DEFAULT_LANGUAGE (default_language(): unset/blank none, en/it/fr/es any case stripped lower-case, else a ValueError naming it; .env.example), effective mode, usage, invitations, register_user rule, limit under a race, bcrypt off the loop",
         # PURE: every database is a private file under tmp_path built with create_all; no session on the lane DB, no
         # server. The variables are set with monkeypatch in this process, and the once-per-process error log is checked
         # in this process too (the report cache cleared around each test); the race holds two connections to that
@@ -2967,6 +3068,15 @@ Note: No backend server required.
     add_test(cat, "brim-provider-base", services_brim_provider_base, name="BRIM Provider Base", desc="Abstract base defaults + text-encoding fallback")
     add_test(cat, "brim-report-sets", services_brim_report_sets, name="BRIM Report Sets", desc="Report-set schemas, contract defaults, combined-file storage")
     add_test(cat, "brim-gap-fix", services_brim_gap_fix, name="BRIM Gap-fix", desc="Gap-fix: bank truth points vs LibreFolio state, proposals and verifications")
+    add_test(
+        cat,
+        "brim-report-set-core",
+        services_brim_report_set_core,
+        name="BRIM Report-set Core",
+        desc="Shared report-set core: text/number helpers, xlsx/csv readers and header scan, rule M (RoleMerge), one-to-one pairing, timeline and zones",
+        # PURE: synthetic rows and files under tmp_path; no database, no server, no network.
+        isolation="pure",
+    )
     add_test(
         cat,
         "gap-fix-currency-guard",
@@ -3458,6 +3568,15 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "panel-metrics-service",
+        services_panel_metrics,
+        name="Hosting Panel Metrics Service",
+        desc="CL-M1 (security): collect_panel_metrics and PanelMetricsResponse (15 required keys, extra forbidden, config_warnings items = check_id + severity): the figures of an instance the test made (counts of brokers, transactions, assets; the sorted distinct providers; the database file with its wal, uploads recursive with no link followed, the disk of the data directory, in MiB to a tenth; the job log: last ok of current_price / history_sync by ts and never partial or error, the errors of the price jobs and the failed jobs of any kind over 24 h with the 23h59 / 24h01 edges, offsets of the ts, a damaged log, an empty one = None, 0, 0); the Security tab's checks that are not ok in its order, never their detail; each of the eight measures raising alone nulls its keys only and is logged once with its traceback; a failed flush or an OperationalError does not poison the session for the next measure; no name, email, path or secret in the JSON; a metrics call is not user activity",
+        # PURE: a data directory of its own under tmp_path (job log, database file, uploads), an in-memory database the test owns entirely, shutil.disk_usage stood in for. No lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "pdf-fonts",
         services_pdf_fonts,
         name="PDF Fonts",
@@ -3533,6 +3652,17 @@ Note: No backend server required.
         # PURE: B's hook replaced by monkeypatch, the guard's clock patched; the two-worker case uses a restore.json and a
         # migrated database copy under tmp_path (the fixtures of test_backup_owner.py) and a fake of A's function. No lane
         # DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "static-unknown-addresses",
+        services_static_unknown_addresses,
+        name="Static Unknown Addresses",
+        desc="FB-23: a missing address under api/ (an unknown route, the API documentation when off) or a missing /mkdocs/ file: a browser navigation (Sec-Fetch-Mode navigate, or Accept with text/html and no Sec-Fetch-Mode) gets 302 Location /, any other request a JSON 404 {detail: Not Found}; the SPA fallback, the documentation, a real API route and the API pages when on are unchanged; a missing /_app chunk stays a plain 404",
+        # A fresh FastAPI() holding a real route, install_api_docs and the static site of a fake build and a fake documentation
+        # under tmp_path (FRONTEND_BUILD_DIR and SITE_DIR swapped in by monkeypatch), called through httpx's in-process ASGI
+        # transport. No DB, no server, no network.
         isolation="pure",
     )
     add_test(

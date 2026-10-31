@@ -143,15 +143,15 @@ CASH_CSV = f'{CASH_MARKER};value_date;amount;currency;description\nrow;2025-01-0
 GENERIC_CSV = b"date,type,quantity,amount,currency,asset\n2025-01-01,DEPOSIT,0,100,EUR,\n"
 
 # The single-file plugins shipped before report sets, frozen on 2026-09-30. A plugin
-# that is *meant* to declare roles (Danske, phase B) is deliberately absent, so its
-# arrival does not turn the "no existing plugin changes" contract red.
+# that is *meant* to declare roles is deliberately absent, so its arrival does not turn
+# the "no existing plugin changes" contract red: Danske (phase B) and Crédit Agricole
+# (2.0.0, W5-7). The Crédit Agricole history tag is still pinned by TestHistoryTag.test_real_plugin.
 EXISTING_PLUGIN_CODES = (
     "broker_avanza",
     "broker_bitvavo",
     "broker_bux",
     "broker_coinbase",
     "broker_cointracking",
-    "broker_credit_agricole",
     "broker_cryptocom",
     "broker_degiro",
     "broker_delta",
@@ -961,7 +961,7 @@ class TestProviderContractDefaults:
         assert generic.to_plugin_info().report_roles == []
 
     def test_every_existing_plugin_keeps_single_file_defaults(self) -> None:
-        """No plugin shipped before report sets declares a role: for all 30, ``to_plugin_info().report_roles == []`` and ``is_report_set_plugin`` is False."""
+        """No plugin shipped before report sets declares a role: for every plugin of the list (Danske and Crédit Agricole, which declare roles, are not in it), ``to_plugin_info().report_roles == []`` and ``is_report_set_plugin`` is False."""
         registered = set(BRIMProviderRegistry.list_plugin_codes())
         assert set(EXISTING_PLUGIN_CODES) <= registered, f"no longer registered: {sorted(set(EXISTING_PLUGIN_CODES) - registered)}"
         _require_fields(BRIMPluginInfo, "report_roles")
@@ -1549,7 +1549,7 @@ class TestHistoryTag:
         assert BRIMProviderRegistry.get_provider_instance("broker_credit_agricole").history_tag == "credit_agricole"
 
     def test_every_existing_plugin_gets_the_default(self) -> None:
-        """None of the 30 single-file plugins overrides it."""
+        """None of the single-file plugins of the list overrides it."""
         _require_contract("history_tag", phase=A2)
 
         tags = {code: BRIMProviderRegistry.get_provider_instance(code).history_tag for code in EXISTING_PLUGIN_CODES}
@@ -2409,12 +2409,23 @@ class TestApplyHistory:
     @pytest.mark.asyncio
     async def test_first_import_import_policy_starts_at_the_oldest_row(self, db_session: AsyncSession) -> None:
         apply_history = _sets("apply_history")
+        output = _parse_output(transactions=["2024-09-20", "2025-02-01"], checkpoints=[("2024-10-01", "opening"), ("2024-12-31", "gap")])
+
+        checkpoints, _verifications, h0 = await apply_history(db_session, broker_id=BROKER_ID, plugin=_FakeBankImportPolicyProvider(), output=output)
+
+        assert h0 == date(2024, 9, 20)
+        assert [item.as_of for item in checkpoints] == [date(2024, 10, 1), date(2024, 12, 31)]
+
+    @pytest.mark.asyncio
+    async def test_first_import_import_policy_keeps_the_opening_when_the_first_row_comes_later(self, db_session: AsyncSession) -> None:
+        """The opening checkpoint belongs to the history even if the oldest imported row is weeks after it: H0 is at most the day after it."""
+        apply_history = _sets("apply_history")
         output = _parse_output(transactions=["2025-02-01", "2024-11-05"], checkpoints=[("2024-10-01", "opening"), ("2024-12-31", "gap")])
 
         checkpoints, _verifications, h0 = await apply_history(db_session, broker_id=BROKER_ID, plugin=_FakeBankImportPolicyProvider(), output=output)
 
-        assert h0 == date(2024, 11, 5)
-        assert [item.as_of for item in checkpoints] == [date(2024, 12, 31)]
+        assert h0 == date(2024, 10, 2)
+        assert [item.as_of for item in checkpoints] == [date(2024, 10, 1), date(2024, 12, 31)]
 
     @pytest.mark.asyncio
     async def test_first_import_import_policy_without_rows_falls_back_to_the_checkpoint(self, db_session: AsyncSession) -> None:
