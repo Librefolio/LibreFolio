@@ -98,6 +98,14 @@ async def cmd_create_user(username: str, email: str, password: str, is_superuser
             print(f"   • {error}")
         return False
 
+    # The address as the server normalises it, like `set-email`: a form that differs (the domain in capitals) would not
+    # match the variable the owner's protection compares with (A-63 (a))
+    try:
+        email = TypeAdapter(EmailStr).validate_python(email)
+    except ValidationError:
+        print("❌ Not an email address")
+        return False
+
     engine = get_async_engine()
 
     async with AsyncSession(engine) as session:
@@ -207,7 +215,7 @@ async def cmd_set_email(username: str, address: str):
         if user is None:
             print(f"❌ User '{username}' not found")
             return False
-        updated, error = await user_service.update_profile(session, user.id, email=email)
+        updated, error = await user_service.update_profile(session, user.id, email=email, reserve_owner_address=False)
         if updated is None:
             print(f"❌ {error}")
             return False

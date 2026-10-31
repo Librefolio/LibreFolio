@@ -5,6 +5,7 @@ Provides user search functionality for features like broker sharing.
 Does NOT expose email for privacy (GDPR compliance).
 """
 
+import asyncio
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -93,7 +94,7 @@ def _invite_read(invite: AccountToken) -> InviteRead:
     return InviteRead(id=invite.id, grants_admin=invite.grants_admin, email=invite.email, created_at=invite.created_at, expires_at=invite.expires_at, created_by_user_id=invite.created_by_user_id)
 
 
-def _admin_user_read(user: User, *, holds_place: bool = False, pending_setup: bool = False, pending_verification: bool = False, avatar_url: Optional[str] = None) -> AdminUserRead:
+def _admin_user_read(user: User, *, protection: Optional[user_service.ProtectionContext] = None, holds_place: bool = False, pending_setup: bool = False, pending_verification: bool = False, avatar_url: Optional[str] = None) -> AdminUserRead:
     return AdminUserRead(
         id=user.id,
         username=user.username,
@@ -101,7 +102,7 @@ def _admin_user_read(user: User, *, holds_place: bool = False, pending_setup: bo
         is_active=user.is_active,
         is_superuser=user.is_superuser,
         created_at=user.created_at,
-        protected=user_service.account_protection(user) is not None,
+        protected=user_service.account_protection(user, protection) is not None,
         holds_place=holds_place,
         pending_setup=pending_setup,
         pending_verification=pending_verification,
@@ -220,8 +221,10 @@ async def list_accounts(admin: Annotated[User, Depends(require_admin)], session:
     waiting = await email_verification.waiting_ids(session)
     # Each account's avatar, drawn after the row's chevron (N69-4): one query for the whole list
     avatars = await user_service.avatar_urls(session, [user.id for user in users])
+    # The profile and the owner's address, read once for the whole list (A-63 (c)): not once per row
+    protection = await asyncio.to_thread(user_service.protection_context)
     return AdminUserListResponse(
-        items=[_admin_user_read(user, holds_place=user.id in holders, pending_setup=user.id in pending, pending_verification=user.id in waiting, avatar_url=avatars.get(user.id)) for user in users],
+        items=[_admin_user_read(user, protection=protection, holds_place=user.id in holders, pending_setup=user.id in pending, pending_verification=user.id in waiting, avatar_url=avatars.get(user.id)) for user in users],
         usage=_usage_read(await registration_service.user_usage(session)),
     )
 
