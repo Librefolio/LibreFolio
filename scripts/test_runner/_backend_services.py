@@ -1300,6 +1300,18 @@ def services_engine_shared_run(verbose: bool = False, test_names: list = None) -
     return run_command(cmd, "Engine shared run tests", verbose=verbose)
 
 
+def services_ownership_share_option(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the report and the positions series with the owner's share ignored, apply_ownership_share (MF6-3, D4)."""
+    print_section("Services: Ownership Share Option (MF6-3)")
+    print_info("Testing: backend/app/services/portfolio_service.py (get_report, get_positions_series, _engine_run, the L2 key) and financial_math/portfolio/engine.py (calculate: broker_shares, the blob key)")
+    print_info(
+        "Tests: apply_ownership_share=False equals the default for an owner at 100 %, an editor, a viewer; equals the editor's view for an owner at 30 %, 0 %, and 30 %/60 % with transfers (no share mismatch); caches never swap the two answers; the risk scope of one broker is share-invariant by default, whole with the option, stress amounts included (PortfolioService on a private SQLite file)"
+    )
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial/test_ownership_share_option.py", test_names)
+    return run_command(cmd, "Ownership share option tests", verbose=verbose)
+
+
 def services_lone_transfer_legs(verbose: bool = False, test_names: list = None) -> bool:
     """Test decision 47's conversion of the lone giving TRANSFER legs a broker deletion left before 1.3."""
     print_section("Services: Lone Transfer Legs (decision 47)")
@@ -3162,6 +3174,18 @@ Note: No backend server required.
         services_engine_shared_run,
         name="Engine Shared Run",
         desc="FB-14: the Portfolio page's report (every section), the positions series of the same window, the standalone Performance table and BUY funding split make one engine build, also with the report and the series concurrent (single-flight); the old per-caller flags made two; every output (report full and summary+history only, series, contribution, funding; mid-history window and none) equals the old flags' field by field",
+        # The file sits in test_financial/, which roi-fifo-utils runs whole: the derived "all"
+        # skips this action so that the file runs once there.
+        in_all=False,
+        # PURE: PortfolioService on a private SQLite file under tmp_path; no lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "ownership-share-option",
+        services_ownership_share_option,
+        name="Ownership Share Option",
+        desc="MF6-3 (D4): PortfolioReportQuery / PositionsSeriesQuery.apply_ownership_share=False counts every broker whole — equal to the default for an owner at 100 %, an editor, a viewer; equal to the editor's report and series for an owner at 30 %, at 0 %, and at 30 %/60 % of two brokers linked by a TRANSFER and a CASH_TRANSFER (no share mismatch); by default the owner's money stays share × the whole and its ratios the whole's; default, False, default with the caches kept give three right answers and one engine build per flag; the risk scope of one broker has the same weights and TWRR returns at 30 % and whole; PortfolioRiskScope.apply_ownership_share=False gives the editor's scope value, asset values and hypothetical stress amounts to an owner at 30 %, and a composition to an owner at 0 % (whose default holds no asset)",
         # The file sits in test_financial/, which roi-fifo-utils runs whole: the derived "all"
         # skips this action so that the file runs once there.
         in_all=False,

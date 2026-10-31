@@ -650,6 +650,9 @@ class PortfolioCalculationResult:
     missing_fx: dict[str, set[date_type]] = field(default_factory=dict)
     # J-43: the classification's linked internal pairs between brokers owned at different shares.
     share_mismatches: list[ShareMismatch] = field(default_factory=list)
+    # The share of each scope broker the run counted (native_cash.broker_shares): the user's, or 1 each without the
+    # ownership share (MF6-3). The service reads it for its own scaled figures, so they follow the run.
+    broker_shares: dict[int, Decimal] = field(default_factory=dict)
     # B5: every TRANSFER leg replayed as in-kind capital at market value (any date), in replay order.
     market_value_transfers: list[MarketValueTransfer] = field(default_factory=list)
     # The held positions' frames from date_from on (None unless asked: include_positions / compute_position_frames).

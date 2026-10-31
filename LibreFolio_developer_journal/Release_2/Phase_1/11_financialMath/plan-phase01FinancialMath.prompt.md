@@ -5243,3 +5243,22 @@ Ambiente: `npm ci` e `api sync` fatti (nessuna differenza nei contratti); corsia
    > modulo che converte (102 verdi). (2) il golden di `test_native_cash_guard` cambia d'esponente (dieci zeri in meno
    > su `cost_asset`/`wac_asset`, asset in IDR) per W-B63 di W2 (`d90612861`, `fx_rates.rate` RealDecimal): stessi
    > valori; lo rigenero dopo l'unione di W2 nel ramo.
+4. ✅ **Golden di `test_native_cash_guard` dopo W-B63** (31/10, commit `4d8e7d9ee` del coordinatore) — dieci zeri in meno
+   su `cost_asset`/`cost_asset_change`/`wac_asset` (asset IDR): `fx_rates.rate` letto come `RealDecimal`; stessi valori.
+5. ✅ **MF6-3 — report «broker intero» (D4)** (31/10, base `4d8e7d9ee`) — `native_cash.broker_shares(accesses, *,
+   apply_ownership_share=True)`: `effective_share` o 1 per ogni broker. `calculate(apply_ownership_share)` (chiave del
+   blob; `result.broker_shares`, letto da `get_summary` e `get_positions_contribution` per le quantità dei lotti),
+   `_engine_run`, `PortfolioReportQuery`/`PositionsSeriesQuery.apply_ownership_share` (default true; chiave L2),
+   `PortfolioRiskScope.apply_ownership_share` passato da `risk/scope.py`. Esempio: broker da 10 000 €, Owner al 30 % →
+   Dashboard 3 000, pagina broker (false) 10 000; Owner allo 0 % → 0 contro 10 000; i rapporti di un broker uguali.
+   > **⚠️ Fuori pista — il rischio**: il design diceva «rischio senza opzione» (pesi e rendimenti non dipendono dalla
+   > quota), ma lo stress legge `scope_value`/`asset_values`: con la pagina a 10 000 l'impatto sarebbe stato su 3 000.
+   > Opzione aggiunta anche lì (decisione del coordinatore, 31/10). Un Owner allo 0 % oggi non ha errore ma una
+   > composizione vuota (le quantità scalate a 0 cadono sotto la soglia della polvere); con false ha quella dell'editor.
+   > **⚠️ Fuori pista — l'esponente**: un Owner al 100 % ha la quota `1.000000` (Numeric(7,6)), l'editor `1`: i JSON
+   > differiscono negli zeri finali (66 campi), non nei valori. Non normalizzato (cambierebbe le risposte di oggi); il
+   > confronto dei test è numerico.
+   > **Note implementazione**: test-author 18 puri (`test_broker_shares.py`) + 20 di servizio
+   > (`test_ownership_share_option.py`, azione `services ownership-share-option`), rossi prima del codice per la ragione
+   > giusta; `_OldEngineRun` di FB-14 accetta il flag. docs-writer: `financial_math.md#whole-broker`,
+   > `access_control.md`, teoria `portfolio-engine/index.en.md#whole-broker` (debito di traduzione: 1 sezione).
