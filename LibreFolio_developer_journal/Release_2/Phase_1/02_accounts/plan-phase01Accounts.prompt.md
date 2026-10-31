@@ -9116,3 +9116,15 @@ Lotti 1–3 (checkpoint 1): A6-4, A6-5, A6-2. Poi 4–6, 7–8, 9–11 (kickoff-
 
 ### A6-2 · A-19: «Register here» non lampeggia più ✅ (30/10)
 > **Note implementazione**: `LoginCard.svelte` mostra il blocco solo con `instanceConfig.loaded || instanceConfig.failed` (se la richiesta fallisce valgono i default, aperto) e pubblica `data-instance="pending|ready"` sulla scheda. Test: 3 casi in `LoginCard.test.ts`.
+
+Checkpoint 1 committed as `f5c732634`. Checkpoint 2: A6-3, A6-1, A-21b.
+
+### A6-3 · A-17 + TC-1: ordine dei campi e requisiti per i lettori di schermo ✅ (31/10)
+> **Note implementazione**: `RegisterCard.svelte`: Email prima, poi Username, poi la password (il gestore di password prende come nome utente il campo subito prima della password). `PasswordStrength.svelte`: accanto a ✓/✗ un testo `sr-only` (`data-testid="password-rulestate-<key>"`) con le chiavi `auth.passwordStrength.ruleMet` / `ruleNotMet` (4 lingue, `dev.py i18n add`); le icone sono `aria-hidden`. Il testid non è `password-rule-state-…` perché `rulesDrawn()` dei test seleziona `^password-rule-`. Rossi: 1 in `RegisterCard.test.ts`, 1 in `PasswordStrength.test.ts`.
+
+### A6-1 · A-28 + A-36: la riga email del Profilo segue il server ✅ (31/10)
+> **Note implementazione**: `ProfileTab.svelte`: dopo un salvataggio l'input prende la forma conservata dal server (`adoptStoredEmail`, solo se è lo stesso indirizzo a meno delle maiuscole: un indirizzo diverso nello store non è ciò che si è appena salvato); su un 400 `CURRENT_PASSWORD_REQUIRED` per un indirizzo che la scheda legge come invariato la scheda mostra il campo password (`serverAsksPassword`), tiene l'indirizzo scritto e rilegge l'indirizzo salvato. Rossi: 2 in `ProfileTab.test.ts`.
+> **⚠️ Fuori pista**: la prima versione adottava sempre l'email dello store e rompeva il test esistente «tries every field…» (il mock di `checkAuth` non aggiorna lo store); la guardia `sameEmail` lo risolve.
+
+### A-21b · doppioni di username solo in ingresso ✅ (31/10)
+> **Note implementazione**: `user_service.username_is_taken()` (confronto `lower()`, A–Z come SQLite) in `create_user` e `update_profile` (l'account esclude se stesso, può cambiare le maiuscole del proprio nome). Nessuna migrazione, nessun indice; il login resta esatto. Test UNAME-040…042 in `test_username_rules.py` (2 rossi su HEAD, 1 guardia). Il testo della voce di backlog con la «010» non esiste più nel codice: la voce è del coordinatore. Docstring di `get_user_by_username_or_email` riscritta.
