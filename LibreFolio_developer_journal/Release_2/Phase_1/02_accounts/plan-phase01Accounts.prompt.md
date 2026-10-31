@@ -9128,3 +9128,13 @@ Checkpoint 1 committed as `f5c732634`. Checkpoint 2: A6-3, A6-1, A-21b.
 
 ### A-21b · doppioni di username solo in ingresso ✅ (31/10)
 > **Note implementazione**: `user_service.username_is_taken()` (confronto `lower()`, A–Z come SQLite) in `create_user` e `update_profile` (l'account esclude se stesso, può cambiare le maiuscole del proprio nome). Nessuna migrazione, nessun indice; il login resta esatto. Test UNAME-040…042 in `test_username_rules.py` (2 rossi su HEAD, 1 guardia). Il testo della voce di backlog con la «010» non esiste più nel codice: la voce è del coordinatore. Docstring di `get_user_by_username_or_email` riscritta.
+
+Checkpoint 2 committed as `7183dda68`. Checkpoint 3: A-63, then A-64 (a), (c), (e).
+
+### A-63 · note della revisione di A5-1 ✅ (31/10)
+> **Note implementazione**: (a) `cmd_create_user` valida e normalizza l'indirizzo con `EmailStr` come `set-email` (UPROT-021/022, 2 rossi su HEAD). (c) `user_service.ProtectionContext` + `protection_context()`: `account_protection(user, context=None)`; `GET /users` legge profilo e titolare una volta (UPROT-020, rosso su HEAD: una lettura per riga). Lo stub a un argomento di `_protect` in `test_users_admin_api.py` accetta ora `context`. (b) ed (e): una frase in `admin/hosting_providers.en.md` (l'indirizzo dal solo ambiente; nessun `user delete`, togliere la variabile non toglie la protezione perché il marchio di titolare resta: serve cambiare il profilo).
+> **Non fatte**: (d) il controllo `warning` in `config_audit` è di H; (f) il limite di accesso per identificatore è indipendente da A5-1 (decisione di prodotto).
+
+### A-64 · note della revisione di A5-1b (a), (c) ✅ — (e) non fatta (31/10)
+> **Note implementazione**: (a) `user_service.owner_address_reserved()`; `create_user(..., reserve_owner_address=False)` (la registrazione passa True) e `update_profile(..., reserve_owner_address=True)` (la CLI `set-email` passa False; il titolare registrato può): sul `managed` nessun altro prende l'indirizzo di `LIBREFOLIO_ADMIN_EMAIL`, risposta `EMAIL_TAKEN` come per un indirizzo in uso (UPROT-030). Gli inviti non hanno bisogno di nulla: la registrazione con l'invito passa da `register_user`. (c) `build_email_changed(..., by_host=True)` con testi propri `intro_host`/`advice_host` in 4 lingue (EMM-042); `confirm_owner_email_change` li usa (`email_changed_work(..., by_host=True)`).
+> **Per decidere (e)**: il fallback per indirizzo prima della prima sync protegge «per indirizzo, anche un utente comune» ed è fissato dal contratto UPROT-002 (`ordinary-account`) di A5-1. Cambiarlo è una scelta di prodotto; con la riserva (a) nessun altro può prendere l'indirizzo, quindi la finestra è ridotta a chi lo aveva già prima della variabile. Non toccato.

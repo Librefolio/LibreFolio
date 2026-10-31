@@ -154,7 +154,7 @@ SIGNATURES = {
     "build_verification": ({"language", "link", "ttl", "instance"}, {}),
     "build_admin_setup": ({"language", "username", "link", "ttl", "instance"}, {}),
     "build_test_message": ({"language", "username", "instance"}, {}),
-    "build_email_changed": ({"language", "instance"}, {}),
+    "build_email_changed": ({"language", "instance", "by_host"}, {"by_host": False}),
     "build_email_change_confirmation": ({"language", "username", "link", "ttl", "instance"}, {}),
 }
 #: The arguments of each builder that an e-mail shows to its reader (the three kinds an untrusted party can address
@@ -792,7 +792,7 @@ def test_each_catalogue_has_a_section_per_kind_and_nothing_else(language: str) -
 
     assert set(catalogue) == {kind.value for kind in EmailKind} | {"common"}
     section = catalogue["email_changed"]
-    assert set(section) == {"subject", "intro", "advice"}
+    assert set(section) == {"subject", "intro", "advice", "intro_host", "advice_host"}  # the last two: the change the host decided (A-64 (c), EMM-042)
     assert (set(string.Template(section["intro"]).get_identifiers()), set(string.Template(section["advice"]).get_identifiers())) == ({"instance"}, {"instance"})
     print_success(f"{len(EmailKind)} kinds and common; email_changed without an action")
 
@@ -923,3 +923,20 @@ def test_no_text_of_the_three_kinds_has_a_place_for_a_username_or_the_new_addres
     assert "instance" in intro, f"email_changed.intro lost the instance: {sorted(intro)}"
     assert string.Template(catalogue["common"]["greeting_anonymous"]).get_identifiers() == [], "the anonymous greeting has a placeholder"
     print_success("no $username, no $address; $instance kept")
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_the_notice_of_a_change_the_host_decided_says_to_ask_the_host(language: str) -> None:
+    """EMM-042 — A-64 (c): ``build_email_changed(by_host=True)`` is its own text, in each language: it differs from the notice of a change the user made (which says to change the password), names the instance, and has no place for the new address or a username. Red until A-64 (c): the keyword does not exist."""
+    print_section(f"EMM-042: the notice of a host's change, {language}")
+    own = build_email_changed(language=language, instance=INSTANCE)
+    by_host = build_email_changed(language=language, instance=INSTANCE, by_host=True)
+
+    assert by_host.text != own.text and by_host.subject == own.subject, "the host's change has its own body under the same subject"
+    assert INSTANCE in by_host.text, "it names the instance"
+    catalogue = _catalogue(language)["email_changed"]
+    assert {"intro_host", "advice_host"} <= set(catalogue), "both texts exist in the catalogue"
+    for key in ("intro_host", "advice_host"):
+        names = set(string.Template(catalogue[key]).get_identifiers())
+        assert names <= {"instance"}, f"{key} holds only $instance: {sorted(names)}"
+    print_success("its own text")
