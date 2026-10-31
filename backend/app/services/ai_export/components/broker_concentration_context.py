@@ -167,9 +167,10 @@ class BrokerConcentrationContextPayload(StrictModel):
 
 
 def _map_slices(items: Sequence, *, currency_code: str) -> list[AllocationSlice]:
-    """Maps engine allocation items 1:1 and sorts deterministically (desc percent, then name)."""
+    """Maps engine allocation items 1:1 and sorts deterministically (desc percent, then name; a slice without a percent
+    — a sum at or below zero — sorts as 0)."""
     slices = [map_allocation_slice(item, currency_code=currency_code) for item in items]
-    return sorted(slices, key=lambda slice_: (-slice_.percent, slice_.name))
+    return sorted(slices, key=lambda slice_: (-(slice_.percent if slice_.percent is not None else Decimal("0")), slice_.name))
 
 
 def build_currency_allocation(summary: PortfolioSummary | None, *, currency_code: str) -> tuple[list[CurrencyAllocationSlice], ConcentrationCoverage]:

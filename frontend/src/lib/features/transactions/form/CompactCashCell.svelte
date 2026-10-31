@@ -14,6 +14,10 @@
 
   `maxSignificantDigits` (B-48): an amount past it marks the field `aria-invalid`, with a danger border; the form says why.
 
+  `maxFractionDigits` (FB-16): the most decimals the number may have. Past it the field is `aria-invalid` and the text is kept as
+  written, never cut at the blur: the form reads a unit price of 12 decimals, and a 13th digit must be seen and refused, not
+  dropped. Without it the display keeps the default of `formatDecimalForDisplay` (8 decimals), as before.
+
   A blur emits only a value that differs, by exact value or by currency, from the one received (B-47): an amount read back
   padded (`0.010000`) and shown as `0.01` is not a change, and the row stays as it was.
 
@@ -25,7 +29,7 @@
     import type {SignRule} from '$lib/features/transactions/transactionTypeStore';
     import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
     import {formatDecimalForDisplay} from '$lib/utils/core/formatDecimal';
-    import {decimalArrowStep, exceedsSignificantDigits, filterDecimalInput, normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
+    import {decimalArrowStep, decimalDigitCounts, exceedsSignificantDigits, filterDecimalInput, normalizeDecimalInput} from '$lib/utils/core/parseDecimalInput';
     import {exactDecimalEqual} from '$lib/features/transactions/txPayloadHelpers';
     import {computeSignHint} from '$lib/features/transactions/form/signHintColor';
 
@@ -60,9 +64,14 @@
         testid?: string;
         /** At most this many significant digits in the amount (B-48): past it the field is invalid. No cap when unset. */
         maxSignificantDigits?: number;
+        /** At most this many decimals (FB-16): past it the field is invalid and the text is shown whole. No cap when unset. */
+        maxFractionDigits?: number;
     }
 
-    let {value, onChange, signHint = 'free', amountPlaceholder = '0.00', defaultCode = '', originalCurrency, disabled = false, amountDisabled = false, currencyDisabled = false, allowedCurrencies, testid = 'compact-cash', maxSignificantDigits}: Props = $props();
+    let {value, onChange, signHint = 'free', amountPlaceholder = '0.00', defaultCode = '', originalCurrency, disabled = false, amountDisabled = false, currencyDisabled = false, allowedCurrencies, testid = 'compact-cash', maxSignificantDigits, maxFractionDigits}: Props = $props();
+
+    /** What the display keeps of the decimals: a cell with a decimal cap shows the number whole (a text past the cap is refused, never cut). */
+    let displayOptions = $derived(maxFractionDigits !== undefined ? {maxFrac: 60} : {});
 
     // Local edit buffers so an empty `amount` doesn't immediately collapse the cell to `null`
     // while the user is mid-typing. We commit `null` only when both fields are empty AND blur fires.
@@ -81,7 +90,10 @@
     // is ours — keep the user's raw text (separator, trailing zeros) intact.
     $effect(() => {
         const incomingAmountRaw = value?.amount ?? '';
-        const incomingAmount = formatDecimalForDisplay(incomingAmountRaw);
+        const incomingAmount = formatDecimalForDisplay(
+            incomingAmountRaw,
+            untrack(() => displayOptions),
+        );
         const incomingCode = value?.code ?? defaultCode;
         // untrack local state reads to avoid re-running on every keystroke
         const local = untrack(() => amountStr);
@@ -113,7 +125,7 @@
     }
 
     function handleBlur() {
-        amountStr = formatDecimalForDisplay(normalizeDecimalInput(amountStr));
+        amountStr = formatDecimalForDisplay(normalizeDecimalInput(amountStr), displayOptions);
         // B-47: every keystroke has emitted already; the blur only tidies the display. Emitting the tidy form of a value
         // received padded would change the row's text, and the editor would ask to discard an untouched row.
         if (showsReceivedValue()) return;
@@ -144,7 +156,12 @@
     // Colors reflect the VALUE AFTER AUTO-FLIP conformance to the backend rule.
     let signOk = $state(false);
     let signBad = $state(false);
-    let digitsInvalid = $derived(maxSignificantDigits !== undefined && exceedsSignificantDigits(amountStr, maxSignificantDigits));
+    let fractionInvalid = $derived.by(() => {
+        if (maxFractionDigits === undefined) return false;
+        const counts = decimalDigitCounts(normalizeDecimalInput(amountStr));
+        return counts !== null && counts.fractionDigits > maxFractionDigits;
+    });
+    let digitsInvalid = $derived((maxSignificantDigits !== undefined && exceedsSignificantDigits(amountStr, maxSignificantDigits)) || fractionInvalid);
     $effect(() => {
         const {ok, bad} = computeSignHint(parseFloat(normalizeDecimalInput(amountStr)), signHint);
         signOk = ok;

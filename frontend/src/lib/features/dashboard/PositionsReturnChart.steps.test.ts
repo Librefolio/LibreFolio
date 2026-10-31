@@ -120,6 +120,7 @@ interface DrawnOption {
     series: Array<{id: string; step?: unknown}>;
     tooltip: {formatter: (params: unknown) => string; axisPointer: {snap: boolean}};
     xAxis: {axisPointer: {snap: boolean}};
+    dataZoom?: Array<{type: string; xAxisIndex?: number; filterMode?: string; zoomOnMouseWheel?: boolean; start?: number; end?: number}>;
 }
 
 function lastOption(): DrawnOption | undefined {
@@ -202,5 +203,66 @@ describe('the tooltip lists each line on the pointed day', () => {
         expect(html).toContain('Alpha');
         expect(html).toContain(money(0));
         expect(html).not.toContain(money(-50));
+    });
+});
+
+describe('zoom (Y2 FB-4)', () => {
+    it('lets the time axis be zoomed and panned, with every line kept whole', async () => {
+        const option = await mountChart([PORTFOLIO(), A(), B()]);
+        expect(option.dataZoom, 'the chart carries a dataZoom').toHaveLength(1);
+        const [zoom] = option.dataZoom!;
+        expect(zoom.type).toBe('inside');
+        expect(zoom.xAxisIndex).toBe(0);
+        expect(zoom.zoomOnMouseWheel).toBe(true);
+        // A step line must keep the point before the window: filtering would start it at the first point inside.
+        expect(zoom.filterMode).toBe('none');
+    });
+
+    it('does not name a window, so a redraw keeps the one the user set', async () => {
+        const option = await mountChart([A()]);
+        expect(option.dataZoom![0].start).toBeUndefined();
+        expect(option.dataZoom![0].end).toBeUndefined();
+    });
+});
+
+describe('the tooltip on a narrow chart (Y2 FB-5)', () => {
+    const LONG = 'Vanguard FTSE All-World UCITS ETF USD Accumulating with a very long name indeed';
+
+    function parse(html: string): HTMLElement {
+        const template = document.createElement('template');
+        template.innerHTML = html;
+        return template.content.firstElementChild as HTMLElement;
+    }
+
+    it('is capped at the width of the chart, minus the box padding', async () => {
+        const option = await mountChart([
+            stepped('12-3', LONG, [
+                ['2026-01-02', 100],
+                ['2026-01-31', 100],
+            ]),
+        ]);
+        pointAt('2026-01-05');
+        const frame = parse(option.tooltip.formatter([{seriesId: '12-3', value: ['2026-01-02', 100]}]));
+        expect(frame.style.maxWidth).toBe('768px');
+    });
+
+    it('cuts a long name with an ellipsis and keeps the value whole', async () => {
+        const option = await mountChart([
+            stepped('12-3', LONG, [
+                ['2026-01-02', 100],
+                ['2026-01-31', 100],
+            ]),
+        ]);
+        pointAt('2026-01-05');
+        const frame = parse(option.tooltip.formatter([{seriesId: '12-3', value: ['2026-01-02', 100]}]));
+        const row = frame.querySelector('[data-tooltip-row]') as HTMLElement;
+        expect(row, 'the row is marked').not.toBeNull();
+        const [label, value] = Array.from(row.children) as HTMLElement[];
+        expect(label.style.textOverflow).toBe('ellipsis');
+        expect(label.style.overflow).toBe('hidden');
+        expect(label.style.minWidth).toBe('0px');
+        expect(value.style.whiteSpace).toBe('nowrap');
+        expect(value.style.flexShrink).toBe('0');
+        expect(label.textContent).toContain(LONG);
     });
 });

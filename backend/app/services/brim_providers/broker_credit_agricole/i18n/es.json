@@ -1,7 +1,7 @@
 {
   "brimPlugins": {
     "broker_credit_agricole": {
-      "description": "Importa las exportaciones de Crédit Agricole (CSV o XLSX): los movimientos de valores de la «Lista Movimenti Deposito Titoli» (cupones, compras, amortizaciones, vencimientos, transferencias por sucesión, equilibrados con contrapartidas de efectivo automáticas) y los movimientos de cuenta de la «Lista Movimenti Conto» (liquidez, comisiones, impuestos e ingresos como depósitos y retiradas). Los activos se identifican solo por su nombre (sin ISIN).",
+      "description": "Importación desde los exports de Crédit Agricole (CSV o XLSX), cargados juntos como un único conjunto: los movimientos de valores «Lista Movimenti Deposito Titoli» y los movimientos de la cuenta «Lista Movimenti Conto». Cada cupón, compra, reembolso y vencimiento se importa una sola vez, con el efectivo que indica la cuenta; el saldo inicial del export de Excel inicia el efectivo y un periodo sin export de la cuenta se convierte en una corrección de efectivo propuesta.",
       "name": "Crédit Agricole"
     }
   }

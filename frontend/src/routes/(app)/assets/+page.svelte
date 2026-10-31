@@ -1999,43 +1999,58 @@
                 {:else}
                     <!-- The cards' view (Y-40): absolute, percent, rolling return -->
                     <div class="flex rounded-lg border border-lf-subtle overflow-hidden" data-testid="assets-global-view" data-view={globalPrimaryView}>
-                        <button
-                            type="button"
-                            class="flex-1 inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalPrimaryView === 'absolute' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
-                            data-testid="assets-global-view-absolute"
-                            aria-pressed={globalPrimaryView === 'absolute'}
-                            aria-label={$t('chart.showAbsolute')}
-                            title={$t('chart.showAbsolute')}
-                            onclick={() => handleListPrimaryView('absolute')}
-                        >
-                            <ChartLine size={14} />
-                        </button>
-                        <button
-                            type="button"
-                            class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalPrimaryView === 'percentage' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
-                            data-testid="assets-global-view-percentage"
-                            aria-pressed={globalPrimaryView === 'percentage'}
-                            onclick={() => handleListPrimaryView('percentage')}
-                            >%
-                        </button>
-                        <button
-                            type="button"
-                            class="flex-1 inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalPrimaryView === 'calendar-return' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
-                            data-testid="assets-global-view-calendar-return"
-                            aria-pressed={globalPrimaryView === 'calendar-return'}
-                            aria-label={$t('signals.riskRollingReturn.name')}
-                            title={$t('signals.riskRollingReturn.name')}
-                            onclick={() => handleListPrimaryView('calendar-return')}
-                        >
-                            <CalendarSync size={14} />
-                        </button>
+                        <Tooltip text={$t('chart.showAbsolute')} position="bottom" interactiveChild wrapperClass="flex-1" testId="assets-global-view-absolute-tooltip">
+                            <button
+                                type="button"
+                                class="w-full inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalPrimaryView === 'absolute' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+                                data-testid="assets-global-view-absolute"
+                                aria-pressed={globalPrimaryView === 'absolute'}
+                                aria-label={$t('chart.showAbsolute')}
+                                onclick={(event) => {
+                                    event.stopPropagation();
+                                    handleListPrimaryView('absolute');
+                                }}
+                            >
+                                <ChartLine size={14} />
+                            </button>
+                        </Tooltip>
+                        <Tooltip text={$t('chart.showPercentage')} position="bottom" interactiveChild wrapperClass="flex-1" testId="assets-global-view-percentage-tooltip">
+                            <button
+                                type="button"
+                                class="w-full px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalPrimaryView === 'percentage' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+                                data-testid="assets-global-view-percentage"
+                                aria-pressed={globalPrimaryView === 'percentage'}
+                                aria-label={$t('chart.showPercentage')}
+                                onclick={(event) => {
+                                    event.stopPropagation();
+                                    handleListPrimaryView('percentage');
+                                }}
+                            >
+                                %
+                            </button>
+                        </Tooltip>
+                        <Tooltip text={$t('signals.riskRollingReturn.name')} position="bottom" interactiveChild wrapperClass="flex-1" testId="assets-global-view-calendar-return-tooltip">
+                            <button
+                                type="button"
+                                class="w-full inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalPrimaryView === 'calendar-return' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+                                data-testid="assets-global-view-calendar-return"
+                                aria-pressed={globalPrimaryView === 'calendar-return'}
+                                aria-label={$t('signals.riskRollingReturn.name')}
+                                onclick={(event) => {
+                                    event.stopPropagation();
+                                    handleListPrimaryView('calendar-return');
+                                }}
+                            >
+                                <CalendarSync size={14} />
+                            </button>
+                        </Tooltip>
                     </div>
                 {/if}
                 <!-- Settings. The three buttons say what they do in a delayed tooltip (Y5-F1); a click is theirs, so
                      it stops before the tooltip's own click, which would pin the hint over the window it opens. -->
                 <Tooltip text={$t('sharedResource.settingsHint')} position="bottom" interactiveChild testId="assets-chart-settings-tooltip">
                     <button
-                        class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors"
+                        class="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors"
                         onclick={(event) => {
                             event.stopPropagation();
                             handleGlobalSettings();
@@ -2049,7 +2064,7 @@
                 <!-- Sync All -->
                 <Tooltip text={$t('sharedResource.syncAllHint')} position="bottom" interactiveChild testId="assets-sync-all-tooltip">
                     <button
-                        class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors"
+                        class="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors"
                         onclick={(event) => {
                             event.stopPropagation();
                             handleSyncAllAssets();
@@ -2064,7 +2079,7 @@
                 <!-- Refresh All -->
                 <Tooltip text={$t('sharedResource.refreshAllHint')} position="bottom" interactiveChild testId="assets-refresh-tooltip">
                     <button
-                        class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors disabled:opacity-50"
+                        class="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors disabled:opacity-50"
                         data-testid="assets-refresh-button"
                         data-busy={pageBusy.busy ? 'true' : 'false'}
                         disabled={pageBusy.busy}

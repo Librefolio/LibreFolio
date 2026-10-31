@@ -117,6 +117,16 @@ was truncated to when it was written. A per-unit cost basis saved with more than
 total divided by the quantity) now reads back with up to twelve. A value with six decimals or fewer reads back exactly
 as before, ``10.000000`` included. On the developer's demo data every stored quantity and price reads back identical.
 
+The same holds for the last two plain ``NUMERIC`` columns that carry a number the user sees, ``price_history.volume``
+(``NUMERIC(24, 0)``) and ``fx_rates.rate`` (``NUMERIC(24, 10)``): the models now read them through ``RealDecimal`` too
+(W-B63), with the declaration they have. No DDL and no data step. What changes is the read of a stored REAL ±inf, written
+before the input limits or by hand: it was ``Decimal('Infinity')``, which a response writes as ``Infinity`` and a client
+cannot parse; it is now ``None``, as in every other ``RealDecimal`` column, so the row loads and can be deleted. A whole
+volume reads back padded to six decimals, equal to what was written (``1234567`` reads ``1234567.000000``), and a rate
+keeps the digits it had, up to the fifteen significant digits of a double. The ±inf already stored are not cleaned up
+by the migration (the developer's decision, 22/10/2026): a real database that holds one is corrected with an external
+script.
+
 The downgrade goes back step by step: the thirteen indexes again with their ``001`` definitions, then
 ``ux_users_email_lower``, the plugin tables, ``enable_registration`` from ``registration_mode`` (``open`` is ``true``,
 ``invite`` and ``disabled`` are ``false``: the old setting had no middle ground), ``account_tokens``, the owner's index

@@ -11,9 +11,9 @@
     import {defaultDisplayCurrency} from '$lib/stores/app/settings';
     import {currentLanguage} from '$lib/stores/app/language';
     import {formatPercent} from '$lib/utils/core/formatPercent';
-    import {getEnd, getStart, isMaxSentinel, resolveDateSentinel, setDateRange} from '$lib/stores/dateRangeStore.svelte';
+    import {getEnd, getStart, historyStart, isMaxSentinel, resolveDateSentinel, setDateRange} from '$lib/stores/dateRangeStore.svelte';
     import {todayIso} from '$lib/utils/dateOnly';
-    import {ArrowLeft, ArrowRightLeft, Briefcase, Crown, ExternalLink, Eye, FileText, Info, Pencil, Plus, RefreshCw, Share2, Shield, TrendingUp, Upload, Users, Wallet} from 'lucide-svelte';
+    import {ArrowLeft, ArrowRightLeft, Briefcase, Copy, Crown, ExternalLink, Eye, FileText, Info, Pencil, Plus, RefreshCw, Share2, Shield, Trash2, TrendingUp, Upload, Users, Wallet} from 'lucide-svelte';
     import BrokerModal from '$lib/features/brokers/BrokerModal.svelte';
     import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import BrokerImportFilesModal from '$lib/features/brokers/BrokerImportFilesModal.svelte';
@@ -34,6 +34,9 @@
     import {resolveFormItemsForView, type FormModalItems} from '$lib/features/transactions/resolveFormItems';
     import {loadPartnerRows, loadEventTooltipMap} from '$lib/features/transactions/loadTransactionRows';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
+    import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
+    import {txStoreSetAll, txStoreCanEdit} from '$lib/features/transactions/txStore.svelte';
+    import {guardEditableRows} from '$lib/features/transactions/bulk/selectionGuards';
     import type {TXReadItem, AssetEvent} from '$lib/features/transactions/types';
     import type {FilterValue} from '$lib/components/table/types';
     import {buildTransactionsFiltersUrl, applyTransactionColumnFilters} from '../../transactions/filterState';
@@ -63,7 +66,7 @@
     import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';
     import {goto} from '$app/navigation';
     import type {BrokerSummary} from '$lib/types';
-    import {parseCurrencyAmount, safeCurrency, safeString} from '$lib/types';
+    import {parseCurrencyAmount, safeString} from '$lib/types';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import CurrencyAmount from '$lib/components/ui/display/CurrencyAmount.svelte';
     import AiExportMenu from '$lib/features/ai-export/AiExportMenu.svelte';
@@ -123,12 +126,12 @@
     // reactive statement or the template reads it.
     $: void pnlCandlesLoading;
     let positionsSeriesScope: PositionsSeriesScope;
-    $: positionsSeriesScope = {brokerIds: [data.brokerId], start: dateFrom || undefined, end: dateTo || undefined, currency: targetCurrency || baseCurrency, ready: broker !== null, version: refreshVersion};
+    $: positionsSeriesScope = {brokerIds: [data.brokerId], start: historyStart(isMaxPending, dateFrom), end: dateTo || undefined, currency: targetCurrency || baseCurrency, ready: broker !== null, version: refreshVersion};
     $: positionsSeriesCtl.sync(positionsSeriesScope);
 
     /** The scope of a lazy report section: this broker, the period and the currency. An answer of another scope is not applied, and a failure counts for its own scope only (Y-24). */
     function reportScope(): string {
-        return `${data.brokerId}|${dateFrom}|${dateTo}|${targetCurrency}`;
+        return `${data.brokerId}|${historyStart(isMaxPending, dateFrom)}|${dateTo}|${targetCurrency}`;
     }
 
     let editModalOpen = false;
@@ -150,6 +153,59 @@
         bulkIntent = {action: 'create'};
         bulkOpen = true;
     }
+
+    /** The bulk workspace from a selection or a row of the Transactions tab (FB-17), as the Transactions page opens it. */
+    function openBulkIntent(intent: import('$lib/features/transactions/bulk/TransactionBulkModal.svelte').WorkspaceIntent) {
+        bulkIntent = intent;
+        bulkOpen = true;
+    }
+
+    /** The rows ticked in the Transactions tab; the bar below shows only to who can edit this broker. */
+    let txSelectedRows: TXReadItem[] = [];
+
+    function handleTxSelectionChange(rows: TXReadItem[]) {
+        txSelectedRows = rows;
+    }
+
+    /** Empty both selections: the table's own (the checkboxes) and this page's (the bar). */
+    function clearTxSelection() {
+        txTableComponent?.getTableRef()?.clearSelection();
+        txSelectedRows = [];
+    }
+
+    /** The selected rows the user can edit, with the reason shown when some or all are left out (`selectionGuards.ts`, shared with the Transactions page). */
+    function editableTxSelection(): TXReadItem[] | null {
+        return guardEditableRows(txSelectedRows, txStoreCanEdit, toasts, $_);
+    }
+
+    function editSelectedTx() {
+        if (txSelectedRows.length === 0) return;
+        const rows = editableTxSelection();
+        if (rows) openBulkIntent({action: 'edit', txIds: rows.map((r) => r.id)});
+    }
+
+    function cloneSelectedTx() {
+        if (txSelectedRows.length === 0) return;
+        openBulkIntent({action: 'clone', txIds: txSelectedRows.map((r) => r.id)});
+    }
+
+    function deleteSelectedTx() {
+        if (txSelectedRows.length === 0) return;
+        const rows = editableTxSelection();
+        if (rows) openBulkIntent({action: 'delete', txIds: rows.map((r) => r.id)});
+    }
+
+    /** The workspace saved something: the rows the selection pointed at may have changed or gone, and the tab reloads. */
+    async function handleBulkCommitted() {
+        clearTxSelection();
+        await handleRefresh();
+    }
+
+    $: txBulkActions = [
+        {id: 'edit', icon: Pencil, label: () => $_('common.edit'), onClick: editSelectedTx},
+        {id: 'clone', icon: Copy, label: () => $_('transactions.actions.clone'), onClick: cloneSelectedTx},
+        {id: 'delete', icon: Trash2, label: () => $_('common.delete'), variant: 'danger' as const, onClick: deleteSelectedTx},
+    ];
 
     /** AI export state — dropdown open/position handled internally by AiExportMenu. */
     let aiExportCompatibility: AiExportCatalogCompatibilityResult = DISABLED_AI_EXPORT_COMPATIBILITY;
@@ -340,7 +396,7 @@
      */
     async function loadOverview(force = false) {
         const options = {includeIncomeHistory: true, includeCostHistory: true, includeDepositHistory: true, includeAcquisitionFunding: true};
-        const cached = peekReport([data.brokerId], dateFrom || undefined, dateTo || undefined, targetCurrency, false, false, true, true, options);
+        const cached = peekReport([data.brokerId], historyStart(isMaxPending, dateFrom), dateTo || undefined, targetCurrency, false, false, true, true, options);
         if (cached) applyOverview(cached.report);
         if (cached && !cached.stale && !force) {
             reportLoading = false;
@@ -348,7 +404,7 @@
         }
         reportLoading = true;
         try {
-            const report = await fetchReport([data.brokerId], dateFrom || undefined, dateTo || undefined, targetCurrency, force, undefined, undefined, undefined, undefined, options);
+            const report = await fetchReport([data.brokerId], historyStart(isMaxPending, dateFrom), dateTo || undefined, targetCurrency, force, undefined, undefined, undefined, undefined, options);
             if (report || !cached) applyOverview(report);
             else toasts.error(`${$_('common.refresh')} — ${escapeHtml(portfolioError() ?? $_('common.error'))}`);
         } finally {
@@ -395,7 +451,7 @@
         pnlCandlesLoading = true;
         try {
             // Only pnl_candles is read, so every other section is switched off.
-            const report = await fetchReport([data.brokerId], dateFrom || undefined, dateTo || undefined, targetCurrency, false, false, false, false, false, {includePnlCandles: true});
+            const report = await fetchReport([data.brokerId], historyStart(isMaxPending, dateFrom), dateTo || undefined, targetCurrency, false, false, false, false, false, {includePnlCandles: true});
             // An answer of another scope is not this one's: the scope on screen asks for its own.
             if (reportScope() !== askedScope) return;
             if (report) candlesRetry.succeeded(askedScope);
@@ -413,7 +469,7 @@
         contributionLoading = true;
         try {
             // includeHistory/includeAllocationHistory=false: only positions_contribution is read below.
-            const report = await fetchReport([broker.id], dateFrom || undefined, dateTo || undefined, targetCurrency, false, true, false, false, false);
+            const report = await fetchReport([broker.id], historyStart(isMaxPending, dateFrom), dateTo || undefined, targetCurrency, false, true, false, false, false);
             if (reportScope() !== askedScope) return;
             // The outcome is recorded before `finally` lets the flag go: the effect it wakes reads it (Y-24).
             if (report) contributionRetry.succeeded(askedScope);
@@ -443,6 +499,8 @@
             const [partner, tooltipMap] = await Promise.all([loadPartnerRows(txMainRows), loadEventTooltipMap(txMainRows)]);
             txPartnerRows = partner;
             txEventTooltipMap = tooltipMap;
+            // The bulk workspace reads the originals of a selected row from the store (FB-17), as the Transactions page fills it.
+            txStoreSetAll(txMainRows, txPartnerRows);
             txLoaded = true;
         } catch (e) {
             console.error('Failed to load transactions:', e);
@@ -733,6 +791,7 @@
                             {depositHistory}
                             {acquisitionFunding}
                             loading={reportLoading && portfolioHistory.length === 0}
+                            {pnlCandlesLoading}
                             baseCurrency={targetCurrency || baseCurrency}
                         />
                     </div>
@@ -803,6 +862,9 @@
                         </a>
                     </div>
                     <div class="flex items-center gap-2">
+                        {#if canEdit && txSelectedRows.length > 0}
+                            <DataTableToolbar selectedCount={txSelectedRows.length} bulkActions={txBulkActions} onClearSelection={clearTxSelection} />
+                        {/if}
                         <ColumnVisibilityToggle tableRef={txTableComponent?.getTableRef()} />
                         {#if canEdit}
                             <button class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-all" on:click={openImportTransactions} data-testid="broker-import-transactions">
@@ -831,7 +893,11 @@
                             eventTooltipMap={txEventTooltipMap}
                             currentPage={txCurrentPage}
                             pageSize={txPageSize}
-                            hideActions={true}
+                            hideActions={!canEdit}
+                            onSelectionChange={handleTxSelectionChange}
+                            onEditRow={(row) => openBulkIntent({action: 'edit', txIds: [row.id]})}
+                            onCloneRow={(row) => openBulkIntent({action: 'clone', txIds: [row.id]})}
+                            onDeleteRow={(row) => openBulkIntent({action: 'delete', txIds: [row.id]})}
                             onFiltersChange={(f) => (txColumnFilters = f)}
                             onPageChange={(page) => (txCurrentPage = page)}
                             onPageSizeChange={(size) => {
@@ -880,18 +946,6 @@
                             <span class="text-lf-secondary">{formatDate(broker.created_at, $uiLocaleStore)}</span>
                         </div>
                     </div>
-
-                    {#if broker.total_value_base_currency}
-                        {@const totalValue = safeCurrency(broker.total_value_base_currency)}
-                        {#if totalValue}
-                            <div class="mt-4 pt-4 border-t border-lf-subtle">
-                                <div class="text-sm text-lf-muted">{$_('common.totalValue')}</div>
-                                <div class="text-2xl font-bold text-lf-link">
-                                    <CurrencyAmount amount={parseCurrencyAmount(totalValue.amount)} code={totalValue.code} />
-                                </div>
-                            </div>
-                        {/if}
-                    {/if}
                 </div>
 
                 <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle p-4" data-testid="broker-sharing-section">
@@ -936,7 +990,7 @@
             bulkOpen = false;
             bulkIntent = undefined;
         }}
-        onCommitted={handleRefresh}
+        onCommitted={handleBulkCommitted}
     />
 
     <BrokerImportFilesModal open={importFilesModalOpen} brokerId={broker.id} brokerName={broker.name} onClose={() => (importFilesModalOpen = false)} />

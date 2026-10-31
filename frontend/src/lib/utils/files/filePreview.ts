@@ -1,6 +1,5 @@
 import {zodiosApi} from '$lib/api';
 import type {BrimFile, FileData, FilePreviewResponse, FilePreviewType, UploadedFile} from '$lib/types';
-import {extractErrorMessage} from '$lib/utils/trySave';
 
 const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg', '.bmp', '.tiff', '.tif', '.ico']);
 const MARKDOWN_EXTENSIONS = new Set(['.md', '.markdown', '.mdown']);
@@ -53,10 +52,6 @@ export async function fetchFilePreview(target: {source: 'static'; fileId: string
               params: {file_id: target.fileId},
               queries: sheetName ? {sheet_name: sheetName} : undefined,
           })) as FilePreviewResponse);
-}
-
-export function getFilePreviewError(error: unknown, fallback = 'Preview failed'): string {
-    return extractErrorMessage(error, fallback);
 }
 
 function getExtension(filename: string): string {

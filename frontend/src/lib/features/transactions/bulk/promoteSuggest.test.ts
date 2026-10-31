@@ -137,13 +137,21 @@ function tempIds(entries: Record<number, string>): (key: number) => string | und
     return (key) => entries[key];
 }
 
+/** The fourth parameter (W6-9): every candidate row is loaded in the transaction store. */
+const allLoaded = (): boolean => true;
+/** A loader that knows only the given ids. */
+const loadedIds =
+    (...ids: number[]) =>
+    (id: number): boolean =>
+        ids.includes(id);
+
 describe('importableSuggestions', () => {
     it('offers, per asked row, the candidates the editor does not hold yet — new rows (negative ids) like saved ones', () => {
         const results = new Map<number, SuggestCandidate[]>([
             [-1, [candidate(101)]],
             [55, [candidate(102, 2, '2026-04-02', 'WITHDRAWAL')]],
         ]);
-        expect(importableSuggestions(results, tempIds({[-1]: 'new-row', 55: 'saved-row'}), new Set())).toEqual([
+        expect(importableSuggestions(results, tempIds({[-1]: 'new-row', 55: 'saved-row'}), new Set(), allLoaded)).toEqual([
             {key: -1, tempId: 'new-row', candidates: [candidate(101)]},
             {key: 55, tempId: 'saved-row', candidates: [candidate(102, 2, '2026-04-02', 'WITHDRAWAL')]},
         ]);
@@ -151,7 +159,7 @@ describe('importableSuggestions', () => {
 
     it('drops the candidates already in the editor, keeping the others in their order', () => {
         const results = new Map([[-3, [candidate(201), candidate(202), candidate(203)]]]);
-        expect(importableSuggestions(results, tempIds({[-3]: 'row'}), new Set([202]))).toEqual([{key: -3, tempId: 'row', candidates: [candidate(201), candidate(203)]}]);
+        expect(importableSuggestions(results, tempIds({[-3]: 'row'}), new Set([202]), allLoaded)).toEqual([{key: -3, tempId: 'row', candidates: [candidate(201), candidate(203)]}]);
     });
 
     it('drops a row whose candidates are all in the editor already, or that has none', () => {
@@ -160,7 +168,7 @@ describe('importableSuggestions', () => {
             [-2, []],
             [-4, [candidate(303)]],
         ]);
-        expect(importableSuggestions(results, tempIds({[-1]: 'all-held', [-2]: 'no-candidate', [-4]: 'one-missing'}), new Set([301, 302]))).toEqual([{key: -4, tempId: 'one-missing', candidates: [candidate(303)]}]);
+        expect(importableSuggestions(results, tempIds({[-1]: 'all-held', [-2]: 'no-candidate', [-4]: 'one-missing'}), new Set([301, 302]), allLoaded)).toEqual([{key: -4, tempId: 'one-missing', candidates: [candidate(303)]}]);
     });
 
     it('drops an asked row that is no longer in the editor', () => {
@@ -168,7 +176,7 @@ describe('importableSuggestions', () => {
             [-1, [candidate(401)]],
             [-2, [candidate(402)]],
         ]);
-        expect(importableSuggestions(results, tempIds({[-2]: 'still-here'}), new Set())).toEqual([{key: -2, tempId: 'still-here', candidates: [candidate(402)]}]);
+        expect(importableSuggestions(results, tempIds({[-2]: 'still-here'}), new Set(), allLoaded)).toEqual([{key: -2, tempId: 'still-here', candidates: [candidate(402)]}]);
     });
 
     it('keeps the order of the answer', () => {
@@ -177,11 +185,11 @@ describe('importableSuggestions', () => {
             [-7, [candidate(501)]],
             [3, [candidate(502)]],
         ]);
-        expect(importableSuggestions(results, tempIds({9: 'a', [-7]: 'b', 3: 'c'}), new Set()).map((entry) => entry.key)).toEqual([9, -7, 3]);
+        expect(importableSuggestions(results, tempIds({9: 'a', [-7]: 'b', 3: 'c'}), new Set(), allLoaded).map((entry) => entry.key)).toEqual([9, -7, 3]);
     });
 
     it('answers nothing for an empty answer', () => {
-        expect(importableSuggestions(new Map(), tempIds({}), new Set([1]))).toEqual([]);
+        expect(importableSuggestions(new Map(), tempIds({}), new Set([1]), allLoaded)).toEqual([]);
     });
 
     it('returns its own lists and leaves the answer alone — whether some candidates are held or none', () => {
@@ -191,13 +199,60 @@ describe('importableSuggestions', () => {
             [-1, partlyHeld],
             [-2, noneHeld],
         ]);
-        const entries = importableSuggestions(results, tempIds({[-1]: 'row', [-2]: 'other'}), new Set([602]));
+        const entries = importableSuggestions(results, tempIds({[-1]: 'row', [-2]: 'other'}), new Set([602]), allLoaded);
         expect(entries.map((entry) => entry.candidates)).toEqual([[candidate(601)], [candidate(603)]]);
         expect(entries[0].candidates).not.toBe(partlyHeld);
         expect(entries[1].candidates).not.toBe(noneHeld);
         expect(partlyHeld).toEqual([candidate(601), candidate(602)]);
         expect(results.get(-1)).toBe(partlyHeld);
         expect(results.get(-2)).toBe(noneHeld);
+    });
+});
+
+/**
+ * W6-9 (C-45): the 💡 counts what the picker can show, and the picker lists only rows the transaction store holds.
+ * A candidate whose row is not loaded was counted and then not shown. The fourth parameter `isLoaded` filters them.
+ */
+describe('importableSuggestions — only candidates whose row is loaded (W6-9)', () => {
+    it('returns only the loaded candidates of a row that has both kinds, in their order', () => {
+        const results = new Map([[-1, [candidate(701), candidate(702), candidate(703)]]]);
+        expect(importableSuggestions(results, tempIds({[-1]: 'row'}), new Set(), loadedIds(701, 703))).toEqual([{key: -1, tempId: 'row', candidates: [candidate(701), candidate(703)]}]);
+    });
+
+    it('omits an asked row whose candidates are all unloaded, and keeps the one that has a loaded candidate', () => {
+        const results = new Map([
+            [-1, [candidate(711), candidate(712)]],
+            [-2, [candidate(713)]],
+        ]);
+        expect(importableSuggestions(results, tempIds({[-1]: 'nothing-loaded', [-2]: 'one-loaded'}), new Set(), loadedIds(713))).toEqual([{key: -2, tempId: 'one-loaded', candidates: [candidate(713)]}]);
+    });
+
+    it('still leaves out the candidates already in the editor, loaded or not', () => {
+        const results = new Map([[-1, [candidate(721), candidate(722), candidate(723)]]]);
+        expect(importableSuggestions(results, tempIds({[-1]: 'row'}), new Set([721]), loadedIds(721, 722))).toEqual([{key: -1, tempId: 'row', candidates: [candidate(722)]}]);
+    });
+
+    it('still skips an asked row that is gone, even when its candidates are loaded', () => {
+        const results = new Map([
+            [-1, [candidate(731)]],
+            [-2, [candidate(732)]],
+        ]);
+        expect(importableSuggestions(results, tempIds({[-2]: 'still-here'}), new Set(), loadedIds(731, 732))).toEqual([{key: -2, tempId: 'still-here', candidates: [candidate(732)]}]);
+    });
+
+    it('asks the loader about candidate ids, never about the asked key', () => {
+        const asked: number[] = [];
+        const results = new Map([[55, [candidate(741)]]]);
+        importableSuggestions(results, tempIds({55: 'row'}), new Set(), (id) => {
+            asked.push(id);
+            return true;
+        });
+        expect(asked).toEqual([741]);
+    });
+
+    it('answers nothing when no candidate is loaded', () => {
+        const results = new Map([[-1, [candidate(751)]]]);
+        expect(importableSuggestions(results, tempIds({[-1]: 'row'}), new Set(), () => false)).toEqual([]);
     });
 });
 
