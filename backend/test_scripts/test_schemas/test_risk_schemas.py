@@ -1292,6 +1292,7 @@ def test_portfolio_scope_asset_slice_is_unique_sorted_and_bounded():
         "kind": "portfolio",
         "broker_ids": [3, 9],
         "asset_ids": [2, 7],
+        "apply_ownership_share": True,
     }
     assert PortfolioRiskScope(kind="portfolio").asset_ids is None
     assert PortfolioRiskScope(kind="portfolio", asset_ids=list(range(1, 101))).asset_ids[-1] == 100
