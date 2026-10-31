@@ -32,10 +32,10 @@
     import {_ as t} from '$lib/i18n';
     import {currentLanguage} from '$lib/stores/app/language';
     import {currencyStoreVersion, ensureCurrenciesLoaded, getCurrencyInfo} from '$lib/stores/reference/currencyStore';
-    import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
+    import {assetTypeBadgeClass, assetTypeBadgeDotClass, getAssetTypeIconUrl} from '$lib/utils/assetTypes';
     import {overflowScrollTextClass} from '$lib/utils/overflowScroll';
 
-    import {applyFilters, assetSearchText, pickerRows, toggleVisibleRows, visibleRowsAllChecked, type PickerAsset, type PickerSection, type PickerVerdict, type SelectionFilters} from './assetPicker';
+    import {applyFilters, assetScope, assetSearchText, pickerRows, toggleVisibleRows, visibleRowsAllChecked, type PickerAsset, type PickerSection, type PickerVerdict, type SelectionFilters} from './assetPicker';
     import CheckMenu, {type CheckMenuItem} from './CheckMenu.svelte';
     import {filterOptions, firstSelectable, isSelectable, stepSelectable} from './optionFilter';
     import SelectPopover from './SelectPopover.svelte';
@@ -117,6 +117,12 @@
     let lastClosedAt = 0;
 
     const listboxId = `asset-picker-listbox-${Math.random().toString(36).substring(2, 9)}`;
+
+    /** A currency's flag, read from the cache: the rows redraw once it has loaded. */
+    let flagOf = $derived.by(() => {
+        void $currencyStoreVersion;
+        return (code: string): string => getCurrencyInfo(code).flag_emoji;
+    });
 
     let filtersActive = $derived(filters.types.length > 0 || filters.currencies.length > 0);
 
@@ -230,18 +236,31 @@
         return {value: String(asset.id), label: asset.display_name, searchText: searchTextOf(asset), icon: iconOf(asset), disabled: isBlocked, data: asset};
     }
 
+    /**
+     * The groups after the caller's own (the benchmarks): the Assets list's usage panels, yours, other users', watched. An asset joins one
+     * only when its caller said who holds it (`held_by_me` / `held_by_others`); one that did not stays in the rest.
+     */
+    let scopeSections = $derived<PickerSection[]>(
+        (['own', 'others', 'analysis'] as const).map((scope) => ({
+            key: `scope-${scope}`,
+            label: $t(`assets.panels.${scope}`),
+            match: (asset: PickerAsset) => (asset.held_by_me !== undefined || asset.held_by_others !== undefined) && assetScope(asset) === scope,
+        })),
+    );
+
     /** `AssetSelect`'s sections: each asset joins the first section that takes it; empty sections print no title; the rest is titled only under a titled section. */
     function sectioned(options: SelectOption[]): SelectOption[] {
-        if (!sections || sections.length === 0) return options;
-        const buckets = new Map<string, SelectOption[]>(sections.map((section) => [section.key, []]));
+        const all = [...(sections ?? []), ...scopeSections];
+        if (!options.some((option) => !option.header && all.some((section) => section.match(assetOf(option))))) return options;
+        const buckets = new Map<string, SelectOption[]>(all.map((section) => [section.key, []]));
         const unclaimed: SelectOption[] = [];
         for (const option of options) {
-            const section = sections.find((candidate) => candidate.match(assetOf(option)));
+            const section = all.find((candidate) => candidate.match(assetOf(option)));
             if (section) buckets.get(section.key)!.push(option);
             else unclaimed.push(option);
         }
         const out: SelectOption[] = [];
-        for (const section of sections) {
+        for (const section of all) {
             const members = buckets.get(section.key)!;
             if (members.length === 0) continue;
             out.push({value: `__section:${section.key}`, label: section.label, header: true});
@@ -404,7 +423,17 @@
 
 {#snippet filterMenus()}
     <div class="mt-2 flex flex-wrap items-center gap-2" data-testid="{testId}-filters">
-        <CheckMenu label={$t('assetPicker.filters.type')} icon={Layers} items={typeItems} selected={filters.types} ontoggle={(item) => toggleFilter('types', item)} onclear={() => (filters = {...filters, types: []})} clearLabel={$t('assetPicker.filters.clear')} testId="{testId}-filter-type" />
+        <CheckMenu
+            label={$t('assetPicker.filters.type')}
+            icon={Layers}
+            items={typeItems}
+            selected={filters.types}
+            ontoggle={(item) => toggleFilter('types', item)}
+            onclear={() => (filters = {...filters, types: []})}
+            clearLabel={$t('assetPicker.filters.clear')}
+            testId="{testId}-filter-type"
+            floating={mode === 'single'}
+        />
         <CheckMenu
             label={$t('assetPicker.filters.currency')}
             icon={Coins}
@@ -414,6 +443,7 @@
             onclear={() => (filters = {...filters, currencies: []})}
             clearLabel={$t('assetPicker.filters.clear')}
             testId="{testId}-filter-currency"
+            floating={mode === 'single'}
         />
         {#if filtersActive}
             <button type="button" class="ml-auto inline-flex items-center gap-0.5 text-[11px] text-lf-link hover:underline" onclick={clearFilters} data-testid="{testId}-filters-clear">
@@ -422,6 +452,24 @@
             </button>
         {/if}
     </div>
+{/snippet}
+
+{#snippet typeBadge(asset: PickerAsset)}
+    {@const typeDot = assetTypeBadgeDotClass(asset.asset_type)}
+    <!-- The design system's badge of the type, as the cards draw it. A long label is capped and scrolls: it never covers the name. -->
+    <span class="inline-flex max-w-[7rem] shrink-0 items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium {assetTypeBadgeClass(asset.asset_type)}" data-testid="{testId}-type-{asset.id}">
+        <span use:scrollOnOverflow class="{overflowScrollTextClass} min-w-0">{typeLabel(asset.asset_type)}</span>
+        {#if typeDot}
+            <span class="inline-block h-1.5 w-1.5 shrink-0 rounded-full {typeDot}" aria-hidden="true"></span>
+        {/if}
+    </span>
+{/snippet}
+
+{#snippet currencyCell(asset: PickerAsset)}
+    {@const code = asset.currency?.trim() ?? ''}
+    <span class="min-w-[3.25rem] shrink-0 whitespace-nowrap text-right font-mono text-[10px] text-lf-muted" data-testid="{testId}-currency-{asset.id}">
+        {#if code}<span class="emoji-flag" aria-hidden="true">{flagOf(code)}</span> {code}{/if}
+    </span>
 {/snippet}
 
 {#snippet warningMark(asset: PickerAsset, verdict: PickerVerdict | undefined)}
@@ -479,8 +527,8 @@
                                 <img src={asset.icon_url || getAssetTypeIconUrl(asset.asset_type)} alt="" class="h-4 w-4 shrink-0 object-contain" onerror={hideBrokenIcon} />
                                 <span use:scrollOnOverflow class="{overflowScrollTextClass} min-w-0 flex-1">{asset.display_name}</span>
                                 {@render warningMark(asset, verdict)}
-                                <span class="shrink-0 text-[10px] text-lf-muted">{typeLabel(asset.asset_type)}</span>
-                                <span class="w-8 shrink-0 text-right font-mono text-[10px] text-lf-muted">{asset.currency?.trim() ?? ''}</span>
+                                {@render typeBadge(asset)}
+                                {@render currencyCell(asset)}
                             </button>
                         {/each}
                     </div>
@@ -611,8 +659,8 @@
                                         <span data-testid="asset-select-inactive-badge" class="shrink-0 rounded bg-lf-neutral px-1.5 py-0.5 text-[10px] font-medium text-lf-secondary">{$t('assets.edit.status.inactive')}</span>
                                     {/if}
                                     {@render warningMark(asset, verdict)}
-                                    <span class="shrink-0 text-[10px] text-lf-muted">{typeLabel(asset.asset_type)}</span>
-                                    <span class="w-8 shrink-0 text-right font-mono text-[10px] text-lf-muted">{asset.currency?.trim() ?? ''}</span>
+                                    {@render typeBadge(asset)}
+                                    {@render currencyCell(asset)}
                                 </button>
                             {/if}
                         {/each}

@@ -169,6 +169,8 @@
       "rowSelect": "Seleziona la riga per disegnarne il rendimento",
       "viewRolling": "Mobile",
       "viewRollingHint": "Percentuale di cui si è mosso il prezzo dell'asset in una finestra che scorre lungo il periodo: per confrontare gli asset fra loro"
-    }
+    },
+    "allocationNoShares": "Nessuna percentuale da mostrare: le fette sommano zero o meno (per esempio uno scoperto che annulla le posizioni). Gli importi sono elencati qui sotto.",
+    "allocationHistoryNoShares": "Nessuna percentuale da mostrare: in questi giorni le fette sommano zero o meno."
   }
 }

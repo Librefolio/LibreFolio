@@ -359,7 +359,9 @@
     "syncSelection": "Sync. sélection",
     "settingsHint": "Modifie l'aspect des graphiques ainsi que les indicateurs et comparaisons qu'ils tracent. S'applique à tous les graphiques de la liste.",
     "syncAllHint": "Demande aux fournisseurs de données les nouvelles données et les enregistre dans LibreFolio.",
-    "refreshAllHint": "Recharge ce que vous voyez depuis LibreFolio, sans interroger les fournisseurs de données."
+    "refreshAllHint": "Recharge ce que vous voyez depuis LibreFolio, sans interroger les fournisseurs de données.",
+    "viewGrid": "Afficher en cartes",
+    "viewTable": "Afficher en tableau"
   },
   "table": {
     "columns": "Colonnes",

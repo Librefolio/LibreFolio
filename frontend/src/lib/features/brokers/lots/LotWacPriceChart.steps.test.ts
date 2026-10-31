@@ -26,6 +26,7 @@ const {chartInstances, echartsModule} = vi.hoisted(() => {
         off: (event: string) => void;
         getZr: () => {on: () => void; off: () => void};
         dispatchAction: (action: unknown) => void;
+        convertToPixel: (finder: unknown, value: number) => number;
         resize: () => void;
         clear: () => void;
         isDisposed: () => boolean;
@@ -51,7 +52,12 @@ const {chartInstances, echartsModule} = vi.hoisted(() => {
                 chart.handlers.delete(event);
             },
             getZr: () => ({on: () => {}, off: () => {}}),
-            dispatchAction: () => {},
+            // The pointer snap moves the pointer with a second `updateAxisPointer`: ECharts hands it back to the listeners
+            dispatchAction: (action) => {
+                const payload = action as {type?: string; axesInfo?: unknown};
+                if (payload.type === 'updateAxisPointer') for (const handler of chart.handlers.get('updateAxisPointer') ?? []) handler({axesInfo: payload.axesInfo});
+            },
+            convertToPixel: (_finder, value) => value / 1_000_000_000,
             resize: () => {},
             clear: () => {},
             isDisposed: () => disposed,
@@ -87,6 +93,8 @@ import {render, setupI18n, waitFor} from '$test/component';
 import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 import {addDays} from '$lib/utils/dateOnly';
 import LotWacPriceChart from './LotWacPriceChart.svelte';
+import {setGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
+import {MOMENTS_ON_THE_NEWEST_DAY, MOMENTS_ON_THE_OLDEST_DAY, firePointerAt, tooltipHoldsDay} from '$test/timeAxisPointer';
 
 const wac = (broker_id: number, date: string, through: string, value: number) => ({broker_id, date, through, wac: String(value), pool_qty: '10'});
 const total = (date: string, through: string, value: number) => ({date, through, wac: String(value), pool_qty: '10'});
@@ -128,6 +136,7 @@ beforeAll(async () => {
 afterAll(() => restoreRects?.());
 beforeEach(() => {
     chartInstances.length = 0;
+    setGlobalLineShape('steps');
 });
 
 async function mountChart(props: Record<string, unknown> = {}): Promise<DrawnOption> {
@@ -217,5 +226,37 @@ describe('the tooltip of a step line', () => {
         const option = await mountChart();
         const html = option.tooltip.formatter([nearestParam(option, market(option), '2026-01-15')]);
         expect(html).toContain(money(25));
+    });
+
+    it.each(MOMENTS_ON_THE_NEWEST_DAY)('opens on the newest day with the pointer at its $label', async (moment) => {
+        const option = await mountChart();
+        // 31 January is the last day of the range; the point ECharts hands over is the first one, the 2nd.
+        firePointerAt(chartInstances[0].handlers.get('updateAxisPointer') ?? [], '2026-01-31', moment);
+        const html = option.tooltip.formatter([nearestParam(option, market(option), '2026-01-02')]);
+        expect(tooltipHoldsDay(html, '2026-01-31')).toBe(true);
+        expect(html).toContain(money(25));
+    });
+
+    it.each(MOMENTS_ON_THE_OLDEST_DAY)('opens on the oldest day shown with the pointer at its $label', async (moment) => {
+        const option = await mountChart();
+        firePointerAt(chartInstances[0].handlers.get('updateAxisPointer') ?? [], '2026-01-02', moment);
+        const html = option.tooltip.formatter([nearestParam(option, market(option), '2026-01-31')]);
+        expect(tooltipHoldsDay(html, '2026-01-02')).toBe(true);
+        expect(html).toContain(money(20));
+    });
+});
+
+describe('the line shape the user chose (Y2 FB-3)', () => {
+    it('joins the points by segments when the choice is segments', async () => {
+        setGlobalLineShape('segments');
+        const option = await mountChart();
+        expect(lines(option).length).toBeGreaterThanOrEqual(2);
+        expect(lines(option).every((series) => series.step === false)).toBe(true);
+    });
+
+    it('draws smooth lines when the choice is spline', async () => {
+        setGlobalLineShape('spline');
+        const option = await mountChart();
+        expect(lines(option).every((series) => series.step === false && (series as {smooth?: boolean}).smooth === true)).toBe(true);
     });
 });

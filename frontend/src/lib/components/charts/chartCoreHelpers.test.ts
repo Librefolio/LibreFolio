@@ -3807,7 +3807,7 @@ describe('canonical overlay axis and reference helpers', () => {
 
         /** The P&L view on screen, as GrowthChart's `seriesContext()` builds it for the series builders. */
         function pnlContext(pnlSubmode: PnlSubmode, aggregationInputs: AggregationInputs): GrowthSeriesContext {
-            return {viewMode: 'pnl', pnlSubmode, eurLabels: EUR_LABELS, pnlLabels: PNL_LABELS, pctSeries: [], aggregationInputs};
+            return {viewMode: 'pnl', pnlSubmode, eurLabels: EUR_LABELS, pnlLabels: PNL_LABELS, pctSeries: [], aggregationInputs, lineShape: 'segments'};
         }
 
         /** The keys of an ECharts series option read here. `echarts.SeriesOption` is a union of every series type, so a drawn series is read through this one view of it. */

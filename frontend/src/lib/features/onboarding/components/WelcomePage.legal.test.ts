@@ -36,6 +36,9 @@ vi.mock('$lib/i18n', async (importOriginal) => {
 vi.mock('$lib/features/settings/SettingCurrency.svelte', async () => ({
     default: (await import('$test/harness/SettingCurrencyProbe.svelte')).default,
 }));
+vi.mock('$lib/components/charts/LineShapePreview.svelte', async () => ({
+    default: (await import('$test/harness/LineShapePreviewProbe.svelte')).default,
+}));
 vi.mock('$lib/components/ui/media/ImagePickerWrapper.svelte', async () => ({
     default: (await import('$test/harness/ImagePickerWrapperProbe.svelte')).default,
 }));

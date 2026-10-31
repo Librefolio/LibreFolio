@@ -66,6 +66,8 @@
     import {themed} from '$lib/theme/themePair';
     import {CHART_GAIN_LOSS, chartNeutrals, LOT_COMPARISON_COLORS} from '$lib/theme/chartTheme';
     import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
+    import {applyLineShape, drawsSteps} from '$lib/components/charts/lineShape';
+    import {getGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
 
     type LotSummarySchema = z.infer<typeof schemas.LotSummarySchema>;
     type LotValueHistoryPoint = z.infer<typeof schemas.LotValueHistoryPoint>;
@@ -424,19 +426,22 @@
 
     function buildTooltipBucketHeader(params: any[], fallbackDate: number | string, theme: ReturnType<typeof buildTooltipTheme>): string {
         const bucket = tooltipBucketInfo(params);
-        if (!bucket || bucket.resolution === 'daily') return buildTooltipHeader(escapeHtml(formatDayWithWeekday(fallbackDate)), theme.textColor);
+        if (!bucket || bucket.resolution === 'daily') {
+            const day = typeof fallbackDate === 'number' ? dayOfAxisValue(fallbackDate) : fallbackDate.slice(0, 10);
+            return buildTooltipHeader(escapeHtml(formatDayWithWeekday(fallbackDate)), theme.textColor, {from: day, to: day});
+        }
 
         // The point stands for its bucket up to its own day, the last one with data: the period still running ends there.
         const span = bucketSpanUpTo(bucket.date, bucket);
         const contextLine = `<div style="font-size:10px;color:${theme.mutedColor};margin-bottom:4px">${escapeHtml($_('chart.tooltip.valueAt', {values: {date: formatLongDate(span.bucketEnd)}}))}</div>`;
         if (bucket.resolution === 'weekly') {
             const label = $_('chart.tooltip.weekRange', {values: {start: formatLongDate(span.bucketStart), end: formatLongDate(span.bucketEnd)}});
-            return `${buildTooltipHeader(escapeHtml(label), theme.textColor)}${contextLine}`;
+            return `${buildTooltipHeader(escapeHtml(label), theme.textColor, {from: span.bucketStart, to: span.bucketEnd})}${contextLine}`;
         }
 
         const month = formatTooltipMonth(span.bucketEnd);
         const label = $_('chart.tooltip.monthLabel', {values: {month}});
-        return `${buildTooltipHeader(escapeHtml(label), theme.textColor)}${contextLine}`;
+        return `${buildTooltipHeader(escapeHtml(label), theme.textColor, {from: span.bucketStart, to: span.bucketEnd})}${contextLine}`;
     }
 
     const modeLabels = $derived.by(() => ({
@@ -1064,13 +1069,12 @@
         return attachIncomeMarkers(series);
     }
 
-    /** The lines hold each value to the next date while the chart draws the steps themselves (the daily resolution); a coarser one joins its buckets. */
-    function withStepLines(series: echarts.SeriesOption[]): echarts.SeriesOption[] {
-        if (currentResolution !== 'daily') return series;
-        return series.map((entry) => (entry.type === 'line' && (entry as {step?: unknown}).step === undefined ? ({...entry, step: 'end'} as echarts.SeriesOption) : entry));
+    /** The user's line shape (FB-3); the steps themselves are the daily resolution, a coarser one joins its buckets. */
+    function withLineShape(series: echarts.SeriesOption[]): echarts.SeriesOption[] {
+        return applyLineShape(series, getGlobalLineShape(), {holdsValue: currentResolution === 'daily'});
     }
 
-    const plottedBaseSeries = $derived.by(() => ensureAxisTriggerAnchor(withStepLines(mode === 'value' ? buildValueSeries() : buildReturnSeries())));
+    const plottedBaseSeries = $derived.by(() => ensureAxisTriggerAnchor(withLineShape(mode === 'value' ? buildValueSeries() : buildReturnSeries())));
 
     const autoYAxisRange = $derived.by(() => computeAutoYAxisRange(plottedBaseSeries));
 
@@ -1189,7 +1193,7 @@
                 },
                 formatter: (params: any) => {
                     // The steps themselves: each line says what it says on the pointed day, not at the drawn point nearest to it.
-                    const items = Array.isArray(params) ? paramsAtDay(params, currentResolution === 'daily' ? pointedDay : null, baseSeries as Array<{id?: unknown; data?: unknown}>) : [params];
+                    const items = Array.isArray(params) ? paramsAtDay(params, drawsSteps(getGlobalLineShape(), currentResolution === 'daily') ? pointedDay : null, baseSeries as Array<{id?: unknown; data?: unknown}>) : [params];
                     if (mode === 'value') return buildValueTooltip(items);
                     return buildReturnTooltip(items);
                 },

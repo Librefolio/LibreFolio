@@ -123,6 +123,7 @@ import {cleanup, render, setupI18n, waitFor} from '$test/component';
 import type {RenderedSignal} from '$lib/charts/signals';
 import type {LineDataPoint} from './LineChart.svelte';
 import type {EventMarker} from './PriceChartFull.svelte';
+import {tooltipHoldsDay} from '$test/timeAxisPointer';
 
 // =============================================================================
 // Fixtures
@@ -171,8 +172,9 @@ beforeAll(async () => {
     PriceChartFull = (await import('./PriceChartFull.svelte')).default;
     helpers = await import('./priceChartHelpers');
     signalLabel = await import('$lib/charts/signalLabel');
-    // The dynamic imports compile the component tree inside this hook: a budget of its own under a loaded machine.
-}, 60_000);
+    // The dynamic imports compile the component tree inside this hook: a budget of its own under a loaded machine (the whole suite runs
+    // while other lanes work: 60 s was not a ceiling there).
+}, 180_000);
 
 beforeEach(() => {
     chartInstances.length = 0;
@@ -395,5 +397,28 @@ describe('PriceChartFull — the event markers’ tooltip escapes what it interp
         it('guard — the original currency code is escaped (:816)', async () => {
             expectEscaped(await markerTooltip({...CONVERTED_DIVIDEND, originalCurrency: PAYLOAD}), 'converted event marker, original currency code');
         });
+    });
+});
+
+describe('the axis tooltip names the day it stands for (Y2-I63, issue #63)', {timeout: 20_000}, () => {
+    /** The tooltip ECharts builds with the pointer on `axisValue`, over the main series alone. */
+    async function tooltipAt(axisValue: string | number): Promise<string> {
+        render(PriceChartFull, {props: {data: DATA, currency: 'EUR', mainSeriesLabel: MAIN_LABEL}});
+        await waitFor(() => expect(axisDays(), 'barrier: the chart drew at the daily resolution, one point per day').toEqual(DAYS), {timeout: 15_000});
+        const formatter = (lastDraw().tooltip as {formatter: Formatter}).formatter;
+        return formatter([{axisValue, seriesType: 'line', color: '#2563eb', seriesName: MAIN_LABEL, value: 100}]);
+    }
+
+    it.each([
+        ['the newest day', DAYS[DAYS.length - 1]],
+        ['the oldest day', DAYS[0]],
+        ['a day in the middle', HOVERED_DAY],
+    ])('opens on %s', async (_name, day) => {
+        expect(tooltipHoldsDay(await tooltipAt(day), day)).toBe(true);
+    });
+
+    it('reads a pointer given in milliseconds as the local day it falls on', async () => {
+        const [year, month, date] = HOVERED_DAY.split('-').map(Number);
+        expect(tooltipHoldsDay(await tooltipAt(String(new Date(year, month - 1, date).getTime())), HOVERED_DAY)).toBe(true);
     });
 });

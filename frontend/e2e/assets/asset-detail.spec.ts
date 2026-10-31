@@ -2111,7 +2111,7 @@ test.describe('Asset Detail Page', () => {
                     requests,
                     comparisonPeerIds,
                     {
-                        start: '2000-01-01',
+                        start: 'min',
                         end: provisionalMaxComparisonRange.end,
                     },
                     asset.currency,
@@ -2131,7 +2131,7 @@ test.describe('Asset Detail Page', () => {
             const priceComparisonRaceOutcome = isStalePriceComparison ? 'stale' : isSuccessorPriceComparison ? 'successor' : isCorrectedPriceComparison ? 'corrected' : null;
             const pendingMaxStandaloneRange = pendingAcceptedCurrentMaxStandaloneFxSyncRange;
             const acceptedCurrentMaxStandaloneFxSyncRange =
-                pendingMaxStandaloneRange !== null && priceComparisonSyncSucceeded && priceComparisonRaceOutcome !== 'stale' && priceComparisonRaceOutcome !== 'successor' && matchesPriceComparisonRequest(requests, comparisonPeerIds, pendingMaxStandaloneRange, asset.currency)
+                pendingMaxStandaloneRange !== null && priceComparisonSyncSucceeded && priceComparisonRaceOutcome !== 'stale' && priceComparisonRaceOutcome !== 'successor' && matchesPriceComparisonRequest(requests, comparisonPeerIds, {start: 'min', end: pendingMaxStandaloneRange.end}, asset.currency)
                     ? pendingMaxStandaloneRange
                     : null;
             // Why derived from the window, not looked up in `successorReadyEvents`: the accepted
@@ -2185,11 +2185,6 @@ test.describe('Asset Detail Page', () => {
             }
             if (provisionalMaxPriceComparison) {
                 await provisionalMaxPriceComparison.wait;
-                await route.fulfill({
-                    status: 503,
-                    json: {detail: 'synthetic-provisional-max-comparison-rejection'},
-                });
-                return;
             }
             if (deferredPriceComparison) {
                 await deferredPriceComparison.wait;
@@ -2306,7 +2301,8 @@ test.describe('Asset Detail Page', () => {
                         request.include_price !== false &&
                         comparisonPeer !== undefined &&
                         request.target_currency === asset.currency &&
-                        request.date_range?.start === acceptedCurrentMaxStandaloneFxSyncRange.start &&
+                        // «All» asks the comparison from `min` (Y2-CMP): the range's days dress the answer, the request names the sentinel
+                        request.date_range?.start === 'min' &&
                         request.date_range.end === acceptedCurrentMaxStandaloneFxSyncRange.end &&
                         pageSyncComparisonSnapshot === null &&
                         !forceReadyPeerConversionFailure &&
@@ -2483,6 +2479,8 @@ test.describe('Asset Detail Page', () => {
                 if (!Array.isArray(match?.data)) return [];
                 return match.data.flatMap((rawValue) => {
                     const value = Array.isArray(rawValue) ? rawValue.at(-1) : rawValue !== null && typeof rawValue === 'object' && 'value' in rawValue ? (rawValue as {value?: unknown}).value : rawValue;
+                    // A day this line has no price for is a gap (the axis is laid on the union of the series' days, Y2-CMP), not a 0
+                    if (value === null || value === undefined) return [];
                     const numeric = Number(value);
                     return Number.isFinite(numeric) ? [numeric] : [];
                 });
@@ -7475,6 +7473,8 @@ test.describe('Asset Detail Page', () => {
             end: provisionalMaxEnd,
             spanDays: resolvedMaxSpanDays,
         };
+        // «All» asks the comparisons from `min`, whatever this asset's own first day turns out to be (Y2-CMP)
+        const maxComparisonRange = {start: 'min', end: concreteMaxRange.end} as const;
         const concreteMaxCalendarRefillRange = {
             start: subtractDays(concreteMaxRange.start, 365 + 7),
             end: concreteMaxRange.end,
@@ -7501,38 +7501,37 @@ test.describe('Asset Detail Page', () => {
         await expect(chart).toHaveAttribute('data-series-state', 'loading');
         await expect(pageRoot).toHaveAttribute('data-busy', 'true');
 
-        // Returning to Price starts a comparison against the still-provisional
-        // MAX range while the Calendar request that will reveal the concrete
-        // first date remains gated.
+        // Returning to Price starts the comparison of «All»: it is asked from `min`, the day each compared asset starts on (Y2-CMP), and that
+        // request does not change when this asset's own first day is found. It is gated while the Calendar request that will reveal the
+        // concrete first date remains gated too.
+        const maxComparisonRangeKey = `min|${provisionalMaxEnd}`;
+        const maxComparisonRangeRequestsBefore = priceComparisonRequestCountsByRange.get(maxComparisonRangeKey) ?? 0;
         const provisionalMaxComparisonGate = deferProvisionalMaxPriceComparisonResponse();
-        const provisionalMaxComparisonRequestPromise = waitForPriceComparisonRequest(comparisonPeerIds, {start: '2000-01-01', end: provisionalMaxEnd}, asset.currency);
+        const provisionalMaxComparisonRequestPromise = waitForPriceComparisonRequest(comparisonPeerIds, {start: 'min', end: provisionalMaxEnd}, asset.currency);
         await pricePrimary.click();
         const provisionalMaxComparisonRequest = await provisionalMaxComparisonRequestPromise;
-        assertPriceComparisonRequest(provisionalMaxComparisonRequest.postDataJSON(), comparisonPeerIds, {start: '2000-01-01', end: provisionalMaxEnd}, asset.currency);
+        assertPriceComparisonRequest(provisionalMaxComparisonRequest.postDataJSON(), comparisonPeerIds, {start: 'min', end: provisionalMaxEnd}, asset.currency);
         await expect(chart).toHaveAttribute('data-primary-mode', 'price');
         await expect(chart).toHaveAttribute('data-series-state', 'loading');
 
-        const concreteMaxComparisonRangeKey = `${concreteMaxRange.start}|${concreteMaxRange.end}`;
-        const forcedConcreteMaxComparisonRequestCount = priceComparisonRequestCountsByRange.get(concreteMaxComparisonRangeKey) ?? 0;
-        const forcedConcreteMaxComparisonGate = deferNextPriceComparisonResponse();
-        const forcedConcreteMaxComparisonRequestPromise = waitForPriceComparisonRequest(comparisonPeerIds, concreteMaxRange, asset.currency);
-
-        // Resolve MAX while Price is active. resolveMaxStartFromChartData()
-        // must reject the provisional comparison and force exactly one
-        // concrete-range successor.
+        // Resolve MAX while Price is active. The comparison asked from `min` stays what it was: resolveMaxStartFromChartData() asks nothing more
+        // (before Y2-CMP it rejected the provisional comparison and forced a concrete-range successor).
+        const maxResolutionComparisonRequestsBefore = priceComparisonRequestCount;
         overlongCalendarGate.release();
         const overlongCalendarResponse = await overlongCalendarResponsePromise;
         expect(overlongCalendarResponse.ok()).toBe(true);
         expect(await overlongCalendarResponse.finished()).toBeNull();
         await expect(chart).toHaveAttribute('data-primary-mode', 'price');
-        const forcedConcreteMaxComparisonRequest = await forcedConcreteMaxComparisonRequestPromise;
-        assertPriceComparisonRequest(forcedConcreteMaxComparisonRequest.postDataJSON(), comparisonPeerIds, concreteMaxRange, asset.currency);
-        await expect.poll(() => priceComparisonRequestCountsByRange.get(concreteMaxComparisonRangeKey) ?? 0).toBe(forcedConcreteMaxComparisonRequestCount + 1);
+        await expect(dateRangeStartInput).toHaveValue(concreteMaxRange.start);
+        // two frames after the resolution: the microtask that used to ask the successor has run
+        await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+        expect(priceComparisonRequestCount, 'resolving «All» asked the comparison again').toBe(maxResolutionComparisonRequestsBefore);
+        expect(priceComparisonRequestCountsByRange.get(maxComparisonRangeKey) ?? 0).toBe(maxComparisonRangeRequestsBefore + 1);
 
         // The original Price request is already superseded by the Calendar
-        // request. Let it finish only after the forced successor is in flight,
-        // so handleDateRangeChange deterministically joins that successor
-        // rather than starting another concrete comparison.
+        // request. Let it finish while the comparison of «All» is still in
+        // flight: resolving the range must neither ask it again nor wait for
+        // the main answer to do so.
         const provisionalMaxPriceResponsePromise = page.waitForResponse(
             (response) => {
                 const request = response.request();
@@ -7548,11 +7547,11 @@ test.describe('Asset Detail Page', () => {
         expect(provisionalMaxPriceResponse.ok()).toBe(true);
         expect(await provisionalMaxPriceResponse.finished()).toBeNull();
 
-        // Exercise an explicit non-force call with the exact same concrete
-        // fingerprint while the forced request is still gated. Returning from
-        // Calendar to Price invokes maybeLoadComparison(force=false)
-        // synchronously; it must join the in-flight successor and issue no
-        // second concrete-range request.
+        // Exercise an explicit non-force call with the exact same fingerprint
+        // (the comparison asked from `min`) while its request is still gated.
+        // Returning from Calendar to Price invokes maybeLoadComparison(force=false)
+        // synchronously; it must join the in-flight request and issue no
+        // second one.
         const maxJoinPriceQueriesBefore = priceQueryRequestCount;
         const maxJoinComparisonRequestsBefore = priceComparisonRequestCount;
         const maxJoinCalendarRequestsBefore = calendarRequestCount;
@@ -7575,12 +7574,12 @@ test.describe('Asset Detail Page', () => {
         expect(priceQueryRequestCount).toBe(maxJoinPriceQueriesBefore + 1);
         expect(priceComparisonRequestCount).toBe(maxJoinComparisonRequestsBefore);
         expect(calendarRequestCount).toBe(maxJoinCalendarRequestsBefore + 1);
-        expect(priceComparisonRequestCountsByRange.get(concreteMaxComparisonRangeKey) ?? 0).toBe(forcedConcreteMaxComparisonRequestCount + 1);
+        expect(priceComparisonRequestCountsByRange.get(maxComparisonRangeKey) ?? 0).toBe(maxComparisonRangeRequestsBefore + 1);
 
         // Refreshing Price/MAX re-arms the broad sentinel. Its main response
-        // resolves the concrete range and auto-schedules one forced comparison
-        // successor. handleRefresh() must join that owned successor rather
-        // than issuing a second same-fingerprint request.
+        // resolves the concrete range. handleRefresh() asks the comparisons again
+        // (forced, from `min`): the range resolution adds no request of its own, so
+        // exactly one request leaves.
         // The refresh is the one the page's own Sync runs, the same
         // `handleRefresh` with no token (P3): the MAX period and both returns
         // to Price above still wait on the gated concrete and provisional
@@ -7589,7 +7588,7 @@ test.describe('Asset Detail Page', () => {
         const maxRefreshPriceQueriesBefore = priceQueryRequestCount;
         const maxRefreshMainRequestsBefore = mainPriceRequestCount;
         const maxRefreshComparisonRequestsBefore = priceComparisonRequestCount;
-        const maxRefreshRangeRequestsBefore = priceComparisonRequestCountsByRange.get(concreteMaxComparisonRangeKey) ?? 0;
+        const maxRefreshRangeRequestsBefore = priceComparisonRequestCountsByRange.get(maxComparisonRangeKey) ?? 0;
         const maxRefreshCalendarRequestsBefore = calendarRequestCount;
         const maxRefreshMainGate = deferNextMainPriceResponse();
         const maxRefreshMainRequestPromise = waitForCountedRequest(
@@ -7612,7 +7611,7 @@ test.describe('Asset Detail Page', () => {
             {timeout: 10_000},
         );
         const maxRefreshComparisonGate = deferNextPriceComparisonResponse();
-        const maxRefreshComparisonRequestPromise = waitForPriceComparisonRequest(comparisonPeerIds, concreteMaxRange, asset.currency);
+        const maxRefreshComparisonRequestPromise = waitForPriceComparisonRequest(comparisonPeerIds, {start: 'min', end: concreteMaxRange.end}, asset.currency);
         const maxRefreshSync = await refreshThroughPageSync();
         const maxRefreshMainRequest = await maxRefreshMainRequestPromise;
         expect(parseQueries(maxRefreshMainRequest.postDataJSON()).find((query) => query.asset_id === assetId)?.date_range).toEqual({
@@ -7630,14 +7629,14 @@ test.describe('Asset Detail Page', () => {
         expect(maxRefreshMainResponse.ok()).toBe(true);
         expect(await maxRefreshMainResponse.finished()).toBeNull();
         const maxRefreshComparisonRequest = await maxRefreshComparisonRequestPromise;
-        assertPriceComparisonRequest(maxRefreshComparisonRequest.postDataJSON(), comparisonPeerIds, concreteMaxRange, asset.currency);
-        await expect.poll(() => priceComparisonRequestCountsByRange.get(concreteMaxComparisonRangeKey) ?? 0).toBe(maxRefreshRangeRequestsBefore + 1);
+        assertPriceComparisonRequest(maxRefreshComparisonRequest.postDataJSON(), comparisonPeerIds, {start: 'min', end: concreteMaxRange.end}, asset.currency);
+        await expect.poll(() => priceComparisonRequestCountsByRange.get(maxComparisonRangeKey) ?? 0).toBe(maxRefreshRangeRequestsBefore + 1);
         expect(priceQueryRequestCount).toBe(maxRefreshPriceQueriesBefore + 2);
         expect(mainPriceRequestCount).toBe(maxRefreshMainRequestsBefore + 1);
         expect(priceComparisonRequestCount).toBe(maxRefreshComparisonRequestsBefore + 1);
         expect(calendarRequestCount).toBe(maxRefreshCalendarRequestsBefore);
 
-        const maxRefreshComparisonResponsePromise = waitForPriceComparisonResponse(comparisonPeerIds, concreteMaxRange, asset.currency);
+        const maxRefreshComparisonResponsePromise = waitForPriceComparisonResponse(comparisonPeerIds, {start: 'min', end: concreteMaxRange.end}, asset.currency);
         maxRefreshComparisonGate.release();
         const maxRefreshComparisonResponse = await maxRefreshComparisonResponsePromise;
         expect(maxRefreshComparisonResponse.ok()).toBe(true);
@@ -7646,32 +7645,23 @@ test.describe('Asset Detail Page', () => {
         expect(priceQueryRequestCount).toBe(maxRefreshPriceQueriesBefore + 2);
         expect(mainPriceRequestCount).toBe(maxRefreshMainRequestsBefore + 1);
         expect(priceComparisonRequestCount).toBe(maxRefreshComparisonRequestsBefore + 1);
-        expect(priceComparisonRequestCountsByRange.get(concreteMaxComparisonRangeKey) ?? 0).toBe(maxRefreshRangeRequestsBefore + 1);
+        expect(priceComparisonRequestCountsByRange.get(maxComparisonRangeKey) ?? 0).toBe(maxRefreshRangeRequestsBefore + 1);
         expect(calendarRequestCount).toBe(maxRefreshCalendarRequestsBefore);
 
-        const forcedConcreteMaxComparisonResponsePromise = waitForPriceComparisonResponse(comparisonPeerIds, concreteMaxRange, asset.currency);
-        forcedConcreteMaxComparisonGate.release();
-        const forcedConcreteMaxComparisonResponse = await forcedConcreteMaxComparisonResponsePromise;
-        expect(forcedConcreteMaxComparisonResponse.ok()).toBe(true);
-        expect(await forcedConcreteMaxComparisonResponse.finished()).toBeNull();
-        await expect.poll(() => priceComparisonRequestCountsByRange.get(concreteMaxComparisonRangeKey) ?? 0).toBe(forcedConcreteMaxComparisonRequestCount + 2);
+        // The first comparison of «All» (gated since the return to Price) answers last, after the Refresh's own, which replaced it: its
+        // late answer changes nothing on the chart and asks nothing more
+        const provisionalMaxComparisonResponsePromise = waitForPriceComparisonResponse(comparisonPeerIds, {start: 'min', end: provisionalMaxEnd}, asset.currency);
+        provisionalMaxComparisonGate.release();
+        const provisionalMaxComparisonResponse = await provisionalMaxComparisonResponsePromise;
+        expect(provisionalMaxComparisonResponse.ok()).toBe(true);
+        expect(await provisionalMaxComparisonResponse.finished()).toBeNull();
         await expect(dateRangeStartInput).toHaveValue(concreteMaxRange.start);
         await expect(dateRangeEndInput).toHaveValue(concreteMaxRange.end);
         await expect(chart).toHaveAttribute('data-calendar-range-days', String(concreteMaxRange.spanDays));
         await expect.poll(readChartComparisonLineLabels).toEqual(expect.arrayContaining(comparisonPeers.map((peer) => peer.display_name)));
-
-        const provisionalMaxComparisonResponsePromise = waitForPriceComparisonResponse(comparisonPeerIds, {start: '2000-01-01', end: provisionalMaxEnd}, asset.currency);
-        provisionalMaxComparisonGate.release();
-        const provisionalMaxComparisonResponse = await provisionalMaxComparisonResponsePromise;
-        expect(provisionalMaxComparisonResponse.status()).toBe(503);
-        expect(provisionalMaxComparisonResponse.ok()).toBe(false);
-        expect(await provisionalMaxComparisonResponse.finished()).toBeNull();
-        expect(await provisionalMaxComparisonResponse.json()).toEqual({
-            detail: 'synthetic-provisional-max-comparison-rejection',
-        });
         await pricePrimary.focus();
         await expect(pricePrimary).toBeFocused();
-        await expect.poll(() => priceComparisonRequestCountsByRange.get(concreteMaxComparisonRangeKey) ?? 0).toBe(forcedConcreteMaxComparisonRequestCount + 2);
+        await expect.poll(() => priceComparisonRequestCountsByRange.get(maxComparisonRangeKey) ?? 0).toBe(maxComparisonRangeRequestsBefore + 2);
         await expect.poll(readChartComparisonLineLabels).toEqual(expect.arrayContaining(comparisonPeers.map((peer) => peer.display_name)));
         await maxRefreshSync.settled();
 
@@ -7720,7 +7710,7 @@ test.describe('Asset Detail Page', () => {
         await expect(chart).toHaveAttribute('data-series-state', 'ready');
         await expect(loadingNotice).toBeHidden();
         await expectAssetDetailChartCanvas(page);
-        expect(priceComparisonRequestCountsByRange.get(concreteMaxComparisonRangeKey) ?? 0).toBe(forcedConcreteMaxComparisonRequestCount + 2);
+        expect(priceComparisonRequestCountsByRange.get(maxComparisonRangeKey) ?? 0).toBe(maxComparisonRangeRequestsBefore + 2);
         expect(calendarRequestCount).toBe(successorCalendarRequestCount + 1);
 
         // The Price/MAX auto-successor has now applied and its remembered
@@ -7738,7 +7728,7 @@ test.describe('Asset Detail Page', () => {
         await expect(pricePrimary).toBeFocused();
         expect(priceQueryRequestCount).toBe(appliedMaxPriceQueriesBefore);
         expect(priceComparisonRequestCount).toBe(appliedMaxComparisonRequestsBefore);
-        expect(priceComparisonRequestCountsByRange.get(concreteMaxComparisonRangeKey) ?? 0).toBe(forcedConcreteMaxComparisonRequestCount + 2);
+        expect(priceComparisonRequestCountsByRange.get(maxComparisonRangeKey) ?? 0).toBe(maxComparisonRangeRequestsBefore + 2);
 
         const restoreAppliedMaxCalendarResponsePromise = waitForCalendarResponse(365);
         await calendarPrimary.click();
@@ -7842,12 +7832,12 @@ test.describe('Asset Detail Page', () => {
         // ISO range already resolved from the MAX price snapshot.
         priceComparisonSyncSucceeded = false;
         forceReadyPeerConversionFailure = true;
-        const maxStandaloneInitialComparisonPromise = waitForPriceComparisonResponse(comparisonPeerIds, concreteMaxRange, asset.currency);
+        const maxStandaloneInitialComparisonPromise = waitForPriceComparisonResponse(comparisonPeerIds, maxComparisonRange, asset.currency);
         await pricePrimary.click();
         const maxStandaloneInitialComparison = await maxStandaloneInitialComparisonPromise;
         expect(maxStandaloneInitialComparison.ok()).toBe(true);
         expect(await maxStandaloneInitialComparison.finished()).toBeNull();
-        assertPriceComparisonRequest(maxStandaloneInitialComparison.request().postDataJSON(), comparisonPeerIds, concreteMaxRange, asset.currency);
+        assertPriceComparisonRequest(maxStandaloneInitialComparison.request().postDataJSON(), comparisonPeerIds, maxComparisonRange, asset.currency);
         await expect(lineChartButton).toBeVisible();
         await lineChartButton.click();
         await expect(chart.getByTestId('candlestick-chart')).toBeHidden();
@@ -7864,7 +7854,7 @@ test.describe('Asset Detail Page', () => {
         const maxStandaloneFxSyncRequestPromise = page.waitForRequest((request) => request.method() === 'POST' && new URL(request.url()).pathname === '/api/v1/fx/currencies/sync', {timeout: 10_000});
         const maxStandaloneFxSyncResponsePromise = page.waitForResponse((response) => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/v1/fx/currencies/sync', {timeout: 10_000});
         const maxStandaloneMainReloadPromise = waitForMainRangeResponse(concreteMaxRange);
-        const maxStandaloneComparisonReloadPromise = waitForPriceComparisonResponse(comparisonPeerIds, concreteMaxRange, asset.currency);
+        const maxStandaloneComparisonReloadPromise = waitForPriceComparisonResponse(comparisonPeerIds, maxComparisonRange, asset.currency);
         await readyFxSyncAction.focus();
         await expect(readyFxSyncAction).toBeFocused();
         await expect(readyFxSyncAction).toBeEnabled();
@@ -7891,7 +7881,7 @@ test.describe('Asset Detail Page', () => {
         const maxStandaloneComparisonReload = await maxStandaloneComparisonReloadPromise;
         expect(maxStandaloneComparisonReload.ok()).toBe(true);
         expect(await maxStandaloneComparisonReload.finished()).toBeNull();
-        assertPriceComparisonRequest(maxStandaloneComparisonReload.request().postDataJSON(), comparisonPeerIds, concreteMaxRange, asset.currency);
+        assertPriceComparisonRequest(maxStandaloneComparisonReload.request().postDataJSON(), comparisonPeerIds, maxComparisonRange, asset.currency);
 
         expect(fxConvertRequests.slice(maxStandaloneFxConversionsBefore)).toEqual([
             [

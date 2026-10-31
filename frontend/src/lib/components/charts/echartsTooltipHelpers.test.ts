@@ -92,6 +92,13 @@ describe('HTML fragment builders', () => {
         expect(html).toContain('#123456');
     });
 
+    it('publishes the days a header stands for when it is told them, and nothing otherwise (Y2-I63)', () => {
+        expect(buildTooltipHeader('Mon 2 Mar', '#123456')).not.toContain('data-tooltip');
+        const html = buildTooltipHeader('Week', '#123456', {from: '2026-03-02', to: '2026-03-08'});
+        expect(html).toContain('data-tooltip-from="2026-03-02"');
+        expect(html).toContain('data-tooltip-to="2026-03-08"');
+    });
+
     it('includes a dot only when a colour is given', () => {
         const withDot = buildTooltipRow('Label', '<b>1</b>', '#ff0000');
         const withoutDot = buildTooltipRow('Label', '<b>1</b>');

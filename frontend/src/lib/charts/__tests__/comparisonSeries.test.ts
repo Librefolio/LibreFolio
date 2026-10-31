@@ -26,8 +26,8 @@ vi.mock('$lib/api', () => ({
         query_prices_bulk_api_v1_assets_prices_query_post: vi.fn(),
     },
 }));
-const fxRange = vi.hoisted(() => ({ensureFxRangeLoaded: vi.fn(async () => [])}));
-vi.mock('$lib/stores/fxStoreRegistry', async (importOriginal) => ({...(await importOriginal<typeof import('$lib/stores/fxStoreRegistry')>()), ensureFxRangeLoaded: fxRange.ensureFxRangeLoaded}));
+const fxRange = vi.hoisted(() => ({ensureFxRangeLoaded: vi.fn(async () => []), ensureFxRangeFromFirstDay: vi.fn(async () => undefined)}));
+vi.mock('$lib/stores/fxStoreRegistry', async (importOriginal) => ({...(await importOriginal<typeof import('$lib/stores/fxStoreRegistry')>()), ensureFxRangeLoaded: fxRange.ensureFxRangeLoaded, ensureFxRangeFromFirstDay: fxRange.ensureFxRangeFromFirstDay}));
 
 import {zodiosApi} from '$lib/api';
 import type {SignalConfig} from '$lib/charts/signals';
@@ -56,6 +56,8 @@ beforeEach(() => {
     query.mockReset();
     fxRange.ensureFxRangeLoaded.mockReset();
     fxRange.ensureFxRangeLoaded.mockResolvedValue([]);
+    fxRange.ensureFxRangeFromFirstDay.mockReset();
+    fxRange.ensureFxRangeFromFirstDay.mockResolvedValue(undefined);
 });
 
 describe('comparisonTargetFromStore', () => {
@@ -190,6 +192,16 @@ describe('fxPairSlugsOf and ensureSignalFxPairs', () => {
             ['EUR-GBP', RANGE.start, RANGE.end],
             ['USD-JPY', RANGE.start, RANGE.end],
         ]);
+    });
+
+    it('from the first day (a detail page on «All»): each pair is loaded from where it begins, up to the end of the range, and the range\'s own start is not asked (Y2-CMP)', async () => {
+        await ensureSignalFxPairs(configs, 'EUR-USD', RANGE, true);
+
+        expect(fxRange.ensureFxRangeFromFirstDay.mock.calls).toEqual([
+            ['EUR-GBP', RANGE.end],
+            ['USD-JPY', RANGE.end],
+        ]);
+        expect(fxRange.ensureFxRangeLoaded).not.toHaveBeenCalled();
     });
 
     it('lets the others finish when one pair fails, and never throws', async () => {

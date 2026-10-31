@@ -15,11 +15,13 @@
       "originalValue": "orig. {value}",
       "fxRateDate": "change au {date}",
       "fxDaysBack": "({days}j avant)",
+      "yearLabel": "{year}",
       "staleBadge": "{days}j"
     },
     "resolution": {
       "weekly": "Hebdomadaire",
-      "monthly": "Mensuel"
+      "monthly": "Mensuel",
+      "yearly": "Annuel"
     },
     "marketPrice": "Prix du marché",
     "showPercentage": "Afficher le pourcentage",
@@ -148,7 +150,12 @@
       "signal": "Axe {name}",
       "volume": "Axe des volumes"
     },
-    "yAxisAuto": "Auto"
+    "yAxisAuto": "Auto",
+    "lineShape": "Forme des lignes",
+    "lineShapeDesc": "Comment les graphiques relient leurs points. Ne vaut que pour ce graphique.",
+    "lineShapeSegments": "Segments",
+    "lineShapeSteps": "Marches",
+    "lineShapeSpline": "Courbe lissée"
   },
   "measure": {
     "pending": "Début: {startDate} ({startValue}) — cliquez sur le graphique pour le point final",

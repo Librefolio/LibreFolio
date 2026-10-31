@@ -242,6 +242,13 @@ export interface RenderedSignal {
     /** Whether ECharts may connect gaps in sparse overlay series. Default preserves legacy true. */
     connectNulls?: boolean;
     /**
+     * A comparison's line asks the chart to reach its days even where the main series has none: a chart with a category axis (the detail pages
+     * of an asset and of an FX pair, which render their comparisons with `_unionAxis`) lays its axis on the union of the main days and the days of
+     * the signals that say so, so a comparison older than the main series is drawn from its first day and the main line is empty before its own.
+     * Indicators, benchmarks and the comparisons of a card do not say so: they follow the main series' days.
+     */
+    extendsAxis?: boolean;
+    /**
      * Band data for confidence-band rendering (seriesType === 'band').
      * Contains parallel arrays for upper, middle, lower values aligned to `data[].date`.
      */
@@ -300,7 +307,7 @@ export interface RenderedSignal {
  * Params the page injects for one render and `toConfig()` never stores: the comparison data
  * (`_resolvedData`) and the comparison's base point (`_basePoint`, AssetComparisonSignal, Z-29d-0).
  */
-const TRANSIENT_PARAMS: ReadonlySet<string> = new Set(['_resolvedData', '_basePoint']);
+const TRANSIENT_PARAMS: ReadonlySet<string> = new Set(['_resolvedData', '_basePoint', '_unionAxis']);
 
 /**
  * Abstract base class for all chart overlay signals.

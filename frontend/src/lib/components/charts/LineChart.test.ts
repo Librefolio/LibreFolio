@@ -268,6 +268,7 @@ import {setRoleReader} from '$lib/theme/roleColors';
 import {PRICE_SERIES} from '$lib/theme/chartTheme';
 import {notifyChartColorsChange} from '$lib/theme/themeMode';
 import {formatAxisDate} from '$lib/utils/core/formatAxisDate';
+import {tooltipHoldsDay} from '$test/timeAxisPointer';
 import LineChart, {type LineDataPoint} from './LineChart.svelte';
 import PriceChartCompact from './PriceChartCompact.svelte';
 import {COLORS} from './lineChartHelpers';
@@ -417,6 +418,19 @@ describe('LineChart — the days its tooltip writes, in the house notation of th
         const headers = NOT_DAYS.map((category) => axisTooltipAt(category, [{seriesName: 'EUR', value: 10}])[0]);
 
         expect(headers, 'a category that is not a day was rewritten as a day').toEqual(NOT_DAYS);
+    });
+});
+
+describe('LineChart — the tooltip names the day it stands for (Y2-I63, issue #63)', {timeout: 20_000}, () => {
+    it.each([
+        ['the newest day', DATA[DATA.length - 1].date],
+        ['the oldest day', DATA[0].date],
+        ['a day in the middle', '2024-03-01'],
+    ])('opens on %s', async (_name, day) => {
+        render(LineChart, {props: {data: DATA, currency: 'EUR'}});
+        await drawnOver(DATA.map((point) => point.date));
+        const formatter = (lastDraw().tooltip as {formatter: Formatter}).formatter;
+        expect(tooltipHoldsDay(formatter([{axisValue: day, seriesType: 'line', color: '#2563eb', seriesName: 'EUR', value: 105}]), day)).toBe(true);
     });
 });
 

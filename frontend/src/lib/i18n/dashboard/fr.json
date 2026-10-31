@@ -169,6 +169,8 @@
       "rowSelect": "Sélectionnez la ligne pour tracer son rendement",
       "viewRolling": "Glissant",
       "viewRollingHint": "Pourcentage dont le prix de l'actif a bougé sur une fenêtre glissante le long de la période : pour comparer les actifs entre eux"
-    }
+    },
+    "allocationNoShares": "Aucun pourcentage à afficher : les parts totalisent zéro ou moins (par exemple un découvert qui annule vos positions). Les montants sont listés ci-dessous.",
+    "allocationHistoryNoShares": "Aucun pourcentage à afficher : ces jours-là, les parts totalisent zéro ou moins."
   }
 }

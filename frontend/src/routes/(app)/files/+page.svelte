@@ -50,6 +50,7 @@
     import {resolveParseFailureMessage} from '$lib/features/transactions/import/parseFailure';
     import type {BrimFile, BrokerInfo, FilePreviewResponse, UploadedFile, UploadScope} from '$lib/types';
     import type {ColumnDef, FilterValue} from '$lib/components/table/types';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {uiLocaleStore} from '$lib/stores/app/uiLocale';
 
     type Tab = 'static' | 'brim';
@@ -763,12 +764,17 @@
             <!-- View mode toggle (only for static tab) -->
             {#if activeTab === 'static' && staticFiles.length > 0}
                 <div class="view-toggle" data-testid="view-mode-toggle">
-                    <button class="view-btn" class:active={viewMode === 'grid'} on:click={() => setViewMode('grid')} title="Grid view" data-testid="view-mode-grid" aria-pressed={viewMode === 'grid'}>
-                        <LayoutGrid size={18} />
-                    </button>
-                    <button class="view-btn" class:active={viewMode === 'list'} on:click={() => setViewMode('list')} title="List view" data-testid="view-mode-list" aria-pressed={viewMode === 'list'}>
-                        <List size={18} />
-                    </button>
+                    <!-- Each button says what it does in the design system's tooltip, as the Assets and FX lists do (FB-8) -->
+                    <Tooltip text={$t('sharedResource.viewGrid')} position="bottom" interactiveChild testId="view-mode-grid-tooltip">
+                        <button class="view-btn" class:active={viewMode === 'grid'} on:click|stopPropagation={() => setViewMode('grid')} aria-label={$t('sharedResource.viewGrid')} data-testid="view-mode-grid" aria-pressed={viewMode === 'grid'}>
+                            <LayoutGrid size={18} />
+                        </button>
+                    </Tooltip>
+                    <Tooltip text={$t('sharedResource.viewTable')} position="bottom" interactiveChild testId="view-mode-list-tooltip">
+                        <button class="view-btn" class:active={viewMode === 'list'} on:click|stopPropagation={() => setViewMode('list')} aria-label={$t('sharedResource.viewTable')} data-testid="view-mode-list" aria-pressed={viewMode === 'list'}>
+                            <List size={18} />
+                        </button>
+                    </Tooltip>
                 </div>
             {/if}
 

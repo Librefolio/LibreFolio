@@ -13,7 +13,9 @@
       "skip": "Ignorer définitivement la configuration",
       "completed": "Configuration enregistrée. Vous pouvez continuer dans LibreFolio.",
       "skipped": "Configuration ignorée. Vous pourrez la relancer plus tard depuis les Paramètres.",
-      "logout": "Se déconnecter"
+      "logout": "Se déconnecter",
+      "lineShapeLabel": "Comment les graphiques tracent les lignes",
+      "lineShapeHint": "Choisissez-en une et regardez l'exemple changer. Vous pourrez la modifier plus tard dans les Paramètres ou pour un seul graphique."
     },
     "errors": {
       "loadTitle": "Impossible de charger la prise en main",

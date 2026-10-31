@@ -14,6 +14,7 @@
     import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';
     import {chartInitOptions} from '$lib/components/charts/chartPixelRatio';
     import {attachChartReady} from '$lib/utils/chartReady';
+    import {dayOfAxisValue} from '$lib/utils/stepSeries';
     import {_ as t} from '$lib/i18n';
     import type {ChartType, ViewMode} from './ChartToolbar.svelte';
     import ChartToolbar from './ChartToolbar.svelte';
@@ -40,6 +41,7 @@
         bucketSpanUpTo,
         computeGhostSeries,
         computeZoomWindow,
+        extendToOverlayDays,
         countBuckets,
         formatMonthLabel,
         formatTruncatedGhostLabel,
@@ -60,6 +62,8 @@
     import {formatDay, formatDayWithWeekday} from '$lib/utils/core/formatAxisDate';
     import {chartNeutrals} from '$lib/theme/chartTheme';
     import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
+    import {applyLineShape, type LineShape} from '$lib/components/charts/lineShape';
+    import {getGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
 
     // =========================================================================
     // Event Marker types and constants
@@ -116,6 +120,8 @@
         areaFill?: boolean;
         showGridLines?: boolean;
         showGradient?: boolean;
+        /** The shape of the lines (FB-3). Without it the chart follows the global shape. */
+        lineShape?: LineShape;
         yAxisMode?: 'auto' | 'include0' | 'custom';
         yAxisMin?: number;
         yAxisMax?: number;
@@ -190,6 +196,7 @@
         areaFill = true,
         showGridLines = true,
         showGradient = true,
+        lineShape,
         yAxisMode = 'auto',
         yAxisMin,
         yAxisMax,
@@ -250,6 +257,8 @@
     let resolvedDataCache = new Map<ChartResolution, ResolvedDataCacheEntry>();
     let lastRawDataRef: LineDataPoint[] | null = null;
     let lastDisplayDataRef: LineDataPoint[] | null = null;
+    /** The days the axis was lengthened with, as text: another comparison (or none) moves every index the zoom and the resolution hold. */
+    let lastAxisKey = '';
     let lastRenderedResolution: ChartResolution | null = null;
     let lastRenderedDates: string[] = [];
     let responsiveXAxisCompact = false;
@@ -265,7 +274,10 @@
     // Derived data
     // =========================================================================
 
-    let displayData = $derived(valueUnit === 'percentage' ? data : toDisplaySeries(data, viewMode));
+    // The axis is laid on the main series' days, lengthened with the days of a comparison older (or younger) than it (Y2-CMP): the main line is
+    // empty there and the comparison is drawn from its own first day. `data` stays the main series, for what only it answers (a click's value, the ghost).
+    let axisData = $derived(extendToOverlayDays(data, overlaySignals));
+    let displayData = $derived(valueUnit === 'percentage' ? axisData : toDisplaySeries(axisData, viewMode));
 
     // =========================================================================
     // Lifecycle
@@ -290,7 +302,9 @@
     });
 
     $effect(() => {
-        if (data !== lastRawDataRef) {
+        const axisKey = axisData === data ? '' : `${axisData[0].date}|${axisData.length}`;
+        if (data !== lastRawDataRef || axisKey !== lastAxisKey) {
+            lastAxisKey = axisKey;
             resolvedDataCache.clear();
             resolution = 'daily';
             logicalRange = null;
@@ -311,6 +325,8 @@
             void colorByBaseline;
             void showGridLines;
             void showGradient;
+            void lineShape;
+            void getGlobalLineShape();
             void viewMode;
             void displayData;
             void resolution;
@@ -359,19 +375,23 @@
         }
     }
 
+    /** The tooltip header, tagged with the ISO days it stands for (`data-tooltip-from` / `data-tooltip-to`, read by the specs: the text is translated). */
     function buildTooltipHeader(date: string, currentResolution: ChartResolution, bucketInfo?: BucketInfo): string {
+        const asDay = (value: string): string => (/^\d+$/.test(value) ? dayOfAxisValue(Number(value)) : value.slice(0, 10));
         if (currentResolution === 'daily') {
-            return `<strong>${formatDayWithWeekday(date)}</strong>`;
+            const day = asDay(date);
+            return `<strong data-tooltip-from="${day}" data-tooltip-to="${day}">${formatDayWithWeekday(date)}</strong>`;
         }
 
         // The point stands for its bucket up to its own day, the last one with data: the period still running ends there.
         const info = bucketSpanUpTo(date, bucketInfo ?? {bucketStart: date, bucketEnd: date});
+        const span = `data-tooltip-from="${info.bucketStart}" data-tooltip-to="${info.bucketEnd}"`;
 
         if (currentResolution === 'weekly') {
-            return `<strong>${$t('chart.tooltip.weekRange', {values: {start: formatDay(info.bucketStart), end: formatDay(info.bucketEnd)}})}</strong>`;
+            return `<strong ${span}>${$t('chart.tooltip.weekRange', {values: {start: formatDay(info.bucketStart), end: formatDay(info.bucketEnd)}})}</strong>`;
         }
 
-        return `<strong>${$t('chart.tooltip.monthLabel', {values: {month: formatMonthLabel(info.bucketEnd)}})}</strong><br/><span style="font-size:11px;opacity:0.8">${$t('chart.tooltip.valueAt', {values: {date: formatDay(info.bucketEnd)}})}</span>`;
+        return `<strong ${span}>${$t('chart.tooltip.monthLabel', {values: {month: formatMonthLabel(info.bucketEnd)}})}</strong><br/><span style="font-size:11px;opacity:0.8">${$t('chart.tooltip.valueAt', {values: {date: formatDay(info.bucketEnd)}})}</span>`;
     }
 
     function getResolvedSeries(currentResolution: ChartResolution): ResolvedDataCacheEntry {
@@ -762,7 +782,7 @@
         lastRenderedDates = dates;
         const bucketInfoByDate = new Map(dates.map((date, index) => [date, getBucketInfo(resolvedLineData[index], activeResolution)]));
         const useBaselineColoring = colorByBaseline;
-        const baselineValue = isPercentage ? 0 : (resolvedLineData[0]?.value ?? 0);
+        const baselineValue = isPercentage ? 0 : (resolvedLineData.find((point) => !point.missing)?.value ?? 0);
         const staleDaysArr = resolvedLineData.map((point) => point.staleDays ?? 0);
         const mainSeriesName = mainSeriesLabel || currency || 'Value';
         const series: any[] = [];
@@ -1104,7 +1124,7 @@
                     return chartWidth > 0 ? fitTooltipToWidth(html, chartWidth - 32) : html;
                 },
             },
-            series,
+            series: applyLineShape(series, lineShape ?? getGlobalLineShape()),
         };
 
         // Resolution switch: the number of data points/series changes drastically
@@ -1171,7 +1191,7 @@
             </div>
         </div>
         {#if chartType === 'line'}
-            <div bind:this={chartContainer} class="w-full" style="height: {chartHeight};" class:cursor-crosshair={measureMode} data-measure-hover={measureHover ?? undefined}></div>
+            <div bind:this={chartContainer} class="w-full" style="height: {chartHeight};" class:cursor-crosshair={measureMode} data-measure-hover={measureHover ?? undefined} data-line-shape={lineShape ?? getGlobalLineShape()}></div>
         {:else}
             <CandlestickChart
                 data={candleSeries}
