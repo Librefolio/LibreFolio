@@ -72,7 +72,7 @@
     import type {SignalLabelInfo} from '$lib/charts/signalLabel';
     import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
     import {ensureSignalFxPairs, fxPairSlugsOf} from '$lib/charts/comparisonSeries';
-    import {applyComparisonAssetsData, clearComparisonAssetsData, COMPARISON_ASSET_RUNTIME_PARAM_KEYS, comparisonAnswerGenerations, comparisonAnswerIsCacheable, comparisonAnswerKey, loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
+    import {applyComparisonAssetsData, clearComparisonAssetsData, COMPARISON_ASSET_RUNTIME_PARAM_KEYS, earliestComparisonDate, type ComparisonAssetsLoadResult, comparisonAnswerGenerations, comparisonAnswerIsCacheable, comparisonAnswerKey, loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
     import {detailPageSignalSources} from '$lib/charts/chartPageSignals';
     import {fxPointToLineDataPoint, renderBackendResults, renderCalendarComparisons, renderCalendarPairComparisons, renderLocalSignals, type SignalDataSources} from '$lib/charts/chartSignalRendering';
     import {buildAssetComparisonQuery} from '$lib/charts/crossTypeCalendar';
@@ -176,6 +176,11 @@
     let urlDateStart = $derived(activePreset === 'MAX' ? 'min' : dateStart);
     let urlDateEnd = $derived(activePreset === 'MAX' ? 'max' : dateEnd);
     let syncDateStart = $derived(activePreset === 'MAX' ? 'min' : dateStart);
+    /**
+     * Where the comparisons are asked from (Y2-CMP). With «All» a comparison starts on its own first price — the server resolves `min` per asset —
+     * and not on the day this pair starts: a comparison older than the page's own series is drawn from where it begins.
+     */
+    let comparisonStart = $derived(activePreset === 'MAX' ? 'min' : dateStart);
 
     // View mode is parent-owned so chart, signals, tooltips, and measures stay aligned.
     let viewMode: ViewMode = $state('percentage');
@@ -405,10 +410,10 @@
     // Overlay signals: the saved local signals, drawn by the one renderer with the page's data (Y-42), then the backend results.
     // FX pairs come from the store, straight (the signal's own `_inverted` turns them); a comparison reads the series
     // loadComparisonAssetsData wrote into its config, and an asset the page does not know is named by the catalogue fallback.
-    let signalSources: SignalDataSources = $derived(detailPageSignalSources({configs: signals, assets: allAssets, fxPairPoints: (pairSlug) => getFxStore(pairSlug).getAllSorted()}));
+    let signalSources: SignalDataSources = $derived(detailPageSignalSources({configs: signals, assets: allAssets, fxPairPoints: (pairSlug) => (activePreset === 'MAX' ? getFxStore(pairSlug).getAllSorted() : getFxStore(pairSlug).getRange(dateStart, dateEnd).data)}));
     let overlaySignals: RenderedSignal[] = $derived.by(() => {
         void overlayDataVersion; // trigger recomputation when overlay data changes
-        return [...renderLocalSignals(signals, signalDefinitionsByType, lineData, viewMode, signalSources), ...backendOverlaySignals];
+        return [...renderLocalSignals(signals, signalDefinitionsByType, lineData, viewMode, signalSources, {unionAxis: true}), ...backendOverlaySignals];
     });
 
     /** Combined overlay signals: computed from settings + measure signals */
@@ -656,7 +661,7 @@
                 .map((config) => ({configId: config.id, assetId: Number(config.params.assetId)}))
                 .filter((peer) => Number.isSafeInteger(peer.assetId) && peer.assetId > 0)
                 .sort((left, right) => left.configId.localeCompare(right.configId)),
-            start: dateStart,
+            start: comparisonStart,
             end: dateEnd,
         });
     }
@@ -1056,6 +1061,16 @@
     }
 
     /**
+     * With «All», the From the date picker shows is the older of this series' first day and the oldest comparison's (Y2-CMP): the chart starts
+     * there. Only the label moves: the queries of this series keep its own first day. `null`: no comparison is on the chart.
+     */
+    function showEarliestStart(loaded: ComparisonAssetsLoadResult | null) {
+        if (activePreset !== 'MAX' || isMaxPending) return;
+        const oldest = loaded === null ? null : earliestComparisonDate(loaded);
+        displayDateStart = oldest !== null && oldest < dateStart ? oldest : dateStart;
+    }
+
+    /**
      * Load comparison asset data if any comparison signals are configured.
      * Called explicitly from onMount, handleRefresh, handleDateRangeChange, handleSignalsChange.
      */
@@ -1084,13 +1099,14 @@
         const requestedAssetIds = comparisonAssetIds(requestedSignalConfigs);
         if (requestedAssetIds.length === 0) {
             comparisonAppliedFingerprint = requestedFingerprint;
+            showEarliestStart(null);
             return Promise.resolve();
         }
         if (lineData.length === 0) return Promise.resolve();
         // N64b: the same request over the same price data comes back from the cache, in this very tick: nothing is asked, no
         // busy token opens (`lastComparisonLoadAskedServer` stays false). A peer's invalidated store, a sync of a peer, a
         // refresh (forced) miss.
-        const answerKey = comparisonAnswerKey(requestedAssetIds, {start: dateStart, end: dateEnd});
+        const answerKey = comparisonAnswerKey(requestedAssetIds, {start: comparisonStart, end: dateEnd});
         const answerGenerations = comparisonAnswerGenerations(requestedAssetIds, allAssets);
         const cachedLoad = !force && answerGenerations !== null ? comparisonSeriesAnswers.get(answerKey, answerGenerations) : null;
         if (cachedLoad !== null) {
@@ -1099,13 +1115,14 @@
                 cachedLoad,
             );
             comparisonAppliedFingerprint = requestedFingerprint;
+            showEarliestStart(cachedLoad);
             overlayDataVersion++;
             return Promise.resolve();
         }
         lastComparisonLoadAskedServer = true;
         const promise = (async () => {
             try {
-                const loaded = await loadComparisonAssetsData(requestedAssetIds, {start: dateStart, end: dateEnd}, allAssets);
+                const loaded = await loadComparisonAssetsData(requestedAssetIds, {start: comparisonStart, end: dateEnd}, allAssets);
                 if (!current()) return;
                 if (answerGenerations !== null && comparisonAnswerIsCacheable(loaded)) comparisonSeriesAnswers.set(answerKey, answerGenerations, loaded);
                 comparisonEvents = applyComparisonAssetsData(
@@ -1113,6 +1130,7 @@
                     loaded,
                 );
                 comparisonAppliedFingerprint = requestedFingerprint;
+                showEarliestStart(loaded);
                 overlayDataVersion++;
             } catch (error) {
                 if (!current()) return;
@@ -1138,7 +1156,7 @@
         const slug = data.canonicalSlug;
         const sessionGeneration = getClientSessionGeneration();
         const range = {start: dateStart, end: dateEnd};
-        await ensureSignalFxPairs(requestedSignalConfigs, slug, range);
+        await ensureSignalFxPairs(requestedSignalConfigs, slug, range, activePreset === 'MAX');
         if (!pageMounted || data.canonicalSlug !== slug || !isClientSessionCurrent(sessionGeneration) || dateStart !== range.start || dateEnd !== range.end) return;
         overlayDataVersion++;
     }

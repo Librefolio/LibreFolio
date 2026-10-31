@@ -40,14 +40,33 @@ export class AssetComparisonSignal extends ChartSignal {
         },
     ];
 
+    /** Whether the chart this signal is drawn on lays its axis on the union of its days and the comparison's (a detail page, Y2-CMP). */
+    private get unionAxis(): boolean {
+        return this.params._unionAxis === true;
+    }
+
+    /**
+     * The comparison's days with a price (a 0 is a gap, not a collapse), on the main chart's days: a card's chart plots only its own days, and
+     * measures the percentage view from the first of them.
+     *
+     * On a detail page (`_unionAxis`, Y2-CMP) the chart's axis is the union of its days and the comparison's, so the signal keeps every day of
+     * its own, and the chart finds them by date: a comparison older than the main series is drawn from where it begins.
+     */
     computePoints(baseData: LineDataPoint[]): LineDataPoint[] {
         // _resolvedData is injected by the parent before calling computePoints
         const resolvedData = this.params._resolvedData as LineDataPoint[] | undefined;
         if (!resolvedData?.length || !baseData.length) return [];
 
+        const points: LineDataPoint[] = [];
+        if (this.unionAxis) {
+            for (const point of resolvedData) {
+                if (point.value !== undefined && point.value !== 0) points.push({date: point.date, value: point.value});
+            }
+            return points;
+        }
+
         // Build date→value lookup, then align to base chart's date axis
         const lookup = new Map(resolvedData.map((d) => [d.date, d.value]));
-        const points: LineDataPoint[] = [];
         for (const bd of baseData) {
             const val = lookup.get(bd.date);
             if (val !== undefined && val !== 0) {
@@ -122,6 +141,7 @@ export class AssetComparisonSignal extends ChartSignal {
             currency,
             currencyFlag,
             aggregationProfile: 'last_with_range',
+            ...(this.unionAxis ? {extendsAxis: true} : {}),
         };
     }
 
@@ -146,13 +166,14 @@ export class AssetComparisonSignal extends ChartSignal {
         if (resolvedData?.length) {
             const hasOriginals = resolvedData.some((d) => d.originalValue !== undefined);
             if (hasOriginals) {
-                // Build aligned original points using the same date alignment as computePoints
+                // The original points on the same days as computePoints: aligned to the main chart's, or the comparison's own on a union axis
                 const lookup = new Map(resolvedData.map((d) => [d.date, d]));
                 const origPoints: LineDataPoint[] = [];
-                for (const bd of baseData) {
-                    const rd = lookup.get(bd.date);
+                const days = this.unionAxis ? resolvedData.map((d) => d.date) : baseData.map((bd) => bd.date);
+                for (const day of days) {
+                    const rd = lookup.get(day);
                     if (rd?.originalValue !== undefined && rd.originalValue !== 0) {
-                        origPoints.push({date: bd.date, value: rd.originalValue});
+                        origPoints.push({date: day, value: rd.originalValue});
                     }
                 }
 
@@ -185,6 +206,7 @@ export class AssetComparisonSignal extends ChartSignal {
                         currency: origCurrency,
                         currencyFlag: origFlag,
                         aggregationProfile: 'last_with_range',
+                        ...(this.unionAxis ? {extendsAxis: true} : {}),
                     });
                 }
             }
