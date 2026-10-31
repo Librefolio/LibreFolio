@@ -1006,6 +1006,7 @@ const ONBOARDING_FLOW_IDS = [
     'asset_page_guide',
     'asset_guide',
     'asset_detail_guide',
+    'tools_page_guide',
 ] as const;
 const ONBOARDING_STEP_IDS = {
     transaction_bulk_guide: ['transaction.bulk.workspace', 'transaction.bulk.validation', 'transaction.bulk.selection', 'transaction.bulk.save'],
@@ -1019,7 +1020,7 @@ test.describe('Onboarding replay controls', () => {
         const section = page.getByTestId('onboarding-replay-section');
         await expect(section).toBeVisible({timeout: 10_000});
         await expect(page.getByTestId('onboarding-flow-welcome')).toBeVisible({timeout: 10_000});
-        for (const group of ['transactions', 'broker', 'fx', 'asset'] as const) {
+        for (const group of ['transactions', 'broker', 'fx', 'asset', 'tools'] as const) {
             await section.getByTestId(`onboarding-group-${group}`).evaluate((element) => {
                 (element as HTMLDetailsElement).open = true;
             });

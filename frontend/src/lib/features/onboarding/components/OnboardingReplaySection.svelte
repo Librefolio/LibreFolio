@@ -40,6 +40,7 @@
         {key: 'broker', items: flows.filter((item) => ['broker_page_guide', 'broker_guide', 'broker_detail_guide'].includes(item.flow))},
         {key: 'fx', items: flows.filter((item) => ['fx_page_guide', 'fx_guide', 'fx_detail_guide'].includes(item.flow))},
         {key: 'asset', items: flows.filter((item) => ['asset_page_guide', 'asset_guide', 'asset_detail_guide'].includes(item.flow))},
+        {key: 'tools', items: flows.filter((item) => item.flow === 'tools_page_guide')},
     ]);
 
     function replayIsArmed(item: OnboardingProgressItem): boolean {

@@ -282,12 +282,12 @@ export async function chooseOnboardingCategory(page: Page, viewport: 'desktop' |
 
 /** The areas of the Onboarding category, in order (OnboardingReplaySection.svelte): the first two open on every load. */
 const OPEN_GROUPS = ['setup', 'core'] as const;
-const FOLDED_GROUPS = ['transactions', 'broker', 'fx', 'asset'] as const;
+const FOLDED_GROUPS = ['transactions', 'broker', 'fx', 'asset', 'tools'] as const;
 
 /**
  * The Onboarding category as every load opens it, settled: only its section on the page, the flows
  * loaded and nothing running (Replay all enabled), the first two areas open on their flow — each with
- * its status, its version line and its Replay action — the other four folded, no replay armed (a
+ * its status, its version line and its Replay action — the other five folded, no replay armed (a
  * fresh browser holds none, and none is armed here), no error. Returns the section.
  */
 export async function expectOnboardingCategory(page: Page): Promise<Locator> {

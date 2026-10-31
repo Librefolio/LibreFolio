@@ -319,6 +319,22 @@
             allowedModalDepth: 0,
             pointer: 'cursor',
         },
+        'tools.page.overview': {
+            ...areaPresentation,
+            anchorId: 'tools.page.overview',
+            titleKey: 'onboarding.toolsPageGuide.steps.overview.title',
+            descriptionKey: 'onboarding.toolsPageGuide.steps.overview.description',
+            hostRoute: '/tools',
+            allowedModalDepth: 0,
+        },
+        'tools.page.refresh': {
+            anchorId: 'tools.page.refresh',
+            titleKey: 'onboarding.toolsPageGuide.steps.refresh.title',
+            descriptionKey: 'onboarding.toolsPageGuide.steps.refresh.description',
+            hostRoute: '/tools',
+            allowedModalDepth: 0,
+            pointer: 'cursor',
+        },
         'fx.page.overview': {
             ...areaPresentation,
             anchorId: 'fx.page.overview',

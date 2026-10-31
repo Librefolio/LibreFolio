@@ -92,7 +92,8 @@
       "fx_page_guide": "FX overview",
       "fx_detail_guide": "FX pair details guide",
       "asset_page_guide": "Assets overview",
-      "asset_detail_guide": "Asset details guide"
+      "asset_detail_guide": "Asset details guide",
+      "tools_page_guide": "Tools page"
     },
     "status": {
       "pending": "Pending",
@@ -113,7 +114,8 @@
         "transactions": "Transactions",
         "broker": "Brokers",
         "fx": "FX",
-        "asset": "Assets"
+        "asset": "Assets",
+        "tools": "Tools"
       },
       "armedToast": "{flow} is ready in this browser. Open its feature to start.",
       "cancelArmed": "Cancel activation",
@@ -397,6 +399,18 @@
         "risk": {
           "title": "Risk scenarios",
           "description": "Open Risk to examine historical measures, stress scenarios, simulations, and portfolio context."
+        }
+      }
+    },
+    "toolsPageGuide": {
+      "steps": {
+        "overview": {
+          "title": "Your tools",
+          "description": "Each card is a tool that works on data you choose. Open a card to use that tool; new tools appear here as they become available."
+        },
+        "refresh": {
+          "title": "Reload the list",
+          "description": "Reload the list if a tool is missing or looks out of date."
         }
       }
     }

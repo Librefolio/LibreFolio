@@ -3381,10 +3381,15 @@ object it is missing from, a password or a token of the body included. Since lot
   renderer (`allow_nan=False`) cannot write: the answer was a `500`, on any route with a `Decimal` in its body. Without
   the `input`, the handler's answer is a readable `422`: one error, `finite_number`, whose `msg` does not hold the
   value, without `ctx`.
-- **What it does not remove** (backlog A-38). The handler drops `input` only: `msg` and `ctx` stay as Pydantic wrote
-  them. A validator that formats the value into its message (`raise ValueError(f"… {value}")`) puts part of it in
-  `msg`, while the `ValueError` itself, in `ctx.error`, serializes to `{}`. None of the routes that take a credential
-  does it today, and their tests look for the secret in the whole answer.
+- **What it does not remove, and the rule** (A-38). The handler drops `input` only: `msg` and `ctx` stay as Pydantic
+  wrote them. A validator that formats the value into its message (`raise ValueError(f"… {value}")`) puts part of it in
+  `msg`, while the `ValueError` itself, in `ctx.error`, serializes to `{}`. So the rule: **the validator of a secret
+  field (a password, a token, a secret, a key, a credential) says what is wrong, never with what**: no value in the
+  message. The validator of a public field may show it, as the currency validators of `schemas/common.py` do with the
+  code they refuse. None of the routes that take a credential breaks the rule, their tests look for the secret in the
+  whole answer, and `backend/test_scripts/test_schemas/test_secret_validator_messages.py` (`./dev.py test schemas
+  secret-validator-messages`) reads the source of `backend/app/schemas` and fails for any `field_validator` of a field
+  named like a secret that formats its value into what it raises.
 
 Tests: `./dev.py test api validation-errors` (`backend/test_scripts/test_api/test_validation_errors_api.py`): in
 process, a small app with and without the handler — a password too short, a missing field, two errors at once, a query

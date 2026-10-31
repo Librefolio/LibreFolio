@@ -14,6 +14,7 @@ export const FX_DETAIL_STEP_IDS = ['fx.detail.header', 'fx.detail.provider', 'fx
 export const ASSET_PAGE_STEP_IDS = ['asset.page.overview', 'asset.page.filters', 'asset.page.sync', 'asset.page.add'] as const;
 export const ASSET_GUIDE_STEP_IDS = ['asset.search', 'asset.identity', 'asset.provider'] as const;
 export const ASSET_DETAIL_STEP_IDS = ['asset.detail.header', 'asset.detail.chart', 'asset.detail.editor', 'asset.detail.metadata', 'asset.detail.risk'] as const;
+export const TOOLS_PAGE_STEP_IDS = ['tools.page.overview', 'tools.page.refresh'] as const;
 export const IMPORT_GUIDE_STEP_IDS = ['import.upload', 'import.select', 'import.analyze', 'import.assets', 'import.fix', 'import.duplicates', 'import.review', 'import.gapFix', 'import.bulk'] as const;
 
 export type CoreTourStepId = (typeof CORE_TOUR_STEP_IDS)[number];
@@ -29,6 +30,7 @@ export type FxDetailStepId = (typeof FX_DETAIL_STEP_IDS)[number];
 export type AssetPageStepId = (typeof ASSET_PAGE_STEP_IDS)[number];
 export type AssetGuideStepId = (typeof ASSET_GUIDE_STEP_IDS)[number];
 export type AssetDetailStepId = (typeof ASSET_DETAIL_STEP_IDS)[number];
+export type ToolsPageStepId = (typeof TOOLS_PAGE_STEP_IDS)[number];
 export type ImportGuideStepId = (typeof IMPORT_GUIDE_STEP_IDS)[number];
 export type GuidePointerMode = 'none' | 'cursor';
 export type GuideHighlightMode = 'none' | 'pulse';
@@ -48,6 +50,7 @@ export type GuideStepId =
     | AssetPageStepId
     | AssetGuideStepId
     | AssetDetailStepId
+    | ToolsPageStepId
     | ImportGuideStepId;
 export type GuidedOnboardingFlow = Exclude<OnboardingFlow, 'welcome'>;
 export type ContextualOnboardingFlow = Exclude<GuidedOnboardingFlow, 'intro_tour' | 'import_guide'>;
@@ -118,6 +121,10 @@ export const ONBOARDING_GUIDE_CATALOG: Record<GuidedOnboardingFlow, GuideFlowDef
     asset_detail_guide: {
         trigger: 'contextual',
         steps: ASSET_DETAIL_STEP_IDS,
+    },
+    tools_page_guide: {
+        trigger: 'contextual',
+        steps: TOOLS_PAGE_STEP_IDS,
     },
 };
 

@@ -10,6 +10,7 @@ import {expect, test, type APIRequestContext, type Locator, type Page, type Requ
 import {login, navigateTo} from './fixtures/auth-helpers';
 import {waitForParseVerdict, waitForSettled} from './fixtures/app-events';
 import {uniqueSuffix} from './fixtures/unique';
+import {ONBOARDING_FLOWS} from '../src/lib/types/onboarding';
 
 test.setTimeout(120_000);
 
@@ -760,7 +761,8 @@ test.describe('Onboarding Round 5', () => {
             const progress = (await progressResponse.json()) as {
                 flows: Array<{flow: string; steps?: Array<{step_id: string}>}>;
             };
-            expect(progress.flows).toHaveLength(15);
+            // Every flow the client knows, once: no fixed count, so the next guide does not break it
+            expect(progress.flows.map((flow) => flow.flow)).toEqual([...ONBOARDING_FLOWS]);
             expect(progress.flows.find((flow) => flow.flow === 'import_guide')?.steps?.map((step) => step.step_id)).toEqual(['import.upload', 'import.select', 'import.analyze', 'import.assets', 'import.fix', 'import.duplicates', 'import.review', 'import.gapFix', 'import.bulk']);
             expect(progress.flows.find((flow) => flow.flow === 'transaction_bulk_guide')?.steps?.map((step) => step.step_id)).toEqual(BULK_STEPS);
             await expect(page.getByTestId('dashboard-page')).toBeVisible();
