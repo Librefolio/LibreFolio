@@ -13,12 +13,14 @@ import {expect, test, type Locator, type Page, type Request} from '../fixtures/p
 import {login} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
 import {waitForSettled} from '../fixtures/app-events';
-import {daysAgoIso} from '../fixtures/dates';
+import {daysAgoIso, todayIso} from '../fixtures/dates';
 import {t as catalogueText} from '../fixtures/i18n-data';
 import {maximisePageSize} from '../fixtures/paging';
 import {pageLanguage} from '../fixtures/sync-overwrite';
 import {goToFxPage} from './fx-helpers';
 import {assetComparison, assetIdByName, pairComparison, seedChartComparisons} from '../fixtures/chartComparisons';
+import {expectChartCanvas} from '../fixtures/charts';
+import {schemas} from '../../src/lib/api/generated';
 
 test.describe('FX List Page', () => {
     test.beforeEach(async ({page}) => {
@@ -1469,5 +1471,240 @@ test.describe('FX list — the grid toolbar: the Absolute icon and the action to
 
         await page.keyboard.press('Escape');
         await expect(modal, 'the modal closes, nothing left over it').toBeHidden({timeout: 5_000});
+    });
+});
+
+// ============================================================================
+// FB-7b — FX list: «All» starts at the pair's first stored rate
+// ============================================================================
+// The pair detail asks «All» from the `min` sentinel of `POST /fx/currencies/convert` (the pair's first usable rate day,
+// resolved by the server); the list still asked its cards from the 2000-01-01 placeholder while «All» was pending, so a pair
+// whose rates begin before 2000 was cut at 2000 in the list. The list must ask the cards from `min`, adopt the first date of
+// the answers as the range start, and remember the first day of each pair for the session.
+//
+// Served by the real backend. Each test owns a pair EUR-X with a MANUAL route (no provider, so nothing syncs by itself) and
+// manual rates on 1985-03-01, 1985-03-04, 1999-12-31 and in the last weeks, deleted and verified gone afterwards
+// (`ownedFxQuotes`). One contract in three halves, so a red names its half:
+//   · the range on screen starts on or before the first stored rate (the picker's FROM field — compact, so an ISO date;
+//     other pairs of the shared database may be older, so never an equality) and the pair's card draws its chart;
+//   · the request that carries the pair asks it from `min`, and no item of it from the placeholder;
+//   · a second visit in the same session (in-app: the sidebar away, the browser's back) does not ask the pair from `min`
+//     again, and still starts on or before the first rate and draws.
+// ============================================================================
+const FB7B_API = '/api/v1';
+const FB7B_FX_RATE_PATH = `${FB7B_API}/fx/currencies/rate`;
+const FB7B_FX_CONVERT_PATH = `${FB7B_API}/fx/currencies/convert`;
+const FB7B_FX_ROUTES_PATH = `${FB7B_API}/fx/providers/routes`;
+
+/** The EUR-X pairs a test registers here are deleted, and verified gone, after it, whatever happened in between (a fixture is torn down before the page, with the session still signed in). */
+const fb7bTest = test.extend<{ownedFxQuotes: string[]}>({
+    ownedFxQuotes: async ({page}, use) => {
+        const quotes: string[] = [];
+        try {
+            await use(quotes);
+        } finally {
+            for (const quote of quotes) await fb7bResetPair(page, quote, 'cleanup');
+        }
+    },
+});
+
+async function fb7bJson<T>(response: {ok(): boolean; status(): number; text(): Promise<string>; json(): Promise<unknown>}, purpose: string): Promise<T> {
+    expect(response.ok(), `${purpose}: HTTP ${response.status()} ${await response.text()}`).toBeTruthy();
+    return (await response.json()) as T;
+}
+
+/** Delete what EUR-`quote` holds, then verify, not infer, that no route and no rate is left. */
+async function fb7bResetPair(page: Page, quote: string, moment: 'precondition' | 'cleanup'): Promise<void> {
+    type PairResults = {results: Array<{base: string; quote: string; success: boolean}>};
+    const rates = await fb7bJson<PairResults>(await page.request.delete(FB7B_FX_RATE_PATH, {data: [{from: 'EUR', to: quote, delete_all: true}]}), `delete every EUR-${quote} rate`);
+    expect(rates.results.find((item) => item.base === 'EUR' && item.quote === quote)?.success, `delete every EUR-${quote} rate`).toBe(true);
+    const routes = await fb7bJson<PairResults>(await page.request.delete(FB7B_FX_ROUTES_PATH, {data: [{base: 'EUR', quote}]}), `delete the EUR-${quote} routes`);
+    expect(routes.results.find((item) => item.base === 'EUR' && item.quote === quote)?.success, `delete the EUR-${quote} routes`).toBe(true);
+    const listing = await fb7bJson<{items?: Array<{base: string; quote: string}>}>(await page.request.get(FB7B_FX_ROUTES_PATH), 'list the FX routes');
+    expect(
+        (listing.items ?? []).filter((route) => route.base === 'EUR' && route.quote === quote),
+        `${moment}: no EUR-${quote} route is configured`,
+    ).toEqual([]);
+    // Backward fill is unlimited: a single stored rate on or before today would answer, so a 404 means none is left.
+    const probe = await page.request.post(FB7B_FX_CONVERT_PATH, {data: [{from_amount: {code: quote, amount: '1'}, to: 'EUR', date_range: {start: todayIso()}}]});
+    expect(probe.status(), `${moment}: no EUR-${quote} rate is stored, so converting ${quote} today must fail, got ${await probe.text()}`).toBe(404);
+}
+
+fb7bTest.describe('FB-7b FX list: All starts at the first stored rate', () => {
+    // A ceiling, never a delay: a sign-in, an API seeding and the page loads each test waits for by name.
+    fb7bTest.describe.configure({timeout: 60_000});
+
+    /** The first stored rate, 15 years before the 2000-01-01 placeholder the list used to ask from. */
+    const FIRST_RATE_DAY = '1985-03-01';
+    /** The placeholder start the list used to send for a pending «All». */
+    const PLACEHOLDER_START = '2000-01-01';
+
+    /**
+     * The quote of each test's pair, per test and per Playwright project, because FX routes and rates are global rows. Each
+     * sorts after EUR (the pair is stored as EUR-X, the slug of its card `EUR-X`) and none appears in any seed, spec, test
+     * or catalogue of the worktree (grep of frontend/e2e, frontend/src/lib/i18n, backend/test_scripts and scripts): not the
+     * ones the FX detail's FB-7b, the sync or the provider-editor tests reserve either.
+     */
+    const QUOTE: Readonly<Record<string, Readonly<Record<'allStart' | 'minRequest' | 'secondVisit', string>>>> = {
+        desktop: {allStart: 'XAF', minRequest: 'YER', secondVisit: 'MDL'},
+        mobile: {allStart: 'SYP', minRequest: 'SHP', secondVisit: 'MRU'},
+    };
+
+    function quoteFor(owner: 'allStart' | 'minRequest' | 'secondVisit'): string {
+        const project = fb7bTest.info().project.name;
+        const quote = QUOTE[project]?.[owner];
+        if (!quote) throw new Error(`No currency is reserved for the FB-7b list ${owner} test on project "${project}": reserve one that sorts after EUR and that no seed, spec or test uses`);
+        return quote;
+    }
+
+    /** What the items of one convert request that concern EUR-`quote` ask, with the starts of every item of the request. */
+    type PairAsk = {start: string | null; pageUrl: string; requestStarts: Array<string | null>};
+
+    fb7bTest.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    /** EUR-`quote` with a MANUAL route and manual rates whose history begins in 1985, registered for the teardown before it exists; the precondition is read back through the API. */
+    async function seedOldRatePair(page: Page, ownedFxQuotes: string[], quote: string): Promise<void> {
+        await fb7bTest.step(`setup: EUR-${quote} with a manual route and rates from ${FIRST_RATE_DAY}`, async () => {
+            ownedFxQuotes.push(quote);
+            await fb7bResetPair(page, quote, 'precondition');
+            const route = {base: 'EUR', quote, priority: 999, chain_steps: [{from: 'EUR', to: quote, provider: 'MANUAL'}]};
+            schemas.FXConversionRouteItem.parse(route);
+            const routeResponse = await page.request.post(FB7B_FX_ROUTES_PATH, {data: [route]});
+            expect(routeResponse.status(), `create the EUR-${quote} MANUAL route: ${await routeResponse.text()}`).toBe(201);
+            const days = [FIRST_RATE_DAY, '1985-03-04', '1999-12-31', daysAgoIso(35), daysAgoIso(10), daysAgoIso(3)];
+            const rates = await page.request.post(FB7B_FX_RATE_PATH, {data: days.map((date, index) => ({date, base: 'EUR', quote, rate: [1.1, 1.11, 1.2, 1.3, 1.4, 1.5][index], source: 'MANUAL'}))});
+            expect(rates.ok(), `store the EUR-${quote} rates: HTTP ${rates.status()} ${await rates.text()}`).toBe(true);
+            // `min` resolves to the first stored day: the answer's first point is the 1985 rate, whatever the page does.
+            const first = await page.request.post(FB7B_FX_CONVERT_PATH, {data: [{from_amount: {code: 'EUR', amount: '1'}, to: quote, date_range: {start: 'min', end: todayIso()}}]});
+            const conversion = schemas.FXConvertResponse.parse(await fb7bJson(first, `convert 1 EUR to ${quote} from min`));
+            expect(conversion.results[0]?.conversion_date, `precondition: EUR-${quote} begins on ${FIRST_RATE_DAY}`).toBe(FIRST_RATE_DAY);
+        });
+    }
+
+    function startOf(raw: unknown): string | null {
+        const range = raw !== null && typeof raw === 'object' ? (raw as {date_range?: {start?: unknown}}).date_range : undefined;
+        return typeof range?.start === 'string' ? range.start : null;
+    }
+
+    /** The items of a convert request that concern EUR-`quote`: none for any other request, or one with no readable body. */
+    function pairAsksFor(request: Request, quote: string, pageUrl: string): PairAsk[] {
+        if (request.method() !== 'POST' || new URL(request.url()).pathname !== FB7B_FX_CONVERT_PATH) return [];
+        let body: unknown;
+        try {
+            body = request.postDataJSON();
+        } catch {
+            return [];
+        }
+        if (!Array.isArray(body)) return [];
+        const requestStarts = body.map(startOf);
+        const asks: PairAsk[] = [];
+        for (const raw of body) {
+            if (raw === null || typeof raw !== 'object') continue;
+            const item = raw as {from_amount?: {code?: unknown}; to?: unknown};
+            if (item.to !== quote && item.from_amount?.code !== quote) continue;
+            asks.push({start: startOf(raw), pageUrl, requestStarts});
+        }
+        return asks;
+    }
+
+    function rangePicker(page: Page): Locator {
+        return page.getByTestId('fx-date-range-picker').getByTestId('date-range-picker-root');
+    }
+
+    /** Opens the list on «All» by URL and verifies, rather than assumes, that «All» is the preset on screen. */
+    async function openListOnAll(page: Page): Promise<void> {
+        await goToFxPage(page, {start: 'min', end: 'max'});
+        await expect(rangePicker(page).getByTestId('date-preset-max'), '«All» is the active preset').toHaveAttribute('data-active', 'true', {timeout: 10_000});
+    }
+
+    /** The pair's card in the grid, verified visible and with a rate (not «not available»). */
+    async function ownCard(page: Page, quote: string): Promise<Locator> {
+        const card = page.getByTestId(`fx-card-EUR-${quote}`);
+        await expect(card, 'the card of the pair this test created').toBeVisible({timeout: 15_000});
+        await expect(card.getByTestId('fx-card-rate-missing'), 'the pair has rates in the range').toHaveCount(0, {timeout: 10_000});
+        return card;
+    }
+
+    /** The FROM field reads a date on or before `day` (an ISO date); anything else, «min» included, is a red that says what the field showed. */
+    async function expectFromOnOrBefore(page: Page, day: string, message: string): Promise<void> {
+        const input = rangePicker(page).getByTestId('date-range-input-start');
+        await expect
+            .poll(
+                async () => {
+                    const value = await input.inputValue();
+                    return /^\d{4}-\d{2}-\d{2}$/.test(value) && value <= day ? 'ok' : `the FROM field shows "${value}"`;
+                },
+                {message: `${message} (on or before ${day}; other pairs of the shared database may be older)`, timeout: 10_000},
+            )
+            .toBe('ok');
+    }
+
+    // The visible half. Red while the list asks from 2000-01-01: the FROM field reads the oldest first rate it is handed
+    // from there on, and the 1985 and 1999 rates are not on the owned card at all.
+    fb7bTest('FB-7b the range of All starts on or before the first stored rate and the card draws', async ({page, ownedFxQuotes}) => {
+        const quote = quoteFor('allStart');
+        await seedOldRatePair(page, ownedFxQuotes, quote);
+        await openListOnAll(page);
+        await ownCard(page, quote);
+
+        await expectChartCanvas(page, `fx-card-EUR-${quote}`, 15_000);
+        await expectFromOnOrBefore(page, FIRST_RATE_DAY, '«All» starts on the oldest first rate, not on the 2000 placeholder');
+    });
+
+    // The wire half. Red while the list sends the 2000-01-01 placeholder. Armed before the navigation: the request is sent
+    // while the page loads, and a listener armed after it would wait for one that already went by.
+    fb7bTest('FB-7b the first rates request of All that carries the pair asks it from min', async ({page, ownedFxQuotes}) => {
+        const quote = quoteFor('minRequest');
+        await seedOldRatePair(page, ownedFxQuotes, quote);
+        const asked = page.waitForRequest((request) => pairAsksFor(request, quote, '').length > 0, {timeout: 30_000});
+        asked.catch(() => undefined);
+        await openListOnAll(page);
+
+        const request = await asked;
+        const first = pairAsksFor(request, quote, '')[0];
+        expect(first?.start, `the item of EUR-${quote} on «All» asks from the min sentinel`).toBe('min');
+        expect(first?.requestStarts, `no item of that request asks from the ${PLACEHOLDER_START} placeholder`).not.toContain(PLACEHOLDER_START);
+    });
+
+    // The memory half. In-app navigation keeps the page's in-memory stores, a reload empties them: the way away is the
+    // sidebar and the way back is the browser's back, both client-side. The requests are taken from the moment of the way
+    // back, and only those the page sent while it was on the list (the assets page asks for its own in between).
+    fb7bTest('FB-7b a second visit to All does not ask the pair from min again and still draws from the first rate', async ({page, ownedFxQuotes}) => {
+        const quote = quoteFor('secondVisit');
+        await seedOldRatePair(page, ownedFxQuotes, quote);
+        const asks: PairAsk[] = [];
+        page.on('request', (request) => {
+            // Read synchronously: the page URL is the page that sent the request, not the one it will be on later.
+            asks.push(...pairAsksFor(request, quote, page.url()));
+        });
+        await openListOnAll(page);
+        await ownCard(page, quote);
+        await expectFromOnOrBefore(page, FIRST_RATE_DAY, 'first visit: «All» starts on the oldest first rate');
+
+        // Away, in-app.
+        await page.getByTestId('nav-assets').click();
+        await expect(page).toHaveURL(/\/assets(?:[?#]|$)/, {timeout: 15_000});
+        await expect(page.getByTestId('assets-page')).toBeVisible({timeout: 15_000});
+        await expect(page.getByTestId('fx-page'), 'the list really unmounted: otherwise nothing is remounted on the way back').toHaveCount(0);
+
+        // Back, in-app.
+        const mark = asks.length;
+        await page.goBack();
+        await expect(page, 'back on the list, still on «All»').toHaveURL(/\/fx\?.*start=min/, {timeout: 15_000});
+        const list = page.getByTestId('fx-page');
+        await expect(list).toBeVisible({timeout: 15_000});
+        await waitForSettled(list, 30_000);
+        await expect(rangePicker(page).getByTestId('date-preset-max'), '«All» is still the active preset').toHaveAttribute('data-active', 'true', {timeout: 10_000});
+        await ownCard(page, quote);
+        await expectChartCanvas(page, `fx-card-EUR-${quote}`, 15_000);
+        await expectFromOnOrBefore(page, FIRST_RATE_DAY, 'second visit: «All» still starts on the oldest first rate');
+
+        const onList = asks.slice(mark).filter((ask) => new URL(ask.pageUrl).pathname === '/fx');
+        expect(
+            onList.filter((ask) => ask.start === 'min'),
+            'the first day is remembered for the session: the list does not ask the pair from min again',
+        ).toEqual([]);
     });
 });

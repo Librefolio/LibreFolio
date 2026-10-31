@@ -80,7 +80,7 @@ nothing cleans such a row up, at startup or from the scheduler (D-W63-1: no). Pi
 planted with raw SQL past the model, as an older release could leave them:
 
 5. the planner's latest saved row on or before ``as_of`` is the latest stored one — D2's 0, inf or 1E+14 over D1's 2.5,
-   or alone —, its rate as the column reads it back (a REAL inf is ``Decimal('Infinity')``);
+   or alone —, its rate as the column reads it back (a REAL inf is ``None``, W-B63);
 6. the WAC evidence reads the stored row of each exact key, whatever its rate (0, inf, 1E+14, as read back), beside the
    usable key;
 7. ``convert_bulk`` (its backward-fill anchor and its window) and ``_first_rate_days_inside`` still read only the rates
@@ -869,11 +869,11 @@ XR45_D3 = date(1987, 6, 12)  # X-R45b: the second row of a run of skipped rates,
 XR45_LATER = date(1987, 6, 15)  # an as_of after D1, D2 and D3
 XR45_D1_RATE = Decimal("2.5")
 #: Rates a 1.2 install could store outside X-R38's ``usable_fx_rate_bounds()`` (1E-10 <= rate < 1E+14), as SQLite binds
-#: them, with the Decimal the ORM reads back from ``fx_rates.rate`` (``Numeric(24, 10)`` on SQLite: ``"%.10f" % value``,
-#: so a REAL inf is ``Decimal('Infinity')``).
+#: them, with the Decimal the ORM reads back from ``fx_rates.rate`` (``RealDecimal(24, 10)`` since W-B63: a REAL inf reads
+#: ``None``, no number to quote; it was ``Decimal('Infinity')`` as a ``Numeric`` column).
 XR45_UNUSABLE = [
     pytest.param(0.0, Decimal("0"), id="0"),  # a manual 1E-11, truncated to the column's 10 decimals
-    pytest.param(float("inf"), Decimal("Infinity"), id="inf"),  # 1E+400, written as an SQLite REAL
+    pytest.param(float("inf"), None, id="inf"),  # 1E+400, written as an SQLite REAL
     pytest.param(1e14, Decimal("1E+14"), id="1E+14"),  # the first rate refused
 ]
 #: Rates a read may use, the two bounds among them, with the Decimal ``fx_rates.rate`` reads back.
@@ -990,7 +990,7 @@ async def test_xr45_reverted_the_latest_saved_planner_fx_row_is_the_latest_store
 
     Contract (the revert, developer 19/10: «non devi filtrare … gli utenti possono … modificare … a mano»): the subquery
     counts every stored row again, so the latest row on or before ``as_of`` — D2's — is the pair's saved row: its date,
-    its rate as the column reads it back (a REAL inf is ``Decimal('Infinity')``), its source.
+    its rate as the column reads it back (a REAL inf is ``None``, W-B63), its source.
     """
     story = f"{XR45_PAIR} 2.5 on {XR45_D1} and a legacy {unusable!r} on {XR45_D2}, as of {as_of}"
     print_section(f"X-R45 reverted: the planner's latest saved row, {story}")
@@ -1068,7 +1068,7 @@ async def test_xr45_reverted_a_planner_fx_pair_whose_only_saved_rate_is_unusable
     saved row at all.
 
     Contract (the revert): the pair's only stored row is its latest saved row, whatever its rate — D2, its rate as read
-    back (0, ``Decimal('Infinity')``, 1E+14), its source.
+    back (0, ``None`` for the inf, 1E+14), its source.
     """
     story = f"{XR45_PAIR} whose only rate is a legacy {unusable!r} on {XR45_D2}, as of {XR45_LATER}"
     print_section(f"X-R45 reverted: the planner's latest saved row, {story}")

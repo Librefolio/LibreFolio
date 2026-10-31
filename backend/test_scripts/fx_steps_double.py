@@ -4,6 +4,10 @@ The handler asks ``unit_rate_steps`` which stored rate row each day reads, and `
 conversion per stretch of days on the same row. A test that replaces ``convert_bulk`` by a double must say the same thing about
 its rates: ``steps_double(rate_day_of)`` gives the steps of a pair from a function ``(source, destination, day) -> rate day``
 (``None`` before the pair's first rate). The default is a rate row on every day, so each day is its own stretch.
+
+The steps carry the unit rate the handler answers as ``rate`` (MF-A13). ``unit_rate_of(source, destination, day)`` says it; the default
+is 1, which a test of the stretches does not read. A test that checks the ``rate`` of an answer gives the rate its ``convert_bulk`` double
+converts at.
 """
 
 from __future__ import annotations
@@ -16,9 +20,10 @@ from typing import Any
 from backend.app.services.fx.conversion import UnitRateSteps
 
 RateDayOf = Callable[[str, str, date], date | None]
+UnitRateOf = Callable[[str, str, date], Decimal]
 
 
-def steps_double(rate_day_of: RateDayOf = lambda _source, _destination, day: day) -> Callable[..., Any]:
+def steps_double(rate_day_of: RateDayOf = lambda _source, _destination, day: day, unit_rate_of: UnitRateOf = lambda _source, _destination, _day: Decimal(1)) -> Callable[..., Any]:
     async def steps(_session: Any, requests: dict) -> dict:
         found = {}
         for (source, destination), windows in requests.items():
@@ -29,7 +34,7 @@ def steps_double(rate_day_of: RateDayOf = lambda _source, _destination, day: day
                 source=source,
                 destination=destination,
                 days=tuple(day for day, _rate_day in rated),
-                values=tuple(Decimal(1) for _ in rated),
+                values=tuple(unit_rate_of(source, destination, day) for day, _rate_day in rated),
                 rate_days=tuple(rate_day for _day, rate_day in rated),
             )
         return found

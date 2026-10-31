@@ -1085,3 +1085,21 @@ async def test_blm03_each_item_starts_at_its_own_first_price_and_a_dated_item_is
     min_a, min_b, dated_a = await _query(private_db, _min_item(a, CEILING), _min_item(b, CEILING), _item(a, date(2024, 1, 10), CEILING))
 
     assert [min_a.prices[0].date, min_b.prices[0].date, dated_a.prices[0].date] == [date(1990, 5, 2), date(2010, 7, 1), date(2024, 1, 10)]
+
+
+@pytest.mark.asyncio
+async def test_blm04_a_target_sampled_like_a_min_card_follows_its_buckets_from_its_own_first_price(private_db, frozen_ceiling, no_market_holidays):
+    """BL-M04: the Assets grid's «All»: a card (first price 1985-03-01) and its comparison target (first price 2015-06-01), both
+    from ``"min"`` to the ceiling, the target ``sample_like`` the card. Once each starts on its own first price the two
+    ranges differ, but they were the same as asked: the request is not refused (``range_mismatch``), the target is sampled
+    on the card's step, and starts on its own first price."""
+    card_asset = await _asset(private_db, prices_on=[date(1985, 3, 1), FROZEN_TODAY])
+    target_asset = await _asset(private_db, prices_on=[date(2015, 6, 1), FROZEN_TODAY])
+    card = _min_item(card_asset, CEILING).model_copy(update={"key": "asset:card", "max_points": 40})
+    target = _min_item(target_asset, CEILING).model_copy(update={"sample_like": "asset:card"})
+
+    card_result, target_result = await _query(private_db, card, target)
+
+    assert card_result.resolution == target_result.resolution != "daily", (card_result.resolution, target_result.resolution)
+    assert card_result.prices[0].date >= date(1985, 3, 1) and target_result.prices[0].date >= date(2015, 6, 1)
+    assert min(point.date for point in target_result.prices) > min(point.date for point in card_result.prices)

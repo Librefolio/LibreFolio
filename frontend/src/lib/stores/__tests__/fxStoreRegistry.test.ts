@@ -48,6 +48,7 @@ vi.mock('$lib/api/bulkBatches', async (importOriginal) => {
 
 import {zodiosApi} from '$lib/api';
 import {notifyPortfolioMutation, notifyPricesCaughtUp, requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
+import {firstDateOf, forgetFirstDate} from '$lib/stores/firstSeriesDates';
 import * as registry from '../fxStoreRegistry';
 import {
     apiResultToFxDataPoint,
@@ -86,6 +87,7 @@ function apiResp(...dates: string[]) {
 beforeEach(() => {
     // Reset the module-level fxStores singleton between tests
     for (const slug of getRegisteredPairs()) removeFxStore(slug);
+    forgetFirstDate('fx', 'EUR-USD');
     mockConvert.mockReset();
 });
 
@@ -890,6 +892,46 @@ describe('loadFxRatesAndSignalsBulk', () => {
         const result = await loadFxRatesAndSignalsBulk([{...cachedNoSignals, signals: [{instance_id: 'a', signal_code: 'EMA', params: {period: 20}}]}]);
 
         expect(result.signalsBySlug.get('EUR-USD')).toEqual([]);
+    });
+
+    describe('asked from the `min` sentinel (FB-7b)', () => {
+        const fromMin = {slug: 'EUR-USD', start: 'min', end: '2024-01-31', displayedInverted: false, signals: []};
+        const answer = (...days: string[]) =>
+            ({
+                success_count: days.length,
+                results: days.map((day) => ({from_amount: {code: 'EUR', amount: '1'}, to_amount: {code: 'USD', amount: '1.25'}, conversion_date: day, rate: '1.25', backward_fill_info: null})),
+            }) as any;
+
+        it('sends `min` as it is, even when the store already holds days', async () => {
+            getFxStore('EUR-USD').merge([{date: '2024-01-10', rate: 1.2, backwardFillInfo: null}]);
+            mockConvert.mockResolvedValueOnce(answer('1985-03-01', '1985-03-04', '2024-01-10'));
+
+            await loadFxRatesAndSignalsBulk([fromMin]);
+
+            expect((mockConvert.mock.calls[0][0] as any[])[0].date_range).toEqual({start: 'min', end: '2024-01-31'});
+        });
+
+        it('marks the store fetched from the first rate that came, hands that range back, and the session remembers the day', async () => {
+            mockConvert.mockResolvedValueOnce(answer('1985-03-04', '1985-03-01', '2024-01-10'));
+
+            const result = await loadFxRatesAndSignalsBulk([fromMin]);
+
+            expect(result.dataBySlug.get('EUR-USD')?.map((point) => point.date)).toEqual(['1985-03-01', '1985-03-04', '2024-01-10']);
+            const store = getFxStore('EUR-USD');
+            expect(store.getMissingIntervals('1985-03-01', '2024-01-31'), 'nothing is missing from the first rate on').toEqual([]);
+            expect(store.getMissingIntervals('1985-02-01', '1985-03-01').length, 'what came before the first rate was never asked').toBe(1);
+            expect(firstDateOf('fx', 'EUR-USD')).toBe('1985-03-01');
+        });
+
+        it('marks nothing and remembers nothing when no rate came', async () => {
+            mockConvert.mockResolvedValueOnce({success_count: 0, results: []} as any);
+
+            const result = await loadFxRatesAndSignalsBulk([fromMin]);
+
+            expect(result.dataBySlug.get('EUR-USD')).toEqual([]);
+            expect(firstDateOf('fx', 'EUR-USD')).toBeUndefined();
+            expect(getFxStore('EUR-USD').getMissingIntervals('2024-01-01', '2024-01-31').length).toBe(1);
+        });
     });
 
     it('marks the fetched range so a second load of the same window is free', async () => {

@@ -97,7 +97,7 @@ def _convert_bulk(monkeypatch: pytest.MonkeyPatch, first_rate: dict[tuple[str, s
 
     double = AsyncMock(side_effect=_convert)
     monkeypatch.setattr(fx_currencies_api, "convert_bulk", double)
-    monkeypatch.setattr(fx_currencies_api, "unit_rate_steps", steps_double(lambda source, destination, day: day if day >= first_rate.get((source, destination), date.min) else None))
+    monkeypatch.setattr(fx_currencies_api, "unit_rate_steps", steps_double(lambda source, destination, day: day if day >= first_rate.get((source, destination), date.min) else None, lambda source, destination, day: _rate((source, destination), day)))
     return double
 
 
