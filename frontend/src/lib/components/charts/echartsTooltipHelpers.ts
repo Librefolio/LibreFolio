@@ -67,6 +67,16 @@ export function buildFittedTooltipRow(labelHtml: string, valueHtml: string): str
 }
 
 /**
+ * `buildFittedTooltipRow` as a line of its own, with an optional colour dot before the label: the label (and its dot) shrinks and ends in
+ * an ellipsis, the value keeps its whole width and sits at the right edge. For a tooltip made of stacked rows (`fitTooltipToWidth` caps it).
+ * Both arguments are HTML: the caller escapes.
+ */
+export function buildFittedTooltipBlockRow(labelHtml: string, valueHtml: string, dotColor?: string): string {
+    const dot = dotColor ? buildDot(dotColor) : '';
+    return `<div data-tooltip-row style="display:flex;align-items:baseline;max-width:100%;min-width:0;gap:16px"><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${dot}${labelHtml}</span><b style="flex-shrink:0;white-space:nowrap;margin-left:auto">${valueHtml}</b></div>`;
+}
+
+/**
  * Cap a tooltip's content at `maxWidthPx`, so a row wider than its chart shrinks (see
  * `buildFittedTooltipRow`) instead of leaving the screen. ECharts' box is `white-space:nowrap`:
  * the frame lets the notes between the rows wrap again.

@@ -20,7 +20,7 @@
  * The inputs arrive canonical (dot decimal, the comma already normalised by the field).
  */
 import {describe, expect, it} from 'vitest';
-import {AMOUNT_DECIMALS, UNIT_PRICE_DECIMALS, amountFromUnitPrice, calculateTradeValue, driverAfterEdit, unitPriceFromAmount, type TradeAmountDriver, type TradeAmountEdit, type TradeAmountInput} from './txTradeAmount';
+import {AMOUNT_DECIMALS, UNIT_PRICE_DECIMALS, amountFromUnitPrice, calculateTradeValue, driverAfterEdit, rowUnitPrice, unitPriceFromAmount, type TradeAmountDriver, type TradeAmountEdit, type TradeAmountInput} from './txTradeAmount';
 
 const DRIVERS: TradeAmountDriver[] = ['amount', 'unit_price'];
 
@@ -465,6 +465,145 @@ describe('calculateTradeValue', () => {
         it('the limit is on the value that drives: a long unit price is ignored while the amount drives', () => {
             expect(calculateTradeValue(input({driver: 'amount', unitPrice: '0.1234567890123456789'}))).not.toBeNull();
             expect(calculateTradeValue(input({driver: 'unit_price', amount: '1000.1234567'}))).not.toBeNull();
+        });
+    });
+});
+
+/**
+ * rowUnitPrice (W2-6) — the unit price a transactions row shows in its read-only «unit price» column, no form involved.
+ *
+ * The row stores a signed quantity and a signed cash amount (a BUY has a positive quantity and a negative cash, a SELL
+ * the opposite): the price is the same positive number either way, so the function works on the ABSOLUTE values. It is
+ * not a second formula: it answers what `calculateTradeValue({driver: 'amount', ...})` answers, so the column and the
+ * form can never show two different prices for one trade. `null` is «nothing to show»: a blank, zero or non-number
+ * quantity or amount, an asset whose quote base is not known, or a value past the limits the form refuses.
+ */
+describe('rowUnitPrice — the price a row shows, from its own quantity and cash', () => {
+    const row = (quantity: string | null | undefined, amount: string | null | undefined, quoteBaseQuantity = 1) => rowUnitPrice({quantity, amount, quoteBaseQuantity});
+
+    describe('what is shown', () => {
+        it('a BUY: positive quantity, negative cash → a positive price', () => {
+            expect(row('10', '-1000')).toBe('100');
+        });
+
+        it('a SELL: negative quantity, positive cash → the same kind of positive price', () => {
+            expect(row('-3', '450.3')).toBe('150.1');
+        });
+
+        it('a bond quoted on base 100: price per 100 nominal', () => {
+            expect(row('5000', '4950', 100)).toBe('99');
+            expect(row('-5000', '4950', 100)).toBe('99');
+        });
+
+        it('the sign of either side is irrelevant: all four combinations give one answer', () => {
+            const answers = [row('10', '1000'), row('-10', '1000'), row('10', '-1000'), row('-10', '-1000')];
+            expect(answers).toEqual(['100', '100', '100', '100']);
+        });
+
+        it('rounds half-even to 12 decimals: a third, two thirds', () => {
+            expect(row('3', '1')).toBe('0.333333333333');
+            expect(row('3', '2')).toBe('0.666666666667');
+            expect(row('-3', '-2')).toBe('0.666666666667');
+        });
+
+        it('rounds a tie half-even: down to an even digit, up to an even digit', () => {
+            // 1/8192 = 0.0001220703125 → ...312 (the 12th digit, 2, is even); 3/8192 = 0.0003662109375 → ...938 (7 is odd, goes up).
+            expect(row('8192', '1')).toBe('0.000122070312');
+            expect(row('8192', '3')).toBe('0.000366210938');
+            expect(row('-8192', '3')).toBe('0.000366210938');
+        });
+
+        it('plain decimal text: no exponent, no trailing zeros in the fraction', () => {
+            expect(row('0.0000000001', '1')).toBe('10000000000');
+            expect(row('4', '10')).toBe('2.5');
+            expect(row('1', '0.000001')).toBe('0.000001');
+        });
+    });
+
+    describe('nothing to show → null', () => {
+        it('a blank, null or undefined quantity or amount', () => {
+            expect(row('', '100')).toBeNull();
+            expect(row('10', '')).toBeNull();
+            expect(row(null, '100')).toBeNull();
+            expect(row('10', null)).toBeNull();
+            expect(row(undefined, '100')).toBeNull();
+            expect(row('10', undefined)).toBeNull();
+        });
+
+        it('a zero quantity or amount, however it is written', () => {
+            for (const zero of ['0', '0.00', '-0', '0.000000']) {
+                expect(row(zero, '100'), `quantity ${zero}`).toBeNull();
+                expect(row('10', zero), `amount ${zero}`).toBeNull();
+            }
+        });
+
+        it('a text that is not a number', () => {
+            for (const junk of ['abc', '1e3', '--5', '1,5', '5 0', '.', '-']) {
+                expect(row(junk, '100'), `quantity ${junk}`).toBeNull();
+                expect(row('10', junk), `amount ${junk}`).toBeNull();
+            }
+        });
+
+        it('an asset whose quote base is not known', () => {
+            expect(rowUnitPrice({quantity: '10', amount: '1000', quoteBaseQuantity: null})).toBeNull();
+            expect(rowUnitPrice({quantity: '10', amount: '1000', quoteBaseQuantity: undefined})).toBeNull();
+            expect(rowUnitPrice({quantity: '10', amount: '1000', quoteBaseQuantity: 1}), 'control: the same row with a known base').toBe('100');
+        });
+    });
+
+    describe('past the limits the form refuses → null; at the limit → a price', () => {
+        it('quantity: 10 decimals pass, 11 do not', () => {
+            expect(row('0.1234567891', '100')).not.toBeNull();
+            expect(row('0.12345678911', '100')).toBeNull();
+            expect(row('-0.12345678911', '100')).toBeNull();
+        });
+
+        it('amount: 6 decimals pass, 7 do not', () => {
+            expect(row('10', '1000.123456')).not.toBeNull();
+            expect(row('10', '1000.1234567')).toBeNull();
+            expect(row('10', '-1000.1234567')).toBeNull();
+        });
+
+        it('15 significant digits pass, 16 do not — for the quantity and the amount', () => {
+            expect(row('123456789012345', '100')).not.toBeNull();
+            expect(row('1234567890123456', '100')).toBeNull();
+            expect(row('10', '123456789.123456')).not.toBeNull();
+            expect(row('10', '1234567890.123456')).toBeNull();
+            expect(row('-1234567890123456', '100')).toBeNull();
+        });
+    });
+
+    describe('one formula: it agrees with the form', () => {
+        const FORM_CASES: Array<[number, string, string]> = [
+            [1, '10', '1000'],
+            [1, '3', '1'],
+            [100, '5000', '4950'],
+            [7, '13', '5'],
+            [1000, '323', '7907.924034'],
+            [1, '0.5', '1000.8'],
+        ];
+
+        it.each(FORM_CASES)('base %s, quantity %s, amount %s → the amount-driven price of the form', (base, quantity, amount) => {
+            const form = calculateTradeValue({driver: 'amount', quoteBaseQuantity: base, quantity, amount, unitPrice: ''});
+            expect(form?.mode).toBe('amount_to_price');
+            expect(row(quantity, amount, base)).toBe(form?.result);
+            expect(row(`-${quantity}`, amount, base), 'a SELL').toBe(form?.result);
+            expect(row(quantity, `-${amount}`, base), 'a BUY').toBe(form?.result);
+        });
+
+        it("the whole parity corpus: the form's answer where it has one, null where it refuses", () => {
+            let calculated = 0;
+            for (const [base, quantity, amount, price] of PRICE_PARITY) {
+                const form = calculateTradeValue({driver: 'amount', quoteBaseQuantity: base, quantity, amount, unitPrice: ''});
+                const shown = row(quantity, `-${amount}`, base);
+                if (form === null) {
+                    expect(shown, `${amount} × ${base} / ${quantity} is past the limits`).toBeNull();
+                } else {
+                    calculated++;
+                    expect(shown, `${amount} × ${base} / ${quantity}`).toBe(price);
+                }
+            }
+            expect(calculated, 'most of the corpus is inside the limits').toBeGreaterThan(PRICE_PARITY.length * 0.8);
         });
     });
 });

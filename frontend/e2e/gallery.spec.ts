@@ -3917,31 +3917,55 @@ test.describe('Gallery Screenshots', () => {
         });
 
         test('import wizard conditional steps (assets / fix / duplicates / n-way compare) - all languages and themes', async ({page}, testInfo) => {
-            // Heaviest wizard test: two real uploads + backend parse + four step walkthrough × 8 combos.
+            // Heaviest wizard test: three real uploads + the set's combine + backend parse + four step walkthrough × 8 combos.
             test.setTimeout(600_000); // 10 minutes
             const viewport = getViewport(testInfo);
+            // The Crédit Agricole exports are the two members of ONE report set (since 2.0.0 neither is read alone): the securities
+            // movements and the account movements. A set is parsed as one combined file, so it holds no duplicate between its own
+            // exports by construction (that double counting is what the set removes), and the duplicates step and the n-way compare
+            // need a second SOURCE FILE in the same analysis: a single file of another plugin (the generic CSV), whose one deposit
+            // is the same movement as the account's transfer of 05/06/2026 under another description (the probable tier).
             const TITOLI_CSV = path.join(__dirname, 'assets', 'demo_credit_agricole_titoli.csv');
             const CONTO_CSV = path.join(__dirname, 'assets', 'demo_credit_agricole_conto.csv');
+            const GENERIC_CSV = path.join(__dirname, 'assets', 'demo_generic_deposit.csv');
 
             // Track this test's own uploads via the upload responses, so cleanup deletes
-            // exactly those files (never a parallel worker's same-named copies).
+            // exactly those files (never a parallel worker's same-named copies). The combined
+            // file of the set, which the analysis writes on the broker, is recorded from the
+            // combine response: left behind, it would be inherited by the next run on this broker.
             const uploadedFileIds = new Set<string>();
+            const uploadedByName = new Map<string, {fileId: string; batchId: string | null}>();
+            const combinedFileIds = new Set<string>();
             page.on('response', (response) => {
-                if (!response.url().includes('/api/v1/brokers/import/upload')) return;
-                if (!response.ok()) return;
-                response
-                    .json()
-                    .then((body) => {
-                        const id = (body as {file_id?: string})?.file_id;
-                        if (id) uploadedFileIds.add(id);
-                    })
-                    .catch(() => {});
+                const pathname = new URL(response.url()).pathname;
+                if (!response.ok() || response.request().method() !== 'POST') return;
+                if (pathname === '/api/v1/brokers/import/upload') {
+                    response
+                        .json()
+                        .then((body) => {
+                            const info = body as {file_id?: string; filename?: string; batch_id?: string | null};
+                            if (!info?.file_id) return;
+                            uploadedFileIds.add(info.file_id);
+                            if (info.filename) uploadedByName.set(info.filename, {fileId: info.file_id, batchId: info.batch_id ?? null});
+                        })
+                        .catch(() => {});
+                } else if (pathname === '/api/v1/brokers/import/sets/combine') {
+                    response
+                        .json()
+                        .then((body) => {
+                            const id = (body as {combined?: {file_id?: string}})?.combined?.file_id;
+                            if (id) combinedFileIds.add(id);
+                        })
+                        .catch(() => {});
+                }
             });
             const cleanupUploadedFiles = async () => {
-                for (const id of uploadedFileIds) {
+                for (const id of [...uploadedFileIds, ...combinedFileIds]) {
                     await page.request.delete(`/api/v1/brokers/import/files/${id}`).catch(() => {});
                 }
                 uploadedFileIds.clear();
+                uploadedByName.clear();
+                combinedFileIds.clear();
             };
             // Parse opens only when every ticked file has a plugin and no report set is ticked in
             // part or left incomplete. When it stays shut, say which of those gates held it.
@@ -3965,7 +3989,7 @@ test.describe('Gallery Screenshots', () => {
                     await page.getByTestId('tx-table').waitFor({state: 'visible', timeout: 10_000});
 
                     try {
-                        // ── Step 1: upload the two Credit Agricole demo files ──
+                        // ── Step 1: upload the two Credit Agricole demo exports (one report set) and the generic CSV ──
                         await page.getByTestId('tx-import-button').click();
                         await page.getByTestId('import-wizard-stepper').waitFor({state: 'visible', timeout: 8_000});
                         const step1 = page.getByTestId('import-wizard-step1');
@@ -3974,11 +3998,11 @@ test.describe('Gallery Screenshots', () => {
                         // resetState() restores it), so there is no "upload more" to click: the input is there.
                         const fileInput = step1.getByTestId('file-input');
                         await expect(fileInput).toBeAttached({timeout: 5_000});
-                        await fileInput.setInputFiles([TITOLI_CSV, CONTO_CSV]);
-                        // Both pending rows rendered
-                        await expect(step1.locator('tbody tr[data-row-id]')).toHaveCount(2, {timeout: 5_000});
+                        await fileInput.setInputFiles([TITOLI_CSV, CONTO_CSV, GENERIC_CSV]);
+                        // The three pending rows rendered
+                        await expect(step1.locator('tbody tr[data-row-id]')).toHaveCount(3, {timeout: 5_000});
 
-                        // Assign the global broker (both files to the same broker — duplicates
+                        // Assign the global broker (all files to the same broker — duplicates
                         // arbitration is per-broker): Interactive Brokers, which has an icon and is
                         // seeded for TEST_ADMIN by populate_mock_data.py — required, not a preference.
                         await page.getByTestId('import-wizard-step1-broker-select').locator('[role="combobox"]').click();
@@ -3995,21 +4019,31 @@ test.describe('Gallery Screenshots', () => {
                         const step2 = page.getByTestId('import-wizard-step2');
                         await step2.waitFor({state: 'visible', timeout: 10_000});
                         await expect(step2).toHaveAttribute('data-busy', 'false', {timeout: 20_000});
-                        // Both uploads are known by id: the cleanup deletes by these, and step 3 is checked against them.
-                        await expect.poll(() => uploadedFileIds.size, {message: 'both demo uploads must be recorded by id', timeout: 5_000}).toBe(2);
+                        // The three uploads are known by id: the cleanup deletes by these, and step 3 is checked against them.
+                        await expect.poll(() => uploadedFileIds.size, {message: 'the three demo uploads must be recorded by id', timeout: 5_000}).toBe(3);
+                        const securitiesUpload = uploadedByName.get(path.basename(TITOLI_CSV));
+                        const accountUpload = uploadedByName.get(path.basename(CONTO_CSV));
+                        const genericUpload = uploadedByName.get(path.basename(GENERIC_CSV));
+                        expect(securitiesUpload?.batchId, 'the two Crédit Agricole exports of one step-1 session share its upload batch').toBeTruthy();
+                        expect(accountUpload?.batchId).toBe(securitiesUpload?.batchId);
+                        expect(genericUpload, 'the generic CSV is uploaded beside them').toBeTruthy();
 
-                        // ── Step 2 → 3: parse both files (plugin auto-picked: broker_credit_agricole) ──
-                        // The demo files are two single files (only report-set plugins group files into
-                        // sets), so no set should hold Parse — but if one ever does, the failure says so.
+                        // ── Step 2 → 3: parse the set (Crédit Agricole, combined first) and the generic CSV ──
+                        // The two exports are ONE card of Select Files (a report set), ticked whole as the upload left it; the
+                        // generic CSV is a single file beside it, ticked too. If a gate holds Parse, the failure says which.
+                        const setCard = step2.locator(`[data-testid="report-set-card"][data-set-key$=":broker_credit_agricole:${securitiesUpload!.batchId}"]`);
+                        await expect(setCard, 'the two Crédit Agricole exports are one complete set').toHaveAttribute('data-set-status', 'complete', {timeout: 20_000});
+                        await expect(setCard, 'uploaded files arrive ticked').toHaveAttribute('data-selected', 'all');
                         await expectParseEnabled();
                         await page.getByTestId('import-wizard-parse').click();
                         const step3 = page.getByTestId('import-wizard-step3');
                         await step3.waitFor({state: 'visible', timeout: 15_000});
                         await waitForParseVerdict(page, 60_000);
-                        await expect(step3, 'both demo files must parse: the later steps are built from the two of them').toHaveAttribute('data-parse-state', 'ok');
-                        // The analysis lists exactly what step 2 ticked: this combo's two uploads, nothing else.
-                        await expect(step3.locator('tbody tr[data-row-id]')).toHaveCount(uploadedFileIds.size);
-                        for (const id of uploadedFileIds) await expect(step3.locator(`tbody tr[data-row-id="${id}"]`)).toHaveCount(1);
+                        await expect(step3, 'the set and the generic CSV must parse: the later steps are built from the two of them').toHaveAttribute('data-parse-state', 'ok');
+                        // The analysis lists what step 2 ticked: the set as ONE row and the generic CSV, nothing else.
+                        await expect(step3.locator('tbody tr[data-row-id]')).toHaveCount(2);
+                        await expect(step3.locator('tbody tr[data-row-id]').filter({has: page.getByTestId('parse-row-set')})).toHaveCount(1);
+                        await expect(step3.locator(`tbody tr[data-row-id="${genericUpload!.fileId}"]`)).toHaveCount(1);
 
                         // ── Step 3 → assets: Continue either opens the parse-notices modal (the parse
                         // raised some) or moves straight on. Wait for whichever of the two the click
@@ -4023,7 +4057,7 @@ test.describe('Gallery Screenshots', () => {
                             await expect(warningConfirm).toBeHidden({timeout: 5_000});
                         }
 
-                        // ── Assets step: proposed (AMUNDI name-suffix) + confirmed (BTP) groups ──
+                        // ── Assets step: proposed group (AMUNDI name-suffix) ──
                         await expect(assetsStep).toBeVisible({timeout: 15_000});
                         await expect(assetsStep.getByTestId('asset-group-step')).toBeVisible({timeout: 10_000});
                         // The shot exists to show an open proposal: insist on one before taking it.
@@ -4057,7 +4091,7 @@ test.describe('Gallery Screenshots', () => {
                         await expect(page.getByTestId('import-wizard-fix-continue')).toBeEnabled({timeout: 10_000});
                         await page.getByTestId('import-wizard-fix-continue').click();
 
-                        // ── Duplicates step: cross-file coupon pair (probable/partial tier) ──
+                        // ── Duplicates step: the generic CSV's deposit against the set's transfer (probable/partial tier) ──
                         const dupStep = page.getByTestId('import-wizard-step-duplicates');
                         await expect(dupStep).toBeVisible({timeout: 20_000});
                         await expect(dupStep.getByTestId('import-wizard-duplicate-resolver')).toBeVisible({timeout: 10_000});

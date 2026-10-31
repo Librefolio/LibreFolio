@@ -262,8 +262,14 @@ def storable_price(value: Decimal, column_name: str = "close") -> Optional[Decim
 
 
 def truncate_fx_rate(value: Decimal) -> Decimal:
-    """Truncate value with the precision used in DB fx_rates.rate column."""
-    return truncate_to_db_precision(value, FxRate, "rate")
+    """Truncate value with the precision used in DB fx_rates.rate column: its 10 decimal places, ``ROUND_DOWN``.
+
+    No cut to ``REAL_SIGNIFICANT_DIGITS``, though ``fx_rates.rate`` is a ``RealDecimal`` since W-B63: that change is about how
+    a stored value is READ (a REAL ±inf reads ``None``) and refused on write, not about the digits of a rate, which stay
+    those of X-R38/X-R50 (``storable_fx_rate``: 14 digits before the point, the double below ``1E+14``).
+    """
+    _precision, scale = get_model_column_precision(FxRate, "rate")
+    return value.quantize(Decimal(10) ** -scale, rounding=ROUND_DOWN, context=_WIDE_CONTEXT)
 
 
 def storable_fx_rate(value: Decimal) -> Optional[Decimal]:
@@ -276,8 +282,10 @@ def storable_fx_rate(value: Decimal) -> Optional[Decimal]:
     a double holds (``99999999999999.995``), has 14 digits before the point but is written as ``1E+14``, which every
     read skips as unusable (``usable_fx_rate_bounds``); it is refused here, never answered «inserted».
     """
-    stored = storable_value(value, FxRate, "rate")
-    if stored is None or stored == 0 or float(stored) >= float(usable_fx_rate_bounds()[1]):
+    if integer_digits_issue(value, FxRate, "rate") is not None:
+        return None
+    stored = truncate_fx_rate(value)
+    if stored == 0 or float(stored) >= float(usable_fx_rate_bounds()[1]):
         return None
     return stored
 

@@ -310,6 +310,17 @@
 
     type QtxRow = WacPreviewResult['qualifying_txs'][number];
 
+    /** The badge of a step's effect, as the backend names it (`WACQualifyingTX.effect`): any other value is read as `add_zero_cost`, the dilution. */
+    const EFFECT_BADGES: Record<string, {labelKey: string; classes: string}> = {
+        add: {labelKey: 'transactions.wacPreview.effect.add', classes: 'bg-lf-success-soft text-lf-success-on-soft'},
+        reduce: {labelKey: 'transactions.wacPreview.effect.reduce', classes: 'bg-lf-warning-soft text-lf-warning-on-soft'},
+        split_rescale: {labelKey: 'transactions.wacPreview.effect.splitRescale', classes: 'bg-lf-info-soft text-lf-info-on-soft'},
+        add_zero_cost: {labelKey: 'transactions.wacPreview.effect.addZeroCost', classes: 'bg-lf-neutral text-lf-secondary'},
+    };
+    function effectBadge(effect: string): {labelKey: string; classes: string} {
+        return EFFECT_BADGES[effect] ?? EFFECT_BADGES.add_zero_cost;
+    }
+
     /** The fraction digits of a per-unit cost (C-97c): one under a cent keeps 4 significant digits instead of `0.00`. */
     function priceFractions(value: string, floorDecimals = 2): {minFraction: number; maxFraction: number} {
         const {min, max} = priceFractionDigits(value, {minDecimals: 2, floorDecimals});
@@ -524,7 +535,8 @@
                     {#each previewResult.qualifying_txs as qtx}
                         {@const isPending = qtx.tx_id == null || qtx.is_pending || (pendingTxIds != null && qtx.tx_id != null && pendingTxIds.has(qtx.tx_id))}
                         {@const pendingType = qtx.pending_op === 'update' ? 'update' : pendingTxIds != null && qtx.tx_id != null && pendingTxIds.has(qtx.tx_id) ? 'create' : 'create'}
-                        <!-- colour: closest role, to review: the pending row and its dot were indigo; info tint and text; the effect badge below: add success, reduce warning, inherited (add_at_wac) info, dilution neutral -->
+                        {@const badge = effectBadge(qtx.effect)}
+                        <!-- colour: closest role, to review: the pending row and its dot were indigo; info tint and text; the effect badge below: add success, reduce warning, split adjustment info, dilution neutral -->
                         <tr class="border-t border-lf-subtle {isPending ? 'bg-lf-info-soft/50' : ''}">
                             <td class="px-2 py-0.5">
                                 {#if isPending}
@@ -562,22 +574,7 @@
                                 {/if}
                             </td>
                             <td class="px-2 py-0.5 text-right">
-                                <span
-                                    class="inline-block px-1 rounded text-[9px] {qtx.effect === 'add'
-                                        ? 'bg-lf-success-soft text-lf-success-on-soft'
-                                        : qtx.effect === 'reduce'
-                                          ? 'bg-lf-warning-soft text-lf-warning-on-soft'
-                                          : qtx.effect === 'add_at_wac'
-                                            ? 'bg-lf-info-soft text-lf-info-on-soft'
-                                            : 'bg-lf-neutral text-lf-secondary'}"
-                                    >{qtx.effect === 'add'
-                                        ? ($t('transactions.wacPreview.effect.add') ?? 'Weighted')
-                                        : qtx.effect === 'reduce'
-                                          ? ($t('transactions.wacPreview.effect.reduce') ?? 'Reduced')
-                                          : qtx.effect === 'add_at_wac'
-                                            ? ($t('transactions.wacPreview.effect.addAtWac') ?? 'Inherited')
-                                            : ($t('transactions.wacPreview.effect.addZeroCost') ?? 'Dilution')}</span
-                                >
+                                <span class="inline-block px-1 rounded text-[9px] {badge.classes}">{$t(badge.labelKey)}</span>
                             </td>
                             <td class="px-2 py-0.5 text-left font-mono"
                                 >{qtx.running_wac && qtx.currency ? formatCurrencyAmountPlain(parseFloat(qtx.running_wac), qtx.currency, {...priceFractions(qtx.running_wac, 4), sensitivity: 'public'}) : qtx.running_wac ? formatPrice(qtx.running_wac, {floorDecimals: 4}) || '—' : '—'}</td

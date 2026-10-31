@@ -119,6 +119,15 @@ export interface PromoteSideFields {
 }
 
 /**
+ * Whether the two rows of a pair disagree on the notes the merge dialog resolves: the description and the tags, in order
+ * (a missing description is an empty one, missing tags an empty list). The date and the cost are not asked there, so a pair
+ * that differs only in them goes straight to the confirmation (W-B79).
+ */
+export function promoteNotesDiverge(a: PromoteSideFields, b: PromoteSideFields): boolean {
+    return (a.description ?? '') !== (b.description ?? '') || JSON.stringify(a.tags ?? []) !== JSON.stringify(b.tags ?? []);
+}
+
+/**
  * The merged fields «promote all» sends for one pair, by the strategy chosen for every pair: `{}` when the two rows
  * agree on description and tags, one side's, or both combined (`mergeStrings`, `mergeTagSets`: the merge dialog's
  * default). `null` when the combined notes would pass `TX_DESCRIPTION_MAX_LENGTH`: the pair is then left for the merge

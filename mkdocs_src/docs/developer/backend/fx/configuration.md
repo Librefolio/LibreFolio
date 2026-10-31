@@ -243,7 +243,7 @@ This ensures resilience to individual provider outages and supports currency pai
   the requested range are not written; a date before 1900-01-01 inside it is, whatever the start,
   `"min"` included (`_is_date_within_sync_range()`, no floor since N83's revision; see
   [Normalization and Storage](architecture.md#stored-rate-dates)).
-- **What the column keeps.** `fx_rates.rate` is `Numeric(24, 10)`: 10 decimal places and 14 digits
+- **What the column keeps.** `fx_rates.rate` is `RealDecimal(24, 10)` (since W-B63; the DDL is still `NUMERIC(24, 10)`): 10 decimal places and 14 digits
   before the decimal point (`max_integer_digits()`, precision − scale). `storable_fx_rate()`
   (`backend/app/db/precision.py`; X-R38, the FX side of W-B58) answers the rate as the column keeps
   it (`truncate_fx_rate()`: 10 decimal places, rounded down), or `None` when it is not finite, has

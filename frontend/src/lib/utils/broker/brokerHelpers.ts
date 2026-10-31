@@ -63,7 +63,8 @@ export async function ensurePluginIconsLoaded(): Promise<void> {
                 if (p?.code && isFallbackPlugin(p)) _fallbackPluginCodes.add(p.code);
             }
         } catch {
-            _pluginIconCache = new Map(); // don't retry on error
+            // Nothing is cached after a failure, so the next call asks again (the API client already logged it); an empty cache would hide the icons until a reload (W6-8).
+            _pluginIconCache = null;
         } finally {
             _pluginIconLoading = null;
         }
