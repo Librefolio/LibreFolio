@@ -174,6 +174,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/routes/rootLayoutAwaitingRestore.gate.test.ts",
             "src/signalRendering.gate.test.ts",
             "src/lib/api/dashboardReportFixture.test.ts",
+            "src/lib/api/openapiDescriptions.test.ts",
             "src/lib/theme/colorAlpha.test.ts",
             "src/lib/theme/chartTheme.test.ts",
             "src/lib/theme/themeMode.test.ts",
