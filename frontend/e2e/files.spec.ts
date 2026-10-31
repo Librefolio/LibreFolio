@@ -744,6 +744,30 @@ test.describe('Files Page', () => {
             await expect(page.getByTestId('file-preview-modal')).toContainText('Legacy .xls preview requires xlrd on server');
         });
 
+        test('a preview the server refuses with a code is shown in the interface language, not in the English of the wire (W-B95)', async ({page}) => {
+            const fileId = await uploadStaticFile(page, `preview-code-${Date.now()}.md`, '# Refused preview\n', 'text/markdown');
+            ownedStaticFiles.push(fileId);
+            const wireMessage = 'ENGLISH-WIRE-MESSAGE preview is not available for this file';
+
+            await page.route('**/api/v1/uploads/*/preview', async (route) => {
+                await route.fulfill({
+                    status: 400,
+                    contentType: 'application/json',
+                    body: JSON.stringify({detail: {code: 'preview_unsupported', message: wireMessage}}),
+                });
+            });
+
+            await openStaticListView(page);
+
+            const row = await listRow(page, 'static', fileId);
+            await row.dblclick();
+
+            await waitForPreviewReady(page);
+            const error = page.getByTestId('file-preview-error');
+            await expect(error).toBeVisible();
+            await expect(error, 'the catalogue text replaces the wire message').not.toContainText(wireMessage);
+        });
+
         test('zoomed image preview scrolls vertically inside the modal', async ({page}) => {
             const fileId = await uploadStaticFile(page, `preview-scroll-${Date.now()}.png`, TEST_AVATAR_PNG, 'image/png');
             ownedStaticFiles.push(fileId);

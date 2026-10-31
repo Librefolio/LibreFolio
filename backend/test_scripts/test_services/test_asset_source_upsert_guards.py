@@ -1848,26 +1848,90 @@ async def test_a_manual_edit_erasing_both_bounds_is_saved_not_rejected(clean_pri
 
 
 @pytest.mark.asyncio
-async def test_a_manual_edit_erasing_low_with_high_below_the_close_is_saved_as_is(clean_prices: int):
-    """The mirror that tells the cures apart: the day stored 12/14/10/12 (open/high/low/close); the editor erases Low and
-    sets High to 11, below the close 12: close 12, low "clear", high 11.
+async def test_a_manual_edit_erasing_low_with_high_below_the_close_is_rejected(clean_prices: int):
+    """The day stored 12/14/10/12 (open/high/low/close); the editor erases Low and sets High to 11, below the close 12:
+    close 12, low "clear", high 11.
 
-    History: red on HEAD 1c1456713 with X-R46's cure, and under a cure that resolved the marker of High alone (the close 12
-    outside [-1, 11]); green with X-R46b's. The two erasing cases above pass under either cure; this one only when the
-    marker is resolved on both bounds -- now ``"clear"``.
-    RED until N92: the write model does not read ``"clear"`` (``InvalidOperation``: a 500).
-    Contract (decided 17/10): one real incoming bound is not checked; the edit is written as it is, as today's one-bound
-    partial update is: ``count`` 1, ``rejected`` ``[]``; the row open 12 (omitted: kept), high 11, low NULL, close 12.
-    This pins the current one-bound policy, not an endorsement of the row it leaves, a close above its only bound:
-    X-R78 will decide whether a lone real bound on the wrong side of the close should be refused instead, and this case
-    changes with that decision.
+    History: until X-R78 (decided 23/10, lot X6-2) a lone real bound was written as it came, this case saved the row
+    open 12 / high 11 / low NULL / close 12, a close above its only bound.
+    RED until X6-2: the row is saved (``count`` 1, ``rejected`` ``[]``).
+    Contract: a manual price whose real bound lies on the wrong side of the close is refused like a corrupt pair: ``count``
+    0, ``rejected`` ``[{the day, "ohlc_inconsistent"}]``; the row keeps 12/14/10/12.
     """
     await _erase_seeded(clean_prices)
 
     row = await _erase_upsert(clean_prices, {"close": "12", "low": "clear", "high": "11"})
 
     outcome = await _erase_outcome(clean_prices, row)
-    assert outcome == (1, [], (Decimal("12"), Decimal("11"), None, Decimal("12"))), f"(count, rejected, open/high/low/close) = {outcome}: {row['message']}"
+    assert outcome == (0, [{"date": ERASE_DAY.isoformat(), "reason": "ohlc_inconsistent"}], ERASE_SEED), f"(count, rejected, open/high/low/close) = {outcome}: {row['message']}"
+
+
+@pytest.mark.asyncio
+async def test_a_manual_edit_erasing_high_with_low_above_the_close_is_rejected(clean_prices: int):
+    """X-R78, the mirror: the editor erases High and sets Low to 13, above the close 12: close 12, low 13, high "clear".
+
+    RED until X6-2: the row is saved with low 13 above its close.
+    Contract: the date refused, ``count`` 0, ``rejected`` ``[{the day, "ohlc_inconsistent"}]``; the row keeps 12/14/10/12.
+    """
+    await _erase_seeded(clean_prices)
+
+    row = await _erase_upsert(clean_prices, {"close": "12", "low": "13", "high": "clear"})
+
+    outcome = await _erase_outcome(clean_prices, row)
+    assert outcome == (0, [{"date": ERASE_DAY.isoformat(), "reason": "ohlc_inconsistent"}], ERASE_SEED), f"(count, rejected, open/high/low/close) = {outcome}: {row['message']}"
+
+
+@pytest.mark.asyncio
+async def test_a_manual_edit_with_only_a_high_below_the_close_is_rejected_not_widened(clean_prices: int):
+    """X-R78, the neighbour it names: the day stored 12/14/10/12; a manual edit sends the close 12 and a High of 11 alone
+    (Low omitted: kept at 10).
+
+    RED until X6-2: the High is widened in silence to the close, the row saved 12/12/10/12.
+    Contract: refused like the cases above: ``count`` 0, ``rejected`` ``[{the day, "ohlc_inconsistent"}]``; the row keeps
+    12/14/10/12.
+    """
+    await _erase_seeded(clean_prices)
+
+    row = await _erase_upsert(clean_prices, {"close": "12", "high": "11"})
+
+    outcome = await _erase_outcome(clean_prices, row)
+    assert outcome == (0, [{"date": ERASE_DAY.isoformat(), "reason": "ohlc_inconsistent"}], ERASE_SEED), f"(count, rejected, open/high/low/close) = {outcome}: {row['message']}"
+
+
+@pytest.mark.asyncio
+async def test_a_manual_edit_with_a_lone_bound_on_the_right_side_of_the_close_is_saved(clean_prices: int):
+    """GUARD of X6-2: the refusal is for a bound on the wrong side only. The day stored 12/14/10/12; the edit sends the
+    close 12 and a High of 13 alone: saved, ``count`` 1, ``rejected`` ``[]``, the row 12/13/10/12."""
+    await _erase_seeded(clean_prices)
+
+    row = await _erase_upsert(clean_prices, {"close": "12", "high": "13"})
+
+    outcome = await _erase_outcome(clean_prices, row)
+    assert outcome == (1, [], (Decimal("12"), Decimal("13"), Decimal("10"), Decimal("12"))), f"(count, rejected, open/high/low/close) = {outcome}: {row['message']}"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("bounds", "expected_high_low"),
+    [
+        pytest.param({"high": "11"}, (Decimal("12"), Decimal("10")), id="a-high-below-the-close-is-widened"),
+        pytest.param({"low": "13"}, (Decimal("14"), Decimal("12")), id="a-low-above-the-close-is-widened"),
+    ],
+)
+async def test_a_providers_lone_bound_on_the_wrong_side_of_the_close_is_widened_not_refused(clean_prices: int, bounds: dict, expected_high_low: tuple):
+    """GUARD of X6-2 (developer, 23/10): the refusal is for manual prices, the API's frontier. A provider's (and the
+    scheduler's) candle with a lone bound on the wrong side of the close keeps widening the merged bounds around the
+    close: the day stored 12/14/10/12 by a first manual upsert, the provider answers the close 12 and ``bounds`` alone.
+
+    Contract: stored, ``count`` 1, ``rejected`` ``[]``, (high, low) = ``expected_high_low``.
+    """
+    await _erase_seeded(clean_prices)
+    point = FAPricePoint(date=ERASE_DAY, close=Decimal("12"), currency="USD", **{key: Decimal(value) for key, value in bounds.items()})
+
+    row = await _xr46_upsert(clean_prices, [point], key=XR65_PROVIDER)
+
+    stored = await _stored_ohlc(clean_prices, ERASE_DAY)
+    assert (row["count"], _xr46_rejected(row), stored[1:3]) == (1, [], expected_high_low), f"{row['message']}; stored {stored}"
 
 
 @pytest.mark.asyncio
@@ -1884,3 +1948,83 @@ async def test_a_manual_edit_with_two_real_bounds_and_the_close_below_low_is_sti
 
     outcome = await _erase_outcome(clean_prices, row)
     assert outcome == (0, [{"date": ERASE_DAY.isoformat(), "reason": "ohlc_inconsistent"}], ERASE_SEED), f"(count, rejected, open/high/low/close) = {outcome}: {row['message']}"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# X-R70 (lot X6-4): the refresh does not count the dates the upsert refuses for an impossible OHLC
+#
+# ``_persist_refresh_item`` takes out of its counts the dates no column keeps and those after the ceiling, but counted a
+# provider's candle whose close lies outside its own [low, high], which the upsert refuses (``ohlc_inconsistent``): an
+# "inserted" or "updated" that was never written, and a ``changed_points`` entry the chart redraws for nothing.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_a_provider_refresh_neither_counts_nor_announces_a_candle_the_upsert_refuses(assigned_asset, clean_prices, monkeypatch):
+    """X-R70: day 0 is stored first at 10. The provider answers day 0 (close 50, bounds [9, 12]: a corrupt candle, refused
+    for a date already stored), day 1 (sound, new) and day 2 (close 60, bounds [9, 12]: refused, a new date).
+
+    RED until X6-4: the refresh counts 2 inserted (day 1, day 2) and 1 updated (day 0), ``changed_points`` the three days.
+    Contract: day 0 keeps 10, only day 1 is stored besides it; 1 inserted, 0 updated, 1 changed, ``changed_points`` day 1
+    alone; the errors of the refresh name day 0 and day 2.
+    """
+    day0, day1, day2 = (BASE_DATE + timedelta(days=offset) for offset in range(3))
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        session.add(PriceHistory(asset_id=assigned_asset, date=day0, close=Decimal("10"), currency="USD", source_plugin_key=XR65_PROVIDER))
+        await session.commit()
+    bounds = {"low": Decimal("9"), "high": Decimal("12"), "currency": "USD"}
+    prices = [FAPricePoint(date=day0, close=Decimal("50"), **bounds), _on(day1, "11"), FAPricePoint(date=day2, close=Decimal("60"), **bounds)]
+    _patch_provider_with_events(monkeypatch, prices, [])
+
+    result = await _refresh(assigned_asset)
+
+    stored = await _stored_closes(assigned_asset)
+    assert stored == {day0: Decimal("10"), day1: Decimal("11")}, f"barrier: the upsert should refuse the two corrupt candles and store day 1: {stored}; {result!r}"
+    counted = (result.inserted_count, result.updated_count, result.points_changed, sorted(point.date for point in result.changed_points or []))
+    assert counted == (1, 0, 1, [day1]), f"(inserted, updated, changed, changed_points) = {counted}: a candle the upsert refused is counted or announced"
+    assert [error for error in result.errors if _names(error, day0, day2)], result.errors
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# X-R29 (lot X6-1): the stored prices in a range, and how many of them are manual
+#
+# The asset list's card and row warn before a sync replaces the stored prices of the range; the warning names the
+# manual ones. ``AssetSourceManager.count_stored_prices`` answers, per item and in request order, ``stored_count`` and
+# ``manual_count`` (source MANUAL) for the range a sync would ask for.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _stored_count_item(asset_id: int, start, end: date):
+    from backend.app.schemas.refresh import FAStoredPriceCountItem  # noqa: PLC0415 — the lot's own model
+
+    return FAStoredPriceCountItem.model_validate({"asset_id": asset_id, "date_range": {"start": start, "end": end}})
+
+
+async def _stored_counts(items: list) -> list[tuple[int, int, int]]:
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        counted = await AssetSourceManager.count_stored_prices(items, session)
+    return [(entry.asset_id, entry.stored_count, entry.manual_count) for entry in counted]
+
+
+@pytest.mark.asyncio
+async def test_the_stored_price_count_tells_stored_and_manual_rows_of_the_range(clean_prices: int):
+    """Day 0 manual, day 1 and day 2 under a provider's key. Contract: day 0..1 → 2 stored, 1 manual; day 0..2 → 3 / 1;
+    day 1..2 → 2 / 0; day 3.. → 0 / 0; ``"min"`` up to day 0 → 1 / 1; ``"resume"`` → 0 / 0 (it starts after the last day);
+    an asset with no price → 0 / 0; the answer in request order."""
+    day0, day1, day2, day3 = (BASE_DATE + timedelta(days=offset) for offset in range(4))
+    await _xr46_upsert(clean_prices, [_on(day0, "10")])
+    await _xr46_upsert(clean_prices, [_on(day1, "11"), _on(day2, "12")], key=XR65_PROVIDER)
+
+    counted = await _stored_counts(
+        [
+            _stored_count_item(clean_prices, day0, day1),
+            _stored_count_item(clean_prices, day0, day2),
+            _stored_count_item(clean_prices, day1, day2),
+            _stored_count_item(clean_prices, day3, day3 + timedelta(days=5)),
+            _stored_count_item(clean_prices, "min", day0),
+            _stored_count_item(clean_prices, "resume", day3),
+            _stored_count_item(clean_prices + 1_000_000, day0, day2),
+        ]
+    )
+
+    assert counted == [(clean_prices, 2, 1), (clean_prices, 3, 1), (clean_prices, 2, 0), (clean_prices, 0, 0), (clean_prices, 1, 1), (clean_prices, 0, 0), (clean_prices + 1_000_000, 0, 0)], counted

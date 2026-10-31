@@ -473,7 +473,8 @@ class EventStoreOperations:
                         "id": row.id,
                         "date": row.date.isoformat(),
                         "type": str(row.type),
-                        "value": Currency(code=row.currency, amount=row.value).model_dump(mode="json"),
+                        # None for a stored value that reads as no value: the event is still the one that holds the key (W-B63)
+                        "value": None if row.value is None else Currency(code=row.currency, amount=row.value).model_dump(mode="json"),
                         "notes": row.notes,
                         "is_auto": row.provider_assignment_id is not None,
                         "linked_transactions": int(linked.get(row.id, 0)),
@@ -626,6 +627,9 @@ class EventStoreOperations:
         Returns:
             List of FAEventQueryResult
 
+        An event whose stored value reads as no value (a REAL ±inf, W-B58) is skipped, with a warning in ``errors`` naming
+        its date; the other events of the asset are returned (W-B63).
+
         E.8 — when ``target_currency`` is set on a request, ``event.value`` is
         converted to that currency via FX rates at the event's date. FX misses
         are surfaced as non-fatal warnings in ``FAEventQueryResult.errors``
@@ -655,9 +659,16 @@ class EventStoreOperations:
             res = await session.execute(stmt)
             db_events = res.scalars().all()
 
+            errors: list[str] = []
+
             # Build native-currency event points first
             event_points: list = []
             for ev in db_events:
+                if ev.value is None:
+                    # A stored value that is no number reads as no value (W-B58/W-B60): the row cannot be shown, and one such
+                    # row must not take the asset's other events down with it (W-B63).
+                    errors.append(f"Event on {ev.date.isoformat()} skipped: its stored value is not a number")
+                    continue
                 event_points.append(
                     FAAssetEventPointOut(
                         date=ev.date,
@@ -668,8 +679,6 @@ class EventStoreOperations:
                         is_auto=ev.provider_assignment_id is not None,
                     )
                 )
-
-            errors: list[str] = []
 
             # E.8 — optional target_currency conversion pass
             if target_currency and event_points:
@@ -732,9 +741,14 @@ class EventStoreOperations:
         res = await session.execute(stmt)
         db_events = res.scalars().all()
 
-        # Group by asset_id
+        # Group by asset_id; an event whose stored value reads as no value is skipped with a warning (W-B63, as the query)
         grouped: dict[int, list] = {}
+        skipped: dict[int, list[str]] = {}
         for ev in db_events:
+            if ev.value is None:
+                skipped.setdefault(ev.asset_id, []).append(f"Event on {ev.date.isoformat()} skipped: its stored value is not a number")
+                grouped.setdefault(ev.asset_id, [])
+                continue
             point = FAAssetEventPointOut(
                 date=ev.date,
                 type=ev.type.value if hasattr(ev.type, "value") else str(ev.type),
@@ -745,7 +759,7 @@ class EventStoreOperations:
             )
             grouped.setdefault(ev.asset_id, []).append(point)
 
-        return [FAEventQueryResult(asset_id=aid, events=evts, errors=[]) for aid, evts in grouped.items()]
+        return [FAEventQueryResult(asset_id=aid, events=evts, errors=skipped.get(aid, [])) for aid, evts in grouped.items()]
 
     @staticmethod
     async def delete_events_bulk(
