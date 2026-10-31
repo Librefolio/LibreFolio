@@ -129,3 +129,32 @@ export function calculateTradeValue(input: TradeAmountInput): TradeAmountResult 
     }
     return isAskable(input.amount, AMOUNT_DECIMALS) ? {mode: 'amount_to_price', result: unitPriceFromAmount(input.quantity, input.amount, input.quoteBaseQuantity)} : null;
 }
+
+/**
+ * The unit price a saved or pending row implies (W2-6, the read-only «unit price» column of the transactions table and the bulk
+ * editor): `|amount| / |quantity| × quote_base_quantity`, through the same `calculateTradeValue` the form uses, never a second
+ * formula. Signs do not matter (a SELL has a negative quantity and a positive cash, a BUY the opposite), so both sides are read
+ * as magnitudes. `null` when the price cannot be calculated: a blank, zero or non-numeric quantity or amount, a value past the
+ * limits the backend keeps, or an asset whose quote base is not known.
+ */
+export function rowUnitPrice(row: {quantity: string | null | undefined; amount: string | null | undefined; quoteBaseQuantity: number | null | undefined}): string | null {
+    const quantity = magnitudeText(row.quantity);
+    const amount = magnitudeText(row.amount);
+    if (quantity === null || amount === null) return null;
+    return calculateTradeValue({driver: 'amount', quoteBaseQuantity: row.quoteBaseQuantity, quantity, amount, unitPrice: ''})?.result ?? null;
+}
+
+/** A decimal text without its one leading sign, `null` for anything that is not text. */
+function magnitudeText(text: string | null | undefined): string | null {
+    if (typeof text !== 'string') return null;
+    const trimmed = text.trim();
+    return trimmed.startsWith('-') || trimmed.startsWith('+') ? trimmed.slice(1) : trimmed;
+}
+
+/**
+ * Whether a transaction type has a unit price: it carries a quantity, a cash amount and an asset, all three (a BUY or SELL and
+ * any single type like them). A leg of a pair has none, the caller excludes it.
+ */
+export function tradeHasUnitPrice(rule: {quantityMode: string; cashField: string; assetField: string}): boolean {
+    return rule.quantityMode !== 'forbidden' && rule.cashField !== 'forbidden' && rule.assetField !== 'forbidden';
+}

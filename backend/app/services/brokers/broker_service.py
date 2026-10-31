@@ -406,9 +406,16 @@ class BrokerService(BrokerAccessMixin, BrokerSummaryMixin):
                 # Validate if needed
                 if validation_triggered:
                     try:
-                        # Validate from the beginning of time
-                        await self.tx_service._validate_broker_balances(broker_id, None)  # None = from beginning
+                        # Validate from the beginning of time (None). Nothing is flushed meanwhile: the validation reads the
+                        # changed flags from the object, and a flush would write the row (and stamp its ``updated_at``) before
+                        # the answer is known.
+                        with self.session.no_autoflush:
+                            await self.tx_service._validate_broker_balances(broker_id, None)
                     except BalanceValidationError as e:
+                        # The refused item is put back in the session itself, so that no caller's rollback is needed (a bulk
+                        # caller that saves after a partial success would persist it): the row was never flushed, so the
+                        # database still holds the old values, and the object is loaded from them again.
+                        await self.session.refresh(broker)
                         results.append(BRUpdateResult(id=broker_id, success=False, validation_triggered=True, error=str(e)))
                         continue
 

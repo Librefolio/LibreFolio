@@ -758,9 +758,9 @@ Copy the structure of an existing, well-tested plugin rather than starting from 
 | `backend/app/services/brim_providers/broker_coinbase/plugin.py` | Crypto assets (symbol, no ISIN), staking as `ADJUSTMENT`, separate fee tx |
 | `backend/app/services/brim_providers/broker_revolut/plugin.py` | **One plugin, two formats** (invest + crypto) via header detection |
 | `backend/app/services/brim_providers/broker_intesa/plugin.py` | CSV/XLSX, two layouts in one plugin; patrimonio snapshot → liquidity `DEPOSIT` when present + per-holding `ADJUSTMENT` seed with per-unit `cost_basis_override` |
-| `backend/app/services/brim_providers/broker_credit_agricole/plugin.py` | **Richest wizard integration**: two layouts in one plugin, 4-tier causale registry, evidence tables, `info` notices, blocking and splitting field todos — read it before designing any `field_todos`. Also: automatic cash counter-entries, par-100 bond maturity split, succession rows as cashless `ADJUSTMENT` |
+| `backend/app/services/brim_providers/broker_credit_agricole/plugin.py` | **Richest wizard integration** and the **second report set** (securities + account exports, each in CSV or XLSX): 4-tier causale registry, evidence tables, `info` notices, blocking and splitting field todos — read it before designing any `field_todos`. Also: rule M with `most_rows`, pairing on the value date, balances that open the cash and turn a hole into a correction, par-100 bond maturity split, succession rows as cashless `ADJUSTMENT` — see [Multi-report plugins](#report-sets) |
 | `backend/app/services/brim_providers/broker_saxo/plugin.py` | Mixed trade/cash rows, verb-in-text events, localized verbs |
-| `backend/app/services/brim_providers/broker_danske_bank/plugin.py` | **Report set** (custody XLSX + cash CSV): roles, a pure `combine` with pairing, zones and truth points, the parse of its combined file, Finnish notices — see [Multi-report plugins](#report-sets) |
+| `backend/app/services/brim_providers/broker_danske_bank/plugin.py` | **Report set** (custody XLSX + cash CSV): roles, a pure `combine` with pairing, zones and truth points on segments, the parse of its combined file, Finnish notices — see [Multi-report plugins](#report-sets) |
 | `backend/app/services/brim_providers/broker_degiro/plugin.py` | **One layout in many languages**: the Account Statement read by column position, the notice language picked from the header (`_detect_language`), **linked `FX_CONVERSION` pairs** (see [Linked pairs](#linked-pairs)), and its orders list (the Transactions export) claimed and answered with one notice instead of transactions (the rule's extension in [Flow](#flow)) |
 
 ## 📥 Canonical imports
@@ -1448,8 +1448,11 @@ files uploaded together for one broker and recognised by the plugin form a **set
 other.
 
 Every default of the contract keeps a plugin single-file, so the existing plugins do not change.
-The reference implementation is `backend/app/services/brim_providers/broker_danske_bank/plugin.py`; the
-framework lives in `backend/app/services/brim/brim_report_sets.py` (members, preview, combine, history
+There are two report-set plugins: Danske Bank (`backend/app/services/brim_providers/broker_danske_bank/plugin.py`,
+the first) and Crédit Agricole (`backend/app/services/brim_providers/broker_credit_agricole/plugin.py`, a
+securities export and an account export, version 2.0.0). They share a core
+([below](#report-set-core)) and differ in how they place rows and truth points; see
+[Where Crédit Agricole differs](#report-set-ca). The framework lives in `backend/app/services/brim/brim_report_sets.py` (members, preview, combine, history
 start) and `backend/app/services/brim/brim_gap_fix.py` (the corrections), the schemas in
 `backend/app/schemas/brim.py`, and the wizard side in
 [Import Wizard → Report sets](../../frontend/components/features/import-wizard.md#report-sets).
@@ -1481,9 +1484,82 @@ sequenceDiagram
     Note over W: the bulk editor saves, as usual
 ```
 
+### 🧱 The shared core: `brim_report_set_core.py` {: #report-set-core }
+
+`backend/app/services/brim/brim_report_set_core.py` holds what every report-set plugin needs whatever the
+bank. All of it is pure and parameterised by what the bank changes (a delimiter, a day accessor, a candidate
+cap): the plugin passes its own constants and keeps what is bank-specific — the columns, the classification
+of the rows, the pairing key, the truth points.
+
+| Area | Functions | Note |
+|---|---|---|
+| Text, numbers, dates | `norm`, `plain`, `money`, `source`, `compatible`, `match_key_text`, `add_business_days`, `CENT` | `source` builds the `lf_source` text; `compatible` is the prefix test for a truncated name |
+| Reading | `xlsx_rows`, `csv_rows`, `layout`, `find_layout` | first worksheet with data; header scan by normalised label |
+| Rule M | `RoleMerge`, `coverage`, `by_day`, `same_rows`, `contained_rows` | several files of one role, day by day (below) |
+| Pairing | `assign`, `best_assignment`, `pair_by_key`, `assignments` | one to one, never a guess |
+| Timeline | `merge_spans`, `Segment`, `build_timeline`, `zone` | segments, checkpoint on the eve, windows; used by Danske |
+
+**`RoleMerge(files, day_of, owner=…, contradiction=…)`** — the two policies of rule M, both with the
+default Danske uses:
+
+| Parameter | `"latest"` / `"differs"` (default, Danske) | `"most_rows"` / `"not_contained"` (Crédit Agricole) |
+|---|---|---|
+| `owner` — who owns a day covered by several files | the file that **ends last** | the file with the **most rows that day** (ties: the file that ends last) |
+| `contradiction` — when a day is a mismatch | two files do not hold the same rows | a file holds a row the owner **lacks**; a file cut mid-day whose rows are all in the owner is no contradiction |
+
+Rows must expose `signature`. `kept` and `superseded` are the rows of the owners and the rows of a losing
+file that is not identical to the owner; `mismatch_days` feeds the `overlap_mismatch` notice.
+
+**Pairing.** `pair_by_key(left, right, left_key, right_key, assign_group)` groups the two sides by key and
+hands each group to `assign`, which answers a list of pairs or `None` (ambiguous). `assign` pairs one
+against one; with more rows it pairs identical twins or lets `best_assignment` choose the assignment with
+the most compatible names, and gives up when more than `max_candidates` rows are on a side or when two
+assignments would **import different things**. `outcome_of(left)` says what a left row imports.
+**`pair_outcome_of(left, right)`** says it for a *pair*, for the plugin whose right-hand row also decides
+what is imported (Crédit Agricole: the ISIN, the withholding, the name on the account side). When it is
+given the twin shortcut is skipped and two assignments that give the left rows different partners are
+ambiguous unless the partners are interchangeable.
+
+#### 🆕 What a new report-set plugin provides {: #report-set-checklist }
+
+1. **Roles** (`report_roles`) with `required`, `multiple`, `extensions`, and `max_history` / `must_cover`
+   when the bank limits how far back an export goes.
+2. **`detect_role`**, **`describe_member`**, **`describe_set`** — pure and cheap, no combining.
+3. **A reader** that keeps every figure as the file wrote it (`cells`) next to the parsed value, so the
+   combined file can carry the verbatim values. A numeric or date cell of an XLSX must be written back in a
+   form the parse reads (`dd/mm/yyyy`, the bank's decimal convention).
+4. **An analysis** (a class that reads the members once): rule M through `RoleMerge`, the classes, the
+   pairing key and `assign`, the outcome of **every** row, the truth points.
+5. **`combine`**: the analysis written as a `BRIMCombinedTable` — columns `lf_*`, then the verbatim
+   `<role>:<column>`, with `COMBINED_REQUIRED_HEADERS` (`lf_row_kind`, `lf_source`); a `summary`.
+6. **`parse` of the combined file only**, plus `BRIMSetRequiredError` naming `missing_roles` for a member
+   read alone, and `BRIMParseError` with a code for anything else.
+7. **`pre_checkpoint_policy`**, **`history_tag`**, `test_sample_sets` and the synthetic samples.
+
+!!! warning "Where not to copy Danske"
+
+    Danske's choices follow from its data, not from the pattern. Do not carry them over without checking
+    them against your bank's:
+
+    - the **axis**: Danske places every row on the **value date**; Crédit Agricole's zones, intervals and
+      balances are on the **operation date**, and the value date only pairs rows;
+    - the **zones** tied to *segments* of the custody history, the settlement lag of 5 business days and the
+      `deferred` outcome: Crédit Agricole has none (its zones come from the balances of the account);
+    - **`summarize`**: rows before the first checkpoint are summarised there; Crédit Agricole uses `import`
+      and a checkpoint absorbs nothing;
+    - **proofs of positions** (E1–E4): Danske proves positions from its own rows; Crédit Agricole proves
+      only the opening, from the transfers;
+    - **account numbers**: whatever the original carries (Danske's cash statement, Crédit Agricole's
+      securities header: dossier and supporting account) is never copied into the combined file.
+
+    What is common is the core above and the contract below; what is bank-specific stays in the plugin.
+
 ### 🎭 Roles and the contract
 
 A report-set plugin overrides `report_roles` with one `BRIMReportRole` per export:
+
+The examples are Danske's; Crédit Agricole declares `securities` and `account` (both required and multiple, `.csv` and
+`.xlsx`; `account` with `max_history` `P2Y` and `must_cover` `securities`).
 
 | Field | Meaning | Danske `custody` | Danske `cash` |
 |---|---|---|---|
@@ -1507,8 +1583,8 @@ role code → the files of that role):
 | `describe_set(members)` | raises `NotImplementedError` | `BRIMSetShape`: segments, proven gaps and notices, **without** combining |
 | `combine(members)` | raises `NotImplementedError` | The combined table, from a **pure** function (below) |
 | `parse(path, broker_id)` | — | Parses the **combined** file; a member alone raises `BRIMSetRequiredError` |
-| `pre_checkpoint_policy` | `"summarize"` | What happens to the rows before the first checkpoint: `summarize` (Danske) or `import` |
-| `history_tag` | `provider_code` without `broker_` | The tag that marks the plugin's transactions (`danske_bank`) |
+| `pre_checkpoint_policy` | `"summarize"` | What happens to the rows before the first checkpoint: `summarize` (Danske) or `import` (Crédit Agricole) |
+| `history_tag` | `provider_code` without `broker_` | The tag that marks the plugin's transactions (`danske_bank`, `credit_agricole`) |
 | `settlement_lag_business_days` | `0` | The longest settlement delay (Danske: `5`). Informational: the framework does not read it, and Danske's own zone rules use the same constant |
 | `test_sample_sets` | `[]` | The sample sets of the generic test suite (see [Testing](#report-set-tests)) |
 
@@ -1602,7 +1678,8 @@ the account fingerprints). No other warning blocks. The core's codes are `unknow
 `excess_files`, `coverage_starts_late`, `coverage_ends_early`, `mixed_accounts`,
 `before_history_segment` and `covers_gap_fix`; the plugin adds its own through `describe_set`
 (Danske: `empty_member`, `mixed_accounts_in_file`, `overlap_mismatch`, `gap`,
-`balance_chain_broken`). The wizard localises `importWizard.reportSet.warning.<code>` and falls back
+`balance_chain_broken`; Crédit Agricole: `empty_member`, `overlap_mismatch`, `account_gap`,
+`balance_chain_broken`, `ambiguous`, `no_counterpart`, `no_balance`). The wizard localises `importWizard.reportSet.warning.<code>` and falls back
 to the English `message`.
 
 !!! note "Combined files: generated names, stale versions, deleted originals"
@@ -1763,6 +1840,27 @@ The days around H0 and around a role's coverage (H0's eve, the day after a corre
 the period a role must cover) are moved with `shift_date()` (`utils/datetime_utils.py`), which holds
 them at the calendar's ends: a report dated 0001-01-01 or 9999-12-31 is read, its rows then refused
 at **Save All** like any date out of range (N74), instead of failing the whole parse (W-B71).
+
+### 🧭 Where Crédit Agricole differs from Danske {: #report-set-ca }
+
+The second plugin shows which parts of the pattern are the plugin's own. Details:
+[Crédit Agricole Importer](../../backend/brim/credit_agricole.md).
+
+| | Danske Bank | Crédit Agricole |
+|---|---|---|
+| Roles | `custody` XLSX, `cash` CSV | `securities` and `account`, each CSV or XLSX |
+| Rule M | `latest` / `differs` | `most_rows` / `not_contained` |
+| Pairing key | trade kind + value date + amount + currency + direction | kind of fact + amount to the cent (half-up) + **same value date** + currency; dividends never pair |
+| Axis of zones | value date, over segments of the custody history | operation date, over the balances of the account (`before`, `window`, `gap`) |
+| Truth points | the eve of each segment, positions from proofs E1–E4 | the opening balance, the end of each **hole**, positions of the opening from the transfers; every closing balance is a verification |
+| Cash correction | at the eve of a segment | only for a `hole` (balances differ and no row lies between them); a `broken` interval is a warning |
+| `pre_checkpoint_policy` | `summarize` | `import` |
+| Cash in flight | trades with a trade date up to the day and a value date after it | pairs recorded (securities date) and not booked (account date), **and the opposite** |
+| Combined `lf_row_kind` | `pair`, `standalone`, `excluded`, `summarized`, `deferred`, `truth_cash`, `truth_position`, `verification` | `pair`, `standalone`, `excluded`, `truth_cash`, `truth_position`, `verification` |
+| Automatic cash legs in the parse | none | none (the 1.x plugin had them; 2.0.0 does not) |
+
+The shape of the analysis is the same in both: read the members, apply rule M, classify, pair, decide
+the outcome of **every** row, derive the truth points, write the combined file, parse only that file.
 
 ### 🏷️ Tags
 

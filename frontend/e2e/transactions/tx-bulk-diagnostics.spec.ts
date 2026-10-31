@@ -501,8 +501,10 @@ test.describe('Transaction bulk diagnostics', () => {
                     await goToBulkPage(body, pageNumber, pageIds);
                     for (const id of pageIds) {
                         const row = bulkRow(body, id);
-                        await expect(row.getByTestId('tx-bulk-row-label')).toHaveAttribute('data-issue-highlighted', String(affectedIds.includes(id)));
-                        await expect(row).toHaveAttribute('data-selected', String(id === unrelatedId));
+                        // Row by row, page after page: under a loaded machine (triage of 30/10/2026: load 44, two workers, the test took
+                        // 1.4 min instead of ~25 s) the default 3 s per check is not enough for the grid to settle after a page change.
+                        await expect(row.getByTestId('tx-bulk-row-label')).toHaveAttribute('data-issue-highlighted', String(affectedIds.includes(id)), {timeout: UI_TIMEOUT});
+                        await expect(row).toHaveAttribute('data-selected', String(id === unrelatedId), {timeout: UI_TIMEOUT});
                     }
                 }
                 const revalidated = await validateBulkNow(page, root);

@@ -274,10 +274,10 @@
             {#if validRows.length > 0}
                 <span class="text-lf-success font-medium">{$t('csvImport.validRows', {values: {n: validRows.length}})}</span>
                 {#if errorCount > 0}
-                    <span class="text-lf-danger ml-2">• {errorCount} error{errorCount !== 1 ? 's' : ''}</span>
+                    <span class="text-lf-danger ml-2">• {$t('csvImport.statusErrors', {values: {count: errorCount}})}</span>
                 {/if}
                 {#if hasDuplicates}
-                    <span class="text-lf-warning ml-2">• duplicates</span>
+                    <span class="text-lf-warning ml-2">• {$t('csvImport.duplicatesShort')}</span>
                 {/if}
             {:else if csvValue.trim()}
                 <span class="text-lf-muted">{$t('csvImport.noValidRows')}</span>

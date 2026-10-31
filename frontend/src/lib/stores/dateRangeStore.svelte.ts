@@ -137,7 +137,11 @@ export function seedFromUrl(searchParams: URLSearchParams): void {
  * Resolve sentinel values ("min"/"max") to concrete ISO dates for endpoints
  * that don't support the sentinel protocol (DateRangeModel-based APIs).
  *
- * - "min" → "2000-01-01" (earliest reasonable date)
+ * - "min" → "2000-01-01", a PLACEHOLDER and nothing more. It is NOT the start of "All": a history can
+ *   begin in 1850. A request that asks for the history (the portfolio report, the positions series)
+ *   must send `historyStart()` instead, which keeps the "min" sentinel for the backend to resolve to the
+ *   first real movement (FB-7). Only endpoints that insist on a real date, and cannot resolve "min"
+ *   (asset prices, FX rates, risk), still take this placeholder until the page has seen the real first day.
  * - "max" → today's date
  * - Any other value → pass through unchanged
  */
@@ -145,6 +149,17 @@ export function resolveDateSentinel(value: string): string {
     if (value === 'min') return '2000-01-01';
     if (value === 'max') return todayIso();
     return value;
+}
+
+/**
+ * The start a history request carries (portfolio report, positions series, transactions list).
+ *
+ * While "All" is pending it is the `"min"` sentinel: the backend resolves it to the user's first
+ * movement, whatever its year. Once the page has seen the real first day, or for any other period,
+ * it is the concrete start.
+ */
+export function historyStart(isMaxPending: boolean, start: string): string {
+    return isMaxPending ? 'min' : start;
 }
 
 /**

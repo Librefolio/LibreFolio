@@ -13,7 +13,7 @@
   CTA actions are emitted via `onaction` — the parent decides whether to open a modal,
   navigate, or trigger a sync. The component does not call goto() directly.
 
-  Active IssueCodes: MISSING_PRICE, STALE_PRICE, MISSING_FX_MARKET, NAV_INCOMPLETE,
+  Active IssueCodes: MISSING_PRICE, STALE_PRICE, STALE_FX (built by the dashboard from `stale_fx_pairs`), MISSING_FX_MARKET, NAV_INCOMPLETE,
   MWRR_NOT_CALCULABLE (portfolio); ASSET_ARCHIVED, RANGE_BEFORE_FIRST_DATA,
   FX_PAIR_MISSING, FX_PAIR_NO_DATA, FX_PAIR_PARTIAL_GAP (asset/fx detail).
 
@@ -36,7 +36,7 @@
         affected_asset_ids?: number[];
         affected_asset_names?: string[];
         affected_fx_pairs?: string[];
-        /** CTA intent: 'add_fx_pair' | 'sync_fx_pair' | 'sync_asset_prices' | 'navigate_asset' | 'navigate_fx' */
+        /** CTA intent: 'add_fx_pair' | 'sync_fx_pair' | 'sync_stale_fx' | 'sync_asset_prices' | 'navigate_asset' | 'navigate_fx' */
         cta_action?: string | null;
         /** Target identifier — asset_id string or fx pair slug */
         cta_target?: string | null;
@@ -135,7 +135,7 @@
     /** Select CTA icon based on action type */
     function getCtaIcon(action: string | null | undefined) {
         if (action === 'add_fx_pair') return Coins;
-        if (action === 'sync_fx_pair' || action === 'sync_asset_prices') return RefreshCw;
+        if (action === 'sync_fx_pair' || action === 'sync_stale_fx' || action === 'sync_asset_prices') return RefreshCw;
         return ArrowUpRight;
     }
 

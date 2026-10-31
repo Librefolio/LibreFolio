@@ -206,7 +206,9 @@
       "rows_not_recognized": "{count, plural, one {# ligne a été exclue ou importée en partie seulement} other {# lignes ont été exclues ou importées en partie seulement}} : l’import ne reconnaît pas, ou n’importe pas encore, ce qu’elles décrivent. Vérifiez les lignes ci-dessous ; si cela compte pour vos parts ou votre trésorerie, signalez le cas pour que nous le traitions :",
       "rows_unreadable": "{count, plural, one {# ligne a été exclue} other {# lignes ont été exclues}} car une valeur nécessaire est illisible. Vérifiez les lignes ci-dessous ; si le fichier est correct, signalez le cas pour que nous le traitions :",
       "possible_split": "Split possible de {ticker} : {added_quantity} actions nouvelles à coût nul. Liez un événement SPLIT ou créez-en un.",
-      "date_before_1900": "La date {date} est antérieure au 1er janvier 1900 : vérifiez l'année."
+      "date_before_1900": "La date {date} est antérieure au 1er janvier 1900 : vérifiez l'année.",
+      "date_unreadable": "Ligne {row} : {value} n’est pas une date valide au format {order, select, day_first {jj/mm/aaaa} month_first {mm/jj/aaaa} day_first_short {jj/mm/aa} month_first_short {mm/jj/aa} year_first_short {aa/mm/jj} year_first {aaaa-mm-jj} other {jj/mm/aaaa}}. Corrigez la date dans le fichier, ou changez le format dans Paramètres › Plugins › Imports des courtiers › CSV générique › « Format des dates », puis cliquez sur « Réanalyser tout ».",
+      "date_unreadable_more": "{n, plural, one {# autre ligne a} other {# autres lignes ont}} une date non valide dans ce format : la même correction s’applique."
     },
     "evidenceRowsTitle": "Lignes du fichier",
     "evidenceRowCount": "{n} lignes",
@@ -339,7 +341,9 @@
       },
       "roleName": {
         "custody": "Opérations sur titres",
-        "cash": "Relevé du compte espèces"
+        "cash": "Relevé du compte espèces",
+        "securities": "Mouvements de titres",
+        "account": "Mouvements du compte"
       },
       "period": {
         "years": "{n, plural, one {# an} other {# ans}}",
@@ -398,7 +402,11 @@
         "overlap_mismatch": "Deux exports « {role} » diffèrent sur {days} jour(s) entre le {first} et le {last} : le plus récent est utilisé pour ces jours.",
         "balance_chain_broken": "Le solde progressif du relevé ne concorde plus à partir du {date} : les soldes sont seulement comparés, pas utilisés pour les corrections.",
         "empty_member": "Un export « {role} » ne contient aucune ligne.",
-        "mixed_accounts_in_file": "Un export de titres contient plusieurs comptes-titres."
+        "mixed_accounts_in_file": "Un export de titres contient plusieurs comptes-titres.",
+        "account_gap": "Aucun export du compte ne couvre {start} – {end} : les soldes de la banque diffèrent de {amount} sur cette période. Exportez les mouvements du compte si la banque les conserve.",
+        "no_balance": "Aucun export du compte n’indique de solde (seul l’export Excel le fait) : la trésorerie n’est pas comparée à la banque.",
+        "ambiguous": "{rows, plural, one {# ligne ne peut pas être appariée} other {# lignes ne peuvent pas être appariées}} avec certitude entre l’export des titres et celui du compte : vérifiez-les.",
+        "no_counterpart": "{rows, plural, one {# ligne n’a pas} other {# lignes n’ont pas}} de ligne correspondante dans l’autre export : vérifiez-{rows, plural, one {la} other {les}}."
       },
       "gapFix": {
         "stepTitle": "Aligner avec la banque",
