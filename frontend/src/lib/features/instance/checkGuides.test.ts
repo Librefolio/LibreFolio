@@ -68,6 +68,18 @@
  * finding (§2.4's premise, fed `blockedScripts`) and, as the contract says, until `configuration.en.md` writes
  * `{: #csp }` (§2.2, the docs step of the lot): THAT anchor check stays red until the documentation lands. The it, fr and
  * es pages cannot have it yet: the three pairs are translation debt (§2.5), written with their reason below.
+ *
+ * FB-27 (the «guide or support» help of the checks): each entry says who can solve the check. Every value of `server` and
+ * `browser` is now an object: `{"kind":"guide","path":"admin/<page>/#<anchor>"}` (the administrator solves it alone: the
+ * MkDocs link) or `{"kind":"support"}` with no path (whoever hosts the instance solves it: «Contact support»). The three
+ * `support` entries are `platform.hosting_panel`, `backup.panel_token` and `accounts.owner_email_change`; every other
+ * check stays a `guide` with the path it had (`backup.upload_limit` and `backup.restore_limit` too: they also apply to a
+ * self-hosted instance). The module exports `CHECK_HELP` (server and browser merged, frozen, id → entry), the type
+ * `CheckHelp`, `checkHelp(checkId)` (own keys only) and keeps `CHECK_GUIDES` / `checkGuidePath` for the `guide` entries
+ * ONLY (a support check has no path). The shape, anchors and translation-ratchet cases apply to the guide entries only; the
+ * table is pinned whole (`EXPECTED_HELP`, kind per id). The removed guide pairs were in no translation debt, so
+ * `TRANSLATION_DEBT` does not move. Red until FB-27: `checkGuides.json` still holds plain strings and the module has no
+ * `CHECK_HELP` nor `checkHelp`.
  */
 import {existsSync, readFileSync} from 'node:fs';
 import {describe, expect, it, vi} from 'vitest';
@@ -100,43 +112,53 @@ vi.mock('$lib/api', () => {
 //  §1: the map, pinned
 // =============================================================================
 
+/** What a check's help is: a guide of the administrator's documentation, or the instance's support. */
+type Help = {kind: 'guide'; path: string} | {kind: 'support'};
+
 /**
- * The 23 guides of §1, whole: check id → guide. A changed guide is a change of this table. Written in the order of the
- * checks (`CONFIG_CHECKS`, then `platform.plugin_secrets`, then `platform.instance_key_check`), then the browser's finding, and compared as a record: the
- * order is pinned by §3, against the checks themselves.
+ * The 23 helps of §1, whole: check id → its help (20 guides, 3 support). A changed guide, or a check that changes who solves
+ * it, is a change of this table. Written in the order of the checks (`CONFIG_CHECKS`, then `platform.plugin_secrets`, then
+ * `platform.instance_key_check`), then the browser's finding, and compared as a record: the order is pinned by §3, against
+ * the checks themselves.
  */
-const EXPECTED_GUIDES: Readonly<Record<string, string>> = {
-    'platform.jwt_secret': 'admin/configuration_secrets/#secrets',
-    'platform.secrets_set_twice': 'admin/configuration_secrets/#secret-files',
-    'platform.instance_key': 'admin/configuration_secrets/#instance-key',
-    'platform.session_cookie': 'admin/connection_checks/#session-cookie',
-    'platform.client_address': 'admin/connection_proxy/#untrusted-proxy',
-    'platform.frame_protection': 'admin/configuration_security/#frame-protection',
-    'platform.csp_report_only': 'admin/configuration_security/#csp-report-only',
-    'platform.log_level': 'admin/configuration_security/#startup-checks',
+const EXPECTED_HELP: Readonly<Record<string, Help>> = {
+    'platform.jwt_secret': {kind: 'guide', path: 'admin/configuration_secrets/#secrets'},
+    'platform.secrets_set_twice': {kind: 'guide', path: 'admin/configuration_secrets/#secret-files'},
+    'platform.instance_key': {kind: 'guide', path: 'admin/configuration_secrets/#instance-key'},
+    'platform.session_cookie': {kind: 'guide', path: 'admin/connection_checks/#session-cookie'},
+    'platform.client_address': {kind: 'guide', path: 'admin/connection_proxy/#untrusted-proxy'},
+    'platform.frame_protection': {kind: 'guide', path: 'admin/configuration_security/#frame-protection'},
+    'platform.csp_report_only': {kind: 'guide', path: 'admin/configuration_security/#csp-report-only'},
+    'platform.log_level': {kind: 'guide', path: 'admin/configuration_security/#startup-checks'},
     // H-61: the hosting panel's wake-up and status tokens, right before the test mode check
-    'platform.hosting_panel': 'admin/hosting_panel_api/#panel-api',
-    'platform.test_mode': 'admin/configuration_security/#startup-checks',
-    'backup.panel_token': 'admin/hosting_panel_backups/#panel-token',
-    'backup.upload_limit': 'admin/hosting_panel_backups/#restore-upload-limit',
-    'backup.restore_limit': 'admin/hosting_panel_backups/#restore-upload-limit',
+    'platform.hosting_panel': {kind: 'support'},
+    'platform.test_mode': {kind: 'guide', path: 'admin/configuration_security/#startup-checks'},
+    'backup.panel_token': {kind: 'support'},
+    'backup.upload_limit': {kind: 'guide', path: 'admin/hosting_panel_backups/#restore-upload-limit'},
+    'backup.restore_limit': {kind: 'guide', path: 'admin/hosting_panel_backups/#restore-upload-limit'},
     // L3 (B, 22/10): the recipients of the hosting panel's sealed backups.
-    'backup.recipients': 'admin/backup_sealed/#sealed',
-    'accounts.login_limit': 'admin/configuration_accounts/#login-limit',
+    'backup.recipients': {kind: 'guide', path: 'admin/backup_sealed/#sealed'},
+    'accounts.login_limit': {kind: 'guide', path: 'admin/configuration_accounts/#login-limit'},
     // H5-4 (A's request A5-1b): the host-started change of the owner's email, right after the login limit's
-    'accounts.owner_email_change': 'admin/hosting_instances/#owner-email-change',
-    'email.smtp': 'admin/email/#variables',
-    'email.smtp_encryption': 'admin/email/#encryption-modes',
-    'email.links': 'admin/email/#links-check',
-    'platform.plugin_secrets': 'admin/configuration_secrets/#plugin-secrets',
+    'accounts.owner_email_change': {kind: 'support'},
+    'email.smtp': {kind: 'guide', path: 'admin/email/#variables'},
+    'email.smtp_encryption': {kind: 'guide', path: 'admin/email/#encryption-modes'},
+    'email.links': {kind: 'guide', path: 'admin/email/#links-check'},
+    'platform.plugin_secrets': {kind: 'guide', path: 'admin/configuration_secrets/#plugin-secrets'},
     // H5-7 (D6): the instance key check (the key does not match what the data were saved with), right after the plugin secrets'.
     // Not `platform.instance_key`: that id is the key file's own check, mapped above to `#instance-key` (ID COLLISION, see test_instance_key_check.py).
-    'platform.instance_key_check': 'admin/configuration_secrets/#instance-key-check',
+    'platform.instance_key_check': {kind: 'guide', path: 'admin/configuration_secrets/#instance-key-check'},
     // The browser's half: the open-registration warning, `OPEN_REGISTRATION_NOTICE_ID`
-    'accounts.openRegistration': 'admin/settings/#open-registration-warning',
+    'accounts.openRegistration': {kind: 'guide', path: 'admin/settings/#open-registration-warning'},
     // H-55 v2: a script the enforced policy blocked and this instance did not send (`cspNotice.ts`)
-    'platform.blockedScript': 'admin/configuration_security/#csp',
+    'platform.blockedScript': {kind: 'guide', path: 'admin/configuration_security/#csp'},
 };
+
+/** The guide entries of `EXPECTED_HELP`, id → path: what `CHECK_GUIDES` holds. */
+const EXPECTED_GUIDES: Readonly<Record<string, string>> = Object.fromEntries(Object.entries(EXPECTED_HELP).flatMap(([id, help]) => (help.kind === 'guide' ? [[id, help.path]] : [])));
+
+/** The checks whose help is «Contact support», not a guide (FB-27). */
+const SUPPORT_IDS: readonly string[] = ['platform.hosting_panel', 'backup.panel_token', 'accounts.owner_email_change'];
 
 /** The findings the browser adds to the Security tab: the open-registration warning and, since H-55 v2, a blocked script. */
 const BLOCKED_SCRIPT_ID = 'platform.blockedScript';
@@ -163,6 +185,8 @@ const TRANSLATION_DEBT: readonly string[] = ['es:settings#open-registration-warn
 interface CheckGuidesModule {
     CHECK_GUIDES: Readonly<Record<string, string>>;
     checkGuidePath(checkId: string): string | undefined;
+    CHECK_HELP: Readonly<Record<string, Help>>;
+    checkHelp(checkId: string): Help | undefined;
 }
 
 /** A computed specifier: Vite does not resolve it when it transforms this file, so while the module is missing each case fails on its own. */
@@ -181,6 +205,14 @@ async function checkGuides(): Promise<CheckGuidesModule> {
     return loaded as unknown as CheckGuidesModule;
 }
 
+/** FB-27: the module with its help half too (`CHECK_HELP`, `checkHelp`): the cases about who solves a check load it here. */
+async function checkHelpModule(): Promise<CheckGuidesModule> {
+    const loaded = await checkGuides();
+    expect(typeof loaded.CHECK_HELP === 'object' && loaded.CHECK_HELP !== null, 'checkGuides.ts exports CHECK_HELP, an object (red until FB-27)').toBe(true);
+    expect(typeof loaded.checkHelp, 'checkGuides.ts exports checkHelp() (red until FB-27)').toBe('function');
+    return loaded;
+}
+
 /** The module's guides, or why it cannot give them: the two docs cases check the table's guides either way. */
 async function moduleGuides(): Promise<{guides: string[]; problem: string | null}> {
     try {
@@ -194,22 +226,32 @@ async function moduleGuides(): Promise<{guides: string[]; problem: string | null
 const GUIDES_JSON = new URL('./checkGuides.json', import.meta.url);
 
 interface GuidesJson {
-    server: Record<string, string>;
-    browser: Record<string, string>;
+    server: Record<string, Help>;
+    browser: Record<string, Help>;
 }
 
-function isGuideRecord(value: unknown): value is Record<string, string> {
-    return typeof value === 'object' && value !== null && !Array.isArray(value) && Object.values(value).every((guide) => typeof guide === 'string');
+/** FB-27's shape of one entry: `{kind: 'guide', path: <string>}` or `{kind: 'support'}` with no other key (no path). */
+function isHelpEntry(value: unknown): value is Help {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+    const keys = Object.keys(value).sort();
+    const entry = value as Record<string, unknown>;
+    if (entry.kind === 'guide') return keys.join() === 'kind,path' && typeof entry.path === 'string';
+    if (entry.kind === 'support') return keys.join() === 'kind';
+    return false;
 }
 
-/** `checkGuides.json`: one object, of exactly two halves, each an id → its guide. */
+function isHelpRecord(value: unknown): value is Record<string, Help> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value) && Object.values(value).every(isHelpEntry);
+}
+
+/** `checkGuides.json`: one object, of exactly two halves, each an id → its help. */
 function guidesJson(): GuidesJson {
     expect(existsSync(GUIDES_JSON), 'src/lib/features/instance/checkGuides.json does not exist (red until N69d §1: the map is not written yet)').toBe(true);
     const parsed: unknown = JSON.parse(readFileSync(GUIDES_JSON, 'utf8'));
     const halves = typeof parsed === 'object' && parsed !== null ? Object.keys(parsed).sort() : parsed;
     expect(halves, 'checkGuides.json is one object, of exactly two halves: server and browser').toEqual(['browser', 'server']);
     const {server, browser} = parsed as Record<string, unknown>;
-    expect([isGuideRecord(server), isGuideRecord(browser)], 'checkGuides.json: server and browser each map an id to its guide, a string').toEqual([true, true]);
+    expect([isHelpRecord(server), isHelpRecord(browser)], 'checkGuides.json: server and browser each map an id to {kind: "guide", path} or {kind: "support"} — no plain string, no path on a support entry (red until FB-27)').toEqual([true, true]);
     return {server, browser} as GuidesJson;
 }
 
@@ -400,7 +442,38 @@ describe('checkGuides — the guide of each finding of the Security tab (N69d)',
             Object.keys(server).filter((id) => Object.hasOwn(browser, id)),
             'No id is in both halves of checkGuides.json',
         ).toEqual([]);
-        expect(CHECK_GUIDES, 'CHECK_GUIDES is {...server, ...browser} of checkGuides.json').toEqual({...server, ...browser});
+        // FB-27: the guide entries of both halves, as id → path; a support entry has no guide
+        const guideEntries = Object.entries({...server, ...browser}).flatMap(([id, help]) => (help.kind === 'guide' ? [[id, help.path] as const] : []));
+        expect(guideEntries.length, 'Barrier: checkGuides.json holds guide entries').toBeGreaterThan(0);
+        expect(CHECK_GUIDES, 'CHECK_GUIDES is the guide entries of {...server, ...browser} of checkGuides.json, id → path').toEqual(Object.fromEntries(guideEntries));
+        for (const id of SUPPORT_IDS) expect(checkGuidePath(id), `checkGuidePath('${id}'): a support check has no guide path`).toBeUndefined();
+    });
+
+    // red until FB-27: checkGuides.json holds plain strings, the module has no CHECK_HELP nor checkHelp
+    it('FB-27 the help lookup: checkHelp answers each own key of CHECK_HELP, the two halves merged and frozen, and nothing else', async () => {
+        const {CHECK_HELP, checkHelp} = await checkHelpModule();
+        const entries = Object.entries(CHECK_HELP);
+        // The barrier of the undefined below: the lookup does answer, for every key
+        expect(entries.length, 'CHECK_HELP holds the helps').toBeGreaterThan(0);
+        for (const [id, help] of entries) expect(checkHelp(id), `checkHelp('${id}') is its help`).toEqual(help);
+        for (const id of NOT_CHECKS) expect(checkHelp(id), `checkHelp('${id}'): only an own key has a help`).toBeUndefined();
+        expect(Object.isFrozen(CHECK_HELP), 'CHECK_HELP is frozen').toBe(true);
+
+        const {server, browser} = guidesJson();
+        expect(CHECK_HELP, 'CHECK_HELP is {...server, ...browser} of checkGuides.json').toEqual({...server, ...browser});
+    });
+
+    // red until FB-27
+    it('FB-27 who solves a check: the three support checks are support, backup.upload_limit and backup.restore_limit stay guides (they apply to self-hosted too)', async () => {
+        const {checkHelp, checkGuidePath} = await checkHelpModule();
+        for (const id of SUPPORT_IDS) {
+            expect(checkHelp(id), `${id} is solved by whoever hosts the instance`).toEqual({kind: 'support'});
+            expect(checkGuidePath(id), `${id} has no guide path`).toBeUndefined();
+        }
+        for (const id of ['backup.upload_limit', 'backup.restore_limit']) {
+            expect(checkHelp(id), `${id} stays a guide: it applies to a self-hosted instance`).toEqual({kind: 'guide', path: 'admin/hosting_panel_backups/#restore-upload-limit'});
+            expect(checkGuidePath(id)).toBe('admin/hosting_panel_backups/#restore-upload-limit');
+        }
     });
 
     // red until N69d §1: checkGuides.json does not exist
@@ -442,7 +515,32 @@ describe('checkGuides — the guide of each finding of the Security tab (N69d)',
     // H-61: red until checkGuides.json holds platform.hosting_panel (contract §5)
     // H-55 v2: red until checkGuides.json holds platform.blockedScript → admin/configuration_security/#csp
     // H5-4: red until checkGuides.json holds accounts.owner_email_change → admin/hosting_instances/#owner-email-change
-    it('§1 pinned whole: CHECK_GUIDES is the table of the 23 guides — a changed guide is a change of this file', async () => {
-        expect((await checkGuides()).CHECK_GUIDES, 'CHECK_GUIDES, check id → guide').toEqual(EXPECTED_GUIDES);
+    // FB-27: red until checkGuides.json holds {kind, path} / {kind: 'support'} entries and the module CHECK_HELP
+    it('§1 pinned whole: CHECK_HELP is the table of the 23 helps (20 guides, 3 support), CHECK_GUIDES its 20 guides — a changed help is a change of this file', async () => {
+        expect(Object.keys(EXPECTED_HELP).length, 'Control: the table has 23 entries').toBe(23);
+        expect(
+            Object.entries(EXPECTED_HELP)
+                .filter(([, help]) => help.kind === 'support')
+                .map(([id]) => id)
+                .sort(),
+            'Control: the support entries are SUPPORT_IDS',
+        ).toEqual([...SUPPORT_IDS].sort());
+        const {CHECK_HELP, CHECK_GUIDES} = await checkHelpModule();
+        expect(CHECK_HELP, 'CHECK_HELP, check id → {kind, path?}').toEqual(EXPECTED_HELP);
+        expect(CHECK_GUIDES, 'CHECK_GUIDES, check id → guide path, the guide entries only').toEqual(EXPECTED_GUIDES);
+    });
+
+    // red until FB-27: checkGuides.json holds plain strings
+    it('FB-27 the data: checkGuides.json holds, per half, exactly the entries of the table — every guide a path of the shape, no support entry with a path', () => {
+        const {server, browser} = guidesJson();
+        const serverIds = Object.keys(EXPECTED_HELP).filter((id) => !BROWSER_FINDINGS.includes(id));
+        expect(server, 'checkGuides.json → server').toEqual(Object.fromEntries(serverIds.map((id) => [id, EXPECTED_HELP[id]])));
+        expect(browser, 'checkGuides.json → browser').toEqual(Object.fromEntries(BROWSER_FINDINGS.map((id) => [id, EXPECTED_HELP[id]])));
+        const guideEntries = Object.values({...server, ...browser}).filter((help): help is Extract<Help, {kind: 'guide'}> => help.kind === 'guide');
+        expect(guideEntries.length, 'Barrier: guide entries to check').toBe(20);
+        expect(
+            guideEntries.filter((help) => !GUIDE_SHAPE.test(help.path)),
+            `Every guide of the JSON matches ${GUIDE_SHAPE}`,
+        ).toEqual([]);
     });
 });

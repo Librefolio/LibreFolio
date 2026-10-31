@@ -61,7 +61,7 @@ zero silently** — hence the dedicated coverage test.
 - **Decimal columns** (C-97): amounts and event values `RealDecimal(18, 6)` (W-B60); quantities `RealDecimal(22, 10)`;
   prices and the per-unit cost basis `RealDecimal(24, 12)` (`db/real_decimal.py`: the SQLite REAL read back as
   the decimal written, at most 15 significant digits; reading never raises — a stored ±inf reads `None` — and a
-  value a double cannot hold is refused on write); FX rates `Numeric(24, 10)`. A value typed or read from a
+  value a double cannot hold is refused on write); the volume `RealDecimal(24, 0)` and FX rates `RealDecimal(24, 10)` (W-B63). A value typed or read from a
   file over its column's limit is refused, never rounded (`db/precision.decimal_limit_issue`: decimal places,
   15 significant digits, and the digits before the decimal point, `max_integer_digits` — 15 for a quantity and a
   transaction amount, decision N63, otherwise precision − scale); a value LibreFolio

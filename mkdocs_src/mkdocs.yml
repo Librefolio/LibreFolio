@@ -882,8 +882,6 @@ plugins:
             "Credits & Legal": "Créditos & Aviso Legal"
 
 extra_javascript:
-  # Mermaid customization (must be loaded as module)
-  - javascripts/mermaid.mjs
   # MathJax configuration (must load before MathJax)
   - javascripts/mathjax.js
   # Library loader with local cache + CDN fallback

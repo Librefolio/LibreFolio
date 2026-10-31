@@ -11,7 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ✨ Added
 
-- **Generic CSV: choose whether your dates are day first or month first** (Settings › Plugins). `03/04/2025` becomes 4 March with «month first»; `25/12/2025` stays 25 December either way. Files parsed before a change of the setting say they need parsing again.
+- **Generic CSV: choose how your dates are written** (Settings › Plugins). Day first or month first, with a four-digit or a two-digit year (`dd/mm/yy`, `mm/dd/yy`, `yy/mm/dd`) or `yyyy-mm-dd`; each option shows a complete example (`dd/mm/yy`: `03/04/26` = 3 April 2026). `03/04/2025` becomes 4 March with «month first»; `25/12/2025` stays 25 December either way. Files parsed before a change of the setting say they need parsing again.
+- **A read-only «Unit price» column** in the transactions table and in the bulk editor, next to the amount: the price per unit a trade implies (the amount divided by the quantity, the same calculation as the form's Total / Unit price toggle). Hide it from the column menu if you do not need it; it is empty for a row without a quantity and an amount, and for the legs of a pair.
 - **Buy or sell: type the total amount or the unit price, and the other is computed at once**, with exact decimals rounded half-even. A saved transaction shows both.
 - **A date before 1900 asks for a confirmation once**, in the transaction form, the bulk editor and the import review: such a date is usually a typo.
 - **Managed instances: `./dev.py user reassign-owner <username>`** gives the administrator account back to the owner's address after a wrong confirmation: a new password link, the old password and the sessions revoked. `user set-email` also cancels an address-change link still waiting.
@@ -228,6 +229,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixed
 
+- **The cost preview names a stock split as «Split adjustment»**, no longer as «Dilution».
+- **The status bar of the CSV editor is translated** («3 valid rows», «1 error», «duplicate date») in Italian, French and Spanish too, in every CSV import.
+- **Emptying the manual cost of a transfer is refused at once in the form**, no longer only at «Save all»; the help text and the page on adjustments no longer say «leave empty = Auto».
+- **Broker icons of the import plugins come back after a failed first load**, without reloading the page.
+- **«Link as pair» no longer opens an empty merge dialog** when the two rows differ only in date or cost: it goes straight to the confirmation.
+- **The bulk editor's Auto cost shows «…» while it is being calculated**, no longer a «💡 0.00» that looked final.
+- **The 💡 of the bulk editor counts only the suggestions it can show** in the picker.
 - **A suspended instance no longer goes straight back to sleep when a request wakes it.** After a scheduled wake-up, a pending idle check could fire the moment the machine resumed and suspend it again before the request that woke it was counted, leaving that request frozen until the client gave up (30 s) and the instance asleep until the next night. The check now waits out the resume grace.
 - A date typed with a one- or two-digit year (`0024-03-01`) is no longer moved a century or refused: date fields, the calendar, the import preview, the charts, the lots, the risk levels and the AI Export read it as written.
 - **After a restore, the owner's reset email says the password was revoked for security** and points to «Forgot Password?» if the link expires (EN/IT/FR/ES).

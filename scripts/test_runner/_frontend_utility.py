@@ -208,6 +208,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/dashboard/positionsSeriesController.test.ts",
             "src/lib/features/dashboard/dateRangeController.test.ts",
             "src/lib/features/dashboard/staleFxIssue.test.ts",
+            "src/lib/features/dashboard/positionsRolling.test.ts",
             "src/lib/features/brokers/lots/lotGanttChartHelpers.test.ts",
             "src/lib/features/brokers/lots/lotStateVisual.test.ts",
             "src/lib/features/brokers/lots/unifiedLotsTableHelpers.test.ts",
@@ -249,6 +250,10 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/i18n/importWizardAssetsCount.test.ts",
             "src/lib/i18n/ownerEmailChangeChecks.test.ts",
             "src/lib/i18n/instanceKeyChecks.test.ts",
+            "src/lib/i18n/transactionsEntryModeKeys.test.ts",
+            "src/lib/i18n/transactionsWacPreviewEffectKeys.test.ts",
+            "src/lib/i18n/csvImportStatusKeys.test.ts",
+            "src/lib/i18n/frameKeys.test.ts",
             "src/lib/features/support/supportLinks.test.ts",
             "src/lib/features/settings/settingsTabs.test.ts",
             "src/lib/features/settings/security/securityChecksApi.test.ts",
@@ -265,6 +270,8 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/settings/users/accountErrors.test.ts",
             "src/lib/features/instance/instanceConfig.test.ts",
             "src/lib/features/instance/checkGuides.test.ts",
+            "src/lib/features/instance/checkSupportReport.test.ts",
+            "src/lib/features/support/supportChannel.test.ts",
             "src/lib/features/instance/profile.test.ts",
             "src/lib/features/instance/instanceNotices.test.ts",
             "src/lib/features/auth/authFlash.test.ts",
@@ -354,6 +361,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/ui/input/PasswordInput.test.ts",
             "src/lib/components/ui/input/PasswordStrength.test.ts",
             "src/lib/components/ui/select/SimpleSelect.test.ts",
+            "src/lib/components/ui/select/SimpleSelect.portal.test.ts",
             "src/lib/components/ui/select/SearchSelect.test.ts",
             "src/lib/components/ui/select/SearchSelect.reopen.test.ts",
             "src/lib/components/ui/select/CurrencySearchSelect.test.ts",
@@ -426,6 +434,8 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/transactions/form/TransactionFormModal.preFloor.test.ts",
             "src/lib/features/transactions/bulk/TransactionBulkModal.test.ts",
             "src/lib/features/transactions/TransactionsTable.privacy.test.ts",
+            "src/lib/features/transactions/TransactionsTable.actions.test.ts",
+            "src/lib/features/transactions/TransactionsTable.unitPrice.test.ts",
             "src/lib/features/transactions/wac/WacPreviewSection.test.ts",
             "src/lib/features/transactions/events/EventExistsPanel.test.ts",
             "src/lib/features/transactions/events/EventCreateMiniModal.test.ts",
@@ -464,6 +474,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/auth/SetupCard.test.ts",
             "src/routes/page.authFlash.test.ts",
             "src/routes/invite/page.test.ts",
+            "src/routes/errorPage.test.ts",
             "src/routes/reset-password/page.test.ts",
             "src/routes/setup/page.test.ts",
             "src/routes/verify-email/page.test.ts",
@@ -479,6 +490,8 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/utils/core/sanitizeHtml.test.ts",
             "src/lib/features/brokers/BrokerModal.test.ts",
             "src/lib/features/brokers/BrokerSharingPanel.test.ts",
+            "src/lib/components/table/ColumnVisibilityToggle.test.ts",
+            "src/lib/components/charts/__tests__/staleDaysPlural.test.ts",
             "src/lib/features/brokers/BrokerCard.test.ts",
             "src/lib/features/brokers/BrokerImportFilesModal.test.ts",
             "src/lib/components/assets/AssetTable.test.ts",
@@ -513,6 +526,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/components/layout/HelpMenu.managed.test.ts",
             "src/lib/components/layout/Sidebar.legal.test.ts",
             "src/lib/components/layout/Sidebar.changelog.test.ts",
+            "src/lib/components/layout/Sidebar.names.test.ts",
             "src/lib/components/layout/ConnectionSecurityIndicator.test.ts",
             "src/lib/features/update-check/UpdateAvailableModal.test.ts",
             "src/lib/features/settings/SettingControls.test.ts",
@@ -572,6 +586,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/instance/components/InstanceAwaitingRestorePage.test.ts",
             "src/lib/features/instance/components/AwaitingRestoreGate.test.ts",
             "src/lib/features/instance/components/InstanceRestoreInterruptedPage.test.ts",
+            "src/lib/features/instance/components/CheckHelp.test.ts",
             "src/lib/features/live-updates/LiveUpdatesStatus.test.ts",
             "src/lib/features/backup/BackupDownloadCard.test.ts",
             "src/lib/features/backup/RestoreCard.test.ts",
@@ -835,6 +850,18 @@ def front_pac_allocator_real(verbose: bool = False, ui: bool = False, headed: bo
     return _run_playwright("pac-allocator-real.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_pac_phone_layout(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the PAC allocator's phone-width checks: the Targets and Review steps fit a 375 px screen, no table and no page scrolls sideways (Y-9)."""
+    print_section("Frontend PAC Allocator Phone Layout Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("pac-phone-layout.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_changelog_locale(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the changelog modal's chapter languages in the Italian and English UI (lot CL, desktop)."""
     print_section("Frontend Changelog Locale Tests")
@@ -893,6 +920,18 @@ def front_docs_offline_math(verbose: bool = False, ui: bool = False, headed: boo
     return _run_playwright("layout/docs-offline-math.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_docs_offline_mermaid(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the documentation's diagrams without internet: Mermaid from the site's own pinned copy, jsDelivr and unpkg never asked (H6-3, M-22)."""
+    print_section("Frontend Docs Offline Mermaid Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("layout/docs-offline-mermaid.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_docs_search_language(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the documentation's search by language: each language's home page finds its own pages only, the toggle widens it to all four, the preference holds (DOC-2)."""
     print_section("Frontend Docs Search Language Tests")
@@ -915,6 +954,18 @@ def front_page_policy(verbose: bool = False, ui: bool = False, headed: bool = Fa
     if not _ensure_test_users():
         return False
     return _run_playwright("layout/page-policy.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_unknown_address(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the unknown-address gate: a 404 of the web app leaves by itself, to the Dashboard or, signed out, to the login (FB-23)."""
+    print_section("Frontend Unknown Address Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("layout/unknown-address.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_api_docs(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -1335,6 +1386,15 @@ def populate_registry(registry: dict) -> None:
     )
     add_test(
         cat,
+        "pac-phone-layout",
+        front_pac_phone_layout,
+        name="PAC Allocator Phone Layout Tests",
+        desc="The PAC allocator on a 375 px screen (Y-9): the Targets and Review steps fit the card, measured as the sideways overflow of every table of the step and of the page (0 px), on the gallery's draft; a screenshot of each step is attached",
+        prereq="Populated DB + test users",
+        tests="pac-phone-layout.spec.ts",
+    )
+    add_test(
+        cat,
         "changelog-locale",
         front_changelog_locale,
         name="Changelog Locale Tests",
@@ -1380,6 +1440,15 @@ def populate_registry(registry: dict) -> None:
     )
     add_test(
         cat,
+        "docs-offline-mermaid",
+        front_docs_offline_mermaid,
+        name="Docs Offline Mermaid",
+        desc="The documentation draws its diagrams without internet: on a page with a default-layout diagram and one whose frontmatter asks for layout: elk (ELK is dropped, the default layout draws it), every origin but the lane's refused, the template writes the site's own pinned Mermaid copy before Material's bundle (/mkdocs/javascripts/vendor/mermaid/mermaid.min.js, 200), Material's rendered SVG is visible with nodes and is not Mermaid's error drawing, no source block is left as code, and neither cdn.jsdelivr.net nor unpkg.com is ever requested (H6-3, M-22)",
+        prereq="Docs site built with the Mermaid copy (dev.py cache js, then dev.py mkdocs build)",
+        tests="layout/docs-offline-mermaid.spec.ts",
+    )
+    add_test(
+        cat,
         "docs-search-language",
         front_docs_search_language,
         name="Docs Search Language",
@@ -1395,6 +1464,15 @@ def populate_registry(registry: dict) -> None:
         desc="The page policy of H-42, enforced by every lane since H-55 v2 (security_headers.py): each main document read as the browser got it, exactly one Content-Security-Policy field with object-src 'none', base-uri 'self', form-action 'self', and frame-ancestors 'self' if and only if X-Frame-Options is SAMEORIGIN, with service workers blocked; positive controls on the sign-in page (a <base>, a form aimed at another origin and an <object> each raising an enforced violation, nothing else); the documentation with its search, the PDF viewer and the Dashboard with no enforced violation",
         prereq="Docs site built (dev.py mkdocs build), populated DB + test users (TEST_USER with no onboarding due)",
         tests="layout/page-policy.spec.ts",
+    )
+    add_test(
+        cat,
+        "unknown-address",
+        front_unknown_address,
+        name="Unknown Address",
+        desc="FB-23: an address the web app does not know (the SPA fallback renders its 404 view) leaves by itself: signed in it ends on /dashboard, signed out on the login, and the error card (data-testid error-page) is no longer on screen",
+        prereq="Populated DB + test users",
+        tests="layout/unknown-address.spec.ts",
     )
     add_test(
         cat,

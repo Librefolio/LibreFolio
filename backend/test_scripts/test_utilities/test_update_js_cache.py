@@ -38,6 +38,8 @@ functions), so these tests monkeypatch the network boundary
 ``tmp_path``. No DB, no server, no network, no writes outside tmp_path — PURE.
 """
 
+import hashlib
+import json
 import re
 from pathlib import Path
 from types import SimpleNamespace
@@ -946,3 +948,236 @@ class TestCompanions:
         failure = js_cache._HARD_FAILURES[0]
         assert "MathJax_Main-Regular.woff" in failure
         assert failure.consumer == "mkdocs", "from vendor_dir_key: the docs ship MathJax, the frontend does not"
+
+
+# ---------------------------------------------------------------------------
+# H6-3 (M-22): the documentation serves Mermaid itself, pinned with its hash
+# ---------------------------------------------------------------------------
+#
+# ``mermaid.mjs`` used to import Mermaid (``@11``, unpinned) and the ELK layout from jsDelivr: offline the
+# diagrams stayed code, online every page called a third party. Now ``mermaid.min.js`` is vendored like
+# MathJax, from an EXACT version, and the downloader refuses a body whose SHA-256 is not the pinned one.
+# A library entry without ``sha256`` (MathJax is ``@3``, unpinned) behaves as before.
+#
+# The page gets it from the template, not from ``extra_javascript``: Material's bundle draws the diagrams as soon
+# as it runs and, if ``window.mermaid`` is not defined yet, fetches its own copy from unpkg. So
+# ``overrides/main.html`` (block ``extrahead``, which runs before the bundle) writes the site's copy and then
+# ``mermaid-early.js``, only on a page that has a diagram.
+
+MERMAID_URL = "https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.min.js"
+MERMAID_SHA256 = "581ed7d74bd9048d0e3a91363927d72ef22942d7722546b27f7cc29e35390eb8"
+MERMAID_BODY = b"/* fake mermaid.min.js, not the real library */ globalThis.mermaid = {};"
+JAVASCRIPTS_DIR = Path(__file__).resolve().parents[3] / "mkdocs_src" / "docs" / "javascripts"
+
+
+def _fake_download(monkeypatch, body: bytes | None) -> list[str]:
+    """Every GET answers ``body`` (None: fails); every HEAD finds nothing. Returns the recorded GETs."""
+    calls: list[str] = []
+
+    def download(url, *args, **kwargs):
+        calls.append(url)
+        return body
+
+    monkeypatch.setattr(js_cache, "download_file", download)
+    monkeypatch.setattr(js_cache, "get_remote_headers", lambda *a, **kw: None)
+    return calls
+
+
+class TestMermaidEntry:
+    def test_the_entry_is_an_exact_version_vendored_beside_mathjax(self):
+        config = js_cache.LIBRARIES["mermaid"]
+        assert config["type"] == "js"
+        assert config["vendor_dir_key"] == "mkdocs"
+        assert config["url"] == MERMAID_URL, "an exact version: no @11, no latest"
+        assert config["target"] == "mermaid.min.js"
+        assert not config.get("companions"), "the UMD bundle loads nothing from beside itself"
+
+    def test_the_entry_pins_the_hash_jsdelivr_publishes(self):
+        assert js_cache.LIBRARIES["mermaid"].get("sha256") == MERMAID_SHA256
+
+    def test_mathjax_stays_unpinned(self):
+        # @3 moves with the CDN: a hash would turn every patch release into a build failure.
+        assert "sha256" not in js_cache.LIBRARIES["mathjax"]
+
+    def test_a_failure_of_mermaid_belongs_to_the_docs_build(self):
+        js_cache._hard_fail("mermaid", "x")
+        assert js_cache._HARD_FAILURES[0].consumer == "mkdocs"
+
+
+PIN_CONFIG = {
+    "type": "js",
+    "url": "https://cdn.example/pinned@1.2.3/dist/pinned.min.js",
+    "target": "pinned.min.js",
+    "vendor_dir_key": "mkdocs",
+    "sha256": hashlib.sha256(MERMAID_BODY).hexdigest(),
+}
+
+
+class TestSha256Pin:
+    """The mechanism, on a synthetic pinned library: independent of the Mermaid entry (TestMermaidEntry)."""
+
+    @pytest.fixture(autouse=True)
+    def _registered(self, monkeypatch):
+        """Registered by name, so a failure is attributed to the docs build as Mermaid's is."""
+        monkeypatch.setitem(js_cache.LIBRARIES, "pinned", PIN_CONFIG)
+
+    def test_a_body_with_the_pinned_hash_is_accepted_and_recorded(self, tmp_path, monkeypatch):
+        _fake_download(monkeypatch, MERMAID_BODY)
+        manifest: dict = {}
+
+        assert js_cache.update_library(tmp_path, manifest, "pinned", PIN_CONFIG) is True
+
+        assert js_cache._HARD_FAILURES == []
+        assert (tmp_path / "pinned" / "pinned.min.js").read_bytes() == MERMAID_BODY
+        assert manifest["libraries"]["pinned"]["current_hash"] == js_cache.get_file_hash(MERMAID_BODY)
+
+    def test_a_body_with_another_hash_is_refused_and_nothing_is_written(self, tmp_path, monkeypatch):
+        _fake_download(monkeypatch, b"<html>a CDN error page served with a 200</html>")
+        manifest: dict = {}
+
+        assert js_cache.update_library(tmp_path, manifest, "pinned", PIN_CONFIG) is False
+
+        assert len(js_cache._HARD_FAILURES) == 1
+        failure = js_cache._HARD_FAILURES[0]
+        assert "pinned" in failure and "sha256" in failure.lower(), "the failure names the library and the check"
+        assert failure.consumer == "mkdocs"
+        assert not (tmp_path / "pinned").exists(), "no file, no directory"
+        assert manifest == {}, "no manifest entry for a body that was refused"
+
+    @pytest.mark.parametrize("force", [False, True])
+    def test_a_refused_body_keeps_the_cached_good_copy(self, tmp_path, monkeypatch, force):
+        _fake_download(monkeypatch, MERMAID_BODY)
+        manifest: dict = {}
+        assert js_cache.update_library(tmp_path, manifest, "pinned", PIN_CONFIG) is True
+        before = {"files": _snapshot(tmp_path / "pinned"), "manifest": json_roundtrip(manifest)}
+
+        _fake_download(monkeypatch, b"<html>a CDN error page served with a 200</html>")
+        assert js_cache.update_library(tmp_path, manifest, "pinned", PIN_CONFIG, force=force) is False
+
+        assert len(js_cache._HARD_FAILURES) == 1, "a refused body is a hard failure even when a copy is cached"
+        assert js_cache._HARD_FAILURES[0].consumer == "mkdocs"
+        assert _snapshot(tmp_path / "pinned") == before["files"], "the cached good copy is untouched"
+        assert json_roundtrip(manifest) == before["manifest"]
+
+    def test_an_entry_without_sha256_keeps_working(self, tmp_path, monkeypatch):
+        _fake_download(monkeypatch, b"anything")
+        assert js_cache.update_library(tmp_path, {}, "mylib", JS_CONFIG) is True
+        assert js_cache._HARD_FAILURES == []
+
+    @pytest.fixture
+    def lane(self, tmp_path, monkeypatch):
+        """The whole refresh, pointed at tmp_path with the pinned library the only one, served a wrong body."""
+        monkeypatch.setattr(js_cache, "VENDOR_DIRS", {"mkdocs": tmp_path / "docs", "fonts": tmp_path / "fonts"})
+        monkeypatch.setattr(js_cache, "LIBRARIES", {"pinned": PIN_CONFIG})
+        _fake_download(monkeypatch, b"not the pinned body")
+
+    def test_a_refused_body_stops_the_docs_build_and_only_that_one(self, lane):
+        assert js_cache.run_from_args(SimpleNamespace(force=False, required_for=["mkdocs"])) == 1
+        js_cache._HARD_FAILURES.clear()
+        assert js_cache.run_from_args(SimpleNamespace(force=False, required_for=["frontend"])) == 0, "deferred, not silent: the frontend build does not ship it"
+
+
+def json_roundtrip(value: dict) -> dict:
+    """A deep, comparable copy of a manifest."""
+    return json.loads(json.dumps(value, sort_keys=True))
+
+
+class TestMermaidServedLocally:
+    """Source scan of what the browser is given: the early script, the template, the site config, the docs scripts."""
+
+    EARLY = "mermaid-early.js"
+
+    @staticmethod
+    def _version(url: str) -> str:
+        match = re.search(r"mermaid@(\d+\.\d+\.\d+)/", url)
+        assert match, f"{url}: Mermaid must be pinned to an exact x.y.z"
+        return match.group(1)
+
+    @staticmethod
+    def _code_of(name: str) -> str:
+        """A script without its comments: the explanation of why something is gone may name it."""
+        text = (JAVASCRIPTS_DIR / name).read_text(encoding="utf-8")
+        return re.sub(r"(?<!:)//[^\n]*|/\*.*?\*/", "", text, flags=re.S)  # `(?<!:)`: the // of https:// is not a comment
+
+    @staticmethod
+    def _extra_javascript() -> str:
+        """The ``extra_javascript:`` block of mkdocs.yml, up to the next top-level key."""
+        site = (JAVASCRIPTS_DIR.parents[1] / "mkdocs.yml").read_text(encoding="utf-8")
+        match = re.search(r"^extra_javascript:[^\n]*\n((?:[ \t]+[^\n]*\n|[ \t]*\n)*)", site, re.M)
+        assert match, "mkdocs.yml has no extra_javascript block"
+        return match.group(1)
+
+    @staticmethod
+    def _extrahead() -> str:
+        html = (JAVASCRIPTS_DIR.parents[1] / "overrides" / "main.html").read_text(encoding="utf-8")
+        match = re.search(r"\{%-?\s*block extrahead\s*-?%\}(.*?)\{%-?\s*endblock\s*-?%\}", html, re.S)
+        assert match, "overrides/main.html has no block extrahead"
+        return re.sub(r"\{#.*?#\}", "", match.group(1), flags=re.S)  # Jinja comments may name the files too
+
+    def test_the_early_script_pins_the_same_version_as_the_downloader(self):
+        text = self._code_of(self.EARLY)
+        cdn = re.search(r"""["'](https://cdn\.jsdelivr\.net/npm/mermaid@[^"']+)["']""", text)
+        assert cdn, "mermaid-early.js names the pinned CDN copy it falls back on"
+        config_url = js_cache.LIBRARIES["mermaid"]["url"]
+        assert self._version(config_url) == "11.17.2"
+        assert self._version(cdn.group(1)) == self._version(config_url)
+        assert cdn.group(1) == config_url == MERMAID_URL, "the very same file the downloader pins by hash"
+
+    def test_the_early_script_is_a_classic_script_without_elk_or_unpinned_urls(self):
+        raw = (JAVASCRIPTS_DIR / self.EARLY).read_text(encoding="utf-8")
+        text = self._code_of(self.EARLY)
+        assert not re.search(r"^\s*import\b", text, re.M), "a classic script: no static import"
+        assert not re.search(r"\bimport\s*\(", text), "no dynamic import either"
+        assert not re.search(r"\bexport\b", text), "a classic script: no export"
+        for forbidden in ("layout-elk", "mermaid.esm", "mermaid@11/", "unpkg"):
+            assert forbidden not in text, f"{forbidden}: only the exactly pinned file may be named"
+        assert "elk" not in text.lower(), "the ELK layout is dropped"
+        assert "mermaid@11/" not in raw, "not even in a comment: a pin must not be written unpinned"
+
+    def test_the_early_script_adds_the_loose_security_level_to_what_material_passes(self):
+        text = self._code_of(self.EARLY)
+        assert re.search(r"""securityLevel\s*:\s*["']loose["']""", text)
+        assert "mermaid.initialize" in text, "initialize is wrapped, so Material's own call gets the level"
+        assert "window.lfMermaidReady" in text
+
+    def test_mkdocs_loads_the_loader_and_neither_mermaid_script(self):
+        block = self._extra_javascript()
+        assert "javascripts/lib-loader.js" in block
+        assert "mermaid.mjs" not in block, "the module is gone: it ran after Material's bundle"
+        assert "mermaid-early" not in block, "it runs before the bundle, from the template; extra_javascript comes after"
+
+    def test_the_mermaid_module_is_gone(self):
+        assert not (JAVASCRIPTS_DIR / "mermaid.mjs").exists()
+        loader = (JAVASCRIPTS_DIR / "lib-loader.js").read_text(encoding="utf-8")
+        assert "name: 'mermaid'" not in loader, "the loader carries MathJax only; Mermaid is not loaded after Material"
+
+    def test_the_template_writes_the_sites_own_copy_then_the_early_script_on_pages_with_a_diagram(self):
+        config = js_cache.LIBRARIES["mermaid"]
+        head = self._extrahead()
+        condition = re.search(r"""\{%-?\s*if\b[^%]*class="mermaid"[^%]*%\}""", head)
+        assert condition, 'only a page whose content has class="mermaid" gets the scripts'
+        # Where the downloader writes it: <vendor>/<library name>/<target>, as for MathJax.
+        local = head.find(f"javascripts/vendor/mermaid/{config['target']}")
+        early = head.find(f"javascripts/{self.EARLY}")
+        assert local != -1, "the site's own copy is written"
+        assert early != -1, "the early script is written"
+        assert condition.start() < local < early, "inside the condition, the library before the script that adjusts it"
+        assert "cdn.jsdelivr.net" not in head and "unpkg" not in head, "the template names no third party"
+        end_if = re.search(r"\{%-?\s*endif\s*-?%\}", head[early:])
+        assert end_if, "both scripts close inside the condition"
+
+    def test_no_docs_script_imports_mermaid_or_elk_from_a_cdn_any_more(self):
+        offenders = []
+        pinned = re.escape(MERMAID_URL)
+        for path in sorted(JAVASCRIPTS_DIR.iterdir()):
+            if not path.is_file() or path.suffix not in {".js", ".mjs"}:
+                continue  # vendor/ holds the downloaded libraries, not our scripts
+            text = path.read_text(encoding="utf-8")
+            for forbidden in ("cdn.jsdelivr.net/npm/mermaid@11/", "@mermaid-js/layout-elk", "mermaid.esm", "unpkg.com/mermaid"):
+                if forbidden in text:
+                    offenders.append(f"{path.name}: {forbidden}")
+            # Any other CDN address of mermaid: only the exactly pinned file may appear, and only in the early script.
+            for found in re.findall(r"https?://[^\s\"'`)]*mermaid[^\s\"'`)]*", text):
+                if not (path.name == self.EARLY and re.fullmatch(pinned, found)):
+                    offenders.append(f"{path.name}: {found}")
+        assert offenders == []

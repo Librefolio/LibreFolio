@@ -191,7 +191,7 @@
                     if (stale > 0) {
                         return {
                             type: 'html',
-                            html: `<span class="font-mono text-xs">${r.date} <span class="ml-1 text-lf-muted text-[10px]">${wd}</span> <span class="ml-1 text-[10px] text-lf-warning" title="${escapeHtml($t('chart.tooltip.stale', {values: {days: stale}}))}">⚠️ ${stale}d</span></span>`,
+                            html: `<span class="font-mono text-xs">${r.date} <span class="ml-1 text-lf-muted text-[10px]">${wd}</span> <span class="ml-1 text-[10px] text-lf-warning" title="${escapeHtml($t('chart.tooltip.stale', {values: {days: stale}}))}">⚠️ ${escapeHtml($t('chart.tooltip.staleBadge', {values: {days: stale}}))}</span></span>`,
                         };
                     }
                     return {

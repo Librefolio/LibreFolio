@@ -89,6 +89,7 @@ import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 import {waitForSettled} from '../fixtures/app-events';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
+import {currentUserId} from '../fixtures/galleryRiskLab';
 
 const API = '/api/v1';
 const REPORT_PATH = `${API}/portfolio/report`;
@@ -447,6 +448,16 @@ async function chooseCandles(chart: Locator): Promise<void> {
     await expect(candles).toHaveAttribute('aria-pressed', 'true');
 }
 
+/**
+ * The positions panel opens on Holdings × Map: the Portfolio table asks the contribution as it opens (the positions sold out inside
+ * the period are its last rows, FB-13), the Map does not. These cases are about the contribution being asked when the Performance
+ * view is chosen, so the panel starts where nothing asks it. The preference is the user's own key, set before the page loads.
+ */
+async function openPositionsOnTheMap(page: Page): Promise<void> {
+    const key = `lf_${await currentUserId(page)}_dashboard-positions-visual`;
+    await page.addInitScript((storageKey) => window.localStorage.setItem(storageKey, 'map'), key);
+}
+
 /** Performance, the way a user chooses it: the view asks its contribution as it is chosen. It starts unpressed — this context saved no view —, checked. */
 async function choosePerformance(panel: Locator): Promise<void> {
     const performance = panel.getByTestId('positions-toggle-performance');
@@ -593,6 +604,7 @@ test.describe('Lazy report retry (Y-24): a failed candles or contribution reques
 
     test('Dashboard, Performance: a failed contribution is not asked again at once, four requests at most, and Refresh asks it again', async ({page}) => {
         const contribution = await preparePage(page, 'contribution', EVERY_REQUEST);
+        await openPositionsOnTheMap(page);
         const refresh = await openDashboard(page, 'posizioni');
         const panel = page.getByTestId('positions-panel');
         await waitForSettled(panel, ROUND_TRIP_MS);
@@ -636,6 +648,7 @@ test.describe('Lazy report retry (Y-24): a failed candles or contribution reques
     test('Broker detail, Performance: a failed contribution is not asked again at once, four requests at most, and a period change asks it again', async ({page}) => {
         const brokerId = await brokerIdByName(page, BROKER_WITH_HOLDINGS);
         const contribution = await preparePage(page, 'contribution', EVERY_REQUEST);
+        await openPositionsOnTheMap(page);
         const refresh = await openBrokerDetail(page, brokerId, 'posizioni');
         const panel = page.getByTestId('positions-panel');
         await waitForSettled(panel, ROUND_TRIP_MS);
