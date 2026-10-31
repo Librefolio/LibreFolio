@@ -600,8 +600,12 @@ async function transferInAuto(page: Page, request: APIRequestContext, owned: Own
             await expect(remainingRow, 'the units left on A are listed').toBeVisible();
             await expectPositionOnScreen(remainingRow, scenario.remaining, 'A');
         } else {
-            // B's row above is the presence barrier: the table is drawn from the same holdings.
-            await expect(remainingRow, 'nothing is left on A: no row').toHaveCount(0);
+            // B's row above is the presence barrier: the table is drawn from the same holdings. Nothing is left on A, so A is no
+            // longer a holding: if the Portfolio table lists it at all, it is as the position closed inside the period (FB-13), the
+            // last rows in italics with no quantity — which the period's contribution brings a moment after the holdings.
+            await expect
+                .poll(async () => remainingRow.evaluateAll((rows) => rows.map((row) => ({italic: row.classList.contains('italic')}))), {message: 'nothing is left on A: no open row (a sold-out one, in italics, may follow)', timeout: 15_000})
+                .toEqual(expect.not.arrayContaining([expect.objectContaining({italic: false})]));
         }
     });
 }

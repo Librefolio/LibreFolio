@@ -1,5 +1,6 @@
 <script lang="ts">
     import {PieChart, Scale} from 'lucide-svelte';
+    import {MediaQuery} from 'svelte/reactivity';
     import {t} from '$lib/i18n';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
@@ -100,6 +101,10 @@
         tableRef?.clearSelection();
     }
 
+    // On a phone (the table's own 768 px breakpoint) the columns are fluid down to a floor each, and the decorative bar is hidden by
+    // default: asset, target, and the pinned columns have to fit a card some 300 px wide (Y-9). The bar stays one click away in «Columns».
+    const phone = new MediaQuery('max-width: 768px');
+
     const columns = $derived.by((): ColumnDef<DraftAsset>[] =>
         withHelpCues<DraftAsset>([
             {
@@ -108,7 +113,7 @@
                 type: 'text',
                 sortable: false,
                 filterable: false,
-                minWidth: 160,
+                minWidth: phone.current ? 80 : 160,
                 getValue: (asset) => assetLabel(asset),
                 cell: (asset) => ({type: 'custom', component: AssetNameCell, props: {label: assetLabel(asset), iconUrl: asset.iconUrl, assetType: asset.assetClass ? asset.assetClass.toUpperCase() : null}}),
             },
@@ -120,6 +125,7 @@
                 filterable: false,
                 width: 200,
                 minWidth: 100,
+                hiddenByDefault: phone.current,
                 cell: (asset) => ({type: 'html', html: barHtml(asset)}),
             },
             {
@@ -130,8 +136,8 @@
                 sortable: false,
                 filterable: false,
                 align: 'right',
-                width: 140,
-                minWidth: 128,
+                width: phone.current ? 96 : 140,
+                minWidth: phone.current ? 84 : 128,
                 cell: (asset) => ({type: 'custom', component: TargetInputCell, props: {draft, assetKey: asset.key, label: assetLabel(asset)}}),
             },
         ]),
@@ -215,7 +221,7 @@
                 enableContextMenu={false}
                 enableActions
                 {rowActions}
-                actionsColumnWidth="64px"
+                actionsColumnWidth={phone.current ? '44px' : '64px'}
                 tableLayout="auto"
             />
         </div>
