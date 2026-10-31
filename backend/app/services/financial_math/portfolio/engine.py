@@ -23,7 +23,8 @@ from backend.app.services.financial_math.average_cost import (
     compute_average_costs,
 )
 from backend.app.services.financial_math.fx_rates import AskedDayRates
-from backend.app.services.financial_math.native_cash import cash_movement_from_transaction, compute_native_cash, effective_share
+from backend.app.services.financial_math.native_cash import broker_shares as counted_broker_shares
+from backend.app.services.financial_math.native_cash import cash_movement_from_transaction, compute_native_cash
 from backend.app.services.financial_math.portfolio.classifier import ScopeAwareTransactionClassifier
 from backend.app.services.financial_math.portfolio.daily_state import DailyStateBuilder
 from backend.app.services.financial_math.portfolio.derived_views import build_cost_positions
@@ -197,6 +198,7 @@ class PortfolioCalculationEngine:
         include_acquisition_funding: bool = False,
         period_start: date_type | None = None,
         include_positions: bool = False,
+        apply_ownership_share: bool = True,
     ) -> PortfolioCalculationResult:
         """Run the full portfolio calculation pipeline.
 
@@ -221,6 +223,10 @@ class PortfolioCalculationEngine:
         caller's period while the states run from ``date_from`` (t=0 for the Dashboard). Without it the snapshot is
         ``date_from``'s. It is part of the blob-cache key, so a cached run never answers with another day's
         snapshot.
+
+        ``apply_ownership_share`` (MF6-3, D4, default True) scales each broker by the share the user counts
+        (``native_cash.effective_share``); False counts every broker whole, as an editor sees it (the broker page). Part
+        of the blob-cache key; the shares used are in the result (``broker_shares``).
         """
         # ── 1. Resolve target currency ──
         if target_currency is None:
@@ -250,7 +256,8 @@ class PortfolioCalculationEngine:
         # F2 — ownership scaling: an OWNER's share scales the broker's contribution
         # (0% is valid and contributes nothing). EDITOR/VIEWER rows always carry
         # share 0 by schema rule but must still see full data → scale 1 for them.
-        broker_shares = {a.broker_id: effective_share(a.role, a.share_percentage) for a in accesses}
+        # MF6-3: without the ownership share (the broker page) every broker counts whole.
+        broker_shares = counted_broker_shares(accesses, apply_ownership_share=apply_ownership_share)
 
         # ── 3. Load ALL transactions for scope brokers ──
         tx_stmt = select(Transaction).where(Transaction.broker_id.in_(scope_broker_ids)).order_by(Transaction.date, Transaction.id)
@@ -264,6 +271,7 @@ class PortfolioCalculationEngine:
                 target_currency=target_currency,
                 date_from=date_from or date_type.today(),
                 date_to=date_to or date_type.today(),
+                broker_shares=broker_shares,
             )
 
         # ── 3b. Load ADJUSTMENT rows linked to unique SPLIT AssetEvents ──
@@ -314,6 +322,7 @@ class PortfolioCalculationEngine:
                 target_currency=target_currency,
                 date_from=actual_to,
                 date_to=actual_to,
+                broker_shares=broker_shares,
             )
 
         # ── 5b. Blob cache check (range-aware) ──
@@ -355,6 +364,8 @@ class PortfolioCalculationEngine:
             # The day of position_states_start: the named period start, else the requested start (the first replayed
             # day); a run from t=0 never answers for a later date_from with its own first day's snapshot.
             period_start or date_from,
+            # MF6-3: the whole brokers (the broker page) or the user's shares
+            apply_ownership_share,
         )
 
         cached_blob, blob_hit = _portfolio_blob_cache.get(blob_key)
@@ -400,6 +411,7 @@ class PortfolioCalculationEngine:
                 include_acquisition_funding=include_acquisition_funding,
                 include_positions=include_positions,
                 period_start=period_start,
+                broker_shares=broker_shares,
                 classification=classification,
                 split_linked_tx_ids=split_linked_tx_ids,
                 split_history=split_history,
@@ -436,6 +448,7 @@ class PortfolioCalculationEngine:
         include_acquisition_funding: bool,
         include_positions: bool,
         period_start: date_type | None,
+        broker_shares: dict[int, Decimal],
         classification,
         split_linked_tx_ids: set[int],
         split_history: dict[int, SplitHistory],
@@ -567,6 +580,7 @@ class PortfolioCalculationEngine:
         result = await asyncio.get_running_loop().run_in_executor(_engine_executor(), contextvars.copy_context().run, builder.build)
         # J-43: the pairs between brokers owned at different shares, for the data-quality report (the cache key holds the shares).
         result.share_mismatches = classification.share_mismatches
+        result.broker_shares = broker_shares
         result.invalid_split_events = sorted(invalid_split_events.values(), key=lambda event: event.event_id)
 
         # ── 12. Store in blob cache ──

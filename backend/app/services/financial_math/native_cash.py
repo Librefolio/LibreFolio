@@ -26,7 +26,8 @@ Rules:
   result on cash (:meth:`NativeCash.exchange_results`, by broker and window);
 * a zero amount changes no figure and never needs a rate;
 * the share scales every amount: an owner counts its own share, any other role the whole
-  broker (:func:`effective_share`).
+  broker (:func:`effective_share`); a caller that asks for the whole broker (the broker page, D4) counts 1 for
+  every broker (:func:`broker_shares`).
 """
 
 from __future__ import annotations
@@ -64,6 +65,17 @@ def effective_share(role: Any, share_percentage: Decimal | None) -> Decimal:
     if str(getattr(role, "value", role)) != _OWNER:
         return _ONE
     return _ONE if share_percentage is None else share_percentage
+
+
+def broker_shares(accesses: Iterable[Any], *, apply_ownership_share: bool = True) -> dict[int, Decimal]:
+    """The share each broker of ``accesses`` counts, by broker id: :func:`effective_share`, or the whole broker.
+
+    ``apply_ownership_share`` False (the broker page, D4) counts every broker whole, as an editor sees it, whatever the
+    role and the share. ``accesses`` are rows with ``broker_id``, ``role`` and ``share_percentage``.
+    """
+    if not apply_ownership_share:
+        return {access.broker_id: _ONE for access in accesses}
+    return {access.broker_id: effective_share(access.role, access.share_percentage) for access in accesses}
 
 
 @dataclass(frozen=True, slots=True)

@@ -65,7 +65,7 @@ for the conversions. The twins run on the float return series of the risk analyt
 backend/app/services/financial_math/
 ├── __init__.py              docstring only: the rule and the module map
 ├── average_cost.py          average purchase cost (WAC): pools, cost steps, missing conversions
-├── native_cash.py           cash per broker and currency: balances, daily value, flows, FX result; the first day one broker's balance in a currency ends below zero (first_negative_cash)
+├── native_cash.py           cash per broker and currency: balances, daily value, flows, FX result; the share each broker counts (broker_shares); the first day one broker's balance in a currency ends below zero (first_negative_cash)
 ├── change_days.py           the days something can change on: the days an FX reading may change (reading_change_days), the days it really changes on a calendar (change_days), days with the day after each (with_next_days)
 ├── ledger_totals.py         control totals of the ledger for backups: cash per broker and currency, quantity per position
 ├── returns.py               simple ROI, TWRR, MWRR (values and daily series; the Dashboard's rules in period_mwrr*, period_twrr* and period_roi_cash_flows; ROI and TWRR on a given capital or exposure for the lots' shorts; a flow counts on the first snapshot on or after it, flows_by_snapshot_date), annualization and its 30-day floor (annualizes), period rebasing, G/L ratio (holding or group), change ratio, timing effect, realized gain, price return (also as a float for a return series), observed annualization of a return series (DAYS_PER_YEAR, its validator, calendar days ↔ observations both ways), fixed-period changes of a price or rate (1D … 5Y, both orientations) and its change over a whole range, recovery from a drawdown
@@ -217,7 +217,8 @@ The portfolio engine has no developer page of its own: its cost side is in
 One call of `PortfolioCalculationEngine.calculate()` (`portfolio/engine.py`):
 
 1. resolves the target currency (by default `get_effective_base_currency()`) and the broker
-   scope, each broker at its `effective_share()`;
+   scope, each broker at the share `native_cash.broker_shares()` gives it — its `effective_share()` (F2), or the
+   whole broker with `apply_ownership_share=False` ([the whole broker](#whole-broker));
 2. loads the scope's transactions and their split links (`load_split_links()`, `splits.py`),
    and classifies them
    (`ScopeAwareTransactionClassifier`, `classifier.py`). A split whose stored ratio fails `is_valid_split_ratio()`
@@ -328,6 +329,26 @@ candles stay a flag of their own (`include_candles`), so their OHLC work stays o
 outputs cost little (pure bookkeeping during the same replay). `period_start` stays in the key: a position frame does
 not carry everything a `DailyPositionState` does (reference prices, average cost, stale and missing-rate marks).
 {: #one-run-per-page }
+
+**The whole broker** (MF6-3, developer decision D4). The ownership scaling (F2) is one function,
+`native_cash.broker_shares(accesses, *, apply_ownership_share=True)`: by broker id, `effective_share(role, share)` —
+an `OWNER` counts its `share_percentage` (None = the whole broker), an `EDITOR` or `VIEWER` the whole broker — or 1 for
+every broker when `apply_ownership_share` is False, whatever the role and the share. `calculate(apply_ownership_share=…)`
+(default True) takes the flag, puts it in the blob-cache key, so the two views never answer for each other, and leaves
+the shares it counted in the result, `PortfolioCalculationResult.broker_shares`. `get_summary()` and
+`get_positions_contribution()` read their lot quantities at those shares (MF-A10), so their figures follow the run.
+`_engine_run()` passes the flag on: False is a run of its own, under its own key. The report and the positions series take it,
+`POST /api/v1/portfolio/report` (`PortfolioReportQuery.apply_ownership_share`, also in the report's L2 cache key) and
+`POST /api/v1/portfolio/positions-series` (`PositionsSeriesQuery.apply_ownership_share`), both defaulting to True: a
+caller that does not send it keeps the owner's share. False is for the broker page, which shows the broker's whole
+amounts, as an editor sees them; the Dashboard keeps the owner's share. A broker worth 10 000 € owned at 30 % is 3 000 € by default and
+10 000 € with False; owned at 0 %, 0 € and 10 000 €. For one broker the ratios — TWRR, MWRR, simple ROI, weights,
+period percentages — are the same either way, since every flow and every value is multiplied by the same constant:
+only the amounts change ([Portfolio Aggregation](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/index.md#5-portfolio-aggregation)).
+With False every broker counts 1, so no pair links brokers owned at different shares and the run reports no
+`TRANSFER_SHARE_MISMATCH` (J-43). The lots analysis has no flag: it already counts whole amounts. The risk of a broker follows its page: `PortfolioRiskScope.apply_ownership_share` (default True) is passed by `risk/scope.py` to the report, so with False the scope value and the asset values the analytics read (the stress impacts among them) are the whole broker's, and an owner at 0 % still gets a risk; weights and returns are the same either way. Tests: `test_broker_shares.py` (`test_financial_math/`) and `test_ownership_share_option.py`
+(`test_financial/`).
+{: #whole-broker }
 
 #### 📅 The Days the Engine Recomputes {: #recomputed-days }
 
@@ -926,6 +947,7 @@ for. The gate runs with the chart-safety unit tests:
 | `./dev.py test services financial-math` | `test_services/test_financial_math/` | `average_cost.py`, `native_cash.py` (its first negative cash day, `test_first_negative_cash.py`), `weights.py` (`test_weights.py`; the allocation views on a sum at or below zero, `test_allocation_non_positive_sum.py`), `ledger_totals.py`, `splits.py` (`test_splits.py`), `returns.py` (the period rebase and the return ratios, `test_returns_rebase_and_ratios.py`; the verified MWRR root, `test_mwrr_verified_root.py`; the Dashboard's MWRR rule, `period_mwrr()` and `period_mwrr_series()`, `test_period_mwrr.py`; the Dashboard's TWRR rule and the simple ROI's capital, `period_twrr()`, `period_twrr_series()` and `period_roi_cash_flows()`, `test_period_twrr_and_roi_flows.py`; the gain that recovers a drawdown, `required_recovery_return()`, `test_required_recovery_return.py`; the float price return and the observed annualization of a return series, `float_price_return()` and `observed_annualization()`, `test_series_returns.py`; the fixed-period changes of the Assets and FX tables, `fixed_period_dates()` and `fixed_period_changes()`, `test_fixed_period_changes.py`), `portfolio/period.py` (`test_period_and_unit_costs.py`, with `movement_unit_costs()` of `average_cost.py`), `marked_price()` and `AssetMarks` of `portfolio/daily_state.py` (`test_asset_marks.py`), `closed_flight_too_short()` of `portfolio/contributions.py` (`test_contributions_short_flight_and_open_base.py`), `compound_growth()` of `interest.py` (`test_compound_growth.py`, against the day-by-day product in a 60-digit context), its ACT/ACT fraction across years, digit for digit with the year loop, and its memo (`test_act_act_fraction.py`), and the layer guard; a pure unit — the file tests of `test_ledger_totals.py` and the loader tests of `test_splits.py` open private SQLite files under `tmp_path`: no shared database, no server |
 | `./dev.py test services roi-fifo-utils` | `test_services/test_financial/` | Returns, FIFO lots, price marks, Yield on Cost, the portfolio engine (`test_portfolio_engine/`), and the portfolio and lots services that call them |
 | `./dev.py test services dust-threshold` | `test_services/test_financial/test_portfolio_engine/test_daily_state_dust_threshold.py` | `DailyStateBuilder` holds a position only above the dust threshold ([held positions](#recomputed-days)); also run by `roi-fifo-utils`, so it is out of `all` |
+| `./dev.py test services ownership-share-option` | `test_services/test_financial/test_ownership_share_option.py` | `apply_ownership_share=False` on the report and the positions series ([the whole broker](#whole-broker)); also run by `roi-fifo-utils`, so it is out of `all` |
 | `./dev.py test services portfolio-engine` | `test_services/test_portfolio_engine_vnext.py` | `DailyStateBuilder` |
 | `./dev.py test services lots-analysis-pure` | `test_services/test_lots_analysis_pure.py` | `lots/` and the service's sync builders; a pure unit |
 | `./dev.py test utils roi-utils` | `test_utilities/test_roi_utils.py` | `returns.py` |

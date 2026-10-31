@@ -88,7 +88,7 @@ from backend.app.services.financial_math.average_cost import (
     movement_unit_costs,
 )
 from backend.app.services.financial_math.holding_window import closed_position_window, exits_in, oldest_open_lot_date, quantity_moves
-from backend.app.services.financial_math.native_cash import CONVERSION_DUST, NativeCash, cash_movement_from_transaction, compute_native_cash, effective_share
+from backend.app.services.financial_math.native_cash import CONVERSION_DUST, NativeCash, broker_shares, cash_movement_from_transaction, compute_native_cash
 from backend.app.services.financial_math.portfolio import period as period_math
 from backend.app.services.financial_math.portfolio.contributions import (
     annualized_period_return,
@@ -478,13 +478,15 @@ class PortfolioService:
         date_to: date_type | None,
         target_currency: str,
         include_candles: bool = False,
+        apply_ownership_share: bool = True,
     ):
         """The one engine run of the report, the Performance table and the positions chart (FB-14).
 
         Every caller asks the same run — the replay from t=0, with the position frames, the BUY funding split and the
         positions at the end of ``date_from`` — so the requests of one page share the engine's blob-cache key: the first
         builds the run, the others read it, or wait on it (single-flight). Each caller serializes only what its query asks.
-        The candles stay a flag of their own: their OHLC work is kept off the ordinary reports.
+        The candles stay a flag of their own: their OHLC work is kept off the ordinary reports. ``apply_ownership_share``
+        False counts every broker whole (the broker page, MF6-3): a run of its own, under its own key.
         """
         from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine  # noqa: PLC0415
 
@@ -498,6 +500,7 @@ class PortfolioService:
             include_acquisition_funding=True,
             period_start=date_from,
             include_positions=True,
+            apply_ownership_share=apply_ownership_share,
         )
 
     async def _get_user_broker_access(
@@ -715,8 +718,9 @@ class PortfolioService:
         _realized_accum = sum((gain for sale in period_math.period_realized_sales(engine_result.realized_sales, date_from, date_to) if (gain := realized_gain(sale.proceeds, sale.cost)) is not None), Decimal("0"))
 
         lot_split_ids = await split_linked_ids(self.db, [tx for txns in lot_txns_by_key.values() for tx in txns])
-        # MF-A10: the moves at the owner's share, as the engine's quantities the rows test against the dust threshold
-        lot_shares = {access.broker_id: effective_share(access.role, access.share_percentage) for access in accesses}
+        # MF-A10: the moves at the run's share (the owner's, or the whole broker: MF6-3), as the engine's quantities the rows
+        # test against the dust threshold
+        lot_shares = engine_result.broker_shares
         oldest_open_lot_dates: dict[tuple[int, int], Optional[date_type]] = {key: oldest_open_lot_date(quantity_moves(txns, lot_split_ids, share=lot_shares[key[0]])) for key, txns in lot_txns_by_key.items()}
         # First lot-affecting transaction per position (includes ADJUSTMENT/TRANSFER, so
         # in-kind/succession/snapshot-seeded positions get a real window start — unlike
@@ -1414,10 +1418,10 @@ class PortfolioService:
         horizon = date_to or date_type.today()
         if native_cash is None:
             movements = []
+            shares = broker_shares(accesses)
             for access in accesses:
-                share = effective_share(access.role, access.share_percentage)
                 for tx in await self._get_transactions(access.broker_id, tx_types=tx_types, date_to=horizon):
-                    movement = cash_movement_from_transaction(tx, share=share)
+                    movement = cash_movement_from_transaction(tx, share=shares[access.broker_id])
                     if movement is not None:
                         movements.append(movement)
             movements.sort(key=lambda movement: (movement.date, movement.movement_id or 0))
@@ -1568,6 +1572,7 @@ class PortfolioService:
         date_to: date_type | None = None,
         target_currency_override: str | None = None,
         _precomputed_engine_result=None,
+        apply_ownership_share: bool = True,
     ) -> PositionsContribution:
         """Compute per-asset period P&L contribution for dashboard Performance view.
 
@@ -1593,7 +1598,7 @@ class PortfolioService:
         engine_result = _precomputed_engine_result
         # Without a shared run, or with one taken for another period start (no positions at this one's): the page's run.
         if engine_result is None or (date_from is not None and engine_result.position_states_start_date != date_from):
-            engine_result = await self._engine_run(user_id=user_id, broker_ids=broker_ids, date_from=date_from, date_to=date_to, target_currency=base_currency)
+            engine_result = await self._engine_run(user_id=user_id, broker_ids=broker_ids, date_from=date_from, date_to=date_to, target_currency=base_currency, apply_ownership_share=apply_ownership_share)
 
         # Quantity-affecting transactions: BUY/SELL plus in-kind ADJUSTMENT and TRANSFER,
         # mirroring _LOT_AFFECTING_TYPES / the engine's position model. Restricting this to
@@ -1668,8 +1673,9 @@ class PortfolioService:
         moved_in = transfer_tracts_moved_in(engine_result.internal_asset_transfers, date_from, effective_end)
 
         lot_split_ids = await split_linked_ids(self.db, [tx for txns in lot_txns_by_key.values() for tx in txns])
-        # MF-A10: the moves at the owner's share, as the engine's quantities the rows test against the dust threshold
-        lot_shares = {access.broker_id: effective_share(access.role, access.share_percentage) for access in accesses}
+        # MF-A10: the moves at the run's share (the owner's, or the whole broker: MF6-3), as the engine's quantities the rows
+        # test against the dust threshold
+        lot_shares = engine_result.broker_shares
         lot_moves = {key: quantity_moves(txns, lot_split_ids, share=lot_shares[key[0]]) for key, txns in lot_txns_by_key.items()}
         oldest_open_lot_dates: dict[tuple[int, int], Optional[date_type]] = {key: oldest_open_lot_date(moves) for key, moves in lot_moves.items()}
 
@@ -1948,7 +1954,7 @@ class PortfolioService:
         series_data = []
         engine_result = None
         if accesses:
-            engine_result = await self._engine_run(user_id=user_id, broker_ids=query.broker_ids, date_from=date_from, date_to=date_to, target_currency=base_currency)
+            engine_result = await self._engine_run(user_id=user_id, broker_ids=query.broker_ids, date_from=date_from, date_to=date_to, target_currency=base_currency, apply_ownership_share=query.apply_ownership_share)
         if engine_result is not None and engine_result.position_frames is not None:
             frames: dict[tuple[int, int], list] = defaultdict(list)
             for frame in engine_result.position_frames:
@@ -2100,6 +2106,7 @@ class PortfolioService:
                 query.include_cost_history,
                 query.include_deposit_history,
                 query.include_acquisition_funding,
+                query.apply_ownership_share,
                 tx_fp,
                 price_fp,
                 fx_fp,
@@ -2119,6 +2126,7 @@ class PortfolioService:
             date_to=effective_date_to,
             target_currency=base_currency,
             include_candles=query.include_pnl_candles,
+            apply_ownership_share=query.apply_ownership_share,
         )
 
         views = DerivedViewsBuilder(engine_result.daily_states, base_currency)
@@ -2177,6 +2185,7 @@ class PortfolioService:
                 date_to=effective_date_to,
                 target_currency_override=base_currency,
                 _precomputed_engine_result=engine_result,
+                apply_ownership_share=query.apply_ownership_share,
             )
 
         # ── 4c. Broker P&L history (additive per-broker overlay for GrowthChart P&L mode) ──
