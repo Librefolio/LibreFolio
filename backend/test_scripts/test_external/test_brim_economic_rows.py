@@ -422,11 +422,11 @@ class TestSwissquoteForexPairs:
 
     @pytest.mark.parametrize("order", sorted(SQ_SAMPLE_PAIRS))
     def test_a_sample_pair_obeys_the_rule_of_a_linked_conversion(self, order: str):
-        """The pair passes ``_validate_linked_pair``: the same type on one broker (the currencies differ and the signs are opposite, asserted above)."""
+        """The pair passes ``_validate_linked_pair``: the same type on one broker, in two currencies (W6-7: the rule reads the currency of each leg; the signs are opposite, asserted above)."""
         credit, debit, day = SQ_SAMPLE_PAIRS[order]
         first, second = _pair_of(_sample(SWISSQUOTE, SQ_SAMPLE), credit, debit, day)
 
-        legs = [SimpleNamespace(type=tx.type, broker_id=tx.broker_id, asset_id=tx.asset_id, quantity=tx.quantity) for tx in (first, second)]
+        legs = [SimpleNamespace(type=tx.type, broker_id=tx.broker_id, asset_id=tx.asset_id, quantity=tx.quantity, currency=tx.cash.code, amount=tx.cash.amount) for tx in (first, second)]
 
         assert TransactionValidationMixin._validate_linked_pair(*legs) is None
 

@@ -190,6 +190,8 @@ async def load_scope_inputs(  # noqa: C901 — scope-variant dispatch + sequenti
             include_allocation_history=False,
             include_breakdown=False,
             include_positions_contribution=False,
+            # MF6-3: the broker page's risk counts the whole broker, as its report does
+            apply_ownership_share=scope.apply_ownership_share,
         ),
     )
     summary = report.summary

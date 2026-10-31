@@ -11,6 +11,9 @@ fingerprint the stale rule compares.
   ``parsed_settings_fingerprint``.
 - DO-C01: the user picks ``month_first``: the file is stale (info and listing); parsing again gives the month-first date and
   the file is current; clearing the choice makes it stale again (the record says month first); the choice is cleared at the end.
+- DO-A02 (FB-18): the card offers six options in order, each with its label key.
+- DO-D01 (FB-18): the user picks each of the three two-digit-year orders in turn: the same file (03/04/26) gives 3 April,
+  4 March and 26 April 2003 (year first); the default still leaves the row unparsed.
 
 Each test logs in a user of its own, creates its broker and its file, and writes only that user's own setting: it goes with
 the user. The unit is scoped (own user, own rows).
@@ -41,6 +44,12 @@ PLUGIN = "broker_generic_csv"
 FIELD = "date_order"
 FINGERPRINT_KEY = "parsed_settings_fingerprint"
 
+#: FB-18: the six values of the select, in the order it shows them.
+ALL_ORDERS = ["day_first", "month_first", "day_first_short", "month_first_short", "year_first_short", "year_first"]
+
+#: 03/04/26 is a different date in each two-digit-year order; the ISO row never moves.
+SHORT_YEAR_CSV = b"date,type,quantity,amount,currency,asset,description\n03/04/26,DEPOSIT,0,500.00,EUR,,short\n2026-02-03,DEPOSIT,0,100.00,EUR,,iso\n"
+
 #: 03/01/2025 is 3 January day first and 1 March month first; the ISO row never moves.
 AMBIGUOUS_CSV = b"date,type,quantity,amount,currency,asset,description\n03/01/2025,DEPOSIT,0,500.00,EUR,,ambiguous\n2025-02-03,DEPOSIT,0,100.00,EUR,,iso\n"
 
@@ -54,16 +63,16 @@ def test_server():
         yield server_manager
 
 
-async def _upload(client: httpx.AsyncClient, broker_id: int) -> tuple[str, dict]:
-    """The file id of an upload of the ambiguous CSV, and the upload response."""
-    files = {"file": (f"date_order_{uuid.uuid4().hex[:8]}.csv", io.BytesIO(AMBIGUOUS_CSV), "text/csv")}
+async def _upload(client: httpx.AsyncClient, broker_id: int, content: bytes = AMBIGUOUS_CSV) -> tuple[str, dict]:
+    """The file id of an upload of the ambiguous CSV (or of ``content``), and the upload response."""
+    files = {"file": (f"date_order_{uuid.uuid4().hex[:8]}.csv", io.BytesIO(content), "text/csv")}
     response = await client.post(f"{API_BASE}/brokers/import/upload", files=files, data={"broker_id": broker_id}, timeout=TIMEOUT)
     assert response.status_code == 200, response.text
     return response.json()["file_id"], response.json()
 
 
 async def _parse(client: httpx.AsyncClient, file_id: str, broker_id: int) -> dict[str, date]:
-    """Parse the file and answer the date of each transaction by its description."""
+    """Parse the file and answer the date of each transaction by its description (a row with a bad date is just absent)."""
     response = await client.post(f"{API_BASE}/brokers/import/files/{file_id}/parse", json={"plugin_code": PLUGIN, "broker_id": broker_id}, timeout=TIMEOUT)
     assert response.status_code == 200, response.text
     return {tx["description"]: date.fromisoformat(tx["date"]) for tx in response.json()["transactions"]}
@@ -161,3 +170,48 @@ async def test_a_changed_personal_value_makes_the_parse_stale_until_the_file_is_
             print_success("stale on a change, current after a new parse, fingerprint never served")
         finally:
             await _set_order(client, None)  # the user is a temporary one; the setting goes with it, cleared anyway
+
+
+@pytest.mark.asyncio
+async def test_the_catalogue_offers_the_six_orders_with_their_label_keys(test_server):
+    """DO-A02 (FB-18): the select's options, in order, each with the label key of the plugin's own i18n space."""
+    print_section("DO-A02: six options")
+    async with httpx.AsyncClient() as client:
+        await create_test_user(client)
+
+        response = await client.get(f"{API_BASE}/settings/plugins", params={"family": "brim", "plugin_code": PLUGIN}, timeout=TIMEOUT)
+
+        assert response.status_code == 200, response.text
+        entries = [plugin for plugin in response.json()["plugins"] if plugin["plugin_code"] == PLUGIN]
+        assert len(entries) == 1
+        field = next(declared for declared in entries[0]["fields"] if declared["key"] == FIELD)
+        assert [(option["value"], option["label_key"]) for option in field["options"]] == [(value, f"pluginSettings.brim.broker_generic_csv.option.date_order.{value}") for value in ALL_ORDERS]
+        assert field["value"] == "day_first"
+        print_success("date_order: six options, default day_first")
+
+
+@pytest.mark.asyncio
+async def test_each_two_digit_year_order_reaches_the_parse(test_server):
+    """DO-D01 (FB-18): default: the 03/04/26 row is not read; each chosen order reads it its own way."""
+    print_section("DO-D01: two-digit-year orders reach the parse")
+    expected = {"day_first_short": date(2026, 4, 3), "month_first_short": date(2026, 3, 4), "year_first_short": date(2003, 4, 26)}
+    async with httpx.AsyncClient() as client:
+        await create_test_user(client)
+        broker_id = await create_test_broker(client)
+        file_id, _ = await _upload(client, broker_id, SHORT_YEAR_CSV)
+        try:
+            default = await _parse(client, file_id, broker_id)
+            assert "short" not in default, "over the default a two-digit year is not read, as before"
+            assert default["iso"] == date(2026, 2, 3)
+
+            for order, wanted in expected.items():
+                chosen = await _set_order(client, order)
+                assert chosen.status_code == 200, f"{order} was refused: {chosen.status_code} {chosen.text}"
+                assert (await _file(client, file_id))["parse_is_stale"] is True, f"choosing {order} makes the parse stale"
+                dates = await _parse(client, file_id, broker_id)
+                assert dates["short"] == wanted, order
+                assert dates["iso"] == date(2026, 2, 3), "an ISO date does not depend on the order"
+                assert (await _file(client, file_id))["parse_is_stale"] is False
+            print_success("each order reads 03/04/26 its own way")
+        finally:
+            await _set_order(client, None)

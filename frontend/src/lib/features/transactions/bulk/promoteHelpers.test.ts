@@ -526,3 +526,63 @@ describe('resolvePromoteAllFields — never past the notes’ limit (W-B70 reds,
         expect(resolvePromoteAllFields('merge', left, right)).toBeNull();
     });
 });
+
+/**
+ * promoteNotesDiverge (W6-6, W-B79) — «do the two rows' notes differ?», the one question that opens the merge dialog.
+ *
+ * PromoteMergeModal resolves the description and the tags and nothing else (date and cost left it in SP-C step 5),
+ * so a row pair that differs only in date or cost has nothing to resolve: the dialog opened empty. The helper takes
+ * only the two note fields on purpose — a caller cannot make a date or a cost reach the answer.
+ *
+ * Loaded through the namespace, like the W-B70 exports above: while the export is missing the cases fail by name
+ * and the rest of the file keeps running.
+ */
+type PromoteNotes = {description?: string | null; tags?: readonly string[] | null};
+type PromoteNotesDiverge = (a: PromoteNotes, b: PromoteNotes) => boolean;
+
+const promoteNotesDiverge: PromoteNotesDiverge = (a, b) => {
+    const value = (promoteHelpers as unknown as Record<string, unknown>)['promoteNotesDiverge'];
+    if (typeof value !== 'function') throw new Error('W6-6: promoteHelpers.promoteNotesDiverge does not exist yet');
+    return (value as PromoteNotesDiverge)(a, b);
+};
+
+describe('promoteNotesDiverge — only the description and the tags open the merge dialog (W6-6)', () => {
+    it('is true when the descriptions differ', () => {
+        expect(promoteNotesDiverge({description: 'rent', tags: ['home']}, {description: 'rent march', tags: ['home']})).toBe(true);
+    });
+
+    it('is true when the tags differ', () => {
+        expect(promoteNotesDiverge({description: 'rent', tags: ['home']}, {description: 'rent', tags: ['home', 'monthly']})).toBe(true);
+        expect(promoteNotesDiverge({description: 'rent', tags: ['home']}, {description: 'rent', tags: []})).toBe(true);
+    });
+
+    it('is false when neither differs — whatever else (date, cost) the callers’ rows disagree on, which the helper never receives', () => {
+        expect(promoteNotesDiverge({description: 'rent', tags: ['home']}, {description: 'rent', tags: ['home']})).toBe(false);
+        expect(promoteNotesDiverge({description: '', tags: []}, {description: '', tags: []})).toBe(false);
+        expect(promoteNotesDiverge({}, {})).toBe(false);
+    });
+
+    it('reads a missing description (null or absent) as the empty one', () => {
+        expect(promoteNotesDiverge({description: null, tags: []}, {description: '', tags: []})).toBe(false);
+        expect(promoteNotesDiverge({description: '', tags: []}, {description: null, tags: []})).toBe(false);
+        expect(promoteNotesDiverge({tags: []}, {description: '', tags: []})).toBe(false);
+        expect(promoteNotesDiverge({description: null, tags: []}, {description: 'x', tags: []})).toBe(true);
+    });
+
+    it('reads missing tags (null or absent) as the empty list', () => {
+        expect(promoteNotesDiverge({description: 'a', tags: null}, {description: 'a', tags: []})).toBe(false);
+        expect(promoteNotesDiverge({description: 'a'}, {description: 'a', tags: null})).toBe(false);
+        expect(promoteNotesDiverge({description: 'a', tags: null}, {description: 'a', tags: ['t']})).toBe(true);
+    });
+
+    it('compares the tags in order: the same tags in another order are different lists', () => {
+        expect(promoteNotesDiverge({description: 'a', tags: ['x', 'y']}, {description: 'a', tags: ['y', 'x']})).toBe(true);
+        expect(promoteNotesDiverge({description: 'a', tags: ['x', 'y']}, {description: 'a', tags: ['x', 'y']})).toBe(false);
+    });
+
+    it('is symmetric', () => {
+        const a = {description: 'a', tags: ['x']};
+        const b = {description: 'b', tags: ['x']};
+        expect(promoteNotesDiverge(a, b)).toBe(promoteNotesDiverge(b, a));
+    });
+});

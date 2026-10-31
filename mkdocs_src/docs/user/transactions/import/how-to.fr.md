@@ -112,7 +112,7 @@ le menu **⋮** d'une ligne, ouvre les détails, avec les avertissements et les 
 
 - **Avertissements et notes** : **Continuer** liste d'abord les avertissements, puis les notes ; lisez-les,
   puis cliquez sur **Continuer quand même**.
-- **Un fichier a échoué** : une bannière en explique la raison. Corrigez son plugin dans **Sélectionner**, puis cliquez sur **Réanalyser tout**.
+- **Un fichier a échoué** : une bannière en explique la raison. Corrigez son plugin dans **Sélectionner**, puis relancez l'analyse. **Réanalyser tout** n'apparaît dans l'analyse que lorsqu'au moins un fichier a été lu ; si aucun ne l'a été, retournez dans **Sélectionner** et cliquez sur **Analyser (N)**.
 
 ### 🧩 Étapes qui n'apparaissent qu'en cas de besoin {: #only-when-needed }
 

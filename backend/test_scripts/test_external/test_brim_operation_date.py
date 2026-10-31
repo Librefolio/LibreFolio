@@ -21,6 +21,10 @@ What is pinned:
 - C. the one documented exception, ``broker_disnat``: a row with no trade date (``-``, as the dividends and the fees have) falls back
   to the settlement date, because the file offers no other day for it.
 
+Crédit Agricole is a report-set plugin since 2.0.0 (an export is no longer read alone): its securities rows are parsed together with
+the account row that states their cash (a pair, one transaction, dated by the operation date of the securities row), its cash row
+and its transfer in as a set of one member. The automatic cash leg of 1.5.0 (a DEPOSIT dated like its BUY) no longer exists, so its case is gone.
+
 Not covered here, on purpose: Avanza, Intesa and Rabobank mention «Valuta» but it means the CURRENCY (they have no value-date column);
 Fineco and Danske Bank have their own date tests; ``broker_generic_csv`` is another lot.
 
@@ -29,16 +33,21 @@ PURE: untouched samples of ``sample_reports/``, no server, no database, no netwo
 
 from __future__ import annotations
 
+import atexit
 import functools
+import shutil
+import tempfile
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
+from pathlib import Path
 from typing import List, Optional, Tuple
 
 import pytest
 
 from backend.app.config import PROJECT_ROOT
 from backend.app.schemas.brim import BRIMParseOutput
+from backend.app.services.brim.brim_provider import write_combined_csv
 from backend.app.services.brim.registry import BRIMProviderRegistry
 
 # =============================================================================
@@ -47,6 +56,7 @@ from backend.app.services.brim.registry import BRIMProviderRegistry
 
 SAMPLE_DIR = PROJECT_ROOT / "backend" / "app" / "services" / "brim_providers" / "sample_reports"
 BROKER_ID = 1
+ACCOUNT_HEADER = "Data Op.;Data Val.;Causale;Descrizione;Importo;Divisa"
 
 
 # =============================================================================
@@ -68,6 +78,18 @@ def _parse_sample(code: str, name: str) -> BRIMParseOutput:
     return _plugin(code).parse(SAMPLE_DIR / name, broker_id=BROKER_ID)
 
 
+_COMBINED_FOLDER: List[object] = []
+
+
+def _folder():
+    """One temporary folder for the files these guards write (the members of a set and their combined file), kept for the whole run."""
+    if not _COMBINED_FOLDER:
+        folder = Path(tempfile.mkdtemp(prefix="lf-operation-date-"))
+        atexit.register(shutil.rmtree, folder, True)
+        _COMBINED_FOLDER.append(folder)
+    return _COMBINED_FOLDER[0]
+
+
 @functools.cache
 def _physical_lines(name: str) -> Tuple[str, ...]:
     """The lines of a sample as the file has them (BOM dropped)."""
@@ -82,6 +104,10 @@ class DateCase:
     the file writes them. ``tx_type`` / ``quantity`` / ``cash`` / ``currency`` / ``description_has`` identify the transaction(s) the
     plugin makes of it (``cash=None``: no cash leg). ``operation`` is the date the transaction must carry; ``other`` is the value /
     settlement date it must NOT carry.
+
+    ``account_row`` is for a securities row of a report-set plugin that is imported with the cash of the account: the ``(causale,
+    description, amount)`` of the account row that states the same fact, dated by the value date of the securities row as the bank
+    books it. The securities row and that row are the two members of the set whose combined file is parsed.
     """
 
     id: str
@@ -95,6 +121,36 @@ class DateCase:
     operation: date
     other: date
     description_has: Optional[str] = None
+    account_row: Optional[Tuple[str, str, str]] = None
+
+
+@functools.cache
+def _parse_case(case: DateCase) -> BRIMParseOutput:
+    """The parse of the sample the case leans on; a report-set plugin's sample is a member, so it is parsed as a set.
+
+    A case with an ``account_row`` is the securities row with its account row (the pair is one transaction, dated by the operation
+    date of the securities row); any other case is the sample alone, the only member of its set."""
+    plugin = _plugin(case.plugin)
+    if not plugin.report_roles:
+        return _parse_sample(case.plugin, case.sample)
+    path = SAMPLE_DIR / case.sample
+    role = plugin.detect_role(path)
+    assert role is not None, f"{case.plugin} reads {case.sample} as no role of its set"
+    folder = _folder()
+    if case.account_row is None:
+        members = {role: [path]}
+    else:
+        line = _line_with(case.sample, case.needles)
+        assert line is not None, f"{case.sample}: no line holds {case.needles}"
+        value_day = line.split(";")[-1]
+        securities = folder / f"{case.id}-securities.csv"
+        securities.write_text("\n".join([_physical_lines(case.sample)[0], line]) + "\n", encoding="utf-8-sig")
+        account = folder / f"{case.id}-account.csv"
+        account.write_text("\n".join([ACCOUNT_HEADER, ";".join([value_day, value_day, *case.account_row, "EUR"])]) + "\n", encoding="utf-8-sig")
+        members = {"securities": [securities], "account": [account]}
+    combined = folder / f"{case.id}-combined.csv"
+    write_combined_csv(combined, plugin.combine(members))
+    return plugin.parse(combined, broker_id=BROKER_ID)
 
 
 def _matches(out: BRIMParseOutput, case: DateCase):
@@ -335,19 +391,7 @@ CASES: List[DateCase] = [
         date(2025, 7, 24),
         date(2025, 7, 28),
         "ACQ.CONT.SU MERC.",
-    ),
-    DateCase(
-        "credit-agricole-securities-buy-auto-cash-leg-has-the-same-day",
-        "broker_credit_agricole",
-        "credit_agricole-export.csv",
-        ("24/07/2025;BTP 01/03/35 3,35%;EUR;ACQ.CONT.SU MERC.", ";28/07/2025"),
-        "DEPOSIT",
-        "0",
-        "50683.13",
-        "EUR",
-        date(2025, 7, 24),
-        date(2025, 7, 28),
-        "Auto cash for BUY BTP 01/03/35",
+        ("COMPRAVENDITA TITOLI/FONDI/OPZIONI", "NOTA INF. ACQ. TIT:BTP 01/03/35 3,35% DOSS:00000/00000000", "'-50.683,13"),
     ),
     DateCase(
         "credit-agricole-securities-subscription-value-one-day-EARLIER",
@@ -360,6 +404,8 @@ CASES: List[DateCase] = [
         "EUR",
         date(2025, 11, 7),
         date(2025, 11, 6),
+        None,
+        ("COMPRAVENDITA TITOLI/FONDI/OPZIONI", "SOTTOSC SICAV ORD.:2026/000000001 AMUNDI PIO GLOB EQ G", "'-20.129,44"),
     ),
     DateCase(
         "credit-agricole-securities-redemption-value-next-day",
@@ -372,6 +418,8 @@ CASES: List[DateCase] = [
         "EUR",
         date(2025, 11, 10),
         date(2025, 11, 11),
+        None,
+        ("GIROCONTO/BONIFICO", "ORD:AMUNDI PRIMO INV LC DT.ORD:000000 DESCR.OPERAZIONE SCT::RIMBORSI: : :SU AMUNDI PRIMO INV LC CL B", "9.984,47"),
     ),
     DateCase(
         "credit-agricole-securities-transfer-in-value-six-days-EARLIER",
@@ -540,14 +588,14 @@ class TestOperationDate:
 
     @pytest.mark.parametrize("case", CASES, ids=lambda c: c.id)
     def test_the_transaction_date_is_the_operation_date(self, case: DateCase):
-        found = _matches(_parse_sample(case.plugin, case.sample), case)
+        found = _matches(_parse_case(case), case)
 
         assert found, f"{case.plugin} gave no {case.tx_type} for {case.needles} (quantity {case.quantity}, cash {case.cash} {case.currency})"
         assert {tx.date for tx in found} == {case.operation}, f"{case.id}: the operation date is {case.operation}, the value / settlement date {case.other}; got {sorted({tx.date for tx in found})}"
 
     @pytest.mark.parametrize("case", CASES, ids=lambda c: c.id)
     def test_the_value_date_is_never_used(self, case: DateCase):
-        found = _matches(_parse_sample(case.plugin, case.sample), case)
+        found = _matches(_parse_case(case), case)
 
         assert found, f"{case.plugin} gave no {case.tx_type} for {case.needles}"
         assert all(tx.date != case.other for tx in found), f"{case.id}: a transaction took the value / settlement date {case.other}"
@@ -563,7 +611,7 @@ class TestDisnatSettlementFallback:
 
     @pytest.mark.parametrize("case", FALLBACK_CASES, ids=lambda c: c.id)
     def test_a_row_with_no_trade_date_takes_the_settlement_date(self, case: DateCase):
-        found = _matches(_parse_sample(case.plugin, case.sample), case)
+        found = _matches(_parse_case(case), case)
 
         assert found, f"{case.plugin} gave no {case.tx_type} for {case.needles}"
         assert {tx.date for tx in found} == {case.operation}

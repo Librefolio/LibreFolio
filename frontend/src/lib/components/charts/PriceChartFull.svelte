@@ -56,7 +56,7 @@
     } from './priceChartHelpers';
     import {formatFixed, formatPrice} from '$lib/utils/core/formatFixed';
     import {uiLocale} from '$lib/stores/app/uiLocale';
-    import {formatDay} from '$lib/utils/core/formatAxisDate';
+    import {formatDay, formatDayWithWeekday} from '$lib/utils/core/formatAxisDate';
     import {chartNeutrals} from '$lib/theme/chartTheme';
     import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
 
@@ -360,7 +360,7 @@
 
     function buildTooltipHeader(date: string, currentResolution: ChartResolution, bucketInfo?: BucketInfo): string {
         if (currentResolution === 'daily') {
-            return `<strong>${formatDay(date)}</strong>`;
+            return `<strong>${formatDayWithWeekday(date)}</strong>`;
         }
 
         // The point stands for its bucket up to its own day, the last one with data: the period still running ends there.
