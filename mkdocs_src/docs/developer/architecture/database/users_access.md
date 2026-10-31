@@ -279,7 +279,7 @@ Table `user_onboarding_progress`: one row per user and guided onboarding flow, `
 - 🧭 **`flow`** (`VARCHAR(50)`): an `OnboardingFlow` value — `welcome`, `intro_tour`,
   `transactions_page_guide`, `transaction_create_guide`, `transaction_bulk_guide`, `import_guide`,
   `broker_page_guide`, `broker_guide`, `broker_detail_guide`, `fx_page_guide`, `fx_guide`,
-  `fx_detail_guide`, `asset_page_guide`, `asset_guide`, `asset_detail_guide`.
+  `fx_detail_guide`, `asset_page_guide`, `asset_guide`, `asset_detail_guide`, `tools_page_guide`.
 - 🚦 **`status`** (`VARCHAR(20)`): an `OnboardingStatus` value — `pending`, `completed` or `skipped` —
   enforced by `CHECK` (`ck_user_onboarding_progress_status`). `completed_at` and `skipped_at` record
   the last terminal transition: the service sets one and clears the other.

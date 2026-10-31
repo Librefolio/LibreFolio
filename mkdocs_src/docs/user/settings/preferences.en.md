@@ -64,6 +64,7 @@ reach it.
 | **Brokers** | Brokers overview, Broker guide, Broker details guide |
 | **FX** | FX overview, FX guide, FX pair details guide |
 | **Assets** | Assets overview, Asset guide, Asset details guide |
+| **Tools** | Tools page |
 
 ### 🔁 Replay a guide
 

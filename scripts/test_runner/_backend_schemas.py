@@ -50,6 +50,14 @@ def schemas_scheduled_investment_bounds(verbose: bool = False, test_names: list 
     return run_command(cmd, "Scheduled investment bounds tests", verbose=verbose)
 
 
+def schemas_secret_validator_messages(verbose: bool = False, test_names: list = None) -> bool:
+    """A-38: a validator of a secret field never puts the value in its message."""
+    print_section("Schemas: Secret Validator Messages (A-38)")
+    print_info("Testing: backend/app/schemas/*.py read as source (ast): no field_validator of a password, token, secret, key or credential formats the value")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_schemas/test_secret_validator_messages.py", test_names)
+    return run_command(cmd, "Secret validator messages tests", verbose=verbose)
+
+
 def schemas_period_changes_bounds(verbose: bool = False, test_names: list = None) -> bool:
     """R13-SEC8 (MF-P2b): the as_of floor of a fixed-period changes item."""
     print_section("Schemas: Period Changes Bounds (R13-SEC8, MF-P2b)")
@@ -238,6 +246,15 @@ Tests for Pydantic/SQLModel schema validation:
         # <data dir>/logs/ and opens librefolio.log there, the lane's log that the shared backend writes too.
     )
     add_test(cat, "scheduled-investment-bounds", schemas_scheduled_investment_bounds, name="Scheduled Investment Bounds", desc="R13-SEC7-2 (N73): period dates 1900-2200, span ≤ 36 525 days, ≤ 1 200 periods, grace ≤ 36 525 days")
+    add_test(
+        cat,
+        "secret-validator-messages",
+        schemas_secret_validator_messages,
+        name="Secret Validator Messages",
+        desc="A-38: no field_validator of a secret field (password, token, secret, key, credential) puts the value in its message: the 422 keeps msg and ctx",
+        # PURE: reads the schemas' source with ast; no import of the app, no row, no server, no network.
+        isolation="pure",
+    )
     add_test(
         cat,
         "period-changes-bounds",

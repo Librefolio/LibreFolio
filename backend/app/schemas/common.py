@@ -120,7 +120,8 @@ def _validate_currency_code_cached(code: str) -> str:
     except LookupError:
         pass
 
-    # Invalid currency
+    # Invalid currency. A currency code is a public field: its message may show it. A validator of a secret field (password,
+    # token, key) never puts the value in its message: the 422 keeps `msg` and `ctx` (A-38, security.md#validation-errors).
     raise ValueError(f"Invalid currency code: '{code}'. Must be ISO 4217 currency.")
 
 
