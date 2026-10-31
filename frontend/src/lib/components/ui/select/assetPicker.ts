@@ -18,6 +18,9 @@ export interface PickerAsset {
     asset_type?: string | null;
     active?: boolean;
     is_benchmark?: boolean;
+    /** What the asset list says of who holds it now (`held_by_me`, `held_by_others`): the single mode groups by it, after the benchmarks. A caller that does not know leaves both out. */
+    held_by_me?: boolean;
+    held_by_others?: boolean;
     identifier_isin?: string | null;
     identifier_ticker?: string | null;
     identifier_other?: readonly string[] | null;
@@ -35,6 +38,18 @@ export interface PickerSection {
     key: string;
     label: string;
     match: (asset: PickerAsset) => boolean;
+}
+
+/** The Assets list's usage panels: yours, other users', watched. */
+export type AssetScope = 'own' | 'others' | 'analysis';
+
+// The list page's usage panels, copied: a +page.svelte cannot be imported. `AssetPickerPanel.rows.test.ts`
+// keeps this function identical to `assetScope` in `routes/(app)/assets/+page.svelte` (as `assetBrowse.ts` does
+// for its own copy). The panels read what is held now (`held_by_me`, `held_by_others`), not who ever traded.
+export function assetScope(a: {held_by_me?: boolean; held_by_others?: boolean}): AssetScope {
+    if (a.held_by_me) return 'own';
+    if (a.held_by_others) return 'others';
+    return 'analysis';
 }
 
 /** The criteria the filter menus narrow the list by. */

@@ -6,6 +6,7 @@
  */
 import type * as echarts from 'echarts';
 import {buildOhlcQuad} from '$lib/components/charts/candlestickChartHelpers';
+import {applyLineShape, type LineShape} from '$lib/components/charts/lineShape';
 import {withHexAlpha} from '$lib/theme/colorAlpha';
 import {themed} from '$lib/theme/themePair';
 import {CHART_GAIN_LOSS, chartNeutrals, GROWTH_SERIES} from '$lib/theme/chartTheme';
@@ -59,12 +60,12 @@ export interface GrowthSeriesContext {
     pctSeries: PctSeriesSpec[];
     aggregationInputs: AggregationInputs;
     /**
-     * The entry is the steps themselves (the daily resolution of a report that gives one point per stretch without news):
-     * its lines hold their value to the next date (`step: 'end'`) instead of joining two points with a slope, and the
-     * P&L halves change sign at the next date instead of at an interpolated crossing. The MWRR line is the exception: it
-     * is a line of true values and stays joined.
+     * The shape the lines are drawn in, already settled for this entry (`effectiveLineShape`): steps only when the entry is the
+     * steps themselves (the daily resolution of a report that gives one point per stretch without news). With `steps` its lines
+     * hold their value to the next date (`step: 'end'`) and the P&L halves change sign at the next date instead of at an
+     * interpolated crossing. The MWRR line is the exception: it is a line of true values and stays joined.
      */
-    stepped?: boolean;
+    lineShape: LineShape;
 }
 
 /** The data of one series, as the partial update sends it. */
@@ -275,7 +276,7 @@ export function buildGrowthUpdateSeries(context: GrowthSeriesContext, entry: Agg
         // what updateChartData's partial by-index series merge depends on across
         // zoom/pan; splitBySign adds POINTS inside two of them (the interpolated zero
         // crossings) and leaves the slot count alone, so the merge stays valid.
-        const signSplit = splitBySign(entry.pnl.total.points, context.stepped === true);
+        const signSplit = splitBySign(entry.pnl.total.points, context.lineShape === 'steps');
         const referenceValue = findReferenceTotalPnl(entry, referenceDate, aggregationInputs);
         const referencePoints: SeriesPoint[] = entry.pnl.total.points.map((p) => ({...p, value: [p.value[0], referenceValue]}));
         return [{name: pnlLabels.total, data: signSplit.positive}, {name: pnlLabels.total, data: signSplit.negative}, {name: PNL_REFERENCE_SERIES_NAME, data: referencePoints}, ...entry.pnl.brokers.map((broker) => ({name: broker.brokerName, data: broker.metric.points}))];
@@ -326,10 +327,8 @@ export function buildGrowthUpdateSeries(context: GrowthSeriesContext, entry: Agg
 
 /** Every series of the view on screen, with its style, around the data `buildGrowthUpdateSeries` built. */
 export function buildGrowthFullSeries(context: GrowthSeriesContext, isDark: boolean, seriesData: GrowthSeriesData[]): echarts.SeriesOption[] {
-    const series = buildSeries(context, isDark, seriesData);
-    if (!context.stepped) return series;
-    // A line that does not say otherwise holds its value to the next date. The MWRR says `step: false`.
-    return series.map((entry) => (entry.type === 'line' && (entry as {step?: unknown}).step === undefined ? ({...entry, step: 'end'} as echarts.SeriesOption) : entry));
+    // The MWRR says `step: false`: a line of true values never takes steps.
+    return applyLineShape(buildSeries(context, isDark, seriesData), context.lineShape, {isTrueValues: (entry) => (entry as {step?: unknown}).step === false});
 }
 
 function buildSeries(context: GrowthSeriesContext, isDark: boolean, seriesData: GrowthSeriesData[]): echarts.SeriesOption[] {

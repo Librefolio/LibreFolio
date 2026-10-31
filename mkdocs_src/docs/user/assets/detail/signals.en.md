@@ -87,6 +87,8 @@ The **Data Comparison** menu adds:
 - **Asset Comparison** — another asset on the same chart, such as a stock against its index ETF. In **%** view both lines start at 0 %. The asset is picked in the same panel as the risk comparison's: a search box, **Type** and **Currency** filters, the benchmarks listed first, one click to choose. The chart's own asset is greyed out; one that another comparison already uses carries a warning mark but can still be chosen.
 - **FX Pair** — the rate of one of your currency pairs.
 
+With **All** selected, the chart starts on the older of the two series. If the compared asset has prices from 1985 and the chart's own asset from 2010, the chart is drawn from 1985, the chart's own line empty until 2010, and the **From** date shows 1985. In **%** view each line starts at 0 % on its own first price. If the compared asset starts later than the chart's own, the chart stays as it was and the comparison line begins on its own first day. The other signals (indicators and synthetic benchmarks) follow the chart's own days, so they are empty before its first day.
+
 **Sync** (🔄) on an Asset Comparison card downloads that asset's prices for the chart's dates, together with the exchange rates that convert it, for pairs that exist. When the pair is missing, an amber ⚠️ on the card creates it; when its rates are missing, an amber 🔄 syncs them.
 
 In [Rolling Return](chart.md#rolling-return) mode only Asset Comparison stays: each compared asset becomes a rolling return, with the same window and currency. The other signals are hidden, not deleted, and come back in **Prices** mode.

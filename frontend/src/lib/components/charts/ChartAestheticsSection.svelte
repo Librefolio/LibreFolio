@@ -14,6 +14,8 @@
     import type {AxisScaleMode, AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
 
     import {numericArrows} from '$lib/actions/numericArrows';
+    import LineShapePicker from './LineShapePicker.svelte';
+    import type {LineShape} from './lineShape';
     // =========================================================================
     // Props
     // =========================================================================
@@ -23,6 +25,8 @@
         areaFill?: boolean;
         gridLines?: boolean;
         staleGradient?: boolean;
+        /** The shape of this chart's lines (FB-3). The row is shown only when the page passes `onlineshapechange`. */
+        lineShape?: LineShape;
         yAxisMode?: 'auto' | 'include0' | 'custom';
         yAxisMin?: number | undefined;
         yAxisMax?: number | undefined;
@@ -34,6 +38,8 @@
             label: string;
             settings: AxisScaleSettings;
         }>;
+        /** Called when the user picks a shape. A page that keeps no per-chart shape leaves it out and the row is not shown. */
+        onlineshapechange?: (shape: LineShape) => void;
         /** Called when one contextual axis profile changes. */
         onaxischange?: (key: string, settings: AxisScaleSettings) => void;
         /** Fields that don't apply in current chart type — rendered greyed out and non-interactive */
@@ -51,6 +57,8 @@
         onchange,
         axisRows,
         onaxischange,
+        lineShape = 'segments',
+        onlineshapechange,
         disabledFields = new Set<string>(),
     }: Props = $props();
 
@@ -184,6 +192,17 @@
                 <span class="inline-block h-4 w-4 transform rounded-full transition-transform {staleGradient ? 'translate-x-6 bg-lf-switch-knob-on' : 'translate-x-1 bg-lf-switch-knob-off border border-lf-input'}"></span>
             </button>
         </div>
+
+        {#if onlineshapechange}
+            <!-- Line shape (FB-3) -->
+            <div class="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-lf-subtle sm:col-span-2 flex-wrap" data-testid="chart-aesthetic-line-shape-row">
+                <span>
+                    <span class="block text-sm font-medium text-lf-secondary">{$t('chartSettings.lineShape')}</span>
+                    <span class="block text-xs text-lf-muted">{$t('chartSettings.lineShapeDesc')}</span>
+                </span>
+                <LineShapePicker value={lineShape} onchange={onlineshapechange} testIdPrefix="chart-aesthetic-line-shape" />
+            </div>
+        {/if}
 
         <!-- Contextual Y-axis scale modes -->
         <div class="p-2.5 rounded-lg border border-lf-subtle sm:col-span-2 space-y-2">

@@ -48,13 +48,14 @@ vi.mock('$lib/api/bulkBatches', async (importOriginal) => {
 
 import {zodiosApi} from '$lib/api';
 import {notifyPortfolioMutation, notifyPricesCaughtUp, requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
-import {firstDateOf, forgetFirstDate} from '$lib/stores/firstSeriesDates';
+import {firstDateOf, forgetAllFirstDates, forgetFirstDate} from '$lib/stores/firstSeriesDates';
 import * as registry from '../fxStoreRegistry';
 import {
     apiResultToFxDataPoint,
     apiResultsToCanonicalFxDataPoints,
     createPairSlug,
     displayFxRate,
+    ensureFxRangeFromFirstDay,
     ensureFxRangeLoaded,
     ensureFxRangeLoadedBulk,
     getFxStore,
@@ -590,6 +591,50 @@ describe('lookupFxRateSync', () => {
 // =============================================================================
 //  ensureFxRangeLoaded — responses with nothing in them
 // =============================================================================
+
+describe('ensureFxRangeFromFirstDay (Y2-CMP)', () => {
+    beforeEach(() => forgetAllFirstDates());
+
+    it('asks the sentinel `min`, files what came back, and remembers the pair\'s first day for the session', async () => {
+        mockConvert.mockResolvedValueOnce(apiResp('1999-01-04', '1999-01-05', '1999-01-06'));
+
+        await ensureFxRangeFromFirstDay('EUR-USD', '1999-01-06');
+
+        const requests = mockConvert.mock.calls[0][0] as unknown as Array<{date_range: {start: string; end: string}}>;
+        expect(requests[0].date_range).toEqual({start: 'min', end: '1999-01-06'});
+        expect(getFxStore('EUR-USD').getRange('1999-01-04', '1999-01-06').data.map((point) => point.date)).toEqual(['1999-01-04', '1999-01-05', '1999-01-06']);
+        expect(firstDateOf('fx', 'EUR-USD')).toBe('1999-01-04');
+        // the range is marked fetched: asking the store for it costs nothing
+        expect(getFxStore('EUR-USD').getMissingIntervals('1999-01-04', '1999-01-06')).toEqual([]);
+    });
+
+    it('knowing the first day, asks the store\'s own gaps from it and never the sentinel', async () => {
+        mockConvert.mockResolvedValueOnce(apiResp('1999-01-04', '1999-01-05'));
+        await ensureFxRangeFromFirstDay('EUR-USD', '1999-01-05');
+        mockConvert.mockClear();
+
+        await ensureFxRangeFromFirstDay('EUR-USD', '1999-01-05');
+
+        expect(mockConvert).not.toHaveBeenCalled();
+    });
+
+    it('leaves the store as it was on a failure, forgets nothing it knew, and never throws', async () => {
+        mockConvert.mockRejectedValueOnce(new Error('down'));
+
+        await expect(ensureFxRangeFromFirstDay('EUR-USD', '1999-01-06')).resolves.toBeUndefined();
+
+        expect(getFxStore('EUR-USD').getAllSorted()).toEqual([]);
+        expect(firstDateOf('fx', 'EUR-USD')).toBeUndefined();
+    });
+
+    it('an answer with no rate remembers nothing', async () => {
+        mockConvert.mockResolvedValueOnce({success_count: 0, results: []} as any);
+
+        await ensureFxRangeFromFirstDay('EUR-USD', '1999-01-06');
+
+        expect(firstDateOf('fx', 'EUR-USD')).toBeUndefined();
+    });
+});
 
 describe('ensureFxRangeLoaded with an empty answer', () => {
     it.each([

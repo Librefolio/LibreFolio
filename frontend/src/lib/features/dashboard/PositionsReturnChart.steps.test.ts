@@ -24,7 +24,9 @@ const {chartInstances, echartsModule} = vi.hoisted(() => {
         getHeight: () => number;
         on: (event: string, handler: (event: unknown) => void) => void;
         off: (event: string) => void;
+        getZr: () => {on: () => void; off: () => void};
         dispatchAction: (action: unknown) => void;
+        convertToPixel: (finder: unknown, value: number) => number;
         resize: () => void;
         clear: () => void;
         isDisposed: () => boolean;
@@ -49,7 +51,13 @@ const {chartInstances, echartsModule} = vi.hoisted(() => {
             off: (event) => {
                 chart.handlers.delete(event);
             },
-            dispatchAction: () => {},
+            getZr: () => ({on: () => {}, off: () => {}}),
+            // The pointer snap moves the pointer with a second `updateAxisPointer`: ECharts hands it back to the listeners
+            dispatchAction: (action) => {
+                const payload = action as {type?: string; axesInfo?: unknown};
+                if (payload.type === 'updateAxisPointer') for (const handler of chart.handlers.get('updateAxisPointer') ?? []) handler({axesInfo: payload.axesInfo});
+            },
+            convertToPixel: (_finder, value) => value / 1_000_000_000,
             resize: () => {},
             clear: () => {},
             isDisposed: () => disposed,
@@ -86,6 +94,8 @@ import {escapeHtml} from '$lib/utils/core/escapeHtml';
 import {formatDay} from '$lib/utils/core/formatAxisDate';
 import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 import PositionsReturnChart from './PositionsReturnChart.svelte';
+import {setGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
+import {MOMENTS_ON_THE_NEWEST_DAY, MOMENTS_ON_THE_OLDEST_DAY, firePointerAt, tooltipHoldsDay} from '$test/timeAxisPointer';
 import type {PositionLine} from './positionsSeries';
 
 const stepped = (id: string, label: string, points: Array<[string, number | null]>, kind: PositionLine['kind'] = 'position'): PositionLine => ({id, label, points: points.map(([date, value]) => ({date, value})), closedOn: null, complete: true, kind, stepped: true});
@@ -137,6 +147,7 @@ beforeAll(async () => {
 afterAll(() => restoreRects?.());
 beforeEach(() => {
     chartInstances.length = 0;
+    setGlobalLineShape('steps');
 });
 
 async function mountChart(lines: PositionLine[]): Promise<DrawnOption> {
@@ -206,6 +217,28 @@ describe('the tooltip lists each line on the pointed day', () => {
     });
 });
 
+describe('the edges of the plot (Y2-I63, issue #63)', () => {
+    const handlers = () => chartInstances[0].handlers.get('updateAxisPointer') ?? [];
+
+    it.each(MOMENTS_ON_THE_NEWEST_DAY)('opens on the newest day with the pointer at its $label, listing the lines that exist then', async (moment) => {
+        const option = await mountChart([PORTFOLIO(), A(), B()]);
+        // 31 January: A and the portfolio end that day; B ended on the 25th and is not listed. The point ECharts hands over is an older one.
+        firePointerAt(handlers(), '2026-01-31', moment);
+        const html = option.tooltip.formatter([{seriesId: '12-3', value: ['2026-01-11', -50]}]);
+        expect(tooltipHoldsDay(html, '2026-01-31')).toBe(true);
+        expect(html).toContain('Alpha');
+        expect(html).not.toContain('Beta');
+    });
+
+    it.each(MOMENTS_ON_THE_OLDEST_DAY)('opens on the oldest day shown with the pointer at its $label', async (moment) => {
+        const option = await mountChart([PORTFOLIO(), A(), B()]);
+        firePointerAt(handlers(), '2026-01-02', moment);
+        const html = option.tooltip.formatter([{seriesId: '12-3', value: ['2026-01-31', 0]}]);
+        expect(tooltipHoldsDay(html, '2026-01-02')).toBe(true);
+        expect(html).toContain(money(100));
+    });
+});
+
 describe('zoom (Y2 FB-4)', () => {
     it('lets the time axis be zoomed and panned, with every line kept whole', async () => {
         const option = await mountChart([PORTFOLIO(), A(), B()]);
@@ -264,5 +297,31 @@ describe('the tooltip on a narrow chart (Y2 FB-5)', () => {
         expect(value.style.whiteSpace).toBe('nowrap');
         expect(value.style.flexShrink).toBe('0');
         expect(label.textContent).toContain(LONG);
+    });
+});
+
+describe('the line shape the user chose (Y2 FB-3)', () => {
+    const drawn = (option: DrawnOption) => option.series.filter((series) => series.id !== undefined);
+
+    it('joins the points by segments when the choice is segments', async () => {
+        setGlobalLineShape('segments');
+        const option = await mountChart([PORTFOLIO(), A(), B()]);
+        expect(drawn(option).map((series) => series.step)).toEqual([false, false, false]);
+    });
+
+    it('draws smooth lines when the choice is spline', async () => {
+        setGlobalLineShape('spline');
+        const option = await mountChart([PORTFOLIO(), A()]);
+        expect(drawn(option).every((series) => series.step === false && (series as {smooth?: boolean}).smooth === true)).toBe(true);
+    });
+
+    it('lists the points ECharts handed over, even with a pointed day, when the steps are not drawn', async () => {
+        setGlobalLineShape('segments');
+        const option = await mountChart([A()]);
+        pointAt('2026-01-21');
+        const html = option.tooltip.formatter([{seriesId: '12-3', value: ['2026-01-21', 0]}]);
+        expect(html).toContain('Alpha');
+        expect(html).toContain(money(0));
+        expect(html).not.toContain(money(-50));
     });
 });

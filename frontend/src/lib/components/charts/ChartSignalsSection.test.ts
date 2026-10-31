@@ -32,6 +32,12 @@ vi.mock('$lib/stores/reference/currencyStore', () => ({
     getCurrencyInfo: vi.fn(() => ({flag_emoji: ''})),
 }));
 
+// The comparison picker groups assets by what the asset store knows is held now, and the section asks the store to load: no server here.
+vi.mock('$lib/stores/reference/assetStore', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('$lib/stores/reference/assetStore')>()),
+    ensureAssetsLoaded: vi.fn(async () => undefined),
+}));
+
 import ChartSignalsSection, {type SignalDataSummary} from './ChartSignalsSection.svelte';
 import ChartAestheticsSection from './ChartAestheticsSection.svelte';
 import type {SignalConfig, SignalDefinition, SignalProblem} from '$lib/charts/signals';
@@ -792,9 +798,9 @@ describe('ChartSignalsSection — the asset-comparison selector scrolls a long a
         return (text ?? '').replace(/\s+/g, ' ').trim();
     }
 
-    /** Every marquee inside `scope`, read as the text it shows and the title it carries. */
+    /** Every marquee of an asset's name inside `scope`, read as the text it shows and the title it carries. The row's type badge scrolls its own long label (Y2 FB-10): not a name. */
     function marqueeReadings(scope: HTMLElement): Array<{text: string; title: string | null}> {
-        return [...scope.querySelectorAll<HTMLElement>(OVERFLOW_MARQUEE_SELECTOR)].map((marquee) => ({text: normalize(marquee.textContent), title: marquee.getAttribute('title')}));
+        return [...scope.querySelectorAll<HTMLElement>(OVERFLOW_MARQUEE_SELECTOR)].filter((marquee) => !marquee.closest('[data-testid*="-type-"]')).map((marquee) => ({text: normalize(marquee.textContent), title: marquee.getAttribute('title')}));
     }
 
     /** Mount the panel with its two comparison cards: the selector of the card under test, and its closed field after checking it is closed. */
@@ -889,6 +895,41 @@ describe('ChartSignalsSection — the comparison asset is picked with the shared
         await screen.findByTestId(`search-select-option-${FREE.id}`);
         return {onchange, trigger};
     }
+
+    it('groups the assets after the benchmarks like the Assets list — yours, other users’, watched — by what the asset store says is held now (Y2 FB-10)', async () => {
+        const {mergeAssets, resetAssetStore} = await import('$lib/stores/reference/assetStore');
+        resetAssetStore();
+        mergeAssets([
+            {id: PINNED.id, display_name: PINNED.display_name, currency: PINNED.currency, held_by_me: false, held_by_others: true},
+            {id: FREE.id, display_name: FREE.display_name, currency: FREE.currency, held_by_me: true, held_by_others: false},
+            {id: BENCH.id, display_name: BENCH.display_name, currency: BENCH.currency, is_benchmark: true, held_by_me: false, held_by_others: false},
+        ]);
+        await mountAndOpen();
+        const root = screen.getByTestId(SELECT_ID);
+        const order = within(root)
+            .getAllByTestId(/^search-select-(header|option)-/)
+            .map((element) => (element.getAttribute('data-testid') ?? '').replace('search-select-', ''))
+            .filter((id) => !id.startsWith(`option-${MAIN.id}`));
+        expect(order).toEqual([
+            'header-__section:benchmark',
+            `option-${BENCH.id}`,
+            'header-__section:scope-own',
+            `option-${FREE.id}`,
+            'header-__section:scope-others',
+            `option-${PINNED.id}`,
+            // OWN is not in the store: its holder is unknown, so it stays in the rest, under the title the list had before.
+            'header-__section:__rest',
+            `option-${OWN.id}`,
+        ]);
+        resetAssetStore();
+    });
+
+    it('asks the asset store to load when it mounts: a detail page does not load it, and without it nobody is grouped (Y2 FB-10)', async () => {
+        const {ensureAssetsLoaded} = await import('$lib/stores/reference/assetStore');
+        vi.mocked(ensureAssetsLoaded).mockClear();
+        await mountAndOpen();
+        expect(ensureAssetsLoaded).toHaveBeenCalled();
+    });
 
     it('keeps the old ids and shows the type and currency filters once open', async () => {
         await mountAndOpen();

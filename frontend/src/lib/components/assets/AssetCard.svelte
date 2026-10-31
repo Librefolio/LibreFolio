@@ -304,6 +304,7 @@
                     baselineValue={isCalendarView ? undefined : (baseValue ?? undefined)}
                     showGridLines={chartSettings?.gridLines}
                     showGradient={chartSettings?.staleGradient ?? true}
+                    lineShape={chartSettings?.lineShape}
                     {overlaySignals}
                     secondaryAxisScales={chartSettings?.axisScales.secondary}
                     sampledResolution={isCalendarView ? 'daily' : resolution}

@@ -28,7 +28,9 @@ const {chartInstances, echartsModule} = vi.hoisted(() => {
         getDom: () => unknown;
         on: (name: string, handler: (event: unknown) => void) => void;
         off: () => void;
-        dispatchAction: () => void;
+        dispatchAction: (action: unknown) => void;
+        convertToPixel: (finder: unknown, value: number) => number;
+        getZr: () => {on: () => void; off: () => void};
         resize: () => void;
         isDisposed: () => boolean;
         dispose: () => void;
@@ -57,7 +59,13 @@ const {chartInstances, echartsModule} = vi.hoisted(() => {
                 chart.handlers.set(name, [...(chart.handlers.get(name) ?? []), handler]);
             },
             off: () => {},
-            dispatchAction: () => {},
+            // The pointer snap moves the pointer with a second `updateAxisPointer`: ECharts hands it back to the listeners
+            dispatchAction: (action) => {
+                const payload = action as {type?: string; axesInfo?: unknown};
+                if (payload.type === 'updateAxisPointer') for (const handler of chart.handlers.get('updateAxisPointer') ?? []) handler({axesInfo: payload.axesInfo});
+            },
+            convertToPixel: (_finder, value) => value / 1_000_000_000,
+            getZr: () => ({on: () => {}, off: () => {}}),
             resize: () => {},
             isDisposed: () => disposed,
             dispose: () => {
@@ -83,7 +91,9 @@ import {cleanup, fireEvent, render, setupI18n, waitFor} from '$test/component';
 import type {PortfolioHistoryPoint, PortfolioMwrrLinePoint} from '$lib/stores/portfolio/portfolioStore.svelte';
 import {uiLocale} from '$lib/stores/app/uiLocale';
 import {addDays} from '$lib/utils/dateOnly';
+import {MOMENTS_ON_THE_NEWEST_DAY, MOMENTS_ON_THE_OLDEST_DAY, firePointer, firePointerAt, tooltipHoldsDay, withoutTooltipDays} from '$test/timeAxisPointer';
 import GrowthChart from './GrowthChart.svelte';
+import {setGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
 
 const eur = (amount: number) => ({code: 'EUR', amount: amount.toFixed(2)});
 
@@ -153,6 +163,7 @@ beforeAll(async () => {
 });
 beforeEach(() => {
     chartInstances.length = 0;
+    setGlobalLineShape('steps');
 });
 afterEach(() => {
     cleanup();
@@ -256,10 +267,126 @@ describe('the tooltip of a step line', () => {
         expect(html).toContain(money(1_060));
     });
 
+    it('reads the drawn point under the pointer, not the pointed day, when the steps are not drawn', async () => {
+        setGlobalLineShape('segments');
+        await mount({history: SPARSE, range: SPARSE_RANGE, mwrrLine: SPARSE_MWRR});
+        pointAt('2026-02-18');
+        const html = tooltipFormatter()([{dataIndex: 3}]);
+        expect(html).toContain(money(1_060));
+    });
+
     it('reads the axis pointer with `snap: false`, so the pointed day is exact', async () => {
         await mount({history: SPARSE, range: SPARSE_RANGE, mwrrLine: SPARSE_MWRR});
         const option = lastOption((candidate) => candidate.tooltip !== undefined) as {tooltip: {axisPointer: {snap: boolean}}; xAxis: {axisPointer: {snap: boolean}}};
         expect(option.tooltip.axisPointer.snap).toBe(false);
         expect(option.xAxis.axisPointer.snap).toBe(false);
+    });
+});
+
+describe('the edges of the plot (Y2-I63, issue #63)', () => {
+    const handlers = () => chartInstances.at(-1)?.handlers.get('updateAxisPointer') ?? [];
+
+    // The pointer of the growth chart snaps to the nearest day, as the other step charts do (`attachDaySnap`, Y6-1): a pointer in the second half
+    // of the day before the newest day rests on the newest day. Red on a branch that does not snap yet, green once Y6-1 is merged.
+    // ECharts hands the formatter the drawn point nearest to the pointer; the tooltip must follow the day the pointer is on instead. The
+    // `dataIndex` given here is deliberately the wrong one (the first step), so a tooltip that read it would name another day.
+    it.each(MOMENTS_ON_THE_NEWEST_DAY)('opens on the newest day with the pointer at its $label', async (moment) => {
+        await mount({history: SPARSE, range: SPARSE_RANGE, mwrrLine: SPARSE_MWRR});
+        firePointerAt(handlers(), '2026-03-01', moment);
+        const html = tooltipFormatter()([{dataIndex: 0}]);
+        expect(tooltipHoldsDay(html, '2026-03-01')).toBe(true);
+        expect(html).toContain(money(1_060));
+    });
+
+    it.each(MOMENTS_ON_THE_OLDEST_DAY)('opens on the oldest day shown with the pointer at its $label', async (moment) => {
+        await mount({history: SPARSE, range: SPARSE_RANGE, mwrrLine: SPARSE_MWRR});
+        firePointerAt(handlers(), '2026-01-01', moment);
+        const html = tooltipFormatter()([{dataIndex: 4}]);
+        expect(tooltipHoldsDay(html, '2026-01-01')).toBe(true);
+        expect(html).toContain(money(1_010));
+    });
+
+    it('opens on the first day of a step and on its last, each with the step\'s own value', async () => {
+        await mount({history: SPARSE, range: SPARSE_RANGE, mwrrLine: SPARSE_MWRR});
+        for (const [day, value] of [
+            ['2026-01-11', 1_030],
+            ['2026-02-19', 1_030],
+            ['2026-02-20', 1_060],
+        ] as const) {
+            firePointer(handlers(), day);
+            const html = tooltipFormatter()([{dataIndex: 0}]);
+            expect(tooltipHoldsDay(html, day), day).toBe(true);
+            expect(html, day).toContain(money(value));
+        }
+    });
+});
+
+/**
+ * The ceilings of the long-history cases, which mount a series of thousands of steps and wait for the resolution cascade to settle: a ceiling,
+ * never a delay (`waitFor` returns as soon as the badge says so). Left at 5 s, the same as the default of the case itself, they went red whenever
+ * the machine ran other lanes' work at the same time (the cascade is CPU-bound).
+ */
+const LONG_HISTORY_MS = 25_000;
+const TEST_CEILING_MS = 40_000;
+
+describe('the resolution badge on a long history (Y2 FB-6)', () => {
+    /** 26 years of one-day steps: 9 497 days over a 1 200 px plot is 7.9 a pixel, and their 1 357 weeks are 1.13, under the 1.3 the weekly line takes. */
+    const FIRST = '2000-01-03';
+    const DAYS = 9_497;
+    const longDaily: PortfolioHistoryPoint[] = Array.from({length: DAYS}, (_, index) => {
+        const day = addDays(FIRST, index);
+        return step(day, day, index);
+    });
+    const longRange = {start: FIRST, end: addDays(FIRST, DAYS - 1)};
+
+    it('shows the Weekly badge: the days are grouped in weeks', async () => {
+        const {getByTestId} = await mount({history: longDaily, range: longRange, mwrrLine: []});
+        await waitFor(() => expect(getByTestId('chart-resolution-badge')).toHaveAttribute('data-resolution', 'weekly'), {timeout: LONG_HISTORY_MS});
+    }, TEST_CEILING_MS);
+});
+
+describe('a history of 140 years is grouped by year (Y2 FB-6)', () => {
+    /** One step every ten days from 1886: 5 110 steps, 1 680 months over a 1 200 px plot is 1.4 a pixel, more than a line takes. */
+    const FIRST = '1886-01-01';
+    const STEPS = 5_110;
+    const centuries: PortfolioHistoryPoint[] = Array.from({length: STEPS}, (_, index) => step(addDays(FIRST, index * 10), addDays(FIRST, index * 10 + 9), index));
+    const range = {start: FIRST, end: addDays(FIRST, STEPS * 10 - 1)};
+
+    it('is drawn a point a year, linear, and the badge says Yearly', async () => {
+        const {getByTestId} = await mount({history: centuries, range, mwrrLine: []});
+        await waitFor(() => expect(getByTestId('chart-resolution-badge')).toHaveAttribute('data-resolution', 'yearly'), {timeout: LONG_HISTORY_MS});
+        const lines = renderedSeries().filter((series) => series.type === 'line');
+        expect(
+            lines.some((series) => series.step === 'end'),
+            'a grouped resolution is the linear line',
+        ).toBe(false);
+        expect(lines[0].data.length, 'about a point a year: 140 of them').toBeGreaterThan(130);
+        expect(lines[0].data.length).toBeLessThan(160);
+    }, TEST_CEILING_MS);
+
+    it('heads the tooltip of a yearly point with its year', async () => {
+        await mount({history: centuries, range, mwrrLine: []});
+        await waitFor(() => expect(renderedSeries().find((series) => series.type === 'line')?.data.length).toBeLessThan(160), {timeout: LONG_HISTORY_MS});
+        const html = tooltipFormatter()([{dataIndex: 70}]);
+        // The year of the 71st yearly bucket: 1886 + 70, as its own text and in no date form.
+        expect(html).toContain('1956');
+        expect(withoutTooltipDays(html)).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+    }, TEST_CEILING_MS);
+});
+
+describe('the line shape the user chose (Y2 FB-3)', () => {
+    const lineSeries = () => renderedSeries().filter((series) => series.type === 'line');
+
+    it('joins the steps by segments when the choice is segments, the default of a new account', async () => {
+        setGlobalLineShape('segments');
+        await mount({history: SPARSE, range: SPARSE_RANGE, mwrrLine: SPARSE_MWRR});
+        expect(lineSeries().length).toBeGreaterThan(0);
+        expect(lineSeries().every((series) => series.step === false && (series as {smooth?: boolean}).smooth === false)).toBe(true);
+    });
+
+    it('draws a spline that cannot overshoot when the choice is spline', async () => {
+        setGlobalLineShape('spline');
+        await mount({history: SPARSE, range: SPARSE_RANGE, mwrrLine: SPARSE_MWRR});
+        expect(lineSeries().every((series) => series.step === false && (series as {smooth?: boolean}).smooth === true && (series as {smoothMonotone?: string}).smoothMonotone === 'x')).toBe(true);
     });
 });

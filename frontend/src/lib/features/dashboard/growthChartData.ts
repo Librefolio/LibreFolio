@@ -239,23 +239,26 @@ export function buildLadderBuckets(sourceDates: string[], rung: CandleWidth, tod
     });
 }
 
-/** How many days, weeks and months of `dates` fall between `startDate` and `endDate`: what the density cascade weighs. */
-export function countBuckets(dates: string[], startDate: string, endDate: string): {dailyCount: number; weeklyCount: number; monthlyCount: number} {
+/** How many days, weeks, months and years of `dates` fall between `startDate` and `endDate`: what the density cascade weighs. The growth chart is the one that counts years, so it is the one that can reach the yearly level. */
+export function countBuckets(dates: string[], startDate: string, endDate: string): {dailyCount: number; weeklyCount: number; monthlyCount: number; yearlyCount: number} {
     let dailyCount = 0;
     const weekly = new Set<string>();
     const monthly = new Set<string>();
+    const yearly = new Set<string>();
 
     for (const date of dates) {
         if (date < startDate || date > endDate) continue;
         dailyCount += 1;
         weekly.add(mapDateToBucket(date, 'weekly').bucketEnd);
         monthly.add(mapDateToBucket(date, 'monthly').bucketEnd);
+        yearly.add(mapDateToBucket(date, 'yearly').bucketEnd);
     }
 
     return {
         dailyCount,
         weeklyCount: weekly.size,
         monthlyCount: monthly.size,
+        yearlyCount: yearly.size,
     };
 }
 
