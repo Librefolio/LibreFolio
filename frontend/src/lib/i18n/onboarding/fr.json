@@ -92,7 +92,8 @@
       "fx_page_guide": "Vue d’ensemble des changes",
       "fx_detail_guide": "Guide des détails de la paire de devises",
       "asset_page_guide": "Vue d’ensemble des actifs",
-      "asset_detail_guide": "Guide des détails de l’actif"
+      "asset_detail_guide": "Guide des détails de l’actif",
+      "tools_page_guide": "Page Outils"
     },
     "status": {
       "pending": "En attente",
@@ -113,7 +114,8 @@
         "transactions": "Transactions",
         "broker": "Courtiers",
         "fx": "FX",
-        "asset": "Actifs"
+        "asset": "Actifs",
+        "tools": "Outils"
       },
       "armedToast": "{flow} est prêt dans ce navigateur. Ouvrez la fonctionnalité pour commencer.",
       "cancelArmed": "Annuler l’activation",
@@ -397,6 +399,18 @@
         "risk": {
           "title": "Scénarios de risque",
           "description": "Ouvrez Risque pour examiner les mesures historiques, les scénarios de stress, les simulations et le contexte du portefeuille."
+        }
+      }
+    },
+    "toolsPageGuide": {
+      "steps": {
+        "overview": {
+          "title": "Vos outils",
+          "description": "Chaque carte est un outil qui travaille sur les données que vous choisissez. Ouvrez une carte pour utiliser cet outil ; les nouveaux outils apparaissent ici dès qu’ils sont disponibles."
+        },
+        "refresh": {
+          "title": "Recharger la liste",
+          "description": "Rechargez la liste si un outil manque ou semble obsolète."
         }
       }
     }

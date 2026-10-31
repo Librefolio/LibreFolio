@@ -14,6 +14,7 @@ export const ONBOARDING_FLOWS = [
     'asset_page_guide',
     'asset_guide',
     'asset_detail_guide',
+    'tools_page_guide',
 ] as const;
 
 export type OnboardingFlow = (typeof ONBOARDING_FLOWS)[number];

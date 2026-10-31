@@ -275,6 +275,7 @@ groups; *Setup* and *Core tour* start open:
 | `broker` | `broker_page_guide`, `broker_guide`, `broker_detail_guide` |
 | `fx` | `fx_page_guide`, `fx_guide`, `fx_detail_guide` |
 | `asset` | `asset_page_guide`, `asset_guide`, `asset_detail_guide` |
+| `tools` | `tools_page_guide` |
 
 A group header counts its flows that are completed at the current version
 (*{completed}/{total} guides completed*). Each row shows the flow name (`onboarding.flows.<flow>`),
