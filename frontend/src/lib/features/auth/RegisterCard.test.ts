@@ -327,6 +327,20 @@ describe('RegisterCard — validation keeps bad credentials off the wire', () =>
     });
 });
 
+// A-17: a password manager takes as the user name the field just before the password; it must be the username, not the email.
+describe('RegisterCard — the order of the fields (A-17)', () => {
+    it('puts the email first, then the username, and the password right after the username', () => {
+        mount();
+        const email = screen.getByTestId('register-email');
+        const username = screen.getByTestId('register-username');
+        const password = screen.getByTestId('register-password');
+        const follows = (a: HTMLElement, b: HTMLElement): boolean => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+        expect(follows(email, username), 'email before username').toBe(true);
+        expect(follows(username, password), 'username before password').toBe(true);
+    });
+});
+
 describe('RegisterCard — validation on blur', () => {
     it('flags a field as soon as the user leaves it', async () => {
         mount();

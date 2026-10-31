@@ -147,6 +147,36 @@
                 {/if}
             {/if}
 
+            <!-- Email Input (before the username: a password manager takes the field just before the password as the user name, A-17) -->
+            <div>
+                <label class="sr-only" for="register-email">{$_('auth.email')}</label>
+                <div class="relative group">
+                    <Mail aria-hidden="true" class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-lf-muted group-focus-within:text-lf-primary transition-colors" data-testid="register-email-icon" size={20} />
+                    <input
+                        autocomplete="email"
+                        bind:value={email}
+                        class="w-full pl-12 pr-4 py-3 rounded-lg border bg-lf-field text-lf-primary placeholder:text-lf-placeholder focus:outline-none focus:ring-1 transition-all disabled:opacity-50"
+                        class:border-lf-input={!emailError}
+                        class:border-lf-danger={emailError}
+                        class:hover:border-lf-input-hover={!emailError}
+                        class:focus:border-lf-focus={!emailError}
+                        class:focus:border-lf-danger={emailError}
+                        class:focus:ring-lf-focus={!emailError}
+                        class:focus:ring-lf-danger={emailError}
+                        data-testid="register-email"
+                        disabled={loading}
+                        id="register-email"
+                        name="email"
+                        on:blur={validateEmail}
+                        placeholder={$_('auth.email')}
+                        type="email"
+                    />
+                </div>
+                {#if emailError}
+                    <p class="text-lf-danger text-xs mt-1">{emailError}</p>
+                {/if}
+            </div>
+
             <!-- Username Input -->
             <div>
                 <label class="sr-only" for="register-username">{$_('auth.username')}</label>
@@ -176,36 +206,6 @@
                 </div>
                 {#if usernameError}
                     <p class="text-lf-danger text-xs mt-1">{usernameError}</p>
-                {/if}
-            </div>
-
-            <!-- Email Input -->
-            <div>
-                <label class="sr-only" for="register-email">{$_('auth.email')}</label>
-                <div class="relative group">
-                    <Mail aria-hidden="true" class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-lf-muted group-focus-within:text-lf-primary transition-colors" data-testid="register-email-icon" size={20} />
-                    <input
-                        autocomplete="email"
-                        bind:value={email}
-                        class="w-full pl-12 pr-4 py-3 rounded-lg border bg-lf-field text-lf-primary placeholder:text-lf-placeholder focus:outline-none focus:ring-1 transition-all disabled:opacity-50"
-                        class:border-lf-input={!emailError}
-                        class:border-lf-danger={emailError}
-                        class:hover:border-lf-input-hover={!emailError}
-                        class:focus:border-lf-focus={!emailError}
-                        class:focus:border-lf-danger={emailError}
-                        class:focus:ring-lf-focus={!emailError}
-                        class:focus:ring-lf-danger={emailError}
-                        data-testid="register-email"
-                        disabled={loading}
-                        id="register-email"
-                        name="email"
-                        on:blur={validateEmail}
-                        placeholder={$_('auth.email')}
-                        type="email"
-                    />
-                </div>
-                {#if emailError}
-                    <p class="text-lf-danger text-xs mt-1">{emailError}</p>
                 {/if}
             </div>
 

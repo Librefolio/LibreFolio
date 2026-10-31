@@ -189,7 +189,8 @@ async def get_user_by_username_or_email(session: AsyncSession, identifier: str) 
     when no account has that address, the account whose username it is exactly — a name from before A-21a, which refuses
     the ``@`` in new names. Without an ``@`` it is a username only, compared exactly, never an address. So no username
     stands in front of another account's address, whichever row was written first. Usernames regardless of case wait
-    for their unique index (A-21b): folding the case here before it would let «Bob» stand in front of «bob».
+    for a unique index (A-21b builds none): folding the case here would let «Bob» stand in front
+    of «bob». The doublets are refused at input instead (``username_is_taken``); accounts already saved are not touched.
     The sign-in, «forgot password» and the verification resend look an identifier up here.
 
     Args:
@@ -204,6 +205,19 @@ async def get_user_by_username_or_email(session: AsyncSession, identifier: str) 
         if user is not None:
             return user
     return await get_user_by_username(session, identifier)
+
+
+async def username_is_taken(session: AsyncSession, username: str, *, other_than: int | None = None) -> bool:
+    """Whether a NEW username is taken: the same name, or the same name in other capitals (A–Z, as SQLite's ``lower()``).
+
+    Input only (A-21b): «Bob» is refused beside «bob», so no new doublet is written; accounts already saved are left
+    as they are, and the sign-in still finds a name by its exact spelling. The account ``other_than`` (the name's own,
+    on a profile change) does not count, so it may change the capitals of its own name.
+    """
+    stmt = select(User.id).where(func.lower(User.username) == func.lower(username))
+    if other_than is not None:
+        stmt = stmt.where(User.id != other_than)
+    return (await session.execute(stmt.limit(1))).first() is not None
 
 
 async def address_is_a_username(session: AsyncSession, address: str, *, other_than: int | None = None) -> bool:
@@ -304,8 +318,7 @@ async def create_user(
         return None, refusal
 
     # Check if username exists
-    existing = await get_user_by_username(session, username)
-    if existing:
+    if await username_is_taken(session, username):
         return None, AccountError("USERNAME_TAKEN", "Username already taken")
 
     # Check if email exists, or is the username of an account from before A-21a (rule 2): the same answer
@@ -688,8 +701,7 @@ async def update_profile(
     if username is not None and username != user.username:
         if (refusal := _new_username_refusal(username)) is not None:
             return None, refusal
-        existing = await get_user_by_username(session, username)
-        if existing:
+        if await username_is_taken(session, username, other_than=user.id):
             return None, AccountError("USERNAME_TAKEN", "Username already taken")
         user.username = username
 
