@@ -664,6 +664,110 @@ describe('diffDualItem', () => {
     });
 });
 
+/**
+ * W6-4 — a manual TRANSFER receiver whose cost field was emptied tells the backend at once.
+ *
+ * `buildDualCreatePayloads` omits `cost_basis_override` from the receiving leg when the draft override is empty (null, or a
+ * `{code, amount: ''}` the user cleared), so the key is ABSENT from the item; `diffDualItem` looked at the key only when it was
+ * there, sent nothing, and the form showed no refusal until «Save all». The contract: in the explicit `manual` mode on a side
+ * that takes a cost basis, when the saved row has a `cost_basis_override` and the draft item has none (key absent, or null),
+ * the diff carries `cost_basis_override: null` — the backend then refuses at once in validate. Everything else is as before.
+ *
+ * The receiver is built the way FormModal builds it (`buildDualCreatePayloads`, then diffed against the saved row), never
+ * hand-written, so the test follows the builder's omission rule.
+ *
+ * Red today: the emptied receiver whose key is ABSENT diffs to `{id}` alone. Guards, green today and after: the key present with
+ * null (already carried), no saved override, an unchanged and a changed override, the auto mode, the sender, and the types whose cost rule forbids a cost.
+ */
+describe('diffDualItem — the manual cost basis of a receiver that was emptied (W6-4)', () => {
+    const SAVED = cash('EUR', '10');
+    const EMPTIED = cash('EUR', '');
+
+    /** The receiving leg of a TRANSFER built from a draft in `mode` with `override`, and its saved row (id 202) with `saved` as override. */
+    function receiverAndSaved(mode: 'auto' | 'manual', override: CashValue | null, saved: CashValue | null) {
+        const [, receiver] = buildDualCreatePayloads('transfer_asset', baseFields({type: 'TRANSFER', quantity: '5', cash: null, cost_basis_mode: mode, cost_basis_override: override}), {broker_id: 2}, 'uuid-w64');
+        const savedReceiver = baseOriginal({id: 202, broker_id: 2, type: 'TRANSFER', date: String(receiver.date), quantity: String(receiver.quantity), cash: null, cost_basis_override: saved});
+        return {receiver, savedReceiver};
+    }
+
+    it.each([
+        ['a null draft override', null],
+        ['a cleared cost field ({code, amount: ""})', EMPTIED],
+    ])('manual receiver, saved override EUR 10, %s: the builder omits the key and the diff carries cost_basis_override: null', (_label, override) => {
+        const {receiver, savedReceiver} = receiverAndSaved('manual', override, SAVED);
+        expect(receiver, 'premise: buildDualCreatePayloads omits the empty override from the receiver').not.toHaveProperty('cost_basis_override');
+
+        expect(diffDualItem(receiver, savedReceiver, 'manual')).toStrictEqual({id: 202, cost_basis_override: null});
+    });
+
+    it('guard: manual receiver, saved override EUR 10, the key present with null — the diff already carries cost_basis_override: null', () => {
+        const {receiver, savedReceiver} = receiverAndSaved('manual', EMPTIED, SAVED);
+
+        expect(diffDualItem({...receiver, cost_basis_override: null}, savedReceiver, 'manual')).toStrictEqual({id: 202, cost_basis_override: null});
+    });
+
+    it('guard: no saved override and an emptied draft — nothing to send, only {id}', () => {
+        const {receiver, savedReceiver} = receiverAndSaved('manual', EMPTIED, null);
+
+        expect(diffDualItem(receiver, savedReceiver, 'manual')).toStrictEqual({id: 202});
+        expect(diffDualItem({...receiver, cost_basis_override: null}, savedReceiver, 'manual'), 'the key present with null, nothing saved').toStrictEqual({id: 202});
+    });
+
+    it('guard: an unchanged non-empty override — only {id}', () => {
+        const {receiver, savedReceiver} = receiverAndSaved('manual', SAVED, SAVED);
+        expect(receiver, 'premise: the receiver carries the draft override').toHaveProperty('cost_basis_override', SAVED);
+
+        expect(diffDualItem(receiver, savedReceiver, 'manual')).toStrictEqual({id: 202});
+    });
+
+    it('guard: a changed non-empty override — the diff carries the new one', () => {
+        const changed = cash('EUR', '12.5');
+        const {receiver, savedReceiver} = receiverAndSaved('manual', changed, SAVED);
+
+        expect(diffDualItem(receiver, savedReceiver, 'manual')).toStrictEqual({id: 202, cost_basis_override: changed});
+    });
+
+    it('guard: the auto mode is unchanged — it carries mode auto and the override (or null), whatever was saved', () => {
+        const emptyAuto = receiverAndSaved('auto', null, SAVED);
+        expect(diffDualItem(emptyAuto.receiver, emptyAuto.savedReceiver, 'auto'), 'saved override, empty hint').toStrictEqual({id: 202, cost_basis_mode: 'auto', cost_basis_override: null});
+
+        const sentinel = cash('EUR', '0');
+        const hinted = receiverAndSaved('auto', sentinel, null);
+        expect(diffDualItem(hinted.receiver, hinted.savedReceiver, 'auto'), 'currency hint sentinel').toStrictEqual({id: 202, cost_basis_mode: 'auto', cost_basis_override: sentinel});
+    });
+
+    it('guard: the sender is never given a cost basis — costBasisMode null, and manual on a side that forbids it', () => {
+        const [sender] = buildDualCreatePayloads('transfer_asset', baseFields({type: 'TRANSFER', quantity: '5', cash: null, cost_basis_mode: 'manual', cost_basis_override: SAVED}), {broker_id: 2}, 'uuid-w64-from');
+        const savedSender = baseOriginal({id: 101, type: 'TRANSFER', date: String(sender.date), quantity: String(sender.quantity), cash: null, cost_basis_override: SAVED});
+        expect(Number(sender.quantity), 'premise: the sender leg is the negative one').toBeLessThan(0);
+
+        expect.soft(diffDualItem(sender, savedSender, null), 'costBasisMode null').toStrictEqual({id: 101});
+        expect.soft(diffDualItem(sender, savedSender, 'manual'), 'explicit manual').toStrictEqual({id: 101});
+        expect.soft(diffDualItem({...sender, cost_basis_override: null}, savedSender, 'manual'), 'explicit manual, key null').toStrictEqual({id: 101});
+    });
+
+    it('guard: a receiver with costBasisMode null (no explicit mode) never carries cost_basis_override', () => {
+        const {receiver, savedReceiver} = receiverAndSaved('manual', EMPTIED, SAVED);
+
+        expect(diffDualItem(receiver, savedReceiver, null)).toStrictEqual({id: 202});
+    });
+
+    it.each([
+        ['FX_CONVERSION', 'fx' as const],
+        ['CASH_TRANSFER', 'transfer_cash' as const],
+    ])('guard: %s, whose cost rule forbids a cost basis, never carries cost_basis_override — even with one saved and manual asked for', (type, layout) => {
+        const [fromLeg, toLeg] = buildDualCreatePayloads(layout, baseFields({type, quantity: '0', cash: cash('EUR', '100')}), {broker_id: 2, cash: cash('USD', '110')}, `uuid-w64-${layout}`);
+        for (const [name, leg, id] of [
+            ['from', fromLeg, 301],
+            ['to', toLeg, 302],
+        ] as const) {
+            const saved = baseOriginal({id, type, date: String(leg.date), quantity: '0', cash: leg.cash as CashValue, cost_basis_override: SAVED});
+            expect.soft(diffDualItem(leg, saved, 'manual'), `${type} ${name} leg, manual`).toStrictEqual({id});
+            expect.soft(diffDualItem({...leg, cost_basis_override: null}, saved, 'manual'), `${type} ${name} leg, manual, key null`).toStrictEqual({id});
+        }
+    });
+});
+
 // =============================================================================
 //  buildDualCreatePayloads
 // =============================================================================

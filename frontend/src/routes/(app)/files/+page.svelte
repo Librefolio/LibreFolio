@@ -46,7 +46,8 @@
     import FileGrid from '$lib/features/files/FileGrid.svelte';
     import TabBar from '$lib/components/ui/tabs/TabBar.svelte';
     import {buildUrlFilters, parseUrlFilters, type UrlFilterConfig} from '$lib/utils/urlFilters';
-    import {fetchFilePreview, getFilePreviewError} from '$lib/utils/files/filePreview';
+    import {fetchFilePreview} from '$lib/utils/files/filePreview';
+    import {resolveParseFailureMessage} from '$lib/features/transactions/import/parseFailure';
     import type {BrimFile, BrokerInfo, FilePreviewResponse, UploadedFile, UploadScope} from '$lib/types';
     import type {ColumnDef, FilterValue} from '$lib/components/table/types';
     import {uiLocaleStore} from '$lib/stores/app/uiLocale';
@@ -719,7 +720,7 @@
         } catch (error) {
             if (token === previewRequestToken) {
                 previewData = null;
-                previewError = getFilePreviewError(error, 'Preview failed');
+                previewError = resolveParseFailureMessage(error, $t, 'Preview failed');
             }
         } finally {
             if (token === previewRequestToken) {

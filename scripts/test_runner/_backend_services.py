@@ -565,6 +565,26 @@ def services_transaction_cost_basis_rule(verbose: bool = False, test_names: list
     return run_command(cmd, "Transaction cost basis rule tests", verbose=verbose)
 
 
+def services_balance_validator_cash_rule(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the batch balance validator's cash rule (W6-12): the opening cash of a broker without the overdraft flag, and the walk against the frozen one."""
+    print_section("Services: Balance Validator Cash Rule")
+    print_info("Testing: backend/app/services/transactions/balances.py (_validate_broker_balances) over financial_math/native_cash.py (first_negative_cash)")
+    print_info("Tests: a negative opening cash with no transaction from from_date refused without the overdraft flag; the error fields, batch index, same-day and cash-vs-asset order; a differential against a frozen copy of the old walk")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_balance_validator_cash_rule.py", test_names)
+    return run_command(cmd, "Balance validator cash rule tests", verbose=verbose)
+
+
+def services_broker_update_bulk_refusal(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that BrokerService.update_bulk puts a refused item back in the session itself (checkpoint 6)."""
+    print_section("Services: Broker update_bulk Refusal")
+    print_info("Testing: backend/app/services/brokers/broker_service.py (update_bulk)")
+    print_info("Tests: a refused overdraft/shorting turn-off leaves the broker exactly as it was, in the session and after a caller's commit on a partial success; valid turn-offs, rename-only, unknown id, access denied and duplicate name keep their results")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_broker_update_bulk_refusal.py", test_names)
+    return run_command(cmd, "Broker update_bulk refusal tests", verbose=verbose)
+
+
 def services_linked_adjustment_pair(verbose: bool = False, test_names: list = None) -> bool:
     """Test that a batch refuses to link two ADJUSTMENTs (pairAdjustmentNotAllowed), and what it still lets through."""
     print_section("Services: Linked Adjustment Pair")
@@ -573,6 +593,26 @@ def services_linked_adjustment_pair(verbose: bool = False, test_names: list = No
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_linked_adjustment_pair.py", test_names)
     return run_command(cmd, "Linked adjustment pair tests", verbose=verbose)
+
+
+def services_linked_cash_pair(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that a batch refuses a linked CASH_TRANSFER or FX_CONVERSION that contradicts its type (W6-7)."""
+    print_section("Services: Linked Cash Pair")
+    print_info("Testing: backend/app/services/transactions/validation.py (_validate_linked_pair) + batch_creates.py (the link_uuid groups)")
+    print_info("Tests: a CASH_TRANSFER pair in two currencies or with amounts that are not opposite, and an FX_CONVERSION in one currency, refused on the first create (commit and validate); coherent pairs and stored pairs untouched; the rule follows TX_TYPE_METADATA; the messages in 4 languages")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_linked_cash_pair.py", test_names)
+    return run_command(cmd, "Linked cash pair tests", verbose=verbose)
+
+
+def services_generic_csv_cost_todo(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that the generic CSV asks for an inherited cost only where it is missing: a typed 0 is a cost (W6-5)."""
+    print_section("Services: Generic CSV Cost Todo")
+    print_info("Testing: backend/app/services/brim_providers/broker_generic_csv/plugin.py (needs_cost_basis_todo)")
+    print_info("Tests: an incoming ADJUSTMENT with a cost of 0 is not asked again; without a cost it is; an outgoing one and other types never are; the todos of a parsed file")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_generic_csv_cost_todo.py", test_names)
+    return run_command(cmd, "Generic CSV cost todo tests", verbose=verbose)
 
 
 def services_transfer_pair_order(verbose: bool = False, test_names: list = None) -> bool:
@@ -1152,6 +1192,16 @@ def services_brim_report_sets(verbose: bool = False, test_names: list = None) ->
     return run_command(cmd, "BRIM report sets tests", verbose=verbose)
 
 
+def services_brim_report_set_core(verbose: bool = False, test_names: list = None) -> bool:
+    """Test the shared core of the report-set BRIM plugins: helpers, readers, rule M, pairing, timeline."""
+    print_section("Services: BRIM Report-set Core")
+    print_info("Testing: backend/app/services/brim/brim_report_set_core.py (shared by the Danske Bank and Crédit Agricole plugins)")
+    print_info("Tests: norm/plain/money/business days, layout and header scan, xlsx/csv readers, RoleMerge (rule M), assign/pair_by_key, merge_spans/build_timeline/zone")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_brim_report_set_core.py", test_names)
+    return run_command(cmd, "BRIM report-set core tests", verbose=verbose)
+
+
 def services_brim_gap_fix(verbose: bool = False, test_names: list = None) -> bool:
     """Test the BRIM gap-fix: LibreFolio's balances at a date, the gap-fix schemas and compute_gap_fix."""
     print_section("Services: BRIM Gap-fix")
@@ -1175,7 +1225,7 @@ def services_financial_math(verbose: bool = False, test_names: list = None) -> b
     """Test the financial_math layer: average cost, native cash, returns, periods, ledger control totals, and the boundaries of the whole layer."""
     print_section("Services: Financial Math (average cost, native cash, returns, periods, ledger totals, layer boundaries)")
     print_info("Testing: backend/app/services/financial_math/ (average_cost.py, native_cash.py, returns.py, portfolio/period.py, ledger_totals.py; imports and packages of every module)")
-    print_info("Tests: average costs and cost movements, native cash and cash movements, effective share, exchange results, rebasing and ratios, the verified MWRR root, periods and unit costs, control totals, layer boundaries")
+    print_info("Tests: average costs and cost movements, native cash and cash movements, the first negative cash day (first_negative_cash), effective share, exchange results, rebasing and ratios, the verified MWRR root, periods and unit costs, control totals, layer boundaries")
     print_info("Pure — convert_bulk is stubbed: no server, no shared DB (the ledger totals read private SQLite files under tmp_path)")
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial_math/", test_names)
@@ -1211,6 +1261,16 @@ def services_split_adjustment_ledger(verbose: bool = False, test_names: list = N
 
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial/test_split_adjustment_ledger.py", test_names)
     return run_command(cmd, "Split adjustment ledger tests", verbose=verbose)
+
+
+def services_dust_threshold(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that the daily state holds a position only above QUANTITY_DUST_THRESHOLD (MF6-2, backlog MF-A6)."""
+    print_section("Services: Daily State Dust Threshold (MF6-2)")
+    print_info("Testing: backend/app/services/financial_math/portfolio/daily_state.py (DailyStateBuilder: valuation loop, start and end snapshots)")
+    print_info("Tests: a residual at the threshold counts nothing (market value, cost, NAV, allocation, broker contribution, frames, snapshots), an unpriced one is not MISSING, one just above is held")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial/test_portfolio_engine/test_daily_state_dust_threshold.py", test_names)
+    return run_command(cmd, "Daily state dust threshold tests", verbose=verbose)
 
 
 def services_lone_transfer_legs(verbose: bool = False, test_names: list = None) -> bool:
@@ -2496,10 +2556,42 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "balance-validator-cash-rule",
+        services_balance_validator_cash_rule,
+        name="Balance Validator Cash Rule",
+        desc="W6-12: a broker without the overdraft flag refuses a negative opening cash on from_date even with no transaction from then on (the overdraft flag, a zero opening and a later healing deposit leave it alone); the error's code, day, currency, balance, params and batch index; same-day end-of-day and several currencies; cash vs asset (lowest day, tie to cash, flag combinations); ledgerUnreadable, unknown broker, both flags; a differential of a few hundred seeded random ledgers against a frozen copy of the old walk, but for that one rule",
+        # PURE: one private in-memory SQLite per test (create_all), disposed at teardown; no lane DB, server or network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "broker-update-bulk-refusal",
+        services_broker_update_bulk_refusal,
+        name="Broker update_bulk Refusal",
+        desc="Checkpoint 6: a refused overdraft/shorting turn-off in BrokerService.update_bulk leaves the broker exactly as it was (every field of the item, flag included), in the session before any commit and after the caller commits a partial success; valid turn-off, rename-only, unknown id, access denied, duplicate name keep their results",
+        # PURE: one private in-memory SQLite per test (create_all), disposed at teardown; no lane DB, server or network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "linked-adjustment-pair",
         services_linked_adjustment_pair,
         name="Linked Adjustment Pair",
         desc="Two ADJUSTMENTs under one link_uuid are refused on the first create (pairAdjustmentNotAllowed, commit and validate); a TRANSFER pair, the Bulk promote, unlinked ADJUSTMENTs and a stored pair are not touched; the message exists in EN/IT/FR/ES",
+    )
+    add_test(
+        cat,
+        "linked-cash-pair",
+        services_linked_cash_pair,
+        name="Linked Cash Pair",
+        desc="W6-7: a CASH_TRANSFER pair in two currencies or with amounts that are not opposite, and an FX_CONVERSION in one currency, are refused on the first create (pairCurrencyMismatch, pairAmountMismatch, pairCurrencySame; commit and validate); coherent and stored pairs are not touched; the rule follows TX_TYPE_METADATA; the messages exist in EN/IT/FR/ES",
+    )
+    add_test(
+        cat,
+        "generic-csv-cost-todo",
+        services_generic_csv_cost_todo,
+        name="Generic CSV Cost Todo",
+        desc="W6-5: the generic CSV asks for the inherited cost only where it is missing: an incoming ADJUSTMENT with a cost of 0 is not asked again, one without a cost is, an outgoing one and other types never are",
     )
     add_test(
         cat,
@@ -2959,6 +3051,15 @@ Note: No backend server required.
     add_test(cat, "brim-gap-fix", services_brim_gap_fix, name="BRIM Gap-fix", desc="Gap-fix: bank truth points vs LibreFolio state, proposals and verifications")
     add_test(
         cat,
+        "brim-report-set-core",
+        services_brim_report_set_core,
+        name="BRIM Report-set Core",
+        desc="Shared report-set core: text/number helpers, xlsx/csv readers and header scan, rule M (RoleMerge), one-to-one pairing, timeline and zones",
+        # PURE: synthetic rows and files under tmp_path; no database, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "gap-fix-currency-guard",
         services_gap_fix_currency_guard,
         name="Gap-fix Currency Guard",
@@ -2972,7 +3073,7 @@ Note: No backend server required.
         "financial-math",
         services_financial_math,
         name="Financial Math",
-        desc="Average cost, native cash, returns and periods, the ledger control totals: movements, conversions through the FX service, diagnostics; boundaries of the whole layer, the day-count primitives' one home",
+        desc="Average cost, native cash and its first negative day, returns and periods, the ledger control totals: movements, conversions through the FX service, diagnostics; boundaries of the whole layer, the day-count primitives' one home",
         # PURE: each module's only I/O is convert_bulk, which every test replaces on its
         # module with a double; the session handed to it is None or a sentinel, or, for the
         # ledger control totals, one on a private SQLite file under tmp_path that no other
@@ -3000,6 +3101,18 @@ Note: No backend server required.
         # skips this action so that the file runs once there.
         in_all=False,
         # Write-scoped (the category default): a user, brokers and an asset under a unique marker, every reading by their ids, the session rolled back.
+    )
+    add_test(
+        cat,
+        "dust-threshold",
+        services_dust_threshold,
+        name="Daily State Dust Threshold",
+        desc="MF6-2: a residual at or below QUANTITY_DUST_THRESHOLD is not held by the daily state — no market value, cost, NAV, allocation, broker contribution, frame or snapshot entry, and no MISSING day when unpriced; 0.000011 is still held",
+        # The file sits in test_financial/, which roi-fifo-utils runs whole: the derived "all"
+        # skips this action so that the file runs once there.
+        in_all=False,
+        # PURE: DailyStateBuilder over mock transactions; no DB, no server, no network.
+        isolation="pure",
     )
     add_test(
         cat,

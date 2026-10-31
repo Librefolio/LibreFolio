@@ -436,6 +436,16 @@ def api_tx_balance_walk(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Balance walk tests", verbose=verbose)
 
 
+def api_broker_overdraft_off_refused(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the broker overdraft-flag-off tests (PATCH refused over a negative cash, flag not stored)."""
+    print_section("Broker Overdraft Off Refused Tests")
+    print_info("Testing PATCH /brokers/{id} allow_cash_overdraft=false over a negative cash: refused, stored flag unchanged")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_broker_overdraft_off_refused.py", test_names)
+    return run_command(cmd, "Broker overdraft off refused tests", verbose=verbose)
+
+
 def api_events_suggest(verbose: bool = False, test_names: list = None) -> bool:
     """Run POST /transactions/events/suggest tests."""
     print_section("Events Suggest (C.2) API Tests")
@@ -1364,6 +1374,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "transfer-promotion", api_transfer_promotion, name="Transfer Promotion", desc="DEPOSIT/WITHDRAWAL → TRANSFER")
     add_test(api, "transactions-validate", api_transactions_validate, name="Transactions Validate", desc="POST /transactions/validate dry-run")
     add_test(api, "tx-balance-walk", api_tx_balance_walk, name="TX Balance Walk", desc="Same-day ordering, cascade, end-of-day")
+    add_test(api, "broker-overdraft-off-refused", api_broker_overdraft_off_refused, name="Broker Overdraft Off Refused", desc="PATCH allow_cash_overdraft=false over a negative cash is refused and the stored flag stays on (own user and broker)")
     add_test(api, "events-suggest", api_events_suggest, name="Events Suggest", desc="Candidate events within tolerance")
     add_test(api, "batch-split-promote", api_batch_split_promote, name="Batch Split/Promote", desc="Split/promote in unified batch + suggest")
     add_test(api, "transactions-wac", api_transactions_wac_inline, name="WAC Cost Basis", desc="WAC inline validate/commit (P16-P28)")

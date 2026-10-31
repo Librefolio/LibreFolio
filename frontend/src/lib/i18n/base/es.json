@@ -182,7 +182,11 @@
       "invalidNumber": "Número no válido en \"{column}\": \"{value}\"",
       "invalidValue": "Valor no válido en \"{column}\": \"{value}\"",
       "duplicate": "Valor duplicado para {label}: {key}"
-    }
+    },
+    "statusValidRows": "{count, plural, one {# fila válida} other {# filas válidas}}",
+    "statusErrors": "{count, plural, one {# error} other {# errores}}",
+    "statusDuplicates": "{label} duplicado",
+    "duplicatesShort": "duplicados"
   },
   "dataEditor": {
     "staleTooltip": "Ocultar filas rellenadas hacia atrás (⚠️ obsoletas). Son puntos de relleno copiados del dato real más cercano.",

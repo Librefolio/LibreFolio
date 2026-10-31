@@ -465,6 +465,18 @@ CALL_SITES: dict[str, tuple[str, str]] = {
 # TWRR and ROI days, then for the MWRR line's days —, every other call site once.
 CALL_COUNTS: dict[str, int] = {"get_history-performance_inputs": 2}
 
+# MF-K3: when ``date_from`` precedes the first state, the simple ROI counts its capital from the whole history's flows
+# (``DerivedViewsBuilder.build_roi_cash_flows``: the period's inputs start from the opening state's capital, which would
+# leave the first day's deposit out), so get_summary and get_history ask the performance inputs once more, with no
+# window. Only the window that starts before the history has that call; every other one keeps CALL_COUNTS.
+ROI_WHOLE_HISTORY_SITES = frozenset({"get_summary-performance_inputs", "get_history-performance_inputs"})
+
+
+def _roi_whole_history_calls(site: str, date_from: date | None) -> int:
+    """The extra, windowless ``build_performance_inputs`` call of ``site`` for a ``date_from`` before the history."""
+    return 1 if site in ROI_WHOLE_HISTORY_SITES and date_from is not None and date_from < _day(0) else 0
+
+
 # The builder methods whose output is steps: the service no longer cuts it, so HEAD's output is the whole build clipped.
 STEP_BUILDERS = frozenset({"build_history", "build_broker_pnl_history", "build_pnl_candles"})
 
@@ -789,9 +801,18 @@ class TestTheServiceHandsItsWindowToTheBuilder:
         builder builds the whole history, and for a builder of steps the test then clips them to the window with
         ``points_between``, since the service no longer cuts) and as it is."""
         site = next(name for name, value in CALL_SITES.items() if value == (service_method, method))
+        extra = _roi_whole_history_calls(site, date_from)
         stripped_calls, stripped = await _head_output(monkeypatch, service_method, method, history, date_from, date_to)
-        assert len(stripped_calls) == CALL_COUNTS.get(site, 1), "barrier: the stripped run went through the call site"
-        assert _dump(await _serve(service_method, history, date_from, date_to)) == _dump(stripped)
+        assert len(stripped_calls) == CALL_COUNTS.get(site, 1) + extra, "barrier: the stripped run went through the call site"
+        with monkeypatch.context() as patch:
+            calls = _record_windows(patch, method)
+            output = await _serve(service_method, history, date_from, date_to)
+        if site in ROI_WHOLE_HISTORY_SITES:
+            # The performance inputs are asked with the service's date_from, and once more with none for the ROI's whole
+            # history when date_from precedes it (MF-K3)
+            expected_calls = [(date_from,)] * CALL_COUNTS.get(site, 1) + [(None,)] * extra
+            assert sorted(calls, key=repr) == sorted(expected_calls, key=repr), f"the windows asked: {calls}"
+        assert _dump(output) == _dump(stripped)
 
 
 # =============================================================================

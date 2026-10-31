@@ -639,11 +639,8 @@ test.describe('Broker Detail Page', () => {
             const url = new URL(page.url());
             const brokerId = Number(url.pathname.split('/').filter(Boolean).pop());
             const assetId = Number(url.searchParams.get('asset'));
-            const summaryResponse = await page.request.get(`/api/v1/brokers/${brokerId}/summary`);
-            expect(summaryResponse.ok(), `broker ${brokerId} summary answered ${summaryResponse.status()}`).toBe(true);
-            const summary = (await summaryResponse.json()) as {holdings?: {asset_id: number; asset_name: string}[] | null};
-            const assetName = summary.holdings?.find((holding) => holding.asset_id === assetId)?.asset_name;
-            if (!assetName) throw new Error(`Asset ${assetId}, opened from the first ${BROKER_WITH_HOLDINGS} holding, is missing from broker ${brokerId}'s summary`);
+            const assetName = (await brokerHoldings(page, brokerId)).find((holding) => holding.asset_id === assetId)?.asset_name;
+            if (!assetName) throw new Error(`Asset ${assetId}, opened from the first ${BROKER_WITH_HOLDINGS} holding, is missing from broker ${brokerId}'s report holdings`);
             await expect(page.getByTestId('lots-analysis-panel-title'), `the title gains "${assetName}" once the asset cache has resolved — from then on the panel's currency is final and its charts are not mounted again`).toContainText(assetName, {timeout: 10_000});
 
             const chart = page.getByTestId('lot-comparison-echart');
@@ -859,6 +856,20 @@ async function lotsAnalysis(page: Page, body: {asset_id: number; broker_ids: num
 }
 
 /**
+ * The open holdings of one broker with their asset names, as the portfolio report gives them (`summary.holdings`, each
+ * with the broker that holds it). They used to come from `GET /brokers/{id}/summary`, which no longer carries them (MF-L:
+ * no page read the field, and the report is where a position's cost and value are calculated).
+ */
+async function brokerHoldings(page: Page, brokerId: number): Promise<{asset_id: number; asset_name: string}[]> {
+    const response = await page.request.post('/api/v1/portfolio/report', {
+        data: {broker_ids: [brokerId], include_summary: true, include_history: false, include_allocation_history: false, include_breakdown: false, include_positions_contribution: false},
+    });
+    expect(response.ok(), `the portfolio report of broker ${brokerId} answered ${response.status()}`).toBe(true);
+    const report = (await response.json()) as {summary?: {holdings?: {asset_id: number; asset_name: string; broker_id?: number | null}[] | null} | null};
+    return (report.summary?.holdings ?? []).filter((holding) => holding.broker_id == null || holding.broker_id === brokerId);
+}
+
+/**
  * Find an Interactive Brokers holding whose lots are all open-ish, with a value history to draw.
  *
  * Why this shape: the Open/Closed filter is tri-state and exclusive per lot (`filterVisibleLots`:
@@ -882,11 +893,8 @@ async function lotsAnalysis(page: Page, body: {asset_id: number; broker_ids: num
  * and the filter cannot disagree about which bucket a lot belongs to.
  */
 async function findAllOpenLotsAsset(page: Page, brokerId: number): Promise<AllOpenLotsAsset> {
-    const summaryResponse = await page.request.get(`/api/v1/brokers/${brokerId}/summary`);
-    expect(summaryResponse.ok(), `broker ${brokerId} summary answered ${summaryResponse.status()}`).toBe(true);
-    const summary = (await summaryResponse.json()) as {holdings?: {asset_id: number; asset_name: string}[] | null};
     const candidates = new Map<number, string>();
-    for (const holding of summary.holdings ?? []) candidates.set(holding.asset_id, holding.asset_name);
+    for (const holding of await brokerHoldings(page, brokerId)) candidates.set(holding.asset_id, holding.asset_name);
 
     const verdicts: string[] = [];
     for (const [id, name] of [...candidates].sort(([a], [b]) => a - b)) {

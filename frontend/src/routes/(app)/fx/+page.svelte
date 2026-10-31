@@ -1409,40 +1409,58 @@
             {:else}
                 <!-- The cards' view (Y-40): absolute, percent, rolling return -->
                 <div class="flex rounded-lg border border-lf-subtle overflow-hidden" data-testid="fx-global-view" data-view={globalPrimaryView}>
-                    <button
-                        class="flex-1 inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalPrimaryView === 'absolute' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
-                        data-testid="fx-global-view-absolute"
-                        aria-pressed={globalPrimaryView === 'absolute'}
-                        aria-label={$_('chart.showAbsolute')}
-                        title={$_('chart.showAbsolute')}
-                        onclick={() => handleListPrimaryView('absolute')}
-                    >
-                        <ChartLine size={14} />
-                    </button>
-                    <button
-                        class="flex-1 px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalPrimaryView === 'percentage' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
-                        data-testid="fx-global-view-percentage"
-                        aria-pressed={globalPrimaryView === 'percentage'}
-                        onclick={() => handleListPrimaryView('percentage')}
-                        >%
-                    </button>
-                    <button
-                        class="flex-1 inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalPrimaryView === 'calendar-return' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
-                        data-testid="fx-global-view-calendar-return"
-                        aria-pressed={globalPrimaryView === 'calendar-return'}
-                        aria-label={$_('signals.riskRollingReturn.name')}
-                        title={$_('signals.riskRollingReturn.name')}
-                        onclick={() => handleListPrimaryView('calendar-return')}
-                    >
-                        <CalendarSync size={14} />
-                    </button>
+                    <Tooltip text={$_('chart.showAbsolute')} position="bottom" interactiveChild wrapperClass="flex-1" testId="fx-global-view-absolute-tooltip">
+                        <button
+                            type="button"
+                            class="w-full inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalPrimaryView === 'absolute' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+                            data-testid="fx-global-view-absolute"
+                            aria-pressed={globalPrimaryView === 'absolute'}
+                            aria-label={$_('chart.showAbsolute')}
+                            onclick={(event) => {
+                                event.stopPropagation();
+                                handleListPrimaryView('absolute');
+                            }}
+                        >
+                            <ChartLine size={14} />
+                        </button>
+                    </Tooltip>
+                    <Tooltip text={$_('chart.showPercentage')} position="bottom" interactiveChild wrapperClass="flex-1" testId="fx-global-view-percentage-tooltip">
+                        <button
+                            type="button"
+                            class="w-full px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalPrimaryView === 'percentage' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+                            data-testid="fx-global-view-percentage"
+                            aria-pressed={globalPrimaryView === 'percentage'}
+                            aria-label={$_('chart.showPercentage')}
+                            onclick={(event) => {
+                                event.stopPropagation();
+                                handleListPrimaryView('percentage');
+                            }}
+                        >
+                            %
+                        </button>
+                    </Tooltip>
+                    <Tooltip text={$_('signals.riskRollingReturn.name')} position="bottom" interactiveChild wrapperClass="flex-1" testId="fx-global-view-calendar-return-tooltip">
+                        <button
+                            type="button"
+                            class="w-full inline-flex items-center justify-center px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors {globalPrimaryView === 'calendar-return' ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-muted hover:bg-lf-hover'}"
+                            data-testid="fx-global-view-calendar-return"
+                            aria-pressed={globalPrimaryView === 'calendar-return'}
+                            aria-label={$_('signals.riskRollingReturn.name')}
+                            onclick={(event) => {
+                                event.stopPropagation();
+                                handleListPrimaryView('calendar-return');
+                            }}
+                        >
+                            <CalendarSync size={14} />
+                        </button>
+                    </Tooltip>
                 </div>
             {/if}
             <!-- Settings. The three buttons say what they do in a delayed tooltip (Y5-F1); a click is theirs, so it
                  stops before the tooltip's own click, which would pin the hint over the window it opens. -->
             <Tooltip text={$_('sharedResource.settingsHint')} position="bottom" interactiveChild testId="fx-chart-settings-tooltip">
                 <button
-                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors"
+                    class="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors"
                     data-testid="fx-chart-settings-button"
                     onclick={(event) => {
                         event.stopPropagation();
@@ -1456,7 +1474,7 @@
             <!-- Sync All -->
             <Tooltip text={$_('sharedResource.syncAllHint')} position="bottom" interactiveChild testId="fx-sync-all-tooltip">
                 <button
-                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors"
+                    class="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors"
                     data-testid="fx-sync-all-button"
                     use:guideAnchor={'fx.page.sync'}
                     onclick={(event) => {
@@ -1471,7 +1489,7 @@
             <!-- Refresh All -->
             <Tooltip text={$_('sharedResource.refreshAllHint')} position="bottom" interactiveChild testId="fx-refresh-tooltip">
                 <button
-                    class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors disabled:opacity-50"
+                    class="w-full flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-xs whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg hover:bg-lf-hover text-lf-secondary transition-colors disabled:opacity-50"
                     data-testid="fx-refresh-all-button"
                     data-busy={pageBusy.busy ? 'true' : 'false'}
                     disabled={pageBusy.busy}

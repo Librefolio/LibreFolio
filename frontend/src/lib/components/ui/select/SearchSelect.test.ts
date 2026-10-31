@@ -620,3 +620,15 @@ describe('AssetSelect — the chosen asset on the trigger', () => {
         expect(stackedLines(trigger), 'the full-size trigger no longer writes the name above the label and the currency').toHaveLength(1);
     });
 });
+
+describe('SearchSelect — an empty trigger with a long placeholder (Y2 FB-9)', () => {
+    it('writes the placeholder on one line that gives way at the trigger edge, never wrapping or leaving the box', async () => {
+        await setupI18n();
+        render(SearchSelect, {props: {testId: 'long-placeholder', value: '', options: [{value: 'a', label: 'Alpha'}], placeholder: '— Currency pair that is named at some considerable length'}});
+        const trigger = screen.getByTestId('long-placeholder-trigger');
+        const placeholder = within(trigger).getByTestId('long-placeholder-placeholder');
+        // jsdom lays nothing out: the utilities that make one truncated line are the subject, as in the block above.
+        expect([...placeholder.classList]).toEqual(expect.arrayContaining(['min-w-0', 'truncate']));
+        expect(placeholder.textContent).toContain('Currency pair');
+    });
+});
