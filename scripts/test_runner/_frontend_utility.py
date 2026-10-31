@@ -627,7 +627,7 @@ def front_auth(verbose: bool = False, ui: bool = False, headed: bool = False, de
         return False
     if not _ensure_test_users():
         return False
-    return _run_playwright("auth.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+    return _run_playwright("e2e/auth.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_auth_links(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
