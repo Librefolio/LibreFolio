@@ -281,6 +281,19 @@ describe('PasswordStrength — the rules checklist', () => {
         expect(holds[0], 'and the two glyphs differ in shape, whatever their colour classes').not.toBe(fails[0]);
     });
 
+    // TC-1: the check and the cross tell a sighted user which rule holds; a screen reader gets the same in words.
+    it('tells a screen reader which rule holds, in hidden text beside the glyph, and hides the glyph itself (TC-1)', () => {
+        render(PasswordStrength, {password: THREE_RULES});
+
+        for (const rule of rulesDrawn()) {
+            const passed = rule.getAttribute('data-passed') === 'true';
+            const state = within(rule).getByTestId(`password-rulestate-${keyOf(rule)}`);
+            expect(state, `${keyOf(rule)} says its state in text`).toHaveTextContent(passed ? 'auth.passwordStrength.ruleMet' : 'auth.passwordStrength.ruleNotMet');
+            expect(state.className, 'the text is for screen readers only').toContain('sr-only');
+            expect(iconOf(rule).getAttribute('aria-hidden'), 'the glyph is not read out').toBe('true');
+        }
+    });
+
     it('leaves the checklist out with showRules: false, and keeps the strength', () => {
         render(PasswordStrength, {password: THREE_RULES, showRules: false});
 

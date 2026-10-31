@@ -134,7 +134,7 @@ const mocks = await vi.hoisted(async () => {
         DISABLED: {profile: 'selfhosted', accounts: accounts('disabled')} as InstanceConfig,
         /** The answer of a self-hosted instance in `mode` that says `first_account_open` (A6d). */
         answer: (mode: Mode, first_account_open: boolean): InstanceConfig => ({profile: 'selfhosted', accounts: accounts(mode, false, first_account_open)}),
-        instance: reactiveBox<{config: InstanceConfig}>({config: OPEN}),
+        instance: reactiveBox<{config: InstanceConfig; loaded: boolean; failed: boolean}>({config: OPEN, loaded: true, failed: false}),
         instanceLoad: vi.fn<(options?: {force?: boolean}) => Promise<void>>().mockName('instanceConfig.load'),
         settingsLoad: vi.fn<() => Promise<void>>().mockResolvedValue(undefined).mockName('globalSettings.load'),
     };
@@ -146,10 +146,10 @@ vi.mock('$lib/features/instance/instanceConfig.svelte', () => ({
             return mocks.instance.config;
         },
         get loaded() {
-            return true;
+            return mocks.instance.loaded;
         },
         get failed() {
-            return false;
+            return mocks.instance.failed;
         },
         load: mocks.instanceLoad,
     },
@@ -221,6 +221,8 @@ function registerOffer(): RegisterOffer {
 beforeEach(() => {
     // Every test starts on an open instance, with no read of the configuration or of the settings asked yet.
     mocks.instance.config = mocks.OPEN;
+    mocks.instance.loaded = true;
+    mocks.instance.failed = false;
     mocks.instanceLoad.mockReset();
     mocks.instanceLoad.mockResolvedValue(undefined);
     mocks.settingsLoad.mockClear();
@@ -326,14 +328,37 @@ describe('LoginCard — «Register here» follows the registration mode of the i
         expect(registerOffer()).toEqual(WITHDRAWN);
     });
 
-    it('offers it before the server has answered: the defaults are open', async () => {
-        // `load()` never settles here, and the store still holds DEFAULT_INSTANCE_CONFIG. The backend refuses a
-        // registration it does not allow anyway.
+    // A6-2 (A-19): the defaults say open, but they are not the instance's word: until it answers, no link that an
+    // invitation-only instance would withdraw a moment later.
+    it('offers nothing before the server has answered: no flash of the link on an invitation-only instance', async () => {
+        mocks.instance.loaded = false;
         mocks.instanceLoad.mockReturnValue(new Promise<void>(() => {}));
         mount();
         await tick();
 
+        expect(registerOffer()).toEqual(WITHDRAWN);
+        expect(screen.getByTestId('login-modal')).toHaveAttribute('data-instance', 'pending');
+    });
+
+    it('offers it once the answer lands open, and says the instance is ready', async () => {
+        mocks.instance.loaded = false;
+        mount();
+        await tick();
+        mocks.instance.loaded = true;
+        await tick();
+
         expect(registerOffer()).toEqual(OFFERED);
+        expect(screen.getByTestId('login-modal')).toHaveAttribute('data-instance', 'ready');
+    });
+
+    it('when the request failed before any answer, the defaults (open) stand: the link is there, the card is ready', async () => {
+        mocks.instance.loaded = false;
+        mocks.instance.failed = true;
+        mount();
+        await tick();
+
+        expect(registerOffer()).toEqual(OFFERED);
+        expect(screen.getByTestId('login-modal')).toHaveAttribute('data-instance', 'ready');
     });
 
     it('follows the answer as soon as it lands, both ways, without a remount', async () => {

@@ -69,6 +69,8 @@
     let protectedEmailOpen = false;
     /** The current password, asked only while the email is changed (A6e). */
     let emailPassword = '';
+    /** The server asked for the password for an address the tab read as unchanged (A-36): the field shows anyway. */
+    let serverAsksPassword = false;
 
     // Original values (from server)
     let originalUsername = $currentUser?.username ?? '';
@@ -94,9 +96,12 @@
     // P18: the same address in other A–Z capitals is no change of address — saved as typed, with no password and
     // nobody signed out. Only a real change asks for the current password (A6e).
     $: emailChangesAddress = emailModified && !sameEmail(editedEmail, originalEmail);
+    // Where the tab and the server disagree on «same address» the server decides: after its 400 the password is asked.
+    $: if (!emailModified) serverAsksPassword = false;
+    $: emailAsksPassword = emailChangesAddress || (emailModified && serverAsksPassword);
     // The password belongs to the change it was typed for: back to the stored address, in any capitals, it is gone.
-    $: if (!emailChangesAddress) emailPassword = '';
-    $: emailNeedsPassword = emailChangesAddress && emailPassword === '';
+    $: if (!emailAsksPassword) emailPassword = '';
+    $: emailNeedsPassword = emailAsksPassword && emailPassword === '';
     $: avatarModified = editedAvatarUrl !== originalAvatarUrl;
     $: hasAnyChanges = usernameModified || emailModified || avatarModified;
 
@@ -154,7 +159,21 @@
 
     /** The body of an email save: the current password only when the address itself changes (A6e, P18). */
     function emailPayload(): {email: string; current_password?: string} {
-        return emailChangesAddress ? {email: editedEmail, current_password: emailPassword} : {email: editedEmail};
+        return emailAsksPassword ? {email: editedEmail, current_password: emailPassword} : {email: editedEmail};
+    }
+
+    /** After a saved e-mail the input shows the address as the server stored it (A-28); `$currentUser` is already read again. */
+    function adoptStoredEmail() {
+        serverAsksPassword = false;
+        // Only the form of the same address: a stored address that is another one is not what was just saved
+        const stored = $currentUser?.email;
+        if (stored && sameEmail(stored, editedEmail)) editedEmail = stored;
+    }
+
+    /** The server asked for the password where the tab saw no change (A-36): ask it, and read the stored address again (A-28). */
+    async function askPasswordAfterRefusal() {
+        serverAsksPassword = true;
+        await auth.checkAuth();
     }
 
     // Save individual field
@@ -169,6 +188,8 @@
 
             await zodiosApi.update_profile_api_v1_auth_profile_put(payload);
             await auth.checkAuth();
+            // The input takes the form the server kept (A-28), so the row settles
+            if (field === 'email') adoptStoredEmail();
 
             const fieldName = field === 'username' ? $_('auth.username') : $_('auth.email');
             notify({
@@ -179,6 +200,7 @@
         } catch (e: unknown) {
             debug.error('ProfileTab', 'saveField failed', e);
             const refusal = describeRefusal(e);
+            if (field === 'email' && refusal.code === 'CURRENT_PASSWORD_REQUIRED') await askPasswordAfterRefusal();
             if (field === 'email' && refusal.code === 'ACCOUNT_PROTECTED') {
                 // No bare error: the modal of the host says what to do (A5-1b)
                 protectedEmailOpen = true;
@@ -233,6 +255,7 @@
             } catch (e: unknown) {
                 debug.error('ProfileTab', 'saveAll field failed', e);
                 const refusal = describeRefusal(e);
+                if (field === 'email' && refusal.code === 'CURRENT_PASSWORD_REQUIRED') await askPasswordAfterRefusal();
                 if (field === 'email' && refusal.code === 'ACCOUNT_PROTECTED') {
                     // Not a failure to list: the modal of the host says what to do (A5-1b)
                     protectedEmailOpen = true;
@@ -259,6 +282,7 @@
 
         if (saved.length > 0) {
             await auth.checkAuth();
+            if (saved.some((item) => item.field === 'email')) adoptStoredEmail();
         }
 
         if (failed.length > 0) {
@@ -497,7 +521,7 @@
                     {/if}
                 </div>
                 <p class="text-xs text-lf-muted mt-1">{$_('settings.emailHint')}</p>
-                {#if !isLocked && emailChangesAddress}
+                {#if !isLocked && emailAsksPassword}
                     <!-- A6e: the current password, for a change of address only (P18: not for other capitals); the change signs the other devices out. -->
                     <div class="mt-3 space-y-1">
                         <label class="sr-only" for="profile-current-password">{$_('settings.currentPassword')}</label>

@@ -617,6 +617,7 @@ _ROUND5_ONBOARDING_FLOW_VERSIONS = {
     "asset_page_guide": 1,
     "asset_guide": 1,
     "asset_detail_guide": 1,
+    "tools_page_guide": 1,
 }
 _REMOVED_ONBOARDING_DRAFT_FLOWS = {
     "transaction_bulk_validation_guide",
@@ -686,7 +687,7 @@ class TestOnboardingServiceEnsure:
         _OWNED_ONBOARDING_USER_IDS.add(user_id)
         return user_id
 
-    def test_round5_registry_is_exactly_fifteen_flows_with_two_step_managed_flows(self):
+    def test_round5_registry_is_exactly_sixteen_flows_with_two_step_managed_flows(self):
         """Model, flow registry and step registry share the final Round 5 contract."""
         from backend.app.db.models import OnboardingFlow  # noqa: PLC0415
         from backend.app.services.accounts.onboarding_service import ONBOARDING_FLOW_STEPS, ONBOARDING_FLOW_VERSIONS  # noqa: PLC0415
@@ -694,7 +695,7 @@ class TestOnboardingServiceEnsure:
         actual_versions = {flow.value: version for flow, version in ONBOARDING_FLOW_VERSIONS.items()}
         actual_steps = {flow.value: step_ids for flow, step_ids in ONBOARDING_FLOW_STEPS.items()}
 
-        assert len(actual_versions) == 15
+        assert len(actual_versions) == 16
         assert actual_versions == _ROUND5_ONBOARDING_FLOW_VERSIONS
         assert {flow.value for flow in OnboardingFlow} == set(_ROUND5_ONBOARDING_FLOW_VERSIONS)
         assert set(actual_versions).isdisjoint(_REMOVED_ONBOARDING_DRAFT_FLOWS)
@@ -703,7 +704,7 @@ class TestOnboardingServiceEnsure:
 
     @pytest.mark.asyncio
     async def test_ensure_creates_all_missing_rows_pending_current_version(self):
-        """A brand-new user gets all 15 flows and every registered step pending."""
+        """A brand-new user gets all 16 flows and every registered step pending."""
         from sqlalchemy.ext.asyncio import AsyncSession  # noqa: PLC0415
 
         from backend.app.db.models import OnboardingStatus, User  # noqa: PLC0415
@@ -721,7 +722,7 @@ class TestOnboardingServiceEnsure:
             try:
                 rows = await ensure_onboarding_progress(user_id, session)
 
-                assert len(rows) == 15, "A fresh user must receive exactly the Round 5 source-of-truth rows"
+                assert len(rows) == 16, "A fresh user must receive exactly the Round 5 source-of-truth rows"
                 assert set(rows) == set(ONBOARDING_FLOW_VERSIONS), "Every registered flow must get a row"
                 for flow, row in rows.items():
                     assert row.user_id == user_id

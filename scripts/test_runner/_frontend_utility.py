@@ -240,6 +240,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/onboarding/guideAnchors.test.ts",
             "src/lib/features/onboarding/onboardingTourSurfaces.test.ts",
             "src/lib/features/onboarding/guideCopy.test.ts",
+            "src/lib/features/onboarding/onboardingGuideCatalog.contract.test.ts",
             "src/lib/features/tools/client.test.ts",
             "src/lib/features/tools/registry.test.ts",
             "src/lib/features/tools/pac-allocator/planner/decimal.test.ts",

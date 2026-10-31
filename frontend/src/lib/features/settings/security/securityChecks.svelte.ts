@@ -8,11 +8,14 @@
  * - `reload()` reads again (the tab's «check again»); the last checks stay listed meanwhile, and after a failure.
  * - `findings`, `attentionCount` and `attentionSeverity` follow the checks and what the browser knows (the public
  *   configuration and the host of the page); before the first answer they are empty.
+ * - `reset()` forgets the answer (the account changed): idle, nothing listed; a request still on the way for the
+ *   account that left lands nowhere. The app's store resets itself at every change of account.
  * - The sidebar's connection line asks for them on every page an administrator opens, and draws the dot of
  *   `attentionSeverity`; the phone's menu button reads the same (N69-1).
  */
 import {instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
 import {readBlockedScripts} from '$lib/features/security/cspNotice';
+import {getClientSessionGeneration, isClientSessionCurrent, registerClientSessionReset} from '$lib/stores/app/clientSession';
 import {fetchSecurityChecks, type SecurityCheck} from './securityChecksApi';
 import {attentionCount, attentionSeverity, securityFindings, type BrowserSecurityState, type SecurityFindings} from './securityFindings';
 
@@ -49,14 +52,17 @@ export function createSecurityChecks(dependencies: SecurityChecksDependencies = 
     function read(): Promise<void> {
         if (pending) return pending;
         status = 'loading';
+        const generation = getClientSessionGeneration();
         const attempt = fetchChecks()
             .then(
                 (items) => {
+                    if (!isClientSessionCurrent(generation)) return;
                     checks = items;
                     answered = true;
                     status = 'ready';
                 },
                 () => {
+                    if (!isClientSessionCurrent(generation)) return;
                     status = 'error';
                 },
             )
@@ -95,9 +101,18 @@ export function createSecurityChecks(dependencies: SecurityChecksDependencies = 
         reload(): Promise<void> {
             return read();
         },
+        /** The account changed: forget the answer; a request under way for the account that left is dropped. */
+        reset(): void {
+            pending = null;
+            checks = [];
+            answered = false;
+            status = 'idle';
+        },
     };
 }
 
 export type SecurityChecksStore = ReturnType<typeof createSecurityChecks>;
 
 export const securityChecks = createSecurityChecks();
+
+registerClientSessionReset('securityChecks', () => securityChecks.reset());

@@ -43,7 +43,9 @@
         "hasLowercase": "One lowercase letter",
         "hasNumber": "One number",
         "hasSpecial": "One special character"
-      }
+      },
+      "ruleMet": "met",
+      "ruleNotMet": "not met"
     },
     "serverUnreachable": {
       "title": "The server is not responding",

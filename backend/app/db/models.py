@@ -351,6 +351,7 @@ class OnboardingFlow(StrEnum):
     ASSET_PAGE_GUIDE = "asset_page_guide"
     ASSET_GUIDE = "asset_guide"
     ASSET_DETAIL_GUIDE = "asset_detail_guide"
+    TOOLS_PAGE_GUIDE = "tools_page_guide"
 
 
 class OnboardingStatus(StrEnum):

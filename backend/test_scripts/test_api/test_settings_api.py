@@ -414,6 +414,7 @@ ONBOARDING_FLOWS = (
     "asset_page_guide",
     "asset_guide",
     "asset_detail_guide",
+    "tools_page_guide",
 )
 REMOVED_ONBOARDING_DRAFT_FLOWS = {
     "transaction_bulk_validation_guide",
@@ -532,7 +533,7 @@ class TestOnboardingProgressApi:
                 flows = {item["flow"]: item for item in data["flows"]}
 
                 assert set(data) == {"flows"}
-                assert len(data["flows"]) == 15, f"Final contract must expose exactly 15 flows, got {[item['flow'] for item in data['flows']]}"
+                assert len(data["flows"]) == 16, f"Final contract must expose exactly 16 flows, got {[item['flow'] for item in data['flows']]}"
                 assert tuple(item["flow"] for item in data["flows"]) == ONBOARDING_FLOWS
                 assert len(flows) == len(data["flows"]), "Final contract must not contain duplicate flow rows"
                 assert set(flows).isdisjoint(REMOVED_ONBOARDING_DRAFT_FLOWS)
@@ -547,7 +548,7 @@ class TestOnboardingProgressApi:
             finally:
                 await _delete_onboarding_user(username)
 
-        print_success("✓ GET exposes the final 15 flows and both ordered step arrays")
+        print_success("✓ GET exposes the final 16 flows and both ordered step arrays")
 
     @pytest.mark.asyncio
     async def test_complete_onboarding_flow(self, test_server):

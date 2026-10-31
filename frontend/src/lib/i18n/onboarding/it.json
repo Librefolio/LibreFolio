@@ -94,7 +94,8 @@
       "fx_page_guide": "Panoramica FX",
       "fx_detail_guide": "Guida dettaglio coppia FX",
       "asset_page_guide": "Panoramica asset",
-      "asset_detail_guide": "Guida dettaglio asset"
+      "asset_detail_guide": "Guida dettaglio asset",
+      "tools_page_guide": "Pagina Strumenti"
     },
     "status": {
       "pending": "In sospeso",
@@ -115,7 +116,8 @@
         "transactions": "Transazioni",
         "broker": "Broker",
         "fx": "FX",
-        "asset": "Asset"
+        "asset": "Asset",
+        "tools": "Strumenti"
       },
       "armedToast": "{flow}: avvio pronto in questo browser. Apri la funzionalità per iniziare.",
       "cancelArmed": "Annulla attivazione",
@@ -399,6 +401,18 @@
         "risk": {
           "title": "Scenari di rischio",
           "description": "Apri Rischio per esaminare misure storiche, scenari di stress, simulazioni e contesto di portafoglio."
+        }
+      }
+    },
+    "toolsPageGuide": {
+      "steps": {
+        "overview": {
+          "title": "I tuoi strumenti",
+          "description": "Ogni scheda è uno strumento che lavora sui dati che scegli. Apri una scheda per usare quello strumento; i nuovi strumenti compaiono qui quando diventano disponibili."
+        },
+        "refresh": {
+          "title": "Ricarica l’elenco",
+          "description": "Ricarica l’elenco se manca uno strumento o ne vedi uno non aggiornato."
         }
       }
     }

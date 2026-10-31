@@ -258,7 +258,7 @@ async def register_user(
     moment = now or utcnow()
     first, invited, grants_admin = await _admission(session, invite_token, moment)
 
-    user, error = await user_service.create_user(session, username, email, password, is_superuser=grants_admin, commit=False)
+    user, error = await user_service.create_user(session, username, email, password, is_superuser=grants_admin, commit=False, reserve_owner_address=True)
     if user is None:
         await session.rollback()
         # A new username against its rules (A-21a) is a refusal of its own, not an account that exists: the service's code
