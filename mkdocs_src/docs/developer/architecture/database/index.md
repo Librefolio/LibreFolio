@@ -64,8 +64,8 @@ is read back (`backend/app/db/models.py`; C-97, issue #43).
 | `transactions.quantity` | `RealDecimal(22, 10)` | 10 | 15 |
 | `price_history`: `open`, `high`, `low`, `close`, `adjusted_close`; `transactions.cost_basis_override`, a per-unit price | `RealDecimal(24, 12)` | 12 | 12 |
 | `transactions.amount`, `asset_events.value` | `RealDecimal(18, 6)` | 6 | 15 for the amount, 12 for the event value |
-| `fx_rates.rate` | `Numeric(24, 10)` | 10 | 14 |
-| `price_history.volume` | `Numeric(24, 0)` | 0 | 24 |
+| `fx_rates.rate` | `RealDecimal(24, 10)` | 10 | 14 |
+| `price_history.volume` | `RealDecimal(24, 0)` | 0 | 24 |
 
 - **Read.** `Numeric` reads through `'%.<scale>f'`: at scale 6, `0.12345678` reads
   `0.123457` (a quantity, before C-97), and a wider scale shows the double's noise
@@ -92,10 +92,13 @@ is read back (`backend/app/db/models.py`; C-97, issue #43).
   than 15 significant digits (10 or more digits before the point, plus decimals; since the
   C-97 input limits, no new amount has more than 15) now reads rounded at the 15th: at most
   0.000005 from what 1.2 read with 10 digits before the point, about ten times more for
-  each further one. The `Numeric` columns have neither guard: `price_history.volume` and
-  `fx_rates.rate` store a value past a double's range as ±inf without an error, and read a
-  stored ±inf back as `Decimal('Infinity')`, not `None`. The FX writers no longer send such a
-  rate, and the conversions skip one already stored (X-R38, below).
+  each further one. `price_history.volume` and `fx_rates.rate` have been `RealDecimal` since
+  W-B63, with the same declaration and DDL (`NUMERIC(24, 0)`, `NUMERIC(24, 10) NOT NULL`, no
+  migration): a value past a double's range is refused on write, and a REAL ±inf stored by an
+  older version or by hand reads back `None`, not `Decimal('Infinity')`. A whole volume reads
+  padded to six decimals, equal to what was written (`1234567` reads `1234567.000000`). The
+  ±inf already stored are not cleaned up (an external script, if a real database holds one);
+  the conversions skip a rate stored that way (X-R38, below).
 - **Input limits.** A value sent in — a transaction's quantity, cash amount or per-unit
   cost basis (manual, or the one a promotion resolves), a manual price or event value —
   over its column's decimal places, over 15 significant digits, or over its column's

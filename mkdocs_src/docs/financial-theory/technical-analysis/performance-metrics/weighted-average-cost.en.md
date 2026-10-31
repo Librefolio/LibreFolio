@@ -191,7 +191,7 @@ The latest acquisition's currency is the currency paid by the most recent transa
 
 !!! warning "WAC is never a price"
 
-    WAC is an accounting construct for cost basis. Market value uses the unified resolver tiers: `MARKET → TRADE_AVG → CARRIED → MISSING`, exposed to portfolio rows as `MARKET_PRICE` or `LAST_TRADE_PRICE`. Only a position whose asset has no mark at all — no quote, no BUY or SELL yet — is counted at its cost basis $q \times \text{WAC}^{T}$, as a declared estimate with no price and no unrealized P&L (`ESTIMATED_AT_COST`), or left unvalued (`MISSING`) when that cost is incomplete. See [Price Resolution](portfolio-engine/price-resolution.md).
+    WAC is an accounting construct for cost basis. Market value uses the unified resolver tiers: `MARKET → TRADE_AVG → CARRIED → MISSING`, exposed to portfolio rows as `MARKET_PRICE` or `LAST_TRADE_PRICE`. Only a position whose asset has no mark at all — no quote, no BUY or SELL, no [transfer cost estimate](portfolio-engine/price-resolution.md#transfer-cost-estimate) yet — is counted at its cost basis $q \times \text{WAC}^{T}$, as a declared estimate with no price and no unrealized P&L (`ESTIMATED_AT_COST`), or left unvalued (`MISSING`) when that cost is incomplete. See [Price Resolution](portfolio-engine/price-resolution.md).
 
 ## ⚙️ Implementation: Position-Level Scope
 

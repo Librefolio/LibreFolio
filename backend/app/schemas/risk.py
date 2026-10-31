@@ -670,6 +670,10 @@ class PortfolioRiskScope(RiskScopeBase):
         max_length=100,
         description=("Exact asset subset of the portfolio. None includes every held asset. The scope stays 'portfolio', and weights are renormalized to 100% of the slice."),
     )
+    apply_ownership_share: bool = Field(
+        True,
+        description="As the portfolio report's: True (default) an owner counts its share of each broker; False every broker counts whole, as an editor sees it — the broker page (D4), so its amounts (stress impacts, scope value) match the page's.",
+    )
 
     @field_validator("broker_ids")
     @classmethod

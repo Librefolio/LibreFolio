@@ -172,7 +172,8 @@ class LotsAnalysisService:
         )
         # J-10 (N76): a TRANSFER leg whose partner pairs back from a broker outside the scope is read the way the scope
         # sees it, for every reader below: the engine, the histories, the conversions and the average-cost lines. The
-        # series above is not touched: a TRANSFER or an ADJUSTMENT is never an observation.
+        # series above is not touched: an ADJUSTMENT is never an observation, and a TRANSFER only as the estimate of an asset
+        # with nothing else yet (W-B94, price_marks._transfer_cost_estimates), read from the scope's own rows.
         boundary = await self._read_at_scope_boundary(transactions, scope_broker_ids=scope_broker_ids, price_series=price_series, quote_base_quantity=quote_base_quantity)
         transactions = boundary.transactions
         # J-47: a transfer still in transit on actual_to has its arriving leg dated later. That leg goes to the engine

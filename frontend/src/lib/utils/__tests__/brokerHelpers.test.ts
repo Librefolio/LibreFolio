@@ -286,3 +286,84 @@ describe('brokerHelpers', () => {
         });
     });
 });
+
+/**
+ * W6-8 — a failed plugin list is not cached: the next call retries.
+ *
+ * `ensurePluginIconsLoaded()` fetched `GET /brokers/import/plugins` once and, when that first call failed, stored an EMPTY
+ * cache «to not retry on error»: the plugin icons of every broker never arrived until a page reload. The contract: after a
+ * failure nothing is cached, so the next call asks again; after a success it never fetches again; two calls at the same time
+ * share one fetch; and a failure is never thrown at the caller (an icon is a decoration, not a reason to break a page).
+ *
+ * Every case starts from a fresh module (`vi.resetModules()`), as the describe above does: the cache is module state.
+ *
+ * Red today: after the rejected first call, the second call returns at once on the empty cache — the API is called once and
+ * the icon is never found. Guards, green today and after: a success is cached, concurrent calls share one fetch, a failure
+ * does not throw.
+ */
+describe('brokerHelpers — ensurePluginIconsLoaded after a failure (W6-8)', () => {
+    beforeEach(() => {
+        vi.resetModules();
+        listPluginsMock.mockReset();
+    });
+
+    it('a call that fails does not throw to the caller, and caches no icon', async () => {
+        listPluginsMock.mockRejectedValueOnce(new Error('network down'));
+        const {ensurePluginIconsLoaded, getPluginIconUrl, isFallbackPluginCode} = await loadHelpers();
+
+        await expect(ensurePluginIconsLoaded()).resolves.toBeUndefined();
+
+        expect(listPluginsMock, 'the plugin list was asked for').toHaveBeenCalledTimes(1);
+        expect(getPluginIconUrl(DEDICATED.code)).toBeNull();
+        expect(isFallbackPluginCode(GENERIC.code)).toBe(false);
+    });
+
+    it('first call rejects, second call resolves: the second call asks again and the icons arrive', async () => {
+        listPluginsMock.mockRejectedValueOnce(new Error('network down')).mockResolvedValueOnce(PLUGINS);
+        const {ensurePluginIconsLoaded, getPluginIconUrl, isFallbackPluginCode} = await loadHelpers();
+
+        await ensurePluginIconsLoaded();
+        expect(getPluginIconUrl(DEDICATED.code), 'premise: nothing is known after the failure').toBeNull();
+
+        await ensurePluginIconsLoaded();
+
+        expect.soft(listPluginsMock, 'the API was called twice: the failure is not cached').toHaveBeenCalledTimes(2);
+        expect.soft(getPluginIconUrl(DEDICATED.code), 'the sync lookup returns the icon').toBe(DEDICATED.icon_url);
+        expect.soft(getPluginIconUrl(GENERIC.code)).toBe(GENERIC.icon_url);
+        expect.soft(isFallbackPluginCode(GENERIC.code), 'the generic fallback kind arrives with the icons').toBe(true);
+    });
+
+    it('two calls at the same time share one fetch, which fails: the next call retries and succeeds', async () => {
+        listPluginsMock.mockRejectedValueOnce(new Error('network down')).mockResolvedValueOnce(PLUGINS);
+        const {ensurePluginIconsLoaded, getPluginIconUrl} = await loadHelpers();
+
+        await expect(Promise.all([ensurePluginIconsLoaded(), ensurePluginIconsLoaded()])).resolves.toEqual([undefined, undefined]);
+        expect(listPluginsMock, 'premise: the two concurrent calls shared one fetch').toHaveBeenCalledTimes(1);
+
+        await ensurePluginIconsLoaded();
+
+        expect.soft(listPluginsMock, 'the third call asked again').toHaveBeenCalledTimes(2);
+        expect.soft(getPluginIconUrl(DEDICATED.code)).toBe(DEDICATED.icon_url);
+    });
+
+    it('guard: after a success a second call does not fetch again', async () => {
+        listPluginsMock.mockResolvedValueOnce(PLUGINS);
+        const {ensurePluginIconsLoaded, getPluginIconUrl} = await loadHelpers();
+
+        await ensurePluginIconsLoaded();
+        await ensurePluginIconsLoaded();
+
+        expect(listPluginsMock).toHaveBeenCalledTimes(1);
+        expect(getPluginIconUrl(DEDICATED.code)).toBe(DEDICATED.icon_url);
+    });
+
+    it('guard: two calls at the same time share one fetch', async () => {
+        listPluginsMock.mockResolvedValueOnce(PLUGINS);
+        const {ensurePluginIconsLoaded, getPluginIconUrl} = await loadHelpers();
+
+        await Promise.all([ensurePluginIconsLoaded(), ensurePluginIconsLoaded()]);
+
+        expect(listPluginsMock).toHaveBeenCalledTimes(1);
+        expect(getPluginIconUrl(GENERIC.code)).toBe(GENERIC.icon_url);
+    });
+});

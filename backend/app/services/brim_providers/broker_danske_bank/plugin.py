@@ -26,17 +26,15 @@ import csv
 import hashlib
 import io
 import re
-import warnings
 from bisect import bisect_right
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
-from itertools import groupby, permutations
+from itertools import groupby
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
-import openpyxl
 import structlog
 
 from backend.app.db.models import TransactionType
@@ -62,6 +60,7 @@ from backend.app.schemas.brim import (
 )
 from backend.app.schemas.common import Currency, DateRangeModel
 from backend.app.schemas.transactions.transactions import TXCreateItem
+from backend.app.services.brim import brim_report_set_core as core
 from backend.app.services.brim.brim_provider import BRIMParseError, BRIMProvider, BRIMSetRequiredError
 from backend.app.services.brim.registry import BRIMProviderRegistry
 from backend.app.services.provider_registry import register_provider
@@ -74,7 +73,7 @@ CURRENCY = "EUR"
 LAG_BUSINESS_DAYS = 5
 PROOF_WINDOW_DAYS = 30
 MAX_MATCH_CANDIDATES = 8
-CENT = Decimal("0.01")
+CENT = core.CENT
 ZERO = Decimal("0")
 
 CUSTODY_COLUMNS = ("Kauppapäivä", "Arvopäivä", "Sijoituskohde", "Määrä", "Kurssi", "Palkkio<br/>sis. Alv", "Summa", "H", "Tila", "Toimeksiantotyyppi")
@@ -134,7 +133,6 @@ _REPORTED_EXCLUSIONS = frozenset({"status"})
 # The cash classes that are no booked movement: the balance chain leaves them out.
 _UNBOOKED_CLASSES = frozenset({"status", "reservation", "invalid"})
 
-_BR_RE = re.compile(r"<br\s*/?>", re.IGNORECASE)
 _SPACES_RE = re.compile(r"\s+")
 _DATE_RE = re.compile(r"^(\d{1,2})\.(\d{1,2})\.(\d{4})$")
 _REFERENCE_RE = re.compile(r"^(?P<name>.*\S)\s+(?P<ref>\d{10})$")
@@ -145,20 +143,6 @@ _REFERENCE_RE = re.compile(r"^(?P<name>.*\S)\s+(?P<ref>\d{10})$")
 # =============================================================================
 
 
-def _norm(value: Any) -> str:
-    """Case- and space-insensitive form of a header or a name (``<br/>`` counts as a space)."""
-    if value is None:
-        return ""
-    return _SPACES_RE.sub(" ", _BR_RE.sub(" ", str(value))).strip().casefold()
-
-
-def _plain(value: Decimal) -> str:
-    text = format(value, "f")
-    if "." in text:
-        text = text.rstrip("0").rstrip(".")
-    return "0" if text in ("", "-0") else text
-
-
 def _cell_text(value: Any) -> str:
     """A spreadsheet cell as text: dates as ``dd.mm.yyyy``, numbers in their shortest decimal form."""
     if value is None:
@@ -166,9 +150,9 @@ def _cell_text(value: Any) -> str:
     if isinstance(value, (datetime, date)):
         return value.strftime("%d.%m.%Y")
     if isinstance(value, float):
-        return _plain(Decimal(repr(value)))
+        return core.plain(Decimal(repr(value)))
     if isinstance(value, Decimal):
-        return _plain(value)
+        return core.plain(value)
     return str(value).strip()
 
 
@@ -199,32 +183,8 @@ def _to_decimal(text: str) -> Optional[Decimal]:
     return value if value.is_finite() else None
 
 
-def _money(value: Decimal) -> str:
-    return format(value.quantize(CENT), "f")
-
-
 def _fi_money(value: Decimal) -> str:
-    return _money(value).replace(".", ",")
-
-
-def _add_business_days(start: date, days: int) -> date:
-    """``start`` plus ``days`` weekdays (holidays are not known and not skipped)."""
-    current, added = start, 0
-    while added < days:
-        current += timedelta(days=1)
-        if current.weekday() < 5:
-            added += 1
-    return current
-
-
-def _compatible(first: str, second: str) -> bool:
-    """Two names of the same security: the cash statement truncates its labels, so one is a prefix of the other."""
-    a, b = _norm(first), _norm(second)
-    return bool(a) and bool(b) and (a.startswith(b) or b.startswith(a))
-
-
-def _source(role: str, file_index: int, file_count: int, row: int) -> str:
-    return f"{role}:{row}" if file_count == 1 else f"{role}#{file_index}:{row}"
+    return core.money(value).replace(".", ",")
 
 
 # =============================================================================
@@ -259,7 +219,7 @@ class _CustodyRow:
 
     @property
     def source(self) -> str:
-        return _source("custody", self.file_index, self.file_count, self.row)
+        return core.source("custody", self.file_index, self.file_count, self.row)
 
     @property
     def signature(self) -> Tuple[str, ...]:
@@ -267,7 +227,7 @@ class _CustodyRow:
 
     @property
     def title(self) -> str:
-        return _norm(self.name)
+        return core.norm(self.name)
 
     @property
     def order_type(self) -> str:
@@ -275,7 +235,7 @@ class _CustodyRow:
 
     @property
     def trade_signature(self) -> Tuple[Any, ...]:
-        return (self.title, self.qty, self.price, self.trade, _norm(self.order_type))
+        return (self.title, self.qty, self.price, self.trade, core.norm(self.order_type))
 
     @property
     def day(self) -> Optional[date]:
@@ -299,7 +259,7 @@ class _CashRow:
 
     @property
     def source(self) -> str:
-        return _source("cash", self.file_index, self.file_count, self.row)
+        return core.source("cash", self.file_index, self.file_count, self.row)
 
     @property
     def signature(self) -> Tuple[str, ...]:
@@ -310,70 +270,27 @@ class _CashRow:
         return self.value
 
 
-def _xlsx_rows(path: Path, limit: Optional[int] = None) -> List[List[Any]]:
-    """Rows of the first worksheet with data, from row 1 (values only)."""
-    with warnings.catch_warnings():
-        # openpyxl warns about harmless things in bank exports (default styles, print areas).
-        warnings.simplefilter("ignore")
-        workbook = openpyxl.load_workbook(path, read_only=True, data_only=True)
-    try:
-        for sheet in workbook.worksheets:
-            rows = _sheet_rows(sheet, limit)
-            if any(cell not in (None, "") for row in rows for cell in row):
-                return rows
-        return []
-    finally:
-        workbook.close()
-
-
-def _sheet_rows(sheet: Any, limit: Optional[int]) -> List[List[Any]]:
-    rows: List[List[Any]] = []
-    for row in sheet.iter_rows(min_row=1, values_only=True):
-        rows.append(list(row))
-        if limit is not None and len(rows) >= limit:
-            break
-    return rows
-
-
-def _csv_rows(path: Path) -> List[List[str]]:
-    with BRIMProvider._open_text(path, newline="") as handle:
-        return [list(row) for row in csv.reader(handle, delimiter=";")]
-
-
-def _layout(header: Sequence[Any], names: Dict[str, str], required: Set[str]) -> Optional[Dict[str, int]]:
-    columns: Dict[str, int] = {}
-    for index, cell in enumerate(header):
-        name = names.get(_norm(cell))
-        if name is not None and name not in columns:
-            columns[name] = index
-    return columns if required <= columns.keys() else None
-
-
 def _custody_layout(header: Sequence[Any]) -> Optional[Dict[str, int]]:
-    columns = _layout(header, _CUSTODY_HEADERS, _CUSTODY_REQUIRED)
+    columns = core.layout(header, _CUSTODY_HEADERS, _CUSTODY_REQUIRED)
     if columns is None:
         return None
     # The currency of Summa sits in the column right after it, with no header.
     after = columns["Summa"] + 1
-    if "H" not in columns and after < len(header) and _norm(header[after]) == "":
+    if "H" not in columns and after < len(header) and core.norm(header[after]) == "":
         columns["H"] = after
     return columns
 
 
 def _cash_layout(header: Sequence[Any]) -> Optional[Dict[str, int]]:
-    return _layout(header, _CASH_HEADERS, _CASH_REQUIRED)
+    return core.layout(header, _CASH_HEADERS, _CASH_REQUIRED)
 
 
 def _find_layout(rows: Sequence[Sequence[Any]], layout: Callable[[Sequence[Any]], Optional[Dict[str, int]]]) -> Optional[Tuple[int, Dict[str, int]]]:
-    for index, row in enumerate(rows[:_HEADER_SCAN_ROWS]):
-        columns = layout(row)
-        if columns is not None:
-            return index, columns
-    return None
+    return core.find_layout(rows, layout, _HEADER_SCAN_ROWS)
 
 
 def _read_custody(path: Path, file_index: int, file_count: int) -> List[_CustodyRow]:
-    rows = _xlsx_rows(path)
+    rows = core.xlsx_rows(path)
     found = _find_layout(rows, _custody_layout)
     if found is None:
         raise BRIMParseError("Not a Danske Bank custody export: the transaction columns are missing", details={"code": "danske_custody_columns_missing"})
@@ -409,7 +326,7 @@ def _custody_row(cells: Dict[str, str], file_index: int, file_count: int, row: i
 
 
 def _read_cash(path: Path, file_index: int, file_count: int) -> List[_CashRow]:
-    rows = _csv_rows(path)
+    rows = core.csv_rows(path)
     found = _find_layout(rows, _cash_layout)
     if found is None:
         raise BRIMParseError("Not a Danske Bank cash statement: the account columns are missing", details={"code": "danske_cash_columns_missing"})
@@ -451,7 +368,7 @@ def _file_kind(path: Path) -> Optional[str]:
     suffix = path.suffix.lower()
     try:
         if suffix in (".xlsx", ".xlsm"):
-            return "custody" if _find_layout(_xlsx_rows(path, limit=_HEADER_SCAN_ROWS), _custody_layout) is not None else None
+            return "custody" if _find_layout(core.xlsx_rows(path, limit=_HEADER_SCAN_ROWS), _custody_layout) is not None else None
         if suffix == ".csv":
             return _csv_kind(path)
     except Exception as exc:  # any read error means "not a Danske export"
@@ -491,11 +408,11 @@ _EVENT_CLASSES: Dict[str, Callable[[_CustodyRow], str]] = {_INCOME: _income_clas
 
 
 def _classify_custody(row: _CustodyRow) -> str:
-    if _norm(row.cells["Tila"]) != _CUSTODY_BOOKED:
+    if core.norm(row.cells["Tila"]) != _CUSTODY_BOOKED:
         return "status"
     if row.trade is None or row.value is None or not row.name or not row.qty or row.value < row.trade:
         return "invalid"
-    order_type = _norm(row.order_type)
+    order_type = core.norm(row.order_type)
     if order_type in _ORDER_TYPES:
         return _trade_class(row)
     classify = _EVENT_CLASSES.get(order_type)
@@ -530,9 +447,9 @@ def _cash_label_class(label: str, amount: Decimal) -> Tuple[str, str]:
 
 def _classify_cash(row: _CashRow) -> Tuple[str, str]:
     # A reservation is a hold the bank replaces with the booked movement: known, so left out without a notice (W-B85).
-    if _norm(row.label) == _RESERVATION:
+    if core.norm(row.label) == _RESERVATION:
         return "reservation", ""
-    if _norm(row.status) != _CASH_BOOKED:
+    if core.norm(row.status) != _CASH_BOOKED:
         return "status", ""
     if row.value is None or not row.amount:
         return "invalid", ""
@@ -540,71 +457,11 @@ def _classify_cash(row: _CashRow) -> Tuple[str, str]:
 
 
 # =============================================================================
-# RULE M: SEVERAL FILES OF ONE ROLE
-# =============================================================================
-
-
-def _coverage(rows: Iterable[Any], day_of: Callable[[Any], Optional[date]]) -> Optional[Tuple[date, date]]:
-    days = [day for day in (day_of(row) for row in rows) if day is not None]
-    return (min(days), max(days)) if days else None
-
-
-def _by_day(rows: Iterable[Any], day_of: Callable[[Any], Optional[date]]) -> Dict[date, List[Any]]:
-    groups: Dict[date, List[Any]] = defaultdict(list)
-    for row in rows:
-        day = day_of(row)
-        if day is not None:
-            groups[day].append(row)
-    return groups
-
-
-def _same_rows(first: Sequence[Any], second: Sequence[Any]) -> bool:
-    return Counter(row.signature for row in first) == Counter(row.signature for row in second)
-
-
-class _RoleMerge:
-    """Rule M (design D-S28): for each day, the rows of the latest file covering it."""
-
-    def __init__(self, files: List[List[Any]], day_of: Callable[[Any], Optional[date]]):
-        self.files = files
-        self.day_of = day_of
-        self.spans = [_coverage(rows, day_of) for rows in files]
-        self.order = sorted((index for index, span in enumerate(self.spans) if span), key=lambda index: (self.spans[index][1], self.spans[index][0], index))
-        self.groups = [_by_day(rows, day_of) for rows in files]
-        self.kept: List[Any] = []
-        self.superseded: List[Any] = []
-        for index, rows in enumerate(files):
-            for row in rows:
-                self._place(index, row)
-        self.mismatch_days = sorted(self._mismatch_days())
-
-    def _owner(self, day: date) -> int:
-        return next(index for index in reversed(self.order) if self.spans[index][0] <= day <= self.spans[index][1])
-
-    def _place(self, index: int, row: Any) -> None:
-        day = self.day_of(row)
-        owner = index if day is None else self._owner(day)
-        if owner == index:
-            self.kept.append(row)
-        elif not _same_rows(self.groups[index].get(day, []), self.groups[owner].get(day, [])):
-            self.superseded.append(row)
-
-    def _mismatch_days(self) -> Set[date]:
-        days: Set[date] = set()
-        for index, span in enumerate(self.spans):
-            if span is None:
-                continue
-            candidates = {day for groups in self.groups for day in groups if span[0] <= day <= span[1]}
-            for day in candidates:
-                owner = self._owner(day)
-                if owner != index and not _same_rows(self.groups[index].get(day, []), self.groups[owner].get(day, [])):
-                    days.add(day)
-        return days
-
-
-# =============================================================================
 # PAIRING (S2-S4)
 # =============================================================================
+#
+# Rule M (several files of one role) and the one-to-one assignment without a guess are shared with the other
+# report-set plugins: ``brim_report_set_core``.
 
 
 def _custody_key(row: _CustodyRow) -> Tuple[Any, ...]:
@@ -615,65 +472,26 @@ def _cash_key(row: _CashRow) -> Tuple[Any, ...]:
     return (row.value, row.amount.quantize(CENT), CURRENCY, row.klass)
 
 
-def _match_key_text(day: Optional[date], amount: Optional[Decimal], currency: str) -> str:
-    if day is None or amount is None:
-        return ""
-    return f"{day.isoformat()}|{_money(amount)}|{currency}"
-
-
-def _assignments(custody_count: int, cash_count: int) -> Iterable[List[Tuple[int, int]]]:
-    if custody_count <= cash_count:
-        for chosen in permutations(range(cash_count), custody_count):
-            yield list(zip(range(custody_count), chosen, strict=True))
-    else:
-        for chosen in permutations(range(custody_count), cash_count):
-            yield list(zip(chosen, range(cash_count), strict=True))
-
-
-def _best_assignment(custody: List[_CustodyRow], cash: List[_CashRow]) -> Optional[List[Tuple[_CustodyRow, _CashRow]]]:
-    """The assignment with the most compatible names, if every such assignment imports the same trades."""
-    best_weight, outcomes, best = -1, set(), None
-    for pairs in _assignments(len(custody), len(cash)):
-        weight = sum(_compatible(custody[i].name, cash[j].name) for i, j in pairs)
-        outcome = tuple(sorted((custody[i].trade_signature for i, _ in pairs), key=repr))
-        if weight > best_weight:
-            best_weight, outcomes, best = weight, {outcome}, pairs
-        elif weight == best_weight:
-            outcomes.add(outcome)
-    if best is None or len(outcomes) != 1:
-        return None
-    return [(custody[i], cash[j]) for i, j in best]
-
-
 def _assign(custody: List[_CustodyRow], cash: List[_CashRow]) -> Optional[List[Tuple[_CustodyRow, _CashRow]]]:
     """Pairs for one key (value date, amount, currency, direction); None when ambiguous."""
-    if len(custody) == 1 and len(cash) == 1:
-        return [(custody[0], cash[0])]
-    if max(len(custody), len(cash)) > MAX_MATCH_CANDIDATES:
-        return None
-    if len({row.trade_signature for row in custody}) == 1 and len({_norm(row.label) for row in cash}) == 1:
-        return list(zip(custody, cash, strict=False))
-    return _best_assignment(custody, cash)
+    return core.assign(
+        custody,
+        cash,
+        max_candidates=MAX_MATCH_CANDIDATES,
+        same_name=lambda custody_row, cash_row: core.compatible(custody_row.name, cash_row.name),
+        outcome_of=lambda custody_row: custody_row.trade_signature,
+        label_of=lambda cash_row: cash_row.label,
+    )
 
 
 def _pair_rows(custody_rows: List[_CustodyRow], cash_rows: List[_CashRow]) -> Tuple[List[Tuple[_CustodyRow, _CashRow]], List[Any]]:
-    custody_by_key: Dict[Tuple[Any, ...], List[_CustodyRow]] = defaultdict(list)
-    cash_by_key: Dict[Tuple[Any, ...], List[_CashRow]] = defaultdict(list)
-    for row in custody_rows:
-        if row.klass in _PAIRED:
-            custody_by_key[_custody_key(row)].append(row)
-    for row in cash_rows:
-        if row.klass in _PAIRED:
-            cash_by_key[_cash_key(row)].append(row)
-    pairs: List[Tuple[_CustodyRow, _CashRow]] = []
-    ambiguous: List[Any] = []
-    for key in sorted(custody_by_key.keys() & cash_by_key.keys(), key=repr):
-        chosen = _assign(custody_by_key[key], cash_by_key[key])
-        if chosen is None:
-            ambiguous.extend([*custody_by_key[key], *cash_by_key[key]])
-        else:
-            pairs.extend(chosen)
-    return pairs, ambiguous
+    return core.pair_by_key(
+        (row for row in custody_rows if row.klass in _PAIRED),
+        (row for row in cash_rows if row.klass in _PAIRED),
+        left_key=_custody_key,
+        right_key=_cash_key,
+        assign_group=_assign,
+    )
 
 
 # =============================================================================
@@ -681,29 +499,12 @@ def _pair_rows(custody_rows: List[_CustodyRow], cash_rows: List[_CashRow]) -> Tu
 # =============================================================================
 
 
-@dataclass
-class _Segment:
-    start: date
-    end: date
-    checkpoint: date
-    kind: str
-    window_end: date = date.min
-    border_end: date = date.min
-
-    @property
-    def zone(self) -> str:
-        return "before" if self.kind == "opening" else "gap"
-
-
 def _raw_segments(custody_files: List[List[_CustodyRow]]) -> List[Tuple[date, date]]:
-    spans = sorted(span for span in (_coverage(rows, lambda row: row.trade) for rows in custody_files) if span)
-    merged: List[Tuple[date, date]] = []
-    for start, end in spans:
-        if merged and start <= merged[-1][1] + timedelta(days=1):
-            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
-        else:
-            merged.append((start, end))
-    return merged
+    return core.merge_spans(span for span in (core.coverage(rows, lambda row: row.trade) for rows in custody_files) if span)
+
+
+def _cash_spans(cash_files: List[List[_CashRow]]) -> List[Tuple[date, date]]:
+    return core.merge_spans(span for span in (core.coverage(rows, lambda row: row.value) for rows in cash_files) if span)
 
 
 def _proven_segments(raw: List[Tuple[date, date]], unpaired_cash: List[_CashRow]) -> List[Tuple[date, date]]:
@@ -711,41 +512,12 @@ def _proven_segments(raw: List[Tuple[date, date]], unpaired_cash: List[_CashRow]
     segments = raw[:1]
     for start, end in raw[1:]:
         previous_end = segments[-1][1]
-        limit = _add_business_days(start - timedelta(days=1), LAG_BUSINESS_DAYS)
+        limit = core.add_business_days(start - timedelta(days=1), LAG_BUSINESS_DAYS)
         if any(previous_end < row.value <= limit for row in unpaired_cash):
             segments.append((start, end))
         else:
             segments[-1] = (segments[-1][0], end)
     return segments
-
-
-def _timeline(segments: List[Tuple[date, date]]) -> List[_Segment]:
-    timeline: List[_Segment] = []
-    for start, end in segments:
-        # The eve of the segment's oldest trade date, also when the cash statement starts later (A13): a trade is recorded on
-        # its trade date, so the opening precedes every one of them (B-52, the developer, 20/10/2026). The opening's cash
-        # truth is then the statement's first balance (_TableBuilder._checkpoint_lines).
-        checkpoint = start - timedelta(days=1)
-        timeline.append(_Segment(start=start, end=end, checkpoint=checkpoint, kind="gap" if timeline else "opening"))
-    for index, segment in enumerate(timeline):
-        settled = _add_business_days(segment.end, LAG_BUSINESS_DAYS)
-        segment.window_end = min(settled, timeline[index + 1].checkpoint) if index + 1 < len(timeline) else settled
-        segment.border_end = _add_business_days(segment.checkpoint, LAG_BUSINESS_DAYS)
-    return timeline
-
-
-def _zone(timeline: List[_Segment], day: Optional[date]) -> Tuple[str, int]:
-    """Zone of a value date and the segment it belongs to (for a gap: the segment after it)."""
-    if day is None or not timeline:
-        return "", -1
-    if day <= timeline[0].checkpoint:
-        return "before", 0
-    for index, segment in enumerate(timeline):
-        if day <= segment.window_end:
-            return "window", index
-        if index + 1 < len(timeline) and day <= timeline[index + 1].checkpoint:
-            return "gap", index + 1
-    return "after", len(timeline) - 1
 
 
 @dataclass
@@ -801,17 +573,6 @@ def _chain(rows: List[_CashRow]) -> _Chain:
     return chain
 
 
-def _cash_spans(cash_files: List[List[_CashRow]]) -> List[Tuple[date, date]]:
-    spans = sorted(span for span in (_coverage(rows, lambda row: row.value) for rows in cash_files) if span)
-    merged: List[Tuple[date, date]] = []
-    for start, end in spans:
-        if merged and start <= merged[-1][1] + timedelta(days=1):
-            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
-        else:
-            merged.append((start, end))
-    return merged
-
-
 # =============================================================================
 # POSITION PROOFS (E1-E4)
 # =============================================================================
@@ -854,8 +615,8 @@ class _Analysis:
         cash_paths = list(members.get("cash", []))
         self.custody_files = [_read_custody(path, index + 1, len(custody_paths)) for index, path in enumerate(custody_paths)]
         self.cash_files = [_read_cash(path, index + 1, len(cash_paths)) for index, path in enumerate(cash_paths)]
-        custody_merge = _RoleMerge(self.custody_files, lambda row: row.trade)
-        cash_merge = _RoleMerge(self.cash_files, lambda row: row.value)
+        custody_merge = core.RoleMerge(self.custody_files, lambda row: row.trade)
+        cash_merge = core.RoleMerge(self.cash_files, lambda row: row.value)
         self.custody: List[_CustodyRow] = custody_merge.kept
         self.cash: List[_CashRow] = cash_merge.kept
         self.superseded: List[Any] = [*custody_merge.superseded, *cash_merge.superseded]
@@ -872,7 +633,7 @@ class _Analysis:
         self.chain = _chain(self.cash)
         self.first_cash = self.chain.days[0] if self.chain.days else None
         self.cash_spans = _cash_spans(self.cash_files)
-        self.timeline = _timeline(self.segments)
+        self.timeline = core.build_timeline(self.segments, LAG_BUSINESS_DAYS)
         if self.timeline:
             self._settle()
 
@@ -883,7 +644,7 @@ class _Analysis:
 
     def _settle(self) -> None:
         for custody, cash in self.pairs:
-            zone, _ = _zone(self.timeline, cash.value)
+            zone, _ = core.zone(self.timeline, cash.value)
             custody.outcome = _Outcome("pair", zone)
             cash.outcome = _Outcome("pair", zone)
         for row in self.custody:
@@ -893,10 +654,10 @@ class _Analysis:
             if not row.outcome.kind:
                 self._settle_cash(row)
         for row in self.superseded:
-            row.outcome = _Outcome("excluded", _zone(self.timeline, row.day)[0], "superseded")
+            row.outcome = _Outcome("excluded", core.zone(self.timeline, row.day)[0], "superseded")
 
     def _settle_custody(self, row: _CustodyRow) -> None:
-        zone, _ = _zone(self.timeline, row.day)
+        zone, _ = core.zone(self.timeline, row.day)
         if id(row) in self.ambiguous:
             row.outcome = _Outcome("excluded", zone, "ambiguous")
         elif row.klass in _PAIRED:
@@ -916,7 +677,7 @@ class _Analysis:
         return "no_counterpart"
 
     def _settle_cash(self, row: _CashRow) -> None:
-        zone, index = _zone(self.timeline, row.value)
+        zone, index = core.zone(self.timeline, row.value)
         if id(row) in self.ambiguous:
             row.outcome = _Outcome("excluded", zone, "ambiguous", self._absorbing(zone))
         elif row.klass in _PAIRED:
@@ -979,11 +740,11 @@ class _Analysis:
             if row is not proof_row and row.klass in _MOVEMENTS and row.trade is not None and start <= row.trade <= end:
                 return True
         for row in self.cash:
-            if row.klass in ("buy", "sell") and row.outcome.kind != "pair" and _compatible(row.name, title) and start <= row.value <= end:
+            if row.klass in ("buy", "sell") and row.outcome.kind != "pair" and core.compatible(row.name, title) and start <= row.value <= end:
                 return True
         return False
 
-    def _proof_e1(self, segment: _Segment, row: _CustodyRow) -> _Proof:
+    def _proof_e1(self, segment: core.Segment, row: _CustodyRow) -> _Proof:
         day = row.trade
         start = day - timedelta(days=PROOF_WINDOW_DAYS)
         if self._recent_trades(row.title, start, day, row):
@@ -994,7 +755,7 @@ class _Analysis:
             return _Proof(row, "E1", reason="excluded_rows")
         return _Proof(row, "E1", quantity=row.qty - self._moved(row.title, segment.checkpoint, day, inclusive=True))
 
-    def _proof_e2(self, segment: _Segment, row: _CustodyRow) -> _Proof:
+    def _proof_e2(self, segment: core.Segment, row: _CustodyRow) -> _Proof:
         day = row.value
         same_day = [other for other in self._custody_rows_of(row.title) if other is not row and other.klass in _MOVEMENTS and day in (other.trade, other.value)]
         if same_day:
@@ -1003,7 +764,7 @@ class _Analysis:
             return _Proof(row, "E2", reason="excluded_rows")
         return _Proof(row, "E2", quantity=-row.qty - self._moved(row.title, segment.checkpoint, day, inclusive=False))
 
-    def _proof_e3(self, segment: _Segment, title: str) -> Optional[_Proof]:
+    def _proof_e3(self, segment: core.Segment, title: str) -> Optional[_Proof]:
         running, lowest, at = ZERO, ZERO, None
         for move in self._movements(title):
             if not segment.checkpoint < move.day <= segment.window_end:
@@ -1017,7 +778,7 @@ class _Analysis:
             return _Proof(at.row, "E3", exactness="at_least", reason="excluded_rows")
         return _Proof(at.row, "E3", quantity=-lowest, exactness="at_least")
 
-    def _exact_proofs(self, segment: _Segment, title: str) -> List[_Proof]:
+    def _exact_proofs(self, segment: core.Segment, title: str) -> List[_Proof]:
         proofs = []
         for row in self._custody_rows_of(title):
             if row.value is None or not segment.checkpoint < row.value <= segment.window_end:
@@ -1028,7 +789,7 @@ class _Analysis:
                 proofs.append(self._proof_e2(segment, row))
         return proofs
 
-    def _title_proofs(self, segment: _Segment, title: str) -> List[_Proof]:
+    def _title_proofs(self, segment: core.Segment, title: str) -> List[_Proof]:
         """The accepted proof first (at most one), then the discarded ones."""
         proofs = self._exact_proofs(segment, title)
         discarded = [proof for proof in proofs if proof.reason]
@@ -1041,13 +802,13 @@ class _Analysis:
         fallback = self._proof_e3(segment, title)
         return ([fallback] if fallback else []) + discarded
 
-    def proofs(self, segment: _Segment) -> List[_Proof]:
+    def proofs(self, segment: core.Segment) -> List[_Proof]:
         titles = sorted({row.title for row in self.custody if row.value is not None and segment.checkpoint < row.value <= segment.window_end})
         return [proof for title in titles for proof in self._title_proofs(segment, title)]
 
     # ----------------------------------------------------------------- cash truth
 
-    def border_cash(self, segment: _Segment) -> Decimal:
+    def border_cash(self, segment: core.Segment) -> Decimal:
         rows = [row for row in self.cash if row.outcome.kind == "summarized" and row.outcome.checkpoint == segment.checkpoint and row.value > segment.checkpoint]
         return sum((row.amount for row in rows), ZERO)
 
@@ -1154,7 +915,7 @@ class _TableBuilder:
         analysis = self.analysis
         for custody, cash in analysis.pairs:
             key = _data_key(cash.value, 0, custody.file_index, custody.row)
-            match = _match_key_text(cash.value, cash.amount, CURRENCY)
+            match = core.match_key_text(cash.value, cash.amount, CURRENCY)
             self._add(key, _line("pair", zone=cash.outcome.zone, source=f"{custody.source} + {cash.source}", match_key=match, custody=custody, cash=cash))
         paired = {id(row) for pair in analysis.pairs for row in pair}
         for row in [*analysis.custody, *(item for item in analysis.superseded if isinstance(item, _CustodyRow))]:
@@ -1167,16 +928,16 @@ class _TableBuilder:
     @staticmethod
     def _custody_line(row: _CustodyRow) -> List[str]:
         outcome = row.outcome
-        match = _match_key_text(row.value, row.summa, row.currency) if row.klass in _PAIRED else ""
+        match = core.match_key_text(row.value, row.summa, row.currency) if row.klass in _PAIRED else ""
         return _line(outcome.kind, zone=outcome.zone, reason=outcome.reason, checkpoint=outcome.checkpoint, source=row.source, match_key=match, custody=row)
 
     @staticmethod
     def _cash_line(row: _CashRow) -> List[str]:
         outcome = row.outcome
-        match = _match_key_text(row.value, row.amount, CURRENCY) if row.klass in _PAIRED else ""
+        match = core.match_key_text(row.value, row.amount, CURRENCY) if row.klass in _PAIRED else ""
         return _line(outcome.kind, zone=outcome.zone, reason=outcome.reason, checkpoint=outcome.checkpoint, source=row.source, match_key=match, cash=row)
 
-    def _checkpoint_lines(self, segment: _Segment) -> None:
+    def _checkpoint_lines(self, segment: core.Segment) -> None:
         analysis = self.analysis
         chain = analysis.chain
         day = segment.checkpoint
@@ -1199,17 +960,17 @@ class _TableBuilder:
             amount = balance + analysis.border_cash(segment) + flight_cash
         self._add(
             _truth_key(segment.checkpoint, 0, ""),
-            _line("truth_cash", zone=segment.zone, reason=reason, checkpoint=segment.checkpoint, source=source.source if source else "", value=_money(amount) if amount is not None else "", currency=CURRENCY if amount is not None else "", cash=source),
+            _line("truth_cash", zone=segment.zone, reason=reason, checkpoint=segment.checkpoint, source=source.source if source else "", value=core.money(amount) if amount is not None else "", currency=CURRENCY if amount is not None else "", cash=source),
         )
         proofs = analysis.proofs(segment)
         for proof in proofs:
-            quantity = _plain(proof.quantity + flight_quantities.get(proof.row.title, ZERO)) if proof.quantity is not None and not proof.reason else ""
+            quantity = core.plain(proof.quantity + flight_quantities.get(proof.row.title, ZERO)) if proof.quantity is not None and not proof.reason else ""
             self._add(_truth_key(segment.checkpoint, 1, proof.row.title), _line("truth_position", zone=segment.zone, checkpoint=segment.checkpoint, source=proof.row.source, value=quantity, proof=proof.proof_text, custody=proof.row))
         self.summary_checkpoints.append(
             {
                 "as_of": segment.checkpoint.isoformat(),
                 "kind": segment.kind,
-                "cash": _money(amount) if amount is not None else None,
+                "cash": core.money(amount) if amount is not None else None,
                 "positions": sum(1 for proof in proofs if not proof.reason),
                 "absorbed": self._absorbed_count(segment.checkpoint),
             }
@@ -1221,16 +982,16 @@ class _TableBuilder:
     def _verification_line(self, day: date, zone: str, balance: Decimal, source: Optional[_CashRow]) -> None:
         self._add(
             _truth_key(day, 2, ""),
-            _line("verification", zone=zone, checkpoint=day, source=source.source if source else "", value=_money(balance), currency=CURRENCY, cash=source),
+            _line("verification", zone=zone, checkpoint=day, source=source.source if source else "", value=core.money(balance), currency=CURRENCY, cash=source),
         )
-        self.summary_verifications.append({"as_of": day.isoformat(), "cash": _money(balance)})
+        self.summary_verifications.append({"as_of": day.isoformat(), "cash": core.money(balance)})
 
     def _final_verification(self) -> None:
         day = self.analysis.verification_day()
         if day is None:
             return
         chain = self.analysis.chain
-        self._verification_line(day, _zone(self.analysis.timeline, day)[0], chain.balance_at(day) + self.analysis.in_flight(day)[0], chain.source_at(day))
+        self._verification_line(day, core.zone(self.analysis.timeline, day)[0], chain.balance_at(day) + self.analysis.in_flight(day)[0], chain.source_at(day))
 
     def _summary(self) -> Dict[str, Any]:
         analysis = self.analysis
@@ -1404,7 +1165,7 @@ class _CombinedParser:
         return None
 
     def _fake_id(self, name: str) -> int:
-        key = _norm(name)
+        key = core.norm(name)
         if key not in self.fake_ids:
             fake_id = FAKE_ASSET_ID_BASE - len(self.fake_ids)
             self.fake_ids[key] = fake_id
@@ -1434,7 +1195,7 @@ class _CombinedParser:
         name = row["custody:Sijoituskohde"]
         label = row["cash:Saaja/Maksaja"]
         order_type = row["custody:Toimeksiantotyyppi"]
-        if _norm(order_type) == _INCOME:
+        if core.norm(order_type) == _INCOME:
             tx_type, delta = TransactionType.DIVIDEND, ZERO
         else:
             tx_type, delta = (TransactionType.BUY if quantity > 0 else TransactionType.SELL), quantity
@@ -1453,7 +1214,7 @@ class _CombinedParser:
             return
         if tx_type != TransactionType.DIVIDEND:
             self.todos.append(_charges_todo(len(self.transactions) - 1, line, row, tx_type, quantity, amount))
-        if not _compatible(name, _cash_label_class(label, amount)[1]):
+        if not core.compatible(name, _cash_label_class(label, amount)[1]):
             self.mismatched.append((line, row))
 
     def _standalone(self, line: int, row: Row) -> None:
@@ -1479,7 +1240,7 @@ class _CombinedParser:
             tags=["import", HISTORY_TAG, "demerger"],
         )
         if created is not None:
-            self.todos.append(_demerger_todo(len(self.transactions) - 1, line, row, new_line=_norm(order_type) == _DEMERGER_NEW))
+            self.todos.append(_demerger_todo(len(self.transactions) - 1, line, row, new_line=core.norm(order_type) == _DEMERGER_NEW))
 
     def _cash_row(self, line: int, row: Row) -> None:
         amount = _to_decimal(row["cash:Määrä"])
@@ -1613,14 +1374,14 @@ def _charges_todo(tx_index: int, line: int, row: Row, tx_type: TransactionType, 
     suggestions.append("Tarkat luvut ovat kauppavahvistuksessa: avaa tapahtuma verkkopankissa.")
     context: Dict[str, Any] = {
         "row": line,
-        "cash": _money(abs(amount)),
+        "cash": core.money(abs(amount)),
         "currency": CURRENCY,
         "compare_nominal": False,
         "split_hint": "trade_charges",
         "split_suggestions": suggestions,
     }
     if plausible:
-        context["charges"] = _money(charges)
+        context["charges"] = core.money(charges)
     verb = "osto" if tx_type == TransactionType.BUY else "myynti"
     comment = "Pankki ilmoittaa vain kokonaissumman: palkkiosarake on aina 0, joten palkkio sisältyy summaan. Kassa on oikein; jos haluat seurata palkkioita erikseen, jaa rivi."
     return BRIMFieldTodo(
@@ -1757,14 +1518,14 @@ class DanskeBankBrokerProvider(BRIMProvider):
         role = self.detect_role(file_path)
         if role == "custody":
             rows = _read_custody(file_path, 1, 1)
-            span = _coverage(rows, lambda row: row.trade)
+            span = core.coverage(rows, lambda row: row.trade)
             accounts = sorted({row.account for row in rows if row.account})
             fingerprint = hashlib.sha256("\n".join(accounts).encode("utf-8")).hexdigest() if accounts else None
             coverage = [BRIMCoverage(axis="trade", start=span[0], end=span[1])] if span else []
             return BRIMMemberSummary(role=role, rows=len(rows), coverage=coverage, account_fingerprint=fingerprint)
         if role == "cash":
             rows = _read_cash(file_path, 1, 1)
-            span = _coverage(rows, lambda row: row.value)
+            span = core.coverage(rows, lambda row: row.value)
             coverage = [BRIMCoverage(axis="value", start=span[0], end=span[1])] if span else []
             return BRIMMemberSummary(role=role, rows=len(rows), coverage=coverage)
         return BRIMMemberSummary(role=None, rows=0)

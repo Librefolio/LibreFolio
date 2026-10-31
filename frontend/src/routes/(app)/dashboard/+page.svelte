@@ -75,6 +75,8 @@
     import LotsAnalysisPanel from '$lib/features/brokers/lots/LotsAnalysisPanel.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
+    import {STALE_FX_ACTION, staleFxIssue, type StaleFxPairLike} from '$lib/features/dashboard/staleFxIssue';
+    import {todayIso} from '$lib/utils/dateOnly';
     import FxPairAddModal from '$lib/components/fx/FxPairAddModal.svelte';
     import {invalidateFxRoutes} from '$lib/stores/reference/fxRoutesStore';
     import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
@@ -272,7 +274,13 @@
     /** Broker filter trigger label — follows assets-page type-filter pattern (no separate badge). */
     const brokerFilterLabel = $derived(brokerFilterActive ? (selectedBrokerIds.length === 1 ? (allBrokers.find((b) => b.id === selectedBrokerIds[0])?.name ?? String(selectedBrokerIds[0])) : `${$_('brokers.title')} (${selectedBrokerIds.length})`) : $_('dashboard.allBrokers'));
 
-    const dataQualityIssues = $derived<DataQualityIssue[]>((summary?.data_quality as {issues?: DataQualityIssue[]} | undefined)?.issues ?? []);
+    // The report's own issues, plus one row for the exchange rates it read from an old stored row (`stale_fx_pairs`): the
+    // report lists them but raises no issue, so the row is built here (developer question 18, 28/10).
+    const dataQualityIssues = $derived.by<DataQualityIssue[]>(() => {
+        const quality = summary?.data_quality as {issues?: DataQualityIssue[]; stale_fx_pairs?: StaleFxPairLike[]} | undefined;
+        const staleFx = staleFxIssue(quality?.stale_fx_pairs, todayIso());
+        return [...(quality?.issues ?? []), ...(staleFx ? [staleFx] : [])];
+    });
 
     /** Tab navigation — mirrors the broker detail page's structure (no "Info" tab
      *  here: there's no portfolio-wide metadata/sharing concept at this level). */
@@ -335,7 +343,7 @@
 
     $effect(() => {
         if (activeTab !== 'transazioni') return;
-        const key = `${dateRangeCtl.start}|${dateRangeCtl.end}|${activeBrokerIds ? [...activeBrokerIds].sort((a, b) => a - b).join(',') : 'all'}`;
+        const key = `${dateRangeCtl.historyStart}|${dateRangeCtl.end}|${activeBrokerIds ? [...activeBrokerIds].sort((a, b) => a - b).join(',') : 'all'}`;
         if (key !== lastTxLoadKey) {
             lastTxLoadKey = key;
             txCurrentPage = 1;
@@ -357,7 +365,7 @@
             const fetchForBroker = async (brokerId?: number): Promise<TXReadItem[]> => {
                 const queries: Record<string, unknown> = {};
                 if (brokerId != null) queries.broker_id = brokerId;
-                if (dateRangeCtl.start) queries.date_start = dateRangeCtl.start;
+                if (!dateRangeCtl.isMaxPending) queries.date_start = dateRangeCtl.start;
                 if (dateRangeCtl.end) queries.date_end = dateRangeCtl.end;
                 return (await zodiosApi.query_transactions_api_v1_transactions_get({queries})) as TXReadItem[];
             };
@@ -461,7 +469,7 @@
             // The banner has one chip per missing pair: the dialog opens on the pair of the chip pressed.
             fxPairCreateSlug = target ?? '';
             showFxPairAddModal = true;
-        } else if (action === 'sync_fx_pair') {
+        } else if (action === 'sync_fx_pair' || action === STALE_FX_ACTION) {
             await syncMissingFxRates(_issue);
         } else if (action === 'sync_asset_prices') {
             // STALE_PRICE: re-sync the flagged provider assets from the day after their last
@@ -502,7 +510,7 @@
     const assetsHref = $derived(`/assets?start=${urlDateFrom}&end=${urlDateTo}`);
     const transactionsHref = $derived(
         buildTransactionsFiltersUrl({
-            date_start: dateRangeCtl.start || undefined,
+            date_start: dateRangeCtl.isMaxPending ? undefined : dateRangeCtl.start,
             date_end: dateRangeCtl.end || undefined,
             broker_id: activeBrokerIds && activeBrokerIds.length === 1 ? activeBrokerIds[0] : undefined,
             broker_ids: activeBrokerIds && activeBrokerIds.length > 1 ? activeBrokerIds : undefined,
@@ -576,7 +584,7 @@
     /** The contribution of the scope on screen as the cache holds it (null: never asked, PositionsPanel
      *  asks when its Performance view needs it). Returns whether the cached one is stale. */
     function showCachedContribution(): boolean {
-        const cached = peekReport(activeBrokerIds, dateRangeCtl.start || undefined, dateRangeCtl.end || undefined, targetCurrency, true, false, false, false);
+        const cached = peekReport(activeBrokerIds, dateRangeCtl.historyStart, dateRangeCtl.end || undefined, targetCurrency, true, false, false, false);
         setContribution(cached?.report ?? null);
         return cached?.stale === true;
     }
@@ -601,7 +609,7 @@
         const load = ++loadSeq;
         const requested = targetCurrency;
         const brokerIds = activeBrokerIds;
-        const start = dateRangeCtl.start || undefined;
+        const start = dateRangeCtl.historyStart;
         const end = dateRangeCtl.end || undefined;
         const options = mainReportOptions();
 
@@ -634,7 +642,7 @@
 
     function hydrateFromCache() {
         if (!brokersReady || ownedBrokerIds.length === 0) return;
-        const cached = peekReport(activeBrokerIds, dateRangeCtl.start || undefined, dateRangeCtl.end || undefined, targetCurrency, false, false, true, true, mainReportOptions());
+        const cached = peekReport(activeBrokerIds, dateRangeCtl.historyStart, dateRangeCtl.end || undefined, targetCurrency, false, false, true, true, mainReportOptions());
         if (!cached) return;
         applyReport(cached.report, targetCurrency);
         showCachedContribution();
@@ -655,7 +663,7 @@
 
     /** The scope of a lazy report section: brokers, period and currency. An answer of another scope is not applied, and a failure counts for its own scope only (Y-24). */
     function reportScope(): string {
-        return `${activeBrokerIds?.join(',')}|${dateRangeCtl.start}|${dateRangeCtl.end}|${targetCurrency}`;
+        return `${activeBrokerIds?.join(',')}|${dateRangeCtl.historyStart}|${dateRangeCtl.end}|${targetCurrency}`;
     }
 
     /**
@@ -669,7 +677,7 @@
         if (!canAsk || contributionLoading || contributionRefreshing || contributionInBackground || !contributionRetry.canAsk(askedScope)) return;
         const requested = targetCurrency;
         const brokerIds = activeBrokerIds;
-        const start = dateRangeCtl.start || undefined;
+        const start = dateRangeCtl.historyStart;
         const end = dateRangeCtl.end || undefined;
         const cached = peekReport(brokerIds, start, end, requested, true, false, false, false);
         if (cached && !cached.stale) {
@@ -706,7 +714,7 @@
     const positionsSeriesCtl = createPositionsSeriesController();
     const positionsSeriesScope = $derived<PositionsSeriesScope>({
         brokerIds: activeBrokerIds,
-        start: dateRangeCtl.start || undefined,
+        start: dateRangeCtl.historyStart,
         end: dateRangeCtl.end || undefined,
         currency: targetCurrency,
         ready: canAsk,
@@ -733,7 +741,7 @@
         try {
             // includeHistory/includeAllocationHistory/includeContribution/includeBreakdown=false:
             // only pnl_candles is read below.
-            const report = await fetchReport(activeBrokerIds, dateRangeCtl.start || undefined, dateRangeCtl.end || undefined, requested, false, false, false, false, false, {includePnlCandles: true});
+            const report = await fetchReport(activeBrokerIds, dateRangeCtl.historyStart, dateRangeCtl.end || undefined, requested, false, false, false, false, false, {includePnlCandles: true});
             // An answer of another scope is not this one's: the scope on screen asks for its own.
             if (!pageAlive || reportScope() !== askedScope) return;
             if (report) candlesRetry.succeeded(askedScope);
@@ -1100,7 +1108,7 @@
             <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
                 <!-- Growth Chart — 3/5 -->
                 <div class="lg:col-span-3">
-                    <GrowthChart {history} range={historyRange} {mwrrLine} {brokerPnlHistory} {pnlCandles} onRequestPnlCandles={() => void pageBusy.join('dashboard-pnl-candles', loadPnlCandles)} {incomeHistory} {costHistory} {depositHistory} {acquisitionFunding} loading={historyLoading} baseCurrency={appliedCurrency} />
+                    <GrowthChart {history} range={historyRange} {mwrrLine} {brokerPnlHistory} {pnlCandles} onRequestPnlCandles={() => void pageBusy.join('dashboard-pnl-candles', loadPnlCandles)} {incomeHistory} {costHistory} {depositHistory} {acquisitionFunding} loading={historyLoading} {pnlCandlesLoading} baseCurrency={appliedCurrency} />
                 </div>
 
                 <!-- Allocation Panel — 2/5 -->

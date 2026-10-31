@@ -48,6 +48,7 @@ The residual holds what neither the four components, the exchange result on cash
 - the cost of a currency exchange, at one broker or across two: −1,000 USD worth €920 at the day's rate, exchanged into +€900, gives −€20, which is neither a fee nor a sale;
 - the value of assets travelling between two brokers on a boundary day;
 - a sale left out of Realized because its proceeds could not be converted, or a sale or an outgoing ADJUSTMENT left out because its position's cost is incomplete.
+- the cost of dust: a sale that leaves $10^{-5}$ units or fewer in a position takes what is left out of the open cost basis without selling it, so its cost is in neither $\Delta\mathrm{UGL}$ nor Realized — 0.00001 units bought at 100,000 leave −1.00 here ([§7](index.md#7-period-contribution)).
 
 ### 💵 FX on Cash {: #fx-on-cash }
 
@@ -174,11 +175,11 @@ $$
 
 A position's start and end values are the portfolio's own valuation of it at the end of $t_0$ and of $t_1$, the two states of $\Delta\mathrm{UGL}$ ([Portfolio Engine — §3](index.md#3-position-state)):
 
-- its mark ([§2](index.md#2-valuation-price)): a market quote, or else a BUY/SELL price, a trade price being restated through any later split;
+- its mark ([§2](index.md#2-valuation-price)): a market quote, or else a BUY/SELL price — or, for an asset with nothing else yet, the cost of an incoming transfer as an estimate —, a trade price being restated through any later split;
 - its cost basis, for a holding whose asset has no mark at all (`ESTIMATED_AT_COST`);
 - converted at the exchange rate of the boundary day itself.
 
-The rows therefore add up to the portfolio: when every row is known, $\sum_{(a,b)} \Delta\mathrm{UGL}(a,b) = \Delta\mathrm{UGL}$, and the rows plus the other period effects — unallocated income and costs, FX on cash, transfers at market value, the residual — close $\mathrm{PnL}_{\text{period}}$. Other holds no valuation difference. Dust aside: a row counts a residual of $10^{-5}$ units or fewer as not held, the portfolio values it ([§7](index.md#7-period-contribution)).
+The rows therefore add up to the portfolio: when every row is known, $\sum_{(a,b)} \Delta\mathrm{UGL}(a,b) = \Delta\mathrm{UGL}$, and the rows plus the other period effects — unallocated income and costs, FX on cash, transfers at market value, the residual — close $\mathrm{PnL}_{\text{period}}$. Other holds no valuation difference. A position left with $10^{-5}$ units or fewer — dust — is held neither by a row nor by the portfolio, so it changes nothing in the identity ([§3](index.md#3-position-state)); its cost is in the residual (above).
 
 - **Internal transfer.** A security moved between two of your brokers inside the period splits its result: the sending broker's row answers for the units until they arrive, the receiving broker's from their arrival, and the total is unchanged. A transfer already in transit at $t_0$, or still in transit at $t_1$, keeps the plain boundary values ([§7](index.md#7-period-contribution)).
 - **Unknown values.** A position held at a boundary whose unrealized gain/loss is unknown there — a missing exchange rate, an incomplete cost — has an unknown $\Delta\mathrm{UGL}(a,b)$, never the known side minus zero.
