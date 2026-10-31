@@ -14,7 +14,7 @@
  * Red first: the module does not exist.
  */
 import {beforeEach, describe, expect, it} from 'vitest';
-import {firstDateOf, forgetAllFirstDates, forgetFirstDate, rememberFirstDate} from './firstSeriesDates';
+import {firstDateOf, forgetAllFirstDates, forgetFirstDate, isFirstDateKnown, rememberFirstDate, rememberNoSeries} from './firstSeriesDates';
 import {notifyPricesCaughtUp} from './portfolio/portfolioMutation';
 import {transitionClientSession} from './app/clientSession';
 
@@ -74,5 +74,34 @@ describe('firstSeriesDates', () => {
         transitionClientSession('second-user');
 
         expect(firstDateOf('asset', 7)).toBeUndefined();
+    });
+});
+
+describe('a series with no point (FB-7b, lists)', () => {
+    it('is known, with no first day', () => {
+        rememberNoSeries('asset', 9);
+
+        expect(isFirstDateKnown('asset', 9)).toBe(true);
+        expect(firstDateOf('asset', 9)).toBeUndefined();
+        expect(isFirstDateKnown('asset', 10), 'another series is not known').toBe(false);
+    });
+
+    it('gives way to a first day, and a first day is not taken back by it', () => {
+        rememberNoSeries('fx', 'EUR-XAF');
+        rememberFirstDate('fx', 'EUR-XAF', '1999-01-04');
+        expect(firstDateOf('fx', 'EUR-XAF'), 'a series that gets points has its first day').toBe('1999-01-04');
+
+        rememberNoSeries('fx', 'EUR-XAF');
+        expect(firstDateOf('fx', 'EUR-XAF'), 'no-series never replaces a first day').toBe('1999-01-04');
+    });
+
+    it('is forgotten as a first day is: one series, a catch-up, all', () => {
+        rememberNoSeries('asset', 9);
+        forgetFirstDate('asset', 9);
+        expect(isFirstDateKnown('asset', 9)).toBe(false);
+
+        rememberNoSeries('asset', 9);
+        notifyPricesCaughtUp();
+        expect(isFirstDateKnown('asset', 9)).toBe(false);
     });
 });

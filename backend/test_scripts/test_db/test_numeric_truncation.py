@@ -162,7 +162,8 @@ def expected_truncation(value: Decimal, scale: int, decorated: bool) -> Decimal:
     """
     truncated = value.quantize(Decimal(10) ** -scale, rounding=ROUND_DOWN)
     if decorated and len(truncated.as_tuple().digits) > SIGNIFICANT_DIGITS:
-        truncated = truncated.quantize(Decimal(10) ** (truncated.adjusted() - SIGNIFICANT_DIGITS + 1), rounding=ROUND_DOWN)
+        # scaleb, not ** : Decimal(10) ** 9 has exponent 0, so quantize would cut nothing from a value with more than 15 integer digits
+        truncated = truncated.quantize(Decimal(1).scaleb(truncated.adjusted() - SIGNIFICANT_DIGITS + 1), rounding=ROUND_DOWN)
     return truncated
 
 

@@ -27,7 +27,7 @@
  */
 import {AxiosError, AxiosHeaders, type AxiosResponse, type InternalAxiosRequestConfig} from 'axios';
 import {describe, expect, it, vi} from 'vitest';
-import {BULK_ITEM_DAYS_BUDGET, BULK_MAX_ITEMS, BULK_RANGE_SPAN_DAYS, BULK_SIGNAL_MARGIN_DAYS, BULK_SPLIT_MAX_DEPTH, bulkRangeDays, bulkTooManyDaysOf, planBulkBatches, sendBulkBatches} from './bulkBatches';
+import {BULK_ITEM_DAYS_BUDGET, BULK_MAX_ITEMS, BULK_RANGE_SPAN_DAYS, BULK_SIGNAL_MARGIN_DAYS, BULK_SPLIT_MAX_DEPTH, MIN_START, bulkRangeDays, bulkTooManyDaysOf, planBulkBatches, sendBulkBatches} from './bulkBatches';
 import type {BulkBatch, BulkOutcome} from './bulkBatches';
 
 // =============================================================================
@@ -212,6 +212,13 @@ describe('bulkRangeDays', () => {
         expect(shift('2099-12-31', -(BULK_RANGE_SPAN_DAYS - 1)) > '1950-01-01', 'premise: from the end asked, the floor would cut 1950-01-01').toBe(true);
         expect(bulkRangeDays('1950-01-01', '2099-12-31', TODAY)).toBe(27_196);
         expect(bulkRangeDays('1800-01-01', '2099-12-31', TODAY)).toBe(BULK_RANGE_SPAN_DAYS);
+    });
+
+    it('counts a `min` start as the whole 100-year span (FB-7b): the first stored day is unknown, never a guessed year', () => {
+        expect(MIN_START, 'the sentinel the pages send').toBe('min');
+        expect(bulkRangeDays(MIN_START, '2024-01-31', LATER)).toBe(BULK_RANGE_SPAN_DAYS);
+        expect(bulkRangeDays(MIN_START, '2099-12-31', TODAY), 'the end is cut at tomorrow first').toBe(BULK_RANGE_SPAN_DAYS);
+        expect(bulkRangeDays(MIN_START, '2024-01-31', LATER), 'more than any real start the placeholder 2000-01-01 would give').toBeGreaterThan(bulkRangeDays('2000-01-01', '2024-01-31', LATER));
     });
 
     it.each([

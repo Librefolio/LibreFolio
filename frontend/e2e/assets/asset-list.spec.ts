@@ -16,7 +16,7 @@ import {TEST_USER} from '../fixtures/test-users';
 import {waitForSettled} from '../fixtures/app-events';
 import {goToAssetsPage} from './assets-helpers';
 import {assetIdByName, pairComparison, seedChartComparisons} from '../fixtures/chartComparisons';
-import {deleteOwned, jsonFrom, type Owned} from './asset-events-owned';
+import {createOwnedAsset, deleteOwned, jsonFrom, type Owned, type OwnedAsset} from './asset-events-owned';
 import {uniqueSuffix, uniqueToken} from '../fixtures/unique';
 import {t} from '../fixtures/i18n-data';
 import {daysAgoIso, localIso} from '../fixtures/dates';
@@ -24,6 +24,7 @@ import {describeShown, isStoredPoint, overwriteCounts, overwriteWarningSentence,
 import {chooseTheme} from '../fixtures/galleryFiles';
 import {parkPointer} from '../fixtures/galleryRiskLab';
 import {schemas} from '../../src/lib/api/generated';
+import {expectChartCanvas} from '../fixtures/charts';
 
 type SyntheticAsset = {
     id: number;
@@ -2711,5 +2712,191 @@ test.describe('Assets list — the grid toolbar: the Absolute icon and the actio
 
         await page.keyboard.press('Escape');
         await expect(modal, 'the modal closes, nothing left over it').toBeHidden({timeout: 5_000});
+    });
+});
+
+// ============================================================================
+// FB-7b — asset list: «All» starts at the first stored price
+// ============================================================================
+// The detail page asks «All» from the `min` sentinel (the asset's first stored price, resolved by the server); the list
+// still asked its cards from the 2000-01-01 placeholder while «All» was pending, so an asset whose history begins before
+// 2000 was cut at 2000 in the list. The list must ask the cards from `min` too, adopt the first date of the answers as the
+// range start, and remember the first day of each asset for the session.
+//
+// Served by the real backend. Each test owns a USD asset with closes in 1985 (the first two), on 1999-12-31 and in the
+// last weeks, deleted afterwards. One contract in three halves, so a red names its half:
+//   · the range on screen starts on or before the first stored price (the picker's FROM field — compact, so an ISO date;
+//     other assets of the shared database may be older, so never an equality) and the card draws its chart;
+//   · the card's item of `POST /assets/prices/query` carries the `min` start, and no item of that request the placeholder;
+//   · a second visit in the same session (in-app: the sidebar away, the browser's back) does not ask the card from `min`
+//     again, and still starts on or before the first price and draws.
+// ============================================================================
+test.describe('FB-7b asset list: All starts at the first stored price', () => {
+    // A ceiling, never a delay: a sign-in, an API seeding and the page loads each test waits for by name.
+    test.describe.configure({timeout: 60_000});
+
+    /** The first stored close, 15 years before the 2000-01-01 placeholder the list used to ask from. */
+    const FIRST_CLOSE_DAY = '1985-03-01';
+    /** The placeholder start the list used to send for a pending «All». */
+    const PLACEHOLDER_START = '2000-01-01';
+
+    /** What one card item of a price query asks, with the starts of every item of the request it travelled in. */
+    type CardAsk = {start: string | null; includePrice: boolean; pageUrl: string; requestStarts: Array<string | null>};
+
+    let owned: Owned = {assetIds: [], brokerIds: []};
+
+    test.beforeEach(async ({page}) => {
+        owned = {assetIds: [], brokerIds: []};
+        await login(page, TEST_USER);
+    });
+
+    test.afterEach(async ({page}) => {
+        await deleteOwned(page, owned);
+    });
+
+    function startOf(raw: unknown): string | null {
+        if (raw === null || typeof raw !== 'object') return null;
+        const range = (raw as {date_range?: unknown}).date_range;
+        const first = Array.isArray(range) ? range[0] : range;
+        const start = first !== null && typeof first === 'object' ? (first as {start?: unknown}).start : undefined;
+        return typeof start === 'string' ? start : null;
+    }
+
+    /** The card items (`key === 'asset:<id>'`) of a request that concern `assetId`; a request that is not the price query, or has no readable body, has none. */
+    function cardAsksFor(request: Request, assetId: number, pageUrl: string): CardAsk[] {
+        if (request.method() !== 'POST' || new URL(request.url()).pathname !== '/api/v1/assets/prices/query') return [];
+        let body: unknown;
+        try {
+            body = request.postDataJSON();
+        } catch {
+            return [];
+        }
+        if (!Array.isArray(body)) return [];
+        const requestStarts = body.map(startOf);
+        const asks: CardAsk[] = [];
+        for (const raw of body) {
+            if (raw === null || typeof raw !== 'object') continue;
+            const item = raw as {asset_id?: unknown; key?: unknown; include_price?: unknown};
+            if (item.asset_id !== assetId || item.key !== `asset:${assetId}`) continue;
+            asks.push({start: startOf(raw), includePrice: item.include_price !== false, pageUrl, requestStarts});
+        }
+        return asks;
+    }
+
+    /** A USD asset of this test's own whose history begins in 1985, as the asset detail's FB-7b describe seeds it. */
+    async function seedOldHistoryAsset(page: Page, label: string): Promise<OwnedAsset> {
+        // The page may poll live providers for current prices and write today's price into the shared database: answered here, locally.
+        await page.route('**/api/v1/assets/prices/current', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
+        return createOwnedAsset(page, owned, {
+            label,
+            closes: [
+                {date: FIRST_CLOSE_DAY, close: 10},
+                {date: '1985-03-04', close: 10.5},
+                {date: '1999-12-31', close: 20},
+                {date: daysAgoIso(35), close: 30},
+                {date: daysAgoIso(20), close: 31},
+                {date: daysAgoIso(10), close: 32},
+                {date: daysAgoIso(3), close: 33},
+            ],
+        });
+    }
+
+    /** The list's range picker: its «All» preset and its FROM field. */
+    function rangePicker(page: Page): Locator {
+        return page.getByTestId('assets-date-range').getByTestId('date-range-picker-root');
+    }
+
+    /** The card of `asset` in the grid, narrowed by the search to this test's asset and verified visible. */
+    async function ownCard(page: Page, asset: OwnedAsset): Promise<Locator> {
+        await expect(page.getByTestId('view-mode-grid'), 'the grid view is available').toBeVisible({timeout: 10_000});
+        await page.getByTestId('view-mode-grid').click();
+        await page.getByTestId('assets-search-input').fill(asset.name);
+        await waitForSettled(page.getByTestId('assets-page'), 30_000);
+        const card = page.getByTestId(`asset-card-${asset.id}`);
+        await expect(card, 'the card of the asset this test created').toBeVisible({timeout: 15_000});
+        return card;
+    }
+
+    /** Opens the list on «All» by URL and verifies, rather than assumes, that «All» is the preset on screen. */
+    async function openListOnAll(page: Page): Promise<void> {
+        await goToAssetsPage(page, {start: 'min', end: 'max'});
+        await expect(rangePicker(page).getByTestId('date-preset-max'), '«All» is the active preset').toHaveAttribute('data-active', 'true', {timeout: 10_000});
+    }
+
+    /** The FROM field reads a date on or before `day` (an ISO date); anything else, «min» included, is a red that says what the field showed. */
+    async function expectFromOnOrBefore(page: Page, day: string, message: string): Promise<void> {
+        const input = rangePicker(page).getByTestId('date-range-input-start');
+        await expect
+            .poll(
+                async () => {
+                    const value = await input.inputValue();
+                    return /^\d{4}-\d{2}-\d{2}$/.test(value) && value <= day ? 'ok' : `the FROM field shows "${value}"`;
+                },
+                {message: `${message} (on or before ${day}; other assets of the shared database may be older)`, timeout: 10_000},
+            )
+            .toBe('ok');
+    }
+
+    // The visible half. Red while the list asks from 2000-01-01: the FROM field reads the oldest first price it is handed
+    // from there on, and the 1985 and 1999 prices are not on the owned card at all.
+    test('FB-7b the range of All starts on or before the first stored price and the card draws', async ({page}) => {
+        const asset = await seedOldHistoryAsset(page, 'E2E FB-7b list all start');
+        await openListOnAll(page);
+        const card = await ownCard(page, asset);
+
+        await expectChartCanvas(page, `asset-card-${asset.id}`, 15_000);
+        await expect(card.getByTestId('asset-card-calendar-problem'), 'the card draws a line, not a problem').toHaveCount(0);
+        await expectFromOnOrBefore(page, FIRST_CLOSE_DAY, '«All» starts on the oldest first price, not on the 2000 placeholder');
+    });
+
+    // The wire half. Red while the list sends the 2000-01-01 placeholder. Armed before the navigation: the request is sent
+    // while the page loads, and a listener armed after it would wait for one that already went by.
+    test('FB-7b the card item of the first prices request of All carries the min start', async ({page}) => {
+        const asset = await seedOldHistoryAsset(page, 'E2E FB-7b list min request');
+        const asked = page.waitForRequest((request) => cardAsksFor(request, asset.id, '').length > 0, {timeout: 30_000});
+        asked.catch(() => undefined);
+        await openListOnAll(page);
+
+        const request = await asked;
+        const first = cardAsksFor(request, asset.id, '')[0];
+        expect(first?.start, 'the card item of this asset on «All» asks from the min sentinel').toBe('min');
+        expect(first?.requestStarts, `no item of that request asks from the ${PLACEHOLDER_START} placeholder`).not.toContain(PLACEHOLDER_START);
+    });
+
+    // The memory half. In-app navigation keeps the page's in-memory stores, a reload empties them: the way away is the
+    // sidebar and the way back is the browser's back, both client-side. The requests are taken from the moment of the way
+    // back, and only those the page sent while it was on the list (the FX page asks for its own in between).
+    test('FB-7b a second visit to All does not ask the card from min again and still draws from the first price', async ({page}) => {
+        const asset = await seedOldHistoryAsset(page, 'E2E FB-7b list second visit');
+        const asks: CardAsk[] = [];
+        page.on('request', (request) => {
+            // Read synchronously: the page URL is the page that sent the request, not the one it will be on later.
+            asks.push(...cardAsksFor(request, asset.id, page.url()));
+        });
+        await openListOnAll(page);
+        await ownCard(page, asset);
+        await expectFromOnOrBefore(page, FIRST_CLOSE_DAY, 'first visit: «All» starts on the oldest first price');
+
+        // Away, in-app.
+        await page.getByTestId('nav-fx').click();
+        await expect(page).toHaveURL(/\/fx(?:[?#]|$)/, {timeout: 15_000});
+        await expect(page.getByTestId('fx-page')).toBeVisible({timeout: 15_000});
+        await expect(page.getByTestId('assets-page'), 'the list really unmounted: otherwise nothing is remounted on the way back').toHaveCount(0);
+
+        // Back, in-app.
+        const mark = asks.length;
+        await page.goBack();
+        await expect(page, 'back on the list, still on «All»').toHaveURL(/\/assets\?.*start=min/, {timeout: 15_000});
+        await expect(page.getByTestId('assets-page')).toBeVisible({timeout: 15_000});
+        await expect(rangePicker(page).getByTestId('date-preset-max'), '«All» is still the active preset').toHaveAttribute('data-active', 'true', {timeout: 10_000});
+        await ownCard(page, asset);
+        await expectChartCanvas(page, `asset-card-${asset.id}`, 15_000);
+        await expectFromOnOrBefore(page, FIRST_CLOSE_DAY, 'second visit: «All» still starts on the oldest first price');
+
+        const onList = asks.slice(mark).filter((ask) => /\/assets(?:[?#]|$)/.test(new URL(ask.pageUrl).pathname + new URL(ask.pageUrl).search));
+        expect(
+            onList.filter((ask) => ask.start === 'min'),
+            'the first day is remembered for the session: the list does not ask the card from min again',
+        ).toEqual([]);
     });
 });

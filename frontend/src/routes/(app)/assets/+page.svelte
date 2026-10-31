@@ -76,7 +76,8 @@
     import type {RangeDelta} from '$lib/utils/rangeChange';
     import {processPriceItemsInParallel} from '$lib/workers/priceProcessingPool';
     import {TargetSampleLoader, type TargetSampleRequest} from '$lib/utils/targetSampleLoader';
-    import {sendBulkBatches} from '$lib/api/bulkBatches';
+    import {MIN_START, sendBulkBatches} from '$lib/api/bulkBatches';
+    import {firstDateOf, forgetFirstDate, isFirstDateKnown, rememberFirstDate, rememberNoSeries} from '$lib/stores/firstSeriesDates';
     import {bulkRefusalMessage} from '$lib/api/bulkRefusal';
     import type {ProcessedAssetResult} from '$lib/workers/priceProcessing.worker';
     import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
@@ -652,11 +653,36 @@
         targetSampleLoader.reset();
     }
 
+    /** The first day of a card's series on screen: its fill's first day, else its first point. */
+    function firstDayOf(asset: AssetState): string | undefined {
+        return asset.base?.date ?? asset.chartData?.[0]?.date;
+    }
+
     function resolveMaxStartFromAssets() {
         if (!isMaxPending) return;
-        const firstDates = assets.map((a) => a.base?.date ?? a.chartData?.[0]?.date).filter((d): d is string => !!d);
+        const firstDates = assets.map((a) => firstDayOf(a)).filter((d): d is string => !!d);
         if (firstDates.length === 0) return;
+        // FB-7b: each asset's first day is kept for the session, so the next «All» starts from a real day, from the cache
+        for (const asset of assets) {
+            const first = firstDayOf(asset);
+            if (first) rememberFirstDate('asset', asset.id, first);
+            else if (!asset.loadingPrices) rememberNoSeries('asset', asset.id);
+        }
         dateStart = firstDates.reduce((min, d) => (d < min ? d : min));
+        displayDateStart = dateStart;
+        isMaxPending = false;
+    }
+
+    /**
+     * FB-7b: «All» still pending and every listed asset's first day already known this session: «All» starts at the oldest of
+     * them, as a real day, and the cards are asked (and cached) from it, never from the `min` sentinel again.
+     */
+    function adoptKnownFirstDays() {
+        if (!isMaxPending || assets.length === 0) return;
+        if (assets.some((asset) => !isFirstDateKnown('asset', asset.id))) return;
+        const days = assets.map((asset) => firstDateOf('asset', asset.id)).filter((day): day is string => day !== undefined);
+        if (days.length === 0) return;
+        dateStart = days.reduce((min, day) => (day < min ? day : min));
         displayDateStart = dateStart;
         isMaxPending = false;
     }
@@ -673,6 +699,8 @@
      */
     function rearmMaxPendingBeforeReload() {
         if (activePreset !== 'MAX') return;
+        // FB-7b: a sync, a refresh or a merge may have moved an asset's first day: the listed ones are asked again
+        for (const asset of assets) forgetFirstDate('asset', asset.id);
         isMaxPending = true;
         dateStart = resolveDateSentinel('min');
         displayDateStart = 'min';
@@ -685,6 +713,14 @@
      */
     async function fetchAllPriceData(silent = false) {
         if (assets.length === 0) return;
+        adoptKnownFirstDays();
+        // FB-7b: «All» still to be settled: the Δ over the range needs its first day, which the cards' answers give; asked together,
+        // it would be valued from a day nobody knows
+        if (isMaxPending) {
+            await fetchPriceSeries(undefined, silent);
+            await loadPeriodChanges(silent);
+            return;
+        }
         await Promise.all([fetchPriceSeries(undefined, silent), loadPeriodChanges(silent)]);
     }
 
@@ -802,6 +838,7 @@
         if (assets.length === 0) return;
         void getSettingsVersion();
 
+        adoptKnownFirstDays();
         const wanted = only ? assets.filter((asset) => only.has(asset.id)) : assets;
         if (wanted.length === 0) return;
         const wantedIds = new Set(wanted.map((asset) => asset.id));
@@ -809,6 +846,9 @@
         // The range the answers belong to: the page may move on while the request is in flight.
         const rangeStart = dateStart;
         const rangeEnd = dateEnd;
+        // FB-7b: «All» pending, the first days unknown: each card is asked from the sentinel `min` (the server answers each asset's
+        // first stored day, whatever its year), never from a made-up start; the answers are filed under the range «All» settles on
+        const askedFromMin = isMaxPending;
 
         const cards: CardQueryInput[] = [];
         const cached = new Map<number, ReducedEntry>();
@@ -856,7 +896,7 @@
             cards.push({
                 assetId: asset.id,
                 plotWidthPx,
-                start: rangeStart,
+                start: askedFromMin ? MIN_START : rangeStart,
                 end: rangeEnd,
                 needsPrice,
                 signals: calendarRequest ? [calendarRequest] : plan.requests,
@@ -945,6 +985,21 @@
             signalRequestFailed = (invalidItemErrors.length > 0 && anySignals) || unansweredSignals;
 
             // Put what was read into the cache (cheap: Map.set calls); a result is tied to its entry by its position in the batch.
+            // Asked from `min`, the answers belong to the range «All» is about to settle on: the oldest first day of the listed assets.
+            let filedStart = rangeStart;
+            if (askedFromMin) {
+                const readFirstDays = new Map<number, string>();
+                for (const {batch, answer} of outcome.answers) {
+                    for (const result of answer.results) {
+                        const entry = batch.items[result.requestIndex];
+                        if (entry?.role !== 'card' || !entry.item.include_price) continue;
+                        const first = result.derived.base?.date ?? result.derived.chartData[0]?.date;
+                        if (first) readFirstDays.set(entry.cardId, first);
+                    }
+                }
+                const firstDays = assets.map((asset) => readFirstDays.get(asset.id) ?? firstDayOf(asset)).filter((day): day is string => !!day);
+                if (firstDays.length > 0) filedStart = firstDays.reduce((min, day) => (day < min ? day : min));
+            }
             const read = new Map<number, ReducedEntry>();
             const signalsByCard = new Map<number, ProcessedAssetResult['signals']>();
             const calendarTargets = new Map<number, Map<number, CalendarReturnView>>();
@@ -959,12 +1014,12 @@
                         continue;
                     }
                     if (entry.role === 'target') {
-                        nextTargetSamples.set(`${entry.cardId}|${entry.targetId}`, reducedPrices.putTarget(entry.targetId!, entry.cardId, rangeStart, rangeEnd, {resolution: result.resolution, derived: result.derived}));
+                        nextTargetSamples.set(`${entry.cardId}|${entry.targetId}`, reducedPrices.putTarget(entry.targetId!, entry.cardId, filedStart, rangeEnd, {resolution: result.resolution, derived: result.derived}));
                         continue;
                     }
                     signalsByCard.set(entry.cardId, result.signals);
                     // An item without prices (its signals only, or a step for its targets) has no series to keep.
-                    if (entry.item.include_price) read.set(entry.cardId, reducedPrices.putCard(entry.cardId, rangeStart, rangeEnd, {resolution: result.resolution, derived: result.derived}));
+                    if (entry.item.include_price) read.set(entry.cardId, reducedPrices.putCard(entry.cardId, filedStart, rangeEnd, {resolution: result.resolution, derived: result.derived}));
                 }
             }
 
