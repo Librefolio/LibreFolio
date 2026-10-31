@@ -137,6 +137,12 @@ describe('the candles loading indicator', () => {
         expect(view.getByTestId(LOADING)).toBeTruthy();
     });
 
+    it('lets the pointer through to the controls under it: the user can leave Candles while they load', async () => {
+        const view = await mountOnCandles({pnlCandles: null, pnlCandlesLoading: true});
+        // The skeleton covers the chart, the submode buttons included: it must not take their clicks (a held request must not hold the user).
+        expect(view.getByTestId(LOADING).className).toContain('pointer-events-none');
+    });
+
     it('is not there when nothing is asked', async () => {
         const view = await mountOnCandles({pnlCandles: null, pnlCandlesLoading: false});
         expect(view.queryByTestId(LOADING)).toBeNull();

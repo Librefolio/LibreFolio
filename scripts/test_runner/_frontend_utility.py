@@ -809,6 +809,18 @@ def front_pac_allocator_real(verbose: bool = False, ui: bool = False, headed: bo
     return _run_playwright("pac-allocator-real.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_pac_phone_layout(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the PAC allocator's phone-width checks: the Targets and Review steps fit a 375 px screen, no table and no page scrolls sideways (Y-9)."""
+    print_section("Frontend PAC Allocator Phone Layout Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("pac-phone-layout.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_changelog_locale(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the changelog modal's chapter languages in the Italian and English UI (lot CL, desktop)."""
     print_section("Frontend Changelog Locale Tests")
@@ -1311,6 +1323,15 @@ def populate_registry(registry: dict) -> None:
         desc="The PAC allocator (beta) end to end on real data (1.2 gap 3): a disposable account holds two priced positions and cash in its own broker; the Tools hub opens the planner (tool code read from the catalogue), «copy from LibreFolio» brings the broker's cash, the positions with their stored prices and their current distribution as the targets, a budget is typed and «Calculate plan» runs the real engine; the tool's own request carries the copied facts, its answer is a proven optimum, and the screen prints it — run state, result state and proof the answer's, per Asset the value after the plan, the ideal value and the signed gap, per order the amount and the fee, on sign and digits at the currency's minor unit — within the budget",
         prereq="Populated DB + test users (registration enabled)",
         tests="pac-allocator-real.spec.ts",
+    )
+    add_test(
+        cat,
+        "pac-phone-layout",
+        front_pac_phone_layout,
+        name="PAC Allocator Phone Layout Tests",
+        desc="The PAC allocator on a 375 px screen (Y-9): the Targets and Review steps fit the card, measured as the sideways overflow of every table of the step and of the page (0 px), on the gallery's draft; a screenshot of each step is attached",
+        prereq="Populated DB + test users",
+        tests="pac-phone-layout.spec.ts",
     )
     add_test(
         cat,
