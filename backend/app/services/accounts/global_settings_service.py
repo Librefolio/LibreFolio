@@ -26,8 +26,34 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.app.config.accounts import default_currency, default_language, default_timezone
 from backend.app.db.models import GlobalSetting
 from backend.app.schemas.settings import GLOBAL_SETTINGS_DEFAULTS, SETTINGS_REGISTRY
+
+#: The global settings an environment variable stands behind until an administrator saves them: the reader of each (CL-10, CL-13).
+_VARIABLE_READERS = {
+    SETTINGS_REGISTRY.global_.DEFAULT_LANGUAGE.key: default_language,
+    SETTINGS_REGISTRY.global_.DEFAULT_CURRENCY.key: default_currency,
+    SETTINGS_REGISTRY.global_.SCHEDULER_TIMEZONE.key: default_timezone,
+}
+
+
+def effective_stored_value(key: str, setting: GlobalSetting | None) -> str | None:
+    """The value a global setting has now, when an environment variable stands behind it: ``None`` when none does.
+
+    ``LIBREFOLIO_DEFAULT_LANGUAGE`` (CL-10), ``LIBREFOLIO_DEFAULT_CURRENCY`` and ``LIBREFOLIO_DEFAULT_TIMEZONE`` (CL-13)
+    are the ``default_language``, ``default_currency`` and ``scheduler_timezone`` until an administrator saves that setting:
+    its row is missing, or was never written by a user (``updated_by_user_id`` is empty, as the row the startup seeds with
+    the default). From the administrator's first save on, the row wins, even when it says the default again. An unusable
+    variable is the audit's to stop at the start; here it stands for nothing.
+    """
+    read = _VARIABLE_READERS.get(key)
+    if read is None or (setting is not None and setting.updated_by_user_id is not None):
+        return None
+    try:
+        return read()
+    except ValueError:
+        return None
 
 
 async def get_setting_value(session: AsyncSession, key: str, default: Any = None) -> Any:
@@ -46,6 +72,10 @@ async def get_setting_value(session: AsyncSession, key: str, default: Any = None
     """
     result = await session.execute(select(GlobalSetting).where(GlobalSetting.key == key))
     setting = result.scalar_one_or_none()
+
+    pinned = effective_stored_value(key, setting)
+    if pinned is not None:
+        return pinned
 
     if not setting:
         # Try to get default from GLOBAL_SETTINGS_DEFAULTS

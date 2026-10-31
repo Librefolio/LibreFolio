@@ -4233,7 +4233,8 @@ test.describe('Gallery Screenshots', () => {
 
                     // Read as, open: the set's plugin, detected and chosen, and reading the files one by one.
                     await readAs.click();
-                    const list = card.getByTestId('report-set-read-as-dropdown');
+                    // The list of a SimpleSelect is in a portal on <body>, not inside the select: looked up from the page
+                    const list = card.page().getByTestId('report-set-read-as-dropdown');
                     await expect(list).toBeVisible();
                     await expect(list.getByTestId(`report-set-read-as-option-${DANSKE}`), 'the set is read with Danske Bank').toHaveAttribute('aria-selected', 'true');
                     await expect(list.getByTestId('report-set-read-as-option-one-by-one')).toHaveAttribute('aria-selected', 'false');

@@ -330,8 +330,10 @@ live email-verification token ([Email Verification](../backend/email.md#verifica
 waiting for its setup ([The Initial Administrator](#initial-admin)), each account counted once. A deactivated or
 deleted account frees its place; an invitation holds one from its creation until it is revoked or expires, and
 hands it to the account it opens; an account waiting for its email verification holds one while its link is
-live. A value that is not a whole number of at least 1 is a limit of 0, logged like an invalid mode
-(`_max_users()`).
+live. A value that is not a whole number of at least 1 makes `max_users()` raise `ValueError`, and
+`log_configuration_audit()` calls it, so the start stops with an error that names the variable (CL-1). The registration
+check `_max_users()` still reads such a value as a limit of 0, logged like an invalid mode, for a process the audit does not
+guard; `GET /panel/status` answers `users_limit: null` for it, never a 500.
 
 #### Over the limit (A5-7)
 

@@ -580,6 +580,15 @@ def api_uploads_serve_file(verbose: bool = False, test_names: list = None) -> bo
     return run_command(cmd, "Uploads serve-file tests", verbose=verbose)
 
 
+def api_uploads_file_disposition(verbose: bool = False, test_names: list = None) -> bool:
+    """Run /uploads/file/{id} inline-vs-attachment disposition tests (H6-2)."""
+    print_section("Uploads File Disposition API Tests (H6-2)")
+    print_info("Testing GET /uploads/file/{id}: inline for safe types, attachment otherwise, nosniff, download flag")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_uploads_file_disposition.py", test_names)
+    return run_command(cmd, "Uploads file disposition tests", verbose=verbose)
+
+
 def api_brokers(verbose: bool = False, test_names: list = None) -> bool:
     """Run Brokers API endpoint tests."""
     print_section("Brokers API Endpoint Tests")
@@ -968,6 +977,14 @@ def api_panel_status(verbose: bool = False, test_names: list[str] | None = None)
     print_info("Testing: GET /api/v1/panel/status: off 404, its own 401, the four setup states with the expiry of a pending one only, no personal data, a blocked instance, OpenAPI")
     cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_panel_status_api.py", test_names)
     return run_command(cmd, "Hosting panel status API tests", verbose=verbose)
+
+
+def api_panel_metrics(verbose: bool = False, test_names: list[str] | None = None) -> bool:
+    """Run the hosting panel's figures route tests: GET /panel/metrics, a signed ticket of scope metrics only (CL-M1)."""
+    print_section("Hosting Panel Metrics API")
+    print_info("Testing: GET /api/v1/panel/metrics: off 404 without the panel's keys, no token opens it (panel_metrics_unauthorized), wrong scope, replay, 429 shared limiter, 503, blocked / awaiting restore / interrupted, the one log line, no user activity, a failing measure is a null in a 200")
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_panel_metrics_api.py", test_names)
+    return run_command(cmd, "Hosting panel metrics API tests", verbose=verbose)
 
 
 def api_broker_multiuser(verbose: bool = False, test_names: list[str] | None = None) -> bool:
@@ -1401,6 +1418,7 @@ Tests for REST API endpoints (server auto-started):
     )
     add_test(api, "backup-export-extras", api_backup_export_extras, name="Backup Export Extras", desc="Events + FX rates export")
     add_test(api, "uploads-serve-file", api_uploads_serve_file, name="Uploads Serve File", desc="Preview, download, MIME")
+    add_test(api, "uploads-file-disposition", api_uploads_file_disposition, name="Uploads File Disposition", desc="H6-2: inline for safe types, attachment otherwise, nosniff, download flag")
     add_test(api, "brokers", api_brokers, name="Brokers API", desc="CRUD broker endpoints")
     add_test(api, "brim", api_brim, name="BRIM API", desc="Upload, parse, import flow")
     add_test(api, "brim-date-order", api_brim_date_order, name="BRIM Date Order API", desc="W5-8 (CP12): the user's own date_order reaches the generic CSV parse, a change makes the file stale until parsed again, the fingerprint is never served")
@@ -1508,7 +1526,7 @@ Tests for REST API endpoints (server auto-started):
         "api-docs",
         api_api_docs,
         name="API Docs",
-        desc="H-55 R5: /api/v1/docs, /api/v1/redoc and openapi.json only with LIBREFOLIO_API_DOCS or test mode (404 otherwise, Docker included); our pages, no inline script, the libraries from jsDelivr at an exact version with SRI and crossorigin, the start scripts served by the instance, out of the schema; main.py wiring; app.openapi() with openapi_url None",
+        desc="H-55 R5: /api/v1/docs, /api/v1/redoc and openapi.json only with LIBREFOLIO_API_DOCS or test mode (404 otherwise, Docker included); our pages, no inline script, the libraries from jsDelivr at an exact version with SRI and crossorigin, the start scripts served by the instance, out of the schema; main.py wiring; app.openapi() with openapi_url None; FB-23: with the static site installed after them, a browser navigation to the three addresses is a 302 to / and any other request a JSON 404",
         isolation="pure",
     )
     add_test(
@@ -1524,7 +1542,16 @@ Tests for REST API endpoints (server auto-started):
         "panel-status",
         api_panel_status,
         name="Hosting Panel Status API",
-        desc="H-61 R1: GET /panel/status off 404 without a token, panel_status_unauthorized, the four states of the initial administrator's setup with the expiry of a pending one only, no personal data, answered on a blocked instance, its OpenAPI schema; the places taken and the limit, owner_email_change, instance_key (nine keys in all); H5-8 users_over_limit: true only while the ACTIVE accounts outnumber LIBREFOLIO_MAX_USERS (invitations and waiting accounts do not count, a deactivated one neither), recomputed at each request, never who, on a blocked, awaiting-restore or unreadable-restore instance, a required boolean right after instance_key in the OpenAPI",
+        desc="H-61 R1: GET /panel/status off 404 without a token, panel_status_unauthorized, the four states of the initial administrator's setup with the expiry of a pending one only, no personal data, answered on a blocked instance, its OpenAPI schema; the places taken and the limit, owner_email_change, instance_key (nine keys in all); H5-8 users_over_limit: true only while the ACTIVE accounts outnumber LIBREFOLIO_MAX_USERS (invitations and waiting accounts do not count, a deactivated one neither), recomputed at each request, never who, on a blocked, awaiting-restore or unreadable-restore instance, a required boolean right after instance_key in the OpenAPI; CL-1 an unusable LIBREFOLIO_MAX_USERS answers 200 with users_limit null; CL-6 restore.reason owner_assignment for a committed restore whose owner has no account (and the OpenAPI enum); CL-9 owner_language (the owner's language, null otherwise; ten keys in all)",
+        isolation="pure",
+    )
+    add_test(
+        api,
+        "panel-metrics",
+        api_panel_metrics,
+        name="Hosting Panel Metrics API",
+        desc="CL-M1 (security): GET /panel/metrics with the ticket-only scope metrics: 404 without LIBREFOLIO_PANEL_PUBLIC_KEYS (no line, no count), 401 panel_metrics_unauthorized to no credential, any static token, garbage, a tampered signature, another scheme or a ticket in the query (counted), panel_ticket_wrong_scope for another scope's ticket and for the metrics ticket at every other panel route (not counted, the jti kept), replay, expired / not yet valid / wrong audience / too long-lived, 429 from the limiter shared with the other scopes even to a valid ticket, 503 panel_metrics_unavailable; 200 with the 15 keys and the figures of an instance the test made, no name, email, path or ticket in it; the one Hosting panel request line without the ticket; not user activity; each failing measure a null in a 200; allowed on a blocked instance, while awaiting the restore and with an interrupted restore, the refusals of every day there, never a 423",
+        # PURE: the app of main.py in this process (ASGI) from a public peer, the panel's keys and tickets of test_panel_restore_api.py, the data directory under tmp_path, an in-memory database the test owns, disk_usage stood in for, the limiter and the activity record the test's own: no lane server, DB or network is reached.
         isolation="pure",
     )
     add_test(

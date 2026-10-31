@@ -2,8 +2,8 @@
 
 Owner: workstream H (platform). A hosting panel calls an instance without a user session, with a credential per scope
 (decision Q2): ``backup`` (``/backup/panel/jobs…``, workstream B), ``wake`` (``POST /system/wake-sync``, workstream Z)
-``status`` (``GET /panel/status``) and ``backup:restore`` (``/backup/panel/restore…``, lot H-62: a ticket only, no
-token, so it is off without the panel's keys). ``panel_access(scope)`` is the dependency of each route:
+``status`` (``GET /panel/status``), ``backup:restore`` (``/backup/panel/restore…``, lot H-62: a ticket only, no
+token, so it is off without the panel's keys) and ``metrics`` (``GET /panel/metrics``, CL-M1: a ticket only too). ``panel_access(scope)`` is the dependency of each route:
 
 1. The scope's token is read at each call (``config/backup.py``, ``config/sleep_wake.py``,
    ``config/hosting_panel.py``), and so are the panel's public keys of L2, with the audience and the clock tolerance
@@ -83,6 +83,8 @@ class PanelScope(StrEnum):
     STATUS = "status"
     #: The restore of the whole instance (lot H-62): a signed ticket only, never a token
     BACKUP_RESTORE = "backup:restore"
+    #: The read-only figures of the instance (CL-M1, ``GET /panel/metrics``): a signed ticket only, never a token
+    METRICS = "metrics"
 
 
 @dataclass(frozen=True)
@@ -155,6 +157,18 @@ _RULES: dict[PanelScope, _ScopeRules] = {
         unavailable_code="backup_restore_unavailable",
         unavailable_message="The panel's ticket settings of this instance cannot be used",
         bearer=HTTPBearer(auto_error=False, scheme_name="BackupRestorePanelTicket", description="A hosting panel's signed ticket of scope `backup:restore` (LIBREFOLIO_PANEL_PUBLIC_KEYS), sent as `Authorization: Bearer <ticket>`; no token is accepted"),
+    ),
+    # CL-M1: no token opens the figures either: only a ticket of this scope, so without the panel's keys the route is off
+    PanelScope.METRICS: _ScopeRules(
+        read_token=lambda: None,
+        config_errors=(),
+        unusable_line="",
+        unusable_fields=lambda exc: {},
+        unauthorized_code="panel_metrics_unauthorized",
+        unauthorized_message="A valid panel ticket for the metrics is required",
+        unavailable_code="panel_metrics_unavailable",
+        unavailable_message="The panel's ticket settings of this instance cannot be used",
+        bearer=HTTPBearer(auto_error=False, scheme_name="PanelMetricsTicket", description="A hosting panel's signed ticket of scope `metrics` (LIBREFOLIO_PANEL_PUBLIC_KEYS), sent as `Authorization: Bearer <ticket>`; no token is accepted"),
     ),
 }
 

@@ -318,7 +318,11 @@
   "nav": {
     "dashboard": "Tableau de bord",
     "settings": "Paramètres",
-    "toggleMenu": "Ouvrir ou fermer le menu"
+    "toggleMenu": "Ouvrir ou fermer le menu",
+    "checkingAuthentication": "Vérification de la connexion…",
+    "closeSidebar": "Fermer le menu",
+    "expandSidebar": "Développer le menu",
+    "collapseSidebar": "Réduire le menu"
   },
   "prices": {
     "sync": {

@@ -3,9 +3,13 @@
   (B-33, `reason` `restore_state`: LibreFolio cannot tell which data it holds, the administrator chooses with
   `./dev.py backup pending --recover previous`) or the owner of the restored data has no account yet (H5-3, `reason`
   `owner_assignment`: `./dev.py backup pending --recover owner`). Every API route but a few answers 423
-  `instance_restore_interrupted`. The page says so on the login's animated background,
-  links the recovery's documentation and, when the instance names one, its support (D7), asks the instance every `pollMs` whether it serves the data again, and reloads
-  once it does.
+  `instance_restore_interrupted`. The page says so on the login's animated background and offers the help of whoever can
+  act (FB-27): the recovery is a command on the server, so on a self-hosted instance the administrator solves it alone
+  and the page links the guide of the recovery; on a managed instance the customer cannot, and the page links the
+  instance's support address with the state's code, the instance's address, the version and the date in the message
+  (D7), or, without a usable address, says to contact whoever provides the service. A self-hosted instance also links
+  its support address when it has one. It asks the instance every `pollMs` whether it serves the data again, and
+  reloads once it does.
 -->
 <script lang="ts">
     import {onMount} from 'svelte';
@@ -14,8 +18,11 @@
     import {zodiosApi} from '$lib/api';
     import {currentLanguage} from '$lib/stores/app/language';
     import AnimatedBackground from '$lib/components/ui/AnimatedBackground.svelte';
-    import {supportChannel} from '$lib/components/assets/assetSearchReport';
+    import {reportHref, supportChannel} from '$lib/features/support/supportChannel';
+    import {APP_VERSION} from '$lib/version';
+    import {buildCheckReport} from '../checkSupportReport';
     import {instanceConfig} from '../instanceConfig.svelte';
+    import {selfHostedConfirmed} from '$lib/features/instance/profile';
 
     interface Props {
         /** What the retry button and the end of the state do; reloads the page by default. */
@@ -28,9 +35,11 @@
         supportUrl?: string | null;
         /** Why the instance serves no data (`restore_interrupted_reason` of `GET /system/instance`); null or absent reads as `restore_state`. */
         reason?: 'restore_state' | 'owner_assignment' | null;
+        /** Whether the administrator is whoever runs the server (a self-hosted instance, confirmed by the server): the recovery is theirs. */
+        selfHosted?: boolean;
     }
 
-    let {onretry = () => window.location.reload(), fetchInterrupted = defaultFetchInterrupted, pollMs = 30_000, supportUrl = configuredSupportUrl(), reason = null}: Props = $props();
+    let {onretry = () => window.location.reload(), fetchInterrupted = defaultFetchInterrupted, pollMs = 30_000, supportUrl = configuredSupportUrl(), reason = null, selfHosted = selfHostedConfirmed()}: Props = $props();
 
     /** The generated type of a nullable string with a description also admits an array (a quirk of the client
      *  generator, as in `AssetSearchAutocomplete`); the response's validator accepts only a string or null. */
@@ -41,11 +50,11 @@
 
     // D7: the instance's support, when it names a usable one (checked again, no GitHub fallback): a mailto or a page
     const support = $derived(supportChannel(supportUrl, {githubFallback: false}));
-    const supportHref = $derived(support?.kind === 'mailto' ? `mailto:${support.address}` : support?.kind === 'page' ? support.url : null);
+    const supportHref = $derived(support ? reportHref(support, buildCheckReport({checkId: 'platform.restore_interrupted', severity: 'error', instanceAddress: window.location.origin, appVersion: APP_VERSION, date: new Date()})) : null);
 
     const ownerAssignment = $derived(reason === 'owner_assignment');
 
-    /** The admin page of the recovery, in the interface language (the docs' rule: English at the root): the CLI's section for an
+    /** The page of the recovery, in the interface language (the docs' rule: English at the root): the CLI's section for an
      *  unreadable state, the panel guide's section on the owner's account for the owner's. */
     const docsHref = $derived(`/mkdocs/${$currentLanguage && $currentLanguage !== 'en' ? `${$currentLanguage}/` : ''}admin/${ownerAssignment ? 'hosting_panel_backups/#restore-owner-pending' : 'cli_backup/#backup-pending-unreadable'}`);
 
@@ -89,7 +98,16 @@
         </section>
         <p class="mt-3 rounded-lg border border-lf-warning-line bg-lf-warning-soft px-3 py-2 text-sm text-lf-warning-on-soft" data-testid="instance-restore-interrupted-admin">{$_(ownerAssignment ? 'instance.restoreInterrupted.ownerAdminHint' : 'instance.restoreInterrupted.adminHint')}</p>
         <p class="mt-3 text-xs text-lf-muted" data-testid="instance-restore-interrupted-auto">{$_('instance.restoreInterrupted.autoReload')}</p>
+        {#if !supportHref && !selfHosted}
+            <p class="mt-3 text-sm text-lf-secondary" data-testid="instance-restore-interrupted-support-missing">{$_('instance.restoreInterrupted.supportMissing')}</p>
+        {/if}
         <div class="mt-5 flex flex-wrap items-center justify-end gap-2">
+            {#if selfHosted}
+                <a href={docsHref} target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-lf-link hover:bg-lf-hover hover:underline" data-testid="instance-restore-interrupted-docs">
+                    {$_('instance.restoreInterrupted.docs')}
+                    <ExternalLink class="h-4 w-4" aria-hidden="true" />
+                </a>
+            {/if}
             {#if supportHref}
                 <a
                     href={supportHref}
@@ -102,10 +120,6 @@
                     <LifeBuoy class="h-4 w-4" aria-hidden="true" />
                 </a>
             {/if}
-            <a href={docsHref} target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium text-lf-link hover:bg-lf-hover hover:underline" data-testid="instance-restore-interrupted-docs">
-                {$_('instance.restoreInterrupted.docs')}
-                <ExternalLink class="h-4 w-4" aria-hidden="true" />
-            </a>
             <button type="button" class="rounded-lg bg-lf-action px-4 py-2 text-sm font-medium text-lf-on-action hover:bg-lf-action-hover" onclick={() => onretry()} data-testid="instance-restore-interrupted-retry">
                 {$_('instance.awaitingRestore.retry')}
             </button>

@@ -297,8 +297,14 @@ async function editableBroker(page: Page): Promise<Subject> {
     const listed = await getJson<{items?: Array<{id: number; is_active: boolean; user_role?: string | null}>}>(page, `${API}/brokers`, 'list the brokers the E2E user can see');
     const editable = (listed.items ?? []).filter((broker) => broker.is_active && (broker.user_role === 'OWNER' || broker.user_role === 'EDITOR')).sort((a, b) => a.id - b.id);
     for (const broker of editable) {
-        const summary = await getJson<{holdings?: unknown[] | null}>(page, `${API}/brokers/${broker.id}/summary`, `read the summary of broker ${broker.id}`);
-        if ((summary.holdings ?? []).length > 0) return {path: `/brokers/${broker.id}`, label: `/brokers/${broker.id}`};
+        // The portfolio report is where the positions are calculated (`GET /brokers/{id}/summary` no longer carries them, MF-L)
+        const report = await jsonFrom<{summary?: {holdings?: Array<{broker_id?: number | null}> | null} | null}>(
+            await page.request.post(`${API}/portfolio/report`, {
+                data: {broker_ids: [broker.id], include_summary: true, include_history: false, include_allocation_history: false, include_breakdown: false, include_positions_contribution: false},
+            }),
+            `read the positions of broker ${broker.id} from the portfolio report`,
+        );
+        if ((report.summary?.holdings ?? []).some((holding) => holding.broker_id == null || holding.broker_id === broker.id)) return {path: `/brokers/${broker.id}`, label: `/brokers/${broker.id}`};
     }
     throw new Error(`None of ${editable.length} active brokers the E2E user can edit holds a position. Check populate_mock_data.py (populate_broker_user_access, populate_transactions).`);
 }

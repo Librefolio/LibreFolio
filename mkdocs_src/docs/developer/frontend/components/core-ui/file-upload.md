@@ -273,6 +273,7 @@ frontend/src/lib/
 ## 🖥️ Backend Support
 
 - **Image preview API**: `GET /api/v1/uploads/file/{id}?img_preview=WxH`, answered with `Cache-Control: private, max-age=3600`
+- **File serving**: `GET /api/v1/uploads/file/{id}` sends `Content-Disposition: inline` for the stored types of `INLINE_SAFE_MEDIA_TYPES` (PDF, JSON, plain text, CSV and the common images), so the PDF fallback of the preview, an `<iframe>`, displays instead of downloading; any other type and `?download=true` are an attachment, and every response carries `X-Content-Type-Options: nosniff` (H6-2, [How a file is served](../../../architecture/security.md#file-serving))
 - **Preview cache**: Size-based (`PREVIEW_CACHE_MAX_MB` in `.env`, default 50MB), TTL 1h, invalidated on delete
 - **No-op for small images**: If requested size ≥ original, serves file directly without processing
 - **Scope**: every upload is `common` (every signed-in user sees it) or `personal` (its uploader and the admins).

@@ -5,8 +5,11 @@ Owner: workstream H (platform). Moved out of ``main.py`` as it was (CP2b), path 
 when the app is not built; the build's chunks under ``/_app``, when the build exists; last, the SPA catch-all, which
 must stay the last route of the app. The handlers read ``FRONTEND_BUILD_DIR`` and ``SITE_DIR`` when a request comes, so
 a test can point them elsewhere. No route serves a hidden file, a name starting with ``.`` such as the build's own
-markers: the catch-all answers the SPA fallback, like a path outside the build (H-28); ``/_app`` and ``/mkdocs`` answer
-their 404, like a missing file (H-29).
+markers: the catch-all answers the SPA fallback, like a path outside the build (H-28); ``/_app`` answers its 404, like a
+missing file (H-29).
+
+An address that leads nowhere under ``/api`` or ``/mkdocs`` (the API's pages and schema while they are off included) takes a
+browser's page request to ``/`` and answers a client's call with the 404 JSON of the API (FB-23, ``address_not_found``).
 
 Caching: the chunks under ``_app/immutable/`` are cached for a year (their names change with their content); every
 other file of ``_app`` (``env.js``, ``version.json``) and every HTML document is revalidated (F28).
@@ -20,8 +23,8 @@ import hashlib
 from html.parser import HTMLParser
 from pathlib import Path
 
-from fastapi import FastAPI
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -97,6 +100,23 @@ def spa_inline_script_hashes(build_dir: Path) -> tuple[str, ...]:
     return tuple(sorted(hashes))
 
 
+def _is_navigation(request: Request) -> bool:
+    """Whether the browser is asking for a page to show: ``Sec-Fetch-Mode: navigate``, or, from a client that does not send
+    it, an ``Accept`` that wants HTML. A call of a client (``Accept: */*`` or JSON) is not one."""
+    mode = request.headers.get("sec-fetch-mode")
+    if mode is not None:
+        return mode.lower() == "navigate"
+    return "text/html" in request.headers.get("accept", "").lower()
+
+
+def address_not_found(request: Request) -> Response:
+    """The answer to an address that leads nowhere (FB-23): a person in a browser goes to the app (``/``, which sends them to the
+    login or the Dashboard); a client gets the API's own 404 in JSON, and is never redirected."""
+    if _is_navigation(request):
+        return RedirectResponse("/", status_code=302)
+    return JSONResponse({"detail": "Not Found"}, status_code=404)
+
+
 def _revalidated_file(path: Path) -> FileResponse:
     """A file of a build, told to revalidate when it is an HTML document."""
     return FileResponse(path, headers=REVALIDATE_HTML if path.suffix == ".html" else None)
@@ -138,7 +158,7 @@ def mkdocs_root():  # pragma: no cover
     return render_docs_not_built()
 
 
-def mkdocs_static(path: str):  # pragma: no cover
+def mkdocs_static(path: str, request: Request):  # pragma: no cover
     if not docs_available():
         return render_docs_not_built()
 
@@ -146,14 +166,14 @@ def mkdocs_static(path: str):  # pragma: no cover
     target = confined_path(SITE_DIR, requested_path)
     # A path leaving the site, or a hidden file of it (H-29), is not found
     if target is None or _hidden_below(SITE_DIR, target):
-        return HTMLResponse("<h1>Documentation file not found</h1>", status_code=404)
+        return address_not_found(request)
     if target.is_dir():
         target = target / "index.html"
 
     if target.exists() and target.is_file():
         return _revalidated_file(target)
 
-    return HTMLResponse("<h1>Documentation file not found</h1>", status_code=404)
+    return address_not_found(request)
 
 
 async def root():  # pragma: no cover
@@ -219,11 +239,11 @@ def _hidden_in_build(target: Path) -> bool:
 # (registered before this route, in install_static_site). This catch-all only handles:
 # 1. Direct static files in build root (favicon, manifest, robots.txt, etc.)
 # 2. SPA fallback (200.html for client-side routing)
-def frontend_catchall(path: str):  # pragma: no cover
+def frontend_catchall(path: str, request: Request):  # pragma: no cover
     """Serve frontend for any non-API route (SPA support)."""
-    # Skip API and docs routes
+    # An API or documentation address nothing else served: the app for a browser, a JSON 404 for a client (FB-23)
     if path.startswith(("api/", "mkdocs")):
-        return HTMLResponse("<h1>Not Found</h1>", status_code=404)
+        return address_not_found(request)
 
     # Check if frontend is available at runtime
     if not frontend_available():

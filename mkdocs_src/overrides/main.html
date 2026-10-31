@@ -22,4 +22,14 @@
   {#- DOC-2: before Material's bundle, which starts fetching the search index when it loads: the page asks for the index
       of its own language (hooks/search_language_split.py writes them), and the search dialog gets its checkbox -#}
   <script src="{{ 'javascripts/search-language.js' | url }}"></script>
+  {#- H6-3: a page with a diagram gets Mermaid from the site's own copy before Material's bundle, which otherwise fetches
+      its own from unpkg (javascripts/mermaid-early.js says why); the other pages load nothing -#}
+  {% if page and page.content and 'class="mermaid"' in page.content %}
+  <script src="{{ 'javascripts/vendor/mermaid/mermaid.min.js' | url }}"></script>
+  <script src="{{ 'javascripts/mermaid-early.js' | url }}"></script>
+  {#- H6-4: the full screen view of a diagram. Same place, same reason: it opens the shadow root Material draws the diagram
+      into, so it must run before Material's bundle draws -#}
+  <link rel="stylesheet" href="{{ 'stylesheets/diagram-zoom.css' | url }}">
+  <script src="{{ 'javascripts/diagram-zoom.js' | url }}"></script>
+  {% endif %}
 {% endblock %}
