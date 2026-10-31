@@ -40,6 +40,7 @@
         bucketSpanUpTo,
         computeGhostSeries,
         computeZoomWindow,
+        extendToOverlayDays,
         countBuckets,
         formatMonthLabel,
         formatTruncatedGhostLabel,
@@ -255,6 +256,8 @@
     let resolvedDataCache = new Map<ChartResolution, ResolvedDataCacheEntry>();
     let lastRawDataRef: LineDataPoint[] | null = null;
     let lastDisplayDataRef: LineDataPoint[] | null = null;
+    /** The days the axis was lengthened with, as text: another comparison (or none) moves every index the zoom and the resolution hold. */
+    let lastAxisKey = '';
     let lastRenderedResolution: ChartResolution | null = null;
     let lastRenderedDates: string[] = [];
     let responsiveXAxisCompact = false;
@@ -270,7 +273,10 @@
     // Derived data
     // =========================================================================
 
-    let displayData = $derived(valueUnit === 'percentage' ? data : toDisplaySeries(data, viewMode));
+    // The axis is laid on the main series' days, lengthened with the days of a comparison older (or younger) than it (Y2-CMP): the main line is
+    // empty there and the comparison is drawn from its own first day. `data` stays the main series, for what only it answers (a click's value, the ghost).
+    let axisData = $derived(extendToOverlayDays(data, overlaySignals));
+    let displayData = $derived(valueUnit === 'percentage' ? axisData : toDisplaySeries(axisData, viewMode));
 
     // =========================================================================
     // Lifecycle
@@ -295,7 +301,9 @@
     });
 
     $effect(() => {
-        if (data !== lastRawDataRef) {
+        const axisKey = axisData === data ? '' : `${axisData[0].date}|${axisData.length}`;
+        if (data !== lastRawDataRef || axisKey !== lastAxisKey) {
+            lastAxisKey = axisKey;
             resolvedDataCache.clear();
             resolution = 'daily';
             logicalRange = null;
@@ -773,7 +781,7 @@
         lastRenderedDates = dates;
         const bucketInfoByDate = new Map(dates.map((date, index) => [date, getBucketInfo(resolvedLineData[index], activeResolution)]));
         const useBaselineColoring = colorByBaseline;
-        const baselineValue = isPercentage ? 0 : (resolvedLineData[0]?.value ?? 0);
+        const baselineValue = isPercentage ? 0 : (resolvedLineData.find((point) => !point.missing)?.value ?? 0);
         const staleDaysArr = resolvedLineData.map((point) => point.staleDays ?? 0);
         const mainSeriesName = mainSeriesLabel || currency || 'Value';
         const series: any[] = [];

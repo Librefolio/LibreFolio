@@ -44,6 +44,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/components/charts/__tests__/stepTooltip.test.ts",
             "src/lib/components/charts/__tests__/timeSeriesAggregation.yearly.test.ts",
             "src/lib/utils/chartReady.test.ts",
+            "src/lib/components/charts/PriceChartFull.unionAxis.test.ts",
             "src/lib/components/charts/lineShape.test.ts",
             "src/lib/components/charts/LineShapePicker.test.ts",
             "src/lib/components/charts/lineShapePreviewData.test.ts",
@@ -752,6 +753,16 @@ def front_chart_tooltip_days(verbose: bool = False, ui: bool = False, headed: bo
     return _run_playwright("chart-tooltip-days.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_chart_comparison_axis(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the comparison axis E2E (Y2-CMP): the asset and FX detail charts start on the older of the main series and its comparison."""
+    print_section("Frontend Chart Comparison Axis Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("chart-comparison-axis.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_files_pdf_offline(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run the PDF preview with every origin but the lane's refused (1.2 gap 7)."""
     print_section("Frontend Files PDF Offline Tests")
@@ -1259,6 +1270,15 @@ def populate_registry(registry: dict) -> None:
     add_test(cat, "settings", front_settings, name="Settings Tests", desc="User preferences, global settings (admin)", prereq="Login working", tests="settings.spec.ts")
     add_test(cat, "files", front_files, name="Files Tests", desc="Files page, tabs, URL filters", prereq="Login working", tests="files.spec.ts")
     add_test(cat, "chart-line-shape", front_chart_line_shape, name="Chart Line Shape Tests", desc="Line shape of every chart (segments, steps, smooth curve): the welcome page example, Settings Preferences, the asset detail chart settings", prereq="Login working, populated DB", tests="chart-line-shape.spec.ts")
+    add_test(
+        cat,
+        "chart-comparison-axis",
+        front_chart_comparison_axis,
+        name="Chart Comparison Axis Tests",
+        desc="With All, the asset and FX detail charts start on the older of the page's series and its comparison (the page's own line empty until its first day, the percentage view from each line's first price); a comparison that starts years later leaves the chart as it was",
+        prereq="Login working, populated DB",
+        tests="chart-comparison-axis.spec.ts",
+    )
     add_test(
         cat,
         "chart-tooltip-days",
