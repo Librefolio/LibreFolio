@@ -989,7 +989,8 @@ async function chooseReadAs(card: Locator, choice: string) {
     const trigger = card.getByTestId('report-set-read-as-button');
     await expect(trigger, '«Read as» is our own select: its trigger is on the card').toBeVisible({timeout: H_FIRST});
     await trigger.click();
-    const dropdown = card.getByTestId('report-set-read-as-dropdown');
+    // The list of a SimpleSelect is in a portal on <body>, not inside the select: looked up from the page
+    const dropdown = card.page().getByTestId('report-set-read-as-dropdown');
     await expect(dropdown, '«Read as» opens its list').toBeVisible({timeout: 5_000});
     await dropdown.getByTestId(`report-set-read-as-option-${choice}`).click();
     await expect(dropdown, 'a choice closes the list').toHaveCount(0, {timeout: 5_000});
@@ -2116,7 +2117,8 @@ test.describe('Import Wizard — report sets', () => {
         await expect(card.locator('select'), 'no native select in the header of the card').toHaveCount(0);
         // Opened, it says how the set is read — with Danske — and offers to read the files one by one.
         await trigger.click();
-        const dropdown = card.getByTestId('report-set-read-as-dropdown');
+        // The list of a SimpleSelect is in a portal on <body>, not inside the select: looked up from the page
+        const dropdown = card.page().getByTestId('report-set-read-as-dropdown');
         await expect(dropdown, '«Read as» opens its list').toBeVisible({timeout: 5_000});
         await expect(dropdown.getByTestId(`report-set-read-as-option-${DANSKE}`), 'the set is read with Danske').toHaveAttribute('aria-selected', 'true');
         const oneByOne = dropdown.getByTestId('report-set-read-as-option-one-by-one');

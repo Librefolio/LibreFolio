@@ -398,7 +398,8 @@ export async function buildPacDraft(page: Page, ids: PacIds): Promise<PacDraft> 
         await kind.click();
         await expect(kind).toHaveAttribute('aria-expanded', 'true');
         // Two order types and the current one marked: the other is «By amount». The block says which one it took.
-        await eur.getByTestId('pac-planner-mode-kind-dropdown').locator('[role="option"][aria-selected="false"]').click();
+        // The list of a SimpleSelect is in a portal on <body>, not inside the select: looked up from the page
+        await eur.page().getByTestId('pac-planner-mode-kind-dropdown').locator('[role="option"][aria-selected="false"]').click();
         await expect(eur).toHaveAttribute('data-kind', 'monetary_amount');
         // By amount, the increment becomes the currency's smallest unit (BrokerEditor.svelte, `setKind`).
         await expect(eur.getByTestId('pac-planner-mode-step')).toHaveValue('0.01');
