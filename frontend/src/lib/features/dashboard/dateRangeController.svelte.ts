@@ -20,13 +20,22 @@
  */
 
 import type {QuickPreset} from '$lib/components/ui/date/DateRangePicker.svelte';
-import {getEnd, getStart, isMaxSentinel, resolveDateSentinel, setDateRange} from '../../stores/dateRangeStore.svelte';
+import {getEnd, getStart, historyStart, isMaxSentinel, resolveDateSentinel, setDateRange} from '../../stores/dateRangeStore.svelte';
 
 export type DateRangeActivePreset = QuickPreset | 'custom' | null;
 
 export interface DateRangeController {
-    /** Concrete, resolved start date — safe to use in API calls. */
+    /**
+     * Concrete start date for endpoints that insist on a real date (risk, asset prices). While "All" is
+     * pending it is only a placeholder (`resolveDateSentinel`): never use it to ask for the history.
+     */
     readonly start: string;
+    /**
+     * The start of a HISTORY request (portfolio report, positions series, transactions): the `"min"`
+     * sentinel while "All" is pending, so the backend starts from the first real movement (FB-7), the
+     * concrete start otherwise.
+     */
+    readonly historyStart: string;
     /**
      * Concrete, resolved end date — safe to use in API calls. Also bindable:
      * DateRangePicker writes its bindable `end` prop directly on preset click
@@ -91,6 +100,9 @@ export function createDateRangeController(onchange?: (rawStart: string, rawEnd: 
     return {
         get start() {
             return start;
+        },
+        get historyStart() {
+            return historyStart(isMaxPending, start);
         },
         get end() {
             return end;

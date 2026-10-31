@@ -96,7 +96,8 @@ def build_data_quality_report(  # noqa: C901 — flat sequential issue-section a
 
     missing_price_assets_dto / stale_prices_dto / missing_fx_pairs_dto are
     pre-built DTO lists (caller constructs them with full asset/broker info).
-    transaction_implied_assets_dto: assets valued at their last BUY or SELL price (no market price yet).
+    transaction_implied_assets_dto: assets valued at their last BUY or SELL price, or at the estimate of the transfer
+    that brought them in (W-B94), with no market price yet.
     valued_at_cost_assets_dto: assets with no price at all, valued at their book cost (J-17).
     missing_cost_basis_assets: (asset_id, name) of the assets with an acquisition whose cost
     is not known (a TRANSFER or ADJUSTMENT adding quantity without cost_basis_override): it

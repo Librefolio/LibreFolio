@@ -30,6 +30,7 @@ from backend.app.schemas.portfolio import (
 )
 from backend.app.schemas.wac import WACPreviewResultItem, WACQualifyingTX
 from backend.app.services import portfolio_service
+from backend.app.services.financial_math import average_cost
 from backend.app.services.financial_math.average_cost import CostEffect, CostMovement, CostMovementKind, CostPosition, _fold_average_costs
 from backend.app.services.financial_math.portfolio import engine as portfolio_engine
 from backend.app.services.financial_math.portfolio.models import DailyPositionState, ValuationSource
@@ -1796,7 +1797,7 @@ async def test_legacy_wac_cache_default_reuses_warm_result(
     cache = _CacheProbe()
     provider_probe = AsyncMock(side_effect=AssertionError("Same-currency WAC must not request FX"))
     monkeypatch.setattr(portfolio_service, "_wac_cache", cache)
-    monkeypatch.setattr(portfolio_service, "convert_bulk", provider_probe)
+    monkeypatch.setattr(average_cost, "convert_bulk", provider_probe)  # the module that converts (compute_average_costs)
 
     cold_result = await portfolio_service.compute_wac_iterative(
         session=session,
@@ -1901,7 +1902,7 @@ async def test_wac_context_does_not_read_or_mutate_process_cache(
     cache = _CacheProbe(cached_wac, cache_hit)
     provider_probe = AsyncMock(side_effect=AssertionError("Same-currency WAC must not request FX"))
     monkeypatch.setattr(portfolio_service, "_wac_cache", cache)
-    monkeypatch.setattr(portfolio_service, "convert_bulk", provider_probe)
+    monkeypatch.setattr(average_cost, "convert_bulk", provider_probe)  # the module that converts (compute_average_costs)
     monkeypatch.setattr(source, "utcnow", lambda: CAPTURED_AT)
 
     response = await source.build_portfolio_planner_source(

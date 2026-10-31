@@ -5,7 +5,7 @@ Tests for Broker endpoints:
 - POST /brokers: Create brokers (with optional initial deposits)
 - GET /brokers: List all brokers
 - GET /brokers/{id}: Get broker details
-- GET /brokers/{id}/summary: Get broker with balances and holdings
+- GET /brokers/{id}/summary: Get broker with balances (the positions are the portfolio report's)
 - PATCH /brokers/{id}: Update broker
 - DELETE /brokers: Bulk delete brokers
 
@@ -146,20 +146,6 @@ def cash_by_currency(summary: dict) -> dict[str, Decimal]:
     codes = [balance["code"] for balance in summary["cash_balances"]]
     assert len(codes) == len(set(codes)), f"One cash line per currency: {summary['cash_balances']}"
     return {balance["code"]: Decimal(str(balance["amount"])) for balance in summary["cash_balances"]}
-
-
-def holdings_by_asset(summary: dict) -> dict[int, dict]:
-    """A summary's holdings, by asset id: quantity, total cost and average cost per unit."""
-    asset_ids = [holding["asset_id"] for holding in summary["holdings"]]
-    assert len(asset_ids) == len(set(asset_ids)), f"One holding per asset: {summary['holdings']}"
-    return {
-        holding["asset_id"]: {
-            "quantity": Decimal(str(holding["quantity"])),
-            "total_cost": money(holding["total_cost"]),
-            "average_cost": None if holding["average_cost_per_unit"] is None else Decimal(str(holding["average_cost_per_unit"])),
-        }
-        for holding in summary["holdings"]
-    }
 
 
 async def remove_owned(client: httpx.AsyncClient, broker_ids: list[int], asset_ids: list[int]) -> list[str]:
@@ -609,16 +595,17 @@ class TestBrokerRead:
             data = response.json()
             assert data["id"] == broker_id
             assert "cash_balances" in data
-            assert "holdings" in data
+            assert "holdings" not in data
+            assert "missing_fx_pairs" not in data
             assert len(data["cash_balances"]) == 1
             assert data["cash_balances"][0]["code"] == "EUR"
 
             print_success(f"✓ Got summary for broker {broker_id}")
 
     @pytest.mark.asyncio
-    async def test_get_broker_summary_with_holdings_and_user_metadata(self, test_server):
-        """BR-A-013B: GET /brokers/{id}/summary returns holdings and user metadata."""
-        print_section("Test BR-A-013B: GET /brokers/{id}/summary - holdings")
+    async def test_get_broker_summary_with_a_position_has_cash_and_user_metadata_only(self, test_server):
+        """BR-A-013B: GET /brokers/{id}/summary after a BUY returns the cash and user metadata, no holdings (MF-L)."""
+        print_section("Test BR-A-013B: GET /brokers/{id}/summary - cash and user metadata")
 
         async with httpx.AsyncClient() as client:
             await create_test_user(client)
@@ -678,14 +665,10 @@ class TestBrokerRead:
             assert Decimal(str(data["user_share_percentage"])) == Decimal("1")
             assert any(balance["code"] == "EUR" for balance in data["cash_balances"])
 
-            holding = next((item for item in data["holdings"] if item["asset_id"] == asset_id), None)
-            assert holding is not None
-            assert holding["asset_name"] == asset_name
-            assert Decimal(str(holding["quantity"])) == Decimal("10")
-            assert holding["total_cost"]["code"] == "EUR"
-            assert Decimal(str(holding["total_cost"]["amount"])) == Decimal("1200")
+            assert cash_by_currency(data) == {"EUR": Decimal("3800")}
+            assert "holdings" not in data
 
-            print_success(f"✓ Got holdings summary for broker {broker_id}")
+            print_success(f"✓ Got cash summary, no holdings, for broker {broker_id}")
 
 
 # ============================================================================
@@ -1467,7 +1450,7 @@ class TestBrokerImportEndpoints:
 #
 # GET /brokers/{id}/summary describes the broker on one day: ``as_of`` (YYYY-MM-DD), the user's
 # today; the server's date when omitted. A transaction dated later counts in none of its figures:
-# cash per currency, holdings, their cost. The API accepts future-dated transactions, which is how
+# cash per currency. The API accepts future-dated transactions, which is how
 # the broker page came to count them as today's cash (W-B5). Same semantics as the service tests
 # test_broker_service.py::TestGetSummaryAsOf (BR-U-090..093).
 #
@@ -1499,11 +1482,6 @@ def as_of_cash_creates(broker_id: int, today: date) -> list[dict]:
 def as_of_cash_view(offset: int) -> dict[str, Decimal]:
     """The cash AS_OF_CASH_VIEWS expects as of ``today + offset``."""
     return {code: Decimal(amount) for code, amount in AS_OF_CASH_VIEWS[offset].items()}
-
-
-def eur_holding(quantity: str, total_cost: str, average_cost: str) -> dict:
-    """A holding of an EUR asset, as holdings_by_asset reads it."""
-    return {"quantity": Decimal(quantity), "total_cost": ("EUR", Decimal(total_cost)), "average_cost": Decimal(average_cost)}
 
 
 class TestBrokerSummaryAsOf:
@@ -1560,8 +1538,8 @@ class TestBrokerSummaryAsOf:
 
     @pytest.mark.asyncio
     async def test_summary_as_of_leaves_out_a_future_purchase(self, test_server):
-        """BR-A-072: A BUY dated tomorrow is in no figure of today's summary (not its units, their cost, the cash paid) and in all of them as of its own day."""
-        print_section("Test BR-A-072: GET /brokers/{id}/summary?as_of - holdings")
+        """BR-A-072: A BUY dated tomorrow is not in today's cash and is in it as of its own day."""
+        print_section("Test BR-A-072: GET /brokers/{id}/summary?as_of - cash paid for a future purchase")
 
         async with httpx.AsyncClient() as client:
             await create_test_user(client)
@@ -1589,14 +1567,11 @@ class TestBrokerSummaryAsOf:
                 views = {}
                 for label, as_of in (("today", today), ("tomorrow", tomorrow)):
                     summary = await get_summary(client, broker_id, as_of=as_of)
-                    views[label] = {"cash": cash_by_currency(summary), "holdings": holdings_by_asset(summary)}
+                    views[label] = cash_by_currency(summary)
 
-                assert views == {
-                    "today": {"cash": {"EUR": Decimal("-1000")}, "holdings": {held: eur_holding("10", "1000", "100")}},
-                    "tomorrow": {"cash": {"EUR": Decimal("-4800")}, "holdings": {held: eur_holding("20", "4000", "200"), future_only: eur_holding("4", "800", "200")}},
-                }
+                assert views == {"today": {"EUR": Decimal("-1000")}, "tomorrow": {"EUR": Decimal("-4800")}}
 
-                print_success("✓ Tomorrow's purchases are out of today's holdings, cost and cash, and in tomorrow's")
+                print_success("✓ Tomorrow's purchases are out of today's cash, and in tomorrow's")
             finally:
                 cleanup_errors = await remove_owned(client, broker_ids, asset_ids)
                 assert not cleanup_errors, f"Owned data cleanup failed: {cleanup_errors}"

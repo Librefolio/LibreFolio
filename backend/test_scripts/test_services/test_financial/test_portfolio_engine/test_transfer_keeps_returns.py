@@ -561,8 +561,8 @@ class TestArrivalWithoutKnownDeparture:
     def test_an_arrival_from_outside_the_scope_takes_no_returns(self):
         """Scope {B}: the departure (at A, whatever returns A holds) is outside it, so the classifier makes the arrival
         a ``linked_external_inflow`` — capital entering the scope, never a linked-internal leg: it consults no split.
-        B deposited 100 on D0; the 650 arrive on D1: R_B 0, and the breakdown (pools 100 against a cash of 750,
-        rescaled x 7.5) reads contributed 750 / generated 0.
+        B deposited 100 on D0; the 650 arrive on D1 and move the pools as a DEPOSIT (B3 / MF-J3; W 0): K_B 750, R_B 0,
+        and the breakdown reads contributed 750 / generated 0 with no rescale.
         """
         out_leg, in_leg = _cash_pair(3, 4, sender=A, receiver=B, out_dt=D1, in_dt=D1, out_amount="650", in_amount="650")
         b_deposit = _tx(id=5, broker_id=B, dt=D0, amount="100")
@@ -572,7 +572,7 @@ class TestArrivalWithoutKnownDeparture:
         result = _build(classification, date_to=D2)
 
         problems = _breakdown_problems(result, {D1: ("750", "750", "0"), D2: ("750", "750", "0")})
-        problems += _pool_problems(result, capital={}, returns={B: "0"})
+        problems += _pool_problems(result, capital={B: "750"}, returns={B: "0"})
         assert not problems, "\n".join(problems)
         assert result.end_state.cumulative_ecf == Decimal("750")
 
@@ -747,14 +747,24 @@ class TestApplyPoolRuleWithSplits:
 
     @pytest.mark.parametrize("tx_type", ["CASH_TRANSFER", "FX_CONVERSION"])
     @pytest.mark.parametrize("classification", ["normal", "linked_external_inflow", "linked_external_outflow"])
-    @pytest.mark.parametrize("signed_amount", ["60", "-60"])
-    def test_a_leg_that_is_not_linked_internal_neither_records_nor_takes_up_a_split(self, tx_type, classification, signed_amount):
+    @pytest.mark.parametrize(
+        ("signed_amount", "withdrawn_after", "capital_after", "returns_after"),
+        [
+            pytest.param("60", "0", "155", "45", id="60"),
+            pytest.param("-60", "5", "40", "40", id="-60"),
+        ],
+    )
+    def test_a_leg_that_is_not_linked_internal_neither_records_nor_takes_up_a_split(self, tx_type, classification, signed_amount, withdrawn_after, capital_after, returns_after):
+        """The splits are J2's, for linked-internal pairs only: this leg neither records one nor takes one up. Its pools
+        move as a DEPOSIT / WITHDRAWAL from outside the perimeter (B3 / MF-J3), by the sign of ``tx.amount``: K 100 /
+        R 40 / W 5, +60 -> W 5 back into R, 55 into K; -60 -> 60 out of K."""
         capital, returns = _pools({A: "100"}, {A: "40"})
         splits = {4: (_d("40"), _d("60"))}
         paired = _tx(id=4, broker_id=B, type=tx_type, dt=D1, amount="60")
         ctxn = _ctxn(_tx(id=3, type=tx_type, dt=D1, amount=signed_amount, related_id=4), classification, paired=paired)
-        assert DailyStateBuilder._apply_pool_rule(ctxn, _d("60"), capital, returns, _d("5"), splits) == (_d("5"), _d("0"), _d("0"))
-        assert (capital[A], returns[A], splits) == (_d("100"), _d("40"), {4: (_d("40"), _d("60"))})
+        assert DailyStateBuilder._apply_pool_rule(ctxn, _d("60"), capital, returns, _d("5"), splits) == (_d(withdrawn_after), _d("0"), _d("0"))
+        assert splits == {4: (_d("40"), _d("60"))}
+        assert (capital[A], returns[A]) == (_d(capital_after), _d(returns_after))
 
     def test_other_movements_ignore_the_splits(self):
         capital, returns = _pools({A: "100"}, {A: "40"})

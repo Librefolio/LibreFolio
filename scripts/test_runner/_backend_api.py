@@ -436,6 +436,16 @@ def api_tx_balance_walk(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Balance walk tests", verbose=verbose)
 
 
+def api_broker_overdraft_off_refused(verbose: bool = False, test_names: list = None) -> bool:
+    """Run the broker overdraft-flag-off tests (PATCH refused over a negative cash, flag not stored)."""
+    print_section("Broker Overdraft Off Refused Tests")
+    print_info("Testing PATCH /brokers/{id} allow_cash_overdraft=false over a negative cash: refused, stored flag unchanged")
+    print_info("Note: Server will be automatically started and stopped by test")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_api/test_broker_overdraft_off_refused.py", test_names)
+    return run_command(cmd, "Broker overdraft off refused tests", verbose=verbose)
+
+
 def api_events_suggest(verbose: bool = False, test_names: list = None) -> bool:
     """Run POST /transactions/events/suggest tests."""
     print_section("Events Suggest (C.2) API Tests")
@@ -1220,7 +1230,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "fx-sync", api_fx_sync, name="FX Sync API", desc="FX rate synchronization endpoints")
     # PURE: the handler runs in process with convert_bulk replaced by a double; no database, no server.
     add_test(api, "fx-convert-sampling", api_fx_convert_sampling, name="FX Convert Sampling", desc="Z-29fx: max_points, resolution and sample_like on POST /fx/currencies/convert: the step from the fill's first day, the bucket results, samples with resolution and sample_bounds, request_index, sample_reference 422s, signals reduced and aligned (O1), the calendar rolling return in the FX domain, the day budget", isolation="pure")
-    add_test(api, "assets-price", api_assets_price, name="Assets Price API", desc="Bulk upsert, delete, query, sync; X-R65 422 date_out_of_range; X-R71 422 price_currency_mismatch")
+    add_test(api, "assets-price", api_assets_price, name="Assets Price API", desc="Bulk upsert, delete, query, sync; X-R65 422 date_out_of_range; X-R71 422 price_currency_mismatch; X-R29 POST /assets/prices/stored-count (stored and manual rows of a range, 1 001 items 422, 401 without a session)")
     # Write-scoped (the category default): own user, own asset (deleted), rates only on AWG/TMT, a pair no other test uses.
     add_test(api, "period-changes", api_period_changes, name="Period Changes API", desc="MF-P2: login, base == quote 422, answer shape, and the Assets/FX pages' numbers from the price query and the conversions; MF-P2b: list caps, ≤ 5 distinct as_of; X5-6: no 1900 floor")
     add_test(api, "signal-catalogs", api_signal_catalogs, name="Signal Catalogs", desc="Static authenticated Asset/FX signal definitions")
@@ -1364,6 +1374,7 @@ Tests for REST API endpoints (server auto-started):
     add_test(api, "transfer-promotion", api_transfer_promotion, name="Transfer Promotion", desc="DEPOSIT/WITHDRAWAL → TRANSFER")
     add_test(api, "transactions-validate", api_transactions_validate, name="Transactions Validate", desc="POST /transactions/validate dry-run")
     add_test(api, "tx-balance-walk", api_tx_balance_walk, name="TX Balance Walk", desc="Same-day ordering, cascade, end-of-day")
+    add_test(api, "broker-overdraft-off-refused", api_broker_overdraft_off_refused, name="Broker Overdraft Off Refused", desc="PATCH allow_cash_overdraft=false over a negative cash is refused and the stored flag stays on (own user and broker)")
     add_test(api, "events-suggest", api_events_suggest, name="Events Suggest", desc="Candidate events within tolerance")
     add_test(api, "batch-split-promote", api_batch_split_promote, name="Batch Split/Promote", desc="Split/promote in unified batch + suggest")
     add_test(api, "transactions-wac", api_transactions_wac_inline, name="WAC Cost Basis", desc="WAC inline validate/commit (P16-P28)")

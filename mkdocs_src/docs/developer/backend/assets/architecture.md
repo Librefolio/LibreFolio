@@ -1185,7 +1185,9 @@ Backward fill reuses stored market prices only, and valuation adds no separate
 last-purchase-price fallback: the portfolio engine values each holding through the
 [Price Resolver](../transactions/price_resolver.md#the-daily-model) alone. On a day without a
 market price, the resolver falls back on the asset's own trades (`BUY` or `SELL`; an `ADJUSTMENT`
-is never a price) when one is the latest observation, as for a fund with no published NAV, and
+is never a price; an incoming `TRANSFER`'s cost only as an
+[estimate](../transactions/price_resolver.md#transfer-cost-estimate) while the asset has nothing else)
+when one is the latest observation, as for a fund with no published NAV, and
 the holding then reports `valuation_source = LAST_TRADE_PRICE`. With neither a quote nor a trade
 on or before the day, a holding whose cost is known counts at that book cost and reports
 `valuation_source = ESTIMATED_AT_COST` — no price at all (see

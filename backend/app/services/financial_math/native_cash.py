@@ -26,19 +26,21 @@ Rules:
   result on cash (:meth:`NativeCash.exchange_results`, by broker and window);
 * a zero amount changes no figure and never needs a rate;
 * the share scales every amount: an owner counts its own share, any other role the whole
-  broker (:func:`effective_share`).
+  broker (:func:`effective_share`); a caller that asks for the whole broker (the broker page, D4) counts 1 for
+  every broker (:func:`broker_shares`).
 """
 
 from __future__ import annotations
 
 import bisect
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date as date_type
 from decimal import Decimal
 from typing import Any
 
 from backend.app.schemas.common import Currency
+from backend.app.services.financial_math.change_days import change_days
 from backend.app.services.financial_math.fx_rates import AskedDayRates
 from backend.app.services.fx.conversion import convert_bulk, unit_rate_steps
 
@@ -63,6 +65,17 @@ def effective_share(role: Any, share_percentage: Decimal | None) -> Decimal:
     if str(getattr(role, "value", role)) != _OWNER:
         return _ONE
     return _ONE if share_percentage is None else share_percentage
+
+
+def broker_shares(accesses: Iterable[Any], *, apply_ownership_share: bool = True) -> dict[int, Decimal]:
+    """The share each broker of ``accesses`` counts, by broker id: :func:`effective_share`, or the whole broker.
+
+    ``apply_ownership_share`` False (the broker page, D4) counts every broker whole, as an editor sees it, whatever the
+    role and the share. ``accesses`` are rows with ``broker_id``, ``role`` and ``share_percentage``.
+    """
+    if not apply_ownership_share:
+        return {access.broker_id: _ONE for access in accesses}
+    return {access.broker_id: effective_share(access.role, access.share_percentage) for access in accesses}
 
 
 @dataclass(frozen=True, slots=True)
@@ -448,25 +461,6 @@ def _step_rate_series(unit_rates: AskedDayRates) -> tuple[dict[str, tuple[date_t
     return {currency: days for currency, (days, _values) in series.items()}, {currency: values for currency, (_days, values) in series.items()}
 
 
-def change_days(read: Callable[[str, date_type], Decimal | None], currencies: Iterable[str], days: Iterable[date_type]) -> tuple[date_type, ...]:
-    """The days of the calendar ``days``, in its order, on which ``read`` gives a currency of ``currencies`` another
-    rate than on the calendar's previous day — the one home of «the day a rate changes».
-
-    The caller chooses the reading and the calendar: the native cash reads the last rate known on or before the day,
-    on the calendar of its rate points; the portfolio engine reads the rate of the exact day, on the days a rate can
-    change and the day before each (``DailyStateBuilder._reading_calendar``). A rate that appears or disappears is a change, and so is a rate on the calendar's first day.
-    """
-    watched = tuple(sorted(set(currencies)))
-    changed: list[date_type] = []
-    previous: dict[str, Decimal | None] = dict.fromkeys(watched)
-    for day in days:
-        rates = {currency: read(currency, day) for currency in watched}
-        if rates != previous:
-            changed.append(day)
-        previous = rates
-    return tuple(changed)
-
-
 def native_balances(movements: Iterable[CashMovement], as_of: date_type | None = None) -> dict[int, dict[str, Decimal]]:
     """Each broker's balance in each currency on ``as_of`` (every movement when None).
 
@@ -481,6 +475,54 @@ def native_balances(movements: Iterable[CashMovement], as_of: date_type | None =
         by_currency = result.setdefault(movement.broker_id, {})
         by_currency[movement.currency] = by_currency.get(movement.currency, _ZERO) + movement.native
     return result
+
+
+@dataclass(frozen=True, slots=True)
+class NegativeCash:
+    """The first day a broker's balance in a currency ends below zero (:func:`first_negative_cash`)."""
+
+    day: date_type
+    currency: str
+    #: The currency's balance at the end of ``day``.
+    balance: Decimal
+    #: The movements of ``currency`` on ``day`` that lowered it, in their input order: the caller picks the one to blame.
+    reducers: tuple[CashMovement, ...]
+
+
+def first_negative_cash(
+    movements: Iterable[CashMovement],
+    *,
+    opening: Mapping[str, Decimal] | None = None,
+    check_days: Iterable[date_type] = (),
+) -> NegativeCash | None:
+    """The first day, in date order, on which one broker's balance in a currency ends below zero; None when none does.
+
+    ``opening`` is the balance of each currency before the first movement (:func:`native_balances` of the earlier rows),
+    ``check_days`` the days to check even without a movement (a validator's first day). The balance is the counted
+    amount (``CashMovement.native``) and is checked at the end of each day, so a deposit and a payment on the same day
+    give no red in between. Only the days with a movement and the ``check_days`` are visited, never the days between: a
+    movement dated 9999-12-31 costs one day. Same-day movements keep their order; on a day with several currencies below
+    zero, the first is the one met first — ``opening``'s order, then the walk's. Only cash: quantities are the caller's.
+    Movements of more than one broker raise ValueError.
+    """
+    by_day: dict[date_type, list[CashMovement]] = {}
+    broker_ids: set[int] = set()
+    for movement in movements:
+        broker_ids.add(movement.broker_id)
+        by_day.setdefault(movement.date, []).append(movement)
+    if len(broker_ids) > 1:
+        raise ValueError(f"first_negative_cash reads one broker's movements, got brokers {sorted(broker_ids)}")
+    balances: dict[str, Decimal] = dict(opening or {})
+    for day in sorted(set(by_day).union(check_days)):
+        todays = by_day.get(day, ())
+        for movement in todays:
+            if movement.native != 0:
+                balances[movement.currency] = balances.get(movement.currency, _ZERO) + movement.native
+        for currency, balance in balances.items():
+            if balance < 0:
+                reducers = tuple(movement for movement in todays if movement.currency == currency and movement.native < 0)
+                return NegativeCash(day=day, currency=currency, balance=balance, reducers=reducers)
+    return None
 
 
 async def compute_native_cash(

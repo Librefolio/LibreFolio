@@ -63,9 +63,12 @@ aggregation**, never for permissions:
   owner's aggregated numbers.
 - Aggregation scales by share **only for OWNERs** — EDITOR/VIEWER rows always carry share 0 by
   schema rule yet see full data, so the engine uses scale 1 for them (`effective_share()` in
-  `financial_math/native_cash.py`, called by `portfolio_service.py` and
+  `financial_math/native_cash.py`, through `broker_shares()`, called by `portfolio_service.py` and
   `financial_math/portfolio/engine.py`). Role/share edits change every scaled number
   but not the underlying data, so they also join the cache fingerprint for instant invalidation.
+- `apply_ownership_share=False` on the report and the positions series (for the broker page) skips the scaling:
+  every broker counts whole, as an EDITOR sees it, whatever the role and the share (`native_cash.broker_shares()`,
+  [the whole broker](../backend/financial_math.md#whole-broker)).
 
 ### 🔒 The "Last Owner" Rule
 

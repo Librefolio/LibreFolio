@@ -65,17 +65,18 @@ for the conversions. The twins run on the float return series of the risk analyt
 backend/app/services/financial_math/
 ├── __init__.py              docstring only: the rule and the module map
 ├── average_cost.py          average purchase cost (WAC): pools, cost steps, missing conversions
-├── native_cash.py           cash per broker and currency: balances, daily value, flows, FX result
+├── native_cash.py           cash per broker and currency: balances, daily value, flows, FX result; the share each broker counts (broker_shares); the first day one broker's balance in a currency ends below zero (first_negative_cash)
+├── change_days.py           the days something can change on: the days an FX reading may change (reading_change_days), the days it really changes on a calendar (change_days), days with the day after each (with_next_days)
 ├── ledger_totals.py         control totals of the ledger for backups: cash per broker and currency, quantity per position
-├── returns.py               simple ROI, TWRR, MWRR (values and daily series; the Dashboard's rule in period_mwrr*; ROI and TWRR on a given capital or exposure for the lots' shorts; a flow counts on the first snapshot on or after it, flows_by_snapshot_date), annualization, period rebasing, G/L ratio (holding or group), change ratio, timing effect, realized gain, price return (also as a float for a return series), observed annualization of a return series (DAYS_PER_YEAR, its validator, calendar days ↔ observations both ways), fixed-period changes of a price or rate (1D … 5Y, both orientations) and its change over a whole range, recovery from a drawdown
+├── returns.py               simple ROI, TWRR, MWRR (values and daily series; the Dashboard's rules in period_mwrr*, period_twrr* and period_roi_cash_flows; ROI and TWRR on a given capital or exposure for the lots' shorts; a flow counts on the first snapshot on or after it, flows_by_snapshot_date), annualization and its 30-day floor (annualizes), period rebasing, G/L ratio (holding or group), change ratio, timing effect, realized gain, price return (also as a float for a return series), observed annualization of a return series (DAYS_PER_YEAR, its validator, calendar days ↔ observations both ways), fixed-period changes of a price or rate (1D … 5Y, both orientations) and its change over a whole range, recovery from a drawdown
 ├── valuation.py             holding value from quantity, price and quote_base_quantity
 ├── trade_amount.py          a trade's unit price on the quote's axis, unrounded (`unit_price_on_quote_axis`), which the trade marks of price_marks.py read; amount ↔ unit price on quote_base_quantity, half-even to a given scale (the transaction form computes its own in the browser since W5-9)
 ├── fx_rates.py              the orientation of a stored FX rate: a pair read from source to destination, either way (oriented_rate, any number type); the unit rates a calculation reads by day, as steps answered on the asked days only (AskedDayRates)
 ├── interest.py              day count conventions (ACT/365, ACT/360, ACT/ACT, 30/360), simple interest and daily compounding over a span in closed form, at a cost independent of the span (compound_growth, memoized): the primitives the Scheduled Investment provider builds its accrual on
-├── price_marks.py           daily mark of an asset: MARKET, TRADE_AVG, CARRIED or MISSING; the days with an observation (observation_dates)
+├── price_marks.py           daily mark of an asset: MARKET, TRADE_AVG, CARRIED or MISSING; the days with an observation (observation_dates); an incoming TRANSFER's cost as an estimated trade observation while the asset has nothing else (W-B94)
 ├── series_steps.py          series as steps (D-P4): the point holding a day (value_at), the points of a window clipped (points_between), the steps of a list of change rows (steps_from_rows, Decimals compared with their exponent)
 ├── yield_on_cost.py         Yield on Cost of holdings, replayed from the transaction ledger
-├── weights.py               a share of a total (none on a total ≤ 0), allocation slices, gross weights, concentration (largest weight, HHI)
+├── weights.py               a share of a total (none on a total ≤ 0), allocation slices (none on a sum ≤ 0), gross weights, concentration (largest weight, HHI)
 ├── splits.py                stock splits in the ledger: the ADJUSTMENT rows linked to a SPLIT asset event (one query), the ids an average-cost replay rescales, the usable-ratio rule, the incoming adjustments without a cost that a SPLIT retype must not orphan, the split a share change implies (`implied_split_ratio`)
 ├── holding_window.py        how long a position has been held at its broker: oldest open lot, a closed position's window, its exits
 ├── fifo/                    FIFO lots
@@ -85,13 +86,13 @@ backend/app/services/financial_math/
 │   └── engine.py            FifoLotEngine, run_fifo_lot_engine()
 ├── portfolio/               daily portfolio state and the views derived from it
 │   ├── __init__.py          docstring only
-│   ├── models.py            classified transactions, daily states, contributions, results
+│   ├── models.py            classified transactions, daily states, contributions, results (PortfolioCalculationResult.marks: the result's AssetMarks)
 │   ├── classifier.py        ScopeAwareTransactionClassifier: internal, external, in transit
-│   ├── daily_state.py       DailyStateBuilder: the daily state vector, without I/O
-│   ├── derived_views.py     DerivedViewsBuilder (history, P&L, allocation…), cost positions
+│   ├── daily_state.py       DailyStateBuilder: the daily state vector, without I/O; a position held only above the dust threshold (_is_held); an asset's mark on a day (marked_price, MarkedPrice) and the result's price reader (AssetMarks)
+│   ├── derived_views.py     DerivedViewsBuilder (history, P&L, allocation…, the flows of the period's simple ROI: build_roi_cash_flows), cost positions
 │   ├── data_quality.py      FX pair slug, configured pair sets, build_data_quality_report()
 │   ├── period.py            a period's boundary states, its P&L, the identity that closes it and its residual (the AI Export reconciliation, J-14); the day's P&L change; the period's realized sales (`period_realized_sales`)
-│   ├── contributions.py     a position's row in the Dashboard's Performance table: its period P&L (`position_period_pnl`), return on the start value, annualized returns, the internal-transfer split (P22: `transfer_tract` is the tract of one transfer for one broker)
+│   ├── contributions.py     a position's row in the Dashboard's Performance table: its period P&L (`position_period_pnl`), return on the start value, annualized returns (a closed flight too short to annualize: `closed_flight_too_short`, MF-A3), the internal-transfer split (P22: `transfer_tract` is the tract of one transfer for one broker)
 │   ├── position_series.py   a position's series, as steps, for the Dashboard's positions chart: P&L since the period's start (the Performance row's, at each day), its base and the percent on it, from the engine's frames of that position (J5-1, #48; D-P4)
 │   └── engine.py            PortfolioCalculationEngine: loads a scope, runs the steps, caches
 └── lots/                    lots analysis math, called by lots_analysis_service.py
@@ -100,7 +101,7 @@ backend/app/services/financial_math/
     ├── conversions.py       FxRateResolver (its rates read as steps), a closure's legs at their own dates, and the conversions each view needs
     ├── economic_events.py   income and FEE/TAX as engine inputs, their outputs, what is withheld
     ├── histories.py         value, return, price, market price and performance histories
-    ├── change_days.py       the days the lots' series can change on (`price_candidate_days`, `lot_change_days`), a lazy calendar (`DayRange`) and the series as steps (`history_steps`, D-P4)
+    ├── change_days.py       the days the lots' series can change on (`price_candidate_days`, `lot_change_days`, through the top-level `with_next_days`), a lazy calendar (`DayRange`) and the series as steps (`history_steps`, D-P4)
     ├── summary.py           a lot's figures: the cost of its open quantity, value and P&L by direction, the lot summary
     ├── scope_boundary.py    transfer legs whose partner sits outside the scope, read at its edge: in at their cost, out at market
     └── average_cost_lines.py  per-broker and cumulative WAC history points
@@ -129,6 +130,35 @@ the NPV changes sign around it (`_changes_sign_at`, in the scan and in `_bracket
 opens at 0 and whose flows all lie decades after its start (a typo dated in 1900), every term underflows to 0.0 at the
 top of the grid, and that point solved nothing; the period has no rate there («—»), while a genuine exact zero, a rate
 of exactly 0, still changes sign and counts. Flows that are all zero have no rate either (MF-P1d): the NPV is zero at every rate, and Newton would answer its own starting point (0.1, «10 %») — a period opening at 0 whose only deposit falls on its last day is one, since the deposit joins the final value (`_all_flows_zero`, in `_solve_xirr` and `_newton_xirr`).
+
+`period_twrr()` and `period_twrr_series()` (`returns.py`, MF-K3) hold the Dashboard's TWRR rule the same way, one rule
+for the card and every point of the line: `period_twrr_series()` is `calculate_twrr_series()` with `None`
+(`PeriodTWRRPoint.twrr`) wherever the snapshot's NAV is zero or less — an emptied portfolio has no time-weighted return,
+as it has no MWRR. The chain keeps compounding through those points (a sub-period starting from 0 returns 0), so after
+a refill the line shows its TWRR again; `period_twrr()` is the series' last point, the card. Empty without two snapshots
+or without flows. Before, the card had its own guard (`engine_nav > 0`) while the line stayed flat at its last value.
+`calculate_twrr()` and `calculate_twrr_series()` remain the bare chains, without that rule.
+
+`period_roi_cash_flows(nav_snapshots, cash_flows, date_from)` (`returns.py`) gives the flows the period's simple ROI
+counts its capital from, card and line alike: the period's flows (`rebase_to_period()`), except when `date_from`
+precedes every snapshot. The rebase leaves out the first day's flows there — they are inside the first NAV, which the
+TWRR and the MWRR start from — and the ROI would see no capital (0 % before MF-K3); that period holds the whole history,
+so its capital is every flow, as with no `date_from`. `DerivedViewsBuilder.build_roi_cash_flows()` calls it on the
+period's inputs, and reads the whole history's when `date_from` falls before the first state.
+
+`marked_price()` (`portfolio/daily_state.py`, MF6-1) is the one rule of «an asset's mark on a day» as the portfolio
+values it: the mark of the asset's `AssetPriceSeries`, a trade mark restated to current units through the splits since
+it was observed, in its own currency (`MarkedPrice`). `DailyStateBuilder._market_value_for()` values every holding with
+it, and the engine's result carries the same rule for its readers: `PortfolioCalculationResult.marks`, an `AssetMarks`
+(`None` when `calculate()` returns early) holding the replay's mark series, splits, `quote_base_quantity` and rates.
+`price_at(asset_id, day)` is the mark the valuation read; `last_market_price_at(asset_id, day)` the last market quote on
+or before `day` (a later trade observation does not move it); `in_target(amount, currency, day)` converts at `day`'s
+rate, as the valuation converts a mark. It answers on the engine's days only, `first_day` … `last_day`, since its rates
+are the ones the engine asked (`AskedDayRates`): any other day is `None`, in any currency. `portfolio_service` reads the
+holdings' unit prices and their one-day changes (`price_change_1d`, `gain_loss_change_1d`,
+`gain_loss_change_1d_percent`) through it and has no price query or conversion of its own any more: the day before's
+price is `last_market_price_at(day − 1)` converted at the rate of `day − 1` — not at the rate of the quote's own date —
+so a foreign quote that did not move shows only that day's rate move; on the replay's first day there is none.
 
 `float_price_return()` and `observed_annualization()` (`returns.py`) serve the float return series that the risk and
 signal statistics read. `market_series.py`, which prepares those series, takes both from here and keeps no return
@@ -187,7 +217,8 @@ The portfolio engine has no developer page of its own: its cost side is in
 One call of `PortfolioCalculationEngine.calculate()` (`portfolio/engine.py`):
 
 1. resolves the target currency (by default `get_effective_base_currency()`) and the broker
-   scope, each broker at its `effective_share()`;
+   scope, each broker at the share `native_cash.broker_shares()` gives it — its `effective_share()` (F2), or the
+   whole broker with `apply_ownership_share=False` ([the whole broker](#whole-broker));
 2. loads the scope's transactions and their split links (`load_split_links()`, `splits.py`),
    and classifies them
    (`ScopeAwareTransactionClassifier`, `classifier.py`). A split whose stored ratio fails `is_valid_split_ratio()`
@@ -287,6 +318,38 @@ flight does not: an identical request with a later start builds on its own.
   other. The map is per process, like the cache.
 {: #single-flight }
 
+**One run per page** (FB-14). The Portfolio page asks the report (with the Performance table) and the positions chart
+for the same period; each used to call `calculate()` with its own flags, so the two requests had different blob keys
+and the page built the engine twice. `PortfolioService._engine_run()` is now the one call of `get_report()`,
+`get_positions_contribution()`, `get_positions_series()` and `get_acquisition_funding_history()`: always from t=0,
+with `include_positions`, `include_acquisition_funding` and `period_start` = the period's start. The requests of one
+page share the key: the first builds, the others read the cache or wait on the flight above. Each caller still
+serializes only what its query asks (a report without `include_acquisition_funding` has no funding series). The
+candles stay a flag of their own (`include_candles`), so their OHLC work stays off the ordinary reports; the extra
+outputs cost little (pure bookkeeping during the same replay). `period_start` stays in the key: a position frame does
+not carry everything a `DailyPositionState` does (reference prices, average cost, stale and missing-rate marks).
+{: #one-run-per-page }
+
+**The whole broker** (MF6-3, developer decision D4). The ownership scaling (F2) is one function,
+`native_cash.broker_shares(accesses, *, apply_ownership_share=True)`: by broker id, `effective_share(role, share)` —
+an `OWNER` counts its `share_percentage` (None = the whole broker), an `EDITOR` or `VIEWER` the whole broker — or 1 for
+every broker when `apply_ownership_share` is False, whatever the role and the share. `calculate(apply_ownership_share=…)`
+(default True) takes the flag, puts it in the blob-cache key, so the two views never answer for each other, and leaves
+the shares it counted in the result, `PortfolioCalculationResult.broker_shares`. `get_summary()` and
+`get_positions_contribution()` read their lot quantities at those shares (MF-A10), so their figures follow the run.
+`_engine_run()` passes the flag on: False is a run of its own, under its own key. The report and the positions series take it,
+`POST /api/v1/portfolio/report` (`PortfolioReportQuery.apply_ownership_share`, also in the report's L2 cache key) and
+`POST /api/v1/portfolio/positions-series` (`PositionsSeriesQuery.apply_ownership_share`), both defaulting to True: a
+caller that does not send it keeps the owner's share. False is for the broker page, which shows the broker's whole
+amounts, as an editor sees them; the Dashboard keeps the owner's share. A broker worth 10 000 € owned at 30 % is 3 000 € by default and
+10 000 € with False; owned at 0 %, 0 € and 10 000 €. For one broker the ratios — TWRR, MWRR, simple ROI, weights,
+period percentages — are the same either way, since every flow and every value is multiplied by the same constant:
+only the amounts change ([Portfolio Aggregation](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/index.md#5-portfolio-aggregation)).
+With False every broker counts 1, so no pair links brokers owned at different shares and the run reports no
+`TRANSFER_SHARE_MISMATCH` (J-43). The lots analysis has no flag: it already counts whole amounts. The risk of a broker follows its page: `PortfolioRiskScope.apply_ownership_share` (default True) is passed by `risk/scope.py` to the report, so with False the scope value and the asset values the analytics read (the stress impacts among them) are the whole broker's, and an owner at 0 % still gets a risk; weights and returns are the same either way. Tests: `test_broker_shares.py` (`test_financial_math/`) and `test_ownership_share_option.py`
+(`test_financial/`).
+{: #whole-broker }
+
 #### 📅 The Days the Engine Recomputes {: #recomputed-days }
 
 `DailyStateBuilder.build()` runs one replay, with the same rules every day, from the earliest
@@ -300,7 +363,17 @@ bringing back what the departure took from K and R. The gap between the two legs
 conversion's spread, the rate move while the cash travels, two brokers owned at different shares —
 is already in the engine's P&L, since no leg is an external flow: it is booked as a result (a gain
 to R, a loss out of R then K). An arrival whose departure is unknown arrives in K, and one whose
-departure is on the same day is applied last on that day. The replay emits one
+departure is on the same day is applied last on that day. Any other CASH_TRANSFER or
+FX_CONVERSION leg — its partner outside the scope (`linked_external_inflow` /
+`linked_external_outflow`) or an orphan whose link was cleared or whose paired row is gone
+(`normal`) — is already an external flow of the capital baseline, and `_cash_transfer_pools()`
+moves its pools as that flow: an incoming leg through `_deposit_pools()` (it restores the
+withdrawn returns W into R first, the rest goes to K), an outgoing one through
+`_withdrawal_pools()` (K first, then R, which goes to W) — the same two helpers a DEPOSIT and a
+WITHDRAWAL use (B3, MF-J3). It never records or takes up a split in `transfer_splits`, and the
+capital baseline, the NAV and the P&L do not change; the cash breakdown
+(`cash_from_contributed_capital` / `cash_from_generated_returns`) and the BUY funding split of a
+broker-filtered view follow the pools it moved. The replay emits one
 `DailyPortfolioState` for every day of `[date_from, date_to]`,
 so a later `date_from` gets for its days exactly the states of the full replay. It evaluates only
 the **dirty** days, which `_collect_dirty_days()` lists: any other day carries the previous state,
@@ -357,6 +430,21 @@ closed position simply ends. The frames are grouped in the order the replay firs
 position, each group by start: summing from `Decimal("0")`, in that order, the market values (not
 None) of the frames covering a day gives that day's `market_value` exactly. Off by default.
 
+**Held positions (MF-A6).** A position is held when its quantity, at the owner's share, is above
+`QUANTITY_DUST_THRESHOLD` (`platform/data_quality_thresholds.py`, 0.00001 units): `_is_held()` in `daily_state.py`, the
+predicate of the Performance rows (`PortfolioService.get_positions_contribution()`) and of the position series. The
+builder asks it in three places — the day's valuation loop, the snapshot at the end of `period_start`
+(`position_states_start`) and the one at `date_to` (`position_states_end`) — so a residual at or below the threshold
+has no market value, no cost in `open_cost_basis`, no `by_asset` or `by_type` amount, no part of its broker's
+`nav_contribution`, no frame and no snapshot entry, and, unpriced, it does not put the day in
+`missing_price_asset_ids` nor make `nav_complete` False. Its cost leaves the open cost basis without a sale, so the
+period identity puts it in the residual Other ([§7](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/index.md#7-period-contribution)):
+a sale of 9.99999 of 10 units bought at 100 000 leaves 0.00001, worth 1.20 at 120 000 and costing 1.00 — the NAV
+leaves it out, Σ rows' ΔUGL equals the portfolio's, and Other is −1.00. Before, the state valued every quantity above
+zero: the NAV counted the 1.20 and ΔUGL a 0.20 that no row had. The quantity itself stays in `cumulative_qty`: dust is
+a rule of valuation, not of the ledger. Tests: `test_daily_state_dust_threshold.py` (the engine) and
+`test_positions_contribution_dust_identity.py` (the Performance table against the summary).
+
 **The positions chart (#48).** `position_series.build_position_series()` turns the frames of the chosen positions into one
 series each, as steps (a point holds from its `date` to its `through`), and nothing else of the engine: it reads the realized sales, the internal transfers, the
 cost of what was bought (`acquisitions_from_average_costs()`) and the income and costs by day
@@ -372,20 +460,20 @@ figures can change on are those of its inputs (a frame starting or ending, a sal
 tract or arrival, the period's start), each read as ever by a lookup, and two consecutive points with the same figures, down to the
 exponent of each Decimal, are one (`series_steps.steps_from_rows`). Expanding every point over its days gives the daily series
 field for field; a date typed in the year 1 costs what the changes cost, not 740 000 points. A position below the dust threshold is not held, and its
-point is 0 where the engine's day totals still count the dust. A closed position ends the day it went to 0, with its final
+point is 0, as in the engine's day totals (held positions, above). A closed position ends the day it went to 0, with its final
 pnl; units sent to another broker of the scope stay the sender's until they arrive (P22), so its series goes on to the
 arrival, holding the pnl of the last day held, and the tract settles it there. An asset asked without a broker is the sum
 over the brokers that held it: the tracts of a transfer between them cancel and what it brings in is not new capital. A value
 that is not known leaves `market_value` None and `pnl` the sum of the parts that are known, with `complete` False, as the
-row does. `PortfolioService.get_positions_series()` runs the engine once with `include_positions` (the blob cache keeps it
-between two selections) and serves `POST /api/v1/portfolio/positions-series`.
+row does. `PortfolioService.get_positions_series()` reads the page's run (`_engine_run()`, [one run per page](#one-run-per-page):
+the report of the same period built it, and the blob cache keeps it between two selections) and serves `POST /api/v1/portfolio/positions-series`.
 
 **The lots' histories as steps (D-P4).** The seven daily series of `POST /portfolio/lots/analysis` (value, return, price, market price,
 broker and cumulative average cost, performance) give a row for each stretch of days in which nothing changes: it holds from its
 `date` to its `through`, both included, and the response has the `range` they lie in. The analysis never walks the calendar. The
 days the converted market price can change on are known from the inputs (`AssetPriceSeries.observation_dates`, the steps of the
 rates, `FxRateResolver.rate_change_days()`, the events and the end of the days valued at cost, each with the day after it:
-`change_days.price_candidate_days`); the price is read on those, the builders run on the days `lot_change_days` keeps, and
+`lots/change_days.price_candidate_days`); the price is read on those, the builders run on the days `lot_change_days` keeps, and
 `history_steps` turns their rows into steps per key: consecutive identical rows, with the exponent of every Decimal, are one, and a
 change day where a key has no row after its first opens a gap. The days between two reads repeat the day before to the digit, so
 expanding the steps gives the daily answer field for field. A missing rate is a gap of the pair over the stretch it holds.
@@ -395,6 +483,21 @@ expanding the steps gives the daily answer field for field. A missing rate is a 
 `build_asset_allocation_history()` turn it into allocation slices named by the caller (`id` = the
 asset id), plus the Liquidity slice of `by_type` (cash and cash in transit): the report's
 `summary.allocation_by_asset` and `allocation_history.asset`.
+
+**Allocation slices (MF-C2).** Every allocation dimension — type, sector, geography, asset;
+current and history — takes its percentages from `weights.slice_percents()`: each slice's amount over the signed sum of
+the day's slices, × 100, unrounded, in the mapping's order; `DerivedViewsBuilder` rounds them to 0.01 (`_cents()`). A
+slice keeps its sign, so with negative cash and a positive sum the cash slice is below zero and the others add up to
+more than 100 (`{Stock: 1500, Liquidity: −500}` → 150 / −50). When the sum is zero or negative, no slice has a share:
+`slice_percents()` returns None for every slice and `_cents()` keeps it, while `name`, `amount`, `id`, `emoji` and the
+order (by amount, descending) are unchanged — stocks bought on an overdraft (`{Stock: 500, Liquidity: −500}`), or an
+emptied portfolio (`{Liquidity: 0}`). The contracts carry the None: `AllocationItem.value` (`schemas/portfolio.py`,
+also inside `AllocationHistoryPoint.components`) and the AI Export `AllocationSlice.percent`
+(`ai_export/components/payloads/portfolio_broker.py`) are nullable, serialised as JSON null; the broker concentration
+context sorts a slice without a percent as 0 (`_map_slices()`). Before, the sum was replaced by 1 when it was zero
+(500 read 50 000 %) and a negative sum flipped every sign. An empty allocation has no slices. Tests:
+`test_weights.py`, `test_allocation_non_positive_sum.py` (the views) and `test_allocation_non_positive_sum_report.py`
+(through `PortfolioService`).
 
 The engine has no date floor (lot MF-PAV-L1): a movement stored in 1500, or in year 1, is replayed
 exactly, on its own date and in its own order, and the states start at the first transaction. When the
@@ -414,7 +517,7 @@ moved or dropped, so there is nothing to warn about.
     hold only the candidate days), and a calendar has no day before `date.min`.
 
 Both rate rules take their days from one pure function, the one home of «the day a rate changes»:
-`native_cash.change_days(read, currencies, days)` returns the days of the calendar `days`, in its
+`change_days.change_days(read, currencies, days)` (moved from `native_cash`) returns the days of the calendar `days`, in its
 order, on which `read(currency, day)` gives one of `currencies` another rate than on the
 calendar's previous day; a rate on the calendar's first day counts. The caller chooses the reading
 and the calendar. The native cash reads the last rate known on or before the day, on the calendar
@@ -422,11 +525,21 @@ of its rate points. The engine reads the rate `fx_rate_map` holds for that exact
 (`_read_rate()`), on every replayed day — or day of the transit, for cash in transit — each
 compared with the day before; its calendars start at the replay's start, and each holds only the
 candidate days (`_reading_calendar()`: the steps and window bounds of the rates, each with the day
-before it), never every day since. `_read_rate()` reads only the
+before it, from `change_days.reading_change_days()`), never every day since. `_read_rate()` reads only the
 map, which `_preload_fx_rates()` already answers for these currencies on every day of
 `[date_from, date_to]` (a day replayed before a later `date_from` may find none there, and its
 state is not emitted), and for cash in transit on every day of its transit, from the interval's own
 start: the rule asks the FX service for nothing more.
+
+`change_days.py` is the one home of the day rules every daily series shares: `reading_change_days(rates, source,
+destination)` gives the days a reading of a pair may differ from the day before (an `AskedDayRates`' steps and window
+bounds, or, on a plain map built by hand in tests, each key's day and the day after), `change_days()` the days a
+reading really differs on a calendar, `with_next_days(days, calendar)` the days inside a calendar with the day after
+each. The engine's `_reading_calendar()` and the lots' `FxRateResolver.rate_change_days()` take their candidate days
+from `reading_change_days()`; `lots/change_days.py` (`lot_change_days()`, `price_candidate_days()`) adds the day after
+with `with_next_days()`. The unions stay with their domain: the engine's dirty days are `_collect_dirty_days()`, which
+compares rates, and the lots' change days compare the converted price in its exact representation, so that their
+series stay byte-identical.
 
 When you add an input that can change a day's value — a rate, a price, a mark's source, an age —
 add its days to the dirty days, or show that the day cannot change.
@@ -443,6 +556,31 @@ checks with its guards that a day whose terms do not move keeps its values, and 
     a copy of the last dirty day. The series derived from the daily states carried that copy, and
     so did the summary when that day was `date_to`: it reads that day's state for NAV, P&L and
     returns. Only the end positions (`position_states_end`) were valued afresh at `date_to`.
+
+### 🔻 The First Negative Cash Day {: #first-negative-cash }
+
+`native_cash.first_negative_cash(movements, *, opening=None, check_days=())` answers one question for one broker: on
+which day, first, does its balance in a currency **end** below zero? It returns a frozen `NegativeCash` — `day`,
+`currency`, `balance` (the currency's balance at the end of that day) and `reducers` (that day's movements of that
+currency that lowered it, in input order, so the caller picks the one to blame) — or None when no balance goes below
+zero. It is the cash half of the balance validator (`transactions/balances.py`, `_validate_broker_balances()`, lot
+W6-12), which it is written for; the validator does not call it yet.
+
+| Input | Meaning |
+|-------|---------|
+| `movements` | `CashMovement`s of **one** broker, in any order; movements of more than one broker raise `ValueError`. The balance is the counted amount, `CashMovement.native` |
+| `opening` | The balance of each currency before the first movement — `native_balances()` of the earlier rows, the validator's `_get_balances_before_date()` |
+| `check_days` | Days to check even without a movement, such as the validator's first day |
+
+- **End of day.** Each day's movements are applied in their order, then every balance is checked, so a deposit and a
+  payment on the same day never read as red in between.
+- **Only the days that matter.** The walk visits the days with a movement and the `check_days`, never the days in
+  between: a movement dated 9999-12-31 costs one step (R13-SEC7-3).
+- **Which currency.** On a day with several currencies below zero, the first one met wins: `opening`'s order, then the
+  order the walk first met each currency.
+- **Only cash.** Quantities are the caller's.
+
+Tests: `test_first_negative_cash.py` (`test_services/test_financial_math/`), run by `./dev.py test services financial-math`.
 
 ### 🧾 Ledger Control Totals {: #ledger-totals }
 
@@ -806,8 +944,10 @@ for. The gate runs with the chart-safety unit tests:
 
 | Command | Runs (under `backend/test_scripts/`) | Covers |
 |---------|--------------------------------------|--------|
-| `./dev.py test services financial-math` | `test_services/test_financial_math/` | `average_cost.py`, `native_cash.py`, `ledger_totals.py`, `splits.py` (`test_splits.py`), `returns.py` (the period rebase and the return ratios, `test_returns_rebase_and_ratios.py`; the verified MWRR root, `test_mwrr_verified_root.py`; the Dashboard's MWRR rule, `period_mwrr()` and `period_mwrr_series()`, `test_period_mwrr.py`; the gain that recovers a drawdown, `required_recovery_return()`, `test_required_recovery_return.py`; the float price return and the observed annualization of a return series, `float_price_return()` and `observed_annualization()`, `test_series_returns.py`; the fixed-period changes of the Assets and FX tables, `fixed_period_dates()` and `fixed_period_changes()`, `test_fixed_period_changes.py`), `portfolio/period.py` (`test_period_and_unit_costs.py`, with `movement_unit_costs()` of `average_cost.py`), `compound_growth()` of `interest.py` (`test_compound_growth.py`, against the day-by-day product in a 60-digit context), its ACT/ACT fraction across years, digit for digit with the year loop, and its memo (`test_act_act_fraction.py`), and the layer guard; a pure unit — the file tests of `test_ledger_totals.py` and the loader tests of `test_splits.py` open private SQLite files under `tmp_path`: no shared database, no server |
+| `./dev.py test services financial-math` | `test_services/test_financial_math/` | `average_cost.py`, `native_cash.py` (its first negative cash day, `test_first_negative_cash.py`), `weights.py` (`test_weights.py`; the allocation views on a sum at or below zero, `test_allocation_non_positive_sum.py`), `ledger_totals.py`, `splits.py` (`test_splits.py`), `returns.py` (the period rebase and the return ratios, `test_returns_rebase_and_ratios.py`; the verified MWRR root, `test_mwrr_verified_root.py`; the Dashboard's MWRR rule, `period_mwrr()` and `period_mwrr_series()`, `test_period_mwrr.py`; the Dashboard's TWRR rule and the simple ROI's capital, `period_twrr()`, `period_twrr_series()` and `period_roi_cash_flows()`, `test_period_twrr_and_roi_flows.py`; the gain that recovers a drawdown, `required_recovery_return()`, `test_required_recovery_return.py`; the float price return and the observed annualization of a return series, `float_price_return()` and `observed_annualization()`, `test_series_returns.py`; the fixed-period changes of the Assets and FX tables, `fixed_period_dates()` and `fixed_period_changes()`, `test_fixed_period_changes.py`), `portfolio/period.py` (`test_period_and_unit_costs.py`, with `movement_unit_costs()` of `average_cost.py`), `marked_price()` and `AssetMarks` of `portfolio/daily_state.py` (`test_asset_marks.py`), `closed_flight_too_short()` of `portfolio/contributions.py` (`test_contributions_short_flight_and_open_base.py`), `compound_growth()` of `interest.py` (`test_compound_growth.py`, against the day-by-day product in a 60-digit context), its ACT/ACT fraction across years, digit for digit with the year loop, and its memo (`test_act_act_fraction.py`), and the layer guard; a pure unit — the file tests of `test_ledger_totals.py` and the loader tests of `test_splits.py` open private SQLite files under `tmp_path`: no shared database, no server |
 | `./dev.py test services roi-fifo-utils` | `test_services/test_financial/` | Returns, FIFO lots, price marks, Yield on Cost, the portfolio engine (`test_portfolio_engine/`), and the portfolio and lots services that call them |
+| `./dev.py test services dust-threshold` | `test_services/test_financial/test_portfolio_engine/test_daily_state_dust_threshold.py` | `DailyStateBuilder` holds a position only above the dust threshold ([held positions](#recomputed-days)); also run by `roi-fifo-utils`, so it is out of `all` |
+| `./dev.py test services ownership-share-option` | `test_services/test_financial/test_ownership_share_option.py` | `apply_ownership_share=False` on the report and the positions series ([the whole broker](#whole-broker)); also run by `roi-fifo-utils`, so it is out of `all` |
 | `./dev.py test services portfolio-engine` | `test_services/test_portfolio_engine_vnext.py` | `DailyStateBuilder` |
 | `./dev.py test services lots-analysis-pure` | `test_services/test_lots_analysis_pure.py` | `lots/` and the service's sync builders; a pure unit |
 | `./dev.py test utils roi-utils` | `test_utilities/test_roi_utils.py` | `returns.py` |

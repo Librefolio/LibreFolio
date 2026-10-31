@@ -97,6 +97,8 @@
         acquisitionFunding?: PortfolioAcquisitionFundingSeries;
         height?: string;
         loading?: boolean;
+        /** The candles are being asked (lazy, on the first activation of the Candles submode): the chart shows a skeleton of its own until they arrive (Y-18). */
+        pnlCandlesLoading?: boolean;
         baseCurrency?: string;
     }
 
@@ -113,6 +115,7 @@
         acquisitionFunding = undefined,
         height = '360px',
         loading = false,
+        pnlCandlesLoading = false,
         baseCurrency = 'EUR',
     }: Props = $props();
 
@@ -1520,6 +1523,9 @@
             <div class="absolute inset-0 z-10 flex items-center justify-center text-lf-muted text-sm">
                 {$_('common.noData')}
             </div>
+        {:else if viewMode === 'pnl' && pnlSubmode === 'candles' && pnlCandlesLoading && pnlCandles == null}
+            <!-- The candles are asked on the first activation: until they arrive the chart is empty, so say it is waiting (Y-18). -->
+            <div class="absolute inset-0 z-10 bg-lf-panel rounded animate-pulse" data-testid="growth-pnl-candles-loading" aria-hidden="true"></div>
         {/if}
         <!-- Persistent chart container — never destroyed -->
         <div bind:this={chartContainer} style="height: 100%; width: 100%;" class:invisible={loading || history.length === 0}></div>

@@ -50,13 +50,14 @@ What do you own on the end date, and how is each position doing? **Portfolio** l
 - **Weight counts cash**, so the rows add up to less than 100% when you hold cash.
 - **Weight shows `—` when your Net Worth is zero or below**, for example when you have borrowed more cash than your holdings are worth: a share of it would mean nothing.
 - **Avg. Cost keeps each purchase's exchange rate**, while Value uses the end date's: the Unrealized P&L includes what the rate did since.
+- **Δ1 compares two prices at two exchange rates**: today's price, the one the position is valued at, at today's rate, against the last market price up to yesterday at yesterday's rate. For an asset quoted in another currency whose price did not move, Δ1 is only what the exchange rate did in one day, and `0` when the rate did not move either.
 - **In the Map**, tiles are grouped by broker and asset type; size is the value, colour the P&L %. Scroll to zoom, drag to move, and **Reset zoom** (↺) shows everything again.
 
 ??? info "➖ Empty cells — when a value is missing"
 
     - **`—` in Unrealized P&L, P&L % or Avg. Cost**: part of what you paid is unknown — an exchange rate missing on a purchase date, or a transfer or adjustment without a cost basis —, or, for Unrealized P&L and P&L % only, the price cannot be converted because the end date's exchange rate is missing. The [Data Quality banner](index.md#data-quality-banner) names what to fix.
     - **`—` in Price, with an Unrealized P&L of `0`**: the asset has no price at all — no market price and no purchase or sale, as when you received it through an adjustment or a transfer — so its Value is what it cost you.
-    - **Δ1** and **Δ1%** need a market price; **Annualized** needs a position old enough for a yearly rate to mean anything.
+    - **Δ1** and **Δ1%** need a market price today and one on or before yesterday; on your portfolio's first day there is no day before, so they stay empty. **Annualized** needs a position old enough for a yearly rate to mean anything.
 
 ### 📉 Return of the positions {: #return-of-the-positions }
 
@@ -70,7 +71,7 @@ Which of your positions did better than the portfolio, and which worse? On the D
 
 ??? info "📐 Why the portfolio line can differ from the positions"
 
-    The portfolio line is the return the Dashboard measures, the [time-weighted return](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md), not the profit of your positions on the capital they employed. The two can therefore differ, even when every position is ticked; the legend says so.
+    The portfolio line is the return the Dashboard measures, the [time-weighted return](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md), not the profit of your positions on the capital they employed. The two can therefore differ, even when every position is ticked; the legend says so. On the days your portfolio is worth zero or less there is no time-weighted return, so the portfolio line has a gap in **%** ([When No TWRR Is Shown](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md#when-no-twrr)).
 
 ### 💸 Yield on Cost (YOC) {: #yield-on-cost-yoc }
 
@@ -98,9 +99,9 @@ Which positions made or lost money in the period, and how? **Period** lists ever
 **Metrics shown**
 
 - **Period P&L**, split as on the [Period P&L card](kpi-cards.md#card-1-period-pl) into **Unrealized change**, **Sales**, **Dividends & interest** and **Costs** → [Period P&L](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md)
-- **Annualized** — the period result as a yearly rate, over the time the position was held in the period → [Net Annualized Return](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/net-annualized-return.md)
+- **Annualized** — the period result as a yearly rate, over the time the position was held in the period; `—` for a position closed in the period after fewer than 30 days held in it, too short for a yearly rate to mean anything → [Net Annualized Return](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/net-annualized-return.md)
 - **Δ1** / **Δ1%** for open positions and, hidden by default, **Start Value**, **End Value**, **Oldest open lot** and **Status**
-- **Other Period Effects** — what belongs to no position: **Unallocated income** and **Unallocated costs**, recorded without an asset; **FX on cash**, what the exchange rates did in the period to cash you hold in another currency, with a row only for a broker whose cash they moved; **Transfers at market value**, when you look at only some of your brokers, the gain that securities moved to or from a broker outside your selection made before crossing the boundary, one row per broker ([Transfers at market value](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md#transfers-at-market-value)); and the **Other / reconciliation residual**, what is left — a currency exchanged at a cost, the exchange-rate move of cash on its way between two of your brokers, securities on their way between them on the first or last day of the period, or a sale left out of **Sales** because a rate or a purchase cost is missing → [FX on cash](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md#fx-on-cash)
+- **Other Period Effects** — what belongs to no position: **Unallocated income** and **Unallocated costs**, recorded without an asset; **FX on cash**, what the exchange rates did in the period to cash you hold in another currency, with a row only for a broker whose cash they moved; **Transfers at market value**, when you look at only some of your brokers, the gain that securities moved to or from a broker outside your selection made before crossing the boundary, one row per broker ([Transfers at market value](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md#transfers-at-market-value)); and the **Other / reconciliation residual**, what is left — a currency exchanged at a cost, the exchange-rate move of cash on its way between two of your brokers, securities on their way between them on the first or last day of the period, a sale left out of **Sales** because a rate or a purchase cost is missing, or the purchase cost of a tiny leftover — 0.00001 units or fewer, which a sale of almost every unit can leave and which does not count as a holding → [FX on cash](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/period-pnl.md#fx-on-cash)
 
 **How to read it**
 
@@ -199,8 +200,8 @@ What are the selected lots worth, and what have they earned since opening? With 
 **How to read it**
 
 - **Comprehensive value above Opening value**: the lots gained, sales and income included.
-- **A dashed line** in **Value** means a lot's current value is estimated at cost: its asset has no price at all — no market price, and no purchase or sale up to the end date.
-- **A flat start**: until the asset's first price — market price, purchase or sale — a lot, for example one you received through an adjustment, is valued at what it cost you, with no gain or loss. A day whose price has no exchange rate is left out instead.
+- **A dashed line** in **Value** means a lot's current value is estimated at cost: its asset has no price at all — no market price, no purchase or sale, and no transfer whose cost counts as its price up to the end date.
+- **A flat start**: until the asset's first price — market price, purchase or sale, or the cost of a transfer that brought it in before anything else — a lot, for example one you received through an adjustment, is valued at what it cost you, with no gain or loss. A day whose price has no exchange rate is left out instead.
 
 ### 🧾 5. Lot Detail
 
@@ -222,7 +223,7 @@ The whole story of one lot. Open it with **View lot detail** (⋮) or by clickin
 
     - **A folded banner** lists what is missing — a rate, a price, a purchase cost — with a chip per affected lot that finds its bubble. Fix it as for the [Data Quality banner](index.md#data-quality-banner). The folded banner also lists income and costs that no lot could take — a dividend paid after every lot was sold, for example — each with its own amount and date.
     - **A red message** means the quantities or transfers of some of the asset's transactions do not add up, so its lots cannot be rebuilt. It lists each transaction to fix with its day, its broker, what is wrong and a **Go to transaction** button. Meanwhile the panel hides the lots, their timeline and the comparison, and the first chart keeps only its **Avg. Cost** lines and the **Market Price**. Fix those transactions and the lots come back.
-    - **Valued at cost**: on the days before the asset's first price — no market price, no purchase or sale — its lots are valued at what they cost, with no market gain or loss, and the banner names those days. With no price at all up to the end date, the lot's bubble has a dashed border.
+    - **Valued at cost**: on the days before the asset's first price — no market price, no purchase or sale, no transfer whose cost counts as its price — its lots are valued at what they cost, with no market gain or loss, and the banner names those days. With no price at all up to the end date, the lot's bubble has a dashed border.
 
 ---
 

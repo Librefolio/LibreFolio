@@ -78,6 +78,18 @@ export function formatDay(value: string, locale: string = uiLocale()): string {
     return DATE_ONLY.test(value) ? formatAxisDate(locale, value, true) : value;
 }
 
+/**
+ * The day of a chart tooltip's header: `formatDay` plus the weekday of that calendar day in brackets, `12 Oct 2026 (Mon)`, in the
+ * language of the interface (`12 ott 2026 (lun)`). The weekday is read on the local calendar like the day, never through UTC.
+ * A millisecond value is read as the instant it is. Any other text (a count, a year, `Q3`) comes back unchanged.
+ */
+export function formatDayWithWeekday(value: string | number, locale: string = uiLocale()): string {
+    const date = typeof value === 'number' || DATE_ONLY.test(value) ? parseDisplayDate(value) : null;
+    if (!date) return String(value);
+    const weekday = date.toLocaleDateString(locale || uiLocale(), {weekday: 'short'});
+    return `${formatAxisDate(locale, value, true)} (${weekday})`;
+}
+
 export function formatAxisDate(locale: string | undefined, value: number | string, withYear = false): string {
     const date = parseDisplayDate(value);
     if (!date) return String(value);

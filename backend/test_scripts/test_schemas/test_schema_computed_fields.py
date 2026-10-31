@@ -48,14 +48,13 @@ class TestBRSummaryComputed:
                 Currency(code="EUR", amount=Decimal("100")),
                 Currency(code="USD", amount=Decimal("50")),
             ],
-            holdings=[],
         )
         assert summary.currencies == ["EUR", "USD"]
 
     def test_currencies_empty(self):
         from backend.app.schemas.brokers import BRSummary  # noqa: PLC0415 — test setup — imports after sys.path/db config
 
-        summary = BRSummary(**_BR_BASE, cash_balances=[], holdings=[])
+        summary = BRSummary(**_BR_BASE, cash_balances=[])
         assert summary.currencies == []
 
 

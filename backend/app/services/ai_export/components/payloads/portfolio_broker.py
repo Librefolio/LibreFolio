@@ -228,7 +228,8 @@ class AllocationSlice(StrictModel):
     """One allocation category slice (type/sector/geography)."""
 
     name: str
-    percent: SafeDecimal
+    #: None for every slice when the slices' sum is zero or negative (MF-C2); the amounts stay.
+    percent: SafeDecimal | None
     amount: Currency
     emoji: str | None = None
 
