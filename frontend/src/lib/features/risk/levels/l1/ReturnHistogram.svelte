@@ -25,6 +25,7 @@
 -->
 <script lang="ts">
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
+    import Tooltip from '$lib/components/ui/feedback/Tooltip.svelte';
     import {_ as t} from '$lib/i18n';
     import {SIGN_BAR} from '$lib/theme/toneClasses';
 
@@ -36,6 +37,14 @@
     }
 
     let {histogram, height = '120px'}: Props = $props();
+
+    /**
+     * What a bar's tooltip says: the interval it covers, written as the axis ends are. Anything more about the bar (its days and
+     * share of the observations) is one more line here, so the tooltip and the bar never disagree about what a bar is.
+     */
+    function binTooltip(bin: {lowerBound: number; upperBound: number}): string {
+        return `${axisPercent(bin.lowerBound)} … ${axisPercent(bin.upperBound)}`;
+    }
 
     function barClass(bin: {holdsCut: boolean; belowCut: boolean}): string {
         if (bin.holdsCut) return 'bg-lf-warning';
@@ -58,18 +67,14 @@
                 <!-- Width from the real bounds, not from a constant: the schema
                      guarantees only that lower bounds ascend, so a non-uniform
                      grid must draw correctly rather than draw evenly. -->
-                <div
-                    class="flex h-full items-end"
-                    style="flex: {bin.upperBound - bin.lowerBound} 1 0%;"
-                    data-testid="risk-l1-histogram-bin-{index}"
-                    data-holds-cut={bin.holdsCut}
-                    data-below-cut={bin.belowCut}
-                    data-count={bin.count}
-                    title="{axisPercent(bin.lowerBound)} … {axisPercent(bin.upperBound)}"
-                >
-                    <!-- A bar with observations never rounds away to nothing: an
-                         invisible bar and an empty bin must not look the same. -->
-                    <div class="w-full rounded-t-sm {barClass(bin)}" style="height: {bin.count > 0 ? Math.max(bin.share * 100, 2) : 0}%;"></div>
+                <div class="flex h-full items-end" style="flex: {bin.upperBound - bin.lowerBound} 1 0%;" data-testid="risk-l1-histogram-bin-{index}" data-holds-cut={bin.holdsCut} data-below-cut={bin.belowCut} data-count={bin.count}>
+                    <!-- The app's tooltip, not the browser's `title` (B6): it reads in the dark theme, opens on touch, and an
+                         empty bin has one too — a bin with nothing in it and a bin that is not there must not look alike. -->
+                    <Tooltip text={binTooltip(bin)} position="top" interactiveChild wrapperClass="h-full w-full items-end" testId="risk-l1-histogram-bin-{index}-tip">
+                        <!-- A bar with observations never rounds away to nothing: an
+                             invisible bar and an empty bin must not look the same. -->
+                        <div class="w-full rounded-t-sm {barClass(bin)}" style="height: {bin.count > 0 ? Math.max(bin.share * 100, 2) : 0}%;"></div>
+                    </Tooltip>
                 </div>
             {/each}
         </div>

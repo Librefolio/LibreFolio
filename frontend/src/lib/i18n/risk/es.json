@@ -357,8 +357,6 @@
       "title": "Repetición histórica",
       "compositionNotice": "Aplica los rendimientos históricos observados a la composición actual; no reconstruye la propiedad pasada.",
       "preset": "Período predefinido",
-      "start": "Fecha inicial",
-      "end": "Fecha final",
       "proxy": "Proxy histórico manual",
       "exclude": "Excluir este activo de la repetición",
       "results": "Resultados de la repetición histórica",

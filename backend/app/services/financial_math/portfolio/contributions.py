@@ -22,11 +22,19 @@ _RATIO_QUANTUM = Decimal("0.0001")
 _ZERO = Decimal("0")
 
 
+def left_after_start(transfer: InternalAssetTransfer, date_from: date_type | None) -> bool:
+    """Whether ``transfer`` leaves its sender after the period's start (or the period has none): the sender then holds the units
+    on the start day. One that left on or before it is in transit at the start, and no broker's start value holds its units.
+    The one place of the rule: :func:`counted_tract` and the base of the asset summed over its brokers (``position_series``)
+    both read it."""
+    return date_from is None or transfer.departure > date_from
+
+
 def counted_tract(transfer: InternalAssetTransfer, date_from: date_type | None, end: date_type) -> bool:
     """Whether the period's rows split ``transfer``'s result between its two brokers (P22): it leaves after the period's
     start and arrives by its end, its value on arrival and the cost moved both known. The one rule of the tract
     adjustments and of the moved cost a closed position's base counts (MF-A5)."""
-    return (date_from is None or transfer.departure > date_from) and transfer.arrival <= end and transfer.value_at_arrival is not None and transfer.cost_moved is not None
+    return left_after_start(transfer, date_from) and transfer.arrival <= end and transfer.value_at_arrival is not None and transfer.cost_moved is not None
 
 
 def transfer_tract(transfer: InternalAssetTransfer, broker_id: int) -> Decimal:

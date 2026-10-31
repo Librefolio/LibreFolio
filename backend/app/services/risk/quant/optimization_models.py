@@ -14,11 +14,14 @@ from backend.app.schemas.risk import (
     RiskOptimizationStrategy,
 )
 
+#: The most assets one optimization carries. The plugin refuses a bigger selection as a RESOURCE_LIMIT before building the request.
+MAX_OPTIMIZATION_ASSETS = 100
+
 
 class OptimizationEngineRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    asset_ids: List[int] = Field(..., min_length=2, max_length=100)
+    asset_ids: List[int] = Field(..., min_length=2, max_length=MAX_OPTIMIZATION_ASSETS)
     returns: List[List[FiniteFloat]] = Field(..., min_length=2)
     annualization_factor: FiniteFloat = Field(..., gt=0)
     strategy: RiskOptimizationStrategy

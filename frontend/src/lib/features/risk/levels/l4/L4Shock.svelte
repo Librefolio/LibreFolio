@@ -12,7 +12,7 @@
     import type {RiskPanelController} from '$lib/features/risk/riskPanelController.svelte';
 
     import {formatCurrencyAmount, stressImpactDimension} from '../../riskAnalysisHelpers';
-    import {stressBucketLabel} from '../../stressBucketLabel';
+    import {geographyGroupNamer, stressBucketLabel} from '../../stressBucketLabel';
     import TornadoChart from './TornadoChart.svelte';
     import {shockOptions, shockScenario, tornadoRows, type TornadoRow} from './scenarioHelpers';
     import {formatPercent} from '$lib/utils/core/formatPercent';
@@ -77,7 +77,7 @@
     /** A bucket as the reader names it, rebuilt on a language switch and when the reference data lands. */
     let bucketName = $derived.by(() => {
         void referenceVersion;
-        const words = {translate: $t, sectorEmoji: getSectorEmoji, country: getCountryInfo};
+        const words = {translate: $t, sectorEmoji: getSectorEmoji, country: getCountryInfo, geographyGroup: geographyGroupNamer(controller.scenarioCatalog, $currentLanguage)};
         return (bucket: string, bucketDimension: RiskScenarioDimension) => stressBucketLabel(bucket, bucketDimension, words);
     });
     let rowLabel = $derived.by(() => {

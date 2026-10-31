@@ -357,8 +357,6 @@
       "title": "Rejeu historique",
       "compositionNotice": "Applique les rendements historiques observés à la composition actuelle ; ne reconstitue pas la détention passée.",
       "preset": "Période prédéfinie",
-      "start": "Date de début",
-      "end": "Date de fin",
       "proxy": "Proxy historique manuel",
       "exclude": "Exclure cet actif du rejeu",
       "results": "Résultats du rejeu historique",
