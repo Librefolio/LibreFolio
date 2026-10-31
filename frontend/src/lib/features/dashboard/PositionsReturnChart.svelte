@@ -11,7 +11,7 @@
 
   Props:
   - lines: the lines to draw, in legend order (positions, then the portfolio)
-  - view / onviewchange: 'absolute' | 'percentage'
+  - view / onviewchange: 'absolute' | 'percentage' | 'rolling' (the percent the asset's price moved over a rolling window, FB-15)
   - hiddenIds / ontoggle: the lines switched off
   - colorOf: the colour of a line id (the same one the table's tick uses)
   - currency: the display currency of the Abs view
@@ -72,10 +72,22 @@
 
     let {lines, view, onviewchange, hiddenIds = new Set<string>(), ontoggle, colorOf, currency, loading = false, failed = false, portfolioLabel, note, height = '18rem'}: Props = $props();
 
-    const VIEWS: ReadonlyArray<PositionsChartView> = ['absolute', 'percentage'];
+    const VIEWS: ReadonlyArray<PositionsChartView> = ['absolute', 'percentage', 'rolling'];
 
-    /** Where each view draws its reference line: the start of the window (0 in money, base 100 in %). */
-    const REFERENCE_LEVEL: Record<PositionsChartView, number> = {absolute: 0, percentage: 100};
+    const VIEW_LABEL_KEYS: Record<PositionsChartView, string> = {
+        absolute: 'dashboard.positionsChart.viewAbsolute',
+        percentage: 'dashboard.positionsChart.viewPercentage',
+        rolling: 'dashboard.positionsChart.viewRolling',
+    };
+    const VIEW_HINT_KEY_NAMES: Record<PositionsChartView, string> = {
+        absolute: 'dashboard.positionsChart.viewAbsoluteHint',
+        percentage: 'dashboard.positionsChart.viewPercentageHint',
+        rolling: 'dashboard.positionsChart.viewRollingHint',
+    };
+    const VIEW_HINT_KEYS = $derived<Record<PositionsChartView, string>>({absolute: $_(VIEW_HINT_KEY_NAMES.absolute), percentage: $_(VIEW_HINT_KEY_NAMES.percentage), rolling: $_(VIEW_HINT_KEY_NAMES.rolling)});
+
+    /** Where each view draws its reference line: the start of the window (0 in money, base 100 in %), or no change (0 in the rolling return). */
+    const REFERENCE_LEVEL: Record<PositionsChartView, number> = {absolute: 0, percentage: 100, rolling: 0};
 
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chart: echarts.ECharts | null = null;
@@ -183,6 +195,8 @@
     /** One tooltip row's value: money in Abs; in %, the base-100 number with its signed percent (value − 100) beside it. */
     function tooltipValue(value: number, mutedColor: string): string {
         if (view === 'absolute') return escapeHtml(formatCurrencyAmountPlain(value, currency, {showSign: true}));
+        // Rolling: the backend's percentage points as they are, signed.
+        if (view === 'rolling') return escapeHtml(formatPercent(value, {digits: 2}));
         const level = formatPercent(value, {suffix: '', signed: false, digits: 2});
         // `value − 100` is a change of unit (base 100 → percent), the one `positionsSeries.ts` declares.
         const change = formatPercent(value - REFERENCE_LEVEL.percentage, {digits: 2});
@@ -319,7 +333,7 @@
                     color: neutrals.dashboard.text,
                     fontSize: 12,
                     // Abs: compact money, masked under privacy. %: the base-100 numbers as they are (112), public.
-                    formatter: (value: number) => (view === 'absolute' ? formatAxisCurrency(value, currency) : formatPercent(value, {suffix: '', signed: false, digits: 1, trim: true})),
+                    formatter: (value: number) => (view === 'absolute' ? formatAxisCurrency(value, currency) : view === 'rolling' ? formatPercent(value, {digits: 1, trim: true}) : formatPercent(value, {suffix: '', signed: false, digits: 1, trim: true})),
                 },
                 axisLine: {show: false},
                 splitLine: {lineStyle: {color: neutrals.dashboard.gridLine, type: 'dashed'}},
@@ -352,23 +366,7 @@
 </script>
 
 <div class="flex flex-col gap-2 text-lf-primary" data-testid="positions-return-chart" data-state={chartState} data-view={view} data-line-count={drawn.length}>
-    <div class="flex flex-wrap items-center justify-between gap-2">
-        <h3 class="text-sm font-semibold text-lf-primary">{$_('dashboard.positionsChart.title')}</h3>
-        <div class="inline-flex overflow-hidden rounded-md border border-lf-input" role="group" aria-label={$_('dashboard.positionsChart.title')}>
-            {#each VIEWS as option (option)}
-                <button
-                    type="button"
-                    class="px-2.5 py-1 text-xs font-medium focus-visible:outline-2 focus-visible:outline-lf-focus {view === option ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-secondary hover:bg-lf-panel'}"
-                    aria-pressed={view === option}
-                    title={option === 'absolute' ? $_('dashboard.positionsChart.viewAbsoluteHint') : $_('dashboard.positionsChart.viewPercentageHint')}
-                    data-testid="positions-chart-view-{option}"
-                    onclick={() => onviewchange?.(option)}
-                >
-                    {option === 'absolute' ? $_('dashboard.positionsChart.viewAbsolute') : $_('dashboard.positionsChart.viewPercentage')}
-                </button>
-            {/each}
-        </div>
-    </div>
+    <h3 class="text-sm font-semibold text-lf-secondary">{$_('dashboard.positionsChart.title')}</h3>
 
     {#if lines.length > 0}
         <div class="flex flex-wrap gap-1.5" role="group" aria-label={$_('dashboard.positionsChart.title')}>
@@ -397,22 +395,41 @@
                 </button>
             {/each}
         </div>
-        {#if hasPortfolioLine && note}
-            <p class="text-xs text-lf-muted" data-testid="positions-chart-note">{note}</p>
-        {/if}
     {/if}
 
-    {#if chartState === 'loading'}
-        <div class="animate-pulse rounded bg-lf-panel" style:height data-testid="positions-chart-skeleton" aria-busy="true" aria-label={$_('common.loading')}></div>
-    {:else if chartState === 'failed'}
-        <div class="flex items-center justify-center rounded border border-dashed border-lf-input px-4 text-center text-sm text-lf-danger" style:height data-testid="positions-chart-failed" role="alert">
-            {$_('dashboard.positionsChart.failed')}
+    <!-- The plot, with the view toggle on it (Abs / %), top right as the Growth chart's toggles are (FB-12) -->
+    <div class="relative" data-testid="positions-chart-plot">
+        <div class="absolute right-1 top-1 z-10 inline-flex overflow-hidden rounded-md border border-lf-input shadow-sm shadow-lf-shadow-card" role="group" aria-label={$_('dashboard.positionsChart.title')}>
+            {#each VIEWS as option (option)}
+                <button
+                    type="button"
+                    class="px-2.5 py-1 text-xs font-medium focus-visible:outline-2 focus-visible:outline-lf-focus {view === option ? 'bg-lf-checked text-lf-on-checked' : 'bg-lf-card text-lf-secondary hover:bg-lf-panel'}"
+                    aria-pressed={view === option}
+                    title={VIEW_HINT_KEYS[option]}
+                    data-testid="positions-chart-view-{option}"
+                    onclick={() => onviewchange?.(option)}
+                >
+                    {$_(VIEW_LABEL_KEYS[option])}
+                </button>
+            {/each}
         </div>
-    {:else if chartState === 'empty'}
-        <div class="flex items-center justify-center rounded border border-dashed border-lf-input px-4 text-center text-sm text-lf-muted" style:height data-testid="positions-chart-hint">
-            {$_('dashboard.positionsChart.hint')}
-        </div>
-    {:else}
-        <div bind:this={chartContainer} class="w-full" style:height data-testid="positions-chart-canvas"></div>
+
+        {#if chartState === 'loading'}
+            <div class="animate-pulse rounded bg-lf-panel" style:height data-testid="positions-chart-skeleton" aria-busy="true" aria-label={$_('common.loading')}></div>
+        {:else if chartState === 'failed'}
+            <div class="flex items-center justify-center rounded border border-dashed border-lf-input px-4 text-center text-sm text-lf-danger" style:height data-testid="positions-chart-failed" role="alert">
+                {$_('dashboard.positionsChart.failed')}
+            </div>
+        {:else if chartState === 'empty'}
+            <div class="flex items-center justify-center rounded border border-dashed border-lf-input px-4 text-center text-sm text-lf-muted" style:height data-testid="positions-chart-hint">
+                {$_('dashboard.positionsChart.hint')}
+            </div>
+        {:else}
+            <div bind:this={chartContainer} class="w-full" style:height data-testid="positions-chart-canvas"></div>
+        {/if}
+    </div>
+
+    {#if lines.length > 0 && hasPortfolioLine && note}
+        <p class="text-xs text-lf-muted" data-testid="positions-chart-note">{note}</p>
     {/if}
 </div>

@@ -1204,6 +1204,10 @@
         .tx-table-wrap tr.tx-row-highlight > td {
             animation: txPulse 1.4s ease-in-out 1;
         }
+        /* The row opened by a highlight keeps a bar on its first cell after the pulse (W-B76): the colour is the design system's role, as the pulse's. */
+        .tx-table-wrap tr[data-highlighted='true'] > td:first-child {
+            box-shadow: inset 3px 0 0 0 var(--lf-checked);
+        }
         @keyframes txPulse {
             0% {
                 box-shadow: inset 0 0 0 0 transparent;

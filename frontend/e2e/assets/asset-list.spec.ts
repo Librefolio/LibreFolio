@@ -19,7 +19,7 @@ import {assetIdByName, pairComparison, seedChartComparisons} from '../fixtures/c
 import {createOwnedAsset, deleteOwned, jsonFrom, type Owned, type OwnedAsset} from './asset-events-owned';
 import {uniqueSuffix, uniqueToken} from '../fixtures/unique';
 import {t} from '../fixtures/i18n-data';
-import {daysAgoIso, localIso} from '../fixtures/dates';
+import {daysAgoIso, localIso, todayIso} from '../fixtures/dates';
 import {describeShown, isStoredPoint, overwriteCounts, overwriteWarningSentence, pageLanguage, recordSyncRequests, storedAssetPrices, type SyncPeriod} from '../fixtures/sync-overwrite';
 import {chooseTheme} from '../fixtures/galleryFiles';
 import {parkPointer} from '../fixtures/galleryRiskLab';
@@ -81,7 +81,7 @@ async function mockAssets(page: Page, assets: SyntheticAsset[]) {
             },
         });
     });
-    await page.route('**/api/v1/assets/prices/current', async (route) => {
+    await page.route('**/api/v1/assets/prices/current*', async (route) => {
         await route.fulfill({json: {results: [], success_count: 0, errors: []}});
     });
 }
@@ -1154,7 +1154,7 @@ test.describe('Assets list — the sync dialog warns before replacing stored pri
         // ask the providers and write each fresh quote as today's price of a shared asset: answered here, empty, so that
         // «no provider is called, nothing is written» does not rest on the periods' arithmetic. The warning reads the
         // stored prices, never the live ones.
-        await page.route('**/api/v1/assets/prices/current', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
+        await page.route('**/api/v1/assets/prices/current*', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
     });
 
     test('sync all over a period holding stored prices warns once, counting among the assets it syncs', async ({page}) => {
@@ -2758,8 +2758,7 @@ test.describe('Assets list — the grid toolbar: the Absolute icon and the actio
     });
 });
 
-// ============================================================================
-// FB-7b — asset list: «All» starts at the first stored price
+// =====================================================================// FB-7b — asset list: «All» starts at the first stored price
 // ============================================================================
 // The detail page asks «All» from the `min` sentinel (the asset's first stored price, resolved by the server); the list
 // still asked its cards from the 2000-01-01 placeholder while «All» was pending, so an asset whose history begins before
@@ -2941,5 +2940,35 @@ test.describe('FB-7b asset list: All starts at the first stored price', () => {
             onList.filter((ask) => ask.start === 'min'),
             'the first day is remembered for the session: the list does not ask the card from min again',
         ).toEqual([]);
+=======
+test.describe('Asset List Page — the live poll brings the Δ with the quote (Y6-1)', () => {
+    test.beforeEach(async ({page}) => {
+        await login(page, TEST_USER);
+    });
+
+    test('while the period ends today the poll asks the Δ over the range (range_start) and the card shows the one the backend answers', async ({page}) => {
+        const asset = syntheticAsset(88101, 0, 0, {displayName: `Live delta ${uniqueSuffix()}`});
+        await mockAssets(page, [asset]);
+        const asked: string[] = [];
+        // Registered after the mocks of the list: a later route wins.
+        await page.route('**/api/v1/assets/prices/current*', async (route) => {
+            asked.push(route.request().url());
+            await route.fulfill({
+                json: {
+                    results: [{asset_id: asset.id, value: '110.00', currency: 'EUR', as_of_date: todayIso(), source: 'provider:test', error: null, error_code: null, retry_after: null, range_change: {reference_date: daysAgoIso(30), change_abs: '10.00', change_ratio: '0.1000'}}],
+                    success_count: 1,
+                    errors: [],
+                },
+            });
+        });
+
+        await navigateTo(page, '/assets');
+        const card = page.getByTestId(`asset-card-${asset.id}`);
+        await expect(card, 'the card of the asset the poll quoted').toBeVisible({timeout: 20_000});
+        await expect(card.getByTestId('asset-range-delta'), 'the Δ of the quote appears on the card').toBeVisible({timeout: 20_000});
+
+        const url = new URL(asked[0]);
+        expect(url.searchParams.get('range_start'), 'the poll carries the range start').toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        expect(url.searchParams.get('range_start')! <= todayIso(), 'a day that is not after today').toBe(true);
     });
 });

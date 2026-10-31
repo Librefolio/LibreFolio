@@ -154,7 +154,6 @@
     "endValueTooltip": "Valore della posizione a fine periodo, calcolato come la colonna Valore del Portafoglio; 0 se la posizione era già chiusa.",
     "transfersAtMarketValue": "Trasferimenti al valore di mercato",
     "assetAllocation": "Per Asset",
-    "backToPortfolio": "Portafoglio",
     "positionsChart": {
       "title": "Rendimento delle posizioni",
       "viewAbsolute": "Abs",
@@ -167,7 +166,9 @@
       "failed": "Non è stato possibile caricare le serie delle posizioni.",
       "closedOn": "Chiusa il {date}",
       "incomplete": "Mancano alcuni valori (un prezzo o un cambio): la linea li lascia fuori.",
-      "rowSelect": "Seleziona la riga per disegnarne il rendimento"
+      "rowSelect": "Seleziona la riga per disegnarne il rendimento",
+      "viewRolling": "Mobile",
+      "viewRollingHint": "Percentuale di cui si è mosso il prezzo dell'asset in una finestra che scorre lungo il periodo: per confrontare gli asset fra loro"
     }
   }
 }

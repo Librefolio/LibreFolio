@@ -83,7 +83,6 @@
     "swapDirection": "Inverti direzione",
     "sync": "Sincronizza",
     "syncing": "Sincronizzazione...",
-    "totalValue": "Valore Totale",
     "type": "Tipo",
     "amount": "Importo",
     "description": "Descrizione",
@@ -376,7 +375,8 @@
       "empty": "Nessuna opzione"
     },
     "confirmBulkAction": "Sei sicuro di voler eseguire questa azione su",
-    "filterLabel": "Filtro"
+    "filterLabel": "Filtro",
+    "resetLayout": "Ripristina disposizione"
   },
   "date": {
     "today": "Oggi",

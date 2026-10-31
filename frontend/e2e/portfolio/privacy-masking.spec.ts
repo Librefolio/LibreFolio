@@ -269,8 +269,8 @@ async function revealColumns(page: Page, menuScope: Locator, table: Locator, col
 
 type Money = {code: string; amount: string | number};
 type BrokerListItem = {id: number; name: string; user_role?: string | null; user_share_percentage?: string | number | null};
-type BrokerHolding = {asset_id: number; asset_name: string; quantity: string | number; current_price?: string | number | null};
-type BrokerSummary = {holdings: BrokerHolding[]};
+type BrokerHolding = {asset_id: number; asset_name: string; quantity: string | number; current_price?: string | number | null; broker_id?: number | null};
+type PortfolioReport = {summary?: {holdings?: BrokerHolding[] | null} | null};
 type LotSummary = {lot_id: number; states: string[]; open_quantity: string | number; original_quantity: string | number};
 type TxRead = {id: number; asset_id: number | null; type: string; quantity: string | number; cash: Money | null};
 type Position = {brokerId: number; brokerName: string; assetId: number; assetName: string};
@@ -296,8 +296,9 @@ async function ownedBrokers(page: Page): Promise<BrokerListItem[]> {
 async function pricedPositions(page: Page): Promise<Position[]> {
     const positions: Position[] = [];
     for (const broker of await ownedBrokers(page)) {
-        const summary = await getJson<BrokerSummary>(page, `/api/v1/brokers/${broker.id}/summary`);
-        for (const holding of summary.holdings) {
+        // The open holdings of the broker come from the portfolio report (`summary.holdings`): `GET /brokers/{id}/summary` no longer carries them (MF-L).
+        const report = await postJson<PortfolioReport>(page, '/api/v1/portfolio/report', {broker_ids: [broker.id], include_summary: true, include_history: false, include_allocation_history: false, include_breakdown: false, include_positions_contribution: false});
+        for (const holding of (report.summary?.holdings ?? []).filter((candidate) => candidate.broker_id == null || candidate.broker_id === broker.id)) {
             if (Number(holding.quantity) > 0 && holding.current_price != null) {
                 positions.push({brokerId: broker.id, brokerName: broker.name, assetId: holding.asset_id, assetName: holding.asset_name});
             }

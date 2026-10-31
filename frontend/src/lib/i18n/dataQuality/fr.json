@@ -45,6 +45,7 @@
     "nonIsoCurrencyUnknown": "Montants en « {value} », qui n'est pas un code de devise ISO — leurs conversions peuvent manquer, et leurs lignes ne peuvent pas être enregistrées de nouveau tant que le code n'est pas corrigé",
     "nonIsoReportCurrency": "Ce rapport convertit en « {value} », qui n'est pas un code de devise ISO (il désigne {suggestion}) — choisissez {suggestion} comme « Devise par défaut » dans Paramètres › Préférences",
     "nonIsoReportCurrencyUnknown": "Ce rapport convertit en « {value} », qui n'est pas un code de devise ISO — choisissez de nouveau la « Devise par défaut » dans Paramètres › Préférences",
-    "staleFx": "{count} taux de change non à jour, le plus ancien depuis {days} jours — synchronisez les taux pour mettre à jour les totaux"
+    "staleFx": "{count} taux de change non à jour, le plus ancien depuis {days} jours — synchronisez les taux pour mettre à jour les totaux",
+    "staleFxAfterSync": "Le fournisseur n'a pas encore de taux plus récents pour {pairs} : réessayez plus tard."
   }
 }

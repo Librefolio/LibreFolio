@@ -94,7 +94,8 @@
       "leaveDone": "You left the broker",
       "leaveDeletedBroker": "Broker deleted: you were the last owner",
       "selfDemoteDone": "You are now a viewer",
-      "leaveLastOwnerHint": "If that's not what you want, assign another user as owner first, then leave."
+      "leaveLastOwnerHint": "If that's not what you want, assign another user as owner first, then leave.",
+      "maxShare": "% (max {max})"
     },
     "lots": {
       "unifiedLots": "Lots",

@@ -83,7 +83,6 @@
     "swapDirection": "Swap direction",
     "sync": "Sync",
     "syncing": "Syncing...",
-    "totalValue": "Total Value",
     "type": "Type",
     "amount": "Amount",
     "description": "Description",
@@ -376,7 +375,8 @@
       "empty": "No options"
     },
     "confirmBulkAction": "Are you sure you want to perform this action on",
-    "filterLabel": "Filter"
+    "filterLabel": "Filter",
+    "resetLayout": "Reset layout"
   },
   "date": {
     "today": "Today",

@@ -271,13 +271,15 @@ async function serveMissingFxRates(page: Page, issue: ReturnType<typeof missingF
  * «old exchange rate» row (`STALE_FX`) from them. The backend's own stale pairs are replaced, so the row a test
  * asserts on is the one it served, and `[]` proves that no stale pair means no row.
  */
-async function serveStaleFxPairs(page: Page, pairs: Array<{pair: string; last_rate_date: string; stale_days: number}>): Promise<void> {
+async function serveStaleFxPairs(page: Page, pairs: Array<{pair: string; last_rate_date: string; stale_days: number}>, after?: {sync: FxSyncProbe; keepAfterSync: boolean}): Promise<void> {
     await page.route(`**${REPORT_PATH}`, async (route) => {
+        // Decided when the request leaves the page: with `after`, the pairs stay stale after the sync only if the provider had nothing newer.
+        const inject = !after || !after.sync.answered || after.keepAfterSync;
         const response = await route.fetch();
         const body = await response.json();
         const summary = body?.summary;
         if (summary) {
-            summary.data_quality = {...(summary.data_quality ?? {issues: []}), stale_fx_pairs: pairs};
+            summary.data_quality = {...(summary.data_quality ?? {issues: []}), stale_fx_pairs: inject ? pairs : []};
         }
         await route.fulfill({response, json: body});
     });
@@ -651,10 +653,11 @@ test.describe('DataQualityBanner — Dashboard (grouped mode)', () => {
         await page.unrouteAll({behavior: 'ignoreErrors'});
     });
 
-    test('STALE_FX «Sync rates» syncs the stale pair from its stored rate up to today, then reloads and reports', async ({page}) => {
+    test('STALE_FX «Sync rates» syncs the stale pair from its stored rate up to today; if the provider has nothing newer it says so (Y6-6)', async ({page}) => {
         test.setTimeout(90_000);
         const sync = await holdFxSync(page);
-        await serveStaleFxPairs(page, [{pair: 'USD/EUR', last_rate_date: daysAgoIso(40), stale_days: 40}]);
+        // The reload still lists the pair as stale: the provider published no newer rate.
+        await serveStaleFxPairs(page, [{pair: 'USD/EUR', last_rate_date: daysAgoIso(40), stale_days: 40}], {sync, keepAfterSync: true});
         try {
             await goToDashboard(page);
             await expandDataQualityBannerStrict(page);
@@ -672,8 +675,36 @@ test.describe('DataQualityBanner — Dashboard (grouped mode)', () => {
             sync.release();
             await reload;
             const synced = await waitForEvent(page, 'fx.rates.synced', {since, timeout: 30_000});
-            expect(synced.detail).toMatchObject({origin: 'dashboard-banner', pairs: ['EUR-USD'], outcome: 'ok'});
+            expect(synced.detail).toMatchObject({origin: 'dashboard-banner', pairs: ['EUR-USD'], outcome: 'ok', stillStale: true});
+            // The variant is the contract, not the sentence: the sync worked, the rate is still old, so a warning, not a success.
+            await expect(page.getByTestId('toast-warning').first()).toBeVisible();
             expect(sync.bodies, 'one click, one sync').toHaveLength(1);
+        } finally {
+            sync.release();
+            await page.unrouteAll({behavior: 'ignoreErrors'});
+        }
+    });
+
+    test('STALE_FX «Sync rates» that finds newer rates says nothing more: the pair is no longer stale (Y6-6)', async ({page}) => {
+        test.setTimeout(90_000);
+        const sync = await holdFxSync(page);
+        // The reload no longer lists the pair: the sync brought it up to date.
+        await serveStaleFxPairs(page, [{pair: 'USD/EUR', last_rate_date: daysAgoIso(40), stale_days: 40}], {sync, keepAfterSync: false});
+        try {
+            await goToDashboard(page);
+            await expandDataQualityBannerStrict(page);
+            const cta = staleFxRow(page).getByTestId('data-quality-cta-STALE_FX');
+            await expect(cta).toBeEnabled();
+
+            const since = await eventSeq(page);
+            await cta.click();
+            await expect.poll(() => sync.bodies.length).toBe(1);
+            const reload = page.waitForRequest((req) => sync.answered && isSummaryReport(req), {timeout: 30_000});
+            sync.release();
+            await reload;
+            const synced = await waitForEvent(page, 'fx.rates.synced', {since, timeout: 30_000});
+            expect(synced.detail).toMatchObject({origin: 'dashboard-banner', pairs: ['EUR-USD'], outcome: 'ok', stillStale: false});
+            await expect(staleFxRow(page), 'the row is gone with the stale pair').toHaveCount(0);
         } finally {
             sync.release();
             await page.unrouteAll({behavior: 'ignoreErrors'});

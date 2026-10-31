@@ -1898,7 +1898,7 @@
                         showMainDelta={primaryMode === 'price'}
                         mainPointContext={primaryMode === 'calendar-return' ? calendarReturnView.contextByDate : undefined}
                         onPointClick={(date, _value) => primaryMode === 'price' && fxDataEditorRef?.scrollToDate(date)}
-                        staleLabel={$t('chart.tooltip.stale')}
+                        staleLabel={(days) => $t('chart.tooltip.stale', {values: {days}})}
                         fxStaleLabel={$t('chart.tooltip.fxStale')}
                     />
                 </div>
