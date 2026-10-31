@@ -36,6 +36,7 @@
         buildDeltaHtml,
         buildEventScatterGroups,
         buildStaleTooltipHtml,
+        type StaleLabel,
         bucketSpanUpTo,
         computeGhostSeries,
         computeZoomWindow,
@@ -148,10 +149,10 @@
         onDblClick?: (date: string, value: number) => void;
         /** Called on double-click on an event marker (date, eventType) — for editor scroll */
         onEventDblClick?: (date: string, eventType: string) => void;
-        /** Translated label for stale indicator in tooltip (e.g. "Stale: {days}d") — receives `{days}` placeholder */
-        staleLabel?: string;
-        /** Translated label for FX stale indicator (e.g. "FX rate: {days}d old") — receives `{days}` placeholder */
-        fxStaleLabel?: string;
+        /** Translated label for the stale indicator in the tooltip: a function of the days (a plural), or a template with a `{days}` placeholder */
+        staleLabel?: StaleLabel;
+        /** Translated label for the FX stale indicator: a function of the days, or a template with a `{days}` placeholder */
+        fxStaleLabel?: StaleLabel;
         /** Display currency code (e.g. "EUR") — used for main label suffix when FX conversion active */
         displayCurrency?: string;
         /** Display currency flag emoji (e.g. "🇪🇺") — pre-computed by parent */

@@ -8,7 +8,7 @@
   - Table stays period-based only (no holdings snapshot semantics mixed in).
 -->
 <script lang="ts">
-    import {onMount} from 'svelte';
+    import {onMount, untrack} from 'svelte';
     import {goto} from '$app/navigation';
     import {ExternalLink, Layers} from 'lucide-svelte';
     import {_} from '$lib/i18n';
@@ -66,9 +66,22 @@
         onAnalyze?: (assetId: number) => void;
         /** Asset whose lot-analysis panel is open — its row stays tinted (F9). */
         analyzedAssetId?: number | null;
+        /** Show a checkbox per row, to draw the positions chart under Period too (FB-12). Off by default: the table behaves as it always did. */
+        selectable?: boolean;
+        /** Position keys (`makePositionKey`) selected by the parent. Seed and follow the table's selection WITHOUT calling `onSelectionChange` back; unknown keys are ignored. */
+        selectedKeys?: string[];
+        /** A user change of the selection: the selected rows in the table's current row order, `[]` when none is left. */
+        onSelectionChange?: (rows: SelectedPosition[]) => void;
     }
 
-    let {positions = [], holdings = [], displayCurrency = 'EUR', brokers = [], onAnalyze, analyzedAssetId = null}: Props = $props();
+    /** One selected row, as `onSelectionChange` reports it (the same shape as the Portfolio table's). */
+    export interface SelectedPosition {
+        key: string;
+        assetId: number;
+        brokerId: number | null;
+    }
+
+    let {positions = [], holdings = [], displayCurrency = 'EUR', brokers = [], onAnalyze, analyzedAssetId = null, selectable = false, selectedKeys = undefined, onSelectionChange}: Props = $props();
 
     let tableRef: DataTable<DisplayRow> | undefined = $state(undefined);
     let tableWrapperEl: HTMLDivElement | undefined = $state(undefined);
@@ -217,6 +230,43 @@
         if (row.assetId == null) return;
         void goto(`/assets/${row.assetId}`);
     }
+
+    // Row selection (FB-12): the table's row ids are `pos-<broker>-<asset>`, the chart's keys `makePositionKey(asset, broker)`.
+    // `appliedKeys` is what the table holds; `syncingSelection` mutes the callback while the parent's keys are pushed in.
+    // Both are plain variables on purpose: the sync effect must not re-run because of them.
+    let syncingSelection = false;
+    const positionKeyOf = (row: DisplayRow): string => makePositionKey(row.assetId, row.brokerId);
+    const seedRowIds: string[] = untrack(() => displayRows.filter((row) => (selectedKeys ?? []).includes(positionKeyOf(row))).map((row) => row.key));
+    let appliedKeys: string[] = untrack(() => displayRows.filter((row) => seedRowIds.includes(row.key)).map(positionKeyOf));
+
+    function sameKeySet(a: string[], b: string[]): boolean {
+        return a.length === b.length && a.every((key) => b.includes(key));
+    }
+
+    function handleTableSelectionChange(selectedIds: string[]): void {
+        const selected = new Set(selectedIds);
+        const rowById = new Map(displayRows.map((row) => [row.key, row]));
+        // Table order (the current sort), not click order; ids that are not rows are dropped.
+        const orderedRows = (tableRef?.getSortedRowIds() ?? displayRows.map((row) => row.key)).filter((id) => selected.has(id) && rowById.has(id)).map((id) => rowById.get(id)!);
+        appliedKeys = orderedRows.map(positionKeyOf);
+        if (syncingSelection) return;
+        onSelectionChange?.(orderedRows.map((row) => ({key: positionKeyOf(row), assetId: row.assetId, brokerId: row.brokerId})));
+    }
+
+    $effect(() => {
+        if (!tableRef || selectedKeys === undefined) return;
+        const wanted = displayRows.filter((row) => selectedKeys.includes(positionKeyOf(row)));
+        const validKeys = wanted.map(positionKeyOf);
+        if (sameKeySet(validKeys, appliedKeys)) return;
+        syncingSelection = true;
+        try {
+            tableRef.clearSelection();
+            for (const row of wanted) tableRef.toggleRowSelectionById(row.key);
+        } finally {
+            syncingSelection = false;
+        }
+        appliedKeys = validKeys;
+    });
 
     const rowActions: RowAction<DisplayRow>[] = [
         {
@@ -455,8 +505,10 @@
         {columns}
         getRowId={(row) => row.key}
         storageKey="dashboard-performance-v2"
-        enableSelection={false}
-        selectionMode="none"
+        enableSelection={selectable}
+        selectionMode={selectable ? 'multi' : 'none'}
+        initialSelectedIds={selectable ? seedRowIds : undefined}
+        onSelectionChange={selectable ? handleTableSelectionChange : undefined}
         enableActions={true}
         enablePagination={true}
         defaultPageSize={25}

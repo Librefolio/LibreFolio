@@ -2713,7 +2713,7 @@
                             hideViewModeToggle={primaryMode === 'calendar-return'}
                             showMainDelta={primaryMode === 'price'}
                             mainPointContext={calendarPointContext}
-                            staleLabel={$t('chart.tooltip.stale')}
+                            staleLabel={(days) => $t('chart.tooltip.stale', {values: {days}})}
                             fxStaleLabel={$t('chart.tooltip.fxStale')}
                             displayCurrency={primaryMode === 'price' && displayCurrency !== assetInfo?.currency ? displayCurrency : undefined}
                             displayCurrencyFlag={primaryMode === 'price' && displayCurrency !== assetInfo?.currency ? getCurrencyInfo(displayCurrency).flag_emoji : undefined}

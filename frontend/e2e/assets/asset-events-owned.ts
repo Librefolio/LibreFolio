@@ -152,7 +152,7 @@ export async function snapshot(page: Page, assetId: number): Promise<Record<numb
 export async function openEventsEditor(page: Page, asset: OwnedAsset): Promise<Locator> {
     // The page polls POST /assets/prices/current, which may ask live providers and write today's price
     // into the shared database. Nothing here is about live prices: it is answered locally.
-    await page.route('**/api/v1/assets/prices/current', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
+    await page.route('**/api/v1/assets/prices/current*', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
     // A full page load: the range in the URL is read once, when the app starts.
     await navigateTo(page, `/assets/${asset.id}?start=${daysAgoIso(40)}&end=${todayIso()}`);
     // The editor is handed the events the page loaded: it is only as ready as the page.

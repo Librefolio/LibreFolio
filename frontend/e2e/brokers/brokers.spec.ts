@@ -5,6 +5,8 @@ import {eventSeq, waitForEvent, waitForSettled} from '../fixtures/app-events';
 import {deleteDisposableUser, registerDisposableUser, skipDueFlowsExcept, type DisposableUser} from '../fixtures/onboarding-accounts';
 import {TEST_USER} from '../fixtures/test-users';
 import {uniqueSuffix} from '../fixtures/unique';
+import {t} from '../fixtures/i18n-data';
+import {pageLanguage} from '../fixtures/sync-overwrite';
 
 /** A disposable account, and the ids of the brokers it created that are still the teardown's to delete. */
 type DisposableOwner = {user: DisposableUser; brokerIds: number[]};
@@ -177,6 +179,14 @@ test.describe('Brokers', () => {
         test('refresh button is visible', async ({page}) => {
             await navigateTo(page, '/brokers');
             await expect(page.getByTestId('brokers-refresh')).toBeVisible();
+        });
+
+        test('refresh button is named in the interface language, as the other pages’ Refresh (Y-15)', async ({page}) => {
+            await navigateTo(page, '/brokers');
+            const refresh = page.getByTestId('brokers-refresh');
+            await expect(refresh).toBeVisible();
+            // The catalogue's `dashboard.syncData`, in the language of the page: not an English literal in the markup.
+            await expect(refresh).toHaveAttribute('title', t(await pageLanguage(page), 'dashboard.syncData'));
         });
     });
 
