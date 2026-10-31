@@ -99,6 +99,7 @@ ALLOWED_WHEN_BLOCKED = frozenset(
         wake.wake_sync,
         # The hosting panel's status of the instance, with its own token: whether the customer has activated it (H-61, R1)
         panel.get_panel_status,
+        panel.get_panel_metrics,
         # The panel's restore, with its ticket instead of a session (H-62): past the ticket each route answers 423
         # instance_blocked itself, so a caller without a ticket learns nothing of the block
         *_PANEL_RESTORE_ROUTES,
@@ -135,6 +136,7 @@ ALLOWED_WHEN_AWAITING_RESTORE = frozenset(
         instance.get_instance_config,
         wake.wake_sync,
         panel.get_panel_status,
+        panel.get_panel_metrics,
         backup_panel.start_panel_backup,
         backup_panel.get_panel_backup_job,
         backup_panel.download_panel_backup,

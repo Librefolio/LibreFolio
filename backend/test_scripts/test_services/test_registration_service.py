@@ -138,7 +138,12 @@ REGISTRATION_VARIABLE = "LIBREFOLIO_REGISTRATION"
 MAX_USERS_VARIABLE = "LIBREFOLIO_MAX_USERS"
 PUBLIC_URL_VARIABLE = "LIBREFOLIO_PUBLIC_URL"
 BILLING_URL_VARIABLE = "LIBREFOLIO_BILLING_URL"
-ACCOUNTS_VARIABLES = (REGISTRATION_VARIABLE, MAX_USERS_VARIABLE, PUBLIC_URL_VARIABLE, BILLING_URL_VARIABLE)
+#: CL-10 (checkpoint 1 of workstream H): the language of the instance before an administrator chose one.
+DEFAULT_LANGUAGE_VARIABLE = "LIBREFOLIO_DEFAULT_LANGUAGE"
+#: CL-13: the currency and the timezone of the instance before an administrator chose them (cases in ``test_default_currency_timezone_variables.py``).
+DEFAULT_CURRENCY_VARIABLE = "LIBREFOLIO_DEFAULT_CURRENCY"
+DEFAULT_TIMEZONE_VARIABLE = "LIBREFOLIO_DEFAULT_TIMEZONE"
+ACCOUNTS_VARIABLES = (REGISTRATION_VARIABLE, MAX_USERS_VARIABLE, PUBLIC_URL_VARIABLE, BILLING_URL_VARIABLE, DEFAULT_LANGUAGE_VARIABLE, DEFAULT_CURRENCY_VARIABLE, DEFAULT_TIMEZONE_VARIABLE)
 ENV_EXAMPLE = PROJECT_ROOT / ".env.example"
 SECTION_BAR = re.compile(r"# =+")
 
@@ -500,6 +505,51 @@ def test_max_users_refuses_anything_but_a_positive_integer(monkeypatch: pytest.M
         max_users()
 
 
+def _default_language_reader():
+    """``backend.app.config.accounts.default_language``, or a red of CL-10 when it is not there yet (imported at call time, so the rest of this file is still collected)."""
+    from backend.app.config import accounts  # noqa: PLC0415 — resolved by the test that needs it
+
+    reader = getattr(accounts, "default_language", None)
+    if reader is None:
+        pytest.fail("red until CL-10: backend.app.config.accounts has no default_language", pytrace=False)
+    return reader
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        pytest.param(None, None, id="unset"),
+        pytest.param("", None, id="empty"),
+        pytest.param("   ", None, id="blank"),
+        pytest.param("en", "en", id="en"),
+        pytest.param("it", "it", id="it"),
+        pytest.param("fr", "fr", id="fr"),
+        pytest.param("es", "es", id="es"),
+        pytest.param("IT", "it", id="upper-case"),
+        pytest.param("Fr", "fr", id="mixed-case"),
+        pytest.param("  es\t", "es", id="stripped"),
+    ],
+)
+def test_default_language_reads_the_variable(monkeypatch: pytest.MonkeyPatch, raw: Optional[str], expected: Optional[str]) -> None:
+    """CL-10a: ``LIBREFOLIO_DEFAULT_LANGUAGE``: no language when unset, empty or blank; one of ``en``, ``it``, ``fr``, ``es`` otherwise, case-insensitive, stripped, returned lower-case."""
+    reader = _default_language_reader()
+    _set_or_unset(monkeypatch, DEFAULT_LANGUAGE_VARIABLE, raw)
+
+    value = reader()
+    assert value == expected and type(value) is type(expected), f"{DEFAULT_LANGUAGE_VARIABLE}={raw!r} must give {expected!r}, got {value!r}"
+
+
+@pytest.mark.parametrize("raw", ["de", "english", "it-IT", "1", "i t", "ita"])
+def test_default_language_refuses_anything_but_the_four_languages(monkeypatch: pytest.MonkeyPatch, raw: str) -> None:
+    """CL-10b: any other value is a ``ValueError`` naming the variable, never a language and never a silent fallback to English."""
+    reader = _default_language_reader()
+    monkeypatch.setenv(DEFAULT_LANGUAGE_VARIABLE, raw)
+
+    with pytest.raises(ValueError) as refused:
+        reader()
+    assert DEFAULT_LANGUAGE_VARIABLE in str(refused.value), f"the error must name {DEFAULT_LANGUAGE_VARIABLE}: {refused.value!r}"
+
+
 URL_ACCESSORS = [pytest.param(public_url, PUBLIC_URL_VARIABLE, id="public_url"), pytest.param(billing_url, BILLING_URL_VARIABLE, id="billing_url")]
 
 
@@ -559,13 +609,13 @@ def _env_example_section(title: str) -> list[str]:
 
 
 def test_each_variable_is_a_commented_line_of_the_accounts_section_of_env_example() -> None:
-    """Contract 3: the four variables are listed in ``.env.example``'s Accounts section, commented: an install that copies the file sets none of them."""
+    """Contract 3: the variables are listed in ``.env.example``'s Accounts section, commented: an install that copies the file sets none of them. CL-10 adds ``LIBREFOLIO_DEFAULT_LANGUAGE`` to them, CL-13 ``LIBREFOLIO_DEFAULT_CURRENCY`` and ``LIBREFOLIO_DEFAULT_TIMEZONE`` (red until the lines are written)."""
     print_section("Contract 3: .env.example, Accounts")
     section = _env_example_section("Accounts")
 
     missing = [name for name in ACCOUNTS_VARIABLES if not any(re.fullmatch(rf"#\s*{name}=.*", line) for line in section)]
     assert not missing, f"the Accounts section of {ENV_EXAMPLE.name} must list {missing} as commented lines ('# NAME=default'): {section}"
-    print_success("LIBREFOLIO_REGISTRATION, LIBREFOLIO_MAX_USERS, LIBREFOLIO_PUBLIC_URL, LIBREFOLIO_BILLING_URL: commented, under Accounts")
+    print_success("LIBREFOLIO_REGISTRATION, LIBREFOLIO_MAX_USERS, LIBREFOLIO_PUBLIC_URL, LIBREFOLIO_BILLING_URL, LIBREFOLIO_DEFAULT_LANGUAGE, LIBREFOLIO_DEFAULT_CURRENCY, LIBREFOLIO_DEFAULT_TIMEZONE: commented, under Accounts")
 
 
 # =============================================================================

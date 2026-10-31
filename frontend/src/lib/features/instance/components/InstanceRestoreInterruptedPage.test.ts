@@ -12,25 +12,35 @@
  *   - the root `instance-restore-interrupted` holds a `role="alert"` section (an error: something is broken) with an
  *     `h1` reading `instance.restoreInterrupted.title` and the paragraph `instance-restore-interrupted-message`
  *     reading `instance.restoreInterrupted.message`; the root also holds the paragraph `instance-restore-interrupted-admin`
- *     (`instance.restoreInterrupted.adminHint`), the docs link `instance-restore-interrupted-docs` named
- *     `instance.restoreInterrupted.docs`, the note `instance-restore-interrupted-auto`
+ *     (`instance.restoreInterrupted.adminHint`), the note `instance-restore-interrupted-auto`
  *     (`instance.restoreInterrupted.autoReload`) and the button `instance-restore-interrupted-retry` named
  *     `instance.awaitingRestore.retry` (the key of the awaiting page, reused);
- *   - the docs link is an anchor to the admin CLI page's anchor `#backup-pending-unreadable`, built by the app's docs-URL
- *     rule — the one of `DocsLink` and of `connectionSecurityDocsUrl` (`$lib/utils/security/connectionSecurity`):
- *     `/mkdocs/` + the language prefix (none in English, `<lang>/` otherwise, from `currentLanguage`) + the path
- *     `admin/cli_backup/#backup-pending-unreadable` — opened in a new tab (`target="_blank"`,
- *     `rel="noopener noreferrer"`);
- *   - nothing else to act on: the retry is the only button, no form, no field, no logout; the docs link is the only
- *     link, and, when the instance has a usable support address, the support link (D7) is the other one;
- *   - the five new keys have a string in all four shipped catalogues (`$lib/i18n/{en,it,fr,es}.json`);
+ *   - FB-27 + checkpoint 2 triage (who can solve an interrupted restore alone?): the recovery is a CLI command on the
+ *     server, so the help depends on WHO reads the page. The prop `selfHosted?: boolean`, by default
+ *     `selfHostedConfirmed()` (`$lib/features/instance/profile`: true only once the server answered `selfhosted`), picks it:
+ *       - `selfHosted: false` (a managed instance, or the server has not answered): NO docs link
+ *         (`instance-restore-interrupted-docs` absent: the customer cannot run the command, support is the help) and the
+ *         support link with the report, or the `instance-restore-interrupted-support-missing` line without an address;
+ *       - `selfHosted: true`: the docs link is BACK, `<a data-testid="instance-restore-interrupted-docs" target="_blank"
+ *         rel="noopener noreferrer">` named `instance.restoreInterrupted.docs`, to `/mkdocs/<lang prefix>admin/<anchor>`
+ *         (prefix `it/`, `fr/`, `es/`, none in English, from `currentLanguage`; anchor `cli_backup/#backup-pending-unreadable`
+ *         for reason restore_state / null / absent, `hosting_panel_backups/#restore-owner-pending` for owner_assignment).
+ *         The support link with the report is still there when the instance has a usable address; there is NEVER the
+ *         support-missing line (the administrator IS the host);
+ *   - nothing else to act on: the retry is the only button, no form, no field, no logout; the links are the docs link
+ *     (self-hosted only) and the support link (D7, only with a usable support address);
+ *   - the four keys have a string in all four shipped catalogues (`$lib/i18n/{en,it,fr,es}.json`);
  *   - D7, the support link: when the instance has a support address — the prop `supportUrl`, by default
  *     `instanceConfig.config.support_url` (`GET /system/instance`) — the page shows the anchor
  *     `instance-restore-interrupted-support` named `instance.restoreInterrupted.support` (a sixth key, all four
  *     catalogues). The address is read through the app's `supportChannel(value, {githubFallback: false})`
- *     (`$lib/components/assets/assetSearchReport`): a mailto gives `href="mailto:<address>"`, a page its normalized
- *     `url`, opened in a new tab (`target="_blank"`, `rel="noopener noreferrer"`). Without a usable address (null,
- *     empty, `javascript:…`, a mailto with two addresses) there is no support link at all, and no GitHub fallback;
+ *     (`$lib/features/support/supportChannel`). FB-27: the link carries the report of the problem: its href is
+ *     `reportHref(channel, buildCheckReport({checkId: 'platform.restore_interrupted', severity: 'error', instanceAddress:
+ *     window.location.origin, appVersion: APP_VERSION, date: new Date()}))` — a `mailto:` with subject and body for a mail
+ *     address, the page with `title` and `body` in its query for a page, opened in a new tab (`target="_blank"`,
+ *     `rel="noopener noreferrer"`) — and the report is in the href only, never in the text. Without a usable address (null,
+ *     empty, `javascript:…`, a mailto with two addresses) there is no link at all, and no GitHub fallback: the paragraph
+ *     `instance-restore-interrupted-support-missing`, named `instance.restoreInterrupted.supportMissing`, says so instead;
  *   - the background is the login page's own `AnimatedBackground` (`$lib/components/ui/AnimatedBackground.svelte`,
  *     `data-testid="animated-background"`), mounted inside the page and imported from that module, never a copy;
  *   - clicking retry calls `onretry`; by default `onretry` is `window.location.reload()`;
@@ -72,6 +82,17 @@
  * would catch a missing it/fr/es entry). Red until H5-3: the page has no `reason` prop (the owner cases read today's
  * keys and link) and the sources have no owner keys.
  *
+ * FB-27 (a «guide or support» help for the checks): the docs cases of this file are now «no docs link» cases, the support
+ * cases check the report in the href (the date is frozen, only `Date` is faked, so the href can be compared whole), and the
+ * new key `instance.restoreInterrupted.supportMissing` is read in the four catalogues and in the four `instance` sources.
+ * Red until FB-27: the page still links the documentation, its support link is the bare address and it has no missing note.
+ *
+ * The real store holds `profile: 'selfhosted'` once loaded (its defaults), so every case about the managed page passes
+ * `selfHosted: false` explicitly (`mountPolling` does by default): none depends on the store's profile or on the order of
+ * the cases. The cases of the prop's DEFAULT load the store with the profile they need.
+ * Red until the self-hosted help lands: the page has no `selfHosted` prop, so the docs link never appears and the
+ * support-missing line stays where a self-hosted administrator must not see it.
+ *
  * Registered in `front_component_unit` (`scripts/test_runner/_frontend_utility.py`, action `component-unit`).
  */
 import {afterEach, beforeAll, beforeEach, describe, expect, it, onTestFinished, vi} from 'vitest';
@@ -85,8 +106,9 @@ import {cleanup, fireEvent, render, screen, setupI18n, within} from '$test/compo
 import {assertEffectsRun} from '$test/runes.svelte';
 import {_ as translate} from '$lib/i18n';
 import {currentLanguage} from '$lib/stores/app/language';
-import {CONNECTION_SECURITY_DOCS_PATH, connectionSecurityDocsUrl} from '$lib/utils/security/connectionSecurity';
-import {supportChannel} from '$lib/components/assets/assetSearchReport';
+import {supportChannel, reportHref} from '$lib/features/support/supportChannel';
+import {buildCheckReport} from '$lib/features/instance/checkSupportReport';
+import {APP_VERSION} from '$lib/version';
 import {DEFAULT_INSTANCE_CONFIG, instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
 import en from '$lib/i18n/en.json';
 import itCatalogue from '$lib/i18n/it.json';
@@ -100,12 +122,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('$lib/api', () => ({zodiosApi: {get_instance_config_api_v1_system_instance_get: mocks.getInstanceConfig}}));
 
-/** The five keys of this page. */
+/** The four keys of the page's text. */
 const NEW_KEYS = {
     title: 'instance.restoreInterrupted.title',
     message: 'instance.restoreInterrupted.message',
     adminHint: 'instance.restoreInterrupted.adminHint',
-    docs: 'instance.restoreInterrupted.docs',
     autoReload: 'instance.restoreInterrupted.autoReload',
 } as const;
 /** H5-3: the three keys of the `owner_assignment` reason. */
@@ -114,10 +135,14 @@ const OWNER_KEYS = {
     message: 'instance.restoreInterrupted.ownerMessage',
     adminHint: 'instance.restoreInterrupted.ownerAdminHint',
 } as const;
+/** The label of the docs link, shown to the administrator of a self-hosted instance. */
+const DOCS_KEY = 'instance.restoreInterrupted.docs';
 /** The retry label: the awaiting page's key, reused. */
 const RETRY_KEY = 'instance.awaitingRestore.retry';
 /** D7: the label of the support link, a sixth key of this page. */
 const SUPPORT_KEY = 'instance.restoreInterrupted.support';
+/** FB-27: the note shown instead of the support link when the instance names no usable address. */
+const SUPPORT_MISSING_KEY = 'instance.restoreInterrupted.supportMissing';
 
 /** A usable address the store holds in the support cases: a link to it means the page ignored its prop. */
 const STORE_SUPPORT_URL = 'mailto:store-support@example.org';
@@ -127,17 +152,20 @@ const DEFAULT_POLL_MS = 30_000;
 /** A short interval for the injected cases: the arithmetic stays readable. */
 const POLL_MS = 1_000;
 
-/** The admin guide's section on an unreadable restore state: a path below `/mkdocs/`, no language, no leading `/`. */
-const DOCS_PATH = 'admin/cli_backup/#backup-pending-unreadable';
-const DOCS_ANCHOR = '#backup-pending-unreadable';
-/** H5-3: the owner reason's docs path, the section of the panel guide on an owner with no account. */
-const OWNER_DOCS_PATH = 'admin/hosting_panel_backups/#restore-owner-pending';
+/** FB-27: the instant the report is written at (only `Date` is faked), so a href can be compared whole. */
+const FROZEN = new Date('2026-10-28T09:30:15.250Z');
 
-/**
- * The app's docs-URL rule (`DocsLink`'s `getDocsUrl`, `connectionSecurityDocsUrl`): `/mkdocs/`, the language prefix,
- * the path. Each case checks first that it is the rule of the exported helper, so a change of the app's rule shows here.
- */
-const docsUrl = (lang: string, path: string): string => `/mkdocs/${lang && lang !== 'en' ? `${lang}/` : ''}${path}`;
+function freezeDate(): void {
+    vi.useFakeTimers({toFake: ['Date']});
+    vi.setSystemTime(FROZEN);
+}
+
+/** FB-27: the href the contract builds for the support link of this page, from the channel of `address`. */
+function reportLink(address: string): string {
+    const channel = supportChannel(address, {githubFallback: false});
+    if (channel === null) throw new Error(`premise: ${address} is not a usable support address`);
+    return reportHref(channel, buildCheckReport({checkId: 'platform.restore_interrupted', severity: 'error', instanceAddress: window.location.origin, appVersion: APP_VERSION, date: new Date(FROZEN)}));
+}
 
 // ---------------------------------------------------------------------------
 // Marker locale — the pattern of DataEditor.test.ts (W-B8).
@@ -169,7 +197,7 @@ function catalogueGaps(keys: readonly string[]): Record<string, string[]> {
 /** Switch svelte-i18n to the marker locale: every key of the English catalogue, and each key of this page, reads as its marker. */
 async function useMarkerLocale(): Promise<void> {
     const messages: Record<string, string> = Object.fromEntries(stringKeysOf(en).map((key) => [key, marked(key)]));
-    for (const key of [...Object.values(NEW_KEYS), ...Object.values(OWNER_KEYS), RETRY_KEY, SUPPORT_KEY]) messages[key] = marked(key);
+    for (const key of [...Object.values(NEW_KEYS), ...Object.values(OWNER_KEYS), RETRY_KEY, SUPPORT_KEY, SUPPORT_MISSING_KEY, DOCS_KEY]) messages[key] = marked(key);
     addMessages(MARKER_LOCALE, messages);
     await setupI18n(MARKER_LOCALE);
 }
@@ -186,25 +214,17 @@ function useFakeTimers(): void {
 /** A `fetchInterrupted` that never answers: the cases about what the page shows. */
 const neverAnswers = (): Promise<boolean | undefined> => new Promise(() => {});
 
-/** Mount with an injected `fetchInterrupted` and `onretry`, and return them; `extra` adds props (the support address). */
+/**
+ * Mount with an injected `fetchInterrupted` and `onretry`, and return them; `extra` adds props (the support address, the
+ * reason, `selfHosted`). `selfHosted` is false unless `extra` says otherwise: the managed page, whatever the store's profile.
+ */
 function mountPolling(fetchInterrupted: () => Promise<boolean | undefined>, pollMs = POLL_MS, extra: Record<string, unknown> = {}) {
     const spy = vi.fn(fetchInterrupted).mockName('fetchInterrupted');
     const onretry = vi.fn().mockName('onretry');
-    const view = render(InstanceRestoreInterruptedPage, {props: {fetchInterrupted: spy, onretry, pollMs, ...extra}});
+    const view = render(InstanceRestoreInterruptedPage, {props: {fetchInterrupted: spy, onretry, pollMs, selfHosted: false, ...extra}});
     flushSync();
     expect(screen.getByTestId('instance-restore-interrupted'), 'Barrier: the page is mounted').toBeInTheDocument();
     return {fetchInterrupted: spy, onretry, view};
-}
-
-/** The docs link of the page: an anchor to `href`, in a new tab, without a window.opener nor a referrer. */
-function expectDocsLink(link: HTMLElement, href: string): void {
-    expect(link.tagName, 'the docs link is an anchor').toBe('A');
-    expect(link.getAttribute('href'), 'the admin guide, at the unreadable-state section').toBe(href);
-    expect(link.getAttribute('href') ?? '', 'the anchor of the section').toMatch(/#backup-pending-unreadable$/);
-    expect(link, 'in a new tab').toHaveAttribute('target', '_blank');
-    const rel = (link.getAttribute('rel') ?? '').split(/\s+/);
-    expect(rel, 'without a window.opener').toContain('noopener');
-    expect(rel, 'without a referrer').toContain('noreferrer');
 }
 
 /** The sources of the `instance` subsystem, by language: what the catalogue build reads (no fallback applied). */
@@ -219,28 +239,54 @@ function sourceGaps(key: string): string[] {
     });
 }
 
-/** The docs link of the owner reason: an anchor to the owner section of the panel guide, in a new tab. */
-function expectOwnerDocsLink(link: HTMLElement, href: string): void {
-    expect(link.tagName, 'the docs link is an anchor').toBe('A');
-    expect(link.getAttribute('href'), 'the panel guide, the section on the owner').toBe(href);
-    expect(link.getAttribute('href') ?? '', 'the anchor of the section').toContain('#restore-owner-pending');
-    expect(link, 'in a new tab').toHaveAttribute('target', '_blank');
-    const rel = (link.getAttribute('rel') ?? '').split(/\s+/);
-    expect(rel, 'without a window.opener').toContain('noopener');
-    expect(rel, 'without a referrer').toContain('noreferrer');
-}
-
 /** The real store, loaded with an injected answer: `support_url` is the instance's support address. */
 async function useInstanceSupportUrl(supportUrl: string | null): Promise<void> {
     await instanceConfig.load({force: true, fetchConfig: async () => ({...DEFAULT_INSTANCE_CONFIG, support_url: supportUrl})});
     expect(instanceConfig.config.support_url, 'precondition: the store holds the support address').toBe(supportUrl);
 }
 
-/** The support link of the page: an anchor named by its key, to `href`. */
+/** The support link of the page: an anchor named by its key, to `href` (the report is in it). */
 function expectSupportLink(link: HTMLElement, href: string): void {
     expect(link.tagName, 'the support link is an anchor').toBe('A');
     expect(link).toHaveAccessibleName(marked(SUPPORT_KEY));
-    expect(link.getAttribute('href'), 'where the instance says support is').toBe(href);
+    expect(link.getAttribute('href'), 'where the instance says support is, with the report').toBe(href);
+}
+
+/** FB-27: no way out but the retry: no link of any kind, and the paragraph that says the instance names no support. */
+function expectSupportMissing(root: HTMLElement): void {
+    const missing = within(root).getByTestId('instance-restore-interrupted-support-missing');
+    expect(missing.tagName, 'a paragraph, not a link').toBe('P');
+    expect(text(missing)).toBe(marked(SUPPORT_MISSING_KEY));
+    expect(within(root).queryByTestId('instance-restore-interrupted-support'), 'no support link').toBeNull();
+    expect(document.body.querySelectorAll('a'), 'no link of any kind: no docs, no GitHub fallback').toHaveLength(0);
+    expect(document.body.innerHTML, 'no GitHub fallback').not.toContain('github.com');
+}
+
+/** The app's docs-URL rule (`DocsLink`): `/mkdocs/`, the language prefix (none in English), the path. */
+const docsUrl = (lang: string, path: string): string => `/mkdocs/${lang && lang !== 'en' ? `${lang}/` : ''}${path}`;
+/** The guide's section on an unreadable restore state (reason restore_state, null or absent), and on an owner with no account. */
+const RESTORE_STATE_DOCS_PATH = 'admin/cli_backup/#backup-pending-unreadable';
+const OWNER_DOCS_PATH = 'admin/hosting_panel_backups/#restore-owner-pending';
+const DOCS_LANGUAGES = ['en', 'it', 'fr', 'es'] as const;
+
+/** The docs link of the self-hosted page: an anchor to `href`, in a new tab, without a window.opener nor a referrer. */
+function expectDocsLink(link: HTMLElement, href: string): void {
+    expect(link.tagName, 'the docs link is an anchor').toBe('A');
+    expect(link.getAttribute('href'), 'the guide section of the reason, in the interface language').toBe(href);
+    expect(link, 'in a new tab').toHaveAttribute('target', '_blank');
+    const rel = (link.getAttribute('rel') ?? '').split(/\s+/);
+    expect(rel, 'without a window.opener').toContain('noopener');
+    expect(rel, 'without a referrer').toContain('noreferrer');
+}
+
+/** The managed page: no docs link, no link to the documentation anywhere; the retry painted first so the absence means something. */
+function expectNoDocs(root: HTMLElement, why: string): void {
+    expect(within(root).getByTestId('instance-restore-interrupted-retry'), `${why}: Barrier: the page painted`).toBeVisible();
+    expect(within(root).queryByTestId('instance-restore-interrupted-docs'), `${why}: no docs link`).toBeNull();
+    expect(
+        [...document.body.querySelectorAll('a')].filter((link) => (link.getAttribute('href') ?? '').includes('/mkdocs/')),
+        `${why}: no link to the documentation`,
+    ).toEqual([]);
 }
 
 beforeAll(async () => {
@@ -264,12 +310,20 @@ afterEach(async () => {
 });
 
 describe('InstanceRestoreInterruptedPage — the catalogues', () => {
-    it('has a string for each of its five keys in all four shipped catalogues', () => {
+    it('has a string for each of its four keys in all four shipped catalogues', () => {
         expect(catalogueGaps(Object.values(NEW_KEYS))).toEqual({});
     });
 
     it('D7: has a string for the support link key in all four shipped catalogues', () => {
         expect(catalogueGaps([SUPPORT_KEY])).toEqual({});
+    });
+
+    it('FB-27: has a string for the support-missing key in all four shipped catalogues', () => {
+        expect(catalogueGaps([SUPPORT_MISSING_KEY])).toEqual({});
+    });
+
+    it('has a string for the docs link key (shown to a self-hosted administrator) in all four shipped catalogues', () => {
+        expect(catalogueGaps([DOCS_KEY])).toEqual({});
     });
 
     it('reuses the retry key of the awaiting page, present in all four catalogues', () => {
@@ -282,7 +336,7 @@ describe('InstanceRestoreInterruptedPage — the catalogues', () => {
 });
 
 describe('InstanceRestoreInterruptedPage — what it shows', () => {
-    it('reads its title, message, admin hint, docs label, note and retry label from the catalogue', () => {
+    it('reads its title, message, admin hint, note and retry label from the catalogue', () => {
         mountPolling(neverAnswers);
         expect(get(translate)(NEW_KEYS.title), 'control: the marker locale is live').toBe(marked(NEW_KEYS.title));
         const root = screen.getByTestId('instance-restore-interrupted');
@@ -290,7 +344,6 @@ describe('InstanceRestoreInterruptedPage — what it shows', () => {
         expect(text(within(root).getByRole('heading', {level: 1}))).toBe(marked(NEW_KEYS.title));
         expect(text(within(root).getByTestId('instance-restore-interrupted-message'))).toBe(marked(NEW_KEYS.message));
         expect(text(within(root).getByTestId('instance-restore-interrupted-admin'))).toBe(marked(NEW_KEYS.adminHint));
-        expect(within(root).getByTestId('instance-restore-interrupted-docs')).toHaveAccessibleName(marked(NEW_KEYS.docs));
         expect(text(within(root).getByTestId('instance-restore-interrupted-auto'))).toBe(marked(NEW_KEYS.autoReload));
         const retry = within(root).getByTestId('instance-restore-interrupted-retry');
         expect(retry.tagName, 'a real button').toBe('BUTTON');
@@ -306,64 +359,55 @@ describe('InstanceRestoreInterruptedPage — what it shows', () => {
         expect(within(alert).getByTestId('instance-restore-interrupted-message'), 'the message is inside the alert').toBeInTheDocument();
     });
 
-    it('links the admin guide at #backup-pending-unreadable, in English, by the app’s docs-URL rule', () => {
-        expect(docsUrl('en', CONNECTION_SECURITY_DOCS_PATH), 'premise: the rule is the exported helper’s').toBe(connectionSecurityDocsUrl('en'));
-        expect(get(currentLanguage), 'premise: the documentation language is English').toBe('en');
-        mountPolling(neverAnswers);
+    it('selfHosted false: has no docs link, in English or in another language: the customer is sent to support, not to a MkDocs page', async () => {
+        for (const language of ['en', 'it'] as const) {
+            currentLanguage.set(language);
+            await waitLocale(language);
+            try {
+                mountPolling(neverAnswers, POLL_MS, {supportUrl: 'mailto:help@example.org'});
+                const root = screen.getByTestId('instance-restore-interrupted');
+                // Presence barrier: the page painted its controls, so the absences below are not "nothing rendered yet"
+                expect(within(root).getByTestId('instance-restore-interrupted-retry')).toBeVisible();
+                expect(within(root).getByTestId('instance-restore-interrupted-support')).toBeVisible();
 
-        const link = within(screen.getByTestId('instance-restore-interrupted')).getByTestId('instance-restore-interrupted-docs');
-
-        expectDocsLink(link, docsUrl('en', DOCS_PATH));
-        expect(docsUrl('en', DOCS_PATH), 'the expected English href, spelled out').toBe(`/mkdocs/admin/cli_backup/${DOCS_ANCHOR}`);
-    });
-
-    it('the docs link follows the current language', async () => {
-        expect(docsUrl('it', CONNECTION_SECURITY_DOCS_PATH), 'premise: the rule is the exported helper’s').toBe(connectionSecurityDocsUrl('it'));
-        currentLanguage.set('it');
-        await waitLocale('it');
-        try {
-            mountPolling(neverAnswers);
-
-            const link = within(screen.getByTestId('instance-restore-interrupted')).getByTestId('instance-restore-interrupted-docs');
-
-            expectDocsLink(link, docsUrl('it', DOCS_PATH));
-            expect(docsUrl('it', DOCS_PATH), 'the expected Italian href, spelled out').toBe(`/mkdocs/it/admin/cli_backup/${DOCS_ANCHOR}`);
-        } finally {
-            currentLanguage.set('en');
-            await waitLocale('en');
+                expect(within(root).queryByTestId('instance-restore-interrupted-docs'), `${language}: no docs link`).toBeNull();
+                expect(
+                    [...document.body.querySelectorAll('a')].filter((link) => (link.getAttribute('href') ?? '').includes('/mkdocs/')),
+                    `${language}: no link to the documentation`,
+                ).toEqual([]);
+            } finally {
+                cleanup();
+                currentLanguage.set('en');
+                await waitLocale('en');
+            }
         }
     });
 
-    it('offers nothing to act on but the retry and the docs link when there is no support address: no logout, no form, no field', async () => {
+    it('offers nothing to act on but the retry when there is no support address: no link at all, no logout, no form, no field', async () => {
         await useInstanceSupportUrl(null);
         mountPolling(neverAnswers);
         const root = screen.getByTestId('instance-restore-interrupted');
-        // Presence barrier: the page painted its two controls, so the absences below are not "nothing rendered yet".
+        // Presence barrier: the page painted its control and the note, so the absences below are not "nothing rendered yet".
         const retry = within(root).getByTestId('instance-restore-interrupted-retry');
-        const docs = within(root).getByTestId('instance-restore-interrupted-docs');
         expect(retry).toBeVisible();
-        expect(docs).toBeVisible();
+        expectSupportMissing(root);
 
         expect(within(root).getAllByRole('button'), 'the retry is the only button').toEqual([retry]);
-        expect([...document.body.querySelectorAll('a')], 'no support address: the docs link is the only link').toEqual([docs]);
         expect(document.body.querySelectorAll('form, input, select, textarea'), 'no form, no field').toHaveLength(0);
         expect(screen.queryByTestId('instance-blocked-logout'), 'no logout button').toBeNull();
     });
 
-    it('D7: with a support address, the docs link and the support link are the only links, the retry still the only button', () => {
+    it('D7: with a support address, the support link is the only link, the retry still the only button, and there is no missing note', () => {
         mountPolling(neverAnswers, POLL_MS, {supportUrl: 'mailto:help@example.org'});
         const root = screen.getByTestId('instance-restore-interrupted');
         const retry = within(root).getByTestId('instance-restore-interrupted-retry');
-        const docs = within(root).getByTestId('instance-restore-interrupted-docs');
         const support = within(root).getByTestId('instance-restore-interrupted-support');
         expect(retry).toBeVisible();
-        expect(docs).toBeVisible();
         expect(support).toBeVisible();
 
         expect(within(root).getAllByRole('button'), 'the retry is the only button').toEqual([retry]);
-        const links = [...document.body.querySelectorAll('a')];
-        expect(links, 'two links').toHaveLength(2);
-        expect(new Set(links), 'the docs link and the support link').toEqual(new Set([docs, support]));
+        expect([...document.body.querySelectorAll('a')], 'the support link is the only link').toEqual([support]);
+        expect(within(root).queryByTestId('instance-restore-interrupted-support-missing'), 'no missing note when there is a link').toBeNull();
         expect(document.body.querySelectorAll('form, input, select, textarea'), 'no form, no field').toHaveLength(0);
         expect(screen.queryByTestId('instance-blocked-logout'), 'no logout button').toBeNull();
     });
@@ -382,25 +426,43 @@ describe('InstanceRestoreInterruptedPage — what it shows', () => {
         expect(source).toMatch(/import\s+AnimatedBackground\s+from\s+['"]\$lib\/components\/ui\/AnimatedBackground\.svelte['"]/);
         expect(source).toMatch(/<AnimatedBackground\b[^>]*\/?>/);
     });
+
+    it('decides the help from the prop selfHosted, whose default is selfHostedConfirmed(), never from a hand-made profile comparison', () => {
+        const source = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'InstanceRestoreInterruptedPage.svelte'), 'utf8');
+
+        expect(source).toMatch(/import\s+\{[^}]*\bselfHostedConfirmed\b[^}]*\}\s+from\s+['"]\$lib\/features\/instance\/profile['"]/);
+        expect(source).toMatch(/selfHosted\s*=\s*selfHostedConfirmed\(\)/);
+        expect(source, 'the profile is read through the shared helper').not.toMatch(/\.profile\s*[!=]==/);
+    });
 });
 
 describe('InstanceRestoreInterruptedPage — D7, the support link', () => {
     beforeEach(async () => {
+        freezeDate();
         // The store holds a different, usable address: a link to it means the page did not read its prop.
         await useInstanceSupportUrl(STORE_SUPPORT_URL);
     });
 
-    it('links a mailto support address as mailto:<address>', () => {
+    it('links a mailto support address as a mailto: with the report of the problem as subject and body', () => {
         const value = 'mailto:help@example.org';
         expect(supportChannel(value, {githubFallback: false}), 'premise: the app reads it as one mail address').toEqual({kind: 'mailto', address: 'help@example.org'});
         mountPolling(neverAnswers, POLL_MS, {supportUrl: value});
 
         const link = within(screen.getByTestId('instance-restore-interrupted')).getByTestId('instance-restore-interrupted-support');
 
-        expectSupportLink(link, 'mailto:help@example.org');
+        expectSupportLink(link, reportLink(value));
+        const href = link.getAttribute('href') ?? '';
+        expect(href, 'a mailto to the instance’s address').toMatch(/^mailto:help@example\.org\?subject=/);
+        const body = decodeURIComponent(/&body=(.*)$/.exec(href)?.[1] ?? '').split('\r\n');
+        expect(body).toContain('Check: platform.restore_interrupted');
+        expect(body).toContain('Severity: error');
+        expect(body).toContain(`Instance: ${window.location.origin}`);
+        expect(body).toContain(`LibreFolio ${APP_VERSION}`);
+        expect(body).toContain(`Date: ${FROZEN.toISOString()}`);
+        expect(link, 'a mailto opens in this tab').not.toHaveAttribute('target');
     });
 
-    it('links a support page at its normalized address, in a new tab, without a window.opener nor a referrer', () => {
+    it('links a support page at its normalized address with the report as title and body, in a new tab, without a window.opener nor a referrer', () => {
         const value = '  https://Support.Example.org  ';
         const channel = supportChannel(value, {githubFallback: false});
         expect(channel, 'premise: the app reads it as a page, normalized').toEqual({kind: 'page', url: 'https://support.example.org/'});
@@ -408,7 +470,11 @@ describe('InstanceRestoreInterruptedPage — D7, the support link', () => {
 
         const link = within(screen.getByTestId('instance-restore-interrupted')).getByTestId('instance-restore-interrupted-support');
 
-        expectSupportLink(link, 'https://support.example.org/');
+        expectSupportLink(link, reportLink(value));
+        const url = new URL(link.getAttribute('href') ?? '');
+        expect(`${url.origin}${url.pathname}`).toBe('https://support.example.org/');
+        expect(url.searchParams.get('title')).toContain('platform.restore_interrupted');
+        expect(url.searchParams.get('body')?.split('\n')).toContain('Check: platform.restore_interrupted');
         expect(link, 'in a new tab').toHaveAttribute('target', '_blank');
         const rel = (link.getAttribute('rel') ?? '').split(/\s+/);
         expect(rel, 'without a window.opener').toContain('noopener');
@@ -422,21 +488,32 @@ describe('InstanceRestoreInterruptedPage — D7, the support link', () => {
 
         const link = within(screen.getByTestId('instance-restore-interrupted')).getByTestId('instance-restore-interrupted-support');
 
-        expectSupportLink(link, 'https://help.example.org/librefolio');
+        expectSupportLink(link, reportLink('https://help.example.org/librefolio'));
         expect(link, 'a page: in a new tab').toHaveAttribute('target', '_blank');
     });
 
-    it('by default shows no support link when the instance names no support address', async () => {
+    it('by default shows no support link, and the missing note, when the instance names no support address (managed page)', async () => {
         await useInstanceSupportUrl(null);
-        render(InstanceRestoreInterruptedPage, {props: {fetchInterrupted: neverAnswers, onretry: vi.fn()}});
+        render(InstanceRestoreInterruptedPage, {props: {fetchInterrupted: neverAnswers, onretry: vi.fn(), selfHosted: false}});
         flushSync();
         const root = screen.getByTestId('instance-restore-interrupted');
-        // Presence barrier: the page painted its docs link, so the absence below is not "nothing rendered yet".
-        const docs = within(root).getByTestId('instance-restore-interrupted-docs');
-        expect(docs).toBeVisible();
+        // Presence barrier: the page painted its retry, so the absences below are not "nothing rendered yet".
+        expect(within(root).getByTestId('instance-restore-interrupted-retry')).toBeVisible();
 
-        expect(within(root).queryByTestId('instance-restore-interrupted-support'), 'no support link').toBeNull();
-        expect([...document.body.querySelectorAll('a')], 'no GitHub fallback either: the docs link is the only link').toEqual([docs]);
+        expectSupportMissing(root);
+    });
+
+    it('the report is only in the href: never in the text, a title or a label', () => {
+        mountPolling(neverAnswers, POLL_MS, {supportUrl: 'mailto:help@example.org'});
+        const root = screen.getByTestId('instance-restore-interrupted');
+        // Presence barrier: the link is there
+        expect(within(root).getByTestId('instance-restore-interrupted-support')).toBeVisible();
+
+        const attributes = [root, ...root.querySelectorAll('*')].flatMap((element) => [...element.attributes].filter((attribute) => ['title', 'aria-label', 'alt'].includes(attribute.name)).map((attribute) => attribute.value));
+        const shown = [root.textContent ?? '', ...attributes].join('\n');
+        for (const piece of ['Check:', 'Severity:', 'Instance:', 'Date:', FROZEN.toISOString(), 'platform.restore_interrupted']) {
+            expect(shown, `«${piece}» belongs to the report, which is only in the href`).not.toContain(piece);
+        }
     });
 
     const UNUSABLE: ReadonlyArray<readonly [string, string | null]> = [
@@ -447,17 +524,15 @@ describe('InstanceRestoreInterruptedPage — D7, the support link', () => {
         ['a mailto with two addresses', 'mailto:help@example.org,other@example.org'],
     ];
 
-    it.each(UNUSABLE)('shows no support link at all for %s, and no GitHub fallback', (_label, value) => {
+    it.each(UNUSABLE)('shows no link at all for %s, the missing note instead, and no GitHub fallback', (_label, value) => {
         expect(supportChannel(value, {githubFallback: false}), 'premise: the app finds no usable address').toBeNull();
         expect(supportChannel(value, {githubFallback: true})?.kind, 'premise: a GitHub fallback would exist, so its absence means something').toBe('github');
         mountPolling(neverAnswers, POLL_MS, {supportUrl: value});
         const root = screen.getByTestId('instance-restore-interrupted');
-        // Presence barrier: the page painted its docs link, so the absence below is not "nothing rendered yet".
-        const docs = within(root).getByTestId('instance-restore-interrupted-docs');
-        expect(docs).toBeVisible();
+        // Presence barrier: the page painted its retry, so the absences below are not "nothing rendered yet".
+        expect(within(root).getByTestId('instance-restore-interrupted-retry')).toBeVisible();
 
-        expect(within(root).queryByTestId('instance-restore-interrupted-support'), 'no support link').toBeNull();
-        expect([...document.body.querySelectorAll('a')], 'no fallback link: the docs link is the only link').toEqual([docs]);
+        expectSupportMissing(root);
     });
 });
 
@@ -619,6 +694,10 @@ describe('InstanceRestoreInterruptedPage — H5-3, the reason', () => {
         expect(catalogueGaps(Object.values(OWNER_KEYS))).toEqual({});
     });
 
+    it.each(SOURCE_LANGUAGES)('FB-27: has a string for the support-missing key in the instance source of %s', (lang) => {
+        expect(sourceGaps(SUPPORT_MISSING_KEY), `${SUPPORT_MISSING_KEY} missing in the ${lang} source`).not.toContain(lang);
+    });
+
     describe.each([
         ['no reason', undefined],
         ['reason null', null],
@@ -636,12 +715,13 @@ describe('InstanceRestoreInterruptedPage — H5-3, the reason', () => {
             expect(root.textContent ?? '', 'no owner key on screen').not.toMatch(/ownerTitle|ownerMessage|ownerAdminHint/);
         });
 
-        it('links the admin CLI page at #backup-pending-unreadable', () => {
-            mountPolling(neverAnswers, POLL_MS, extra());
+        it('selfHosted false: has no docs link', () => {
+            mountPolling(neverAnswers, POLL_MS, {...extra(), supportUrl: 'mailto:help@example.org', selfHosted: false});
+            const root = screen.getByTestId('instance-restore-interrupted');
+            // Presence barrier: the page painted its support link, so the absence below is not "nothing rendered yet".
+            expect(within(root).getByTestId('instance-restore-interrupted-support')).toBeVisible();
 
-            const link = within(screen.getByTestId('instance-restore-interrupted')).getByTestId('instance-restore-interrupted-docs');
-
-            expectDocsLink(link, docsUrl('en', DOCS_PATH));
+            expect(within(root).queryByTestId('instance-restore-interrupted-docs')).toBeNull();
         });
     });
 
@@ -677,63 +757,47 @@ describe('InstanceRestoreInterruptedPage — H5-3, the reason', () => {
             expect(within(alert).getByTestId('instance-restore-interrupted-message'), 'the message is inside the alert').toBeInTheDocument();
         });
 
-        it('keeps the docs label, the reload note and the retry label of the page', () => {
+        it('keeps the reload note and the retry label of the page', () => {
             mountPolling(neverAnswers, POLL_MS, OWNER);
             const root = screen.getByTestId('instance-restore-interrupted');
             // Presence barrier: the owner page painted.
             expect(text(within(root).getByRole('heading', {level: 1}))).toBe(marked(OWNER_KEYS.title));
 
-            expect(within(root).getByTestId('instance-restore-interrupted-docs')).toHaveAccessibleName(marked(NEW_KEYS.docs));
             expect(text(within(root).getByTestId('instance-restore-interrupted-auto'))).toBe(marked(NEW_KEYS.autoReload));
             expect(within(root).getByTestId('instance-restore-interrupted-retry')).toHaveAccessibleName(marked(RETRY_KEY));
         });
 
-        it('links the owner section of the panel guide in English, by the app’s docs-URL rule', () => {
-            expect(docsUrl('en', CONNECTION_SECURITY_DOCS_PATH), 'premise: the rule is the exported helper’s').toBe(connectionSecurityDocsUrl('en'));
-            expect(get(currentLanguage), 'premise: the documentation language is English').toBe('en');
-            mountPolling(neverAnswers, POLL_MS, OWNER);
+        it('selfHosted false: has no docs link, the owner section of the panel guide included', () => {
+            mountPolling(neverAnswers, POLL_MS, {...OWNER, supportUrl: 'mailto:help@example.org'});
+            const root = screen.getByTestId('instance-restore-interrupted');
+            expect(text(within(root).getByRole('heading', {level: 1})), 'Barrier: the owner page painted').toBe(marked(OWNER_KEYS.title));
 
-            const link = within(screen.getByTestId('instance-restore-interrupted')).getByTestId('instance-restore-interrupted-docs');
-
-            expectOwnerDocsLink(link, docsUrl('en', OWNER_DOCS_PATH));
-            expect(docsUrl('en', OWNER_DOCS_PATH), 'the expected English href, spelled out').toBe('/mkdocs/admin/hosting_panel_backups/#restore-owner-pending');
+            expect(within(root).queryByTestId('instance-restore-interrupted-docs')).toBeNull();
+            expect(
+                [...document.body.querySelectorAll('a')].filter((link) => (link.getAttribute('href') ?? '').includes('/mkdocs/')),
+                'no link to the documentation',
+            ).toEqual([]);
         });
 
-        it('the owner docs link follows the current language', async () => {
-            currentLanguage.set('it');
-            await waitLocale('it');
-            try {
-                mountPolling(neverAnswers, POLL_MS, OWNER);
-
-                const link = within(screen.getByTestId('instance-restore-interrupted')).getByTestId('instance-restore-interrupted-docs');
-
-                expectOwnerDocsLink(link, docsUrl('it', OWNER_DOCS_PATH));
-                expect(docsUrl('it', OWNER_DOCS_PATH), 'the expected Italian href, spelled out').toBe('/mkdocs/it/admin/hosting_panel_backups/#restore-owner-pending');
-            } finally {
-                currentLanguage.set('en');
-                await waitLocale('en');
-            }
-        });
-
-        it('has the same controls: retry the only button, the docs link the only link without a support address', async () => {
+        it('has the same controls: retry the only button, no link at all and the missing note without a support address', async () => {
             await useInstanceSupportUrl(null);
             mountPolling(neverAnswers, POLL_MS, OWNER);
             const root = screen.getByTestId('instance-restore-interrupted');
             expect(text(within(root).getByRole('heading', {level: 1})), 'Barrier: the owner page painted').toBe(marked(OWNER_KEYS.title));
             const retry = within(root).getByTestId('instance-restore-interrupted-retry');
-            const docs = within(root).getByTestId('instance-restore-interrupted-docs');
 
             expect(within(root).getAllByRole('button'), 'the retry is the only button').toEqual([retry]);
-            expect([...document.body.querySelectorAll('a')], 'the docs link is the only link').toEqual([docs]);
+            expectSupportMissing(root);
             expect(document.body.querySelectorAll('form, input, select, textarea'), 'no form, no field').toHaveLength(0);
         });
 
-        it('shows the support link, from the prop, when the instance names one', () => {
+        it('shows the support link, from the prop, with the same report, when the instance names one', () => {
+            freezeDate();
             mountPolling(neverAnswers, POLL_MS, {...OWNER, supportUrl: 'mailto:help@example.org'});
             const root = screen.getByTestId('instance-restore-interrupted');
             expect(text(within(root).getByRole('heading', {level: 1})), 'Barrier: the owner page painted').toBe(marked(OWNER_KEYS.title));
 
-            expectSupportLink(within(root).getByTestId('instance-restore-interrupted-support'), 'mailto:help@example.org');
+            expectSupportLink(within(root).getByTestId('instance-restore-interrupted-support'), reportLink('mailto:help@example.org'));
         });
 
         it('calls onretry when retry is clicked', async () => {
@@ -771,6 +835,125 @@ describe('InstanceRestoreInterruptedPage — H5-3, the reason', () => {
 
             expect(fetchInterrupted).toHaveBeenCalledTimes(atMount + 3);
             expect(onretry).not.toHaveBeenCalled();
+        });
+    });
+});
+
+describe('InstanceRestoreInterruptedPage — selfHosted: the help of an administrator who has the server', () => {
+    const SUPPORT = 'mailto:help@example.org';
+    const REASONS = [
+        ['no reason', undefined, RESTORE_STATE_DOCS_PATH],
+        ['reason null', null, RESTORE_STATE_DOCS_PATH],
+        ["reason 'restore_state'", 'restore_state', RESTORE_STATE_DOCS_PATH],
+        ["reason 'owner_assignment'", 'owner_assignment', OWNER_DOCS_PATH],
+    ] as const;
+
+    const reasonProps = (reason: string | null | undefined): Record<string, unknown> => (reason === undefined ? {} : {reason});
+
+    describe.each(REASONS)('%s', (_label, reason, path) => {
+        it('shows the docs link, named by its key, to the guide section in English', () => {
+            mountPolling(neverAnswers, POLL_MS, {...reasonProps(reason), selfHosted: true, supportUrl: SUPPORT});
+            const root = screen.getByTestId('instance-restore-interrupted');
+
+            const link = within(root).getByTestId('instance-restore-interrupted-docs');
+            expectDocsLink(link, docsUrl('en', path));
+            expect(link).toHaveAccessibleName(marked(DOCS_KEY));
+            expect(docsUrl('en', path), 'the expected English href, spelled out').toBe(`/mkdocs/${path}`);
+        });
+
+        it.each(DOCS_LANGUAGES)('the docs link follows the current language: %s', async (language) => {
+            currentLanguage.set(language);
+            await waitLocale(language);
+            try {
+                mountPolling(neverAnswers, POLL_MS, {...reasonProps(reason), selfHosted: true, supportUrl: SUPPORT});
+                const link = within(screen.getByTestId('instance-restore-interrupted')).getByTestId('instance-restore-interrupted-docs');
+
+                expectDocsLink(link, docsUrl(language, path));
+            } finally {
+                cleanup();
+                currentLanguage.set('en');
+                await waitLocale('en');
+            }
+        });
+
+        it('keeps the support link with the report next to the docs link, and the retry as the only button', () => {
+            freezeDate();
+            mountPolling(neverAnswers, POLL_MS, {...reasonProps(reason), selfHosted: true, supportUrl: SUPPORT});
+            const root = screen.getByTestId('instance-restore-interrupted');
+            const docs = within(root).getByTestId('instance-restore-interrupted-docs');
+            const support = within(root).getByTestId('instance-restore-interrupted-support');
+
+            expectSupportLink(support, reportLink(SUPPORT));
+            expect([...document.body.querySelectorAll('a')], 'the docs link and the support link are the only links').toEqual([docs, support]);
+            expect(within(root).getAllByRole('button'), 'the retry is the only button').toEqual([within(root).getByTestId('instance-restore-interrupted-retry')]);
+            expect(within(root).queryByTestId('instance-restore-interrupted-support-missing'), 'no missing note').toBeNull();
+        });
+
+        it.each([
+            ['null', null],
+            ['empty', ''],
+            ['a javascript: URL', 'javascript:alert(1)'],
+        ])('has no support link and NO missing line without a usable address (%s): the administrator is the host', (_what, value) => {
+            expect(supportChannel(value, {githubFallback: false}), 'premise: the app finds no usable address').toBeNull();
+            mountPolling(neverAnswers, POLL_MS, {...reasonProps(reason), selfHosted: true, supportUrl: value});
+            const root = screen.getByTestId('instance-restore-interrupted');
+            // Presence barrier: the docs link painted, so the absences below are not "nothing rendered yet".
+            expect(within(root).getByTestId('instance-restore-interrupted-docs')).toBeVisible();
+
+            expect(within(root).queryByTestId('instance-restore-interrupted-support-missing'), 'no «contact whoever provides the service» line').toBeNull();
+            expect(within(root).queryByTestId('instance-restore-interrupted-support'), 'no support link').toBeNull();
+            expect(document.body.innerHTML, 'no GitHub fallback').not.toContain('github.com');
+        });
+    });
+
+    it('the managed page of the same reasons has no docs link: control that selfHosted is what shows it', () => {
+        for (const [, reason] of REASONS) {
+            mountPolling(neverAnswers, POLL_MS, {...reasonProps(reason), selfHosted: false, supportUrl: SUPPORT});
+            expectNoDocs(screen.getByTestId('instance-restore-interrupted'), `reason ${String(reason)}`);
+            cleanup();
+        }
+    });
+
+    describe('the default of the prop: selfHostedConfirmed(), from the instance store', () => {
+        /** The real store, answered with `profile`; the page is mounted WITHOUT the prop. */
+        async function mountWithStoreProfile(profile: 'selfhosted' | 'managed', extra: Record<string, unknown> = {}) {
+            await instanceConfig.load({force: true, fetchConfig: async () => ({...DEFAULT_INSTANCE_CONFIG, profile, support_url: null})});
+            expect(instanceConfig.config.profile, 'precondition: the store holds the profile').toBe(profile);
+            render(InstanceRestoreInterruptedPage, {props: {fetchInterrupted: neverAnswers, onretry: vi.fn(), ...extra}});
+            flushSync();
+            return screen.getByTestId('instance-restore-interrupted');
+        }
+
+        it('shows the docs link when the server answered selfhosted', async () => {
+            const root = await mountWithStoreProfile('selfhosted');
+
+            expectDocsLink(within(root).getByTestId('instance-restore-interrupted-docs'), docsUrl('en', RESTORE_STATE_DOCS_PATH));
+            expect(within(root).queryByTestId('instance-restore-interrupted-support-missing'), 'the administrator is the host: no missing line').toBeNull();
+        });
+
+        it('shows the owner section of the guide when the server answered selfhosted and the reason is owner_assignment', async () => {
+            const root = await mountWithStoreProfile('selfhosted', {reason: 'owner_assignment'});
+
+            expectDocsLink(within(root).getByTestId('instance-restore-interrupted-docs'), docsUrl('en', OWNER_DOCS_PATH));
+        });
+
+        it('shows no docs link, and the missing line without an address, when the server answered managed', async () => {
+            const root = await mountWithStoreProfile('managed');
+
+            expectNoDocs(root, 'managed');
+            expectSupportMissing(root);
+        });
+
+        it('an explicit selfHosted: false wins over a self-hosted store', async () => {
+            const root = await mountWithStoreProfile('selfhosted', {selfHosted: false});
+
+            expectNoDocs(root, 'prop false');
+        });
+
+        it('an explicit selfHosted: true wins over a managed store', async () => {
+            const root = await mountWithStoreProfile('managed', {selfHosted: true});
+
+            expectDocsLink(within(root).getByTestId('instance-restore-interrupted-docs'), docsUrl('en', RESTORE_STATE_DOCS_PATH));
         });
     });
 });

@@ -49,9 +49,9 @@ contract:
     parameters such as ``; charset=utf-8`` allowed, carries exactly ``PAGE_POLICY``, ``frame-ancestors 'self';
     object-src 'none'; base-uri 'self'; form-action 'self'``: here ``/``, a client-side route answered by the catch-all
     (also gzip-compressed), ``/200.html``, ``/offline.html``, the documentation under ``/mkdocs``, Swagger UI and ReDoc
-    under ``/api/v1``, the catch-all's HTML 404 of an unknown API path. Every other response carries exactly
+    under ``/api/v1``. Every other response carries exactly
     ``frame-ancestors 'self'``, as before H-42: here a text file, an image and a JavaScript chunk of the build, the API's
-    JSON, a CORS preflight, a 500. Off (self-hosted, or ``false`` over ``managed``): neither header, on any response.
+    JSON (an unknown API path's JSON 404 and the 302 a browser navigation to it gets included, FB-23), a CORS preflight, a 500. Off (self-hosted, or ``false`` over ``managed``): neither header, on any response.
     Why the three directives go on documents only (H-42, security review E, design approved by the coordinator): they
     touch no script, and they mean something only for a document: no plugin content (``object-src 'none'``), no
     injected ``<base>`` retargeting the relative URLs (``base-uri 'self'``), no form sent to another origin
@@ -61,8 +61,8 @@ contract:
 (b) The report-only policy. On (``managed``, or ``LIBREFOLIO_CSP_REPORT_ONLY=true``): ``Content-Security-Policy-Report-Only``
     is on the web app's HTML, the responses whose ``Content-Type`` is ``text/html`` outside ``/mkdocs`` and ``/api/``:
     ``/``, a client-side route answered by the catch-all (also gzip-compressed), ``/200.html`` and ``/offline.html``. It
-    is on no other response: not the documentation's HTML, not the API's JSON nor its HTML (Swagger UI, ReDoc, the
-    catch-all's HTML 404 for an unknown API path), not a JavaScript chunk under ``/_app``, an image or a text file of the
+    is on no other response: not the documentation's HTML, not the API's JSON nor its HTML (Swagger UI, ReDoc; an unknown
+    API path is a JSON 404, or a 302 for a browser navigation, since FB-23), not a JavaScript chunk under ``/_app``, an image or a text file of the
     build, a CORS preflight or a 500. Off: on no response. The two switches are independent of each other.
 (c) The report-only policy, read directive by directive and never as a string: ``default-src 'self'``, ``object-src
     'none'``, ``base-uri 'self'``, ``frame-ancestors 'self'``, and ``script-src`` exactly ``'self' 'wasm-unsafe-eval'
@@ -687,8 +687,15 @@ def _is_the_openapi_json(reply: Reply) -> None:
     assert "openapi" in json.loads(reply.body), f"barrier: not an OpenAPI document: {reply.body[:120]!r}"
 
 
-def _is_an_html_404(reply: Reply) -> None:
-    assert reply.raised is None and reply.status == 404 and reply.media_type == "text/html", f"barrier: not the catch-all's HTML 404 of an API path: {reply.status} {reply.headers} {reply.body[:120]!r}, raised {reply.raised!r}"
+def _is_a_json_404(reply: Reply) -> None:
+    """FB-23: an unknown API path is answered by the catch-all with a JSON 404, not an HTML page (a browser navigation gets a redirect instead)."""
+    assert reply.raised is None and reply.status == 404 and reply.media_type == "application/json", f"barrier: not the catch-all's JSON 404 of an API path: {reply.status} {reply.headers} {reply.body[:120]!r}, raised {reply.raised!r}"
+    assert json.loads(reply.body) == {"detail": "Not Found"}, f"barrier: not the JSON 404 body: {reply.body[:120]!r}"
+
+
+def _is_a_redirect_home(reply: Reply) -> None:
+    """FB-23: a browser navigation to an unknown API path is sent to the web app's home with a 302."""
+    assert reply.raised is None and reply.status == 302 and reply.values("location") == ["/"], f"barrier: not the redirect to / of a navigation to an unknown API path: {reply.status} {reply.headers} {reply.body[:120]!r}, raised {reply.raised!r}"
 
 
 def _is_a_preflight_answer(reply: Reply) -> None:
@@ -740,7 +747,8 @@ CASES: dict[str, Case] = {
     "api-html-redoc": Case(f"{API_V1_PREFIX}/redoc", _is_redoc, html=True, web_app_html=False, api_docs=True),
     "api-openapi-json": Case(f"{API_V1_PREFIX}/openapi.json", _is_the_openapi_json, html=False, web_app_html=False),
     "api-other-html-document": Case(f"{API_V1_PREFIX}/other", answered(200, HTML, PAGE_HTML), html=True, web_app_html=False),
-    "api-unknown-path-html-404": Case(f"{API_V1_PREFIX}/no-such-route", _is_an_html_404, html=True, web_app_html=False),
+    "api-unknown-path-json-404": Case(f"{API_V1_PREFIX}/no-such-route", _is_a_json_404, html=False, web_app_html=False),
+    "api-unknown-path-navigation-redirect": Case(f"{API_V1_PREFIX}/no-such-route", _is_a_redirect_home, html=False, web_app_html=False, headers=(("Sec-Fetch-Mode", "navigate"),)),
     "api-cors-preflight": Case(f"{API_V1_PREFIX}/things", _is_a_preflight_answer, html=False, web_app_html=False, method="OPTIONS", headers=(("Origin", "http://elsewhere.test"), ("Access-Control-Request-Method", "GET"))),
     "api-500": Case(f"{API_V1_PREFIX}/boom", _is_the_500, html=False, web_app_html=False),
 }
