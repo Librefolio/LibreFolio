@@ -47,6 +47,7 @@
  *   toolbar-action-promote                           — «Link as pair», offered only when a promote rule matches
  *   confirm-modal-confirm|-cancel                    — its plain confirm, when the two rows' fields agree
  *   promote-merge-modal                              — the merge modal, absent when they agree
+ *   promote-merge-modal-content, promote-merge-cancel — the merge modal's body and its Cancel (W6-6)
  *   toast-error                                      — the refusal: its variant and its parameters, never its words
  */
 
@@ -306,5 +307,76 @@ test.describe('W-B39 — a refused Split pair or Promote pair says why', () => {
         expect(await linkFacts(page, [withdrawal, deposit]), 'nothing changed: still two standalone rows').toEqual(standalone);
         await expect(tableRow(page, withdrawal)).toBeVisible();
         await expect(transactionsPage(page).getByTestId(`tx-link-icon-${withdrawal}`), 'and the table shows no link').toHaveCount(0);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// W6-6 (W-B79) — «Link as pair» opens the merge dialog only when the NOTES differ
+// ---------------------------------------------------------------------------
+
+/**
+ * The merge dialog resolves the description and the tags and nothing else (date and cost left it in SP-C step 5).
+ * The page nevertheless opened it whenever the two rows' dates or costs differed too, so a pair that disagreed only
+ * on its date met an EMPTY dialog. Contract: the dialog opens iff the description or the tags differ; any other pair
+ * goes straight to the plain confirm. Nothing here commits: every test ends on Cancel, and the owned account goes.
+ *
+ * Owned data, as P1 above: a WITHDRAWAL and a DEPOSIT of the same amount on two overdraft brokers of a disposable
+ * account, so «Link as pair» matches CASH_TRANSFER; they differ only in what each test varies.
+ */
+test.describe('W6-6 — Link as pair: the merge dialog only for differing notes', () => {
+    let owned: OwnedAccount = emptyOwnedAccount();
+
+    test.beforeEach(() => {
+        owned = emptyOwnedAccount();
+    });
+
+    test.afterEach(async ({page, request}) => {
+        await cleanupOwnedAccount(page, request, owned);
+    });
+
+    /** The two standalone halves of a cash transfer, on the owned account, ticked on the Transactions page, with «Link as pair» pressed. */
+    async function linkAsPair(page: Page, request: Parameters<typeof openOwnedAccount>[1], label: string, halves: {withdrawalDate: string; depositDate: string; withdrawalDescription: string; depositDescription: string}): Promise<void> {
+        await openOwnedAccount(page, request, owned, label);
+        const from = await createOverdraftBroker(page, owned, 'from');
+        const to = await createOverdraftBroker(page, owned, 'to');
+        const [withdrawal, deposit] = await commitCreates(
+            page,
+            [
+                {broker_id: from.id, type: 'WITHDRAWAL', date: halves.withdrawalDate, cash: {code: 'EUR', amount: '-100'}, description: halves.withdrawalDescription},
+                {broker_id: to.id, type: 'DEPOSIT', date: halves.depositDate, cash: {code: 'EUR', amount: '100'}, description: halves.depositDescription},
+            ],
+            'commit the two standalone halves',
+        );
+        await openTransactions(page, [withdrawal, deposit]);
+        await selectRows(page, [withdrawal, deposit]);
+        const promote = transactionsPage(page).getByTestId('selection-toolbar').getByTestId('toolbar-action-promote');
+        await expect(promote, 'precondition: the two rows match a promote rule').toBeVisible({timeout: UI_TIMEOUT});
+        await promote.click();
+    }
+
+    test('M1 rows that differ only in date go straight to the plain confirm: no empty merge dialog', async ({page, request}, testInfo) => {
+        const description = `W6-6 date ${uniqueSuffix()}`;
+        await linkAsPair(page, request, `w66d_${testInfo.project.name}`, {withdrawalDate: daysAgoIso(5), depositDate: daysAgoIso(6), withdrawalDescription: description, depositDescription: description});
+
+        const confirm = page.getByTestId('confirm-modal-confirm');
+        await expect(confirm, 'W6-6: notes agree, so the plain confirm opens').toBeVisible({timeout: UI_TIMEOUT});
+        // Absence only after the presence barrier above: the confirm is up, so the page has decided.
+        await expect(page.getByTestId('promote-merge-modal-content'), 'and no merge dialog, which would have nothing to resolve').toHaveCount(0);
+
+        await page.getByTestId('confirm-modal-cancel').click();
+        await expect(confirm).toHaveCount(0, {timeout: UI_TIMEOUT});
+    });
+
+    test('M2 guard: rows whose descriptions differ open the merge dialog, not the plain confirm', async ({page, request}, testInfo) => {
+        const date = daysAgoIso(5);
+        const marker = uniqueSuffix();
+        await linkAsPair(page, request, `w66n_${testInfo.project.name}`, {withdrawalDate: date, depositDate: date, withdrawalDescription: `W6-6 out ${marker}`, depositDescription: `W6-6 in ${marker}`});
+
+        const merge = page.getByTestId('promote-merge-modal-content');
+        await expect(merge, 'differing descriptions have something to resolve: the merge dialog opens').toBeVisible({timeout: UI_TIMEOUT});
+        await expect(page.getByTestId('confirm-modal-confirm'), 'and the plain confirm does not').toHaveCount(0);
+
+        await page.getByTestId('promote-merge-cancel').click();
+        await expect(merge).toHaveCount(0, {timeout: UI_TIMEOUT});
     });
 });

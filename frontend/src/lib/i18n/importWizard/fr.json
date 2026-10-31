@@ -339,7 +339,9 @@
       },
       "roleName": {
         "custody": "Opérations sur titres",
-        "cash": "Relevé du compte espèces"
+        "cash": "Relevé du compte espèces",
+        "securities": "Mouvements de titres",
+        "account": "Mouvements du compte"
       },
       "period": {
         "years": "{n, plural, one {# an} other {# ans}}",
@@ -398,7 +400,11 @@
         "overlap_mismatch": "Deux exports « {role} » diffèrent sur {days} jour(s) entre le {first} et le {last} : le plus récent est utilisé pour ces jours.",
         "balance_chain_broken": "Le solde progressif du relevé ne concorde plus à partir du {date} : les soldes sont seulement comparés, pas utilisés pour les corrections.",
         "empty_member": "Un export « {role} » ne contient aucune ligne.",
-        "mixed_accounts_in_file": "Un export de titres contient plusieurs comptes-titres."
+        "mixed_accounts_in_file": "Un export de titres contient plusieurs comptes-titres.",
+        "account_gap": "Aucun export du compte ne couvre {start} – {end} : les soldes de la banque diffèrent de {amount} sur cette période. Exportez les mouvements du compte si la banque les conserve.",
+        "no_balance": "Aucun export du compte n’indique de solde (seul l’export Excel le fait) : la trésorerie n’est pas comparée à la banque.",
+        "ambiguous": "{rows, plural, one {# ligne ne peut pas être appariée} other {# lignes ne peuvent pas être appariées}} avec certitude entre l’export des titres et celui du compte : vérifiez-les.",
+        "no_counterpart": "{rows, plural, one {# ligne n’a pas} other {# lignes n’ont pas}} de ligne correspondante dans l’autre export : vérifiez-{rows, plural, one {la} other {les}}."
       },
       "gapFix": {
         "stepTitle": "Aligner avec la banque",

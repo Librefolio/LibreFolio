@@ -11,8 +11,9 @@
     import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import SingleDatePicker from '$lib/components/ui/date/SingleDatePicker.svelte';
     import ExactQuantityInput from '$lib/components/ui/input/ExactQuantityInput.svelte';
-    import TxTradePriceRow from '$lib/features/transactions/form/TxTradePriceRow.svelte';
-    import type {TradeAmountDriver} from '$lib/features/transactions/form/txTradeAmount';
+    import TxEntryModeToggle from '$lib/features/transactions/form/TxEntryModeToggle.svelte';
+    import TxCashDerived from '$lib/features/transactions/form/TxCashDerived.svelte';
+    import {UNIT_PRICE_DECIMALS, type TradeAmountDriver} from '$lib/features/transactions/form/txTradeAmount';
     import TxCellMark from '$lib/features/transactions/form/TxCellMark.svelte';
     import type {TxFormCell, TxFormCheckKind} from '$lib/features/transactions/form/txFormChecks';
     import CompactCashCell from '$lib/features/transactions/form/CompactCashCell.svelte';
@@ -55,12 +56,16 @@
         quantityInputSignRule: 'positive' | 'nonzero' | 'zero' | 'any';
         /** V-37b: the cells «Validate now» found wrong, and why. */
         markedCells: Partial<Record<TxFormCell, TxFormCheckKind>>;
-        /** #47: the «Total amount / Unit price» row, shown for a BUY or SELL. */
+        /** #47, FB-16: the «Total / Unit price» selector and the other value, for a BUY, a SELL and any single type with a quantity and an amount. */
         showTradePrice: boolean;
+        /** How the number in the amount field is read. */
         entryMode: TradeAmountDriver;
-        unitPrice: string;
+        /** What the amount field shows: the total, or the unit price while the number is read as one. */
+        cashCellValue: {code: string; amount: string} | null;
+        /** The other value, shown in place of the sign hint; `null` when there is nothing to calculate. */
+        derivedCash: {mode: 'total' | 'unit_price'; value: string; base: number} | null;
         onEntryModeChange: (mode: TradeAmountDriver) => void;
-        onUnitPriceInput: (value: string) => void;
+        onCashInput: (value: {code: string; amount: string} | null) => void;
         rule: ReturnType<typeof getTypeRule>;
         showCostBasisField: boolean;
         typeImmutable: boolean;
@@ -108,9 +113,10 @@
         markedCells,
         showTradePrice,
         entryMode,
-        unitPrice,
+        cashCellValue,
+        derivedCash,
         onEntryModeChange,
-        onUnitPriceInput,
+        onCashInput,
         rule,
         showCostBasisField,
         typeImmutable,
@@ -130,7 +136,7 @@
 
     // B-48: the reason a quantity or a cash amount past the significant digits is refused, said under the field.
     let quantitySignificantError = $derived(exceedsSignificantDigits(draft.quantity, REAL_SIGNIFICANT_DIGITS));
-    let cashSignificantError = $derived(exceedsSignificantDigits(draft.cash?.amount, REAL_SIGNIFICANT_DIGITS));
+    let cashSignificantError = $derived(exceedsSignificantDigits(showTradePrice ? cashCellValue?.amount : draft.cash?.amount, REAL_SIGNIFICANT_DIGITS));
 </script>
 
 <!-- Required section -->
@@ -223,14 +229,20 @@
                 {/if}
             </div>
             <div class="flex flex-col gap-1" data-testid="tx-form-cash-wrap">
-                <span class="text-xs text-lf-muted">
-                    {$t('transactions.table.cash')}{rule.cashField === 'required' ? ' *' : ''}{#if cashLabel}
-                        <span class="text-lf-warning">{cashLabel}</span>{/if}
+                <span class="flex items-center justify-between gap-2 text-xs text-lf-muted">
+                    <span>
+                        {$t('transactions.table.cash')}{rule.cashField === 'required' ? ' *' : ''}{#if cashLabel}
+                            <span class="text-lf-warning">{cashLabel}</span>{/if}
+                    </span>
+                    {#if showTradePrice && !isReadonly}
+                        <TxEntryModeToggle mode={entryMode} onModeChange={onEntryModeChange} />
+                    {/if}
                 </span>
                 <TxCellMark cell="cash" marks={markedCells}
                     ><CompactCashCell
-                        value={draft.cash}
-                        onChange={setCash}
+                        value={showTradePrice ? cashCellValue : draft.cash}
+                        onChange={showTradePrice ? onCashInput : setCash}
+                        maxFractionDigits={showTradePrice && entryMode === 'unit_price' ? UNIT_PRICE_DECIMALS : undefined}
                         signHint={rule.cashSign}
                         disabled={isReadonly}
                         testid="tx-form-cash"
@@ -242,11 +254,10 @@
                 {#if cashSignificantError}
                     <p class="mt-1 text-xs text-lf-danger" data-testid="tx-form-cash-significant-error">{$t('transactions.errors.significantDigitsExceeded', {values: {max: REAL_SIGNIFICANT_DIGITS}})}</p>
                 {/if}
-                {#if cashHint}
-                    <span class="text-[10px] text-lf-muted">{cashHint}</span>
-                {/if}
-                {#if showTradePrice}
-                    <TxTradePriceRow mode={entryMode} {unitPrice} readonly={isReadonly} onModeChange={onEntryModeChange} {onUnitPriceInput} />
+                {#if showTradePrice && derivedCash}
+                    <TxCashDerived mode={derivedCash.mode} value={derivedCash.value} base={derivedCash.base} />
+                {:else if cashHint}
+                    <span class="text-[10px] text-lf-muted" data-testid="tx-form-cash-hint">{cashHint}</span>
                 {/if}
             </div>
         {:else if rule.quantityMode !== 'forbidden'}

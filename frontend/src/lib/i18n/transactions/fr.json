@@ -8,7 +8,8 @@
       "quantity": "Qté",
       "cash": "Espèces",
       "broker": "Courtier",
-      "links": "Liens"
+      "links": "Liens",
+      "unitPrice": "Prix unitaire"
     },
     "actions": {
       "clone": "Cloner",
@@ -78,10 +79,10 @@
       "costBasis": "Coût de revient (override)",
       "linkUuid": "TX Liée",
       "pairPartner": "Transaction liée",
-      "hintSignPositive": "doit être > 0",
-      "hintSignNegative": "saisir positif — inversé à l'enregistrement",
-      "hintSignZero": "doit être 0",
-      "hintSignNonzero": "doit être ≠ 0",
+      "hintSignPositive": "Saisissez une valeur supérieure à 0",
+      "hintSignNegative": "Saisissez une valeur positive",
+      "hintSignZero": "Saisissez 0",
+      "hintSignNonzero": "Saisissez une valeur différente de 0",
       "saveFailed": "Échec de l'enregistrement de la transaction",
       "fxTitle": "Change de Devises",
       "transferAssetTitle": "Transfert d'Actif",
@@ -96,14 +97,15 @@
       "eventCreateDateRequired": "La date est obligatoire",
       "fxDatesHint": "Les dates 'De' et 'À' coïncident généralement : elles diffèrent quand le courtier crédite la nouvelle devise un autre jour.",
       "eventEditTitle": "Modifier événement pour {asset}",
-      "entryModeAmount": "Montant total",
+      "entryModeAmount": "Total",
       "entryModeUnitPrice": "Prix unitaire",
-      "unitPriceCalculated": "calculé",
-      "unitPriceHint": "Le montant est calculé à partir du prix unitaire et de la quantité ; vous pouvez toujours le modifier.",
       "preFloorDate": {
         "message": "La date {date} est antérieure au 1er janvier 1900. Vérifiez que l'année est correcte : c'est souvent une faute de frappe.",
         "confirm": "Oui, la date est correcte"
-      }
+      },
+      "entryModeLabel": "Comment lire le nombre",
+      "entryDerivedTotal": "= {value} au total",
+      "entryDerivedUnit": "= {value} {base, plural, =1 {par unité} other {pour # unités}}"
     },
     "bulk": {
       "resetRow": "Réinitialiser la ligne",
@@ -163,7 +165,7 @@
       "serverError": "Sauvegarde impossible — erreur serveur"
     },
     "costBasisOverride": {
-      "tooltip": "Override du prix de revient unitaire. Si vide, calculé automatiquement à partir des achats lors de la sauvegarde. Remplacer pour Exit Tax, héritage ou règles fiscales particulières. Utilisez le sélecteur Total/Par unité ci-dessous pour choisir comment saisir ce montant.",
+      "tooltip": "Le coût que vous saisissez à la place du prix de revient moyen : pour l'Exit Tax, un héritage ou des règles fiscales particulières. Auto le calcule à partir de vos achats. Utilisez le sélecteur Total/Par unité ci-dessous pour choisir comment saisir ce montant.",
       "warningAdjustment": "Le coût de base manuel est vide : sans lui, la transaction ne peut pas être enregistrée. Saisissez ce que ces parts vous ont coûté : 0 pour les nouvelles parts d'une division d'actions. Pour un don, saisissez 0, ou ce que le donateur les a payées : le prix de revient unitaire, et la plus-value sur laquelle vous pourriez être imposé, restent ainsi plus proches de la réalité."
     },
     "wacPreview": {
@@ -186,7 +188,7 @@
         "add": "Pondérée",
         "reduce": "Quantité réduite",
         "addZeroCost": "Dilution",
-        "addAtWac": "Auto PRU"
+        "splitRescale": "Ajustement du split"
       },
       "pendingCreate": "Transaction en attente (nouvelle, pas encore enregistrée)",
       "pendingEdit": "Transaction en attente (modifiée, pas encore enregistrée)",
@@ -286,7 +288,10 @@
       "costBasisModeIncompatible": "❌ {type} ne prend pas de coût de base ici, donc aucun mode Auto ou Manuel : retirez-le.",
       "costBasisNegative": "Le coût de base ne peut pas être négatif : saisissez 0 ou plus.",
       "pairAdjustmentNotAllowed": "Deux Ajustements ne peuvent pas être liés : pour déplacer des titres entre courtiers, utilisez un Transfert d'Actif.",
-      "pairArrivalBeforeDeparture": "L'arrivée ({arrivalDate}) est datée avant le départ ({departureDate}). Elle a été enregistrée telle quelle : vérifiez les deux dates."
+      "pairArrivalBeforeDeparture": "L'arrivée ({arrivalDate}) est datée avant le départ ({departureDate}). Elle a été enregistrée telle quelle : vérifiez les deux dates.",
+      "pairCurrencyMismatch": "Les deux côtés d'un virement doivent être dans la même devise (trouvées {currencyA} et {currencyB}). Pour changer de devise, utilisez un change de devises",
+      "pairAmountMismatch": "Un virement doit faire sortir d'un courtier le même montant qu'il fait entrer dans l'autre (trouvés {amountA} et {amountB})",
+      "pairCurrencySame": "Les deux côtés d'un change de devises doivent être dans des devises différentes (les deux sont en {currency})"
     },
     "pydantic": {
       "greaterThan": "La valeur doit être supérieure à {gt}",

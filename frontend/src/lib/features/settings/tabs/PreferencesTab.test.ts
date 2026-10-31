@@ -202,8 +202,9 @@ const themeRow = () => screen.getByTestId('preference-theme');
 async function chooseLanguage(name: string) {
     await fireEvent.click(within(languageRow()).getByRole('combobox'));
     // The option renders "<flag> <label>", so the accessible name contains the
-    // label rather than equalling it.
-    await fireEvent.click(await within(languageRow()).findByRole('option', {name: new RegExp(name)}));
+    // label rather than equalling it. The open list is a child of <body> (H6-1),
+    // not of the row; only one list is open at a time.
+    await fireEvent.click(await screen.findByRole('option', {name: new RegExp(name)}));
 }
 
 /** Pick a theme through the radio group — addressed by i18n key, not by label. */

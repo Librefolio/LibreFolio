@@ -94,7 +94,8 @@
       "leaveDone": "Vous avez quitté le courtier",
       "leaveDeletedBroker": "Courtier supprimé : vous étiez le dernier propriétaire",
       "selfDemoteDone": "Vous êtes maintenant lecteur",
-      "leaveLastOwnerHint": "Si ce n'est pas ce que vous voulez, désignez d'abord un autre utilisateur comme propriétaire, puis quittez."
+      "leaveLastOwnerHint": "Si ce n'est pas ce que vous voulez, désignez d'abord un autre utilisateur comme propriétaire, puis quittez.",
+      "maxShare": "% (max {max})"
     },
     "lots": {
       "unifiedLots": "Lots",

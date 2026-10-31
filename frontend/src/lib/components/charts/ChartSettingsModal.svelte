@@ -520,7 +520,7 @@
                             showGradient={staleGradient}
                             showGridLines={gridLines}
                             showMainDelta={!previewIsCalendar}
-                            staleLabel={$t('chart.tooltip.stale')}
+                            staleLabel={(days) => $t('chart.tooltip.stale', {values: {days}})}
                             valueUnit={previewIsCalendar ? 'percentage' : 'price'}
                             yAxisMax={previewPrimaryScale.max}
                             yAxisMin={previewPrimaryScale.min}

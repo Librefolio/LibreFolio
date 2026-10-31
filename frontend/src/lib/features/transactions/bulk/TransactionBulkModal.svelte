@@ -73,7 +73,9 @@
         type IdentifiedBulkOp,
     } from '$lib/features/transactions/bulk/bulkDisplay';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
-    import {cashAmountsCancel, promotePairOrder, resolvePromoteAllFields, TX_DESCRIPTION_MAX_LENGTH} from '$lib/features/transactions/bulk/promoteHelpers';
+    import {autoCostCellState} from '$lib/features/transactions/bulk/costCellState';
+    import {unitPriceCellHtml} from '$lib/features/transactions/unitPriceCell';
+    import {cashAmountsCancel, promoteNotesDiverge, promotePairOrder, resolvePromoteAllFields, TX_DESCRIPTION_MAX_LENGTH} from '$lib/features/transactions/bulk/promoteHelpers';
     import {assetQuantitiesCancel, importableSuggestions as importableFromResults, mixedPromotePairs, newRowSuggestId} from '$lib/features/transactions/bulk/promoteSuggest';
     import {resolveIssueMessage, type ResolverContext} from '$lib/features/transactions/resolveValidationMessage';
     import {sanitizeHtml} from '$lib/utils/core/sanitizeHtml';
@@ -1835,6 +1837,19 @@
                 },
             },
             {
+                // W2-6: read-only, calculated from the row's own quantity and cash by the helper the transactions table uses.
+                id: 'unit_price',
+                header: () => $t('transactions.table.unitPrice'),
+                type: 'text',
+                width: 120,
+                sortable: false,
+                filterable: false,
+                cell: (row): CellContent => {
+                    // Cash is stored as a magnitude here: the helper reads magnitudes, so the display sign does not matter.
+                    return {type: 'html', html: unitPriceCellHtml(row.fields, {testId: 'tx-bulk-unit-price', isPairLeg: getPartnerOp(row.tempId) != null})};
+                },
+            },
+            {
                 id: 'broker',
                 header: () => $t('transactions.table.broker'),
                 type: 'text',
@@ -1891,26 +1906,23 @@
 
                     // mode 'auto'
                     if (mode === 'auto') {
-                        if (cbo && cbo.amount) {
-                            // Auto-calculated value present
+                        // `…` means the value is still being computed, `—` that it was computed and there is nothing to
+                        // propose (a BUY has no cost basis to match, a SELL may find no lot); the lightbulb stays in both
+                        // because the cell is still in automatic mode. `validateRuns === 0` belongs with «unknown»: before
+                        // the first run nobody has asked yet, so an em-dash would be a verdict the app has not reached.
+                        // A cost of 0 is read the same way (W6-2): while the validation is not settled it may be only the
+                        // currency hint Auto sends, not a computed value.
+                        const unknown = scheduler.state.isPending || scheduler.state.isValidating || scheduler.state.validateRuns === 0;
+                        const state = autoCostCellState(cbo?.amount, !unknown);
+                        if (cbo && state === 'ready') {
                             return {
                                 type: 'html',
                                 html: `<span class="text-lf-muted italic" data-testid="tx-bulk-cost-basis-auto" data-state="ready">💡 ${formatCurrencyAmountHtml(displayAmount(Number(cbo.amount)), cbo.code)}${modeSuffix}</span>`,
                             };
                         }
-                        // No amount. Two different facts used to share one glyph: the value is
-                        // still being computed, or it was computed and there is nothing to
-                        // propose (a BUY has no cost basis to match, a SELL may find no lot).
-                        // `…` now means only the first, `—` the second — the lightbulb stays in
-                        // both because the cell is still in automatic mode.
-                        //
-                        // `validateRuns === 0` belongs with "unknown", not with "empty": before
-                        // the first run nobody has asked yet, so an em-dash would be a verdict
-                        // the app has not reached.
-                        const unknown = scheduler.state.isPending || scheduler.state.isValidating || scheduler.state.validateRuns === 0;
                         return {
                             type: 'html',
-                            html: `<span class="text-lf-muted italic" data-testid="tx-bulk-cost-basis-auto" data-state="${unknown ? 'pending' : 'empty'}">💡 ${unknown ? '…' : '—'}</span>`,
+                            html: `<span class="text-lf-muted italic" data-testid="tx-bulk-cost-basis-auto" data-state="${state}">💡 ${state === 'pending' ? '…' : '—'}</span>`,
                         };
                     }
 
@@ -2697,7 +2709,7 @@
             descB = opB.fields.description;
         const tagsA = opA.fields.tags,
             tagsB = opB.fields.tags;
-        const diverges = descA !== descB || JSON.stringify(tagsA) !== JSON.stringify(tagsB);
+        const diverges = promoteNotesDiverge(opA.fields, opB.fields);
         if (diverges) {
             const labelA = opA.op === 'edit' ? `#${(opA as any).txId}` : opA.tempId.slice(0, 6);
             const labelB = opB.op === 'edit' ? `#${(opB as any).txId}` : opB.tempId.slice(0, 6);
@@ -3066,7 +3078,12 @@
     let importableSuggestions = $derived.by(() => {
         const opsEditIds = new Set(ops.filter((o) => o.op === 'edit').map((o) => (o as any).txId as number));
         const tempIdByKey = new Map(ops.filter(isSuggestable).map((o) => [suggestKeyOf(o), o.tempId]));
-        return importableFromResults(suggestFromDB, (key) => tempIdByKey.get(key), opsEditIds);
+        return importableFromResults(
+            suggestFromDB,
+            (key) => tempIdByKey.get(key),
+            opsEditIds,
+            (id) => txStoreGet(id) != null,
+        );
     });
 
     let suggestPickerIncludeIds = $derived(new Set(importableSuggestions.flatMap((s) => s.candidates.map((c) => c.id))));
@@ -3170,7 +3187,7 @@
             descB = opB.fields.description;
         const tagsA = opA.fields.tags,
             tagsB = opB.fields.tags;
-        const diverges = descA !== descB || JSON.stringify(tagsA) !== JSON.stringify(tagsB);
+        const diverges = promoteNotesDiverge(opA.fields, opB.fields);
         if (diverges) {
             const [first, second] = swapped ? [opB, opA] : [opA, opB];
             const labelOf = (op: PendingOp) => (sug.isDB ? `#${(op as any).txId ?? ''} ${op.fields.type}` : op.fields.type);

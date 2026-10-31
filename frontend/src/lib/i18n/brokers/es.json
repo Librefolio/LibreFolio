@@ -94,7 +94,8 @@
       "leaveDone": "Has abandonado el bróker",
       "leaveDeletedBroker": "Bróker eliminado: eras el último propietario",
       "selfDemoteDone": "Ahora eres lector",
-      "leaveLastOwnerHint": "Si no es lo que quieres, asigna primero a otro usuario como propietario y luego abandona."
+      "leaveLastOwnerHint": "Si no es lo que quieres, asigna primero a otro usuario como propietario y luego abandona.",
+      "maxShare": "% (máx. {max})"
     },
     "lots": {
       "unifiedLots": "Lotes",

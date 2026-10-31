@@ -13,7 +13,7 @@
     import {formatPercent} from '$lib/utils/core/formatPercent';
     import {getEnd, getStart, historyStart, isMaxSentinel, resolveDateSentinel, setDateRange} from '$lib/stores/dateRangeStore.svelte';
     import {todayIso} from '$lib/utils/dateOnly';
-    import {ArrowLeft, ArrowRightLeft, Briefcase, Crown, ExternalLink, Eye, FileText, Info, Pencil, Plus, RefreshCw, Share2, Shield, TrendingUp, Upload, Users, Wallet} from 'lucide-svelte';
+    import {ArrowLeft, ArrowRightLeft, Briefcase, Copy, Crown, ExternalLink, Eye, FileText, Info, Pencil, Plus, RefreshCw, Share2, Shield, Trash2, TrendingUp, Upload, Users, Wallet} from 'lucide-svelte';
     import BrokerModal from '$lib/features/brokers/BrokerModal.svelte';
     import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import BrokerImportFilesModal from '$lib/features/brokers/BrokerImportFilesModal.svelte';
@@ -24,6 +24,7 @@
     import GrowthChart from '$lib/features/dashboard/GrowthChart.svelte';
     import PositionsPanel from '$lib/features/dashboard/PositionsPanel.svelte';
     import {createPositionsSeriesController, type PositionsSeriesScope} from '$lib/features/dashboard/positionsSeriesController';
+    import {createPositionsRollingController, type RollingScope} from '$lib/features/dashboard/positionsRolling';
     import RiskLevelsPanel from '$lib/features/risk/levels/RiskLevelsPanel.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
@@ -34,6 +35,9 @@
     import {resolveFormItemsForView, type FormModalItems} from '$lib/features/transactions/resolveFormItems';
     import {loadPartnerRows, loadEventTooltipMap} from '$lib/features/transactions/loadTransactionRows';
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
+    import DataTableToolbar from '$lib/components/table/DataTableToolbar.svelte';
+    import {txStoreSetAll, txStoreCanEdit} from '$lib/features/transactions/txStore.svelte';
+    import {guardEditableRows} from '$lib/features/transactions/bulk/selectionGuards';
     import type {TXReadItem, AssetEvent} from '$lib/features/transactions/types';
     import type {FilterValue} from '$lib/components/table/types';
     import {buildTransactionsFiltersUrl, applyTransactionColumnFilters} from '../../transactions/filterState';
@@ -112,10 +116,13 @@
     // The per-position return chart (Y5-2): the lines of the positions ticked, asked for this broker, period and currency,
     // and asked again when one of them or `refreshVersion` moves.
     const positionsSeriesCtl = createPositionsSeriesController();
+    // The Rolling view of that chart (FB-15): the rolling return of the ticked positions' assets over the same period.
+    const positionsRollingCtl = createPositionsRollingController();
     onDestroy(() => {
         candlesRetry.dispose();
         contributionRetry.dispose();
         positionsSeriesCtl.dispose();
+        positionsRollingCtl.dispose();
     });
     // The candles' loading flag must be a signal, as on the Dashboard: the loader's guard reads it inside GrowthChart's
     // effect, which has to wake when a request ends — to ask for the scope on screen once an old scope's answer was
@@ -125,6 +132,9 @@
     let positionsSeriesScope: PositionsSeriesScope;
     $: positionsSeriesScope = {brokerIds: [data.brokerId], start: historyStart(isMaxPending, dateFrom), end: dateTo || undefined, currency: targetCurrency || baseCurrency, ready: broker !== null, version: refreshVersion};
     $: positionsSeriesCtl.sync(positionsSeriesScope);
+    let positionsRollingScope: RollingScope;
+    $: positionsRollingScope = {start: dateFrom || undefined, end: dateTo || undefined, ready: broker !== null, version: refreshVersion};
+    $: positionsRollingCtl.sync(positionsRollingScope);
 
     /** The scope of a lazy report section: this broker, the period and the currency. An answer of another scope is not applied, and a failure counts for its own scope only (Y-24). */
     function reportScope(): string {
@@ -150,6 +160,59 @@
         bulkIntent = {action: 'create'};
         bulkOpen = true;
     }
+
+    /** The bulk workspace from a selection or a row of the Transactions tab (FB-17), as the Transactions page opens it. */
+    function openBulkIntent(intent: import('$lib/features/transactions/bulk/TransactionBulkModal.svelte').WorkspaceIntent) {
+        bulkIntent = intent;
+        bulkOpen = true;
+    }
+
+    /** The rows ticked in the Transactions tab; the bar below shows only to who can edit this broker. */
+    let txSelectedRows: TXReadItem[] = [];
+
+    function handleTxSelectionChange(rows: TXReadItem[]) {
+        txSelectedRows = rows;
+    }
+
+    /** Empty both selections: the table's own (the checkboxes) and this page's (the bar). */
+    function clearTxSelection() {
+        txTableComponent?.getTableRef()?.clearSelection();
+        txSelectedRows = [];
+    }
+
+    /** The selected rows the user can edit, with the reason shown when some or all are left out (`selectionGuards.ts`, shared with the Transactions page). */
+    function editableTxSelection(): TXReadItem[] | null {
+        return guardEditableRows(txSelectedRows, txStoreCanEdit, toasts, $_);
+    }
+
+    function editSelectedTx() {
+        if (txSelectedRows.length === 0) return;
+        const rows = editableTxSelection();
+        if (rows) openBulkIntent({action: 'edit', txIds: rows.map((r) => r.id)});
+    }
+
+    function cloneSelectedTx() {
+        if (txSelectedRows.length === 0) return;
+        openBulkIntent({action: 'clone', txIds: txSelectedRows.map((r) => r.id)});
+    }
+
+    function deleteSelectedTx() {
+        if (txSelectedRows.length === 0) return;
+        const rows = editableTxSelection();
+        if (rows) openBulkIntent({action: 'delete', txIds: rows.map((r) => r.id)});
+    }
+
+    /** The workspace saved something: the rows the selection pointed at may have changed or gone, and the tab reloads. */
+    async function handleBulkCommitted() {
+        clearTxSelection();
+        await handleRefresh();
+    }
+
+    $: txBulkActions = [
+        {id: 'edit', icon: Pencil, label: () => $_('common.edit'), onClick: editSelectedTx},
+        {id: 'clone', icon: Copy, label: () => $_('transactions.actions.clone'), onClick: cloneSelectedTx},
+        {id: 'delete', icon: Trash2, label: () => $_('common.delete'), variant: 'danger' as const, onClick: deleteSelectedTx},
+    ];
 
     /** AI export state — dropdown open/position handled internally by AiExportMenu. */
     let aiExportCompatibility: AiExportCatalogCompatibilityResult = DISABLED_AI_EXPORT_COMPATIBILITY;
@@ -443,6 +506,8 @@
             const [partner, tooltipMap] = await Promise.all([loadPartnerRows(txMainRows), loadEventTooltipMap(txMainRows)]);
             txPartnerRows = partner;
             txEventTooltipMap = tooltipMap;
+            // The bulk workspace reads the originals of a selected row from the store (FB-17), as the Transactions page fills it.
+            txStoreSetAll(txMainRows, txPartnerRows);
             txLoaded = true;
         } catch (e) {
             console.error('Failed to load transactions:', e);
@@ -769,6 +834,8 @@
                     positionsSeriesLoading={$positionsSeriesCtl.loading}
                     positionsSeriesFailed={$positionsSeriesCtl.failed}
                     onRequestPositionsSeries={(keys) => positionsSeriesCtl.request(keys, positionsSeriesScope)}
+                    positionsRolling={$positionsRollingCtl}
+                    onRequestPositionsRolling={(assetIds) => positionsRollingCtl.request(assetIds, positionsRollingScope)}
                 />
                 <LotsAnalysisPanel open={activeAssetId != null} assetId={activeAssetId} brokerIds={[broker.id]} brokers={panelBrokers} currency={activeAsset?.currency ?? baseCurrency} assetName={activeAsset?.display_name ?? null} onClose={closeAssetPanel} {refreshVersion} />
             </div>
@@ -808,6 +875,9 @@
                         </a>
                     </div>
                     <div class="flex items-center gap-2">
+                        {#if canEdit && txSelectedRows.length > 0}
+                            <DataTableToolbar selectedCount={txSelectedRows.length} bulkActions={txBulkActions} onClearSelection={clearTxSelection} />
+                        {/if}
                         <ColumnVisibilityToggle tableRef={txTableComponent?.getTableRef()} />
                         {#if canEdit}
                             <button class="flex items-center justify-center gap-1 px-2.5 py-1.5 text-xs bg-lf-panel text-lf-secondary rounded-lg hover:bg-lf-neutral transition-all" on:click={openImportTransactions} data-testid="broker-import-transactions">
@@ -836,7 +906,11 @@
                             eventTooltipMap={txEventTooltipMap}
                             currentPage={txCurrentPage}
                             pageSize={txPageSize}
-                            hideActions={true}
+                            hideActions={!canEdit}
+                            onSelectionChange={handleTxSelectionChange}
+                            onEditRow={(row) => openBulkIntent({action: 'edit', txIds: [row.id]})}
+                            onCloneRow={(row) => openBulkIntent({action: 'clone', txIds: [row.id]})}
+                            onDeleteRow={(row) => openBulkIntent({action: 'delete', txIds: [row.id]})}
                             onFiltersChange={(f) => (txColumnFilters = f)}
                             onPageChange={(page) => (txCurrentPage = page)}
                             onPageSizeChange={(size) => {
@@ -929,7 +1003,7 @@
             bulkOpen = false;
             bulkIntent = undefined;
         }}
-        onCommitted={handleRefresh}
+        onCommitted={handleBulkCommitted}
     />
 
     <BrokerImportFilesModal open={importFilesModalOpen} brokerId={broker.id} brokerName={broker.name} onClose={() => (importFilesModalOpen = false)} />

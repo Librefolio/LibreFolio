@@ -181,7 +181,11 @@
       "invalidNumber": "Nombre invalide dans \"{column}\" : \"{value}\"",
       "invalidValue": "Valeur invalide dans \"{column}\" : \"{value}\"",
       "duplicate": "Valeur en double pour {label} : {key}"
-    }
+    },
+    "statusValidRows": "{count, plural, one {# ligne valide} other {# lignes valides}}",
+    "statusErrors": "{count, plural, one {# erreur} other {# erreurs}}",
+    "statusDuplicates": "{label} en double",
+    "duplicatesShort": "doublons"
   },
   "dataEditor": {
     "staleTooltip": "Masquer les lignes remplies rétroactivement (⚠️ obsolètes). Ce sont des points de remplissage copiés à partir du point réel le plus proche.",
@@ -313,7 +317,11 @@
   "nav": {
     "dashboard": "Tableau de bord",
     "settings": "Paramètres",
-    "toggleMenu": "Ouvrir ou fermer le menu"
+    "toggleMenu": "Ouvrir ou fermer le menu",
+    "checkingAuthentication": "Vérification de la connexion…",
+    "closeSidebar": "Fermer le menu",
+    "expandSidebar": "Développer le menu",
+    "collapseSidebar": "Réduire le menu"
   },
   "prices": {
     "sync": {
@@ -369,7 +377,8 @@
       "empty": "Aucune option"
     },
     "confirmBulkAction": "Êtes-vous sûr de vouloir effectuer cette action sur",
-    "filterLabel": "Filtre"
+    "filterLabel": "Filtre",
+    "resetLayout": "Réinitialiser la disposition"
   },
   "date": {
     "today": "Aujourd'hui",

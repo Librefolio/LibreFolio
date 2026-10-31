@@ -1,5 +1,6 @@
 <script lang="ts">
     import {ChevronDown, ChevronRight, Pencil} from 'lucide-svelte';
+    import {MediaQuery} from 'svelte/reactivity';
     import {t} from '$lib/i18n';
     import DataTable from '$lib/components/table/DataTable.svelte';
     import type {ColumnDef, EnumOption, RowAction} from '$lib/components/table/types';
@@ -39,6 +40,10 @@
     const KIND_ORDER: FactKind[] = ['broker', 'cash', 'contribution', 'price', 'fx'];
     const KIND_FALLBACKS: Record<FactKind, string> = {broker: 'Broker', cash: 'Cash', contribution: 'Contribution', price: 'Price', fx: 'Exchange rate'};
     const ORIGIN_ORDER: FactOriginState[] = ['librefolio', 'manual', 'modified'];
+
+    // On a phone (the table's own 768 px breakpoint) the columns are fluid down to a floor each, and the facts' secondary columns are hidden by
+    // default, so that a table fits a card some 300 px wide (Y-9); «Columns» brings them back.
+    const phone = new MediaQuery('max-width: 768px');
 
     let factsOpen = $state(false);
     let sectionsTable = $state<DataTable<SectionRow>>();
@@ -100,7 +105,7 @@
             type: 'custom',
             sortable: false,
             filterable: false,
-            minWidth: 140,
+            minWidth: phone.current ? 84 : 140,
             cell: (row) => ({type: 'custom', component: ReviewCell, props: {cell: {type: 'step', step: row.step, blocked: row.blocked}}}),
         },
         {
@@ -109,7 +114,7 @@
             type: 'custom',
             sortable: false,
             filterable: false,
-            minWidth: 200,
+            minWidth: phone.current ? 110 : 200,
             cell: (row) => ({type: 'custom', component: ReviewCell, props: {cell: {type: 'summary', text: row.text, currencies: row.currencies}}}),
         },
     ]);
@@ -146,7 +151,7 @@
             id: 'entity',
             header: () => $t(`${KEY}.factEntity`, {default: 'Item'}),
             type: 'text',
-            minWidth: 180,
+            minWidth: phone.current ? 100 : 180,
             getValue: (fact) => searchText(fact),
             cell: (fact) => ({
                 type: 'custom',
@@ -167,6 +172,7 @@
             type: 'enum',
             enumOptions: kindOptions,
             minWidth: 110,
+            hiddenByDefault: phone.current,
             getValue: (fact) => fact.kind,
             sortFn: (a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind),
             cell: (fact) => ({
@@ -181,7 +187,7 @@
             type: 'custom',
             sortable: false,
             filterable: false,
-            minWidth: 160,
+            minWidth: phone.current ? 100 : 160,
             cell: (fact) => ({type: 'custom', component: ReviewCell, props: {cell: {type: 'value', fact}}}),
         },
         {
@@ -190,6 +196,7 @@
             type: 'enum',
             enumOptions: originOptions,
             minWidth: 120,
+            hiddenByDefault: phone.current,
             getValue: (fact) => factOriginState(fact),
             sortFn: (a, b) => ORIGIN_ORDER.indexOf(factOriginState(a)) - ORIGIN_ORDER.indexOf(factOriginState(b)),
             cell: (fact) => ({type: 'custom', component: ReviewCell, props: {cell: {type: 'origin', fact}}}),
@@ -230,7 +237,7 @@
             enableContextMenu={false}
             enableActions
             rowActions={sectionActions}
-            actionsColumnWidth="64px"
+            actionsColumnWidth={phone.current ? '44px' : '64px'}
             tableLayout="auto"
         />
     </div>
@@ -275,7 +282,7 @@
                             enableContextMenu={false}
                             enableActions
                             rowActions={factActions}
-                            actionsColumnWidth="64px"
+                            actionsColumnWidth={phone.current ? '44px' : '64px'}
                             tableLayout="auto"
                             emptyMessage={$t(`${KEY}.factsEmpty`, {default: 'No item matches these filters.'})}
                         />

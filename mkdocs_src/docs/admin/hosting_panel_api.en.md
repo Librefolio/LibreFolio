@@ -9,7 +9,7 @@ The rest of the guide starts on [Hosting for Others](hosting_providers.md).
 ## 🔌 Hosting Panel API {: #panel-api }
 
 Your hosting panel calls the instance without a user's session. Each of its calls belongs to a
-**scope**, and each scope but the restore has a token of its own, which opens that scope and nothing
+**scope**, and each scope but the restore and the metrics has a token of its own, which opens that scope and nothing
 else:
 
 | Scope | For | Routes | Token |
@@ -18,12 +18,13 @@ else:
 | `wake` | Run the price and exchange rate updates that are due, for example right after your panel wakes the instance: [Scheduled Wake-up](wake_sync.md#wake-sync) | `POST /api/v1/system/wake-sync` | `LIBREFOLIO_WAKE_TOKEN` |
 | `status` | Follow the setup of the [initial administrator](hosting_instances.md#initial-admin), the instance's mode and its restore: [The Setup Status](#panel-status) | `GET /api/v1/panel/status` | `LIBREFOLIO_PANEL_STATUS_TOKEN` |
 | `backup:restore` | Put a backup back on an instance that awaits it: [Restoring an Instance from Your Panel](hosting_panel_backups.md#panel-restore) | The seven routes under `/api/v1/backup/panel/restore` | None: a [signed ticket](#panel-api-tickets) only |
+| `metrics` | Read the instance's figures: space used, size of the database, counts, failed jobs: [The Metrics](#panel-metrics) | `GET /api/v1/panel/metrics` | None: a [signed ticket](#panel-api-tickets) only |
 
 Beside the tokens, a panel that runs many instances can sign a short-lived **ticket** for each call:
 see [Signed Tickets](#panel-api-tickets). A scope accepts its token, its tickets, or both; the
-`backup:restore` scope accepts tickets only, so it is off while the panel's public keys are not set.
+`backup:restore` and `metrics` scopes accept tickets only, so they are off while the panel's public keys are not set.
 
-The rules of this section hold for the four scopes alike. None of your panel's calls counts as a
+The rules of this section hold for the five scopes alike. None of your panel's calls counts as a
 visit for the [idle suspension](sleep_wake.md#idle-suspend-activity): each keeps the machine awake
 only while it runs.
 
@@ -102,7 +103,7 @@ Give each instance an origin of its own, for example its own host name. With the
 | Header | `typ` | exactly `lf-panel+jwt` |
 | Header | `kid` | one of the configured labels |
 | Claims | `aud` | the instance's audience, above |
-| Claims | `scope` | `backup`, `wake`, `status` or `backup:restore`: it must be the scope of the route |
+| Claims | `scope` | `backup`, `wake`, `status`, `backup:restore` or `metrics`: it must be the scope of the route |
 | Claims | `iat`, `exp` | Unix seconds, whole numbers; `exp − iat` is positive and at most 300 |
 | Claims | `jti` | a unique id of 16 to 64 characters among `A-Z a-z 0-9 _ -`, used once |
 
@@ -230,11 +231,11 @@ only: the private key is public, so **never use it for a real instance**.
 
 | Answer | When | `code` |
 | --- | --- | --- |
-| `404` | The scope is off: neither its token nor the panel's public keys are set (for `backup:restore`, the keys are not set). The body is `{"detail": "Not Found"}`, as for a path that does not exist | — |
-| `401` | No credential, or one that is not the scope's token and not a ticket LibreFolio can verify, another scope's token included (any token, for `backup:restore`). The answer carries `WWW-Authenticate: Bearer` | `backup_panel_unauthorized`, `wake_unauthorized`, `panel_status_unauthorized` or `backup_restore_unauthorized`, by scope |
+| `404` | The scope is off: neither its token nor the panel's public keys are set (for `backup:restore` and `metrics`, the keys are not set). The body is `{"detail": "Not Found"}`, as for a path that does not exist | — |
+| `401` | No credential, or one that is not the scope's token and not a ticket LibreFolio can verify, another scope's token included (any token, for `backup:restore` and `metrics`). The answer carries `WWW-Authenticate: Bearer` | `backup_panel_unauthorized`, `wake_unauthorized`, `panel_status_unauthorized`, `backup_restore_unauthorized` or `panel_metrics_unauthorized`, by scope |
 | `401` | A ticket signed by your panel, but refused: see [Why a Ticket Is Refused](#panel-api-ticket-refusals). The answer carries `WWW-Authenticate: Bearer` | `panel_ticket_…`, in every scope |
 | `429` | Too many refused credentials from your panel's address: see [The Limit on Refused Credentials](#panel-api-limit). The answer carries `Retry-After`, the seconds to wait | `panel_too_many_attempts`, in every scope |
-| `503` | The scope's token is set but cannot be used: shorter than 32 characters, a character that is not visible ASCII, or a `_FILE` that cannot give it. Or the [ticket settings](#panel-api-tickets) cannot be used, or the registry of used tickets. Each call logs an error that names the variable, never the token | `backup_panel_unavailable`, `wake_unavailable`, `panel_status_unavailable` or `backup_restore_unavailable`, by scope |
+| `503` | The scope's token is set but cannot be used: shorter than 32 characters, a character that is not visible ASCII, or a `_FILE` that cannot give it. Or the [ticket settings](#panel-api-tickets) cannot be used, or the registry of used tickets. Each call logs an error that names the variable, never the token | `backup_panel_unavailable`, `wake_unavailable`, `panel_status_unavailable`, `backup_restore_unavailable` or `panel_metrics_unavailable`, by scope |
 
 A scope that is off, or whose token or ticket settings cannot be used, answers before anything else:
 the credential of the call is not read, and nothing is counted. The `code` comes in the `detail` of the answer, with a
@@ -254,7 +255,7 @@ LibreFolio counts the credentials it refuses, per address:
   token waits too.
 - **A refusal counts when it proves nothing**: no credential, a wrong token, another scope's token,
   a ticket that cannot be verified, or a ticket signed with a key the instance does not hold. The
-  four scopes share one count: a panel that keeps sending a wrong backup token also waits for its
+  five scopes share one count: a panel that keeps sending a wrong backup token also waits for its
   wake-up and its status calls.
 - **A ticket with a valid signature is never counted**, whatever is wrong with it (expired, not
   yet valid, another instance, already used…): only the panel can sign one, so a panel whose clock
@@ -278,7 +279,7 @@ Every call to a scope that is on writes one line, `Hosting panel request`:
 | ⚠️ `warning` | `limited` | The `429` | `retry_after`, the seconds of `Retry-After` |
 | ⚠️ `warning` | `unavailable` | The `503` | `reason`: `unusable`, or `registry` when the registry of used tickets cannot be used. Just before it, an error line names the variable and what is wrong |
 
-- Every line also carries `scope` (`backup`, `wake`, `status` or `backup:restore`), `method`, `path` (without the
+- Every line also carries `scope` (`backup`, `wake`, `status`, `backup:restore` or `metrics`), `method`, `path` (without the
   query string), `credential`, the kind of credential the call presented (`token` or `ticket`), and
   the `request_id` of the request.
 - It never carries the token, the ticket, the value sent, a header, the query string or your panel's
@@ -325,7 +326,7 @@ checks, and logs an error for each one that fails. The **Security** tab of Setti
 [initial administrator](hosting_instances.md#initial-admin) stands: whether your customer has used the setup link, and
 until when the link works. It also gives the instance's `mode` and its `restore`
 ([Restoring an Instance from Your Panel](hosting_panel_backups.md#panel-restore)), how many places its users take, with the
-limit, and whether the owner's [new address](hosting_instances.md#owner-email-change) waits for its confirmation. Turn it on with a token of its own in
+limit, whether the owner's [new address](hosting_instances.md#owner-email-change) waits for its confirmation, and the language the owner chose, to write to them in it. Turn it on with a token of its own in
 `LIBREFOLIO_PANEL_STATUS_TOKEN`, as in [A Token per Scope](#panel-api-tokens), then:
 
 ```bash
@@ -334,7 +335,7 @@ curl -sS -H "Authorization: Bearer $LIBREFOLIO_PANEL_STATUS_TOKEN" \
 ```
 
 ```json
-{"admin_setup": "pending", "setup_expires_at": "2026-10-23T09:12:44.512312Z", "mode": "normal", "restore": null, "users_used": 3, "users_limit": 10, "owner_email_change": null, "instance_key": "ok", "users_over_limit": false}
+{"admin_setup": "pending", "setup_expires_at": "2026-10-23T09:12:44.512312Z", "mode": "normal", "restore": null, "users_used": 3, "users_limit": 10, "owner_email_change": null, "instance_key": "ok", "users_over_limit": false, "owner_language": "it"}
 ```
 
 | `admin_setup` | What it means | `setup_expires_at` |
@@ -347,15 +348,16 @@ curl -sS -H "Authorization: Bearer $LIBREFOLIO_PANEL_STATUS_TOKEN" \
 | Key | What it holds |
 | --- | --- |
 | `mode` | `normal`, or `awaiting_restore` while [`LIBREFOLIO_AWAIT_RESTORE`](hosting_panel_backups.md#await-restore) is on |
-| `restore` | `null` when no restore was ever recorded on this instance; otherwise `state` (`pending`, `in_progress`, `committed`, `rolled_back`, or `unreadable` when the state of the restore cannot be read), `reason` (why a restore was rolled back: `first_start_failed`, `swap_interrupted`, `swap_failed` or `stage_missing`; for `unreadable`, why the state cannot be read: `io`, `not_a_file` or `invalid`), `waiting` (why a confirmed restore still waits: `backup_running`, `other_data_directory`, `server_running` or `instance_blocked`), `backup_created_at` and `stage_id`. Each is `null` when it does not apply. It never says who confirmed the restore |
+| `restore` | `null` when no restore was ever recorded on this instance; otherwise `state` (`pending`, `in_progress`, `committed`, `rolled_back`, or `unreadable` when the state of the restore cannot be read), `reason` (why a restore was rolled back: `first_start_failed`, `swap_interrupted`, `swap_failed` or `stage_missing`; for `unreadable`, why the state cannot be read: `io`, `not_a_file` or `invalid`; for a `committed` restore, `owner_assignment` when the restore is done but the owner of the restored data has no account yet, so the instance serves no data until it has one: have the instance's administrator run `./dev.py backup pending --recover owner`, see [When the Owner of a Restored Instance Has No Account Yet](hosting_panel_backups.md#restore-owner-pending)), `waiting` (why a confirmed restore still waits: `backup_running`, `other_data_directory`, `server_running` or `instance_blocked`), `backup_created_at` and `stage_id`. Each is `null` when it does not apply. It never says who confirmed the restore |
 | `users_used` | The places the users take, a whole number from `0`: the active accounts, the invitations not yet used, revoked or expired, and the deactivated accounts that wait for their email verification while its link is live or, for the [initial administrator](hosting_instances.md#initial-admin), for the setup. Each account or invitation counts once. It is what `LIBREFOLIO_MAX_USERS` limits |
-| `users_limit` | The value of `LIBREFOLIO_MAX_USERS`, a whole number from `1`; `null` when it is not set, which means no limit |
+| `users_limit` | The value of `LIBREFOLIO_MAX_USERS`, a whole number from `1`; `null` when it is not set, which means no limit. Also `null` when the variable holds a value that cannot be used (`0`, `abc`): the route still answers `200`, never `500`; have the value fixed, as the instance does not start with it |
 | `owner_email_change` | Where a [change of the owner's address](hosting_instances.md#owner-email-change) stands: `pending` (the new address was sent a confirmation link and the account keeps the old one until it is clicked), `blocked` (another account already holds the new address, so nothing changes: change the variable again to a free address) or `null` (no change is waiting, the instance is not managed, or its initial administrator has not set up yet). Never the address |
 | `instance_key` | `ok`, or `mismatch` when the instance key it has is not the one its data was written with ([The Key Check](configuration_secrets.md#instance-key-check)). With `mismatch`, your backup starts answer `409` `backup_instance_key_mismatch` and the wake-up runs no job; the instance keeps serving. Never the fingerprint |
+| `owner_language` | The language the instance's owner chose in their account settings: `en`, `it`, `fr` or `es`. Use it to write to your customer in their own language. `null` when the instance has no owner, or the owner has not chosen a language yet. Never anything else of the account |
 | `users_over_limit` | `true` while the active accounts outnumber `users_limit`, for example after your customer moved to a smaller plan: ordinary users are then refused until an administrator chooses who keeps access, and the others are deactivated, never deleted. `false` otherwise, and always `false` when `users_limit` is `null`. Invitations and accounts waiting for their email verification take places, so they count in `users_used`, but they never make this `true`. One yes or no, never who |
 
-- The answer holds these nine keys and nothing else: `admin_setup`, `setup_expires_at`, `mode`,
-  `restore`, `users_used`, `users_limit`, `owner_email_change`, `instance_key` and `users_over_limit`. The two counts are numbers only,
+- The answer holds these ten keys and nothing else: `admin_setup`, `setup_expires_at`, `mode`,
+  `restore`, `users_used`, `users_limit`, `owner_email_change`, `instance_key`, `users_over_limit` and `owner_language`. The two counts are numbers only,
   never a username, an email address or an id; `owner_email_change` never carries the address either, `instance_key` never the fingerprint, and `users_over_limit` never says who. Ignore the keys you do not know: a later version may add some.
 - 📏 Compare `users_used` with `users_limit` to know when an instance is full. At the limit, nobody
   can sign up without an invitation and administrators cannot create invitations: see
@@ -375,6 +377,53 @@ curl -sS -H "Authorization: Bearer $LIBREFOLIO_PANEL_STATUS_TOKEN" \
   refusals are those of every scope ([Refused Calls](#panel-api-refusals)), with the codes
   `panel_status_unauthorized` and `panel_status_unavailable`. A [signed ticket](#panel-api-tickets)
   of scope `status` opens it too.
+
+### 📈 The Metrics {: #panel-metrics }
+
+`GET /api/v1/panel/metrics` gives your panel a few figures of the instance, to show your customer how
+much room it uses and to see at a glance which instance needs a look. It is read-only, and the figures
+are numbers, dates and ids of checks: never an email address, a user or broker name, a path or a secret.
+
+Unlike the status, it has **no token**: only a [signed ticket](#panel-api-tickets) of scope `metrics`
+opens it, so it is off (`404`) while `LIBREFOLIO_PANEL_PUBLIC_KEYS` is not set. It shares the limit on
+[refused credentials](#panel-api-limit) with the other scopes.
+
+```bash
+curl -sS -H "Authorization: Bearer $TICKET" \
+  https://librefolio.example.com/api/v1/panel/metrics
+```
+
+```json
+{"started_at": "2026-10-29T06:00:12.480113Z", "storage_used_mb": 412.6, "storage_limit_mb": 1024.0, "database_mb": 38.4, "uploads_mb": 2.1, "config_warnings": [{"check_id": "platform.jwt_secret", "severity": "warning"}], "price_refresh_last_ok_at": "2026-10-30T08:10:03.221890Z", "price_refresh_errors_24h": 0, "jobs_failed_24h": 0, "brokers_count": 3, "transactions_count": 1842, "assets_count": 57, "plugins_enabled": ["yfinance"], "market_data_credits_used": null, "market_data_credits_limit": null}
+```
+
+| Key | What it holds |
+| --- | --- |
+| `started_at` | When the server process started, in UTC. A restart of the instance moves it |
+| `storage_used_mb`, `storage_limit_mb` | The space used on the volume that holds the instance's data folder, and the size of that volume, in MiB (1 MiB is 1024 × 1024 bytes), to a tenth. The used space is everything on the volume, not only LibreFolio's files |
+| `database_mb` | The size of the database file with its write-ahead log, in MiB |
+| `uploads_mb` | The size of the uploaded files, in MiB. `0.0` when nothing was uploaded |
+| `config_warnings` | The checks of the **Security** tab that are not `ok`, in the tab's order, each as `check_id` and `severity` (`info`, `warning` or `error`) and nothing else: no message, no detail, no value. An empty list means all clear |
+| `price_refresh_last_ok_at` | When a price refresh of the scheduler (current prices or history sync) last ended ok, in UTC; `null` when the job log holds none |
+| `price_refresh_errors_24h` | How many items the price refreshes failed on in the last 24 hours: the failed items of the current-price runs, and the failed assets and rates of the history syncs |
+| `jobs_failed_24h` | How many scheduler runs, of any job, ended in error in the last 24 hours |
+| `brokers_count`, `transactions_count`, `assets_count` | How many brokers, transactions and assets the instance holds |
+| `plugins_enabled` | The sorted codes of the price providers some asset is assigned to |
+| `market_data_credits_used`, `market_data_credits_limit` | Always `null` today: no price provider counts credits |
+
+- The answer holds these fifteen keys, always all of them. Ignore the keys you do not know: a later
+  version may add some.
+- **A figure that cannot be measured is `null`**, never an error: each one fails alone, the others
+  stay, and LibreFolio logs a warning that names the keys. Do not read `null` as zero.
+- The last 24 hours of `price_refresh_errors_24h` and `jobs_failed_24h` are counted from the
+  [scheduler's job log](settings.md#market-data-scheduler), which keeps its last 500 entries only. On an
+  instance whose jobs run very often, the figures reach back less than 24 hours.
+- It answers on a [blocked instance](hosting_instances.md#instance-block) and on an instance that
+  [awaits a restore](hosting_panel_backups.md#await-restore) too, so your panel can still read the
+  figures there. It does not count as a visit for the
+  [idle suspension](sleep_wake.md#idle-suspend-activity).
+- Its refusals are those of every scope ([Refused Calls](#panel-api-refusals)), with the codes
+  `panel_metrics_unauthorized` and `panel_metrics_unavailable`.
 
 ---
 

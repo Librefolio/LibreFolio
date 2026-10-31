@@ -159,6 +159,8 @@ ALLOWED_ROUTES = {
     "backend.app.api.v1.system.info.get_system_info": ("GET", "/api/v1/system/info"),
     "backend.app.api.v1.system.wake.wake_sync": ("POST", "/api/v1/system/wake-sync"),
     "backend.app.api.v1.panel.get_panel_status": ("GET", "/api/v1/panel/status"),
+    # CL-M1: the panel's figures, a signed ticket of scope `metrics` only (no token opens it): allowed so that the ticket decides, never the 423. Red until CL-M1.
+    "backend.app.api.v1.panel.get_panel_metrics": ("GET", "/api/v1/panel/metrics"),
     # H-62 (contract L3 §5): the hosting panel's restore, ticket only. Allowed by the block so that the credential is
     # checked first (404/401/429/503 of its scope) and only then the route's own 423 instance_blocked: a caller without a
     # valid ticket never learns the block. Red until H-62.

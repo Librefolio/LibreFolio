@@ -35,12 +35,14 @@ _StatusWaiting = _STATUS["waiting"].annotation
 class PanelRestoreSummary(BaseModel):
     """The restore of the instance, in ``GET /panel/status``: its state and why it waits, without who confirmed it.
     ``unreadable`` (D7): the state of the restore cannot be read, ``reason`` then says why (``io``, ``not_a_file``,
-    ``invalid``), and the instance serves no data until its administrator recovers it."""
+    ``invalid``), and the instance serves no data until its administrator recovers it. ``committed`` with the reason
+    ``owner_assignment`` (CL-6): the restore is done, but the owner of the restored data has no account yet, and the
+    instance serves no data until it has one."""
 
     model_config = ConfigDict(extra="forbid")
 
     state: _StatusState | Literal["unreadable"]
-    reason: _StatusReason | Literal["io", "not_a_file", "invalid"] = None
+    reason: _StatusReason | Literal["io", "not_a_file", "invalid", "owner_assignment"] = None
     waiting: _StatusWaiting = None
     backup_created_at: datetime | None = None
     stage_id: str | None = None
@@ -79,6 +81,50 @@ class PanelStatusResponse(BaseModel):
         ...,
         description="True while the active accounts outnumber the valid limit (LIBREFOLIO_MAX_USERS), for example after the move to a smaller plan: ordinary users are refused until an administrator chooses who keeps access. Invitations and accounts waiting for their verification take places (users_used) but never make it true; false without a limit. A yes or no, never who (H5-8)",
     )
+    owner_language: Literal["en", "it", "fr", "es"] | None = Field(
+        None,
+        description="The language the instance's owner (the paying administrator) chose in their account settings, for the hosting provider's own messages to them; null when the instance has no owner, the owner has not chosen one yet, or it is not one of the four. Never anything else of the account (CL-9)",
+    )
+
+
+class PanelConfigWarning(BaseModel):
+    """One check of the Security tab that is not ``ok``: its id and how serious it is, never its detail (CL-M1)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    check_id: str = Field(..., description="The check's id, as `GET /security/checks` lists it (`platform.jwt_secret`)")
+    severity: Literal["info", "warning", "error"] = Field(..., description="How serious the check found it; an `ok` check is not listed")
+
+
+class PanelMetricsResponse(BaseModel):
+    """``GET /api/v1/panel/metrics``: read-only figures of the instance for the hosting provider (CL-M1).
+
+    Figures, never who or what: no email, user or broker name, path or secret. Every key is always present; a figure
+    that could not be measured is ``null`` (and logged), never an error, and each one fails alone. Sizes are in MiB
+    (1024 * 1024), to a tenth.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    started_at: datetime | None = Field(..., description="When this server process started, in UTC (a restart of the instance moves it)")
+    storage_used_mb: float | None = Field(..., description="Space used on the volume that holds the instance's data directory, in MiB: everything on it, not only LibreFolio's files")
+    storage_limit_mb: float | None = Field(..., description="Size of that volume, in MiB: the room the plan gives the instance")
+    database_mb: float | None = Field(..., description="Size of the SQLite database file with its write-ahead log, in MiB")
+    uploads_mb: float | None = Field(..., description="Size of the uploaded files (the `custom-uploads` folder, symbolic links not followed), in MiB")
+    config_warnings: list[PanelConfigWarning] | None = Field(..., description="The Security tab's checks that are not ok, as `check_id` and `severity` only: no detail, no message, no value; in the tab's order")
+    price_refresh_last_ok_at: datetime | None = Field(..., description="When a price refresh of the scheduler (current prices or history sync) last ended ok, from the job log; null when none is in the log")
+    price_refresh_errors_24h: int | None = Field(..., ge=0, description="Items the scheduler's price refreshes failed on in the last 24 hours, in total (current prices: the failed items; history sync: the failed assets and rates), from the job log")
+    jobs_failed_24h: int | None = Field(
+        ...,
+        ge=0,
+        description="Scheduler runs, of any job, that ended in error in the last 24 hours. Counted from the job log, which keeps the last 500 entries only: on a busy instance it can reach back less than 24 hours",
+    )
+    brokers_count: int | None = Field(..., ge=0, description="How many brokers the instance holds (there is no portfolio table)")
+    transactions_count: int | None = Field(..., ge=0, description="How many transactions the instance holds")
+    assets_count: int | None = Field(..., ge=0, description="How many assets the instance holds")
+    plugins_enabled: list[str] | None = Field(..., description="The price providers in use: the sorted codes of the providers some asset is assigned to")
+    market_data_credits_used: int | None = Field(..., description="Always null today: no price provider has credits")
+    market_data_credits_limit: int | None = Field(..., description="Always null today: no price provider has credits")
 
 
 class PanelRestoreStageReport(BaseModel):

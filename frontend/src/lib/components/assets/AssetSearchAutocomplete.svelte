@@ -33,7 +33,8 @@
     import {writeTextToClipboard} from '$lib/utils/clipboard';
     import {APP_VERSION} from '$lib/version';
     import {hasPremium, orderSearchResults, splitSearchResults, type ProviderTier} from './assetSearchSections';
-    import {buildSearchReport, reportHref, supportChannel, type ProviderOutcome, type SearchReportContext, type SupportChannel} from './assetSearchReport';
+    import {buildSearchReport, type ProviderOutcome, type SearchReportContext} from './assetSearchReport';
+    import {reportHref, supportChannel, type SupportChannel} from '$lib/features/support/supportChannel';
 
     // =========================================================================
     // Types

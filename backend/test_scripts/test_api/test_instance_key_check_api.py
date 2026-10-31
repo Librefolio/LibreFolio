@@ -179,8 +179,8 @@ def prepare_wake(target: Instance) -> tuple[dict[str, str], list[str]]:
 
 
 def test_the_panel_status_declares_instance_key_required_and_after_the_owners_change():
-    """The model: ``instance_key`` is a REQUIRED ``ok``/``mismatch`` choice declared right after ``owner_email_change``; the pinned key set of the panel's status holds nine keys (H5-8 adds ``users_over_limit`` after it)."""
-    assert NEW_KEY in PANEL_STATUS_KEYS and len(PANEL_STATUS_KEYS) == 9, f"H5-7, H5-8: the pinned key set of test_await_restore_mode_api.py holds {NEW_KEY} (nine keys): {sorted(PANEL_STATUS_KEYS)}"
+    """The model: ``instance_key`` is a REQUIRED ``ok``/``mismatch`` choice declared right after ``owner_email_change``; the pinned key set of the panel's status holds ten keys (H5-8 adds ``users_over_limit`` after it, CL-9 ``owner_language``)."""
+    assert NEW_KEY in PANEL_STATUS_KEYS and len(PANEL_STATUS_KEYS) == 10, f"H5-7, H5-8, CL-9: the pinned key set of test_await_restore_mode_api.py holds {NEW_KEY} (ten keys): {sorted(PANEL_STATUS_KEYS)}"
     schema = PanelStatusResponse.model_json_schema()
     properties = schema.get("properties", {})
     assert NEW_KEY in properties, f"H5-7: PanelStatusResponse has no {NEW_KEY}: {sorted(PanelStatusResponse.model_fields)}"
@@ -188,7 +188,7 @@ def test_the_panel_status_declares_instance_key_required_and_after_the_owners_ch
     assert NEW_KEY in schema.get("required", []), "required: no default, a panel that reads it never meets an absent state"
     order = list(PanelStatusResponse.model_fields)
     assert order.index(NEW_KEY) == order.index("owner_email_change") + 1, f"declared right after owner_email_change: {order}"
-    assert len(order) == 9, f"nine keys: {order}"
+    assert len(order) == 10, f"ten keys: {order}"
 
 
 def test_the_openapi_says_it_the_start_409_and_the_wake_status(app):
@@ -203,8 +203,8 @@ def test_the_openapi_says_it_the_start_409_and_the_wake_status(app):
 
 
 @pytest.mark.asyncio
-async def test_the_panel_status_says_ok_with_this_keys_check_file_and_holds_nine_keys(keyed):
-    """A check file of the key in force: ``instance_key`` is ``ok``, the answer holds exactly the nine keys, never the value."""
+async def test_the_panel_status_says_ok_with_this_keys_check_file_and_holds_ten_keys(keyed):
+    """A check file of the key in force: ``instance_key`` is ``ok``, the answer holds exactly the ten keys, never the value."""
     write_value_of(keyed, KEY_A)
     body = await status_body(keyed)
     assert set(body) == PANEL_STATUS_KEYS, f"exactly {sorted(PANEL_STATUS_KEYS)}: {sorted(body)}"

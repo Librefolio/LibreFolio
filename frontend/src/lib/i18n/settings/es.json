@@ -418,7 +418,9 @@
         "info": "Información"
       },
       "blockedScript": "Esta pestaña del navegador bloqueó un script que LibreFolio no envió ({sources}): lo añade un proxy, una CDN o una extensión del navegador. Desactiva esa inyección para este sitio.",
-      "guide": "Guía"
+      "guide": "Guía",
+      "support": "Contactar con el soporte",
+      "supportMissing": "Para resolver esto, contacta con quien te proporciona el servicio."
     },
     "protectedEmail": {
       "title": "Aquí no puedes cambiar el correo",

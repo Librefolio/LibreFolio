@@ -181,7 +181,11 @@
       "invalidNumber": "Número no válido en \"{column}\": \"{value}\"",
       "invalidValue": "Valor no válido en \"{column}\": \"{value}\"",
       "duplicate": "Valor duplicado para {label}: {key}"
-    }
+    },
+    "statusValidRows": "{count, plural, one {# fila válida} other {# filas válidas}}",
+    "statusErrors": "{count, plural, one {# error} other {# errores}}",
+    "statusDuplicates": "{label} duplicado",
+    "duplicatesShort": "duplicados"
   },
   "dataEditor": {
     "staleTooltip": "Ocultar filas rellenadas hacia atrás (⚠️ obsoletas). Son puntos de relleno copiados del dato real más cercano.",
@@ -313,7 +317,11 @@
   "nav": {
     "dashboard": "Panel",
     "settings": "Configuración",
-    "toggleMenu": "Abrir o cerrar el menú"
+    "toggleMenu": "Abrir o cerrar el menú",
+    "checkingAuthentication": "Comprobando el acceso…",
+    "closeSidebar": "Cerrar el menú",
+    "expandSidebar": "Expandir el menú",
+    "collapseSidebar": "Contraer el menú"
   },
   "prices": {
     "sync": {
@@ -369,7 +377,8 @@
       "empty": "Sin opciones"
     },
     "confirmBulkAction": "¿Estás seguro de querer realizar esta acción en",
-    "filterLabel": "Filtro"
+    "filterLabel": "Filtro",
+    "resetLayout": "Restablecer disposición"
   },
   "date": {
     "today": "Hoy",
