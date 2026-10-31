@@ -41,7 +41,7 @@
     }
 </script>
 
-<div class="w-full max-w-lg bg-lf-card text-lf-primary border border-lf-raised rounded-2xl shadow-2xl shadow-lf-shadow overflow-hidden flex flex-col font-sans" data-testid="login-modal">
+<div class="w-full max-w-lg bg-lf-card text-lf-primary border border-lf-raised rounded-2xl shadow-2xl shadow-lf-shadow overflow-hidden flex flex-col font-sans" data-instance={instanceConfig.loaded || instanceConfig.failed ? 'ready' : 'pending'} data-testid="login-modal">
     <!-- Header Section (brand green) -->
     <div class="bg-lf-brand p-8 flex flex-col items-center justify-center space-y-3">
         <div class="flex items-center space-x-3 text-lf-on-brand">
@@ -114,8 +114,8 @@
             </button>
 
             <!-- Register Link: while anyone may register, or while the instance has no account (its first account can be
-                 created in any mode, decision 36); until the instance answers, its default (open) keeps it -->
-            {#if instanceConfig.config.accounts.registration_mode === 'open' || instanceConfig.config.accounts.first_account_open === true}
+                 created in any mode, decision 36); not before the instance answered (its default, open, would flash the link on an invitation-only instance); when the request failed, the default stands -->
+            {#if (instanceConfig.loaded || instanceConfig.failed) && (instanceConfig.config.accounts.registration_mode === 'open' || instanceConfig.config.accounts.first_account_open === true)}
                 <div class="text-center pt-2 text-xs text-lf-secondary">
                     <span>{$_('auth.noAccount')} </span>
                     <button class="font-bold text-lf-link hover:underline" data-testid="goto-register" on:click={() => dispatch('gotoRegister')} type="button">
