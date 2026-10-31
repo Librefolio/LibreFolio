@@ -542,6 +542,12 @@ def cmd_db_check(args):
     db_file, ok = _existing_db_file(args)
     if not ok:
         return 1
+    if getattr(args, "integrity", False):
+        print(Colors.success(f"Checking database integrity (read-only): {db_file or get_database_path()}"))
+        command = ["python", "-m", "backend.app.services.platform.db_integrity_check"]
+        if db_file is not None:
+            command += ["--db-file", str(db_file)]
+        return run_pipenv(command)
     print(Colors.success(f"Checking database constraints: {db_file or get_database_path()}"))
     env = {"ALEMBIC_DATABASE_URL": f"sqlite:///{db_file}"} if db_file else None
     return run_pipenv(["python", "-m", "backend.alembic.check_constraints_hook"], env=env)
@@ -2695,8 +2701,9 @@ Examples:
     p = subparsers.add_parser("db", help="🖥️  Database commands")
     db_sub = p.add_subparsers(dest="db_cmd", metavar="action")
 
-    db_p = db_sub.add_parser("check", help="Verify CHECK constraints")
+    db_p = db_sub.add_parser("check", help="Verify CHECK constraints (--integrity: the restore's checks on the file, read-only)")
     db_p.add_argument("path", nargs="?", help="Database file (default: the configured one; a relative path starts at the project root)")
+    db_p.add_argument("--integrity", action="store_true", help="Instead: integrity_check, foreign_key_check, text that is not UTF-8 (table and rowid) and the Alembic revision")
     db_p.set_defaults(func=cmd_db_check)
 
     db_p = db_sub.add_parser("currencies", help="List stored currency codes that are not ISO 4217 codes")
