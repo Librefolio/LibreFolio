@@ -1,13 +1,25 @@
 <script lang="ts">
+    import {onMount} from 'svelte';
+    import {afterNavigate, goto} from '$app/navigation';
     import {page} from '$app/stores';
     import {_} from 'svelte-i18n';
     import AnimatedBackground from '$lib/components/ui/AnimatedBackground.svelte';
+
+    // An address that leads nowhere takes the user back to the page they came from in the app, or to the Dashboard (which
+    // sends a signed-out visitor to the login). Any other error stays on its card.
+    let previous: string | null = null;
+    afterNavigate(({from}) => {
+        previous = from ? from.url.pathname + from.url.search : null;
+    });
+    onMount(() => {
+        if ($page.status === 404) void goto(previous ?? '/dashboard', {replaceState: true});
+    });
 </script>
 
 <AnimatedBackground />
 
 <div class="min-h-screen flex items-center justify-center p-4">
-    <div class="w-full max-w-md bg-lf-card text-lf-primary border border-lf-raised rounded-2xl shadow-2xl shadow-lf-shadow overflow-hidden">
+    <div data-testid="error-page" class="w-full max-w-md bg-lf-card text-lf-primary border border-lf-raised rounded-2xl shadow-2xl shadow-lf-shadow overflow-hidden">
         <!-- Header (brand green) -->
         <div class="bg-lf-brand p-6 flex flex-col items-center justify-center">
             <div class="text-6xl text-lf-on-brand mb-2">

@@ -82,7 +82,7 @@ import {currentLanguage} from '$lib/stores/app/language';
 import {toasts} from '$lib/stores/app/toastStore.svelte';
 import {getAssetProviderName, isParametricProvider} from '$lib/utils/providerHelpers';
 import {DEFAULT_INSTANCE_CONFIG, instanceConfig} from '$lib/features/instance/instanceConfig.svelte';
-import {GITHUB_NEW_ISSUE_URL} from './assetSearchReport';
+import {GITHUB_NEW_ISSUE_URL} from '$lib/features/support/supportChannel';
 
 /** The creation callbacks, typed from the component: the contract under test (O-20). */
 type OnCreated = NonNullable<ComponentProps<typeof AssetModal>['oncreated']>;

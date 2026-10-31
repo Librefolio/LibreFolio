@@ -169,7 +169,10 @@ your users sign in again after each restart. See
   it, the asset search offers no **Let us know** link: the public GitHub issue a self-hosted
   instance falls back to would publish the instance's profile, its provider codes and your
   customer's asset identifiers. It is also the **Contact support** link of the page shown while
-  [a restore has stopped half way](hosting_panel_backups.md#restore-interrupted). Other help links in the app may still
+  [a restore has stopped half way](hosting_panel_backups.md#restore-interrupted), and of the three
+  [security checks](settings.md) only you can solve (`platform.hosting_panel`,
+  `backup.panel_token`, `accounts.owner_email_change`), with the check's code, its severity, the
+  instance's address, the version and the date in the message. Other help links in the app may still
   point to LibreFolio's GitHub. See «Main Options» in [Environment Variables](configuration.md).
 
     **A support form that fills itself in.** With a page, **Let us know** opens it in a new tab

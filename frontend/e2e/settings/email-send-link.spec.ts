@@ -411,7 +411,8 @@ test.describe('«Send by email» in the share dialogs — links ready', () => {
             const trigger = action.getByTestId('send-link-email-language-button');
             await expect(trigger, 'an invitation offers the language of its email').toBeEnabled({timeout: UI_MS});
             await trigger.click();
-            const list = action.getByTestId('send-link-email-language-dropdown');
+            // The list of a SimpleSelect is in a portal on <body>, not inside the select: looked up from the page
+            const list = action.page().getByTestId('send-link-email-language-dropdown');
             await expect(list, 'the select opens its list').toBeVisible({timeout: UI_MS});
             await expect(list.getByTestId('send-link-email-language-option-instance'), 'the instance’s language is chosen by default').toHaveAttribute('aria-selected', 'true');
             await list.getByTestId('send-link-email-language-option-it').click();

@@ -57,7 +57,9 @@ of being copied by hand. While email is **Ready** and `LIBREFOLIO_PUBLIC_URL` ca
 3. For an invitation, choose the **Language of the email**: **The instance's language** writes it
    in the instance's **Default Language** ([Global Settings](settings.md)); pick English,
    Italiano, Français or Español for someone who reads another one. A reset link goes in its
-   account's language.
+   account's language. To set the **Default Language** before any administrator has saved it, put
+   `LIBREFOLIO_DEFAULT_LANGUAGE` in the `.env` file (`en`, `it`, `fr` or `es`): see
+   [Environment Variables](configuration_accounts.md#accounts).
 4. Click **Send by email**. The dialog says *Sent to …* with the address and the language the email
    was written in, or why the email did not go out ([Sending Errors](email_troubleshooting.md#sending-errors)).
 

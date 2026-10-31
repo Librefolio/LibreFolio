@@ -22,7 +22,8 @@ only where the operator asked for them. The contract:
     other script, style sheet and image from the same origin; the OpenAPI address in a ``data-openapi-url`` attribute
     (read by the start script); no Google Fonts, no ``fastapi.tiangolo.com`` favicon. The start scripts name no third party
     (Swagger's ``validatorUrl`` is null).
-(c) ``enabled=False`` registers nothing: the app answers 404, as for a path that does not exist.
+(c) ``enabled=False`` registers nothing: the app answers 404, as for a path that does not exist. With the static site installed after it, as in ``main.py`` (FB-23): a browser navigation to the three addresses is
+    redirected to ``/`` (302) and any other request gets a JSON 404 ``{"detail": "Not Found"}``, never the catch-all's HTML 404.
 (d) The wiring of ``main.py``: FastAPI is built with ``docs_url=None`` and ``redoc_url=None`` always and an
     ``openapi_url`` that depends on ``api_docs_enabled()`` (``/api/v1/openapi.json`` when on, ``None`` off), and
     ``install_api_docs(app, enabled=api_docs_enabled())`` runs before ``install_static_site(app)``, whose catch-all must stay
@@ -506,6 +507,55 @@ async def test_not_enabled_the_route_does_not_exist(path: str) -> None:
     response = await get(build_app(enabled=False), path)
 
     assert response.status_code == 404, f"GET {path} answered {response.status_code} with enabled=False, wanted 404"
+
+
+def static_site_app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, *, enabled: bool) -> FastAPI:
+    """``build_app(enabled=...)`` followed by ``install_static_site``, as ``main.py`` wires them (our pages first, the SPA catch-all last), over a fake build and a fake documentation site under ``tmp_path``."""
+    from backend.app.services.platform import static_site  # noqa: PLC0415 — only the cases of FB-23 need the static site
+
+    build, site = tmp_path / "build", tmp_path / "site"
+    for folder, name, content in ((build, "index.html", b"<!doctype html><title>index</title>"), (build, "200.html", b"<!doctype html><title>spa fallback</title>"), (site, "index.html", b"<!doctype html><title>docs</title>")):
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / name).write_bytes(content)
+    monkeypatch.setattr(static_site, "FRONTEND_BUILD_DIR", build)
+    monkeypatch.setattr(static_site, "SITE_DIR", site)
+    app = build_app(enabled=enabled)
+    static_site.install_static_site(app)
+    return app
+
+
+async def get_with(app: FastAPI, path: str, headers: dict[str, str]) -> httpx.Response:
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://librefolio.test") as client:
+        return await client.get(path, headers=headers, timeout=TIMEOUT)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("path", [DOCS_PATH, REDOC_PATH, OPENAPI_PATH], ids=["docs", "redoc", "openapi-json"])
+async def test_not_enabled_with_the_static_site_a_navigation_goes_to_the_app_and_a_client_gets_a_json_404(path: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """FB-23 (checkpoint 1 of workstream H), the same ``enabled=False`` as the case above but with ``install_static_site`` installed after it, as in
+    ``main.py``: the SPA catch-all would be the one to answer, and it must not answer an HTML 404. ``/api/v1/docs``, ``/api/v1/redoc`` and
+    ``/api/v1/openapi.json`` are redirected to ``/`` (``302``, ``Location: /``) when the request is a browser navigation (``Sec-Fetch-Mode: navigate``)
+    and are a JSON 404 ``{"detail": "Not Found"}`` for any other request (httpx's default ``Accept: */*``). Barriers: with ``enabled=True`` the two pages
+    are served to the same navigation (``openapi.json`` is never published by an app built with ``openapi_url=None``), and the static site serves the
+    SPA fallback, so the redirect and the 404 come from the address and not from a missing site."""
+    print_section(f"FB-23: {path} not enabled, with the static site")
+    on = static_site_app(tmp_path / "on", monkeypatch, enabled=True)
+    off = static_site_app(tmp_path / "off", monkeypatch, enabled=False)
+    navigation = {"Sec-Fetch-Mode": "navigate"}
+    if path != OPENAPI_PATH:
+        served = await get_with(on, path, navigation)
+        assert served.status_code == 200 and served.headers.get("content-type", "").startswith("text/html"), f"barrier: with enabled=True a navigation to {path} gets our page: {served.status_code} {served.headers.get('content-type')!r}"
+    spa = await get_with(off, "/some/client/route", navigation)
+    assert spa.status_code == 200, f"barrier: the static site serves the SPA fallback: {spa.status_code}"
+
+    redirected = await get_with(off, path, navigation)
+    refused = await get_with(off, path, {})
+
+    assert (redirected.status_code, redirected.headers.get_list("location")) == (302, ["/"]), f"a navigation to {path} (not enabled) is redirected to /: {redirected.status_code} {redirected.text[:80]!r}"
+    assert (
+        refused.status_code == 404 and refused.headers.get("content-type", "").split(";")[0] == "application/json" and refused.json() == {"detail": "Not Found"}
+    ), f"a client asking for {path} (not enabled) gets a JSON 404: {refused.status_code} {refused.headers.get('content-type')!r} {refused.text[:80]!r}"
+    print_success(f"{path}: 302 -> / for a navigation, JSON 404 for a client")
 
 
 def test_not_enabled_registers_no_route_at_all() -> None:

@@ -223,10 +223,10 @@ async function typeSecretAfterItsContent(key: string, value: string): Promise<vo
     await fireEvent.input(input, {target: {value: input.value + value}});
 }
 
-/** Opens the field's select and picks the option: its options are looked for inside the field, never elsewhere. */
+/** Opens the field's select and picks the option. The open list is a child of <body> (H6-1), so it is looked for there; only one list is open at a time. */
 async function choose(key: string, value: string): Promise<void> {
     await fireEvent.click(inSetting(key, 'plugin-setting-select-button'));
-    await fireEvent.click(await within(setting(key)).findByTestId(`plugin-setting-option-${value}`));
+    await fireEvent.click(await screen.findByTestId(`plugin-setting-option-${value}`));
 }
 
 async function pressSave(): Promise<void> {
@@ -341,8 +341,8 @@ describe('PluginSettingsForm — one control per field', () => {
         expect(discardButton(), 'nothing to discard yet').toBeDisabled();
 
         await fireEvent.click(inSetting('region', 'plugin-setting-select-button'));
-        expect(await within(setting('region')).findByTestId('plugin-setting-option-eu'), 'the option in force is the selected one').toHaveAttribute('aria-selected', 'true');
-        expect(within(setting('region')).getByTestId('plugin-setting-option-us')).toHaveAttribute('aria-selected', 'false');
+        expect(await screen.findByTestId('plugin-setting-option-eu'), 'the option in force is the selected one').toHaveAttribute('aria-selected', 'true');
+        expect(screen.getByTestId('plugin-setting-option-us')).toHaveAttribute('aria-selected', 'false');
     });
 
     it('PSF-02: each control makes its edit, and Save writes one item per edit, in the order the plugin declares its fields', async () => {
