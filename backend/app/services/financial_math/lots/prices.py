@@ -22,7 +22,8 @@ def opening_reference_price(
     """The reference price of ``lot`` at its opening: ``(price, currency, opening date, source)``.
 
     A lot the FIFO engine gave a market reference (one opened by an ADJUSTMENT, from the home's daily mark on its
-    opening day: a market quote, or a BUY/SELL price, carried forward) keeps that price, in the currency of that mark.
+    opening day: a market quote, a BUY/SELL price or a transfer-cost estimate, carried forward) keeps that price, in the
+    currency of that mark.
     The date is always the opening date, so the reference converts at the rate of the day it stands for (P21), never
     at the date of an older observation it was carried from.
     """
@@ -44,7 +45,8 @@ def opening_reference_price(
 def last_day_without_observation(price_series: AssetPriceSeries, days: Sequence[date_type]) -> date_type | None:
     """The last of the ascending ``days`` with no observation on or before it; None when the first already has one.
 
-    Such a day has no price at all — no quote and no BUY or SELL, on it or before it — so the lots value an open lot
+    Such a day has no price at all — no quote, no BUY or SELL and no transfer-cost estimate (W-B94), on it or before it —
+    so the lots value an open lot
     at its cost there, as the Dashboard values a holding (J-17). They are always the days before the asset's first
     observation: a later day resolves to that observation, carried forward. So the days with an observation are a tail
     of ``days``, found by bisection (L1a): a few lookups, whatever the length of the history.

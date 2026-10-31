@@ -76,9 +76,9 @@ class AllocationItem(StrictModel):
     """Single allocation slice (by type, sector, geography, or asset)."""
 
     name: str = Field(..., description="Category name, e.g. 'ETF', 'Technology', 'US', 'Unknown'")
-    value: SafeDecimal = Field(
+    value: Optional[SafeDecimal] = Field(
         ...,
-        description="Percentage share of the total, rounded to 0.01: amount / sum of all slices × 100. The shares add up to 100; with negative cash the cash slice is below zero and the others can exceed 100.",
+        description="Percentage share of the total, rounded to 0.01: amount / sum of all slices × 100. The shares add up to 100; with negative cash the cash slice is below zero and the others can exceed 100. None for every slice when the sum of the slices is zero or negative (no meaningful share); the amounts stay.",
     )
     amount: SafeDecimal = Field(..., description="Absolute value in base currency")
     emoji: Optional[str] = Field(None, description="Display emoji for the category (sector/type/geo)")
@@ -1711,6 +1711,7 @@ class PortfolioReportQuery(StrictModel):
     include_cost_history: bool = Field(False, description="Include the signed FEE+TAX cost history (batch 2). Same sparse/eager caller policy as include_income_history.")
     include_deposit_history: bool = Field(False, description="Include the DEPOSIT history (batch 2). Same sparse/eager caller policy as include_income_history.")
     include_acquisition_funding: bool = Field(False, description="Include the new-vs-reinvested BUY funding split (batch 2). Same sparse/eager caller policy as include_income_history.")
+    apply_ownership_share: bool = Field(True, description="True (default): an owner counts its share of each broker. False: every broker counts whole, as an editor sees it — the broker page (D4).")
 
 
 class PortfolioReportResponse(StrictModel):
@@ -1755,6 +1756,7 @@ class PositionsSeriesQuery(StrictModel):
     date_range: Optional[OpenDateRangeModel] = Field(None, description="The window of the chart: its start is the period's start (every figure is the result since it). None = full history.")
     target_currency: Optional[str] = Field(None, description="Override base currency (ISO 4217).")
     positions: List[PositionKey] = Field(..., min_length=1, max_length=50, description="The positions to draw (max 50), as the rows of the Portfolio table: (asset, broker).")
+    apply_ownership_share: bool = Field(True, description="As the report's: False counts every broker whole (the broker page, D4).")
 
 
 class PositionSeriesPoint(StepSpan):

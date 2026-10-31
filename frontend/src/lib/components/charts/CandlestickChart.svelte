@@ -42,7 +42,7 @@
     import {clearTimer} from '$lib/utils/core/clearTimer';
     import {formatFixed} from '$lib/utils/core/formatFixed';
     import {uiLocale} from '$lib/stores/app/uiLocale';
-    import {formatDay} from '$lib/utils/core/formatAxisDate';
+    import {formatDay, formatDayWithWeekday} from '$lib/utils/core/formatAxisDate';
     import {CHART_TOOLTIP_COLORS, chartNeutrals} from '$lib/theme/chartTheme';
     import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
 
@@ -244,7 +244,7 @@
     function buildTooltipHeader(date: string, bucketInfo?: {bucketStart: string; bucketEnd: string}): string {
         const heading = chartNeutrals(isDarkProp ?? isDarkTheme(), chartContainer).tooltip.candlestickBox.heading;
         if (resolution === 'daily') {
-            return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${heading}">${formatDay(date)}</div>`;
+            return `<div style="font-size:12px;font-weight:600;margin-bottom:2px;color:${heading}">${formatDayWithWeekday(date)}</div>`;
         }
 
         // The point stands for its bucket up to its own day, the last one with data: the period still running ends there.

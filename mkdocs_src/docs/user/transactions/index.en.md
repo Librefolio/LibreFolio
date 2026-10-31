@@ -15,6 +15,7 @@ The **Transactions** page lists the transactions of all the brokers you can acce
 - **Sort** — click a column header.
 - **Filter** — open the filter of a column (date, type, asset, broker, tags, description…). In the date filter, type a date in **From** only to see the transactions from that day on, or in **To** only for those up to that day; the two ends of a range must be different days. Your filters are kept in the page address, so a bookmark reopens the same view.
 - **Open** — double-click a row to see it read-only; the pencil switches to editing.
+- **Unit price** — a column next to the amount shows the price per unit a trade implies (the amount divided by the quantity, per the asset's quote base); it is read-only and empty for a row without a quantity and an amount, and for the legs of a linked pair. Hide it from the column menu if you do not need it. The bulk editor has the same column.
 
 Without filters or sorting, the two rows of a linked pair (a transfer or a currency exchange) stay next to each other, and the link icon jumps to the partner row.
 

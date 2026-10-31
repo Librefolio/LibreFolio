@@ -94,7 +94,11 @@
       "toastFailed": "Échec de la synchronisation pour {name}",
       "modalTitle": "Synchroniser les Prix",
       "modalDescription": "Synchronisez les prix des fournisseurs configurés pour la plage de dates sélectionnée.",
-      "assetsCount": "actifs"
+      "assetsCount": "actifs",
+      "confirmTitle": "Synchroniser {name} ?",
+      "confirmMessage": "{stored, plural, one {# prix enregistré} many {# prix enregistrés} other {# prix enregistrés}} sur cette période {stored, plural, one {sera remplacé} many {seront remplacés} other {seront remplacés}} par les valeurs du fournisseur.",
+      "confirmManual": "{manual, plural, one {# a été saisi à la main et sera remplacé} many {# ont été saisis à la main et seront remplacés} other {# ont été saisis à la main et seront remplacés}} aussi.",
+      "confirmAction": "Synchroniser"
     },
     "delete": {
       "confirmQuestion": "Supprimer \"{name}\" ?",

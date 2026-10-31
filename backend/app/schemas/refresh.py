@@ -34,7 +34,7 @@ from typing import List, Literal, Optional
 
 from pydantic import Field, field_validator, model_validator
 
-from backend.app.schemas.common import BaseBulkResponse, Currency, DateRangeModel, StrictModel
+from backend.app.schemas.common import BaseBulkResponse, BaseListResponse, Currency, DateRangeModel, StrictModel
 from backend.app.schemas.prices import FAPricePoint
 
 # ============================================================================
@@ -106,6 +106,25 @@ class FARefreshItem(StrictModel):
 
     asset_id: int = Field(..., description="Asset ID")
     date_range: SyncDateRangeModel = Field(..., description="Date range for refresh")
+
+
+class FAStoredPriceCountItem(StrictModel):
+    """One asset's range whose stored prices are counted (X-R29): the range a sync would ask for."""
+
+    asset_id: int = Field(..., description="Asset ID")
+    date_range: SyncDateRangeModel = Field(..., description="The range a sync would ask for ('min' counts from the first stored day, 'resume' counts none: it starts after the last one)")
+
+
+class FAStoredPriceCount(StrictModel):
+    """The prices stored for one asset in a range, and how many of them were entered by hand."""
+
+    asset_id: int
+    stored_count: int = Field(0, ge=0, description="Prices stored in the range, whoever wrote them")
+    manual_count: int = Field(0, ge=0, description="Of them, those entered by hand (source MANUAL): a sync replaces them with the provider's")
+
+
+class FAStoredPriceCountResponse(BaseListResponse[FAStoredPriceCount]):
+    """One count per requested item, in request order."""
 
 
 class FARefreshResult(StrictModel):

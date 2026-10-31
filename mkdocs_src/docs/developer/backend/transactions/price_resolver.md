@@ -18,7 +18,7 @@ is decided by a four-tier ladder:
 | Tier | `MarkSource` | Meaning |
 |------|--------------|---------|
 | 1 | `MARKET` | An asset-system price (`price_history.close`) exists on `D` — the exact real quote |
-| 2 | `TRADE_AVG` | No quote, but same-day `BUY`/`SELL` rows exist — average of their unit prices |
+| 2 | `TRADE_AVG` | No quote, but same-day TRADE observations exist — average of their unit prices (`BUY`/`SELL` rows, or [transfer cost estimates](#transfer-cost-estimate)) |
 | 3 | `CARRIED` | Otherwise, the last observation ≤ `D` carried forward (LOCF; market- or trade-origin) |
 | 4 | `MISSING` | Nothing on or before `D` — `unit_price = 0`, `currency = None` |
 
@@ -101,12 +101,13 @@ composes one synthetic P&L candle per day:
 - **What feeds it** (`build_asset_price_series`): MARKET observations from `price_rows`
   (`(date, close, currency)`; `close` is already per-qbq and is not re-scaled), with their
   optional intraday range from `ohlc_by_date`, and TRADE observations from `BUY`/`SELL` rows
-  with an amount (`|amount| / |quantity|` in the transaction currency). Split-linked rows are
-  skipped.
+  with an amount (`|amount| / |quantity|` in the transaction currency), plus the
+  [transfer cost estimates](#transfer-cost-estimate). Split-linked rows are skipped.
 - **An `ADJUSTMENT` is never a price**, incoming or outgoing, with or without a cost basis
   (developer decision P2): its `cost_basis_override` is a cost — often the position's average
   cost — not what the asset was worth that day. One that takes units out has no value at all
-  (N78-1). Only market quotes and `BUY`/`SELL` trades mark an asset.
+  (N78-1). Market quotes and `BUY`/`SELL` trades mark an asset; an incoming `TRANSFER` does only
+  as an estimate (see [Transfer cost as an estimate](#transfer-cost-estimate)).
 - **A market quote is read in the units of its own day; a split moves the quantity.** The
   portfolio engine values a holding as quantity × mark. The quantity changes at a split only
   through the `ADJUSTMENT` rows linked to the SPLIT event, on the split's date. The split ratio
@@ -119,6 +120,47 @@ composes one synthetic P&L candle per day:
   numbers are right. This is a known limit of release 1.3 (developer decision of 23/10/2026, MF-SPL1 C). The
   target is to store as-traded closes, with the readers that need a continuous line (charts,
   signals, risk) applying the SPLIT events themselves.
+
+## 🔁 Transfer cost as an estimate {: #transfer-cost-estimate }
+
+W-B94 (developer decision of 30/10/2026, road b), `_transfer_cost_estimates()` in
+`price_marks.py`: the cost of an incoming `TRANSFER` is a price observation for an asset that has
+nothing else to be priced by yet. A `TRANSFER` row with `quantity > 0`, a positive
+`cost_basis_override` and a `cost_basis_currency`, not split-linked, becomes a TRADE observation —
+so `estimated=True`, `TRADE_AVG` on its day and `CARRIED` after — at
+`cost_basis_override × quote_base_quantity`, in `cost_basis_currency` (a `TRANSFER` row has no
+amount and no currency of its own).
+
+It counts **only on a day strictly before the asset's first real event**: the earliest of its
+market quotes and of every other counted row (non-zero quantity, not split-linked) among the
+transactions passed in — `BUY`, `SELL`, `ADJUSTMENT` and outgoing `TRANSFER`. An `ADJUSTMENT` is
+never a price, yet it still stops the estimate. Other incoming legs do not: each one before that
+day is an observation, and those of one day are averaged like trades. A quote or a trade is never
+overridden. Example: an ETF quoted 200 up to Friday, bought years ago at 50 and moved between two
+brokers on Saturday resolves to the carried 200 on Saturday and Sunday, never 50 — the old `BUY`
+and the quote both precede the transfer.
+
+"First" is computed over the rows the caller passes, which for both consumers are the scope's:
+the portfolio engine's rows of the asset at the brokers in scope, the lots analysis's loaded
+transactions. An internal transfer between two brokers of the scope gives no estimate (its outgoing
+leg is on or before its incoming one); a leg from a broker outside the scope does, when nothing of
+the scope precedes it.
+
+What it changes downstream, for an asset that arrived only by transfer with a cost basis and has
+no price source:
+
+| Reader | Before | With the estimate |
+|--------|--------|-------------------|
+| Portfolio valuation (`DailyStateBuilder`) | `ESTIMATED_AT_COST`: book cost, converted at the acquisition day's rate and frozen | `LAST_TRADE_PRICE`: the transfer's unit cost, converted at each day's rate; in `transaction_implied_asset_ids` |
+| In-kind capital of the leg (`_transfer_leg_capital()`) | The cost the leg moves in its pool | Its market value on its own day — that same cost, so the transfer stays neutral on its day |
+| Dashboard data quality, asset with a provider | `VALUED_AT_COST`, after the 14-day grace from the first acquisition | `TRANSACTION_IMPLIED`, after the same 14-day grace, counted from the transfer's arrival (its first lot movement, as it has no `BUY`/`SELL`; see [Data Quality Banner](../../frontend/data-quality-banner.md#active-issuecodes)) |
+| Lots analysis | Days at cost, `CURRENT_PRICE_ASSUMED_AT_COST`, `value_source = ESTIMATED_AT_COST`, no price line | A mark from the transfer day: `value_source = MARKET_PRICE`, price series points with `estimated=True`; a boundary leg's reference resolves `"fallback"` (`REFERENCE_PRICE_FALLBACK`) |
+
+Example (`test_transfer_cost_estimate.py`): 10 units at 50 USD, report in EUR, USD→EUR 0.9 / 0.8 /
+0.7 on three days → value 450 / 400 / 350 and P&L 0 / −50 / −100, capital 450; before, 450 every
+day. Tests: `backend/test_scripts/test_services/test_financial_math/test_price_marks_transfer_estimate.py`
+(pure) and `backend/test_scripts/test_services/test_financial/test_portfolio_engine/test_transfer_cost_estimate.py`
+(the engine).
 
 ## 🧾 No observation: valued at cost {: #valued-at-cost }
 
@@ -147,7 +189,7 @@ exchange rate on a mark that exists is not this case: the mark is there, only it
 fails.
 
 The choice is made day by day, with no look-ahead: the cost stands in only on the days before the
-asset's first observation. From the first quote, `BUY` or `SELL` on, the resolver always has a
+asset's first observation. From the first quote, `BUY`, `SELL` or transfer cost estimate on, the resolver always has a
 mark — carried forward when it is old, and flagged stale past `STALE_PRICE_THRESHOLD_DAYS` — and
 the price wins.
 
@@ -157,7 +199,7 @@ book cost, except for units in transit, which keep the cost recorded on the tran
 | Where | Value |
 |-------|-------|
 | Held position, daily and end-date snapshot (`_value_held_position()`) | The book cost of the held quantity |
-| Orphan `TRANSFER` leg (`_transfer_leg_capital()`) | The cost the leg moves in its pool (`step.cost_report_change`): the cost it adds, or the average cost it removes — the capital follows the pool's book cost both ways, as for an incoming in-kind `ADJUSTMENT` (an outgoing one, which has no value, moves no capital). An unknown cost counts as zero, the pool's own convention. While the pool's cost is complete the leg is neutral, the holding being valued at that same cost; with the pool's cost incomplete the holding is `MISSING`, yet the leg still moves its known cost, so nothing is left in capital once the units are gone |
+| Orphan `TRANSFER` leg (`_transfer_leg_capital()`) | The cost the leg moves in its pool (`step.cost_report_change`): the cost it adds, or the average cost it removes — the capital follows the pool's book cost both ways, as for an incoming in-kind `ADJUSTMENT` (an outgoing one, which has no value, moves no capital). An unknown cost counts as zero, the pool's own convention. While the pool's cost is complete the leg is neutral, the holding being valued at that same cost; with the pool's cost incomplete the holding is `MISSING`, yet the leg still moves its known cost, so nothing is left in capital once the units are gone. An incoming leg with a cost basis reaches this case only when something of the scope precedes it (an `ADJUSTMENT`, an outgoing leg): otherwise its cost is the asset's [estimated mark](#transfer-cost-estimate) on its day, and the leg counts at that market value |
 | Internal `TRANSFER` pair between two brokers (`_internal_pair_value()`) | The book cost the arrival adds to the receiver's pool (`_movement_cost_step()` of the receiving leg: the cost recorded on that leg, converted at its date), rescaled from the receiver's share to the sender's, whether or not the receiver's pool is complete; an arrival of unknown cost adds 0, so there is no flow. With the receiver's pool complete, that is what its NAV takes the units at. With it incomplete, the receiver's holding is `MISSING`: the receiver's line takes the gap — its own unknown cost, with the NAV incomplete — and the sender's line is the same as with a complete pool |
 | Units in transit (`_compute_in_transit()`) | The cost recorded on the transfer, converted at the arrival date |
 

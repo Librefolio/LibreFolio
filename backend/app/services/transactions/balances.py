@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.app.db.models import Broker, Transaction
 from backend.app.schemas.transactions.batch import TXValidationCode
 from backend.app.services.financial_math.ledger_totals import position_quantities
-from backend.app.services.financial_math.native_cash import cash_movement_from_transaction, native_balances
+from backend.app.services.financial_math.native_cash import cash_movement_from_transaction, first_negative_cash, native_balances
 from backend.app.services.transactions.transaction_batch_context import BalanceValidationError
 from backend.app.services.transactions.unreadable_rows import UnreadableLedgerError, count_unreadable_rows
 
@@ -31,13 +31,17 @@ class TransactionBalancesMixin:
     # BALANCE VALIDATION
     # =========================================================================
 
-    async def _validate_broker_balances(  # noqa: C901 — balance replay over the transaction days, per-tx accumulate + raises
+    async def _validate_broker_balances(
         self,
         broker_id: int,
         from_date: Optional[date_type] = None,
         batch_tx_ids: Optional[Dict[int, tuple]] = None,
     ) -> None:
         """Validate cash and asset balances for a broker from a given date.
+
+        A broker without the overdraft flag never has a negative cash, the opening one included (developer, 30/10/2026): the
+        cash is read by ``financial_math.native_cash.first_negative_cash`` and checked on ``from_date`` even when no
+        transaction follows it. The error is the one of the lowest day among cash and quantities, the cash on a tie.
 
         Walks the days with transactions, and ``from_date``: the balances change on no other day (R13-SEC7-3). A broker
         whose transactions hold a value that is no number has no known balances, so its replay is refused, never run
@@ -80,69 +84,76 @@ class TransactionBalancesMixin:
         result = await self.session.execute(stmt)
         txs = list(result.scalars().all())
 
-        if not txs:
-            return
+        # The cash is checked by the single home of cash maths (W6-12). A broker without the overdraft flag never has a negative
+        # cash, the opening one included: with a ``from_date`` it is checked on that day even when no transaction follows it
+        # (developer, 30/10/2026). The days walked are those with a movement and ``from_date``: between two of them nothing
+        # changes, so the first negative day is one of them (R13-SEC7-3).
+        cash_hit = None
+        if not broker.allow_cash_overdraft:
+            movements = (movement for tx in txs if (movement := cash_movement_from_transaction(tx)) is not None)
+            cash_hit = first_negative_cash(movements, opening=cash_balances, check_days=(from_date,) if from_date is not None else ())
 
-        _batch = batch_tx_ids or {}
+        # The quantities walk the same days; with no transaction there is nothing to walk.
+        asset_hit = None if broker.allow_asset_shorting or not txs else self._first_negative_asset(txs, asset_balances, from_date, batch_tx_ids or {})
 
+        # The lowest day wins, and the cash on a tie.
+        if cash_hit is not None and (asset_hit is None or cash_hit.day <= asset_hit[0]):
+            b_op, b_idx = ("create", -1)
+            for reducer in cash_hit.reducers:
+                if reducer.movement_id in (batch_tx_ids or {}):
+                    b_op, b_idx = (batch_tx_ids or {})[reducer.movement_id]
+            raise BalanceValidationError(
+                broker_id=broker_id,
+                date=cash_hit.day,
+                currency_or_asset=cash_hit.currency,
+                balance=cash_hit.balance,
+                message=f"Cash balance for {cash_hit.currency} goes negative ({cash_hit.balance}) on {cash_hit.day} for broker {broker_id}",
+                code=TXValidationCode.BALANCE_CASH_NEGATIVE.value,
+                params={"brokerId": broker_id, "currency": cash_hit.currency, "balance": str(cash_hit.balance), "date": str(cash_hit.day)},
+                batch_index=b_idx,
+                batch_operation=b_op,
+            )
+        if asset_hit is not None:
+            day, asset_id, balance, (b_op, b_idx) = asset_hit
+            raise BalanceValidationError(
+                broker_id=broker_id,
+                date=day,
+                currency_or_asset=f"asset:{asset_id}",
+                balance=balance,
+                message=f"Asset {asset_id} quantity goes negative ({balance}) on {day} for broker {broker_id}",
+                code=TXValidationCode.BALANCE_ASSET_NEGATIVE.value,
+                params={"brokerId": broker_id, "assetId": asset_id, "balance": str(balance), "date": str(day)},
+                batch_index=b_idx,
+                batch_operation=b_op,
+            )
+
+    @staticmethod
+    def _first_negative_asset(
+        txs: List[Transaction],
+        asset_balances: Dict[int, Decimal],
+        from_date: Optional[date_type],
+        batch_tx_ids: Dict[int, tuple],
+    ) -> Optional[Tuple[date_type, int, Decimal, tuple]]:
+        """The first day a quantity ends below zero: ``(day, asset_id, balance, (batch_operation, batch_index))``, or None.
+
+        The days are those with a transaction and ``from_date`` (the quantities before it may already be negative). The
+        batch fields are the last batch transaction that reduced that asset on the day, else ``("create", -1)``. Only
+        quantities: the cash is ``first_negative_cash``'s.
+        """
         txs_by_date: Dict[date_type, List[Transaction]] = defaultdict(list)
         for tx in txs:
             txs_by_date[tx.date].append(tx)
-
-        # R13-SEC7-3: the days with transactions, and from_date (the balances before it may already be negative), not
-        # every day of the calendar: between two of them no balance changes, so the first negative day is one of them.
-        # Day by day, on the event loop: a row dated 9999-12-31 made every later replay of the broker walk ~2.9 million
-        # days (then fail on the date's overflow), and a replay starting at a row of the year 1 ~740 000.
-        days = sorted(set(txs_by_date) | ({from_date} if from_date is not None else set()))
-
-        for current_date in days:
-            # Track last batch tx that reduced each balance on this day
-            last_cash_reducer: Dict[str, tuple] = {}
-            last_asset_reducer: Dict[int, tuple] = {}
-
+        for current_date in sorted(set(txs_by_date) | ({from_date} if from_date is not None else set())):
+            last_reducer: Dict[int, tuple] = {}
             for tx in txs_by_date.get(current_date, []):
-                if tx.amount != Decimal("0") and tx.currency:
-                    cash_balances[tx.currency] = cash_balances.get(tx.currency, Decimal("0")) + tx.amount
-                    # Track batch txs that reduce cash
-                    if tx.amount < Decimal("0") and tx.id in _batch:
-                        last_cash_reducer[tx.currency] = _batch[tx.id]
                 if tx.quantity != Decimal("0") and tx.asset_id:
                     asset_balances[tx.asset_id] = asset_balances.get(tx.asset_id, Decimal("0")) + tx.quantity
-                    # Track batch txs that reduce asset quantity
-                    if tx.quantity < Decimal("0") and tx.id in _batch:
-                        last_asset_reducer[tx.asset_id] = _batch[tx.id]
-
-            if not broker.allow_cash_overdraft:
-                for currency, balance in cash_balances.items():
-                    if balance < Decimal("0"):
-                        b_op, b_idx = last_cash_reducer.get(currency, ("create", -1))
-                        raise BalanceValidationError(
-                            broker_id=broker_id,
-                            date=current_date,
-                            currency_or_asset=currency,
-                            balance=balance,
-                            message=f"Cash balance for {currency} goes negative ({balance}) on {current_date} for broker {broker_id}",
-                            code=TXValidationCode.BALANCE_CASH_NEGATIVE.value,
-                            params={"brokerId": broker_id, "currency": currency, "balance": str(balance), "date": str(current_date)},
-                            batch_index=b_idx,
-                            batch_operation=b_op,
-                        )
-
-            if not broker.allow_asset_shorting:
-                for asset_id, balance in asset_balances.items():
-                    if balance < Decimal("0"):
-                        b_op, b_idx = last_asset_reducer.get(asset_id, ("create", -1))
-                        raise BalanceValidationError(
-                            broker_id=broker_id,
-                            date=current_date,
-                            currency_or_asset=f"asset:{asset_id}",
-                            balance=balance,
-                            message=f"Asset {asset_id} quantity goes negative ({balance}) on {current_date} for broker {broker_id}",
-                            code=TXValidationCode.BALANCE_ASSET_NEGATIVE.value,
-                            params={"brokerId": broker_id, "assetId": asset_id, "balance": str(balance), "date": str(current_date)},
-                            batch_index=b_idx,
-                            batch_operation=b_op,
-                        )
+                    if tx.quantity < Decimal("0") and tx.id in batch_tx_ids:
+                        last_reducer[tx.asset_id] = batch_tx_ids[tx.id]
+            for asset_id, balance in asset_balances.items():
+                if balance < Decimal("0"):
+                    return current_date, asset_id, balance, last_reducer.get(asset_id, ("create", -1))
+        return None
 
     async def _get_balances_before_date(self, broker_id: int, before_date: date_type, exclude_tx_ids: Collection[int] = (), *, through: bool = False) -> Tuple[Dict[str, Decimal], Dict[int, Decimal]]:
         """Get cash and asset balances at end of day before the given date — with ``through``, at the end of that date.

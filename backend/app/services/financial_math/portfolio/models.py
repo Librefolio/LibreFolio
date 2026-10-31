@@ -9,13 +9,16 @@ from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
 from enum import StrEnum
-from typing import Literal, Optional, overload
+from typing import TYPE_CHECKING, Literal, Optional, overload
 
 from backend.app.db.models import Transaction
 from backend.app.services.financial_math.average_cost import (
     AverageCost,
 )
 from backend.app.services.financial_math.native_cash import NativeCash
+
+if TYPE_CHECKING:
+    from backend.app.services.financial_math.portfolio.daily_state import AssetMarks
 
 # =============================================================================
 # DATACLASSES — Internal runtime objects (not API DTOs)
@@ -626,6 +629,9 @@ class PortfolioCalculationResult:
     # and the period flows by type and position. None when calculate() returns early, with
     # no broker or no transaction in scope.
     native_cash: NativeCash | None = None
+    # The price of an asset on a day as the replay valued it (MF6-1): its reader of marks, splits and rates. None when
+    # calculate() returns early.
+    marks: AssetMarks | None = None
     # End state for cache forward extension
     end_state: EngineEndState | None = None
     # Metadata
@@ -644,6 +650,9 @@ class PortfolioCalculationResult:
     missing_fx: dict[str, set[date_type]] = field(default_factory=dict)
     # J-43: the classification's linked internal pairs between brokers owned at different shares.
     share_mismatches: list[ShareMismatch] = field(default_factory=list)
+    # The share of each scope broker the run counted (native_cash.broker_shares): the user's, or 1 each without the
+    # ownership share (MF6-3). The service reads it for its own scaled figures, so they follow the run.
+    broker_shares: dict[int, Decimal] = field(default_factory=dict)
     # B5: every TRANSFER leg replayed as in-kind capital at market value (any date), in replay order.
     market_value_transfers: list[MarketValueTransfer] = field(default_factory=list)
     # The held positions' frames from date_from on (None unless asked: include_positions / compute_position_frames).

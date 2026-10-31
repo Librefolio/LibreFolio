@@ -5056,3 +5056,209 @@ Via del coordinatore: la costante, i testi del pavimento, il testo unico del CHA
    (`git archive d2dc09a9a`, `ondata5/MF-L5-split-ledger-on-d2dc09a9a.log`): il test di W5-2b legge `wac_points[giorno]`
    per data, mentre la linea del costo medio è a gradini da J5-5 → serve `value_at`. Integrazione W × J, non L5.
    CHECKPOINT READY inviato, FROZEN.
+
+### Ondata 6 (kickoff 28/10/2026) — HEAD `f4a5e6e0a` (atteso `32674edb8`, vedi sotto)
+
+Kickoff: `salvataggi-worktrees-20261021/ondata6/kickoff-MF.md`. Corsia: porta 6205, `/tmp/librefolio-r13-o6-mf`.
+Treno 12 per MF6-1, K3, A3/A11; 13 per il resto (PIANO-ondata6 §4).
+
+> **⚠️ Fuori pista**: il worktree è a `f4a5e6e0a`, 7 commit **dietro** `32674edb8` (antenato diretto; come tutti i
+> worktree `o6-*`). I 7 commit sono solo documenti e `Pipfile` (`tzdata`, H6-4):
+> `git diff --stat f4a5e6e0a 32674edb8 -- backend/app frontend/src` è vuoto, quindi l'analisi del giorno 1 vale. Il
+> riallineamento della base è del coordinatore, prima di MF6-1.
+
+#### Giorno 1 — analisi in sola lettura (28/10)
+1. ✅ **T-U1** (28/10): [analisi-T-U1-convert_bulk-20261028.md](analisi-T-U1-convert_bulk-20261028.md).
+   > **Note implementazione**: 15 chiamate dirette di `convert_bulk` + 4 di `unit_rate_steps` + 1 via
+   > `convert_by_stretch`. La conversione è già una casa sola (P3); duplicato è solo il racconto del buco (5 forme, la
+   > chiusura `WACMissingPairInfo(… merged_spans …)` identica 4 volte) e dell'età (soglia 7 in 2 posti). Proposti
+   > T-U1a (casa: raccoglitore, predicato, lettore della provenienza; con change-days), T-U1b (in MF6-1), T-U1c (X/J).
+   > `STALE_FX`: il dato c'è (D-P4), il banner è di Y. MF-A13 ricontato: 3 divisioni vere, `asset_resources` non divide
+   > più; piano di misura scritto.
+2. ✅ **Inventario change-days** (28/10): [inventario-change-days-20261028.md](inventario-change-days-20261028.md).
+   > **Note implementazione**: una pila, non 4 copie. Duplicazioni vere: ripiego «mappa semplice» ×2 (solo test),
+   > «giorno accanto» ×2 nei lotti, `merged_windows`/`merged_spans`. Casa proposta `financial_math/change_days.py`;
+   > motore e lotti restano unioni separate. Firma della funzione pura per W6-12 (`first_negative_cash`) in §6.
+3. ✅ CHECKPOINT READY (solo documenti) inviato il 28/10 → FROZEN fino al commit e a MF-L di W2.
+
+#### MF6-1 → MF-K3 → MF-A3/A11 (28/10, base `f33d91b4f` = `32674edb8` + giorno 1 + MF-L)
+Ambiente: `npm ci` e `api sync` fatti (nessuna differenza nei contratti); corsia popolata.
+1. ✅ **MF6-1 (T-U5)** (28/10) — cura scritta. MF-L aveva già tolto `brokers/summary.py::_get_latest_prices_batch`: restava una
+   copia, `portfolio_service._get_price_at_date` (+ `_convert_to_base`, solo per la variazione a 1 giorno). Casa:
+   `daily_state.marked_price` (la regola che `_market_value_for` ora chiama) e `AssetMarks` sul risultato del motore
+   (`PortfolioCalculationResult.marks`: marchi, split, tassi chiesti, giorni del motore). Il riepilogo legge il prezzo
+   di oggi e quello di ieri (ultima quotazione di mercato ≤ D−1) dal lettore, convertiti al tasso del giorno.
+   > **Note implementazione**: cambia di proposito (1) il prezzo di ieri al tasso di ieri, non del giorno della chiusura;
+   > (2) primo giorno del portafoglio: nessuna variazione (ieri fuori dai giorni del motore), per tutte le valute;
+   > (3) `current_price` estero all'ultima cifra (× 1/tasso del motore invece di ÷ tasso di `convert_bulk`).
+   > I 4 test di `test_summary_day_change_house.py` (compreso il pareggio 200→202,47) e 131 di `test_portfolio_service`
+   > verdi.
+2. ✅ **MF-K3** (28/10) — cura scritta: `returns.period_twrr_series`/`period_twrr` (punto None a NAV ≤ 0, card = ultimo
+   punto), `period_roi_cash_flows` (periodo che precede il portafoglio ≡ storia intera per il capitale del ROI),
+   `DerivedViewsBuilder.build_roi_cash_flows`.
+   > **⚠️ Fuori pista**: test-author (C.2) ha preso un difetto del primo cablaggio: `build_performance_inputs(date_from)`
+   > parte già dal capitale dello stato d'apertura, quindi il deposito del primo giorno non arrivava al ROI (0 flussi,
+   > ROI 0). Rimedio: `build_roi_cash_flows` rilegge gli input della storia intera solo in quel caso (una lettura in più,
+   > solo quando l'intervallo precede il portafoglio).
+3. ✅ **MF-A3** (28/10; **MF-A11 non confermata**) — numeri su HEAD prima della cura (`annualized_period_return`): (a) 100 a 10, 99 vendute a 9,
+   1 tenuta: riga aperta «—» (−1 000 %), chiusa −31,9 % annuo, con la base unica −10 % cumulato (= la chiusa), −10,27 %
+   annuo; (b) residuo di polvere: +10 746,76 (×100 = 1 074 676 %) → +1,03 %.
+   > **⚠️ Fuori pista — A11 tolta**: scritta e poi ritirata. I libri dei test esistenti (`TestDustResidual`, MF-A10
+   > «residuo sopra la polvere e riacquisto») la smentiscono: 10 comprate a 100, quasi tutte vendute presto, 5
+   > ricomprate dopo, +100 di guadagno: oggi +24,38 % annuo (capitale medio impegnato ≈ 500, quindi vicino al vero), con
+   > la base A11 (500 + 1 000 uscite, su tutta la finestra) +8,03 %. Aggiusta gli estremi (a) e (b), peggiora questi:
+   > non confermata coi numeri → resta fuori. Proposta per dopo: una base media nel tempo (capitale × giorni tenuti /
+   > giorni della finestra, alla Modified Dietz), domanda per il developer.
+   Cura rimasta (A3): `contributions.closed_flight_too_short` (volo < 30 giorni nel periodo → «—», mai la regola
+   generale), `returns.annualizes`.
+4. ✅ **Rossi e riparazioni** (test-author): 6 file nuovi, 55 test, ognuno rosso su `f33d91b4f` per il motivo giusto e
+   verde sull'albero (`ondata6/MF6-reds-*.log`); 4 riparazioni di forma o di valore voluto: `test_position_frames`
+   (confronta `marks` per valore), `test_engine_single_flight` (fotografa `AssetPriceSeries`), `test_windowed_views`
+   (+1 lettura della storia intera solo per «prima della storia»), golden `eur_only_golden.json` (20 righe: `gain_loss_change_1d`
+   0E-12 → 0E-8 sugli EUR; l'ETF in IDR: `current_price` all'ultima cifra, variazione a 1 giorno −0,49 % / −0,35 % → 0,00 %).
+5. ✅ **Docs** (docs-writer): 7 pagine utente/teoria `.en.md` + `developer/backend/financial_math.md`; build strict 0,
+   check-links 0; debito di traduzione su 7 pagine (nessuno stamp).
+6. ✅ **Porte** (`ondata6/MF6-g3-*.log`, `MF6-g2-api-portfolio.log`): `roi-fifo-utils` **2488**, `financial-math`
+   **3833**, `portfolio-engine` **41**, `api portfolio` **58**, tutti verdi. CHECKPOINT READY inviato, FROZEN;
+   `portfolio_service.py` passa ad AIX dopo il commit.
+   > **Note implementazione**: committato dal coordinatore come `01f1da513`. MF-A11 scartata coi numeri (ok del
+   > coordinatore); la base media nel tempo è registrata come seguito; la domanda su «ieri» va al developer, intanto
+   > resta l'ultima quotazione di mercato.
+
+#### MF-C2 → MF6-2 → change-days (28/10, base `01f1da513`)
+1. ✅ **MF-C2 (fette nulle)** (28/10) — la sola parte matematica avrebbe reso rosso `api portfolio`: la fetta Liquidità
+   c'è sempre, un portafoglio svuotato ha somma 0 e `AllocationItem.value` era obbligatorio. Domanda al coordinatore →
+   **(a)**: MF prende anche le righe del contratto nello stesso commit. Cura: `weights.slice_percents` → tutte None con
+   somma ≤ 0 (vuota → `{}`); `derived_views._cents`; `AllocationItem.value` facoltativo (anche nei punti della storia);
+   AI Export `AllocationSlice.percent` facoltativo e `broker_concentration_context._map_slices` ordina None come 0
+   (altrimenti `-None`). `api sync` + `front check` (0 errori).
+   > **Note implementazione**: rossi del test-author 39 (5 file; `test_weights` net-zero/negative-sum capovolti);
+   > verdi 326. Il frontend non si rompe ma legge null come 0 senza avviso: `AllocationPanel.svelte:67`
+   > (`parseFloat(value ?? '0')` → fetta scartata, torta vuota), `allocationHistorySteps.ts:53` (`Number(null)` = 0),
+   > `AllocationHistoryChart.svelte:415,423` (`?? 0`) → a Y/Y2. Bump v2 dell'AI Export: di AIX (treno 13, con T-U9).
+2. ✅ **MF6-2 (MF-A6)** (28/10) — `daily_state._is_held`: tenuta sopra `QUANTITY_DUST_THRESHOLD` nei tre punti (stato
+   del giorno, istantanea d'inizio, istantanea di fine). Esempio dei test: 10 a 100 000, vendute 9,99999 a 120 000 →
+   resta 0,00001 (vale 1,20, costa 1,00): prima NAV +1,20 e ΔUGL +0,20 che nessuna riga aveva; ora Σ righe = ΔUGL del
+   portafoglio, l'Altro prende −1,00 (il costo della polvere).
+   > **Note implementazione**: 13 test nuovi (12 rossi + 1 guardia sopra la soglia); riparati i 3 `dust-residual` di
+   > `test_broker_cards` (titolo 8220/220 → 8219,998/219,998, card A 5000/0 → 4999,998/−0,002) e `CONSUMERS` di
+   > `test_data_quality_thresholds`; nuova azione `services dust-threshold`.
+3. ✅ **change-days** (28/10) — `financial_math/change_days.py`: `reading_change_days` (il ripiego «mappa semplice» di
+   `daily_state._reading_calendar` e `FxRateResolver.rate_change_days` unito), `change_days` (spostata da
+   `native_cash`), `with_next_days` (i due «giorno dopo» di `lots/change_days.py`). Parità: nessun atteso toccato.
+   > **⚠️ Fuori pista — `merged_windows` resta**: `fx_rates.py` è una foglia per guardia
+   > (`test_fx_rates::test_the_house_of_the_orientation_imports_nothing_from_the_services`: serve `fx` e il PAC), quindi
+   > non può importare `series_steps.merged_spans`. Unirle chiede di spostare `merged_spans` in `utils/` (6 chiamanti,
+   > `portfolio_service.py` compreso, ora di AIX): non fatto, proposto come seguito.
+   > **⚠️ Fuori pista**: `with_next_days` senza il parametro `after` dell'inventario (serve solo «dopo»).
+4. ✅ **Funzione pura per W6-12** — `native_cash.first_negative_cash` / `NegativeCash` (contratto dell'inventario §6);
+   30 test (rossi per assenza, poi verdi). Nota per W2: `ondata6/MF-first_negative_cash-per-W6-12.md` (8 differenze
+   col validatore; solo la 1 — saldo iniziale negativo con `from_date` senza transazioni dopo — cambierebbe un esito:
+   domanda per il developer, intanto `if txs:` tiene il comportamento di oggi).
+5. ✅ **Test, docs, porte** (28/10) — test-author: `test_change_days_home.py` (187: le funzioni della casa e la parità
+   con le quattro formule in linea di `01f1da513` su 40 semi), import di `test_fx_only_days` alla casa nuova.
+   docs-writer: `portfolio-engine/{index,period-pnl,book-value}.en.md`, `user/dashboard/{charts,positions}.en.md`,
+   `developer/backend/financial_math.md`; build strict 0, check-links 97 (debito di traduzione su 5 pagine, nessuno
+   stamp). Porte (`ondata6/MF-o6b-g2-*.log`): `financial-math` **4080**, `portfolio-engine` **41**,
+   `lots-analysis-pure` **254**, `roi-fifo-utils` **2505**, `ai-export` **1139**, `ai-export-pure` **497**,
+   `api portfolio` **58**; `front check` 0 errori; ruff, black, `diff --check` puliti. CHECKPOINT READY (6–8).
+   > **Note implementazione**: committato dal coordinatore come `b48694f3f`; il rosso di `utils all` era suo (chiave di
+   > cache del workflow), corretto altrove. Ramo unito in W2 (W6-12) e Y2 (punti frontend di MF-C2).
+
+#### B3 + MF-J3 → W-B94 → MF-A13 (28/10, base `b48694f3f`)
+1. ✅ **B3 + MF-J3** (28/10) — `daily_state._cash_transfer_pools`: una gamba CASH_TRANSFER / FX_CONVERSION con l'altra
+   fuori perimetro (`linked_external_*`) o orfana (`normal`: collegamento tolto, coppia non trovata) muove K/R come un
+   DEPOSIT (entrata: prima restituisce W in R, il resto in K) o un WITHDRAWAL (uscita: K, poi R → W), col segno
+   dell'importo; `_deposit_pools` / `_withdrawal_pools` condivise col DEPOSIT e il WITHDRAWAL veri. Capitale di
+   riferimento, NAV e P&L invariati. Esempio: vista {B}, 650 da A → versato 650 / generato 0 (prima 0 / 650); B con
+   100 / 100 → 750 / 100 (prima 425 / 425).
+   > **Note implementazione**: test-author: 104 test nuovi (65 rossi, 39 perni di parità; i 15 «gemelli» confrontano la
+   > gamba con un DEPOSIT/WITHDRAWAL dello stesso importo), azione `services external-cash-leg-pools`; 24 perni della
+   > regola vecchia da riparare (`test_single_replay::TestApplyPoolRule`, `test_transfer_keeps_returns::TestApplyPoolRuleWithSplits`).
+   > **⚠️ Fuori pista**: la proposta di MF-J3 diceva «in entrata senza il recupero di W»; la decisione dell'ondata 6 dice
+   > «come un versamento/prelievo»: applicata alla lettera (con il recupero di W), simmetrica all'uscita che alimenta W.
+   > Cambia solo quando W > 0. `_apply_pool_rule` oltre la complessità 10: i rami dei trasferimenti in `_cash_transfer_pools`.
+2. ⏸️ **W-B94** — domanda al developer (via coordinatore): (a) priorità TRADE come BUY/SELL (salto del NAV nel giorno
+   del trasferimento: ETF a 200 il venerdì, costo 50, trasferito il sabato → 50 sabato e domenica) o (b, consigliata) la
+   stima solo per un asset senza alcuna osservazione fino a quel giorno. Nessun codice fino alla risposta.
+3. ✅ **MF-A13 — misura** (sola lettura) — [analisi-MF-A13-misura-20261028](analisi-MF-A13-misura-20261028.md): diretta
+   0 differenze su 578, inversa 1 428 / 2 237 alla 28ª cifra, nessun arrotondato. Contratto (coordinatore, close (b)
+   `original_close × fx_rate`) girato a X; MF rivede e scrive i rossi di parità quando il diff è pronto.
+4. ✅ **B3 — riparazioni, docs, porte** (29/10) — 24 perni riscritti alla regola nuova (+ il perno `capital={B: 750}` in
+   `TestArrivalWithoutKnownDeparture`); docs-writer: `portfolio-engine/{index §6, deposited-capital}.en.md` (nuovo
+   esempio E `#e-cash-from-outside-the-view`), `user/dashboard/charts.en.md`, `developer/backend/financial_math.md`,
+   `developer/backend/transactions/service.md` (diceva il contrario). Build strict 0, check-links 97. Porte:
+   `portfolio-engine` 41, `financial-math` 4080, `roi-fifo-utils` 2609, `external-cash-leg-pools` 98 + 6,
+   `api portfolio` 58, `ai-export-pure` 497, `ai-export` 1139; ruff, black, `diff --check` puliti. CHECKPOINT READY.
+   > **⚠️ Fuori pista**: `test_portfolio_service::TestPortfolioFxCacheIdentity::test_irrelevant_fx_pair_does_not_change_identity`
+   > è rosso su una corsia popolata coi dati mock (`populate_mock_data.py:3063` semina EUR/THB, priorità 1, dal 31/08):
+   > verde solo perché il runner `services` ricrea il DB senza mock. Seguito per il test-author (una coppia che i mock
+   > non seminano).
+   > **Note implementazione**: committato dal coordinatore come `b6a8b1625` (con l'analisi di MF-A13). Decisioni del
+   > developer (30/10): restituzione di W confermata; la variazione di un giorno resta l'ultima quotazione di mercato,
+   > senza punti di prezzo «—» (verificato: `last_market_price_at` None → nessuna variazione).
+
+#### W-B94 (b) → revisione MF-A13 → FB-14 (30/10, base `b6a8b1625`)
+1. ✅ **W-B94, strada (b)** (30/10) — `price_marks._transfer_cost_estimates`: il costo per unità d'una TRANSFER in
+   entrata (`cost_basis_override × qbq`, in `cost_basis_currency`) è un'osservazione TRADE stimata solo se, fino al
+   suo giorno compreso, l'asset non ha né quotazione né altri movimenti delle sue unità (BUY/SELL, ADJUSTMENT,
+   uscite); un'altra entrata non la ferma. Esempio dei test: 10 unità a 50 USD, report in EUR, cambio 0,9 / 0,8 / 0,7
+   → valore 450 / 400 / 350 (prima 450 fisso, al costo); un ETF quotato 200 il venerdì e spostato il sabato resta 200.
+   > **⚠️ Fuori pista — la regola di mezzo**: la prima simulazione del test-author (bloccano solo quotazioni e BUY/SELL)
+   > dava un guadagno finto su due libri esistenti (#3: ADJUSTMENT a 20 poi trasferimento a 40 → +200; #4 05f: B con un
+   > ADJUSTMENT senza costo → +50). Letta alla lettera la decisione («né quotazione né operazione»), un ADJUSTMENT o
+   > un'uscita prima fermano la stima: #3 e #4 restano come oggi; i trasferimenti interni sono esclusi da sé (il
+   > mittente ha già un movimento prima).
+   > **⚠️ Fuori pista — la grazia**: un asset con fornitore arrivato solo per trasferimento finiva in
+   > TRANSACTION_IMPLIED dal primo giorno (la grazia partiva dalle sole date di BUY/SELL): `get_summary` ora la conta
+   > dalla sua prima riga di lotto (l'arrivo) quando non ha BUY/SELL (trovato dal docs-writer; test di grazia rosso
+   > senza la cura).
+   > **Note implementazione**: test-author: 27 puri + 9 di motore + 5 di grazia, azione `services transfer-cost-estimate`;
+   > riparati 3 perni (2 di `test_daily_state_builder`, il caso 05e «ricevuto a 12»: B ora vale al prezzo stimato
+   > 10 × 10 = 100, non al suo costo 120). docs-writer: 16 pagine inglesi + 5 developer, ancora `#transfer-cost-estimate`;
+   > build strict 0, check-links 97.
+2. ✅ **Revisione MF-A13** (diff di X `cb9a720f4`, sola lettura) — va bene col contratto (close (b)). Test di parità
+   (24) verdi sul suo albero, rossi sul mio per la ragione giusta; portati fuori dal mio worktree in
+   `ondata6/MF-A13-parity/` (file + registrazione) perché il coordinatore li porti sul ramo di X.
+   > **⚠️ Fuori pista — correzione dell'analisi**: «nessun valore arrotondato cambia» è falso a un pareggio
+   > d'arrotondamento: GBP→EUR del 20/06/2025, `399.5129875` → `399.5129874999…9` (a 1e-6: …988 → …987); 3 volte a
+   > 1e-6 sul corpus, mai a 1e-12 né ai centesimi. Segnalato per il bump di AIX.
+3. ✅ **FB-14 — un solo calcolo del motore per pagina** (31/10, base `09f2aed57`) — `PortfolioService._engine_run()`:
+   da t=0, sempre con `include_positions`, `include_acquisition_funding` e `period_start` = inizio del periodo; le
+   candele restano a parte. Lo chiamano `get_report`, `get_positions_contribution` (i due rami), `get_positions_series`,
+   `get_acquisition_funding_history`. Esempio: la pagina Portfolio chiede report (con la tabella Performance) e grafico
+   delle posizioni sullo stesso periodo → prima due chiavi del blob e due calcoli, ora una chiave e un calcolo (il
+   secondo legge la cache o aspetta il volo). Misura sui mock (76 transazioni, minimo di 3): base 0,306 s, con tutte le
+   uscite tranne le candele 0,266 s (rumore: il costo in più è sotto il rumore); segmenti 396 in ogni combinazione.
+   `period_start` resta nella chiave: un `PositionFrame` non ha tutti i campi di `DailyPositionState`.
+   > **Note implementazione**: `position_series.py` non toccato (J5-4 lì è di J). Docs developer `financial_math.md`
+   > ancora `#one-run-per-page`. MF6-3 aggiungerà un flag alla chiave base e un parametro a `_engine_run`.
+   > **Note implementazione (test)**: test-author, `test_financial/test_engine_shared_run.py` (14, azione
+   > `services engine-shared-run`, eseguito anche da `roi-fifo-utils`): un solo calcolo per report + grafico, anche in
+   > parallelo (single-flight), 0 calcoli nuovi per contribution e funding dopo il report; parità campo per campo con i
+   > vecchi flag (5 casi × 2 finestre): nessuna differenza, nemmeno nel report solo summary+history (`period_start` da
+   > None a `date_from`). Guardia: coi vecchi flag i calcoli sono 2.
+   > **⚠️ Fuori pista — rossi del treno 12**: (1) `test_portfolio_allocation_source.py`, 3 test patchavano
+   > `portfolio_service.convert_bulk`, sparito con MF6-1 (`01f1da513`): ora patchano `financial_math.average_cost`, il
+   > modulo che converte (102 verdi). (2) il golden di `test_native_cash_guard` cambia d'esponente (dieci zeri in meno
+   > su `cost_asset`/`wac_asset`, asset in IDR) per W-B63 di W2 (`d90612861`, `fx_rates.rate` RealDecimal): stessi
+   > valori; lo rigenero dopo l'unione di W2 nel ramo.
+4. ✅ **Golden di `test_native_cash_guard` dopo W-B63** (31/10, commit `4d8e7d9ee` del coordinatore) — dieci zeri in meno
+   su `cost_asset`/`cost_asset_change`/`wac_asset` (asset IDR): `fx_rates.rate` letto come `RealDecimal`; stessi valori.
+5. ✅ **MF6-3 — report «broker intero» (D4)** (31/10, base `4d8e7d9ee`) — `native_cash.broker_shares(accesses, *,
+   apply_ownership_share=True)`: `effective_share` o 1 per ogni broker. `calculate(apply_ownership_share)` (chiave del
+   blob; `result.broker_shares`, letto da `get_summary` e `get_positions_contribution` per le quantità dei lotti),
+   `_engine_run`, `PortfolioReportQuery`/`PositionsSeriesQuery.apply_ownership_share` (default true; chiave L2),
+   `PortfolioRiskScope.apply_ownership_share` passato da `risk/scope.py`. Esempio: broker da 10 000 €, Owner al 30 % →
+   Dashboard 3 000, pagina broker (false) 10 000; Owner allo 0 % → 0 contro 10 000; i rapporti di un broker uguali.
+   > **⚠️ Fuori pista — il rischio**: il design diceva «rischio senza opzione» (pesi e rendimenti non dipendono dalla
+   > quota), ma lo stress legge `scope_value`/`asset_values`: con la pagina a 10 000 l'impatto sarebbe stato su 3 000.
+   > Opzione aggiunta anche lì (decisione del coordinatore, 31/10). Un Owner allo 0 % oggi non ha errore ma una
+   > composizione vuota (le quantità scalate a 0 cadono sotto la soglia della polvere); con false ha quella dell'editor.
+   > **⚠️ Fuori pista — l'esponente**: un Owner al 100 % ha la quota `1.000000` (Numeric(7,6)), l'editor `1`: i JSON
+   > differiscono negli zeri finali (66 campi), non nei valori. Non normalizzato (cambierebbe le risposte di oggi); il
+   > confronto dei test è numerico.
+   > **Note implementazione**: test-author 18 puri (`test_broker_shares.py`) + 20 di servizio
+   > (`test_ownership_share_option.py`, azione `services ownership-share-option`), rossi prima del codice per la ragione
+   > giusta; `_OldEngineRun` di FB-14 accetta il flag. docs-writer: `financial_math.md#whole-broker`,
+   > `access_control.md`, teoria `portfolio-engine/index.en.md#whole-broker` (debito di traduzione: 1 sezione).

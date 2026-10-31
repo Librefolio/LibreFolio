@@ -537,6 +537,17 @@ function houseDay(iso: string, locale: string): string {
     return new Intl.DateTimeFormat(locale, {year: 'numeric', month: 'short', day: 'numeric'}).format(new Date(year, month - 1, day));
 }
 
+/**
+ * `houseDay` plus the weekday of that calendar day in brackets, as Intl writes it in `locale` — `4 mar 2024 (lun)`, `4 mars 2024 (lun.)`,
+ * `Mar 4, 2024 (Mon)`: the header of ONE day (Y2 FB-1). The weekday is read on the UTC calendar of the same y-m-d, so the oracle shares no
+ * code with the product and no time zone moves it.
+ */
+function houseDayWithWeekday(iso: string, locale: string): string {
+    const [year, month, day] = iso.split('-').map(Number);
+    const weekday = new Intl.DateTimeFormat(locale, {weekday: 'short', timeZone: 'UTC'}).format(new Date(Date.UTC(year, month - 1, day)));
+    return `${houseDay(iso, locale)} (${weekday})`;
+}
+
 /** The month of the day `iso` as Intl writes it in `locale` — `febbraio 2024`: the monthly header's first line, localized already. */
 function monthOf(iso: string, locale: string): string {
     return new Intl.DateTimeFormat(locale, {month: 'long', year: 'numeric', timeZone: 'UTC'}).format(new Date(`${iso}T00:00:00Z`));
@@ -551,6 +562,11 @@ const DAY = '⟨day⟩';
  */
 function sansDay(line: string, iso: string): string {
     return line.split(houseDay(iso, uiLocale())).join(DAY).split(iso).join(DAY);
+}
+
+/** `line` with the heading day `iso` — written with its weekday in brackets, as a one-day header is — replaced by `DAY`. */
+function sansHeadingDay(line: string, iso: string): string {
+    return line.split(houseDayWithWeekday(iso, uiLocale())).join(DAY);
 }
 
 /** The two conversion lines of `marker`'s tooltip, as the catalogue and Intl write them in `locale` — the rate's day set aside (`DAY`). */
@@ -589,7 +605,7 @@ function mountChart(): void {
 async function bothTooltips(): Promise<{backfilled: string[]; sameDay: string[]}> {
     const backfilled = await tooltipOf(BACKFILLED);
     const sameDay = await tooltipOf(SAME_DAY);
-    expect([sansDay(backfilled[0], BACKFILLED.date), sansDay(sameDay[0], SAME_DAY.date)], 'barrier: each tooltip is the daily one of its event, headed by its day (in either notation: how the day is written is T-ISO’s)').toEqual([DAY, DAY]);
+    expect([sansHeadingDay(backfilled[0], BACKFILLED.date), sansHeadingDay(sameDay[0], SAME_DAY.date)], 'barrier: each tooltip is the daily one of its event, headed by its day and weekday (how the day itself is written is T-ISO’s)').toEqual([DAY, DAY]);
     return {backfilled, sameDay};
 }
 
@@ -742,6 +758,10 @@ describe('PriceChartFull — every day its tooltips write, in the house notation
             written.filter(({oracle, day}) => oracle === day),
             'a locale writes a day as ISO: no red could tell the cure',
         ).toEqual([]);
+        // The weekday oracle against a calendar, typed by hand: 4 March 2024 was a Monday.
+        expect(houseDayWithWeekday('2024-03-04', 'en-US')).toBe('Mar 4, 2024 (Mon)');
+        expect(houseDayWithWeekday('2024-03-04', 'it')).toBe('4 mar 2024 (lun)');
+        expect(houseDayWithWeekday('2024-03-03', 'fr')).toBe('3 mars 2024 (dim.)');
     });
 
     it.each(['it', 'fr', 'en'] as const)('%s interface: a daily point’s axis tooltip is headed by its day in the house notation', async (lang) => {
@@ -754,7 +774,7 @@ describe('PriceChartFull — every day its tooltips write, in the house notation
 
         const [header] = tooltipLines(axisTooltipHtml('2024-03-04', [{seriesName: 'EUR', value: 105}]));
 
-        expect(header, `the daily header is not the day in the ${lang} interface’s notation (${locale}): the tooltip writes the ISO day`).toBe(houseDay('2024-03-04', locale));
+        expect(header, `the daily header is not the day in the ${lang} interface’s notation (${locale}): the tooltip writes the ISO day, or no weekday`).toBe(houseDayWithWeekday('2024-03-04', locale));
     });
 
     it.each(LANGUAGES)('%s interface: a weekly point’s axis tooltip is headed by chart.tooltip.weekRange around the week’s first and last day in the house notation', async (lang) => {
@@ -819,7 +839,7 @@ describe('PriceChartFull — every day its tooltips write, in the house notation
         const lines = await tooltipOf(BACKFILLED);
 
         expect({heading: lines[0], fx: lines.at(-1)}, `the event’s days are not in the ${lang} interface’s notation: its heading and fxRateDate write ISO days`).toEqual({
-            heading: houseDay(BACKFILLED.date, locale),
+            heading: houseDayWithWeekday(BACKFILLED.date, locale),
             fx: `${catalogue('chart.tooltip.fxRateDate', {date: houseDay(BACKFILLED.fxRateDate!, locale)})} ${catalogue('chart.tooltip.fxDaysBack', {days: fixed(BACKFILLED.fxDaysBack!, 0, locale)})}`,
         });
     });
@@ -976,7 +996,7 @@ describe('CandlestickChart — the price chart’s candles: the tooltip’s head
             'daily',
         );
 
-        expect(candleHeader('2024-03-04', 1), `the candle’s day is not in the ${lang} interface’s notation: the header writes the ISO day`).toEqual([houseDay('2024-03-04', locale)]);
+        expect(candleHeader('2024-03-04', 1), `the candle’s day is not in the ${lang} interface’s notation: the header writes the ISO day, or no weekday`).toEqual([houseDayWithWeekday('2024-03-04', locale)]);
     });
 
     it.each(LANGUAGES)('%s interface: a weekly candle’s tooltip is headed by chart.tooltip.weekRange around the week’s first and last day in the house notation', async (lang) => {

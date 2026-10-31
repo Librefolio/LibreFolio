@@ -54,6 +54,7 @@ from backend.app.services.ai_export.components import broker_concentration_conte
 from backend.app.services.ai_export.components.broker_concentration_context import ConcentrationComparisonStatus
 from backend.app.services.ai_export.components.broker_cost_efficiency import BrokerCostEfficiencyAccessError, FeeStatus, TradeActivityRecord
 from backend.app.services.ai_export.components.catalog import build_component_registry
+from backend.app.services.ai_export.components.payloads.portfolio_broker import AllocationSlice, map_allocation_slice
 from backend.app.services.ai_export.components.registry import ComponentRegistry
 from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain
 from backend.app.services.ai_export.dependencies import BuildContext, RequiredComponentBuildError, ResourceLoadError, build_bucket_plan_for_scope
@@ -358,6 +359,69 @@ class TestConcentrationContext:
         assert payload["position_count"] == 0
         assert payload["allocation_by_currency"] == []
         assert payload["herfindahl_index_points"] is None
+
+
+class TestConcentrationContextSlicesWithoutPercent:
+    """MF-C2 (developer's decision, ondata 6): a broker whose allocation slices add up to zero or less (stocks 500 bought
+    on overdraft, cash -500) gets ``AllocationItem.value`` None from the engine; the dataset copies it as
+    ``AllocationSlice.percent`` None (null in the payload), keeps every amount, and ``_map_slices`` sorts a None percent
+    as 0 (descending percent, then name) instead of raising on ``-None``.
+
+    RED on the tree of 2026-10-28 (HEAD 01f1da513): ``AllocationItem(value=None)`` and ``AllocationSlice(percent=None)``
+    are refused (``ValidationError``); past the schema, ``_map_slices`` would raise ``TypeError`` on ``-slice_.percent``.
+    """
+
+    @staticmethod
+    def _null_item(name: str, amount: str) -> AllocationItem:
+        return AllocationItem(name=name, value=None, amount=Decimal(amount))
+
+    def test_allocation_slice_accepts_a_null_percent(self):
+        slice_ = AllocationSlice(name="Liquidity", percent=None, amount=_money("-500"))
+        assert slice_.percent is None
+        assert slice_.model_dump(mode="json")["percent"] is None, "null in the payload, never dropped"
+
+    def test_map_allocation_slice_copies_a_null_value(self):
+        mapped = map_allocation_slice(self._null_item("Stock", "500"), currency_code=CURRENCY)
+        assert (mapped.name, mapped.percent, mapped.amount.amount) == ("Stock", None, Decimal("500"))
+
+    def test_map_slices_sorts_a_null_percent_as_zero_then_by_name(self):
+        items = [
+            AllocationItem(name="Cash", value=Decimal("-10"), amount=Decimal("-100")),
+            self._null_item("Zeta", "0"),
+            AllocationItem(name="ETF", value=Decimal("60"), amount=Decimal("600")),
+            self._null_item("Alpha", "0"),
+            AllocationItem(name="Bond", value=Decimal("0"), amount=Decimal("0")),
+        ]
+        ordered = broker_concentration_context._map_slices(items, currency_code=CURRENCY)
+        assert [(slice_.name, slice_.percent) for slice_ in ordered] == [
+            ("ETF", Decimal("60")),
+            ("Alpha", None),
+            ("Bond", Decimal("0")),
+            ("Zeta", None),
+            ("Cash", Decimal("-10")),
+        ]
+
+    @pytest.mark.asyncio
+    async def test_a_net_zero_broker_builds_with_null_percents_and_its_amounts(self, monkeypatch):
+        scope = _scope()
+        summary = _summary(
+            holdings=[_holding(1, current_value=500, nav_weight_percent=None)],
+            net_worth=_money(0),
+            cash_total=_money(-500),
+            allocation_by_type=[self._null_item("Stock", "500"), self._null_item("Liquidity", "-500")],
+            allocation_by_sector=[self._null_item("Tech", "500"), self._null_item("Liquidity", "-500")],
+            allocation_by_geography=[AllocationItem(name="US", value=Decimal("100.00"), amount=Decimal("500"))],
+        )
+        _patch_report(monkeypatch, _report(scope, summary=summary))
+        context = _make_context(scope, _registry(), _make_async_session())
+
+        payload = (await context.resolve("broker.concentration_context", required=True)).payload
+
+        # Both percents None (sorted as 0): ties broken by name, so Liquidity before Stock / Tech
+        assert [(s["name"], s["percent"], Decimal(s["amount"]["amount"])) for s in payload["allocation_by_type"]] == [("Liquidity", None, Decimal("-500")), ("Stock", None, Decimal("500"))]
+        assert [(s["name"], s["percent"], Decimal(s["amount"]["amount"])) for s in payload["allocation_by_sector"]] == [("Liquidity", None, Decimal("-500")), ("Tech", None, Decimal("500"))]
+        assert [(s["name"], Decimal(s["percent"])) for s in payload["allocation_by_geography"]] == [("US", Decimal("100.00"))], "a positive-sum dimension keeps its percent"
+        assert payload["largest_position_weight_percent"] is None, "no NAV weight on a NAV at zero (D-MF7)"
 
 
 # =============================================================================

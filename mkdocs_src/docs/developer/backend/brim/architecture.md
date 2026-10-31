@@ -64,7 +64,9 @@ reached only from the review's **Import**, and only for a [report set](#report-s
 ### 🧺 Report sets {: #report-sets }
 
 Some banks split one account across several exports — Danske Bank (`broker_danske_bank/plugin.py`) is read
-from a custody export and a cash export. A **report-set plugin** declares the export roles it combines
+from a custody export and a cash export, Crédit Agricole (`broker_credit_agricole/plugin.py`, since 2.0.0) from
+a securities export and an account export. Both build on `brim_report_set_core.py`
+([BRIM Plugin Guide → The shared core](../../architecture/patterns/brim_plugin_guide.md#report-set-core)). A **report-set plugin** declares the export roles it combines
 (`report_roles`; `is_report_set_plugin` is true when the list is not empty), and its exports are
 imported as one set:
 
@@ -822,7 +824,7 @@ eToro itself downloads the statement as XLS.
 
 ## 🔗 Related
 
-- **[Crédit Agricole Importer](credit_agricole.md)** — Layouts, causale registry, account trades and maturities
+- **[Crédit Agricole Importer](credit_agricole.md)** — Report set (securities + account), pairing, balances and holes, causale registry, account trades and maturities
 - **[Generic CSV Provider](generic_csv.md)** — Format reference + sign conventions + LLM tip
 - **[Providers List](providers_list.md)** — All currently supported brokers
 - **[BRIM Plugin Guide](../../architecture/patterns/brim_plugin_guide.md)** — How to write a new broker plugin

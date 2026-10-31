@@ -16,7 +16,7 @@ from datetime import date as date_type
 from decimal import Decimal
 
 from backend.app.services.financial_math.portfolio.models import InternalAssetTransfer
-from backend.app.services.financial_math.returns import cumulative_to_annualized
+from backend.app.services.financial_math.returns import annualizes, cumulative_to_annualized
 
 _RATIO_QUANTUM = Decimal("0.0001")
 _ZERO = Decimal("0")
@@ -177,6 +177,7 @@ def annualized_period_return(
     closed position's does (MF-A8), and must then be positive. Not passed when units left the position in the period —
     before the arrival or after it: a transfer carries no quantity, so the part of the tract that left with them cannot
     be told apart, and the end cost stays the base.
+
     """
     ratio = period_return_on_start(period_pnl, start_value)
     if ratio is None and period_pnl is not None and end_cost is not None:
@@ -190,6 +191,17 @@ def annualized_period_return(
     if ratio is None or window_from is None:
         return None
     return cumulative_to_annualized(ratio, (end - window_from).days)
+
+
+def closed_flight_too_short(opened: date_type | None, closed: date_type | None, date_from: date_type | None) -> bool:
+    """Whether a position closed in the period was held in it too few days to annualize (MF-A3): its flight time, from
+    its first opening clamped to the period's start to its last close, is under the floor of
+    :func:`returns.cumulative_to_annualized`. Its row then shows no annualized return — never the period's general
+    rule, which would spread ten days held over the whole year."""
+    if opened is None or closed is None:
+        return False
+    start = opened if date_from is None or opened > date_from else date_from
+    return not annualizes((closed - start).days)
 
 
 def closed_position_annualized(
