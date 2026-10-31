@@ -10874,3 +10874,27 @@ Sessione figlia T, ondata 6, base `5efc0d973`, corsia 6221 (`/tmp/librefolio-r13
 > `e2e/fixtures/galleryBackup.ts`, TS2345 in `e2e/transactions/tx-bulk-possible-split.spec.ts`), corretti. Gate:
 > script `check:e2e` in `frontend/package.json`; `dev.py front check` lo esegue dopo svelte-check. Rosso/verde:
 > `TestFrontCheckCoversTheE2ESpecs`. `tsc` finale rc 0, 0 errori (log `ondata6/T-tsc-e2e2.log`).
+
+### Proposta C6-7b — `LF_SETUP_DONE` per `front-utility` (2026-10-31, non applicata)
+
+> `scripts/test_runner/_frontend_utility.py` chiama `_run_playwright` 42 volte, ma `_ensure_db_populated()` una sola
+> (`front_pac_allocator_real`). `front_utility_all` prepara solo build e utenti: «db» non entra mai in `_SETUP_DONE`,
+> quindi `_ensure_test_users` non imposta `LF_SETUP_DONE` e `global-setup.ts` ripopola il DB e ricrea gli utenti a
+> ogni invocazione. Misura di V (12/10): circa 20 s a invocazione → fino a ~14 minuti (42 × 20 s) per un
+> `front-utility all`. Cura proposta: `_ensure_db_populated()` prima di `_ensure_test_users()` in `front_utility_all`
+> e nelle azioni singole (come fanno asset e fx). Rischio: gli spec di utility che oggi ripartono da un DB appena
+> popolato a ogni file vedrebbero lo stato lasciato dai precedenti; va provato con un `front-utility all` intero
+> (pesante, in una finestra) prima di adottarla.
+
+### C6-6 (resto) e W6-10 (U-B9) ✅ (2026-10-31)
+
+> **Note implementazione**: `brim_plugin_key` → `default_import_plugin` nei 7 broker mock (il campo vero del modello; la
+> chiave vecchia veniva scartata in silenzio). Le 6 righe di asset che non validavano: forma piatta (Amundi Core MSCI
+> World, S&P 500) → `distribution` + `sector_area` «Other»; MSCI World Index e iShares Core MSCI World: i paesi sommavano
+> 0,86, aggiunti CAN/CHE/AUS/NLD/SWE (0,14); iShares: settori sommati a 1,0; Gold Spot: tolto `GLOBAL`, settore «Basic
+> Materials»; Semiconductors: `ASIA`/`EUROPE` → TWN/KOR/JPN/NLD/DEU. Test in `test_populate_reset.py`: tutti gli asset
+> contro `FAClassificationParams`, ogni chiave dei broker è un campo di `Broker`, ogni plugin predefinito esiste. Rossi
+> 3/3 prima, 28 verdi dopo. `auth.spec.ts` → `e2e/auth.spec.ts`; test `TestEverySpecPatternSelectsOneSpec` su tutti i
+> pattern letterali del runner; `test_test_runner_cli.py` 857 verdi.
+> Mock rilanciati sulla corsia 6221: `db populate`, `db referential-integrity`, `api assets-metadata`, `assets-crud`,
+> `ai-export`, `ai-export-unpriced-asset`, `brokers`, `broker-access`: tutti rc 0 (log `ondata6/T-mocks-run.log`).
