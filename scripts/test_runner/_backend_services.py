@@ -1240,6 +1240,16 @@ def services_transfer_cost_estimate(verbose: bool = False, test_names: list = No
     return engine_ok and grace_ok
 
 
+def services_engine_shared_run(verbose: bool = False, test_names: list = None) -> bool:
+    """Test that the Portfolio page's report, Performance table, positions chart and BUY funding share one engine run (FB-14)."""
+    print_section("Services: Engine Shared Run (FB-14)")
+    print_info("Testing: backend/app/services/portfolio_service.py (_engine_run: get_report, get_positions_contribution, get_positions_series, get_acquisition_funding_history)")
+    print_info("Tests: one build for the report then the series, for both concurrent (single-flight), none for the standalone contribution and funding after the report; every output equal to the old per-caller flags' (PortfolioService on a private SQLite file)")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial/test_engine_shared_run.py", test_names)
+    return run_command(cmd, "Engine shared run tests", verbose=verbose)
+
+
 def services_lone_transfer_legs(verbose: bool = False, test_names: list = None) -> bool:
     """Test decision 47's conversion of the lone giving TRANSFER legs a broker deletion left before 1.3."""
     print_section("Services: Lone Transfer Legs (decision 47)")
@@ -3053,6 +3063,18 @@ Note: No backend server required.
         # skips this action so that the file runs once there.
         in_all=False,
         # PURE: DailyStateBuilder over mock transactions, and PortfolioService on a private SQLite file under tmp_path; no lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "engine-shared-run",
+        services_engine_shared_run,
+        name="Engine Shared Run",
+        desc="FB-14: the Portfolio page's report (every section), the positions series of the same window, the standalone Performance table and BUY funding split make one engine build, also with the report and the series concurrent (single-flight); the old per-caller flags made two; every output (report full and summary+history only, series, contribution, funding; mid-history window and none) equals the old flags' field by field",
+        # The file sits in test_financial/, which roi-fifo-utils runs whole: the derived "all"
+        # skips this action so that the file runs once there.
+        in_all=False,
+        # PURE: PortfolioService on a private SQLite file under tmp_path; no lane DB, no server, no network.
         isolation="pure",
     )
     add_test(

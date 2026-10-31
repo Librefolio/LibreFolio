@@ -317,6 +317,18 @@ flight does not: an identical request with a later start builds on its own.
   other. The map is per process, like the cache.
 {: #single-flight }
 
+**One run per page** (FB-14). The Portfolio page asks the report (with the Performance table) and the positions chart
+for the same period; each used to call `calculate()` with its own flags, so the two requests had different blob keys
+and the page built the engine twice. `PortfolioService._engine_run()` is now the one call of `get_report()`,
+`get_positions_contribution()`, `get_positions_series()` and `get_acquisition_funding_history()`: always from t=0,
+with `include_positions`, `include_acquisition_funding` and `period_start` = the period's start. The requests of one
+page share the key: the first builds, the others read the cache or wait on the flight above. Each caller still
+serializes only what its query asks (a report without `include_acquisition_funding` has no funding series). The
+candles stay a flag of their own (`include_candles`), so their OHLC work stays off the ordinary reports; the extra
+outputs cost little (pure bookkeeping during the same replay). `period_start` stays in the key: a position frame does
+not carry everything a `DailyPositionState` does (reference prices, average cost, stale and missing-rate marks).
+{: #one-run-per-page }
+
 #### 📅 The Days the Engine Recomputes {: #recomputed-days }
 
 `DailyStateBuilder.build()` runs one replay, with the same rules every day, from the earliest
@@ -432,8 +444,8 @@ pnl; units sent to another broker of the scope stay the sender's until they arri
 arrival, holding the pnl of the last day held, and the tract settles it there. An asset asked without a broker is the sum
 over the brokers that held it: the tracts of a transfer between them cancel and what it brings in is not new capital. A value
 that is not known leaves `market_value` None and `pnl` the sum of the parts that are known, with `complete` False, as the
-row does. `PortfolioService.get_positions_series()` runs the engine once with `include_positions` (the blob cache keeps it
-between two selections) and serves `POST /api/v1/portfolio/positions-series`.
+row does. `PortfolioService.get_positions_series()` reads the page's run (`_engine_run()`, [one run per page](#one-run-per-page):
+the report of the same period built it, and the blob cache keeps it between two selections) and serves `POST /api/v1/portfolio/positions-series`.
 
 **The lots' histories as steps (D-P4).** The seven daily series of `POST /portfolio/lots/analysis` (value, return, price, market price,
 broker and cumulative average cost, performance) give a row for each stretch of days in which nothing changes: it holds from its
