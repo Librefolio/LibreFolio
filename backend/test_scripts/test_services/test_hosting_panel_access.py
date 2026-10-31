@@ -941,7 +941,7 @@ def spy_on_hmac(monkeypatch: pytest.MonkeyPatch, access: ModuleType) -> HmacSpy:
 
 
 def test_the_module_gives_the_scopes_one_dependency_per_scope_a_frozen_caller_and_one_limiter() -> None:
-    """HPA-010 (§2): ``PanelScope`` is a ``StrEnum`` of exactly ``backup``, ``wake`` and ``status``. ``panel_access(scope)``
+    """HPA-010 (§2): ``PanelScope`` is a ``StrEnum`` of exactly ``backup``, ``wake``, ``status``, ``backup:restore`` and ``metrics``. ``panel_access(scope)``
     returns the same object for the same scope, and one of its own for each. ``PanelCaller`` is a frozen dataclass of
     ``scope``, then ``credential``. ``PANEL_ATTEMPT_LIMIT`` is 20 and ``PANEL_ATTEMPT_WINDOW_SECONDS`` 600.
     ``new_panel_attempts()``, the factory the module builds ``PANEL_ATTEMPTS`` with, gives a new ``SlidingWindowLimiter``
@@ -957,8 +957,8 @@ def test_the_module_gives_the_scopes_one_dependency_per_scope_a_frozen_caller_an
 
     assert isinstance(scope_class, type) and issubclass(scope_class, enum.StrEnum), f"PanelScope is a StrEnum: {scope_class!r}"
     members = {member.name: member.value for member in scope_class}
-    # H-62 (contract L3 §5): the restore's scope, ticket only, joins the three; red until H-62
-    assert members == {"BACKUP": BACKUP, "WAKE": WAKE, "STATUS": STATUS, "BACKUP_RESTORE": "backup:restore"}, f"PanelScope holds exactly backup, wake, status and backup:restore: {members}"
+    # H-62 (contract L3 §5): the restore's scope, ticket only, joins the three; CL-M1: so does the metrics' scope, ticket only
+    assert members == {"BACKUP": BACKUP, "WAKE": WAKE, "STATUS": STATUS, "BACKUP_RESTORE": "backup:restore", "METRICS": "metrics"}, f"PanelScope holds exactly backup, wake, status, backup:restore and metrics: {members}"
     dependencies = {scope: panel_access(scope_class(scope)) for scope in SCOPES}
     again = {scope: panel_access(scope_class(scope)) for scope in SCOPES}
     assert all(callable(dependency) for dependency in dependencies.values()), f"panel_access gives a FastAPI dependency, a callable: {dependencies}"
