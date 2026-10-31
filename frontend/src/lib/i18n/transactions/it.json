@@ -8,7 +8,8 @@
       "quantity": "Qtà",
       "cash": "Importo",
       "broker": "Broker",
-      "links": "Link"
+      "links": "Link",
+      "unitPrice": "Prezzo unitario"
     },
     "actions": {
       "clone": "Clona",
@@ -78,10 +79,10 @@
       "costBasis": "Costo di carico manuale",
       "linkUuid": "TX Collegata",
       "pairPartner": "Transazione collegata",
-      "hintSignPositive": "deve essere > 0",
-      "hintSignNegative": "inserisci positivo — invertito al salvataggio",
-      "hintSignZero": "deve essere 0",
-      "hintSignNonzero": "deve essere ≠ 0",
+      "hintSignPositive": "Inserisci un valore maggiore di 0",
+      "hintSignNegative": "Inserisci un valore positivo",
+      "hintSignZero": "Inserisci 0",
+      "hintSignNonzero": "Inserisci un valore diverso da 0",
       "saveFailed": "Impossibile salvare la transazione",
       "fxTitle": "Cambio Valuta",
       "transferAssetTitle": "Trasferimento Asset",
@@ -96,14 +97,15 @@
       "eventCreateDateRequired": "La data è obbligatoria",
       "fxDatesHint": "Le date 'Da' e 'A' di solito coincidono: si separano quando il broker accredita la nuova valuta in un altro giorno.",
       "eventEditTitle": "Modifica evento per {asset}",
-      "entryModeAmount": "Importo totale",
+      "entryModeAmount": "Totale",
       "entryModeUnitPrice": "Prezzo unitario",
-      "unitPriceCalculated": "calcolato",
-      "unitPriceHint": "L'importo si calcola dal prezzo unitario e dalla quantità; puoi comunque modificarlo.",
       "preFloorDate": {
         "message": "La data {date} è anteriore al 1° gennaio 1900. Controlla che l'anno sia giusto: spesso è un errore di battitura.",
         "confirm": "Sì, la data è giusta"
-      }
+      },
+      "entryModeLabel": "Come leggere il numero",
+      "entryDerivedTotal": "= {value} in totale",
+      "entryDerivedUnit": "= {value} {base, plural, =1 {per unità} other {per # unità}}"
     },
     "bulk": {
       "resetRow": "Reimposta riga",
@@ -163,7 +165,7 @@
       "serverError": "Salvataggio impossibile — errore del server"
     },
     "costBasisOverride": {
-      "tooltip": "Override del prezzo medio di carico. Se vuoto, calcolato automaticamente dagli acquisti al salvataggio. Sovrascrivi per Exit Tax, eredità o regole fiscali particolari. Usa il selettore Totale/Per unità sotto per scegliere come inserire questo importo.",
+      "tooltip": "Il costo che inserisci al posto del prezzo medio di carico: per Exit Tax, eredità o regole fiscali particolari. Auto lo calcola dai tuoi acquisti. Usa il selettore Totale/Per unità sotto per scegliere come inserire questo importo.",
       "warningAdjustment": "Il costo di carico manuale è vuoto: senza, la transazione non si può salvare. Scrivi quanto ti sono costate queste quote: 0 per le quote nuove di uno split. Per un regalo, scrivi 0, oppure quanto le ha pagate il donante: così il prezzo medio di carico, e l'utile su cui potresti pagare le tasse, restano più vicini a quelli veri."
     },
     "wacPreview": {
@@ -186,7 +188,7 @@
         "add": "Pesata",
         "reduce": "Quantità ridotta",
         "addZeroCost": "Diluizione",
-        "addAtWac": "Auto PMC"
+        "splitRescale": "Adeguamento split"
       },
       "pendingCreate": "Transazione in attesa (nuova, non ancora salvata)",
       "pendingEdit": "Transazione in attesa (modificata, non ancora salvata)",
@@ -286,7 +288,10 @@
       "costBasisModeIncompatible": "❌ {type} qui non prende un costo base, quindi nessuna modalità Auto o Manuale: toglila.",
       "costBasisNegative": "Il costo di carico non può essere negativo: scrivi 0 o più.",
       "pairAdjustmentNotAllowed": "Due Rettifiche non si possono collegare: per spostare titoli fra broker usa un Trasferimento Asset.",
-      "pairArrivalBeforeDeparture": "L'arrivo ({arrivalDate}) è datato prima della partenza ({departureDate}). È stato salvato come inserito: controlla le due date."
+      "pairArrivalBeforeDeparture": "L'arrivo ({arrivalDate}) è datato prima della partenza ({departureDate}). È stato salvato come inserito: controlla le due date.",
+      "pairCurrencyMismatch": "I due lati di un bonifico devono essere nella stessa valuta (trovate {currencyA} e {currencyB}). Per cambiare valuta usa un cambio valuta",
+      "pairAmountMismatch": "Un bonifico deve far uscire da un broker ed entrare nell'altro lo stesso importo (trovati {amountA} e {amountB})",
+      "pairCurrencySame": "I due lati di un cambio valuta devono essere in valute diverse (entrambi sono in {currency})"
     },
     "pydantic": {
       "greaterThan": "Il valore deve essere maggiore di {gt}",

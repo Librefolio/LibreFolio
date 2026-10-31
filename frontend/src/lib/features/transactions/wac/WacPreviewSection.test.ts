@@ -67,6 +67,7 @@
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest';
 import {flushSync, tick} from 'svelte';
 import {waitLocale} from 'svelte-i18n';
+import {get} from 'svelte/store';
 
 // The only request this graph makes is the currency catalogue (the currency store behind the
 // formatter, and the currency chip of the cost-basis input). It is answered here so every money
@@ -91,6 +92,7 @@ vi.mock('$lib/api', () => ({
 }));
 
 import {fireEvent, render, screen, setupI18n, within} from '$test/component';
+import {_ as translate} from '$lib/i18n';
 import {currentLanguage} from '$lib/stores/app/language';
 import {isPrivacyEnabled, setPrivacyEnabled, togglePrivacy} from '$lib/stores/app/privacyStore.svelte';
 import {uiLocale} from '$lib/stores/app/uiLocale';
@@ -490,5 +492,62 @@ describe('WacPreviewSection — qualifying table: no digit lost (C-97c-1, D-C97c
 
     it('guard: the FX tooltip still writes a rate of 1.08345678 as 1.0835', async () => {
         expect(await fxTooltipText(FOUR_DECIMAL_RATE.tx_id)).toMatch(numberToken('1.0835'));
+    });
+});
+
+// ---------------------------------------------------------------------------
+// W6-1 — a split_rescale row is not a «Dilution»
+// ---------------------------------------------------------------------------
+
+/**
+ * The backend preview sends `effect` in {add, add_zero_cost, reduce, split_rescale} (`_WAC_PREVIEW_EFFECTS`, portfolio_service.py).
+ * The effect cell used to print the `addZeroCost` label («Dilution») for everything that was not add / reduce, so a row
+ * that a split rescaled was mislabelled «Dilution». The contract: a `split_rescale` row prints
+ * `transactions.wacPreview.effect.splitRescale` — a label of its own, not the add_zero_cost one — and an `add_zero_cost`
+ * row still prints `addZeroCost`.
+ *
+ * Read through the catalogue, never typed: the expected text is `$_(key)` in the language the table is mounted in, and the
+ * cell is selected by `rowOf` (a transaction id this block owns) and the column order of the template. Whether the four
+ * catalogues carry the key is the business of `lib/i18n/transactionsWacPreviewEffectKeys.test.ts`.
+ *
+ * Red today: the split_rescale cell prints the addZeroCost label, and `splitRescale` is not in the catalogue.
+ */
+describe('WacPreviewSection — qualifying table: the effect column (W6-1)', () => {
+    const EFFECT_KEY = 'transactions.wacPreview.effect';
+    const SPLIT_RESCALE_ROW = {...SAME_CURRENCY, tx_id: 7401, effect: 'split_rescale'};
+    const ZERO_COST_ROW = {...SAME_CURRENCY, tx_id: 7402, effect: 'add_zero_cost'};
+    const ADD_ROW = {...SAME_CURRENCY, tx_id: 7403, effect: 'add'};
+    const REDUCE_ROW = {...SAME_CURRENCY, tx_id: 7404, effect: 'reduce'};
+    const EFFECT_ROWS = [SPLIT_RESCALE_ROW, ZERO_COST_ROW, ADD_ROW, REDUCE_ROW];
+
+    /** The label of an effect key in the language the table is mounted in. */
+    const label = (name: string): string => norm(get(translate)(`${EFFECT_KEY}.${name}`));
+
+    beforeEach(async () => {
+        await setupI18n('en');
+        const wac = {code: 'EUR', amount: SAME_CURRENCY.running_wac};
+        render(WacPreviewSection, {value: {...wac}, onChange: vi.fn(), mode: 'auto', testid: TESTID, externalResult: {wac, qualifying_txs: EFFECT_ROWS.map((row) => structuredClone(row)), missing_pairs: []}});
+        await openQualifyingTable(EFFECT_ROWS);
+    });
+
+    it('a split_rescale row prints the splitRescale label, not the add_zero_cost one', () => {
+        expect.soft(cellText(SPLIT_RESCALE_ROW.tx_id, 'effect'), 'the cell of the split_rescale row').toBe(label('splitRescale'));
+        expect.soft(cellText(SPLIT_RESCALE_ROW.tx_id, 'effect'), 'the split_rescale row is not mislabelled with the add_zero_cost label').not.toBe(label('addZeroCost'));
+    });
+
+    it('the splitRescale label exists and is distinct from the add_zero_cost one', () => {
+        expect.soft(label('splitRescale'), 'splitRescale is a catalogue entry (a missing key reads as itself)').not.toBe(`${EFFECT_KEY}.splitRescale`);
+        expect.soft(label('splitRescale'), 'a label of its own').not.toBe(label('addZeroCost'));
+    });
+
+    it('guard: an add_zero_cost row still prints the addZeroCost label', () => {
+        expect(label('addZeroCost'), 'control: addZeroCost is a catalogue entry').not.toBe(`${EFFECT_KEY}.addZeroCost`);
+        expect(cellText(ZERO_COST_ROW.tx_id, 'effect')).toBe(label('addZeroCost'));
+    });
+
+    it('guard: add and reduce rows print their own labels', () => {
+        expect.soft(cellText(ADD_ROW.tx_id, 'effect')).toBe(label('add'));
+        expect.soft(cellText(REDUCE_ROW.tx_id, 'effect')).toBe(label('reduce'));
+        expect.soft(label('add'), 'add and reduce are told apart').not.toBe(label('reduce'));
     });
 });

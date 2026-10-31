@@ -37,8 +37,9 @@
     import {allocationCoverage, allocationRows, allocationWitnessDays, type AllocationStep} from './allocationHistorySteps';
     import {bucketEndDays} from './growthStepInputs';
     import {dayOfAxisValue, indexHoldingDay} from '$lib/utils/stepSeries';
+    import {attachDaySnap} from '$lib/components/charts/dayPointerSnap';
     import {formatPercent} from '$lib/utils/core/formatPercent';
-    import {formatDay} from '$lib/utils/core/formatAxisDate';
+    import {formatDay, formatDayWithWeekday} from '$lib/utils/core/formatAxisDate';
     import {bucketSpanUpTo} from '$lib/components/charts/priceChartHelpers';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {withHexAlpha} from '$lib/theme/colorAlpha';
@@ -575,7 +576,7 @@
             return buildTooltipHeader($t('chart.tooltip.monthLabel', {values: {month: formatMonthLabel(row.bucketStart)}}), mutedColor) + buildTooltipHeader($t('chart.tooltip.valueAt', {values: {date: formatDay(row.date)}}), mutedColor);
         }
 
-        return buildTooltipHeader(formatDay(row.date), mutedColor);
+        return buildTooltipHeader(formatDayWithWeekday(row.date), mutedColor);
     }
 
     function getDisplayName(rawName: string): string {
@@ -871,6 +872,7 @@
             const value = (event as {axesInfo?: Array<{value?: unknown}>}).axesInfo?.[0]?.value;
             pointedDay = typeof value === 'number' && Number.isFinite(value) ? dayOfAxisValue(value) : null;
         });
+        attachDaySnap(chartInstance);
     }
 
     // NOTE: getCurrentVisibleLogicalRange() internally calls chartInstance.getOption(),

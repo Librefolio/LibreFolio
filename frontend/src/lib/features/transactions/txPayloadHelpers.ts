@@ -364,11 +364,14 @@ export function diffDualItem(item: Record<string, unknown>, orig: TxOriginal, co
     if (explicitMode === 'auto') {
         out.cost_basis_mode = 'auto';
         out.cost_basis_override = item.cost_basis_override ?? null;
-    } else if ('cost_basis_override' in item) {
+    } else {
+        // A cost the user emptied is not «unchanged»: the form leaves the key out (or null), and the saved override is then
+        // detached with an explicit null, which the validation refuses at once where the type needs a cost (W6-4).
+        const draftOverride = item.cost_basis_override ?? null;
         const originalOverride = orig.cost_basis_override ?? null;
-        if (!fieldEq('cost_basis_override', item.cost_basis_override, originalOverride)) {
+        if (!fieldEq('cost_basis_override', draftOverride, originalOverride)) {
             // Manual is an internal discriminator; its wire shape is override-only.
-            out.cost_basis_override = item.cost_basis_override;
+            out.cost_basis_override = draftOverride;
         }
     }
     return out;

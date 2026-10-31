@@ -94,7 +94,7 @@ This records in-kind capital, not P&L: the adjustment creates/changes lots but d
 
     | Scenario | What to set |
     |----------|------------|
-    | **Normal transfer** | Leave empty — auto-calculated |
+    | **Normal transfer** | Keep the cost on **Auto** — calculated from your purchases |
     | **Exit Tax** | Market value at transfer date (jurisdiction-specific) |
     | **Inheritance** | Fair market value at date of death (or stepped-up basis) |
     | **Gift** | Donor's original cost basis (carryover basis) |

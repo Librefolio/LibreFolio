@@ -470,7 +470,7 @@
                 </div>
             {/if}
         {:else}
-            <span class="text-lf-placeholder">{placeholder || $_('common.search')}</span>
+            <span class="min-w-0 flex-1 truncate text-lf-placeholder" data-testid={testId ? `${testId}-placeholder` : undefined}>{placeholder || $_('common.search')}</span>
         {/if}
         <ChevronDown class="text-lf-muted shrink-0 transition-transform {isOpen ? 'rotate-180' : ''}" size={14} />
     </div>

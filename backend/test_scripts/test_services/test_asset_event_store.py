@@ -1469,3 +1469,100 @@ async def test_guard_editing_a_split_without_changing_its_type_is_allowed(owned,
 
     assert [(row.id, row.date, row.type, row.value, row.notes) for row in await _rows(owned.asset_id)] == [(split_id, _day(offset), AssetEventType.SPLIT, Decimal(ratio), notes)]
     assert await _tx_snapshot(owned) == transactions_before
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# W-B63 (part 2): an event whose stored value reads back as no value
+#
+# Since W-B60 ``AssetEvent.value`` reads a REAL ±inf (written before W-B58, or by hand) as ``None``. The events query
+# then built ``Currency(amount=None)`` for that row and raised: one such row took the whole answer down for the asset,
+# and the create mode of ``bulk_upsert_events`` raised the same while listing the stored event that blocks a key.
+# The contract (developer, 22/10/2026): the query skips such a row and says so in the result's ``errors``; the other
+# events are returned. A create on the key it holds is still EVENT_EXISTS, the stored event listed with no value.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+async def _store_infinite_value(event_id: int) -> None:
+    """Overwrite the stored value of one event with a REAL inf, as an older version or another tool left it (raw SQL: the
+    column type refuses to write one)."""
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        await session.execute(text("UPDATE asset_events SET value = :stored WHERE id = :event_id"), {"stored": float("inf"), "event_id": event_id})
+        await session.commit()
+
+
+@pytest.mark.asyncio
+async def test_the_events_query_skips_an_event_with_no_readable_value_and_says_so(owned):
+    """Red today: the row reads ``None`` and ``Currency(amount=None)`` raises, so the asset's events cannot be read at all.
+
+    Contract: the readable event is returned, the other is left out, and ``errors`` carries one warning naming its date.
+    """
+    readable_id = await _add_manual(owned.asset_id, 400, AssetEventType.DIVIDEND, "1.25")
+    unreadable_id = await _add_manual(owned.asset_id, 401, AssetEventType.DIVIDEND, "9.99")
+    await _store_infinite_value(unreadable_id)
+    request = FAEventQueryItem(asset_id=owned.asset_id, date_range=DateRangeModel(start=_day(400), end=_day(401)))
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        try:
+            results = await AssetSourceManager.query_events_bulk([request], session)
+        except Exception as exc:  # noqa: BLE001 — the red is the exception itself
+            pytest.fail(f"W-B63: the events query raised {type(exc).__name__} on an event whose stored value reads as no value: one such row takes down every event of the asset ({exc})")
+
+    queried = next(result for result in results if result.asset_id == owned.asset_id)
+    assert [(event.id, event.value.amount) for event in queried.events] == [(readable_id, Decimal("1.25"))], f"the readable event must be returned alone, got {[(event.id, event.value.amount) for event in queried.events]}"
+    assert len(queried.errors) == 1 and _day(401).isoformat() in queried.errors[0], f"one warning naming the skipped event's date {_day(401).isoformat()} was expected, got {queried.errors}"
+    assert unreadable_id not in [event.id for event in queried.events]
+
+
+@pytest.mark.asyncio
+async def test_guard_the_events_query_has_no_warning_when_every_value_reads(owned):
+    """GUARD (green before and after): a clean asset answers its events and no warning."""
+    first = await _add_manual(owned.asset_id, 402, AssetEventType.DIVIDEND, "1.25")
+    second = await _add_manual(owned.asset_id, 403, AssetEventType.DIVIDEND, "0.5")
+    request = FAEventQueryItem(asset_id=owned.asset_id, date_range=DateRangeModel(start=_day(402), end=_day(403)))
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        results = await AssetSourceManager.query_events_bulk([request], session)
+
+    queried = next(result for result in results if result.asset_id == owned.asset_id)
+    assert [event.id for event in queried.events] == [first, second] and queried.errors == [], f"expected both events and no warning, got {[event.id for event in queried.events]} / {queried.errors}"
+
+
+@pytest.mark.asyncio
+async def test_a_create_on_a_key_held_by_an_event_with_no_readable_value_is_still_event_exists(owned):
+    """Red today: listing the stored event builds ``Currency(amount=None)`` and raises, so the user gets a 500 instead of
+    the refusal.
+
+    Contract: EVENT_EXISTS as for any stored event, the stored one listed with ``value`` None.
+    """
+    stored_id = await _add_manual(owned.asset_id, 404, AssetEventType.DIVIDEND, "1.25")
+    await _store_infinite_value(stored_id)
+
+    try:
+        refused = await _upsert_refused([_item(owned.asset_id, [_ev(404, "DIVIDEND", "3.00")], mode="create")])
+    except Exception as exc:  # noqa: BLE001 — the red is the exception itself
+        pytest.fail(f"W-B63: a create on the key of an event with no readable value raised {type(exc).__name__} instead of EVENT_EXISTS ({exc})")
+
+    assert refused.error_code == "EVENT_EXISTS"
+    existing = _plain(refused.details)["existing"]
+    assert [(row["id"], row["value"]) for row in existing] == [(stored_id, None)], f"the stored event must be listed with no value, got {existing}"
+
+
+@pytest.mark.asyncio
+async def test_the_events_by_ids_skips_an_event_with_no_readable_value_and_says_so(owned):
+    """Red today: the same ``Currency(amount=None)`` raises in the read by ids, the one the editor opens a pair of events with.
+
+    Contract (W-B63): as the query by range, the readable event is returned, the other is left out, one warning names its date.
+    """
+    readable_id = await _add_manual(owned.asset_id, 405, AssetEventType.DIVIDEND, "1.25")
+    unreadable_id = await _add_manual(owned.asset_id, 406, AssetEventType.DIVIDEND, "9.99")
+    await _store_infinite_value(unreadable_id)
+
+    async with AsyncSession(get_async_engine(), expire_on_commit=False) as session:
+        try:
+            results = await AssetSourceManager.get_events_by_ids([readable_id, unreadable_id], session)
+        except Exception as exc:  # noqa: BLE001 — the red is the exception itself
+            pytest.fail(f"W-B63: the read by ids raised {type(exc).__name__} on an event whose stored value reads as no value ({exc})")
+
+    answered = next(result for result in results if result.asset_id == owned.asset_id)
+    assert [event.id for event in answered.events] == [readable_id], f"the readable event must be returned alone, got {[event.id for event in answered.events]}"
+    assert len(answered.errors) == 1 and _day(406).isoformat() in answered.errors[0], f"one warning naming {_day(406).isoformat()} was expected, got {answered.errors}"

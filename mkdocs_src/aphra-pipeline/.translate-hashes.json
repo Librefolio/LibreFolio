@@ -4159,7 +4159,7 @@
     }
   },
   "financial-theory/instruments/transaction-types/adjustment.en.md": {
-    "md5": "120fa534deaffcd7d2900f36de8d9196",
+    "md5": "fc3bcb704ef688799b88f73e155fb819",
     "langs_done": [
       "es",
       "fr",
@@ -4179,7 +4179,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 184.2,
-        "stamped_at": "2026-10-11T16:16:40.261232+00:00",
+        "stamped_at": "2026-10-28T22:01:16.483685+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -4192,7 +4192,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 233.8,
-        "stamped_at": "2026-10-11T16:16:40.261232+00:00",
+        "stamped_at": "2026-10-28T22:01:16.483685+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -4205,7 +4205,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 168.0,
-        "stamped_at": "2026-10-11T16:16:40.261232+00:00",
+        "stamped_at": "2026-10-28T22:01:16.483685+00:00",
         "stamped_by": "translate-stamp"
       }
     }
@@ -6552,7 +6552,7 @@
     }
   },
   "user/transactions/import/how-to.en.md": {
-    "md5": "62b4e6fa610c58fcef863996fada1112",
+    "md5": "fdb0723f80adb3493111652654ee29ba",
     "langs_done": [
       "es",
       "fr",
@@ -6572,7 +6572,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 167.7,
-        "stamped_at": "2026-10-20T09:22:34.925399+00:00",
+        "stamped_at": "2026-10-30T12:11:52.569529+00:00",
         "stamped_by": "translate-stamp"
       },
       "fr": {
@@ -6587,7 +6587,7 @@
         "elapsed_s": 173.0,
         "final_structural_diff": "## STRUCTURAL DIFF REPORT (source vs translation)\n\nIssues found: 1\n\n1. BOLD_MARKERS: source=114, translated=115 (Δ+1)\n  L3: src=1 trn=2\n    EN: The **Import Wizard** turns the reports you download from your broker into transactions. You check\n    TR: L'**Assistant d'importation** transforme les rapports que vous téléchargez depuis votre courtier en transactions. Vous v\n  L4: src=1 trn=0\n    EN: what it read and settle its doubts; nothing is saved until you press **Save All**.\n    TR: \n  L9: src=0 trn=1\n    EN: \n    TR: 1. Exportez un rapport de transactions depuis votre courtier : sa page dans les **[Courtiers pris en charge](index.md)**\n  L10: src=1 trn=2\n    EN: 1. Export a transaction report from your broker: its page in **[Supported Brokers](index.md)** says\n    TR: 2. Sur la page **[Transactions](../index.md)**, cliquez sur **Importer** (:material-file-upload:).\n  L12: src=2 trn=1\n    EN: 2. On the **[Transactions](../index.md)** page, click **Import** (:material-file-upload:).\n    TR: 4. Cliquez sur **Importer N transactions** : les lignes s'ouvrent dans l'espace de travail groupé, pas encore enregistré\n  L13: src=0 trn=1\n    EN: 3. Drop the report into the wizard, assign it to its broker and follow the steps below.\n    TR: 5. Jetez-y un dernier coup d'œil et cliquez sur **Tout enregistrer**.\n  L14: src=1 trn=0\n    EN: 4. Click **Import N transactions**: the rows open in the bulk workspace, not saved yet.\n    TR: \n  L15: src=1 trn=0\n    EN: 5. Give them a last look and click **Save All**.\n    TR: <div class=\"lf-screenshot-carousel\" data-carousel=\"carousel-import-wizard\" data-carousel-interval=\"6000\" data-show-title\n  … and more (showing first 8 mismatches)\n\nSOURCE_OUTLINE (for reference):\n  # 🧙 How to Import Transactions\n    ## 🚀 Step-by-Step Guide\n    ## 🧙 The Import Wizard Steps\n      ### 📤 Step 1: Upload\n        #### 🧭 A file in the wrong broker {: #wrong-broker }\n      ### 🗂️ Step 2: Select Files\n      ### 🧠 Step 3: Parse\n      ### 🧩 Steps that appear only when needed {: #only-when-needed }\n      ### 📦 Step 4: Review {: #review }\n        #### 🗂️ Match each security\n        #### 🚦 Read the status badges\n        #### ⛔ Rows before the broker's opening date {: #opening-date }\n        #### 📥 Import the rows\n      ### 💾 Save in the bulk workspace\n    ## 🧭 Guided First Import {: #guided-first-import }\n    ## 🔗 Related",
         "final_structural_issues": 1,
-        "stamped_at": "2026-10-20T09:22:34.925399+00:00",
+        "stamped_at": "2026-10-30T12:11:52.569529+00:00",
         "stamped_by": "translate-stamp"
       },
       "es": {
@@ -6600,7 +6600,7 @@
         "structural_diff": "",
         "structural_issues": 0,
         "elapsed_s": 161.9,
-        "stamped_at": "2026-10-20T09:22:34.925399+00:00",
+        "stamped_at": "2026-10-30T12:11:52.569529+00:00",
         "stamped_by": "translate-stamp"
       }
     }

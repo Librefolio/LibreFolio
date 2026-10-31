@@ -5,7 +5,7 @@ Provides RESTful endpoints for broker management:
 - POST /brokers: Create brokers (with optional initial deposits)
 - GET /brokers: List all brokers
 - GET /brokers/{id}: Get broker details
-- GET /brokers/{id}/summary: Get broker with balances and holdings
+- GET /brokers/{id}/summary: Get broker with its cash balances
 - PATCH /brokers/{id}: Update broker
 - DELETE /brokers: Bulk delete brokers
 
@@ -296,7 +296,7 @@ async def get_broker_summary(
     broker_id: int,
     current_user: Annotated[User, Depends(get_current_user)],
     as_user_id: Optional[str] = Query(None, description="Superuser: impersonate user ID or 'all'"),
-    as_of: Optional[date] = Query(None, description="The user's today (YYYY-MM-DD); the server date when omitted. Cash, holdings and their average cost count the transactions dated up to that day; prices are the latest known."),
+    as_of: Optional[date] = Query(None, description="The user's today (YYYY-MM-DD); the server date when omitted. Cash counts the transactions dated up to that day."),
     session: AsyncSession = Depends(get_session_generator),
 ) -> BRSummary:
     """
@@ -307,7 +307,7 @@ async def get_broker_summary(
     Includes:
     - Basic broker info
     - Cash balances per currency
-    - Asset holdings with cost basis and market value
+    - The caller's role and share on the broker (the positions are `POST /portfolio/report`'s)
 
     Args:
         broker_id: Broker ID

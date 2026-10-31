@@ -48,7 +48,7 @@ See [Price Resolution](price-resolution.md) for the resolver contract and data-q
 
 ## 📐 3. Position State {: #3-position-state }
 
-For each position $(a, b)$ with $q(a,b,t) > 0$:
+A position $(a, b)$ is **held** on $t$ when its quantity is above the dust threshold $\varepsilon = 10^{-5}$ units: $q(a,b,t) > \varepsilon$. For each position held:
 
 $$
 \mathrm{MV}(a,b,t) =
@@ -69,6 +69,8 @@ $$
 Where $w(a,b,t)$ is the [Weighted Average Cost](../weighted-average-cost.md) for position $(a,b)$ at date $t$, kept in $C^*$ at historical rates (§4): the cost basis takes no exchange rate at $t$, so for a foreign asset the exchange-rate effect is part of $\mathrm{UGL}$.
 
 The second case covers an asset with no observation yet — no quote, no BUY or SELL on or before $t$, as for a holding received through adjustments or transfers. The position is valued at its cost basis, valuation source `ESTIMATED_AT_COST`: a declared estimate, not a price. It reports no unit price, it does not move with exchange rates, and its $\mathrm{UGL}$ is zero, with neither a price effect nor an exchange-rate effect. The choice is made day by day, with no look-ahead: from the first observation on, the mark wins, even an old one carried forward. A position whose cost is incomplete (§4) has no market value on such a day (`MISSING`) and is left out of $\mathrm{MV}(t)$. The valuation sources therefore rank `MARKET_PRICE` > `LAST_TRADE_PRICE` > `ESTIMATED_AT_COST` > `MISSING` ([Price Resolution](price-resolution.md)).
+
+A quantity of $\varepsilon$ units or fewer — the dust a sale of almost every unit can leave behind — is not held: it has no position state, so no market value, no cost basis, no allocation slice and no snapshot, and dust without a mark does not make the day incomplete. The same threshold decides which positions the Performance rows hold (§7), so the portfolio and its rows count the same positions; where the cost of the dust goes is in §7.
 
 ---
 
@@ -119,6 +121,8 @@ $$
 $$
 \mathrm{UGL}(t) = \mathrm{NAV}(t) - \mathrm{Book}(t)
 $$
+
+$\mathrm{MV}(t)$ and $\mathrm{OCB}(t)$ run over the positions held on $t$ (§3): dust, at or below the threshold, is in neither, so neither in NAV nor in Book.
 
 $\mathrm{Cash}(t)$ is each broker's cash, kept in the currencies it was recorded in and valued at the rate of $t$:
 
@@ -249,7 +253,7 @@ $$
 \sum_{(a,b) \in \mathcal{P}} \Delta\mathrm{UGL}(a,b) = \Delta\mathrm{UGL} = \bigl[\mathrm{MV}(t_1) - \mathrm{OCB}(t_1)\bigr] - \bigl[\mathrm{MV}(t_0) - \mathrm{OCB}(t_0)\bigr]
 $$
 
-Dust aside: a row counts a position holding $10^{-5}$ units or fewer as not held — no value, no unrealized of its own —, while the portfolio state of §3 values every quantity above zero. The unrealized change of such a residual is in $\Delta\mathrm{UGL}$ and in no row (MF-A6).
+The identity holds with dust too: a row and the portfolio state of §3 use the same threshold, so a position left with $10^{-5}$ units or fewer is not held on either side — no value, no unrealized, in no row and not in $\Delta\mathrm{UGL}$. Its cost leaves the open cost basis without being sold, so it is in neither $\Delta\mathrm{UGL}$ nor Realized: it ends in the period's residual (below).
 
 **Internal transfers.** $T(a,b)$ splits the result of a security moved between two brokers of $S$: each broker answers for its own stretch. For each linked TRANSFER of $a$ from broker $s$ to broker $d$ that departs after $t_0$ and arrives on or before $t_1$, with $V$ the value of the moved units on the arrival day (§3) and $C$ the historical cost the sender's pool gave up for them (§4):
 
@@ -288,7 +292,17 @@ $$
 
 Unallocated fees/income without `asset_id` are grouped per broker as other period effects, and so is $\mathrm{FXonCash}_b$: one row per broker holding foreign cash, shown when its result is not zero. See [Period P&L — FX on Cash](period-pnl.md#fx-on-cash).
 
-When every row is known, the rows and the other period effects together close $\mathrm{PnL}_{period}$. Since the rows are valued as the portfolio is, the residual holds no valuation difference between them, only what no position holds: what travels between two brokers, the cost of a currency exchange, a disposal left out of Realized.
+When every row is known, the rows and the other period effects together close $\mathrm{PnL}_{period}$. Since the rows are valued as the portfolio is, the residual holds no valuation difference between them, only what no position holds: what travels between two brokers, the cost of a currency exchange, a disposal left out of Realized, the cost of dust.
+
+??? example "Example: a sale that leaves 0.00001 units"
+
+    10 units are bought at 100,000 before the period, and the price is 100,000 at $t_0$: NAV is 1,000,000 and the unrealized 0. Inside the period, 9.99999 units are sold at 120,000 for 1,199,998.80: Realized is $9.99999 \times 20{,}000 = 199{,}999.80$, and 0.00001 units are left; the price is 120,000 at $t_1$ too, so they are worth 1.20 at a cost of 1.00. They are dust: they are in no row and not in NAV, so the row's and the portfolio's $\Delta\mathrm{UGL}$ are both 0, and NAV at $t_1$ is the cash of the sale. $\mathrm{PnL}_{period} = 1{,}199{,}998.80 - 1{,}000{,}000 = 199{,}998.80$, and
+
+    $$
+    \mathrm{Other} = 199{,}998.80 - 0 - 199{,}999.80 = -1.00
+    $$
+
+    the cost of the dust. Valued in NAV, the dust would have put $1.20 - 1.00 = 0.20$ into the portfolio's $\Delta\mathrm{UGL}$ that no row had.
 
 ---
 
@@ -353,7 +367,7 @@ A fund held on Friday 23, Saturday 24, Sunday 25 and Monday 26 October, quoted o
 - **Which series.** `history`, `allocation_history.*`, `broker_pnl_history[].points` and `pnl_candles.points`. The event series (income, cost, deposit, acquisition funding) are unchanged: one point per event.
 - **Maximal steps.** Two adjacent steps never carry identical values; the steps of a broker are maximal for its own P&L, not for the portfolio's.
 - **Gaps.** A day that no step covers has no value: a broker that starts mid-window, or a day without a P&L candle (a held asset could not be valued).
-- **TWRR and ROI** stay inside the steps. On a quiet day the TWRR factor is exactly 1 and the ROI does not change. The first point of the TWRR is pinned to 0, being period-relative.
+- **TWRR and ROI** stay inside the steps. On a quiet day the TWRR factor is exactly 1 and the ROI does not change. The first point of the TWRR is pinned to 0, being period-relative. A step on which the NAV is zero or less carries no TWRR (`null`), under the same rule as the card ([When No TWRR Is Shown](twrr.md#when-no-twrr)); the chain keeps compounding through it, so the TWRR returns once the NAV is above zero again. The ROI's capital is the card's ([The ROI of a Period](roi.md#dashboard-period-roi)).
 - **MWRR** moves every day, because time passes, and with several flows it has no closed form: it does not sit in the steps but in `mwrr_line`, a series of **true values**, each equal to the [MWRR](mwrr.md) of the period ending that day, under the same rule as the card (no rate when the portfolio's value or the net invested capital is not positive). The line has a point at the `date` and at the `through` of every step; inside a step longer than 62 days it adds the last day of each calendar month strictly inside it, at most 24 per step, evenly spread. Its first point is pinned to 0.
 - **Data quality** follows the same idea: `incomplete_nav_ranges`, `incomplete_book_value_ranges`, `incomplete_allocation_ranges` and `incomplete_valuation_ranges` are lists of `{start, end}` with consecutive days merged. `missing_fx_pairs[].dates` holds only the dates of the movements, and `missing_fx_pairs[].ranges` the valuation days, merged. The older `incomplete_*_dates` lists are transitional.
 

@@ -9,13 +9,16 @@ from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
 from enum import StrEnum
-from typing import Literal, Optional, overload
+from typing import TYPE_CHECKING, Literal, Optional, overload
 
 from backend.app.db.models import Transaction
 from backend.app.services.financial_math.average_cost import (
     AverageCost,
 )
 from backend.app.services.financial_math.native_cash import NativeCash
+
+if TYPE_CHECKING:
+    from backend.app.services.financial_math.portfolio.daily_state import AssetMarks
 
 # =============================================================================
 # DATACLASSES — Internal runtime objects (not API DTOs)
@@ -626,6 +629,9 @@ class PortfolioCalculationResult:
     # and the period flows by type and position. None when calculate() returns early, with
     # no broker or no transaction in scope.
     native_cash: NativeCash | None = None
+    # The price of an asset on a day as the replay valued it (MF6-1): its reader of marks, splits and rates. None when
+    # calculate() returns early.
+    marks: AssetMarks | None = None
     # End state for cache forward extension
     end_state: EngineEndState | None = None
     # Metadata

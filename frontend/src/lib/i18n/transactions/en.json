@@ -8,7 +8,8 @@
       "quantity": "Qty",
       "cash": "Cash",
       "broker": "Broker",
-      "links": "Links"
+      "links": "Links",
+      "unitPrice": "Unit price"
     },
     "actions": {
       "clone": "Clone",
@@ -78,10 +79,10 @@
       "costBasis": "Cost basis override",
       "linkUuid": "Linked TX",
       "pairPartner": "Pair partner",
-      "hintSignPositive": "must be > 0",
-      "hintSignNegative": "enter positive — auto-negated on save",
-      "hintSignZero": "must be 0",
-      "hintSignNonzero": "must be ≠ 0",
+      "hintSignPositive": "Enter a value above 0",
+      "hintSignNegative": "Enter a positive value",
+      "hintSignZero": "Enter 0",
+      "hintSignNonzero": "Enter a value other than 0",
       "saveFailed": "Failed to save transaction",
       "fxTitle": "Currency Exchange",
       "transferAssetTitle": "Asset Transfer",
@@ -96,14 +97,15 @@
       "eventCreateDateRequired": "Date is required",
       "fxDatesHint": "The 'From' and 'To' dates usually match: they differ when the broker credits the new currency on another day.",
       "eventEditTitle": "Edit event for {asset}",
-      "entryModeAmount": "Total amount",
+      "entryModeAmount": "Total",
       "entryModeUnitPrice": "Unit price",
-      "unitPriceCalculated": "calculated",
-      "unitPriceHint": "The amount is calculated from the unit price and the quantity; you can still edit it.",
       "preFloorDate": {
         "message": "The date {date} is before 1 January 1900. Check that the year is right: it is often a typo.",
         "confirm": "Yes, the date is right"
-      }
+      },
+      "entryModeLabel": "How to read the amount",
+      "entryDerivedTotal": "= {value} in total",
+      "entryDerivedUnit": "= {value} {base, plural, =1 {per unit} other {per # units}}"
     },
     "bulk": {
       "resetRow": "Reset row",
@@ -163,7 +165,7 @@
       "serverError": "Save failed — server error"
     },
     "costBasisOverride": {
-      "tooltip": "Override of the weighted avg cost. If empty, auto-calculated from purchases at save. Override for Exit Tax, inheritance, or special fiscal rules. Use the Total/Per unit toggle below to choose how this amount is entered.",
+      "tooltip": "The cost you enter instead of the weighted average cost: for Exit Tax, inheritance or special fiscal rules. Auto calculates it from your purchases. Use the Total/Per unit toggle below to choose how this amount is entered.",
       "warningAdjustment": "The manual cost basis is empty: the transaction can't be saved without it. Enter what these units cost you: 0 for the new shares of a stock split. For a gift, enter 0, or what the donor paid for them: that keeps the weighted average cost, and the gain you may be taxed on, closer to the real ones."
     },
     "wacPreview": {
@@ -186,7 +188,7 @@
         "add": "Weighted",
         "reduce": "Quantity reduced",
         "addZeroCost": "Dilution",
-        "addAtWac": "Auto WAC"
+        "splitRescale": "Split adjustment"
       },
       "pendingCreate": "Pending transaction (new, not yet saved)",
       "pendingEdit": "Pending transaction (edited, not yet saved)",
@@ -286,7 +288,10 @@
       "costBasisModeIncompatible": "❌ {type} takes no cost basis here, so no Auto or Manual mode: remove it.",
       "costBasisNegative": "The cost basis can't be negative: enter 0 or more.",
       "pairAdjustmentNotAllowed": "Two Adjustments cannot be linked: use an Asset Transfer to move units between brokers.",
-      "pairArrivalBeforeDeparture": "The arrival ({arrivalDate}) is dated before the departure ({departureDate}). It was saved as entered: check the two dates."
+      "pairArrivalBeforeDeparture": "The arrival ({arrivalDate}) is dated before the departure ({departureDate}). It was saved as entered: check the two dates.",
+      "pairCurrencyMismatch": "Both sides of a cash transfer must be in the same currency (found {currencyA} and {currencyB}). To change currency, use a currency exchange",
+      "pairAmountMismatch": "A cash transfer must take out of one broker the same amount it brings into the other (found {amountA} and {amountB})",
+      "pairCurrencySame": "The two sides of a currency exchange must be in different currencies (both are {currency})"
     },
     "pydantic": {
       "greaterThan": "Value must be greater than {gt}",
