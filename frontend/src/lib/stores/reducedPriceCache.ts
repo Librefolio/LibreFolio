@@ -23,6 +23,8 @@ import type {ChartResolution} from '$lib/components/charts/timeSeriesAggregation
 import {fillCounts, stepForMaxPoints} from '$lib/components/charts/timeSeriesAggregation';
 import type {DerivedPriceState} from '$lib/utils/assetPriceDerived';
 
+import {withLiveHead} from '$lib/utils/liveHead';
+
 import {registerPortfolioMutationListener} from './portfolio/portfolioMutation';
 
 /** A series as the page reads it from an answer. */
@@ -73,6 +75,25 @@ export class ReducedPriceCache {
         const entry: ReducedEntry = {...series, counts: countsOf(series.derived), stale: false};
         this.cards.set(ReducedPriceCache.cardKey(assetId, start, end), entry);
         return entry;
+    }
+
+    /**
+     * A live quote of `asOfDate` at `value`: the last point of every range of the asset that holds that day (its end on or after it) is
+     * brought up to the quote, on the spot (Y6-1). The entry stays what it was (fresh or stale, the same step and base), no cache is
+     * dropped and nothing is asked again. Returns how many ranges changed.
+     */
+    applyLiveHead(assetId: number, asOfDate: string, value: number): number {
+        let changed = 0;
+        for (const [key, entry] of this.cards) {
+            const [id, , end] = key.split('|');
+            if (Number(id) !== assetId || end < asOfDate) continue;
+            const chartData = withLiveHead(entry.derived.chartData, entry.resolution, asOfDate, value);
+            if (!chartData) continue;
+            const derived: DerivedPriceState = {...entry.derived, chartData, lastPrice: value};
+            this.cards.set(key, {...entry, derived, counts: countsOf(derived)});
+            changed += 1;
+        }
+        return changed;
     }
 
     /** The target's series sampled like the card, if the card has the step it was read for; null otherwise. */

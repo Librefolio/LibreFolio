@@ -1,7 +1,7 @@
 {
   "chart": {
     "tooltip": {
-      "stale": "Stale: {days} day(s) old",
+      "stale": "Stale: {days, plural, one {# day} other {# days}} old",
       "fxStale": "FX rate: {days}d old",
       "percentNote": "% relative to range start date",
       "upper": "Upper",
@@ -14,7 +14,8 @@
       "currentBucket": "In progress: {days} of {total} days",
       "originalValue": "orig. {value}",
       "fxRateDate": "fx @ {date}",
-      "fxDaysBack": "({days}d back)"
+      "fxDaysBack": "({days}d back)",
+      "staleBadge": "{days}d"
     },
     "resolution": {
       "weekly": "Weekly",

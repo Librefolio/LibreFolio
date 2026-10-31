@@ -22,6 +22,7 @@
     import * as echarts from 'echarts';
     import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';
     import {chartInitOptions} from '$lib/components/charts/chartPixelRatio';
+    import {attachDaySnap} from '$lib/components/charts/dayPointerSnap';
     import {attachChartReady} from '$lib/utils/chartReady';
     import {getUserStorage, setUserStorage} from '$lib/utils/storage';
     import {maskFormattedNumber, shouldMaskAmount} from '$lib/utils/privacy/maskable';
@@ -1125,6 +1126,8 @@
                 pointedDay = typeof value === 'number' && Number.isFinite(value) ? dayOfAxisValue(value) : null;
             };
             zoomInstance.on('updateAxisPointer', onAxisPointer);
+            // …and the pointer line rests on a day, never between two (Y2 FB-2).
+            attachDaySnap(zoomInstance);
             dataZoomCleanup = () => {
                 zoomInstance.off('dataZoom', onDataZoom);
                 zoomInstance.off('updateAxisPointer', onAxisPointer);
@@ -1525,7 +1528,7 @@
             </div>
         {:else if viewMode === 'pnl' && pnlSubmode === 'candles' && pnlCandlesLoading && pnlCandles == null}
             <!-- The candles are asked on the first activation: until they arrive the chart is empty, so say it is waiting (Y-18). -->
-            <div class="absolute inset-0 z-10 bg-lf-panel rounded animate-pulse" data-testid="growth-pnl-candles-loading" aria-hidden="true"></div>
+            <div class="pointer-events-none absolute inset-0 z-10 bg-lf-panel rounded animate-pulse" data-testid="growth-pnl-candles-loading" aria-hidden="true"></div>
         {/if}
         <!-- Persistent chart container — never destroyed -->
         <div bind:this={chartContainer} style="height: 100%; width: 100%;" class:invisible={loading || history.length === 0}></div>

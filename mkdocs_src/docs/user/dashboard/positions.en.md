@@ -19,7 +19,7 @@ The **Positions** tab shows what you hold, what each position earned in the peri
 
 - **[Portfolio](#holdings) / [Period](#performance)** switches between what you own and what each position earned; **Table / Map** (the two icons) between a table and a chart.
 - **The eye icon** (in Table) shows, hides or reorders the columns; **Reset layout** restores them. **See all →** opens the Assets page.
-- **To dig into a position**, open its **⋮** menu in a table, or right-click it in any view: **Analyze Lots** opens the [FIFO Lots Analysis](#fifo-lots-analysis) (on the Dashboard it takes the place of the view, on a broker's page it opens below the list), **View Asset** the asset's page.
+- **To dig into a position**, open its **⋮** menu in a table, or right-click it in any view: **Analyze Lots** opens the [FIFO Lots Analysis](#fifo-lots-analysis) below the positions (on the Dashboard as on a broker's page), **View Asset** the asset's page.
 
 LibreFolio remembers your choices.
 
@@ -27,7 +27,7 @@ LibreFolio remembers your choices.
 
 ## 📋 Holdings — what you own {: #holdings }
 
-What do you own on the end date, and how is each position doing? **Portfolio** lists one row per asset and broker, the largest value first.
+What do you own on the end date, and how is each position doing? **Portfolio** lists one row per asset and broker, the largest value first. At the bottom, in italics, come the positions you **sold out inside the period**: they have no value, weight or yield, but you can tick them to draw their line in the [chart](#return-of-the-positions), and they have the usual row actions.
 
 **Columns shown**
 
@@ -61,17 +61,19 @@ What do you own on the end date, and how is each position doing? **Portfolio** l
 
 ### 📉 Return of the positions {: #return-of-the-positions }
 
-Which of your positions did better than the portfolio, and which worse? On the Dashboard, **Portfolio** in **Table** view puts a tick box on every row and, under the table, a **Return of the positions** chart.
+Which of your positions did better than the portfolio, and which worse? On the Dashboard, the **Table** view of both **Portfolio** and **Period** puts a tick box on every row and, under the table, a **Return of the positions** chart. It sits beside the allocation by asset — the pie of today and the history area, with two buttons — at about 3/5 and 2/5 of the row, like the Growth chart and the Allocation of the Overview. The **Map** view has no chart.
 
-- **Nothing ticked**: the chart shows the portfolio line only. **Tick a row** to add a line for that position, and tick more to compare them.
+- **Nothing ticked**: the chart shows the portfolio line only. **Tick a row**, in either table, to add a line for that position, and tick more to compare them.
 - **The legend** under the title has one button per line: click it to turn the line off and on. A **flag** marks a position that closed, and a **warning mark** one with a missing price or exchange rate, whose line leaves those days out.
-- **Abs / %** switch the view. **Abs** is the position's profit or loss in money, from the start of the period. **%** is its return in *base 100*: every line starts at 100 on the first day of the period, so 112 means +12%. LibreFolio remembers the view.
+- **Abs / % / Rolling** switch the view; the buttons are on the chart, top right. **Abs** is the position's profit or loss in money, from the start of the period. **%** is its return in *base 100*: every line starts at 100 on the first day of the period, so 112 means +12%. **Rolling** is described below. LibreFolio remembers the view.
 - **A closed position's line ends on the day it closed**; hover the legend button for the date.
 - **Up to 50 positions** can be drawn at once.
 
+**Rolling — comparing assets with each other.** For every ticked position, the line shows the percent the asset's **price** moved over a window that rolls along the period, so assets bought on different days can be compared on the same footing. The window is the largest of 1 week, 1 month, 3 months and 1 year that fits the period. It is **per asset**: two brokers holding the same asset share one line. There is **no portfolio line** in this view, since the portfolio has no price.
+
 ??? info "📐 Why the portfolio line can differ from the positions"
 
-    The portfolio line is the return the Dashboard measures, the [time-weighted return](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md), not the profit of your positions on the capital they employed. The two can therefore differ, even when every position is ticked; the legend says so. On the days your portfolio is worth zero or less there is no time-weighted return, so the portfolio line has a gap in **%** ([When No TWRR Is Shown](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md#when-no-twrr)).
+    The portfolio line is the return the Dashboard measures, the [time-weighted return](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md), not the profit of your positions on the capital they employed. The two can therefore differ, even when every position is ticked; a sentence under the chart says so. On the days your portfolio is worth zero or less there is no time-weighted return, so the portfolio line has a gap in **%** ([When No TWRR Is Shown](../../financial-theory/technical-analysis/performance-metrics/portfolio-engine/twrr.md#when-no-twrr)).
 
 ### 💸 Yield on Cost (YOC) {: #yield-on-cost-yoc }
 
@@ -121,7 +123,7 @@ Which positions made or lost money in the period, and how? **Period** lists ever
 
 Which purchases make up a position, where are they held, and how has each one done? The **FIFO Lots Analysis** answers lot by lot: each purchase opens a *lot*, and each sale closes the **oldest** open lots first — First-In, First-Out.
 
-Choose **Analyze Lots** on a position and the panel opens, for the brokers of the page: your broker filter on the Dashboard, the broker itself on its own page. On the Dashboard it **replaces** the whole Portfolio / Period view, with a **← Portfolio** button above it that brings you back; the browser's back button does the same. On a broker's page it opens below the list. **View Asset** (↗) opens the asset, **✕** closes the panel.
+Choose **Analyze Lots** on a position and the panel opens, for the brokers of the page: your broker filter on the Dashboard, the broker itself on its own page. On the Dashboard, as on a broker's page, it opens **below the positions**: the positions table and the return chart stay on screen. **View Asset** (↗) opens the asset; **✕** closes the panel, and so does the browser's back button.
 
 <div class="lf-screenshot-carousel" data-carousel="carousel-fifo-lots-analysis" data-carousel-interval="6000" data-show-titles="true" style="margin: 1.5rem 0 2.5rem 0;">
   <img class="gallery-img lf-screenshot-carousel-item is-active" data-category="dashboard" data-name="fifo-lots-panel" data-title="🔍 Overview" alt="FIFO Lots Analysis Overview">

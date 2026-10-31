@@ -46,7 +46,7 @@ async function mockPage(page: Page, counts: Counts | 'fails') {
         const requested = (route.request().postDataJSON() as Array<{asset_id: number}> | null) ?? [];
         await route.fulfill({json: {items: requested.map(({asset_id}) => ({asset_id, prices: [], events: [], errors: [], signals: []}))}});
     });
-    await page.route('**/api/v1/assets/prices/current', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
+    await page.route('**/api/v1/assets/prices/current*', (route) => route.fulfill({json: {results: [], success_count: 0, errors: []}}));
     await page.route('**/api/v1/assets/prices/stored-count', async (route) => {
         sent.count.push(route.request().postDataJSON());
         if (counts === 'fails') return route.fulfill({status: 500, json: {detail: 'boom'}});

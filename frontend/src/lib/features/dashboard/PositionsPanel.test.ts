@@ -90,7 +90,7 @@ vi.stubGlobal('localStorage', {
     removeItem: (key: string) => void storage.delete(key),
 });
 
-import {fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
+import {fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import {getUserStorageKey} from '$lib/utils/storage';
 import type {ComponentProps} from 'svelte';
 import PositionsPanel from './PositionsPanel.svelte';
@@ -124,6 +124,12 @@ function summaryOf(...holdings: Array<ReturnType<typeof holding>>) {
 }
 
 const SUMMARY = () => summaryOf(holding(11, 1), holding(22, 1), holding(33, 2));
+
+/** A period's contribution: the three open positions, and asset 55 at broker 1 sold out inside the period. */
+function contributionPosition(assetId: number, brokerId: number, isFullySold: boolean) {
+    return {asset_id: assetId, asset_name: isFullySold ? `Sold ${assetId}` : `Asset ${assetId}`, asset_type: 'STOCK', broker_id: brokerId, broker_name: `Broker ${brokerId}`, period_pnl: '10', start_value: '100', end_value: isFullySold ? '0' : '110', is_fully_sold: isFullySold};
+}
+const CONTRIBUTION = () => ({positions: [contributionPosition(11, 1, false), contributionPosition(22, 1, false), contributionPosition(33, 2, false), contributionPosition(55, 1, true)], unallocated: [], other_effects: [], gross_gains: '10', gross_losses: '0'}) as never;
 
 const HISTORY: HistoryPointLike[] = [
     {date: '2026-01-02', through: '2026-01-02', total_pnl: {code: 'EUR', amount: '500'}, twrr: '0'},
@@ -251,12 +257,19 @@ describe('PositionsPanel — the return chart is Holdings + Table only', () => {
         await waitFor(() => expect(screen.queryByTestId('positions-return-chart')).toBeNull());
     });
 
-    it('Performance: no chart, in either visual mode', async () => {
+    it('Performance + Table: the chart is under the table too, beside the allocation (FB-12)', async () => {
         storage.set(getUserStorageKey('dashboard-positions-semantic'), 'performance');
-        render(PositionsPanel, {props: panelProps()});
+        render(PositionsPanel, {props: panelProps({contribution: CONTRIBUTION()})});
         await waitFor(() => expect(screen.getByTestId('positions-toggle-performance')).toHaveAttribute('aria-pressed', 'true'));
-        expect(screen.queryByTestId('positions-return-chart')).toBeNull();
-        await fireEvent.click(screen.getByTestId('positions-toggle-map'));
+        await waitFor(() => expect(screen.getByTestId('contribution-table')).toBeInTheDocument());
+        expect(chartRoot()).toBeInTheDocument();
+        expect(within(screen.getByTestId('positions-chart-section')).getByTestId('allocation-panel')).toBeInTheDocument();
+    });
+
+    it('Performance + Map: no chart', async () => {
+        storage.set(getUserStorageKey('dashboard-positions-semantic'), 'performance');
+        storage.set(getUserStorageKey('dashboard-positions-visual'), 'map');
+        render(PositionsPanel, {props: panelProps({contribution: CONTRIBUTION()})});
         await waitFor(() => expect(screen.getByTestId('positions-toggle-map')).toHaveAttribute('aria-pressed', 'true'));
         expect(screen.queryByTestId('positions-return-chart')).toBeNull();
     });
@@ -517,5 +530,145 @@ describe('PositionsPanel — the chart view is kept per user', () => {
         await fireEvent.click(screen.getByTestId('positions-chart-view-absolute'));
         await waitFor(() => expect(chartRoot()).toHaveAttribute('data-view', 'absolute'));
         expect(onRequestPositionsSeries).toHaveBeenCalledTimes(1);
+    });
+});
+
+// =============================================================================
+// FB-12 · the layout: the chart beside the allocation by asset
+// =============================================================================
+
+describe('PositionsPanel — the chart sits beside the allocation by asset (FB-12)', () => {
+    it('the chart section holds the chart and the allocation panel, pie and history, with no dimension tabs', async () => {
+        await mountPanel();
+        const section = screen.getByTestId('positions-chart-section');
+        expect(within(section).getByTestId('positions-return-chart')).toBeInTheDocument();
+        const allocation = within(section).getByTestId('allocation-panel');
+        expect(within(allocation).getByTestId('allocation-view-now')).toBeInTheDocument();
+        expect(within(allocation).getByTestId('allocation-view-history')).toBeInTheDocument();
+        expect(within(allocation).queryByTestId('allocation-tab-type'), 'the allocation here is by asset only').toBeNull();
+    });
+
+    it('asks the history of the asset dimension when the user opens it', async () => {
+        const onRequestAllocationHistory = vi.fn();
+        await mountPanel({onRequestAllocationHistory, brokerIds: [4, 5]});
+        await fireEvent.click(within(screen.getByTestId('positions-chart-section')).getByTestId('allocation-view-history'));
+        await waitFor(() => expect(onRequestAllocationHistory).toHaveBeenCalledWith('asset', [4, 5]));
+    });
+
+    it('keeps its own pie / history choice: the Dashboard’s allocation view is not changed', async () => {
+        await mountPanel();
+        await fireEvent.click(within(screen.getByTestId('positions-chart-section')).getByTestId('allocation-view-history'));
+        expect(storage.get(getUserStorageKey('dashboard-allocation-view'))).toBeUndefined();
+    });
+});
+
+// =============================================================================
+// FB-13 · the positions sold inside the period, in the Portfolio table
+// =============================================================================
+
+describe('PositionsPanel — the positions sold inside the period (FB-13)', () => {
+    it('the Portfolio table lists them last, in italics, and the contribution is asked for them', async () => {
+        const onRequestContribution = vi.fn();
+        await mountPanel({contribution: CONTRIBUTION(), onRequestContribution});
+        await waitFor(() => expect(document.querySelector('tbody tr[data-row-id="55-1"]')).not.toBeNull());
+        const ids = [...document.querySelectorAll<HTMLElement>('tbody tr[data-row-id]')].map((row) => row.dataset.rowId);
+        expect(ids).toEqual(['33-2', '22-1', '11-1', '55-1']);
+        expect(document.querySelector('tbody tr[data-row-id="55-1"]')?.className).toContain('italic');
+        // The contribution was already there: nothing to ask.
+        expect(onRequestContribution).not.toHaveBeenCalled();
+    });
+
+    it('without the contribution the Portfolio table asks for it (the sold rows come with it)', async () => {
+        const onRequestContribution = vi.fn();
+        await mountPanel({contribution: null, onRequestContribution});
+        await waitFor(() => expect(onRequestContribution).toHaveBeenCalled());
+    });
+
+    it('a sold position can be ticked and its line asked, like an open one', async () => {
+        const onRequestPositionsSeries = vi.fn();
+        await mountPanel({contribution: CONTRIBUTION(), onRequestPositionsSeries});
+        await waitFor(() => expect(document.querySelector('tbody tr[data-row-id="55-1"]')).not.toBeNull());
+        await fireEvent.click(checkbox('55-1'));
+        await waitFor(() => expect(onRequestPositionsSeries).toHaveBeenCalledWith([keyOf(55, 1)]));
+    });
+});
+
+// =============================================================================
+// FB-15 · the Rolling view: the percent the asset's price moved over a rolling window
+// =============================================================================
+
+describe('PositionsPanel — the Rolling view (FB-15)', () => {
+    /** The rolling return of an asset: one view of the signal, two points. */
+    const rollingView = (...values: number[]) => ({
+        state: 'ready' as const,
+        points: values.map((value, i) => ({date: `2026-01-0${i + 2}`, value})),
+        contextByDate: new Map(),
+        problem: null,
+    });
+    const rollingState = (entries: Array<[number, ReturnType<typeof rollingView>]>, extra: {loading?: boolean; failed?: boolean} = {}) => ({views: new Map(entries), loading: extra.loading ?? false, failed: extra.failed ?? false});
+
+    async function mountOnRolling(overrides: PanelProps = {}) {
+        storage.set(CHART_VIEW_KEY(), 'rolling');
+        return mountPanel(overrides);
+    }
+
+    it('a stored Rolling view is restored at mount, and it draws no portfolio line', async () => {
+        await mountOnRolling();
+        expect(screen.getByTestId('positions-chart-view-rolling')).toHaveAttribute('aria-pressed', 'true');
+        expect(chartRoot()).toHaveAttribute('data-view', 'rolling');
+        expect(screen.queryByTestId('positions-chart-legend-portfolio')).toBeNull();
+    });
+
+    it('asks nothing while no row is ticked', async () => {
+        const onRequestPositionsRolling = vi.fn();
+        await mountOnRolling({onRequestPositionsRolling});
+        expect(onRequestPositionsRolling).not.toHaveBeenCalled();
+    });
+
+    it('ticking positions asks the rolling return of their assets, once each', async () => {
+        const onRequestPositionsRolling = vi.fn();
+        await mountOnRolling({onRequestPositionsRolling});
+
+        await fireEvent.click(checkbox('22-1'));
+        await fireEvent.click(checkbox('11-1'));
+
+        await waitFor(() => expect(onRequestPositionsRolling).toHaveBeenLastCalledWith([22, 11]));
+    });
+
+    it('choosing Rolling with positions already ticked asks for them at once', async () => {
+        const onRequestPositionsRolling = vi.fn();
+        await mountPanel({onRequestPositionsRolling});
+        await fireEvent.click(checkbox('22-1'));
+        expect(onRequestPositionsRolling, 'the other views ask nothing of the kind').not.toHaveBeenCalled();
+
+        await fireEvent.click(screen.getByTestId('positions-chart-view-rolling'));
+
+        await waitFor(() => expect(onRequestPositionsRolling).toHaveBeenCalledWith([22]));
+        expect(storage.get(CHART_VIEW_KEY())).toBe('rolling');
+    });
+
+    it('draws one line per ticked position from the views of its asset, with the percentage points as they are', async () => {
+        await mountOnRolling({positionsRolling: rollingState([[22, rollingView(1.5, -2)]])});
+        await fireEvent.click(checkbox('22-1'));
+        await waitFor(() => expect(screen.getByTestId('positions-chart-legend-22-1')).toBeInTheDocument());
+        await waitFor(() => expect(valuesOfSeries('22-1')).toEqual([1.5, -2]));
+        expect(screen.getByTestId('positions-chart-legend-22-1')).toHaveTextContent('Asset 22');
+    });
+
+    it('two brokers holding the same asset share its line values', async () => {
+        const summary = summaryOf(holding(22, 1), holding(22, 2));
+        await mountOnRolling({summary, positionsRolling: rollingState([[22, rollingView(3, 4)]])});
+        await fireEvent.click(checkbox('22-1'));
+        await fireEvent.click(checkbox('22-2'));
+        await waitFor(() => expect(valuesOfSeries('22-2')).toEqual([3, 4]));
+        expect(valuesOfSeries('22-1')).toEqual([3, 4]);
+    });
+
+    it('says it is loading, or that it failed, only while a row is ticked', async () => {
+        const view = await mountOnRolling({positionsRolling: rollingState([], {loading: true})});
+        expect(chartRoot()).not.toHaveAttribute('data-state', 'loading');
+        await fireEvent.click(checkbox('22-1'));
+        await waitFor(() => expect(chartRoot()).toHaveAttribute('data-state', 'loading'));
+        view.unmount();
     });
 });

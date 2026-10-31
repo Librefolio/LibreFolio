@@ -132,3 +132,60 @@ describe('staleness and invalidation', () => {
         expect(reducedPrices.getTarget(8, 9, ...RANGE, 'weekly'), 'the card 9 is gone with its targets').toBeNull();
     });
 });
+
+describe('a live quote extends the head of the entries in place (Y6-1)', () => {
+    it('updates the last point and the last price of every range of the asset that ends on or after the quote’s day, and keeps them fresh', () => {
+        reducedPrices.putCard(7, '2026-07-01', '2026-10-16', daily('2026-10-01', 16));
+        reducedPrices.putCard(7, '2026-01-01', '2026-10-16', daily('2026-10-01', 16));
+        reducedPrices.putCard(7, '2026-01-01', '2026-06-30', daily('2026-06-01', 30));
+
+        const touched = reducedPrices.applyLiveHead(7, '2026-10-16', 250.5);
+
+        expect(touched).toBe(2);
+        for (const start of ['2026-07-01', '2026-01-01']) {
+            const entry = reducedPrices.getCard(7, start, '2026-10-16', 100);
+            expect(entry?.derived.lastPrice).toBe(250.5);
+            expect(entry?.derived.chartData.at(-1)).toMatchObject({date: '2026-10-16', value: 250.5, staleDays: 0});
+            expect(entry?.stale).toBe(false);
+        }
+        expect(reducedPrices.getCard(7, '2026-01-01', '2026-06-30', 100)?.derived.lastPrice, 'a range that ended before the quote’s day').toBe(129);
+    });
+
+    it('does not invalidate: the entry stays readable at the same step, its base unmoved', () => {
+        reducedPrices.putCard(7, ...RANGE, weekly('2026-01-07', '2026-06-30'));
+
+        reducedPrices.applyLiveHead(7, '2026-06-30', 130);
+
+        const entry = reducedPrices.getCard(7, ...RANGE, 100);
+        expect(entry?.resolution).toBe('weekly');
+        expect(entry?.derived.base).toEqual({date: '2026-01-07', value: 99});
+        expect(entry?.derived.chartData.at(-1)?.value).toBe(130);
+    });
+
+    it('a stale entry stays stale: the catch-up still has to be read again', () => {
+        reducedPrices.putCard(7, ...RANGE, weekly('2026-01-07', '2026-06-30'));
+        notifyPricesCaughtUp();
+
+        reducedPrices.applyLiveHead(7, '2026-06-30', 130);
+
+        expect(reducedPrices.getCard(7, ...RANGE, 100)?.stale).toBe(true);
+    });
+
+    it('touches nothing of another asset, and nothing when the quote changes nothing', () => {
+        reducedPrices.putCard(8, ...RANGE, weekly('2026-01-07', '2026-06-30'));
+
+        expect(reducedPrices.applyLiveHead(7, '2026-06-30', 130)).toBe(0);
+        expect(reducedPrices.applyLiveHead(8, '2026-06-30', 102), 'the last point already holds that price').toBe(0);
+        expect(reducedPrices.getCard(8, ...RANGE, 100)?.derived.chartData.at(-1)?.value).toBe(102);
+    });
+
+    it('a daily entry ending after its last point grows by the quote’s day, and its counts follow', () => {
+        reducedPrices.putCard(7, '2026-10-01', '2026-10-31', daily('2026-10-01', 10));
+
+        reducedPrices.applyLiveHead(7, '2026-10-12', 120);
+
+        const entry = reducedPrices.getCard(7, '2026-10-01', '2026-10-31', 100);
+        expect(entry?.derived.chartData).toHaveLength(11);
+        expect(entry?.counts.days).toBe(12);
+    });
+});

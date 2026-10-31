@@ -24,7 +24,7 @@
     import type {AssetRow} from '$lib/components/assets/AssetTable.svelte';
     import AssetTable from '$lib/components/assets/AssetTable.svelte';
     import AssetBrowseOrder from '$lib/components/assets/AssetBrowseOrder.svelte';
-    import {fetchCurrentPrices, computeDirection, livePollFailure, livePollOutcome} from '$lib/services/livePriceService';
+    import {fetchCurrentPrices, computeDirection, livePollFailure, livePollOutcome, type LivePriceResult} from '$lib/services/livePriceService';
     import type {LivePriceDirection} from '$lib/services/livePriceService';
     import {startActivePolling, type ActivePolling, type ActivePollingState} from '$lib/features/live-updates/activePolling';
     import {ASSET_LIST_LIVE_INTERVAL_MS} from '$lib/features/live-updates/cadence';
@@ -73,7 +73,7 @@
     import {buildReducedQuery, cardsOfAnotherStep, comparisonTargetFrom, comparisonTargetIds, estimateEntryDays, signalBaseData, type CardQueryInput} from '$lib/utils/reducedPriceQuery';
     import {DEFAULT_COMPACT_PLOT_WIDTH_PX, compactMaxPoints, type ChartResolution} from '$lib/components/charts/timeSeriesAggregation';
     import {fetchAssetPeriodChanges, PeriodChangesLedger, visiblePeriodColumns, type PeriodDeltas, type PeriodSpec} from '$lib/utils/periodChanges';
-    import type {RangeDelta} from '$lib/utils/rangeChange';
+    import {assetRangeDelta, rangeStartFor, type RangeDelta} from '$lib/utils/rangeChange';
     import {processPriceItemsInParallel} from '$lib/workers/priceProcessingPool';
     import {TargetSampleLoader, type TargetSampleRequest} from '$lib/utils/targetSampleLoader';
     import {MIN_START, sendBulkBatches} from '$lib/api/bulkBatches';
@@ -1128,12 +1128,48 @@
         if (fxPairSlugs.length > 0) void loadFxRateData();
     }
 
+    /**
+     * The live quotes bring the head of the cards up to date, on the spot (Y6-1): the last point of each series, in the reduced cache and
+     * on the card, takes the quote's price at the quote's day, with no cache dropped and nothing asked again.
+     */
+    function applyLiveHeads(results: LivePriceResult[]) {
+        const touched = new Set<number>();
+        for (const result of results) {
+            if (result.value == null || result.asOfDate == null || result.error) continue;
+            if (reducedPrices.applyLiveHead(result.assetId, result.asOfDate, result.value) > 0) touched.add(result.assetId);
+        }
+        if (touched.size === 0) return;
+        assets = assets.map((asset) => {
+            if (!touched.has(asset.id)) return asset;
+            const entry = reducedPrices.getCard(asset.id, dateStart, dateEnd, compactMaxPoints(plotWidths.get(asset.id) ?? DEFAULT_COMPACT_PLOT_WIDTH_PX));
+            return entry ? assetWithEntry(asset, entry) : asset;
+        });
+    }
+
+    /** Each card's Δ over the range comes with its quote (`range_start`), so price, chart and Δ agree on the latest information. */
+    function applyLiveRangeDeltas(results: LivePriceResult[]) {
+        const next = new Map(rangeDeltas);
+        let changed = false;
+        for (const result of results) {
+            if (result.rangeChange == null) continue;
+            const delta = assetRangeDelta(result.rangeChange);
+            if (delta.abs === null && delta.pct === null) continue;
+            next.set(result.assetId, delta);
+            changed = true;
+        }
+        if (changed) rangeDeltas = next;
+    }
+
     /** Fetch live current prices for all assets (fire-and-forget, non-blocking); the outcome spaces the next poll (Z7). */
     async function fetchLivePrices() {
         if (assets.length === 0) return;
         try {
             const ids = assets.map((a) => a.id);
-            const results = await fetchCurrentPrices(ids);
+            // The Δ over the range comes with the quote while the range has a real first day (not while «All» is still to resolve).
+            const askedStart = dateStart;
+            const askedEnd = dateEnd;
+            const rangeStart = isMaxPending ? null : rangeStartFor(askedStart, todayIso());
+            const results = await fetchCurrentPrices(ids, {rangeStart});
             const newMap = new Map<number, {value: number; direction: LivePriceDirection}>();
             for (const r of results) {
                 if (r.value != null) {
@@ -1145,6 +1181,11 @@
                 }
             }
             livePriceMap = newMap;
+            // An answer for another range (the user moved while it was in flight) is not applied to this one.
+            if (askedStart === dateStart && askedEnd === dateEnd) {
+                applyLiveHeads(results);
+                if (rangeStart !== null) applyLiveRangeDeltas(results);
+            }
             return livePollOutcome(results);
         } catch (e: any) {
             console.warn('[Assets] fetchLivePrices error (non-critical):', e?.message);

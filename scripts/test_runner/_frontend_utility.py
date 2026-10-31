@@ -44,6 +44,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/components/charts/__tests__/stepTooltip.test.ts",
             "src/lib/components/charts/__tests__/dayPointerSnap.test.ts",
             "src/lib/stores/__tests__/reducedPriceCache.test.ts",
+            "src/lib/utils/__tests__/liveHead.test.ts",
             "src/lib/utils/__tests__/chartUtils.test.ts",
             "src/lib/utils/__tests__/reducedPriceQuery.test.ts",
             "src/lib/utils/__tests__/targetSampleLoader.test.ts",
@@ -199,6 +200,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/dashboard/positionsSeriesController.test.ts",
             "src/lib/features/dashboard/dateRangeController.test.ts",
             "src/lib/features/dashboard/staleFxIssue.test.ts",
+            "src/lib/features/dashboard/positionsRolling.test.ts",
             "src/lib/features/brokers/lots/lotGanttChartHelpers.test.ts",
             "src/lib/features/brokers/lots/lotStateVisual.test.ts",
             "src/lib/features/brokers/lots/unifiedLotsTableHelpers.test.ts",
@@ -478,6 +480,8 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/utils/core/sanitizeHtml.test.ts",
             "src/lib/features/brokers/BrokerModal.test.ts",
             "src/lib/features/brokers/BrokerSharingPanel.test.ts",
+            "src/lib/components/table/ColumnVisibilityToggle.test.ts",
+            "src/lib/components/charts/__tests__/staleDaysPlural.test.ts",
             "src/lib/features/brokers/BrokerCard.test.ts",
             "src/lib/features/brokers/BrokerImportFilesModal.test.ts",
             "src/lib/components/assets/AssetTable.test.ts",
@@ -490,6 +494,7 @@ def front_component_unit(verbose: bool = False, ui: bool = False, headed: bool =
             "src/lib/features/dashboard/GrowthChart.tooltip.test.ts",
             "src/lib/features/dashboard/GrowthChart.steps.test.ts",
             "src/lib/features/dashboard/GrowthChart.candlesLoading.test.ts",
+            "src/lib/features/dashboard/GrowthChart.daySnap.test.ts",
             "src/lib/features/dashboard/ContributionTable.test.ts",
             "src/lib/features/dashboard/PerformanceChart.test.ts",
             "src/lib/features/dashboard/OtherPeriodEffectsTable.test.ts",
@@ -803,6 +808,18 @@ def front_pac_allocator_real(verbose: bool = False, ui: bool = False, headed: bo
     if not _ensure_test_users():
         return False
     return _run_playwright("pac-allocator-real.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
+def front_pac_phone_layout(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the PAC allocator's phone-width checks: the Targets and Review steps fit a 375 px screen, no table and no page scrolls sideways (Y-9)."""
+    print_section("Frontend PAC Allocator Phone Layout Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("pac-phone-layout.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
 def front_changelog_locale(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
@@ -1319,6 +1336,15 @@ def populate_registry(registry: dict) -> None:
         desc="The PAC allocator (beta) end to end on real data (1.2 gap 3): a disposable account holds two priced positions and cash in its own broker; the Tools hub opens the planner (tool code read from the catalogue), «copy from LibreFolio» brings the broker's cash, the positions with their stored prices and their current distribution as the targets, a budget is typed and «Calculate plan» runs the real engine; the tool's own request carries the copied facts, its answer is a proven optimum, and the screen prints it — run state, result state and proof the answer's, per Asset the value after the plan, the ideal value and the signed gap, per order the amount and the fee, on sign and digits at the currency's minor unit — within the budget",
         prereq="Populated DB + test users (registration enabled)",
         tests="pac-allocator-real.spec.ts",
+    )
+    add_test(
+        cat,
+        "pac-phone-layout",
+        front_pac_phone_layout,
+        name="PAC Allocator Phone Layout Tests",
+        desc="The PAC allocator on a 375 px screen (Y-9): the Targets and Review steps fit the card, measured as the sideways overflow of every table of the step and of the page (0 px), on the gallery's draft; a screenshot of each step is attached",
+        prereq="Populated DB + test users",
+        tests="pac-phone-layout.spec.ts",
     )
     add_test(
         cat,
