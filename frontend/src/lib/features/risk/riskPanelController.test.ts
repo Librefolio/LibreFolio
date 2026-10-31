@@ -1404,7 +1404,7 @@ describe('riskPanelController', () => {
         const DASHBOARD_TODAY = [
             [
                 {
-                    scope: {kind: 'portfolio'},
+                    scope: {kind: 'portfolio', apply_ownership_share: true},
                     date_range: {start: '2025-01-01', end: '2025-12-31'},
                     target_currency: 'EUR',
                     mode: 'historical',
@@ -1420,7 +1420,7 @@ describe('riskPanelController', () => {
             ],
             [
                 {
-                    scope: {kind: 'portfolio'},
+                    scope: {kind: 'portfolio', apply_ownership_share: true},
                     date_range: {start: '2025-01-01', end: '2025-12-31'},
                     target_currency: 'EUR',
                     mode: 'current_composition',
