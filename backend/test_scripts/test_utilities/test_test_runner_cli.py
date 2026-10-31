@@ -2671,6 +2671,23 @@ class TestTheLaneDatabaseIsSnapshottedWhateverTheBodyDoes:
         assert teed_entry_steps.events == _steps_of(body), f"{command} {' '.join(H30_ACTION)}: the body raised, and the lane's database is still snapshotted, once, after the body, with no log tee entered (ran: {teed_entry_steps.events})"
 
 
+class TestEverySpecPatternSelectsOneSpec:
+    """C6-7 (V-17): a literal handed to ``_run_playwright`` is a substring of a path, so it names one spec file only."""
+
+    def test_no_literal_spec_pattern_of_the_runner_matches_two_specs(self):
+        specs = [p.relative_to(PROJECT_ROOT / "frontend").as_posix() for p in (PROJECT_ROOT / "frontend" / "e2e").rglob("*.spec.ts")]
+        ambiguous = {}
+        for source in sorted((PROJECT_ROOT / "scripts" / "test_runner").glob("*.py")):
+            for node in ast.walk(ast.parse(source.read_text(encoding="utf-8"))):
+                if isinstance(node, ast.Call) and getattr(node.func, "id", "") == "_run_playwright" and node.args and isinstance(node.args[0], ast.Constant):
+                    pattern = node.args[0].value
+                    matched = [s for s in specs if pattern in s]
+                    if len(matched) != 1:
+                        ambiguous[f"{source.name}:{node.lineno} {pattern}"] = matched
+
+        assert ambiguous == {}
+
+
 class TestSettingsActionSelectsOneSpec:
     """C6-7 (V-17): ``front settings`` hands Playwright a pattern that matches one spec file only."""
 
