@@ -117,8 +117,8 @@
             {
               "asset_complete": true,
               "conversion": null,
-              "cost_asset": "17037525.3270000000000000000",
-              "cost_asset_change": "17037525.3270000000000000000",
+              "cost_asset": "17037525.327000000000000",
+              "cost_asset_change": "17037525.327000000000000",
               "cost_report": "987.654000000",
               "cost_report_change": "987.654000000",
               "effect": "add",
@@ -2627,7 +2627,7 @@
           "valuation_split_adjusted": false,
           "valuation_stale": false,
           "wac": "9.87654",
-          "wac_asset": "170375.2532700000000",
+          "wac_asset": "170375.253270000",
           "wac_currency": "EUR"
         },
         {
@@ -8252,8 +8252,8 @@
             {
               "asset_complete": true,
               "conversion": null,
-              "cost_asset": "17037525.3270000000000000000",
-              "cost_asset_change": "17037525.3270000000000000000",
+              "cost_asset": "17037525.327000000000000",
+              "cost_asset_change": "17037525.327000000000000",
               "cost_report": "987.654000000",
               "cost_report_change": "987.654000000",
               "effect": "add",
@@ -9071,7 +9071,7 @@
           "valuation_split_adjusted": false,
           "valuation_stale": true,
           "wac": "9.87654",
-          "wac_asset": "170375.2532700000000",
+          "wac_asset": "170375.253270000",
           "wac_currency": "EUR"
         },
         {
@@ -9142,7 +9142,7 @@
           "valuation_split_adjusted": false,
           "valuation_stale": false,
           "wac": "9.87654",
-          "wac_asset": "170375.2532700000000",
+          "wac_asset": "170375.253270000",
           "wac_currency": "EUR"
         },
         {
