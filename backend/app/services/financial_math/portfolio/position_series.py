@@ -29,7 +29,8 @@ The rules, which the developer decided on 18/10 and 23/10 (plan 05, «Ondata 5»
 * ``None`` is «not known», never 0. A day without a market value has a pnl of the parts that are known, flagged
   ``complete = False``, as the Performance row does;
 * a request for ``(None, asset)`` is the asset summed over the brokers that held it. The tracts of an internal transfer
-  cancel in the sum and what it brings in is not new capital; a closed leg keeps its final pnl and base.
+  cancel in the sum and what it brings in is not new capital, unless it was already in transit at ``date_from``: then no broker's start
+  value holds the units and the receiver's base is the only one that does; a closed leg keeps its final pnl and base.
 
 Everything is in the report currency at the owner's share: the engine's frames are already scaled. The module imports
 nothing outside ``financial_math`` and the data-quality thresholds.
@@ -50,7 +51,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 from backend.app.services.financial_math.average_cost import AverageCost, CostMovementKind
-from backend.app.services.financial_math.portfolio.contributions import counted_tract, position_period_pnl, transfer_tract
+from backend.app.services.financial_math.portfolio.contributions import counted_tract, left_after_start, position_period_pnl, transfer_tract
 from backend.app.services.financial_math.portfolio.models import InternalAssetTransfer, PositionFrame, RealizedSale
 from backend.app.services.financial_math.returns import realized_gain
 from backend.app.services.financial_math.series_steps import steps_from_rows, value_at
@@ -170,7 +171,7 @@ def _single(  # noqa: C901 — one pass over the days of a position: boundaries,
     transfers: Sequence[InternalAssetTransfer],
     acquisitions: Sequence[tuple[date_type, Decimal]],
 ) -> tuple[PositionSeriesData, _Steps]:
-    """The series of one position at one broker, and what transfers brought into its base (what the asset-level sum takes out)."""
+    """The series of one position at one broker, and what transfers brought into its base that another broker's base already holds (what the asset-level sum takes out)."""
     start_frame = reader.on(date_from) if date_from is not None else None
     held_at_start = _held(start_frame)
     held_frames = [frame for frame in reader.frames if frame.quantity > QUANTITY_DUST_THRESHOLD and frame.start <= date_to]
@@ -211,7 +212,13 @@ def _single(  # noqa: C901 — one pass over the days of a position: boundaries,
     flow_days = tuple(step[0] for step in flow_steps)
     bought = _steps_of(list(acquisitions))
     tract_adjustments = _steps_of([(t.arrival, transfer_tract(t, key[0])) for t in transfers if _takes_part(t, key) and counted_tract(t, date_from, t.arrival)])
-    brought_in = _steps_of([(t.arrival, base) for t in transfers if t.receiver_broker_id == key[0] and t.asset_id == key[1] and (date_from is None or t.arrival > date_from) and (base := _arrival_base(t, date_from)) is not None])
+    arrivals = [(t, base) for t in transfers if t.receiver_broker_id == key[0] and t.asset_id == key[1] and (date_from is None or t.arrival > date_from) and (base := _arrival_base(t, date_from)) is not None]
+    brought_in = _steps_of([(t.arrival, base) for t, base in arrivals])
+    # J5-4: what the asset-level sum takes out of this position's base. A transfer that left after ``date_from`` is a base the sender's
+    # start value already holds (it was the sender's on that day), so the receiver's is a second copy of it. One that left on or before
+    # ``date_from`` was nobody's at the start (the sender's frames end the day before it left) and nobody buys it: the receiver's
+    # base is the only one that holds it, and the sum keeps it.
+    already_in_senders_base = _steps_of([(t.arrival, base) for t, base in arrivals if left_after_start(t, date_from)])
     start_unknown_base = held_at_start and start_value is None
 
     cache: dict[date_type, SeriesPoint] = {}
@@ -287,7 +294,7 @@ def _single(  # noqa: C901 — one pass over the days of a position: boundaries,
     days = sorted(day for day in changing if first_date <= day <= last_date)
     points = _steps_of_points([point_at(day) for day in days], first_date, last_date)
     data = PositionSeriesData(key, first_date, last_date, held_at_start, held_at_end, closed_on, points, all(point.complete for point in points))
-    return data, brought_in
+    return data, already_in_senders_base
 
 
 def _next_day(day: date_type) -> date_type:
@@ -390,7 +397,9 @@ def build_position_series(
 def _sum_over_brokers(request: PositionRequest, singles: list[PositionSeriesData], brought: list[_Steps]) -> PositionSeriesData:
     """An asset summed over the brokers that held it: each broker's step on each day, a closed one at its last.
 
-    What an internal transfer brought into a receiver's base (``brought``, by broker) is taken out: it is not new capital.
+    What an internal transfer brought into a receiver's base that the sender's start value already holds (``brought``, by broker) is
+    taken out: it is not new capital. A transfer already in transit at ``date_from`` is not among them (J5-4): the receiver's base is
+    the only one that holds it.
     The sum changes only where one of the brokers' steps starts, so it is given there.
     """
     held = [data for data in singles if data.points]

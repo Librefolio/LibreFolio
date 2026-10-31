@@ -25,7 +25,7 @@ import {describe, expect, it, vi} from 'vitest';
 
 import type {RiskScenarioDimension} from '$lib/features/risk/riskRequest';
 
-import {stressBucketLabel, type StressBucketVocabulary} from './stressBucketLabel';
+import {geographyGroupNamer, stressBucketLabel, type StressBucketVocabulary} from './stressBucketLabel';
 
 /** The catalogue the translator stub reads, in Italian: one message per key a case names. */
 const MESSAGES = new Map<string, string>([
@@ -94,5 +94,42 @@ describe('stressBucketLabel — the other buckets', () => {
 
         expect(stressBucketLabel('ITA', 'geography', vocabulary)).toBe('🇮🇹 Italia');
         expect(stressBucketLabel('XKX', 'geography', vocabulary)).toBe('XKX');
+    });
+});
+
+describe('stressBucketLabel — a geography group the host defines (T-GRP)', () => {
+    const catalog = {
+        geography_groups: [
+            {id: 'european_union', name: {en: 'European Union', it: 'Unione Europea'}},
+            {id: 'nordics', name: {en: 'Nordic countries', it: 'Paesi nordici'}},
+            {id: 'no_name', name: {}},
+        ],
+    };
+
+    it("names the host group in the reader's language, never by its id", () => {
+        const {vocabulary} = words('');
+        const label = stressBucketLabel('nordics', 'geography', {...vocabulary, geographyGroup: geographyGroupNamer(catalog, 'it')});
+
+        expect(label).toBe('Paesi nordici');
+    });
+
+    it('falls back to English when the host gave no text for the language', () => {
+        const {vocabulary} = words('');
+
+        expect(stressBucketLabel('nordics', 'geography', {...vocabulary, geographyGroup: geographyGroupNamer(catalog, 'es')})).toBe('Nordic countries');
+    });
+
+    it('keeps the catalogue name of the EU group, and shows a group with no name, or no catalogue, as written', () => {
+        const {vocabulary} = words('');
+
+        expect(stressBucketLabel('european_union', 'geography', {...vocabulary, geographyGroup: geographyGroupNamer(catalog, 'it')})).toBe('Unione europea');
+        expect(stressBucketLabel('no_name', 'geography', {...vocabulary, geographyGroup: geographyGroupNamer(catalog, 'it')})).toBe('no_name');
+        expect(stressBucketLabel('nordics', 'geography', {...vocabulary, geographyGroup: geographyGroupNamer(null, 'it')})).toBe('nordics');
+    });
+
+    it('does not read a group name for a bucket of another dimension', () => {
+        const {vocabulary} = words('');
+
+        expect(stressBucketLabel('nordics', 'asset_class', {...vocabulary, geographyGroup: geographyGroupNamer(catalog, 'it')})).toBe('nordics');
     });
 });

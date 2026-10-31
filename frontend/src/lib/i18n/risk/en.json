@@ -357,8 +357,6 @@
       "title": "Historical replay",
       "compositionNotice": "Applies observed historical returns to the current composition; it does not reconstruct past ownership.",
       "preset": "Period preset",
-      "start": "Start date",
-      "end": "End date",
       "proxy": "Manual history proxy",
       "exclude": "Exclude this asset from the replay",
       "results": "Historical replay results",
