@@ -80,7 +80,7 @@
     let overwriteWarnings = $derived(
         activeSections.flatMap((section) => {
             const existing = section.existingIds?.length ? section.targetIds.filter((id) => section.existingIds!.includes(id)).length : 0;
-            return existing > 0 ? [{id: section.id, title: section.title, existing, total: section.targetIds.length}] : [];
+            return existing > 0 ? [{id: section.id, title: section.title, existing, total: section.targetIds.length, manual: section.manualCount ?? 0}] : [];
         }),
     );
 
@@ -385,9 +385,11 @@
              start only; the counts are republished as numbers, the sentence is translated. -->
         {#if !hasResults && !syncing}
             {#each overwriteWarnings as warning (warning.id)}
-                <div data-existing={warning.existing} data-section={warning.id} data-testid="{testId}-overwrite-warning" data-total={warning.total}>
+                <div data-existing={warning.existing} data-manual={warning.manual > 0 ? warning.manual : undefined} data-section={warning.id} data-testid="{testId}-overwrite-warning" data-total={warning.total}>
                     <InfoBanner variant="warning">
-                        <span class="text-xs">{activeSections.length > 1 ? `${warning.title}: ` : ''}{$t('fx.sync.overwriteWarning', {values: {existing: warning.existing, total: warning.total}})}</span>
+                        <span class="text-xs"
+                            >{activeSections.length > 1 ? `${warning.title}: ` : ''}{$t('fx.sync.overwriteWarning', {values: {existing: warning.existing, total: warning.total}})}{warning.manual > 0 ? ` ${$t('assets.sync.overwriteManual', {values: {manual: warning.manual}})}` : ''}</span
+                        >
                     </InfoBanner>
                 </div>
             {/each}

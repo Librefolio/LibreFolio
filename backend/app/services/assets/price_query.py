@@ -36,6 +36,7 @@ from backend.app.schemas.common import (
     Currency,
     DateRangeModel,
     FxBackwardFillInfo,
+    MinStartDateRangeModel,
 )
 from backend.app.schemas.prices import FACurrentPriceItem, FACurrentValue, FAPriceQueryItem, FAPriceQueryResult, FAPriceSampleBounds
 from backend.app.schemas.provider import (
@@ -226,6 +227,26 @@ class PriceQueryOperations:
         return fill_point(row, day)
 
     @staticmethod
+    async def _resolve_min_starts(requests: list, session: AsyncSession) -> list:
+        """The items with their ``"min"`` start replaced by the day of the asset's first stored price (FB-7b), in one grouped read.
+
+        An asset with no price, or whose first price is after the item's ``end``, gets the single day ``end``: its series is empty.
+        Items with a real start come back as they are.
+        """
+        wanted = {req.asset_id for req in requests if isinstance(req.date_range, MinStartDateRangeModel)}
+        if not wanted:
+            return requests
+        firsts = dict((await session.execute(select(PriceHistory.asset_id, func.min(PriceHistory.date)).where(PriceHistory.asset_id.in_(wanted)).group_by(PriceHistory.asset_id))).all())
+        resolved = []
+        for req in requests:
+            if isinstance(req.date_range, MinStartDateRangeModel):
+                end = req.date_range.end
+                first = firsts.get(req.asset_id)
+                req = req.model_copy(update={"date_range": DateRangeModel(start=first if first is not None and first <= end else end, end=end)})
+            resolved.append(req)
+        return resolved
+
+    @staticmethod
     async def observed_prices(request: FAPriceQueryItem, session: AsyncSession) -> ObservedPrices:
         """The series of ``request`` read by observation (X-Q1): ``first_point_date``, ``observation_dates`` and ``point_on(day)``,
         the point the public series has on that day (no signal, no sampling; the request's range and ``target_currency``).
@@ -261,7 +282,7 @@ class PriceQueryOperations:
         return by_asset
 
     @staticmethod
-    async def _plan_samples(requests: list, session: AsyncSession) -> tuple[dict[int, _SamplePlan], dict[int, date_type]]:  # noqa: C901 — three ways to ask a step, one table
+    async def _plan_samples(requests: list, session: AsyncSession, references: dict[int, int]) -> tuple[dict[int, _SamplePlan], dict[int, date_type]]:  # noqa: C901 — three ways to ask a step, one table
         """Z-29: by item index, the plan of each item with ``max_points``, ``resolution`` or ``sample_like`` that is sampled
         weekly or monthly, or has nothing to fill.
 
@@ -275,8 +296,10 @@ class PriceQueryOperations:
         A daily step is left out, to be read and filled day by day as without these fields — a ``sample_like`` from the
         later first day, given back as the second mapping (by item index, the day its range now starts); nothing to fill
         gives an empty series, as the fill does.
+
+        ``references`` is ``resolve_sample_references`` of the request as it was asked: after a ``"min"`` start is resolved
+        each item of a pair holds its own first day, so the ranges that were the same no longer are (FB-7b).
         """
-        references = resolve_sample_references(requests)
         asked = {index for index, req in enumerate(requests) if req.max_points is not None or req.resolution is not None or req.sample_like is not None}
         if not asked:
             return {}, {}
@@ -487,7 +510,9 @@ class PriceQueryOperations:
         if not requests:
             return []
         # Z-29: every sample_like names an item of the request, before anything is read
-        resolve_sample_references(requests)
+        references = resolve_sample_references(requests)
+        # FB-7b: a start of "min" is the day of the asset's first stored price; from here every range holds real days
+        requests = await PriceQueryOperations._resolve_min_starts(requests, session)
 
         latest_end = latest_range_end()
         clamped: list = []
@@ -506,7 +531,7 @@ class PriceQueryOperations:
         # Z-29: the items sampled weekly or monthly, planned on two rows per asset and kept out of the day-by-day read
         # below; their points count against the day budget, their rows are read once it has passed. A follower of a
         # daily card is read day by day from the day the comparison starts
-        sample_plans, daily_starts = await PriceQueryOperations._plan_samples(requests, session)
+        sample_plans, daily_starts = await PriceQueryOperations._plan_samples(requests, session, references)
         for index, start in daily_starts.items():
             requests[index] = requests[index].model_copy(update={"date_range": DateRangeModel(start=start, end=requests[index].date_range.end or requests[index].date_range.start)})
         # Z-29s: an item with signals is read, computed and counted day by day, as without a sampling field; its plan

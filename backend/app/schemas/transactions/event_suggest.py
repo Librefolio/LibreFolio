@@ -75,3 +75,7 @@ class TXEventReconciliationItem(StrictModel):
     type: TransactionType
     status: Literal["unique", "none", "several"]
     candidates: List[TXEventSuggestCandidate] = Field(default_factory=list)
+    # FB-19: the transaction's own cash and quantity, so that the window can suggest the value of the event it offers to create
+    amount: SafeDecimal = Field(..., description="The transaction's cash delta (positive = received); 0 when it has none")
+    currency: Optional[str] = Field(None, description="The currency of ``amount``; None when the transaction has no cash")
+    quantity: SafeDecimal = Field(..., description="The transaction's asset delta; 0 when it has none")

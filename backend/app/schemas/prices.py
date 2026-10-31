@@ -47,6 +47,7 @@ from backend.app.schemas.common import (
     Currency,
     DateRangeModel,
     FxBackwardFillInfo,
+    MinStartDateRangeModel,
     SafeDecimal,
     StrictModel,
 )
@@ -138,6 +139,7 @@ class FAPricePoint(StrictModel):
     original_open: Optional[SafeDecimal] = Field(None, description="Open price in original currency before FX conversion")
     original_high: Optional[SafeDecimal] = Field(None, description="High price in original currency before FX conversion")
     original_low: Optional[SafeDecimal] = Field(None, description="Low price in original currency before FX conversion")
+    fx_rate: Optional[SafeDecimal] = Field(None, description="The unit rate the point was converted with: the day's step, from `original_currency` to `currency` (None = no conversion). Close, open, high and low are their `original_*` times it")
     source_plugin_key: Optional[str] = Field(None, description="Provider key that produced the stored price")
     backward_fill_info: Optional[AssetBackwardFillInfo] = Field(None, description="Backward-fill + FX staleness info (only in query results)")
 
@@ -148,7 +150,7 @@ class FAPricePoint(StrictModel):
             return None
         return Currency.validate_code(v)
 
-    @field_validator("open", "high", "low", "close", "volume", "original_open", "original_high", "original_low", "original_close", mode="before")
+    @field_validator("open", "high", "low", "close", "volume", "original_open", "original_high", "original_low", "original_close", "fx_rate", mode="before")
     @classmethod
     def parse_decimal(cls, v):
         if v is None:
@@ -338,7 +340,7 @@ class FAPriceQueryItem(StrictModel):
     """
 
     asset_id: int = Field(..., description="Asset ID to query")
-    date_range: DateRangeModel = Field(..., description="Date range (end defaults to start)")
+    date_range: DateRangeModel | MinStartDateRangeModel = Field(..., description="Date range (end defaults to start); `start` may be the sentinel min (with a required `end`): the day of the asset first stored price, an empty series when it has none (FB-7b)")
     include_price: bool = Field(
         True,
         description="Include price history in response. False with max_points, resolution or sample_like (Z-29a-f): the item only gives its step (its resolution, and a sample_like's buckets), reads no price row past its plan and counts nothing against the day budget",

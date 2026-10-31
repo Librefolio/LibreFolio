@@ -98,7 +98,8 @@
       "confirmTitle": "Synchroniser {name} ?",
       "confirmMessage": "{stored, plural, one {# prix enregistré} many {# prix enregistrés} other {# prix enregistrés}} sur cette période {stored, plural, one {sera remplacé} many {seront remplacés} other {seront remplacés}} par les valeurs du fournisseur.",
       "confirmManual": "{manual, plural, one {# a été saisi à la main et sera remplacé} many {# ont été saisis à la main et seront remplacés} other {# ont été saisis à la main et seront remplacés}} aussi.",
-      "confirmAction": "Synchroniser"
+      "confirmAction": "Synchroniser",
+      "overwriteManual": "{manual, plural, one {# a été saisi à la main} many {# ont été saisis à la main} other {# ont été saisis à la main}}."
     },
     "delete": {
       "confirmQuestion": "Supprimer \"{name}\" ?",

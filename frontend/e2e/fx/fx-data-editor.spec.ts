@@ -9,6 +9,7 @@
  * - Database populated with EUR-USD data
  */
 
+import {readFileSync} from 'node:fs';
 import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 import {login, setLanguage} from '../fixtures/auth-helpers';
 import {TEST_USER} from '../fixtures/test-users';
@@ -56,6 +57,55 @@ test.describe('FX Data Editor', () => {
         // Click the edit button again to close (toggle)
         await page.getByTestId('fx-detail-edit-btn').click();
         await expect(page.getByTestId('fx-detail-editor-panel')).not.toBeVisible();
+    });
+
+    // ========================================================================
+    // Export (FB-30): the rates editor's Export button downloads the pair as JSON or CSV.
+    // Read-only: an export writes nothing, so nothing to restore.
+    // ========================================================================
+    test('export downloads the pair rates as JSON and as CSV', async ({page}) => {
+        await goToFxDetailPage(page, 'EUR-USD');
+        await page.getByTestId('fx-detail-edit-btn').click();
+        const panel = page.getByTestId('fx-detail-editor-panel');
+        await expect(panel).toBeVisible();
+        const exportButton = panel.getByTestId('data-editor-export-btn');
+        await expect(exportButton).toBeVisible();
+
+        const dialog = page.getByTestId('data-export-modal');
+        /** Opens the dialog (it starts on CSV), picks `format`, confirms, and returns the file the browser received. */
+        const exportAs = async (format: 'csv' | 'json') => {
+            await exportButton.click();
+            await expect(dialog).toBeVisible();
+            await expect(dialog.getByTestId('data-export-format-csv')).toBeChecked();
+            if (format === 'json') await dialog.getByTestId('data-export-format-json').check();
+            const downloading = page.waitForEvent('download', {timeout: 15_000});
+            await dialog.getByTestId('data-export-confirm').click();
+            const download = await downloading;
+            await expect(dialog).toBeHidden();
+            const path = await download.path();
+            expect(path, 'the download completed').not.toBeNull();
+            return {name: download.suggestedFilename(), text: readFileSync(path!, 'utf8')};
+        };
+
+        // JSON: the envelope names the pair (stored order, as the page asked it) and holds its rates.
+        const json = await exportAs('json');
+        expect(json.name.endsWith('.json')).toBe(true);
+        const envelope = JSON.parse(json.text) as {scope: string; entity: {type: string; base: string; quote: string; inverted: boolean}; row_count: number; rows: Array<{date: string; base: string; quote: string; rate: string | null}>};
+        expect(envelope.scope).toBe('fx_rates');
+        expect(envelope.entity).toMatchObject({type: 'fx_pair', base: 'EUR', quote: 'USD', inverted: false});
+        expect(envelope.rows.length).toBeGreaterThan(0);
+        expect(envelope.row_count).toBe(envelope.rows.length);
+        for (const row of envelope.rows) expect([row.base, row.quote]).toEqual(['EUR', 'USD']);
+
+        // CSV: the default; the header is the export's fixed column list.
+        const csv = await exportAs('csv');
+        expect(csv.name.endsWith('.csv')).toBe(true);
+        const lines = csv.text.split(/\r?\n/).filter((line) => line.length > 0);
+        const header = lines[0].split(';');
+        expect(header).toContain('date');
+        expect(header).toContain('rate');
+        // Not equal to the JSON's count: the pair is shared, and another test may have synced it between the two downloads.
+        expect(lines.length - 1, 'the CSV holds rates').toBeGreaterThan(0);
     });
 
     // ========================================================================

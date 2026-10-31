@@ -51,7 +51,7 @@ from backend.app.db.models import Asset, AssetType, FxRate, PriceHistory
 from backend.app.schemas import SignalCadence, SignalDomain, SignalExecutionContext, SignalPricePoint
 from backend.app.schemas.common import Currency, DateRangeModel
 from backend.app.schemas.prices import AssetBackwardFillInfo, FAPricePoint, FAPriceQueryItem
-from backend.app.services.assets import price_query
+from backend.app.services.assets import observed_prices, price_query
 from backend.app.services.assets.price_query import FULL_HISTORY_LOAD_START, RISK_WARMUP_DAY_MULTIPLIER, PriceQueryOperations
 from backend.app.services.fx import conversion as fx_conversion
 from backend.app.services.fx.conversion import convert_bulk as head_convert_bulk
@@ -274,7 +274,10 @@ async def head_convert(session: AsyncSession, prices: list[FAPricePoint], target
         converted_currency, rate_date, _applied = conv_result
         original_close = original.close
         if original_close and original_close != 0:
-            fx_factor = converted_currency.amount / original_close
+            # MF-A13: the factor is the unit rate of the day's step, read from the stored row, not derived by a division of the
+            # converted close (which differs at the last digit on an inverse pair); the close is the original times it
+            stored = (await session.execute(select(FxRate.rate).where(FxRate.base == min(original.currency, target), FxRate.quote == max(original.currency, target), FxRate.date == rate_date))).scalar_one()
+            fx_factor = stored if original.currency < target else Decimal(1) / stored
         else:
             conv_idx += 1
             continue
@@ -291,7 +294,8 @@ async def head_convert(session: AsyncSession, prices: list[FAPricePoint], target
             open=original.open * fx_factor if original.open is not None else None,
             high=original.high * fx_factor if original.high is not None else None,
             low=original.low * fx_factor if original.low is not None else None,
-            close=converted_currency.amount,
+            close=original_close * fx_factor,
+            fx_rate=fx_factor,
             volume=original.volume,
             currency=target,
             original_currency=original.currency,
@@ -418,18 +422,27 @@ async def test_oq04_the_conversions_asked_are_the_stretches_of_unchanged_price_a
 
     Red before the cure: it is handed one item for every day of the series.
     """
-    handed: list[int] = []
+    # MF-A13: a stretch is converted as its stored row times the day's unit rate; nothing is asked of ``convert_bulk`` any more
+    converted: list[int] = []
+    asked_of_convert_bulk: list[int] = []
+    real_converted = observed_prices._converted
 
-    async def _counting(session, conversions, raise_on_error=True):
-        handed.append(len(conversions))
+    def _counting(row, rate_date, fx_rate):
+        converted.append(1)
+        return real_converted(row, rate_date, fx_rate)
+
+    async def _forbidden(session, conversions, raise_on_error=True):
+        asked_of_convert_bulk.append(len(conversions))
         return await head_convert_bulk(session, conversions, raise_on_error=raise_on_error)
 
-    monkeypatch.setattr(fx_conversion, "convert_bulk", _counting)
+    monkeypatch.setattr(observed_prices, "_converted", _counting)
+    monkeypatch.setattr(fx_conversion, "convert_bulk", _forbidden)
     (result,) = await _query(world, world.item(asset, window, target))
     expected = _expected_conversions(asset, window, target)
 
     assert len(result.prices) > expected > 0, f"premise: the series has {len(result.prices)} days for {expected} stretches: weekends and rate-less days make the stretches fewer"
-    assert sum(handed) == expected, f"{sum(handed)} conversions asked for a series of {len(result.prices)} days, expected {expected} (one for each stretch)"
+    assert sum(converted) == expected, f"{sum(converted)} conversions made for a series of {len(result.prices)} days, expected {expected} (one for each stretch)"
+    assert asked_of_convert_bulk == [], "the price query asks nothing of convert_bulk: the unit rate of the step is read, once for each stretch"
 
 
 # =============================================================================
@@ -566,3 +579,48 @@ async def test_oq06_the_signal_results_and_the_visible_points_are_the_head_pipel
     assert _dump(result.prices) == _dump(expected_points), "the visible points differ"
     assert [_without_clock(r.model_dump(mode="json")) for r in result.signals] == [_without_clock(r.model_dump(mode="json")) for r in expected_results], f"{signals}: the signal results differ"
     assert any(r.status.value in ("ok", "partial") and r.series for r in result.signals), f"premise: some signal computed ({[r.status.value for r in result.signals]})"
+
+
+# =============================================================================
+# OQ-A13 — MF-A13: the point carries the unit rate it was converted with
+# =============================================================================
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("asset", "target", "window"), [("eur", "USD", "all"), ("usd", "EUR", "all"), ("gbp", "EUR", "mid"), ("usd", "EUR", "over-the-rate-gap")])
+async def test_oqa13_a_converted_point_says_the_unit_rate_and_is_its_original_times_it(world, asset, target, window):
+    """OQ-A13: every converted point has ``fx_rate``, the unit rate of the day's step (the stored rate on a direct pair, one
+    over it on an inverse one), and its close, open, high and low are its ``original_*`` times it: one formula, the engine's.
+    A point that did not convert (native, or with no usable rate) has no ``fx_rate``.
+
+    Red before MF-A13: the point has no ``fx_rate``, and the converted close is the original divided by the stored rate.
+    """
+    (result,) = await _query(world, world.item(asset, window, target))
+
+    converted = [point for point in result.prices if point.original_currency is not None and point.backward_fill_info is not None and point.backward_fill_info.fx_rate_date is not None]
+    assert converted, "premise: the window holds converted points"
+    for point in converted:
+        assert point.fx_rate is not None, point.date
+        assert point.close == point.original_close * point.fx_rate, point.date
+        for scaled, original in ((point.open, point.original_open), (point.high, point.original_high), (point.low, point.original_low)):
+            assert scaled == (original * point.fx_rate if original is not None else None), point.date
+    assert all(point.fx_rate is None for point in result.prices if point.original_currency is None), "a native point has no rate"
+
+
+@pytest.mark.asyncio
+async def test_oqa13_the_rate_of_a_direct_pair_is_the_stored_row_and_an_inverse_one_is_one_over_it(world):
+    """OQ-A13: EUR→USD on one day: ``fx_rate`` is the stored EUR/USD rate of the day's step; USD→EUR the same, inverted."""
+    start, end = WINDOWS["mid"]
+    async with AsyncSession(world.engine, expire_on_commit=False) as session:
+        stored = {row.date: row.rate for row in (await session.execute(select(FxRate).where(FxRate.base == "EUR", FxRate.quote == "USD"))).scalars().all()}
+    (direct,) = await _query(world, world.item("eur", "mid", "USD"))
+    (inverse,) = await _query(world, world.item("usd", "mid", "EUR"))
+
+    for point in direct.prices:
+        info = point.backward_fill_info
+        rate_day = info.fx_rate_date if info is not None and info.fx_rate_date is not None else point.date
+        assert point.fx_rate == stored[rate_day], point.date
+    for point in inverse.prices:
+        info = point.backward_fill_info
+        rate_day = info.fx_rate_date if info is not None and info.fx_rate_date is not None else point.date
+        assert point.fx_rate == Decimal(1) / stored[rate_day], point.date
