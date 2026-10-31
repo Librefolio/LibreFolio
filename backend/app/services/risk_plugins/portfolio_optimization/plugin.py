@@ -25,12 +25,14 @@ from backend.app.services.risk.base import (
     RiskAnalytic,
     RiskComputation,
     RiskUnavailableError,
+    resource_limit_error,
 )
 from backend.app.services.risk.quant.optimization_engine import (
     OptimizationResourceLimitError,
     run_optimization,
 )
 from backend.app.services.risk.quant.optimization_models import (
+    MAX_OPTIMIZATION_ASSETS,
     OptimizationEngineRequest,
     OptimizationWeightResult,
 )
@@ -161,6 +163,15 @@ class PortfolioOptimizationAnalytic(RiskAnalytic):
             raise RiskUnavailableError(
                 "Optimization requires at least two usable assets",
                 code=RiskErrorCode.INSUFFICIENT_HISTORY,
+            )
+        if len(asset_ids) > MAX_OPTIMIZATION_ASSETS:
+            # A6: a size limit, refused as every other one is (D379) and before the request exists, whose own validation would
+            # otherwise answer it as INVALID_PARAMETERS ("a bad value") for a selection that is only too big.
+            raise resource_limit_error(
+                f"Optimization carries at most {MAX_OPTIMIZATION_ASSETS} assets, got {len(asset_ids)}",
+                metric="assets",
+                actual=len(asset_ids),
+                limit=MAX_OPTIMIZATION_ASSETS,
             )
         prepared_by_asset = {item.returns.asset_id: item.returns for item in prepared.series}
         return_columns = [[float(point.value) for point in prepared_by_asset[asset_id].points] for asset_id in asset_ids]
