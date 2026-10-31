@@ -29,7 +29,7 @@ import contextlib
 import importlib
 import os
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
 from typing import Any, Optional
@@ -60,6 +60,7 @@ from backend.test_scripts.test_utils import print_section
 
 CONFIRM = f"{API_V1_PREFIX}/email/email-change/confirm"
 LOGIN = f"{API_V1_PREFIX}/auth/login"
+PROFILE = f"{API_V1_PREFIX}/auth/profile"
 ME = f"{API_V1_PREFIX}/auth/me"
 BASE_URL = "http://test"
 TIMEOUT = 30.0
@@ -117,14 +118,16 @@ class Notices:
     """The calls of ``email_changed_work`` the route scheduled."""
 
     calls: list[tuple[int, str, str]]
+    by_host: list[bool] = field(default_factory=list)
 
 
 @pytest.fixture(autouse=True)
 def notices(monkeypatch: pytest.MonkeyPatch) -> Notices:
     recorded = Notices(calls=[])
 
-    async def record(user_id: int, old_address: str, new_address: str, *, engine: Any = None) -> None:
+    async def record(user_id: int, old_address: str, new_address: str, *, engine: Any = None, by_host: bool = False) -> None:
         recorded.calls.append((user_id, old_address, new_address))
+        recorded.by_host.append(by_host)
 
     monkeypatch.setattr(flows, "email_changed_work", record)
     return recorded
@@ -280,6 +283,7 @@ async def test_the_click_changes_the_address_and_ends_the_sessions(private: _Pri
     assert await _status(private.engine, older.token) == TokenStatus.REVOKED, "the owner's other change links are revoked"
     assert await _status(private.engine, reset.token, AccountTokenPurpose.PASSWORD_RESET) == TokenStatus.REVOKED, "a reset link asked to the old mailbox no longer works"
     assert notices.calls == [(owner.id, OLD_EMAIL, NEW_EMAIL)]
+    assert notices.by_host == [True], "A-64 (c): the notice to the old address is the one of a change the host decided"
     async with _browser(private) as fresh:
         assert (await fresh.post(LOGIN, json={"username": OLD_EMAIL, "password": PASSWORD})).status_code == 401, "the old address no longer signs in"
         assert (await fresh.post(LOGIN, json={"username": NEW_EMAIL, "password": PASSWORD})).status_code == 200, "the new one does, with the same password"
@@ -460,3 +464,22 @@ async def test_the_whole_flow_from_the_sync_to_the_click(private: _Private, monk
         again = await owner_module.run_owner_sync(session)
     assert again.action == "unchanged"
     assert notices.calls == [(owner.id, OLD_EMAIL, NEW_EMAIL)]
+
+
+@pytest.mark.asyncio
+async def test_the_profile_refuses_the_address_the_host_reserved_for_the_owner(private: _Private) -> None:
+    """OWNAPI-040 — A-64 (a), the wiring: on this managed instance ``LIBREFOLIO_ADMIN_EMAIL`` is ``NEW_EMAIL`` and the owner has not clicked yet. An ordinary user signed in who asks ``PUT /auth/profile`` for that address (with the right current password) gets a 400 with the detail of an address already in use, and keeps its own. Barrier: a free address goes through for the same user. The owner (the recorded one) is exempt: it may hold the address by its own change."""
+    owner = await _owner(private.engine)
+    member = await _add_user(private.engine, "ownapi_member", "member@zq-ownapi.example.com")
+    async with _browser(private) as signed_in:
+        login = await signed_in.post(LOGIN, json={"username": "ownapi_member", "password": PASSWORD})
+        assert login.status_code == 200, login.text
+
+        refused = await signed_in.put(PROFILE, json={"email": NEW_EMAIL, "current_password": PASSWORD})
+
+        assert refused.status_code == 400 and refused.json()["detail"] == "Email already registered", f"the reserved address must be refused as an address in use: {refused.status_code} {refused.text}"
+        assert (await _row(private.engine, member.id)).email == "member@zq-ownapi.example.com"
+
+        allowed = await signed_in.put(PROFILE, json={"email": "member2@zq-ownapi.example.com", "current_password": PASSWORD})
+        assert allowed.status_code == 200, f"barrier: a free address goes through: {allowed.text}"
+    assert (await _row(private.engine, owner.id)).email == OLD_EMAIL

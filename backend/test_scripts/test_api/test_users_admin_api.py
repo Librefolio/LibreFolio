@@ -2156,7 +2156,7 @@ def _protect(monkeypatch: pytest.MonkeyPatch, *user_ids: int) -> None:
     """
     protected = frozenset(user_ids)
 
-    def account_protection(user: User) -> Optional[str]:
+    def account_protection(user: User, context: object = None) -> Optional[str]:  # the list passes the context it read once (A-63 (c))
         return PROTECTION_REASON if user.id in protected else None
 
     monkeypatch.setattr(user_service, "account_protection", account_protection, raising=False)

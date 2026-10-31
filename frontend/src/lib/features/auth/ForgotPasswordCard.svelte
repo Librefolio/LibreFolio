@@ -18,6 +18,10 @@
         void instanceConfig.load();
     });
 
+    // Docker: the exec drops to the image's own user (gosu), so the files the command writes belong to the server's
+    // user and not to root; the same line `./dev.py docker exec` runs (admin docs, «docker exec»).
+    const DOCKER_RESET_COMMAND = 'docker compose exec librefolio sh -c \'exec gosu "${LIBREFOLIO_UID:-1000}:${LIBREFOLIO_GID:-1000}" python dev.py "$@"\' sh user reset <username> <new_password>';
+
     let commandsOpen = false;
     // The server commands are for whoever runs the server: shown once the server said self-hosted. A managed instance's
     // users have no terminal: they ask their administrator for a reset link (F05). Before the answer, neither; when the
@@ -40,7 +44,7 @@
         {#snippet commands()}
             <div class="bg-lf-terminal border border-lf-terminal-line text-lf-terminal-prompt font-mono text-sm p-3 rounded-lg overflow-x-auto" data-testid="forgot-reset-commands">
                 <code class="block whitespace-pre text-lf-terminal-comment"># Docker</code>
-                <code class="block whitespace-pre">docker compose exec librefolio python dev.py user reset &lt;username&gt; &lt;new_password&gt;</code>
+                <code class="block whitespace-pre">{DOCKER_RESET_COMMAND}</code>
                 <code class="block whitespace-pre mt-2 text-lf-terminal-comment"># Manual install</code>
                 <code class="block whitespace-pre">./dev.py user reset &lt;username&gt; &lt;new_password&gt;</code>
             </div>

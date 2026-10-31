@@ -2023,7 +2023,7 @@ describe('onboardingGuide — contextual FIFO and account reset', () => {
 });
 
 describe('onboardingGuide — final flow and step-managed Bulk contract', () => {
-    it('exports exactly the approved 15-flow runtime contract without draft Bulk ids', () => {
+    it('exports exactly the approved 16-flow runtime contract without draft Bulk ids', () => {
         expect(ONBOARDING_FLOWS).toEqual([
             'welcome',
             'intro_tour',
@@ -2040,6 +2040,7 @@ describe('onboardingGuide — final flow and step-managed Bulk contract', () => 
             'asset_page_guide',
             'asset_guide',
             'asset_detail_guide',
+            'tools_page_guide',
         ]);
         expect(ONBOARDING_FLOWS).not.toContain('transaction_bulk_validation_guide');
         expect(ONBOARDING_FLOWS).not.toContain('transaction_bulk_selection_guide');

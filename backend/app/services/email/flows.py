@@ -334,7 +334,7 @@ async def forgotten_password_work(identifier: str, *, engine: AsyncEngine | None
 INSTANCE_FALLBACK = "LibreFolio"
 
 
-async def email_changed_work(user_id: int, old_address: str, new_address: str, *, engine: AsyncEngine | None = None) -> None:
+async def email_changed_work(user_id: int, old_address: str, new_address: str, *, engine: AsyncEngine | None = None, by_host: bool = False) -> None:
     """The notice to the address an account had before its email changed, after the answer, with a session of its own.
 
     It goes only to the old address, in the account's language, and shows nothing of the new one (N62). It carries
@@ -364,7 +364,7 @@ async def email_changed_work(user_id: int, old_address: str, new_address: str, *
             language = await account_language(session, user_id)
             links = links_state()
             instance = links.instance if links.ready else INSTANCE_FALLBACK
-            content = build_email_changed(language=language, instance=instance)
+            content = build_email_changed(language=language, instance=instance, by_host=by_host)
             await send_email(content, to=old_address, user_id=user_id)
             EMAIL_CHANGE_NOTICES_BY_ACCOUNT.hit(user_id)
             EMAIL_CHANGE_NOTICES_BY_MAILBOX.hit(mailbox)

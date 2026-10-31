@@ -27,11 +27,11 @@ see is described in [Getting Started](../../user/getting-started.md) and
    replaying go through `onboardingGuide`; persistence, resume, stall handling and the cross-tab
    close all live behind it.
 
-## 🗺️ The fifteen flows {: #flows }
+## 🗺️ The sixteen flows {: #flows }
 
 The flows are the `OnboardingFlow` enum in `backend/app/db/models.py`, mirrored by
 `ONBOARDING_FLOWS` in `frontend/src/lib/types/onboarding.ts`. `welcome` is a page of its own; the
-other fourteen are guided flows, declared in `ONBOARDING_GUIDE_CATALOG`
+other fifteen are guided flows, declared in `ONBOARDING_GUIDE_CATALOG`
 (`frontend/src/lib/features/onboarding/onboardingGuideCatalog.ts`).
 
 | Flow | Kind | Starts when | Steps |
@@ -51,6 +51,7 @@ other fourteen are guided flows, declared in `ONBOARDING_GUIDE_CATALOG`
 | `asset_page_guide` | Page | `/assets` has loaded | 4 |
 | `asset_guide` | Modal | the add-asset modal opens | 3 |
 | `asset_detail_guide` | Detail | `/assets/[id]` has loaded its asset | 5 |
+| `tools_page_guide` | Page | `/tools` has answered its catalog | 2 |
 
 *Kind* is descriptive. The catalogue itself knows three fields: `trigger` (`automatic` for the
 tour, `contextual` for every other guide), `completionMode: 'steps'` for the two step-managed
@@ -577,7 +578,7 @@ test, and provides `deleteDisposableUser()` to remove it at the end.
 
 | File | What it pins |
 |---|---|
-| `backend/test_scripts/test_services/test_settings_service.py` | The registry: exactly fifteen flows, the two step lists, every flow at version 1. Update it when you add a flow or bump a version |
+| `backend/test_scripts/test_services/test_settings_service.py` | The registry: exactly sixteen flows, the two step lists, every flow at version 1. Update it when you add a flow or bump a version |
 | `backend/test_scripts/test_api/test_settings_api.py` | The endpoints, including the exact flow and step arrays of the progress read |
 | `backend/test_scripts/test_db/db_schema_validate.py` | Migration 004 and its grandfathered rows |
 | `backend/test_scripts/test_db/test_db_referential_integrity.py` | The canonical E2E users, completed on every flow and step |
