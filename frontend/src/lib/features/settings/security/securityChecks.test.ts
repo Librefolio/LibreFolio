@@ -703,3 +703,44 @@ describe('attentionSeverity — the store’s getter (N69b)', () => {
         expect(fetch, 'none of this asks the server again').toHaveBeenCalledTimes(2);
     });
 });
+
+describe('the account changes (A6-5, A-61)', () => {
+    // red until A6-5
+    it('the app’s store forgets the answer of the account that left: idle, nothing listed, the next ensureLoaded() asks again', async () => {
+        const graph = await freshGraph();
+        const {securityChecks} = graph;
+        const session = await import('$lib/stores/app/clientSession');
+        session.transitionClientSession(1);
+        api.listSecurityChecks.mockResolvedValueOnce({items: structuredClone(MIXED)});
+        await settle(securityChecks.ensureLoaded());
+        expect(securityChecks.status, 'premise: the first account was answered').toBe('ready');
+
+        session.transitionClientSession(2);
+
+        expect(securityChecks.status).toBe('idle');
+        expect(securityChecks.checks).toEqual([]);
+        expect(securityChecks.attentionCount).toBe(0);
+        expect(securityChecks.attentionSeverity).toBeNull();
+        api.listSecurityChecks.mockResolvedValueOnce({items: structuredClone(ALL_OK)});
+        await settle(securityChecks.ensureLoaded());
+        expect(api.listSecurityChecks, 'the new account asks for itself').toHaveBeenCalledTimes(2);
+    });
+
+    // red until A6-5
+    it('an answer still on the way for the account that left is discarded, not shown to the next one', async () => {
+        const graph = await freshGraph();
+        const {securityChecks} = graph;
+        const session = await import('$lib/stores/app/clientSession');
+        session.transitionClientSession(1);
+        let answerLate!: (value: {items: SecurityCheck[]}) => void;
+        api.listSecurityChecks.mockReturnValueOnce(new Promise((resolve) => (answerLate = resolve)));
+        const late = securityChecks.ensureLoaded();
+
+        session.transitionClientSession(2);
+        answerLate({items: structuredClone(MIXED)});
+        await settle(late);
+
+        expect(securityChecks.checks, 'the old account’s checks do not land').toEqual([]);
+        expect(securityChecks.status).not.toBe('ready');
+    });
+});

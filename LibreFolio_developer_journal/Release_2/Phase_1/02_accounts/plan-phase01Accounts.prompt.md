@@ -9103,3 +9103,16 @@ La sessione di E non c'è più: in questo lotto i suoi file (`i18n/email/*`, `se
 - `user_service.create_password_reset(..., email=None)` additivo (marcatura informativa). Docs: `admin/hosting_providers.en.md`, «Restoring a Backup on a Managed Instance: the Owner» (`#restore-owner`); la sezione completa del ripristino è di B.
 - **Modale** `features/backup/OwnerChoiceModal.svelte` (+ test, OCM-01…13): utente con l'email del titolare preselezionato e scelta forzata, altrimenti si sceglie; avviso sempre visibile; `busy`; 10 chiavi `backup.ownerChoice.*` ×4. Solo ruoli di colore.
 - **Rossi → verdi**: servizi 24 (15 rossi contro il codice attuale), modale 22; `front check` 0/0; `i18n check` 5184 chiavi.
+
+## Ondata 6 · A (30/10/2026; base `5efc0d973`; sessione A su Sonnet; corsia 6215)
+
+Lotti 1–3 (checkpoint 1): A6-4, A6-5, A6-2. Poi 4–6, 7–8, 9–11 (kickoff-A).
+
+### A6-4 · H-8: il comando Docker della password dimenticata ✅ (30/10)
+> **Note implementazione**: `ForgotPasswordCard.svelte` mostra ora la riga `docker compose exec librefolio sh -c 'exec gosu … python dev.py "$@"' sh user reset …` (la stessa di `admin/docker_advanced`, «docker exec»), costante `DOCKER_RESET_COMMAND`. Rosso: `FPM-12` in `ForgotPasswordCard.managed.test.ts`. Docs: una riga di `admin/cli_tools.en.md`.
+
+### A6-5 · A-61: i controlli di sicurezza al cambio d'account ✅ (30/10)
+> **Note implementazione**: `securityChecks.svelte.ts` ha `reset()` e registra `registerClientSessionReset('securityChecks', …)` (solo lo store dell'app, non quelli di `createSecurityChecks()` dei test); una risposta in volo per l'account uscito è scartata con `isClientSessionCurrent(generation)`. Test: 2 casi in `securityChecks.test.ts`.
+
+### A6-2 · A-19: «Register here» non lampeggia più ✅ (30/10)
+> **Note implementazione**: `LoginCard.svelte` mostra il blocco solo con `instanceConfig.loaded || instanceConfig.failed` (se la richiesta fallisce valgono i default, aperto) e pubblica `data-instance="pending|ready"` sulla scheda. Test: 3 casi in `LoginCard.test.ts`.

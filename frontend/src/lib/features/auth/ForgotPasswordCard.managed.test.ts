@@ -213,6 +213,18 @@ describe('ForgotPasswordCard — the server commands only on a self-hosted insta
         expect(askAdmin()).toBeNull();
     });
 
+    // A6-4 (H-8): the bare `docker compose exec … python dev.py` runs as root and leaves root-owned files in the data
+    // folder; the command shown drops to the image's user with gosu, as `./dev.py docker exec` does.
+    it('FPM-12: the Docker command drops to the server user with gosu — never the bare root exec', async () => {
+        await serverAnswers(SELFHOSTED);
+
+        await mount();
+
+        expect(commands()).toHaveTextContent(/gosu/);
+        expect(commands()).toHaveTextContent(/user reset/);
+        expect(commands()).not.toHaveTextContent(/exec librefolio python dev\.py/);
+    });
+
     // red until A9
     it('FPM-02: answered managed, no email links — forgot-ask-admin on view, saying its key; no command, no heading', async () => {
         await serverAnswers(MANAGED);
