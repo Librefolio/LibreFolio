@@ -184,6 +184,35 @@ async function createOwnedBroker(page: Page, tag: string): Promise<{id: number; 
     return {id: result.broker_id, name};
 }
 
+/**
+ * The broker the analyze and review cases import into. It is created by the test with the generic CSV plugin as its
+ * default import plugin, so the generic CSV below is the file that plugin reads: a seeded broker would put the test at
+ * the mercy of the mock data (Interactive Brokers has had its own plugin since W6-10, and the wizard then asks whether
+ * the file belongs to another broker).
+ */
+const FLOW_BROKER_PLUGIN = 'broker_generic_csv';
+const flowBrokers = new WeakMap<Page, {id: number; name: string}>();
+
+async function createFlowBroker(page: Page): Promise<void> {
+    const name = `import-flow-${uniqueSuffix()}`;
+    const response = await page.request.post(`${API}/brokers`, {data: [{name, opened_at: '2025-01-01', default_import_plugin: FLOW_BROKER_PLUGIN}]});
+    expect(response.ok(), `Flow broker setup failed (HTTP ${response.status()})`).toBe(true);
+    const body = (await response.json()) as {results: Array<{name: string; success: boolean; broker_id: number | null; message?: string}>};
+    const result = body.results.find((candidate) => candidate.name === name);
+    if (!result?.success || typeof result.broker_id !== 'number') {
+        throw new Error(`Flow broker setup returned no id for ${name}: ${result?.message ?? 'missing result'}`);
+    }
+    flowBrokers.set(page, {id: result.broker_id, name});
+}
+
+async function cleanupFlowBroker(page: Page): Promise<void> {
+    const broker = flowBrokers.get(page);
+    flowBrokers.delete(page);
+    if (!broker) return;
+    const deleted = await page.request.delete(`${API}/brokers?ids=${broker.id}&force=true`);
+    expect(deleted.ok(), `Cleanup must delete the flow broker ${broker.id} (HTTP ${deleted.status()})`).toBe(true);
+}
+
 function rememberOwnedFile(page: Page, fileId: string): void {
     const ids = ownedFileIds.get(page) ?? new Set<string>();
     ids.add(fileId);
@@ -238,7 +267,11 @@ async function installTerminalOnboardingProgress(page: Page): Promise<void> {
 }
 
 test.afterEach(async ({page}) => {
-    await cleanupOwnedFiles(page);
+    try {
+        await cleanupOwnedFiles(page);
+    } finally {
+        await cleanupFlowBroker(page);
+    }
 });
 
 async function installImportScrollObservation(page: Page): Promise<void> {
@@ -411,10 +444,11 @@ function csv(marker: string): {name: string; mimeType: string; buffer: Buffer} {
 
 /**
  * Assign the uploaded file(s) to a specifically named owned broker via the step-1
- * "assign all" dropdown. Existing analyze/review cases use their seeded broker; the
+ * "assign all" dropdown. The analyze/review cases use the broker `createFlowBroker` made; the
  * onboarding cases pass the unique broker owned by their disposable account.
  */
-async function assignBroker(page: Page, brokerName = 'Interactive Brokers') {
+async function assignBroker(page: Page, brokerName = flowBrokers.get(page)?.name) {
+    if (!brokerName) throw new Error('assignBroker needs a broker name, or a flow broker created by createFlowBroker');
     await page.getByTestId('import-wizard-step1-broker-select').locator('[role="combobox"]').click();
     const option = page.locator('[data-testid^="search-select-option-"]').filter({hasText: brokerName});
     await expect(option, `Owned broker ${brokerName} must be the unique matching option`).toHaveCount(1, {timeout: 8_000});
@@ -651,6 +685,7 @@ test.describe('Import Wizard — analyze step', () => {
     test.beforeEach(async ({page}) => {
         await installTerminalOnboardingProgress(page);
         await login(page, TEST_USER);
+        await createFlowBroker(page);
         await goToTransactions(page);
         await openImportWizard(page);
     });
@@ -716,6 +751,7 @@ test.describe('Import Wizard — review step', () => {
     test.beforeEach(async ({page}) => {
         await installTerminalOnboardingProgress(page);
         await login(page, TEST_USER);
+        await createFlowBroker(page);
         await goToTransactions(page);
         await openImportWizard(page);
     });
