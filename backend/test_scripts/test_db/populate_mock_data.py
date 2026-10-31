@@ -328,7 +328,7 @@ def populate_brokers(session: Session):
             "name": "Interactive Brokers",
             "description": "Low-cost global broker with multi-currency support",
             "portal_url": "https://www.interactivebrokers.com",
-            "brim_plugin_key": "broker_ibkr",
+            "default_import_plugin": "broker_ibkr",
             "allow_cash_overdraft": False,
             "allow_asset_shorting": False,
         },
@@ -336,7 +336,7 @@ def populate_brokers(session: Session):
             "name": "DEGIRO",
             "description": "European low-cost broker",
             "portal_url": "https://www.degiro.com",
-            "brim_plugin_key": "broker_degiro",
+            "default_import_plugin": "broker_degiro",
             "allow_cash_overdraft": False,
             "allow_asset_shorting": False,
         },
@@ -344,7 +344,7 @@ def populate_brokers(session: Session):
             "name": "Directa SIM",
             "description": "Italian online broker for stocks, ETFs, and bonds",
             "portal_url": "https://www.directa.it",
-            "brim_plugin_key": "broker_directa",
+            "default_import_plugin": "broker_directa",
             "allow_cash_overdraft": False,
             "allow_asset_shorting": False,
         },
@@ -352,7 +352,7 @@ def populate_brokers(session: Session):
             "name": "eToro",
             "description": "Social trading platform with stocks and CFDs",
             "portal_url": "https://www.etoro.com",
-            "brim_plugin_key": "broker_etoro",
+            "default_import_plugin": "broker_etoro",
             "allow_cash_overdraft": False,
             "allow_asset_shorting": False,
         },
@@ -360,7 +360,7 @@ def populate_brokers(session: Session):
             "name": "Coinbase",
             "description": "Cryptocurrency exchange for Bitcoin and altcoins",
             "portal_url": "https://www.coinbase.com",
-            "brim_plugin_key": "broker_coinbase",
+            "default_import_plugin": "broker_coinbase",
             "allow_cash_overdraft": False,
             "allow_asset_shorting": False,
         },
@@ -368,7 +368,7 @@ def populate_brokers(session: Session):
             "name": "Recrowd",
             "description": "Real estate crowdfunding platform",
             "portal_url": "https://www.recrowd.com",
-            "brim_plugin_key": "broker_generic_csv",
+            "default_import_plugin": "broker_generic_csv",
             "allow_cash_overdraft": False,
             "allow_asset_shorting": False,
         },
@@ -376,7 +376,7 @@ def populate_brokers(session: Session):
             "name": "Charles Schwab",
             "description": "US full-service broker for stocks, ETFs, and options",
             "portal_url": "https://www.schwab.com",
-            "brim_plugin_key": "broker_schwab",
+            "default_import_plugin": "broker_schwab",
             "allow_cash_overdraft": False,
             "allow_asset_shorting": False,
         },
@@ -385,7 +385,7 @@ def populate_brokers(session: Session):
     for broker_data in brokers:
         broker = Broker(**broker_data)
         session.add(broker)
-        plugin = broker_data.get("brim_plugin_key", "N/A")
+        plugin = broker_data.get("default_import_plugin", "N/A")
         print(f"  ✅ {broker.name} (BRIM: {plugin})")
 
     session.commit()
@@ -811,8 +811,8 @@ def populate_assets(session: Session):
             "classification_params": json.dumps(
                 {
                     "short_description": "Real estate development loan in Milan (closed position)",
-                    "geographic_area": {"ITA": 1.0},
-                    "sector": "Real Estate",
+                    "geographic_area": {"distribution": {"ITA": 1.0}},
+                    "sector_area": {"distribution": {"Real Estate": 1.0}},
                 }
             ),
         },
@@ -823,8 +823,8 @@ def populate_assets(session: Session):
             "classification_params": json.dumps(
                 {
                     "short_description": "Residential project in Rome",
-                    "geographic_area": {"ITA": 1.0},
-                    "sector": "Real Estate",
+                    "geographic_area": {"distribution": {"ITA": 1.0}},
+                    "sector_area": {"distribution": {"Real Estate": 1.0}},
                 }
             ),
         },
@@ -837,8 +837,7 @@ def populate_assets(session: Session):
             "classification_params": json.dumps(
                 {
                     "short_description": "Digital gold, store of value",
-                    "geographic_area": {"GLOBAL": 1.0},
-                    "sector": "Cryptocurrency",
+                    "sector_area": {"distribution": {"Other": 1.0}},
                 }
             ),
         },
@@ -850,8 +849,7 @@ def populate_assets(session: Session):
             "classification_params": json.dumps(
                 {
                     "short_description": "Smart contract platform",
-                    "geographic_area": {"GLOBAL": 1.0},
-                    "sector": "Cryptocurrency",
+                    "sector_area": {"distribution": {"Other": 1.0}},
                 }
             ),
         },
@@ -864,8 +862,8 @@ def populate_assets(session: Session):
             "classification_params": json.dumps(
                 {
                     "short_description": "GPU and AI computing leader",
-                    "geographic_area": {"USA": 1.0},
-                    "sector": "Technology",
+                    "geographic_area": {"distribution": {"USA": 1.0}},
+                    "sector_area": {"distribution": {"Technology": 1.0}},
                 }
             ),
         },
@@ -878,15 +876,8 @@ def populate_assets(session: Session):
             "classification_params": json.dumps(
                 {
                     "short_description": "Global developed markets ETF (accumulating) — served via JustETF",
-                    "geographic_area": {
-                        "USA": 0.65,
-                        "DEU": 0.08,
-                        "GBR": 0.08,
-                        "JPN": 0.07,
-                        "FRA": 0.06,
-                        "CHN": 0.06,
-                    },
-                    "sector": "Diversified",
+                    "geographic_area": {"distribution": {"USA": 0.65, "DEU": 0.08, "GBR": 0.08, "JPN": 0.07, "FRA": 0.06, "CHN": 0.06}},
+                    "sector_area": {"distribution": {"Other": 1.0}},
                 }
             ),
         },
@@ -899,8 +890,8 @@ def populate_assets(session: Session):
             "classification_params": json.dumps(
                 {
                     "short_description": "Standard & Poor's 500 — US large-cap benchmark index",
-                    "geographic_area": {"USA": 1.0},
-                    "sector": "Diversified",
+                    "geographic_area": {"distribution": {"USA": 1.0}},
+                    "sector_area": {"distribution": {"Other": 1.0}},
                 }
             ),
         },
@@ -919,6 +910,11 @@ def populate_assets(session: Session):
                             "GBR": 0.04,
                             "FRA": 0.03,
                             "DEU": 0.03,
+                            "CAN": 0.04,
+                            "CHE": 0.03,
+                            "AUS": 0.03,
+                            "NLD": 0.02,
+                            "SWE": 0.02,
                         }
                     },
                 }
@@ -947,8 +943,7 @@ def populate_assets(session: Session):
             "classification_params": json.dumps(
                 {
                     "short_description": "Gold spot price (XAU/USD) via web scraping",
-                    "geographic_area": {"distribution": {"GLOBAL": 1.0}},
-                    "sector_area": {"distribution": {"Precious Metals": 1.0}},
+                    "sector_area": {"distribution": {"Basic Materials": 1.0}},
                 }
             ),
         },
@@ -964,7 +959,7 @@ def populate_assets(session: Session):
             "classification_params": json.dumps(
                 {
                     "short_description": "Semiconductors sector ETF tracking MSCI World Semiconductors & Semiconductor Equipment index",
-                    "geographic_area": {"distribution": {"USA": 0.80, "ASIA": 0.15, "EUROPE": 0.05}},
+                    "geographic_area": {"distribution": {"USA": 0.80, "TWN": 0.08, "KOR": 0.04, "JPN": 0.03, "NLD": 0.03, "DEU": 0.02}},
                     "sector_area": {"distribution": {"Technology": 1.0}},
                 }
             ),
@@ -988,9 +983,14 @@ def populate_assets(session: Session):
                             "GBR": 0.04,
                             "FRA": 0.03,
                             "DEU": 0.03,
+                            "CAN": 0.04,
+                            "CHE": 0.03,
+                            "AUS": 0.03,
+                            "NLD": 0.02,
+                            "SWE": 0.02,
                         }
                     },
-                    "sector_area": {"distribution": {"Technology": 0.25, "Financials": 0.15, "Healthcare": 0.12}},
+                    "sector_area": {"distribution": {"Technology": 0.25, "Financials": 0.15, "Health Care": 0.12, "Industrials": 0.12, "Consumer Discretionary": 0.11, "Other": 0.25}},
                 }
             ),
         },

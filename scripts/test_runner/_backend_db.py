@@ -238,6 +238,16 @@ def db_post_migration(verbose: bool = False, test_names: list = None) -> bool:
     return run_command(cmd, "Post-migration fix tests", verbose=verbose)
 
 
+def db_integrity_check(verbose: bool = False, test_names: list = None) -> bool:
+    """Test dev.py db check --integrity on temporary databases (B6-1, B-56)."""
+    print_section("DB Test: Database Integrity Check")
+    print_info("This test works on temporary databases only: the test database is not touched")
+    print_info("Testing: integrity, foreign keys, text that is not UTF-8 by table and rowid (never the content), the revision, exit codes, read-only, the dev.py wiring")
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_db/test_db_integrity_check.py", test_names)
+    return run_command(cmd, "Database integrity check tests", verbose=verbose)
+
+
 def db_post_migration_orphan_pairs(verbose: bool = False, test_names: list = None) -> bool:
     """Test the post-migration fix orphan_pair_halves on temporary databases at head (N1b-2)."""
     print_section("DB Test: Post-Migration Fix — Orphan Pair Halves")
@@ -313,6 +323,7 @@ def db_all(verbose: bool = False) -> bool:
         "session-pragmas",  # temporary databases only too
         "create", "validate", "numeric-truncation", "populate", "populate-reset", "autoincrement-schema", "post-migration",
         "post-migration-orphan-pairs",
+        "integrity-check",
         "migration-005", "referential-integrity", "fx-rates", "brim", "brim-bulk", "asset-merge", "model-validators"
         ]
 
@@ -385,6 +396,9 @@ Note: No backend server required. Tests operate directly on test DB.
     add_test(cat, "post-migration", db_post_migration, name="Post-Migration Fixes",
              desc="Ordered fixes after alembic upgrade head: AUTOINCREMENT conversion, orphan broker folders, rollback; the run lock refuses a symlink and is created 0o600; B-36 (17): table names a database brings quoted (x\"y, a\" WHERE 1 --): the pending fix applied, its row counts holding them, no OperationalError",
              prereq="None (temporary databases)")
+    add_test(cat, "integrity-check", db_integrity_check, name="Database Integrity Check",
+             desc="db check --integrity: integrity_check, foreign_key_check, text that is not UTF-8 named by table and rowid, the Alembic revision; exit 0/1/2; the file untouched",
+             prereq="None (temporary databases)", isolation="pure")
     add_test(cat, "post-migration-orphan-pairs", db_post_migration_orphan_pairs, name="Post-Migration Orphan Pair Halves",
              desc="orphan_pair_halves: the lone halves older broker deletions left become standalone rows; giving TRANSFER legs and unreadable rows left; dry run, log lines, rollback",
              prereq="None (temporary databases)")

@@ -10901,3 +10901,90 @@ Il developer è assente fino a domani sera e l'app non apre sessioni nuove: il c
    > **⚠️ Fuori pista**: il primo giro dell'E2E era rosso per due difetti dello spec (il selettore `dialog` trovava anche la ricerca di Material; gli errori di console erano le chiamate di terze parti del sito, bloccate dal test), non del prodotto.
 17. ✅ **Rosso del gate del treno 12: chiavi `importWizard.parseRefusal.credit_agricole_*`** — mancavano le cinque (`not_combined_file`, `combined_columns_missing`, `combined_line_unknown_kind`, `combined_line_incomplete`, `no_dated_rows`) in `importWizard/{en,it,fr,es}.json`: il plugin le solleva dal 2.0.0 (W5-7) senza testo. Aggiunte con `dev.py i18n add`, nelle 4 lingue, con gli stessi segnaposto dei raise. `services brim-parse-error-codes` verde (11).
 18. ✅ **Rosso del gate: `toolbar-width-sweep` brokerDetail** — `editableBroker` leggeva le posizioni da `GET /brokers/{id}/summary`, da cui MF-L ha tolto `holdings`; ora le legge dal report del portafoglio (`POST /portfolio/report`, `summary.holdings`), come `brokers-detail`.
+
+## Ondata 6 · T (strumenti)
+
+Sessione figlia T, ondata 6, base `5efc0d973`, corsia 6221 (`/tmp/librefolio-r13-o6-t`). Lotti in ordine: C6-7, C6-8, C6-5
+(checkpoint 1), C6-6, W6-10 (2), B6-1, Z-37 (3), C6-2 (4, con il via del coordinatore).
+
+### C6-7 (V-17) ✅ (2026-10-30)
+
+> **Note implementazione**: `front_settings` passava `settings.spec.ts` a Playwright, che lo usa come espressione
+> regolare sul percorso: prendeva anche `settings/plugin-settings.spec.ts` e `fx/fx-chart-settings.spec.ts`. Ora passa
+> `e2e/settings.spec.ts`, che nel percorso compare una volta sola. Rosso prima, verde dopo:
+> `TestSettingsActionSelectsOneSpec` in `backend/test_scripts/test_utilities/test_test_runner_cli.py`.
+>
+> **⚠️ Fuori pista**: il secondo punto di V-17 (il setup di Playwright che ripopola il DB perché `LF_SETUP_DONE` non è
+> impostato) riguarda tutte le 42 azioni di `_frontend_utility.py`, non la sola riga 700: nessuna chiama
+> `_ensure_db_populated`, quindi `_ensure_test_users` non imposta mai la variabile. Non è nel perimetro del lotto, va
+> deciso dal coordinatore. Stesso difetto del pattern in `auth.spec.ts` (prende anche `layout/app-start-auth.spec.ts`).
+
+### C6-8 (H-20 + J-15) ✅ (2026-10-30)
+
+> **Note implementazione**: `_common.line_buffer_output()` mette lo stdout/stderr del runner a righe, chiamata
+> all'inizio di `_dispatch_test_command` e di `main`; `cmd_mkdocs_gallery` stampa con `flush=True`. Test:
+> `TestRunnerOutputIsLineBuffered`.
+
+### C6-5 (I-07) ⏳ (2026-10-30)
+
+> **Note implementazione**: in attesa di `npm ci` (il lock pesante è occupato da altre sessioni): senza `tsc` non si
+> rimisurano i TS2769.
+
+### C6-6 (C-51) 🟡 anticipato (2026-10-30)
+
+> **Note implementazione**: fatto prima del checkpoint 1 (file disgiunti, nessuna dipendenza). Le cinque righe della
+> vecchia forma piatta (RE Loan Milano, RE Loan Roma, Bitcoin, Ethereum, NVIDIA) ora scrivono `geographic_area.distribution`
+> e `sector_area.distribution`; per le due crypto non c'è `geographic_area` (`GLOBAL` non è un paese ISO). Rosso/verde:
+> `test_mock_asset_classification_params_validate_against_the_model` in `test_populate_reset.py`, 5 rossi → 5 verdi.
+>
+> **⚠️ Fuori pista**: altre 6 righe di `populate_mock_data.py` non validano: 878 e 899 (forma piatta), 912 e 981 (pesi che
+> sommano 0,86), 947 (`GLOBAL`), 964 (`ASIA`, `EUROPE`). Fuori dai 5 del lotto, non toccate. Il test sulle altre categorie
+> che leggono i mock non è ancora stato rilanciato.
+
+### C6-5 (I-07) ✅ (2026-10-30)
+
+> **Note implementazione**: `tsc -p tsconfig.e2e.json` rimisurato: nessun TS2769, 2 errori veri (TS1360 in
+> `e2e/fixtures/galleryBackup.ts`, TS2345 in `e2e/transactions/tx-bulk-possible-split.spec.ts`), corretti. Gate:
+> script `check:e2e` in `frontend/package.json`; `dev.py front check` lo esegue dopo svelte-check. Rosso/verde:
+> `TestFrontCheckCoversTheE2ESpecs`. `tsc` finale rc 0, 0 errori (log `ondata6/T-tsc-e2e2.log`).
+
+### Proposta C6-7b — `LF_SETUP_DONE` per `front-utility` (2026-10-31, non applicata)
+
+> `scripts/test_runner/_frontend_utility.py` chiama `_run_playwright` 42 volte, ma `_ensure_db_populated()` una sola
+> (`front_pac_allocator_real`). `front_utility_all` prepara solo build e utenti: «db» non entra mai in `_SETUP_DONE`,
+> quindi `_ensure_test_users` non imposta `LF_SETUP_DONE` e `global-setup.ts` ripopola il DB e ricrea gli utenti a
+> ogni invocazione. Misura di V (12/10): circa 20 s a invocazione → fino a ~14 minuti (42 × 20 s) per un
+> `front-utility all`. Cura proposta: `_ensure_db_populated()` prima di `_ensure_test_users()` in `front_utility_all`
+> e nelle azioni singole (come fanno asset e fx). Rischio: gli spec di utility che oggi ripartono da un DB appena
+> popolato a ogni file vedrebbero lo stato lasciato dai precedenti; va provato con un `front-utility all` intero
+> (pesante, in una finestra) prima di adottarla.
+
+### C6-6 (resto) e W6-10 (U-B9) ✅ (2026-10-31)
+
+> **Note implementazione**: `brim_plugin_key` → `default_import_plugin` nei 7 broker mock (il campo vero del modello; la
+> chiave vecchia veniva scartata in silenzio). Le 6 righe di asset che non validavano: forma piatta (Amundi Core MSCI
+> World, S&P 500) → `distribution` + `sector_area` «Other»; MSCI World Index e iShares Core MSCI World: i paesi sommavano
+> 0,86, aggiunti CAN/CHE/AUS/NLD/SWE (0,14); iShares: settori sommati a 1,0; Gold Spot: tolto `GLOBAL`, settore «Basic
+> Materials»; Semiconductors: `ASIA`/`EUROPE` → TWN/KOR/JPN/NLD/DEU. Test in `test_populate_reset.py`: tutti gli asset
+> contro `FAClassificationParams`, ogni chiave dei broker è un campo di `Broker`, ogni plugin predefinito esiste. Rossi
+> 3/3 prima, 28 verdi dopo. `auth.spec.ts` → `e2e/auth.spec.ts`; test `TestEverySpecPatternSelectsOneSpec` su tutti i
+> pattern letterali del runner; `test_test_runner_cli.py` 857 verdi.
+> Mock rilanciati sulla corsia 6221: `db populate`, `db referential-integrity`, `api assets-metadata`, `assets-crud`,
+> `ai-export`, `ai-export-unpriced-asset`, `brokers`, `broker-access`: tutti rc 0 (log `ondata6/T-mocks-run.log`).
+
+### B6-1 (B-56) ✅ (2026-10-31)
+
+> **Note implementazione**: `dev.py db check --integrity [file]` → `backend/app/services/platform/db_integrity_check.py`
+> (sola lettura, `mode=ro`): `describe_database` (integrity_check, foreign_key_check, revisione), la scansione UTF-8 del
+> ripristino estratta in `undecodable_tables` (`staging.py`; `_refuse_undecodable_text` la usa), i rowid con una lettura
+> riga per riga solo delle tabelle segnalate (mai il contenuto), `_revision_plan` (head / più vecchia = nessun problema
+> / sconosciuta / mancante). Uscite 0/1/2. Test `test_db_integrity_check.py`: 9 rossi (modulo mancante) → 9 verdi;
+> `test_backup_staging` + `test_backup_cli_restore` 444 verdi. Azione `db integrity-check` registrata (isolation pure).
+> Provato sul DB della corsia 6221: nessun problema, 18 tabelle.
+
+### Z-37 ✅ (2026-10-31)
+
+> **Note implementazione**: `frontend/scripts/sanitize-openapi-descriptions.mjs` (apice inverso → apostrofo, `${` →
+> `$ {`, solo valori di `description`) prima di `openapi-zod-client` in `generate-api`. Riprodotto con un mini-documento:
+> il client grezzo non è TypeScript valido. Test `src/lib/api/openapiDescriptions.test.ts` (6 verdi), registrato in
+> `front_component_unit`. `dev.py api sync` completo rc 0. La cura di `FAPricePoint` resta (toglierla cambia lo schema).

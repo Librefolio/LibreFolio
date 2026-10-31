@@ -152,6 +152,8 @@ import argparse
 import ast
 import contextlib
 import importlib
+import io
+import json
 import os
 import re
 import sqlite3
@@ -161,6 +163,7 @@ from types import SimpleNamespace
 
 import pytest
 
+import dev
 from scripts.test_runner import _backend_api as backend_api
 from scripts.test_runner import _backend_db as backend_db
 from scripts.test_runner import _backend_services as backend_services
@@ -2668,6 +2671,122 @@ class TestTheLaneDatabaseIsSnapshottedWhateverTheBodyDoes:
             _h30_run(monkeypatch, entry, *H30_ACTION)
 
         assert teed_entry_steps.events == _steps_of(body), f"{command} {' '.join(H30_ACTION)}: the body raised, and the lane's database is still snapshotted, once, after the body, with no log tee entered (ran: {teed_entry_steps.events})"
+
+
+class TestEverySpecPatternSelectsOneSpec:
+    """C6-7 (V-17): a literal handed to ``_run_playwright`` is a substring of a path, so it names one spec file only."""
+
+    def test_no_literal_spec_pattern_of_the_runner_matches_two_specs(self):
+        specs = [p.relative_to(PROJECT_ROOT / "frontend").as_posix() for p in (PROJECT_ROOT / "frontend" / "e2e").rglob("*.spec.ts")]
+        ambiguous = {}
+        for source in sorted((PROJECT_ROOT / "scripts" / "test_runner").glob("*.py")):
+            for node in ast.walk(ast.parse(source.read_text(encoding="utf-8"))):
+                if isinstance(node, ast.Call) and getattr(node.func, "id", "") == "_run_playwright" and node.args and isinstance(node.args[0], ast.Constant):
+                    pattern = node.args[0].value
+                    matched = [s for s in specs if pattern in s]
+                    if len(matched) != 1:
+                        ambiguous[f"{source.name}:{node.lineno} {pattern}"] = matched
+
+        assert ambiguous == {}
+
+
+class TestSettingsActionSelectsOneSpec:
+    """C6-7 (V-17): ``front settings`` hands Playwright a pattern that matches one spec file only."""
+
+    def test_front_settings_pattern_matches_exactly_one_e2e_spec(self, monkeypatch):
+        calls: list[str] = []
+        monkeypatch.setattr(_frontend_utility, "_ensure_frontend_build", lambda: True)
+        monkeypatch.setattr(_frontend_utility, "_ensure_test_users", lambda: True)
+        monkeypatch.setattr(_frontend_utility, "_run_playwright", lambda spec, **kw: calls.append(spec) or True)
+
+        assert _frontend_utility.front_settings() is True
+
+        (pattern,) = calls
+        specs = [p.relative_to(PROJECT_ROOT / "frontend").as_posix() for p in (PROJECT_ROOT / "frontend" / "e2e").rglob("*.spec.ts")]
+        matched = sorted(s for s in specs if pattern in s)
+        assert matched == ["e2e/settings.spec.ts"], f"Playwright takes the pattern as a substring: {pattern!r} also selects {matched}"
+
+
+class TestRunnerOutputIsLineBuffered:
+    """C6-8 (H-20 + J-15): the runner and the gallery show progress as it happens, also into a file or a pipe."""
+
+    def test_line_buffer_output_turns_on_line_buffering(self, monkeypatch, tmp_path):
+        with open(tmp_path / "out.log", "w", encoding="utf-8") as out, open(tmp_path / "err.log", "w", encoding="utf-8") as err:
+            assert not out.line_buffering and not err.line_buffering
+            monkeypatch.setattr(sys, "stdout", out)
+            monkeypatch.setattr(sys, "stderr", err)
+
+            _common.line_buffer_output()
+
+            assert out.line_buffering and err.line_buffering
+
+    def test_line_buffer_output_is_harmless_on_a_stream_without_reconfigure(self, monkeypatch):
+        monkeypatch.setattr(sys, "stdout", io.StringIO())
+        monkeypatch.setattr(sys, "stderr", io.StringIO())
+
+        _common.line_buffer_output()
+
+    def test_both_runner_entries_ask_for_line_buffering_first(self, monkeypatch):
+        calls: list[str] = []
+        monkeypatch.setattr(_common, "line_buffer_output", lambda: calls.append("buffered"))
+        monkeypatch.setattr(runner_cli, "_refused_test_names", lambda args: "stop here")
+        monkeypatch.setattr(runner_cli, "create_parser", lambda: argparse.ArgumentParser())
+        monkeypatch.setattr(sys, "argv", ["runner"])
+
+        assert runner_cli._dispatch_test_command(argparse.Namespace()) == 2
+        assert runner_cli.main() == 2
+
+        assert calls == ["buffered", "buffered"]
+
+    def test_gallery_flushes_every_line_it_relays_from_playwright(self):
+        tree = ast.parse((PROJECT_ROOT / "dev.py").read_text(encoding="utf-8"))
+        gallery = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "cmd_mkdocs_gallery")
+        relays = [n for n in ast.walk(gallery) if isinstance(n, ast.Call) and getattr(n.func, "id", "") == "print" and n.args and getattr(n.args[0], "id", "") == "line"]
+
+        assert relays, "the loop over proc.stdout moved: update this test"
+        for call in relays:
+            flush = next((k.value for k in call.keywords if k.arg == "flush"), None)
+            assert isinstance(flush, ast.Constant) and flush.value is True, f"dev.py:{call.lineno}: print(line) without flush=True"
+
+
+class TestFrontCheckCoversTheE2ESpecs:
+    """C6-5 (I-07): ``dev.py front check`` type-checks the E2E specs with their own tsconfig."""
+
+    @pytest.fixture
+    def check_calls(self, monkeypatch):
+        calls: list[list[str]] = []
+        codes = {"check": 0, "check:e2e": 0}
+
+        def fake_live(cmd, cwd=None, env=None):
+            calls.append(cmd)
+            return codes[cmd[-1]]
+
+        monkeypatch.setattr(dev, "run_command_live", fake_live)
+        return dev, calls, codes
+
+    def test_front_check_runs_svelte_check_then_the_e2e_check(self, check_calls):
+        dev, calls, _ = check_calls
+
+        assert dev.cmd_fe_check(argparse.Namespace()) == 0
+
+        assert calls == [["npm", "run", "check"], ["npm", "run", "check:e2e"]]
+
+    def test_an_e2e_type_error_fails_front_check(self, check_calls):
+        dev, _, codes = check_calls
+        codes["check:e2e"] = 2
+
+        assert dev.cmd_fe_check(argparse.Namespace()) == 2
+
+    def test_generate_api_neutralizes_the_openapi_descriptions_before_the_generator_reads_them(self):
+        """Z-37: a backtick in a referred model's docstring would break ``generated.ts``."""
+        script = json.loads((PROJECT_ROOT / "frontend" / "package.json").read_text(encoding="utf-8"))["scripts"]["generate-api"]
+
+        assert script.index("sanitize-openapi-descriptions.mjs") < script.index("openapi-zod-client")
+
+    def test_the_npm_script_points_at_the_e2e_tsconfig(self):
+        scripts = json.loads((PROJECT_ROOT / "frontend" / "package.json").read_text(encoding="utf-8"))["scripts"]
+
+        assert "tsconfig.e2e.json" in scripts["check:e2e"]
 
 
 if __name__ == "__main__":

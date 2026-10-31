@@ -31,6 +31,7 @@ The warning printed for a DB outside the data dir is never asserted: its text is
 
 from __future__ import annotations
 
+import ast
 import json
 import uuid
 from pathlib import Path
@@ -44,8 +45,12 @@ setup_test_database()
 
 # populate_mock_data configures the test database again when imported and builds a lazy NullPool
 # engine: the import opens no connection. Nothing below hands it a path outside tmp_path.
+from backend.app.db.models import Broker
+from backend.app.schemas.assets.metadata import FAClassificationParams
+from backend.test_scripts.test_db import populate_mock_data
 from backend.test_scripts.test_db.populate_mock_data import reset_broker_reports
 
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
 STATUS_FOLDERS = ("uploaded", "parsed", "failed")
 EMPTIED = {"uploaded": [], "parsed": [], "failed": []}
 SQLITE_BYTES = b"SQLite format 3\x00" + bytes(84)
@@ -518,3 +523,63 @@ def test_a_symlink_to_a_folder_is_removed_as_a_link(data_dir: Path, tmp_path: Pa
 
     assert _snapshot(outside) == before
     assert _status_folders(data_dir) == EMPTIED
+
+
+# ---------------------------------------------------------------------------
+# C6-6 (C-51) and W6-10 (U-B9): the mock data write the shapes the models read
+# ---------------------------------------------------------------------------
+
+def _mock_classification_params() -> dict[str, dict]:
+    """``display_name`` -> the dict the mock asset passes to ``json.dumps`` (read as source, never run)."""
+    tree = ast.parse(Path(populate_mock_data.__file__).read_text(encoding="utf-8"))
+    found: dict[str, dict] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Dict):
+            continue
+        entries = {k.value: v for k, v in zip(node.keys, node.values, strict=True) if isinstance(k, ast.Constant)}
+        name, params = entries.get("display_name"), entries.get("classification_params")
+        if isinstance(name, ast.Constant) and isinstance(params, ast.Call) and params.args:
+            found[name.value] = ast.literal_eval(params.args[0])
+    return found
+
+
+def _mock_dict_literals(key: str) -> list[dict]:
+    """Every dict literal of ``populate_mock_data.py`` that carries ``key``, as written in the source."""
+    tree = ast.parse(Path(populate_mock_data.__file__).read_text(encoding="utf-8"))
+    return [{k.value: v for k, v in zip(node.keys, node.values, strict=True) if isinstance(k, ast.Constant)} for node in ast.walk(tree) if isinstance(node, ast.Dict) and any(isinstance(k, ast.Constant) and k.value == key for k in node.keys)]
+
+
+def test_every_mock_asset_classification_validates_against_the_model():
+    """C6-6 (C-51): not one mock asset writes a shape the model refuses; the failures are named."""
+    assets = _mock_dict_literals("classification_params")
+    assert len(assets) >= 10, "the mock assets were not found: update this test"
+
+    refused = {}
+    for entry in assets:
+        params = entry["classification_params"]
+        if not (isinstance(params, ast.Call) and params.args):
+            continue
+        try:
+            FAClassificationParams.model_validate(ast.literal_eval(params.args[0]))
+        except ValueError as exc:
+            refused[ast.literal_eval(entry["display_name"])] = str(exc).splitlines()[0]
+
+    assert not refused, f"mock assets whose classification_params the model refuses: {refused}"
+
+
+def test_every_mock_broker_key_is_a_field_of_the_broker_model():
+    """W6-10 (U-B9): ``Broker(**data)`` drops an unknown key without a word (``brim_plugin_key`` did, for every broker)."""
+    brokers = _mock_dict_literals("allow_cash_overdraft")
+    assert brokers, "the mock brokers were not found: update this test"
+
+    unknown = {ast.literal_eval(b["name"]): sorted(set(b) - set(Broker.model_fields)) for b in brokers if set(b) - set(Broker.model_fields)}
+
+    assert not unknown, f"mock broker keys that are not Broker fields: {unknown}"
+
+
+def test_every_mock_broker_default_import_plugin_is_an_installed_plugin():
+    plugins = {p.name for p in (PROJECT_ROOT / "backend/app/services/brim_providers").iterdir() if p.is_dir()}
+    chosen = {ast.literal_eval(b["name"]): ast.literal_eval(b["default_import_plugin"]) for b in _mock_dict_literals("allow_cash_overdraft") if "default_import_plugin" in b}
+
+    assert len(chosen) >= 7, f"the mock brokers must each name a default import plugin: {chosen}"
+    assert {name: code for name, code in chosen.items() if code not in plugins} == {}
