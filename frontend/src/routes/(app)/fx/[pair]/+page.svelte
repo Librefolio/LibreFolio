@@ -73,12 +73,14 @@
     import {ensureSignalFxPairs, fxPairSlugsOf} from '$lib/charts/comparisonSeries';
     import {applyComparisonAssetsData, clearComparisonAssetsData, COMPARISON_ASSET_RUNTIME_PARAM_KEYS, comparisonAnswerGenerations, comparisonAnswerIsCacheable, comparisonAnswerKey, loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
     import {detailPageSignalSources} from '$lib/charts/chartPageSignals';
-    import {fxPointToLineDataPoint, renderBackendResults, renderCalendarPairComparisons, renderLocalSignals, type SignalDataSources} from '$lib/charts/chartSignalRendering';
+    import {fxPointToLineDataPoint, renderBackendResults, renderCalendarComparisons, renderCalendarPairComparisons, renderLocalSignals, type SignalDataSources} from '$lib/charts/chartSignalRendering';
+    import {buildAssetComparisonQuery} from '$lib/charts/crossTypeCalendar';
     import {buildFxDetailCalendarQuery, fxDetailCalendarViews} from '$lib/charts/fxDetailCalendar';
+    import {firstDateOf, forgetFirstDate, rememberFirstDate} from '$lib/stores/firstSeriesDates';
     import AssetChartModeToggle, {type AssetChartPrimaryMode} from '$lib/components/assets/detail/AssetChartModeToggle.svelte';
     import AssetCalendarWindowControls from '$lib/components/assets/detail/AssetCalendarWindowControls.svelte';
     import {formatSignalProblem} from '$lib/components/charts/chartSignalsHelpers';
-    import {emptyCalendarReturnView, type CalendarReturnView} from '$lib/components/charts/priceChartHelpers';
+    import {emptyCalendarReturnView, extractCalendarReturnViewsByAsset, type CalendarReturnView} from '$lib/components/charts/priceChartHelpers';
     import {CALENDAR_RETURN_PRESETS, DEFAULT_CALENDAR_RETURN_WINDOW, calendarReturnRangeDays, calendarReturnWindowDays, type CalendarReturnPresetKey, type CalendarReturnWindowSelection, type CalendarReturnWindowUnit} from '$lib/components/charts/calendarReturnWindow';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
@@ -183,6 +185,8 @@
     let primaryMode: AssetChartPrimaryMode = $state('price');
     let calendarReturnView: CalendarReturnView = $state(emptyCalendarReturnView());
     let calendarTargetViews: Map<string, CalendarReturnView> = $state(new Map());
+    // FB-11: the rolling return of the assets its `asset-comparison` signals compare, by asset id
+    let calendarAssetViews: Map<number, CalendarReturnView> = $state(new Map());
     let calendarRequestGeneration = 0;
     let calendarCustomAmount = $state(DEFAULT_CALENDAR_RETURN_WINDOW.customAmount);
     let calendarCustomUnit: CalendarReturnWindowUnit = $state(DEFAULT_CALENDAR_RETURN_WINDOW.customUnit);
@@ -410,7 +414,27 @@
     let allOverlaySignals: RenderedSignal[] = $derived([...overlaySignals, ...measureSignals, ...(pendingPreviewSignal ? [pendingPreviewSignal] : [])]);
 
     // X5-F1 — what the chart draws in the rolling-return mode: the pair's return and the compared pairs' lines
-    let calendarOverlaySignals: RenderedSignal[] = $derived(renderCalendarPairComparisons(signals, calendarTargetViews));
+    let calendarOverlaySignals: RenderedSignal[] = $derived([
+        ...renderCalendarPairComparisons(signals, calendarTargetViews),
+        ...renderCalendarComparisons(
+            signals,
+            calendarAssetViews,
+            (assetId) => {
+                const asset = allAssets.find((candidate) => candidate.id === assetId);
+                return asset ? {displayName: asset.display_name, iconUrl: asset.icon_url ?? null, assetType: asset.asset_type ?? null} : null;
+            },
+            (assetId) => $t('chartSettings.signals.assetFallback', {values: {id: String(assetId)}}),
+        ),
+    ]);
+    /** The assets compared in the rolling return by the state of their view (asset ids). */
+    let calendarAssetComparisonState = $derived.by(() => {
+        const byState: Record<'ready' | 'partial' | 'unavailable' | 'error', number[]> = {ready: [], partial: [], unavailable: [], error: []};
+        for (const [assetId, view] of calendarAssetViews) {
+            if (view.state === 'ready' || view.state === 'partial' || view.state === 'unavailable' || view.state === 'error') byState[view.state].push(assetId);
+        }
+        for (const ids of Object.values(byState)) ids.sort((left, right) => left - right);
+        return byState;
+    });
     /** The state of the rolling return as the page shows it: before the first answer it is loading, not idle. */
     let calendarChartState = $derived(calendarReturnView.state === 'idle' ? 'loading' : calendarReturnView.state);
     /** The `fx-pair` signals by the state of their rolling return (config ids). */
@@ -689,6 +713,7 @@
             primaryMode = openingMode();
             calendarReturnView = emptyCalendarReturnView();
             calendarTargetViews = new Map();
+            calendarAssetViews = new Map();
             void loadFxAiExportCompatibility();
 
             await (initialSignalDefinitions ??= loadFxSignalDefinitions());
@@ -816,6 +841,8 @@
      */
     function rearmMaxPendingBeforeReload() {
         if (activePreset !== 'MAX') return;
+        // FB-7b: a sync, a catch-up or Refresh may have moved the pair's first day: it is asked again
+        forgetFirstDate('fx', data.canonicalSlug);
         isMaxPending = true;
         dateStart = resolveDateSentinel('min');
         displayDateStart = 'min';
@@ -834,6 +861,18 @@
         const inverted = data.inverted;
         const canonicalBase = data.canonicalBase;
         const canonicalQuote = data.canonicalQuote;
+        // FB-7b: «All» still pending and the pair's first day already known this session: start from it, and from the cache
+        if (isMaxPending) {
+            const knownFirstDay = firstDateOf('fx', slug);
+            if (knownFirstDay !== undefined) {
+                dateStart = knownFirstDay;
+                displayDateStart = knownFirstDay;
+                isMaxPending = false;
+            }
+        }
+        // FB-7b: «All» pending, its first day unknown: the rates are asked from the sentinel `min` (the server answers the pair's first
+        // stored day, whatever its year), never from a made-up start; the store cannot answer a start it does not know
+        const askedFromMin = isMaxPending;
         const start = dateStart;
         const end = dateEnd;
         const sessionGeneration = getClientSessionGeneration();
@@ -846,7 +885,7 @@
         };
         error = null;
         const store = getFxStore(slug);
-        const gaps = store.getMissingIntervals(start, end);
+        const gaps = askedFromMin ? [{start, end}] : store.getMissingIntervals(start, end);
         const hasCachedRange = gaps.length === 0;
         // A store a catch-up marked stale that still holds points for the range (Y5-1, D3): they go on screen at once and the rates
         // are asked in background, with no loading state.
@@ -878,7 +917,7 @@
         const requestBody: FxConvertBulkBody = ranges.map((range) => ({
             from_amount: {code: withSignals ? base : canonicalBase, amount: '1'},
             to: withSignals ? quote : canonicalQuote,
-            date_range: {start: range.start, end: range.end},
+            date_range: {start: askedFromMin ? ('min' as const) : range.start, end: range.end},
             ...(withSignals ? {signals: requestPlan.requests} : {}),
         }));
         // N64: the same signal request, answered over the same rates (the generation of the pair's store, read now), comes
@@ -906,8 +945,12 @@
             if (canonicalPoints.length > 0) {
                 store.merge(canonicalPoints);
             }
-            for (const range of ranges) store.markFetched(range.start, range.end);
-            chartData = store.getRange(start, end).data;
+            // From the first day the server held, when the rates were asked from `min`: nothing exists before it, and the placeholder
+            // start the page waits on was never asked
+            const firstDay = askedFromMin && canonicalPoints.length > 0 ? canonicalPoints.reduce((earliest, point) => (point.date < earliest ? point.date : earliest), canonicalPoints[0].date) : null;
+            for (const range of ranges) store.markFetched(firstDay ?? range.start, range.end);
+            if (firstDay !== null) rememberFirstDate('fx', slug, firstDay);
+            chartData = store.getRange(firstDay ?? start, end).data;
 
             const signalGroup = withSignals ? response.signal_results?.find((group) => group.request_index === 0) : undefined;
             // X-R16: an invalid signal result fails the signals only, as a failed request does: nothing applied, the banner
@@ -1167,6 +1210,28 @@
             calendarReturnView = emptyCalendarReturnView('error');
             calendarTargetViews = new Map();
         }
+        await loadCalendarAssetComparisons(requestedSignalConfigs, current);
+    }
+
+    /**
+     * FB-11: the rolling return of the assets the `asset-comparison` signals compare, each asked of `POST /assets/prices/query`
+     * (no prices, no events, the asset's own currency). A failure marks each asset `error`; it never touches the pair's own view.
+     */
+    async function loadCalendarAssetComparisons(requestedSignalConfigs: SignalConfig[], current: () => boolean): Promise<void> {
+        const assetIds = comparisonAssetIds(requestedSignalConfigs);
+        if (assetIds.length === 0) {
+            calendarAssetViews = new Map();
+            return;
+        }
+        try {
+            const response = await zodiosApi.query_prices_bulk_api_v1_assets_prices_query_post(buildAssetComparisonQuery({start: dateStart, end: dateEnd, windowDays: calendarWindowDays, assetIds}));
+            if (!current()) return;
+            calendarAssetViews = extractCalendarReturnViewsByAsset((response as {items?: unknown}).items, assetIds);
+        } catch (error) {
+            if (!current()) return;
+            console.error('Failed to load the rolling return of the compared assets:', error);
+            calendarAssetViews = new Map(assetIds.map((assetId) => [assetId, emptyCalendarReturnView('error')]));
+        }
     }
 
     /** The rolling return under the page's busy token: it always asks the server. */
@@ -1381,18 +1446,15 @@
         const shouldReloadBackend = backendRequestFingerprint(signals) !== backendRequestFingerprint(newSignals);
         const shouldReloadComparison = comparisonLoadFingerprint(signals) !== comparisonLoadFingerprint(newSignals);
         const shouldLoadFxPairs = fxPairSlugsOf(signals, data.canonicalSlug).join() !== fxPairSlugsOf(newSignals, data.canonicalSlug).join();
+        // Read before `setPairSettings`, which makes `signals` the new list at once (FB-11: the calendar targets were read after it, so a comparison added from the panel never loaded)
+        const calendarTargetsFingerprint = (configs: SignalConfig[]) =>
+            pairTargetsOf(configs)
+                .map((t) => `${t.configId}:${t.pairSlug}:${t.inverted}`)
+                .join() + `|${comparisonAssetIds(configs).join()}`;
+        const shouldReloadCalendarTargets = calendarTargetsFingerprint(signals) !== calendarTargetsFingerprint(newSignals);
         setPairSettings(data.canonicalSlug, {...settings, signals: JSON.parse(JSON.stringify(newSignals))});
         if (shouldLoadFxPairs) void loadSignalFxPairs(newSignals);
-        if (
-            primaryMode === 'calendar-return' &&
-            pairTargetsOf(signals)
-                .map((t) => `${t.configId}:${t.pairSlug}:${t.inverted}`)
-                .join() !==
-                pairTargetsOf(newSignals)
-                    .map((t) => `${t.configId}:${t.pairSlug}:${t.inverted}`)
-                    .join()
-        )
-            void trackCalendarLoad('fx-detail-calendar-pairs', newSignals);
+        if (primaryMode === 'calendar-return' && shouldReloadCalendarTargets) void trackCalendarLoad('fx-detail-calendar-pairs', newSignals);
         if (shouldReloadComparison) void trackComparisonLoad('fx-detail-comparison', newSignals);
         if (shouldReloadBackend) {
             void trackChartLoad('fx-detail-signals', newSignals);
@@ -1663,7 +1725,7 @@
                 <ChartSignalsSection
                     signals={signalPanelConfigs}
                     definitions={signalDefinitions}
-                    allowedSignalTypes={primaryMode === 'calendar-return' ? ['fx-pair'] : undefined}
+                    allowedSignalTypes={primaryMode === 'calendar-return' ? ['fx-pair', 'asset-comparison'] : undefined}
                     backendError={primaryMode === 'price' ? signalBackendError : null}
                     {signalsLoading}
                     onretrybackend={retryBackendSignals}
@@ -1697,6 +1759,10 @@
         data-calendar-comparison-partial={primaryMode === 'calendar-return' ? calendarComparisonState.partial.join(',') : undefined}
         data-calendar-comparison-unavailable={primaryMode === 'calendar-return' ? calendarComparisonState.unavailable.join(',') : undefined}
         data-calendar-comparison-error={primaryMode === 'calendar-return' ? calendarComparisonState.error.join(',') : undefined}
+        data-calendar-asset-comparison-ready={primaryMode === 'calendar-return' ? calendarAssetComparisonState.ready.join(',') : undefined}
+        data-calendar-asset-comparison-partial={primaryMode === 'calendar-return' ? calendarAssetComparisonState.partial.join(',') : undefined}
+        data-calendar-asset-comparison-unavailable={primaryMode === 'calendar-return' ? calendarAssetComparisonState.unavailable.join(',') : undefined}
+        data-calendar-asset-comparison-error={primaryMode === 'calendar-return' ? calendarAssetComparisonState.error.join(',') : undefined}
         use:guideAnchor={'fx.detail.chart'}
     >
         {#if primaryMode === 'price' && loading && lineData.length === 0}

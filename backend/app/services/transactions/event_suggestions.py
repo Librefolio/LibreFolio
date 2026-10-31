@@ -132,5 +132,18 @@ class TransactionEventSuggestionsMixin:
         for tx in rows:
             candidates = candidates_by_key[(tx.asset_id, tx.date, tx.type)]
             status = "none" if not candidates else "unique" if len(candidates) == 1 else "several"
-            items.append(TXEventReconciliationItem(transaction_id=tx.id, broker_id=tx.broker_id, asset_id=tx.asset_id, date=tx.date, type=tx.type, status=status, candidates=candidates))
+            items.append(
+                TXEventReconciliationItem(
+                    transaction_id=tx.id,
+                    broker_id=tx.broker_id,
+                    asset_id=tx.asset_id,
+                    date=tx.date,
+                    type=tx.type,
+                    status=status,
+                    candidates=candidates,
+                    amount=tx.amount,
+                    currency=tx.currency,
+                    quantity=tx.quantity,
+                )
+            )
         return items

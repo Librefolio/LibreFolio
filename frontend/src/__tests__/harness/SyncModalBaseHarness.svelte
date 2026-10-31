@@ -38,6 +38,7 @@
         countLabel?: string;
         /** The targets that already hold stored data in the range (C-66). */
         existingIds?: string[];
+        manualCount?: number;
     }
 
     interface Props {
@@ -60,6 +61,7 @@
             countLabel: s.countLabel ?? `unit:${s.id}`,
             targetIds: s.targetIds,
             ...(s.existingIds !== undefined ? {existingIds: s.existingIds} : {}),
+            ...(s.manualCount !== undefined ? {manualCount: s.manualCount} : {}),
             doSyncFn: s.doSyncFn,
             resultRow: row,
         })),
