@@ -295,9 +295,13 @@ async def create_user(
     is_superuser: bool = False,
     is_active: bool = True,
     commit: bool = True,
+    reserve_owner_address: bool = False,
 ) -> tuple[Optional[User], Optional[AccountError]]:
     """
     Create a new user.
+
+    ``reserve_owner_address``: registration asks it, so nobody takes the address the host named for the owner of a
+    managed instance (A-64 (a)); the command line and the initial administrator's creation do not.
 
     With ``commit=False`` the user is only flushed (it has its id), and the caller commits it together with what
     else the creation belongs to — an invitation spent, a limit checked.
@@ -323,7 +327,7 @@ async def create_user(
 
     # Check if email exists, or is the username of an account from before A-21a (rule 2): the same answer
     existing = await get_user_by_email(session, email)
-    if existing or await address_is_a_username(session, email):
+    if existing or await address_is_a_username(session, email) or (reserve_owner_address and await asyncio.to_thread(owner_address_reserved, email)):
         return None, AccountError("EMAIL_TAKEN", "Email already registered")
 
     # Create user
@@ -673,9 +677,13 @@ async def update_profile(
     user_id: int,
     username: str | None = None,
     email: str | None = None,
+    reserve_owner_address: bool = True,
 ) -> tuple[Optional[User], Optional[AccountError]]:
     """
     Update user profile (username and/or email).
+
+    ``reserve_owner_address``: the profile refuses the address the host named for the owner of a managed instance
+    (A-64 (a)), unless the account is the recorded owner; the command line passes False.
 
     Validates uniqueness constraints before committing.
 
@@ -710,7 +718,7 @@ async def update_profile(
     email_changed = email is not None and not same_email(email, user.email)
     if email_changed:
         existing = await get_user_by_email(session, email)
-        if existing or await address_is_a_username(session, email, other_than=user.id):
+        if existing or await address_is_a_username(session, email, other_than=user.id) or (reserve_owner_address and not user.is_instance_owner and await asyncio.to_thread(owner_address_reserved, email)):
             return None, AccountError("EMAIL_TAKEN", "Email already registered")
         user.email = email
         # A new address is not verified (E5), every session opened with the old one ends (A6e), and so does every live
@@ -889,7 +897,34 @@ def note_recorded_owner(owner_id: Optional[int]) -> None:
     _recorded_owner = owner_id
 
 
-def account_protection(user: User) -> Optional[str]:
+@dataclass(frozen=True)
+class ProtectionContext:
+    """The two things ``account_protection`` reads from the environment, read once: whether the instance is ``managed`` and the owner's address.
+
+    ``get_settings()`` reads the ``.env`` file at every call: a list of accounts asks the context once and passes it to each row (A-63 (c)).
+    """
+
+    managed: bool
+    owner_email: Optional[str]
+
+
+def protection_context() -> ProtectionContext:
+    """The profile and the owner's address, as they are now; pass it to ``account_protection`` when asking for many accounts."""
+    return ProtectionContext(managed=get_settings().LIBREFOLIO_PROFILE == "managed", owner_email=owner_admin_email())
+
+
+def owner_address_reserved(address: str, context: Optional[ProtectionContext] = None) -> bool:
+    """Whether ``address`` is the one the host named in ``LIBREFOLIO_ADMIN_EMAIL`` of a managed instance (A-64 (a)).
+
+    Until the owner clicks the confirmation link another account could take that address first, and the change of the
+    owner's address would find it in use. So registration and the profile refuse it, with the answer of an address in
+    use. The owner's own account, the command line and the initial administrator's creation do not ask this.
+    """
+    context = context or protection_context()
+    return context.managed and context.owner_email is not None and same_email(address, context.owner_email)
+
+
+def account_protection(user: User, context: Optional[ProtectionContext] = None) -> Optional[str]:
     """Why ``user`` may be neither deleted, deactivated nor demoted by anyone from the app; ``None`` when nothing protects it.
 
     On a managed instance (``LIBREFOLIO_PROFILE=managed``) the paying administrator is protected (``PAYING_ADMINISTRATOR``):
@@ -906,16 +941,18 @@ def account_protection(user: User) -> Optional[str]:
       A5-1 is the fallback, as it was: the address alone protects, administrator or not.
 
     In any other profile nobody is protected. The routes of ``api/v1/users.py`` ask it; the command line (``./dev.py user``)
-    does not: it is the operator's emergency exit. The profile and the variable are read at every call.
+    does not: it is the operator's emergency exit. The profile and the variable are read at every call, unless the
+    caller passes a ``context`` it read once (a list of accounts).
     """
-    if get_settings().LIBREFOLIO_PROFILE != "managed":
+    context = context or protection_context()
+    if not context.managed:
         return None
     if user.is_instance_owner:
         return PAYING_ADMINISTRATOR
     recorded = _recorded_owner
     if isinstance(recorded, int):
         return PAYING_ADMINISTRATOR if user.id == recorded else None
-    owner = owner_admin_email()
+    owner = context.owner_email
     if owner is None or not same_email(user.email, owner):
         return None
     if recorded is None and not (user.is_superuser and user.is_active):

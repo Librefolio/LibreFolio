@@ -215,11 +215,17 @@ def build_test_message(*, language: str | None, username: str, instance: str) ->
     return _render(EmailKind.TEST, lang, greeting="greeting", before=["intro"], after=["outro"], values=values)
 
 
-def build_email_changed(*, language: str | None, instance: str) -> EmailContent:
+def build_email_changed(*, language: str | None, instance: str, by_host: bool = False) -> EmailContent:
     """The notice to the address an account had before, when its email address changes. No link, no user name and
-    nothing of the new address, which whoever changes it chooses, down to the last label of its domain (N62)."""
+    nothing of the new address, which whoever changes it chooses, down to the last label of its domain (N62).
+
+    ``by_host``: the host of a managed instance decided the change (A-64 (c)): the advice is to ask the host, not to
+    change the password — nobody else has the account.
+    """
     lang = email_language(language)
     values = {"instance": instance}
+    if by_host:
+        return _render(EmailKind.EMAIL_CHANGED, lang, greeting="greeting_anonymous", before=["intro_host"], after=["advice_host"], values=values)
     return _render(EmailKind.EMAIL_CHANGED, lang, greeting="greeting_anonymous", before=["intro"], after=["advice"], values=values)
 
 

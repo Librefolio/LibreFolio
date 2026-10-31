@@ -1724,8 +1724,9 @@ def test_email_changed_work_has_its_signature_and_its_fallback_name() -> None:
     parameters = inspect.signature(flows.email_changed_work).parameters
 
     assert inspect.iscoroutinefunction(flows.email_changed_work)
-    assert [(parameter.name, parameter.kind) for parameter in parameters.values()] == [("user_id", POSITIONAL), ("old_address", POSITIONAL), ("new_address", POSITIONAL), ("engine", KEYWORD_ONLY)]
+    assert [(parameter.name, parameter.kind) for parameter in parameters.values()] == [("user_id", POSITIONAL), ("old_address", POSITIONAL), ("new_address", POSITIONAL), ("engine", KEYWORD_ONLY), ("by_host", KEYWORD_ONLY)]
     assert parameters["engine"].default is None
+    assert parameters["by_host"].default is False  # A-64 (c): the host decided the change
     assert flows.INSTANCE_FALLBACK == "LibreFolio"
     print_success("email_changed_work(user_id, old_address, new_address, *, engine=None); «LibreFolio»")
 

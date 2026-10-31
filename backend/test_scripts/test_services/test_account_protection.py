@@ -35,6 +35,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
+from backend.app.api.v1 import users as users_api
 from backend.app.config import accounts, get_settings
 from backend.app.db.base import SQLModel  # imports every model
 from backend.app.db.models import User
@@ -304,3 +305,182 @@ async def test_the_command_line_and_the_services_still_reset_end_sessions_and_ch
     async with AsyncSession(engine) as session:
         stored = (await session.execute(select(User.email).where(User.id == owner_id))).scalar_one()
     assert stored == "owner.moved.a51@example.com", f"the address must be the new one: {stored!r}"
+
+
+# =============================================================================
+# A-63 (c): THE PROFILE AND THE OWNER ARE READ ONCE FOR A LIST, NOT ONCE PER ROW
+# =============================================================================
+
+
+def _count_settings_reads(monkeypatch: pytest.MonkeyPatch) -> list[int]:
+    """Replace ``user_service.get_settings`` by a counter around the real one; the list of calls, one entry per read."""
+    reads: list[int] = []
+    real = user_service.get_settings
+
+    def counted() -> Any:
+        reads.append(1)
+        return real()
+
+    monkeypatch.setattr(user_service, "get_settings", counted)
+    return reads
+
+
+# red until A-63 (c)
+@pytest.mark.asyncio
+async def test_the_list_of_accounts_reads_the_settings_once_not_once_per_row(engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """UPROT-020 — A-63 (c): ``GET /users`` builds one row per account, and each row asked ``get_settings()`` — which reads ``.env`` — for the profile. Now the list reads the profile and the owner once: with 6 accounts the settings are read at most once, and the rows still say who is protected."""
+    print_section("UPROT-020: GET /users reads the settings once")
+    _configure(monkeypatch, tmp_path, profile="managed", admin_email=OWNER_EMAIL)
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        owner = User(username="a63_owner", email=OWNER_EMAIL, hashed_password="x", is_active=True, is_superuser=True)
+        others = [User(username=f"a63_user{i}", email=f"a63.user{i}@example.com", hashed_password="x", is_active=True) for i in range(5)]
+        session.add_all([owner, *others])
+        await session.commit()
+        reads = _count_settings_reads(monkeypatch)
+        answer = await users_api.list_accounts(admin=owner, session=session)
+
+    assert len(answer.items) >= 6, "premise: the list holds the six accounts"
+    assert len(reads) <= 1, f"the settings must be read once for the whole list, not once per row: {len(reads)} reads for {len(answer.items)} rows"
+    assert {item.username: item.protected for item in answer.items}["a63_owner"] is True, "the owner is still protected"
+    assert not any(item.protected for item in answer.items if item.username.startswith("a63_user")), "nobody else is"
+    print_success(f"{len(reads)} read for {len(answer.items)} rows")
+
+
+# =============================================================================
+# A-63 (a): THE COMMAND LINE STORES THE ADDRESS AS THE SERVER NORMALISES IT
+# =============================================================================
+
+
+async def _address_of(engine: AsyncEngine, username: str) -> Optional[str]:
+    async with AsyncSession(engine) as session:
+        return (await session.execute(select(User.email).where(User.username == username))).scalar_one_or_none()
+
+
+# red until A-63 (a)
+@pytest.mark.asyncio
+async def test_user_create_stores_the_address_as_the_server_normalises_it(engine: AsyncEngine, user_cli: ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """UPROT-021 — A-63 (a): ``./dev.py user create`` saved the address as typed, so an owner created with ``Owner@EXAMPLE.com`` did not match the normalised variable the protection compares with. Now the address is validated and normalised like ``user set-email`` does (the domain in lower case): the stored form is the one ``EmailStr`` gives, and the account is protected on a managed instance whose variable is that address."""
+    print_section("UPROT-021: user create normalises the address")
+    _configure(monkeypatch, tmp_path, profile="managed", admin_email="a63owner@example.com")
+
+    answer = await user_cli.cmd_create_user("a63_cli_owner", "a63owner@EXAMPLE.COM", "Cli-Protection-2026!", True)
+
+    assert answer is True, f"user create must go through: {answer!r}"
+    assert await _address_of(engine, "a63_cli_owner") == "a63owner@example.com", "the address is stored in the form the server normalises it to"
+    async with AsyncSession(engine) as session:
+        user = (await session.execute(select(User).where(User.username == "a63_cli_owner"))).scalar_one()
+        assert user_service.account_protection(user) == REASON, "and it is the protected owner"
+    print_success("normalised, protected")
+
+
+# red until A-63 (a)
+@pytest.mark.asyncio
+async def test_user_create_refuses_a_text_that_is_not_an_address(engine: AsyncEngine, user_cli: ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """UPROT-022 — A-63 (a): an address that is not one is refused with ❌ and nothing is created (``set-email`` already does)."""
+    print_section("UPROT-022: user create refuses a non-address")
+    _configure(monkeypatch, tmp_path, profile=None, admin_email=None)
+
+    answer = await user_cli.cmd_create_user("a63_cli_bad", "not-an-address", "Cli-Protection-2026!", False)
+
+    assert answer is False, f"a text that is not an address must be refused: {answer!r}"
+    assert await _address_of(engine, "a63_cli_bad") is None, "nothing is created"
+    print_success("refused")
+
+
+# =============================================================================
+# A-64 (a): ON A MANAGED INSTANCE NOBODY ELSE TAKES THE ADDRESS OF THE VARIABLE
+# =============================================================================
+
+HOST_ADDRESS = "a64host@example.com"
+
+
+# red until A-64 (a)
+@pytest.mark.asyncio
+async def test_registration_and_the_profile_refuse_the_address_the_host_reserved(engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """UPROT-030 — A-64 (a): on a managed instance whose ``LIBREFOLIO_ADMIN_EMAIL`` is ``HOST_ADDRESS`` and whose owner has not yet clicked the confirmation link, a user could take that address first — in registration (``create_user`` with the reservation, as ``register_user`` calls it) or in the profile (``update_profile``) — and block the change. Now both answer ``EMAIL_TAKEN`` (the same answer as an address in use, so the reservation is not told) and write nothing. Barriers: another address goes through; the command line (``reserve_owner_address=False``) is the operator's and still can; on a self-hosted instance nothing is reserved."""
+    print_section("UPROT-030: the host's address is reserved on a managed instance")
+    _configure(monkeypatch, tmp_path, profile="managed", admin_email=HOST_ADDRESS)
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        member = User(username="a64_member", email="a64.member@example.com", hashed_password="x", is_active=True)
+        session.add(member)
+        await session.commit()
+
+        user, error = await user_service.create_user(session, "a64_new", HOST_ADDRESS.upper(), "Reserve-2026!", reserve_owner_address=True)
+        assert user is None and getattr(error, "code", None) == "EMAIL_TAKEN", f"registration must be refused with EMAIL_TAKEN: {(user, error)!r}"
+
+        updated, error = await user_service.update_profile(session, member.id, email=HOST_ADDRESS)
+        assert updated is None and getattr(error, "code", None) == "EMAIL_TAKEN", f"the profile must be refused with EMAIL_TAKEN: {(updated, error)!r}"
+
+        ok, error = await user_service.create_user(session, "a64_other", "a64.other@example.com", "Reserve-2026!", reserve_owner_address=True)
+        assert ok is not None and error is None, f"barrier: another address goes through: {error!r}"
+
+        operator, error = await user_service.update_profile(session, member.id, email=HOST_ADDRESS, reserve_owner_address=False)
+        assert operator is not None and error is None, f"the command line is the operator's and may: {error!r}"
+
+    unused = "a64.selfhosted.host@example.com"
+    _configure(monkeypatch, tmp_path, profile=None, admin_email=unused)
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        taken, taken_error = await user_service.create_user(session, "a64_selfhosted2", unused, "Reserve-2026!", reserve_owner_address=True)
+        assert taken is not None, f"self-hosted: nothing is reserved, not even the variable's address: {taken_error!r}"
+    print_success("reserved on managed, free elsewhere")
+
+
+# red until A-64 (a)
+@pytest.mark.asyncio
+@pytest.mark.parametrize("with_invitation", [pytest.param(False, id="open"), pytest.param(True, id="with-invitation")])
+async def test_register_user_refuses_the_address_the_host_reserved(engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, with_invitation: bool) -> None:
+    """UPROT-031 — A-64 (a), the wiring of registration: ``register_user`` — open, or with a valid invitation — on a managed instance refuses ``HOST_ADDRESS`` with ``ACCOUNT_EXISTS`` (the answer of an address in use) and writes no account. Barrier: another address registers. If someone removed ``reserve_owner_address=True`` from ``register_user``, this is the case that turns red."""
+    print_section("UPROT-031: register_user and the host's address")
+    from backend.app.services.accounts import registration_service  # noqa: PLC0415 — after _configure, which sets the environment the module reads
+
+    _configure(monkeypatch, tmp_path, profile="managed", admin_email=HOST_ADDRESS)
+    monkeypatch.setenv("LIBREFOLIO_REGISTRATION", "open")
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        session.add(User(username="a64_first", email="a64.first@example.com", hashed_password="x", is_active=True, is_superuser=True))
+        await session.commit()
+
+        async def invite() -> str | None:
+            if not with_invitation:
+                return None
+            issued = await registration_service.create_invite(session, created_by_user_id=None)
+            await session.commit()
+            return issued.token
+
+        with pytest.raises(registration_service.RegistrationError) as refused:
+            await registration_service.register_user(session, username="a64_reg", email=HOST_ADDRESS, password="Reserve-2026!Aa", invite_token=await invite())
+        assert refused.value.code == "ACCOUNT_EXISTS", f"the reserved address is refused as an address in use: {refused.value.code}"
+        assert (await session.execute(select(User).where(User.username == "a64_reg"))).scalar_one_or_none() is None, "no account was written"
+
+        user = await registration_service.register_user(session, username="a64_reg", email="a64.reg@example.com", password="Reserve-2026!Aa", invite_token=await invite())
+        assert user.id is not None, "barrier: another address registers"
+    print_success("refused, nothing written")
+
+
+# red until A-64 (a)
+@pytest.mark.asyncio
+async def test_the_recorded_owner_may_hold_the_reserved_address(engine: AsyncEngine, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """UPROT-032 — A-64 (a), the exemption: the account recorded as owner (``is_instance_owner``) changing its profile to ``HOST_ADDRESS`` is allowed (the reservation is against strangers). Removing ``not user.is_instance_owner`` turns this red; a stranger is refused (UPROT-030)."""
+    print_section("UPROT-032: the owner")
+    _configure(monkeypatch, tmp_path, profile="managed", admin_email=HOST_ADDRESS)
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        owner = User(username="a64_owner", email="a64.oldowner@example.com", hashed_password="x", is_active=True, is_superuser=True, is_instance_owner=True)
+        session.add(owner)
+        await session.commit()
+
+        changed, error = await user_service.update_profile(session, owner.id, email=HOST_ADDRESS)
+        assert changed is not None and error is None, f"the recorded owner may take the address: {error!r}"
+    print_success("owner exempt")
+
+
+# red until A-64 (a)
+@pytest.mark.asyncio
+async def test_the_command_line_may_give_an_account_the_reserved_address(engine: AsyncEngine, user_cli: ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """UPROT-033 — A-64 (a): ``./dev.py user set-email`` is the operator's emergency exit, above the reservation (it passes ``reserve_owner_address=False``). Removing that turns this red."""
+    print_section("UPROT-033: the command line")
+    _configure(monkeypatch, tmp_path, profile="managed", admin_email=HOST_ADDRESS)
+    async with AsyncSession(engine, expire_on_commit=False) as session:
+        session.add(User(username="a64_cli_member", email="a64.climember@example.com", hashed_password="x", is_active=True))
+        await session.commit()
+
+    assert await user_cli.cmd_set_email("a64_cli_member", HOST_ADDRESS) is True, "the operator's command may"
+    print_success("command line exempt")
