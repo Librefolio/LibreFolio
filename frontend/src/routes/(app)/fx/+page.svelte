@@ -32,7 +32,8 @@
     import {formatSignalProblem} from '$lib/components/charts/chartSignalsHelpers';
     import {DEFAULT_COMPACT_PLOT_WIDTH_PX} from '$lib/components/charts/timeSeriesAggregation';
     import {buildFxCalendarQuery, estimateFxCalendarDays, fxCalendarRequest, type FxCalendarCardInput, type FxCalendarEntry} from '$lib/utils/reducedFxQuery';
-    import {sendBulkBatches} from '$lib/api/bulkBatches';
+    import {MIN_START, sendBulkBatches} from '$lib/api/bulkBatches';
+    import {firstDateOf, forgetFirstDate, isFirstDateKnown, rememberFirstDate, rememberNoSeries} from '$lib/stores/firstSeriesDates';
     import {onPricesCaughtUp} from '$lib/features/price-refresh/onPricesCaughtUp';
     import {comparisonTargetFromStore, ensureComparisonSeries} from '$lib/charts/comparisonSeries';
     import {comparisonTargetIds} from '$lib/utils/reducedPriceQuery';
@@ -389,7 +390,33 @@
         if (!isMaxPending) return;
         const firstDates = pairs.map((p) => p.data?.[0]?.date).filter((d): d is string => !!d);
         if (firstDates.length === 0) return;
-        dateStart = firstDates.reduce((min, d) => (d < min ? d : min));
+        const oldest = firstDates.reduce((min, d) => (d < min ? d : min));
+        // FB-7b: each pair's first day is kept for the session; a pair that starts after the oldest has nothing between, so its
+        // store is marked fetched from the oldest and a later look at that range asks nothing
+        for (const pair of pairs) {
+            const first = pair.data?.[0]?.date;
+            if (!first) {
+                if (!pair.loading) rememberNoSeries('fx', pair.config.slug);
+                continue;
+            }
+            rememberFirstDate('fx', pair.config.slug, first);
+            if (first > oldest) getFxStore(pair.config.slug).markFetched(oldest, first);
+        }
+        dateStart = oldest;
+        displayDateStart = dateStart;
+        isMaxPending = false;
+    }
+
+    /**
+     * FB-7b: «All» still pending and every listed pair's first day already known this session: «All» starts at the oldest of them,
+     * as a real day, and the rates come from the stores, never asked from the `min` sentinel again.
+     */
+    function adoptKnownFirstDays() {
+        if (!isMaxPending || pairs.length === 0) return;
+        if (pairs.some((pair) => !isFirstDateKnown('fx', pair.config.slug))) return;
+        const days = pairs.map((pair) => firstDateOf('fx', pair.config.slug)).filter((day): day is string => day !== undefined);
+        if (days.length === 0) return;
+        dateStart = days.reduce((min, day) => (day < min ? day : min));
         displayDateStart = dateStart;
         isMaxPending = false;
     }
@@ -406,6 +433,8 @@
      */
     function rearmMaxPendingBeforeReload() {
         if (activePreset !== 'MAX') return;
+        // FB-7b: a sync, a refresh or a catch-up may have moved a pair's first day: the listed ones are asked again
+        for (const pair of pairs) forgetFirstDate('fx', pair.config.slug);
         isMaxPending = true;
         dateStart = resolveDateSentinel('min');
         displayDateStart = 'min';
@@ -417,6 +446,14 @@
      * columns come both ways and depend on none of them (X-R60).
      */
     async function fetchAllPairData(propagateError = false, silent = false) {
+        adoptKnownFirstDays();
+        // FB-7b: «All» still to be settled: the Δ over the range needs its first day, which the rates' answers give; asked together,
+        // it would be valued from a day nobody knows
+        if (isMaxPending) {
+            await Promise.all([fetchAllPairSeries(propagateError, silent), fetchCalendarReturns(undefined, silent), fetchComparisonSeries([], silent)]);
+            await loadPeriodChanges(silent);
+            return;
+        }
         await Promise.all([fetchAllPairSeries(propagateError, silent), loadPeriodChanges(silent), fetchCalendarReturns(undefined, silent), fetchComparisonSeries([], silent)]);
     }
 
@@ -495,7 +532,7 @@
                 continue;
             }
             const windowDays = calendarReturnWindowDays(effectiveCalendarReturnWindow(settings, rangeDays)) ?? 30;
-            cards.push({slug, base: pair.config.base, quote: pair.config.quote, inverted: isCardInverted(slug), plotWidthPx: DEFAULT_COMPACT_PLOT_WIDTH_PX, start: dateStart, end: dateEnd, windowDays, pairTargets: pairTargetsOf(settings.signals)});
+            cards.push({slug, base: pair.config.base, quote: pair.config.quote, inverted: isCardInverted(slug), plotWidthPx: DEFAULT_COMPACT_PLOT_WIDTH_PX, start: isMaxPending ? MIN_START : dateStart, end: dateEnd, windowDays, pairTargets: pairTargetsOf(settings.signals)});
             calendarRequestOfSlug.set(slug, requestId);
             // While the new return loads, the old one stays on screen. A silent reload (a catch-up) keeps its state as well: the page does not say busy.
             const previous = next.get(slug);
@@ -654,6 +691,10 @@
         const current = () => pageAlive && isClientSessionCurrent(sessionGeneration);
         if (!current() || pairs.length === 0) return;
         void getSettingsVersion();
+        adoptKnownFirstDays();
+        // FB-7b: «All» pending, the first days unknown: the rates are asked from the sentinel `min` (the server answers each pair's first
+        // stored day, whatever its year), never from a made-up start; the stores are marked from the first rate that came
+        const askedFromMin = isMaxPending;
 
         const bulkRequests: Array<{
             slug: string;
@@ -686,7 +727,7 @@
                 requestVersion,
             });
 
-            const needsRates = store.getMissingIntervals(dateStart, dateEnd).length > 0;
+            const needsRates = askedFromMin || store.getMissingIntervals(dateStart, dateEnd).length > 0;
             if (!needsRates) {
                 // Fast path: already cached — nothing to wait for, so clear the
                 // per-card skeleton here too (this branch never reaches the bulk
@@ -703,7 +744,7 @@
             if (needsRates || plan.requests.length > 0) {
                 bulkRequests.push({
                     slug: pair.config.slug,
-                    start: dateStart,
+                    start: askedFromMin ? MIN_START : dateStart,
                     end: dateEnd,
                     signals: plan.requests,
                     displayedInverted: isCardInverted(pair.config.slug),
@@ -745,6 +786,17 @@
         } catch (requestError) {
             if (!current()) return;
             console.error('Failed to fetch FX rates/signals bulk:', requestError);
+            // FB-7b: asked from `min`, the list goes in more batches than from a made-up start, and a batch whose pairs all have no
+            // rate is answered 404, `All conversions failed`: the pairs of the batches that answered are already in their stores. A 404
+            // is «no rates here», not a failure: those pairs stay without data, and «All» settles on the others'.
+            if (askedFromMin && (requestError as {response?: {status?: number}})?.response?.status === 404) {
+                for (const nf of needFetch) {
+                    const stored = getFxStore(nf.slug);
+                    pairs[nf.index] = {...pairs[nf.index], data: stored.getRange(firstDateOf('fx', nf.slug) ?? dateEnd, dateEnd).data, loading: false};
+                }
+                resolveMaxStartFromPairs();
+                return;
+            }
             // X-R58: a request the backend refused as too large is said, not left as cards without rates.
             const refusal = bulkRefusalMessage(requestError, $_);
             if (refusal !== null) toasts.error(refusal);
@@ -771,7 +823,8 @@
         const plan = buildBackendSignalRequestPlan(configs, signalDefinitions);
         const state = resultStateForPair(pair.config.slug);
         const requestVersion = state.beginRequest();
-        const needsRates = store.getMissingIntervals(dateStart, dateEnd).length > 0;
+        const askedFromMin = isMaxPending;
+        const needsRates = askedFromMin || store.getMissingIntervals(dateStart, dateEnd).length > 0;
 
         if (!needsRates && plan.requests.length === 0) {
             pairs[index] = {...pair, data: store.getRange(dateStart, dateEnd).data};
@@ -788,7 +841,7 @@
             const result = await loadFxRatesAndSignalsBulk([
                 {
                     slug: pair.config.slug,
-                    start: dateStart,
+                    start: askedFromMin ? MIN_START : dateStart,
                     end: dateEnd,
                     signals: plan.requests,
                     displayedInverted: isCardInverted(pair.config.slug),

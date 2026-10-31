@@ -20,7 +20,8 @@ import {TimeSeriesStore} from './core/TimeSeriesStore';
 import {registerPortfolioMutationListener} from './portfolio/portfolioMutation';
 import type {ChainStep} from '$lib/utils/currency/currencyGraph';
 import {zodiosApi} from '$lib/api';
-import {BULK_SIGNAL_MARGIN_DAYS, bulkRangeDays, sendBulkBatches} from '$lib/api/bulkBatches';
+import {BULK_SIGNAL_MARGIN_DAYS, MIN_START, bulkRangeDays, sendBulkBatches} from '$lib/api/bulkBatches';
+import {rememberFirstDate} from '$lib/stores/firstSeriesDates';
 import {todayIso} from '$lib/utils/dateOnly';
 import {schemas} from '$lib/api/generated';
 import {z} from 'zod';
@@ -360,6 +361,10 @@ export async function ensureFxRangeLoadedBulk(requests: Array<{slug: string; sta
 
 export interface FxRatesAndSignalsBulkRequest {
     slug: string;
+    /**
+     * The first day asked, or the sentinel `min` (FB-7b): the pair's first stored rate, which the server answers. The store is then
+     * marked fetched from the first rate that came, and the session remembers that day.
+     */
     start: string;
     end: string;
     signals: Array<z.input<typeof schemas.SignalRequest>>;
@@ -388,8 +393,8 @@ export async function loadFxRatesAndSignalsBulk(requests: FxRatesAndSignalsBulkR
 
     for (const request of requests) {
         const store = getFxStore(request.slug);
-        const gaps = store.getMissingIntervals(request.start, request.end);
-        if (request.signals.length > 0) {
+        const gaps = request.start === MIN_START ? [] : store.getMissingIntervals(request.start, request.end);
+        if (request.signals.length > 0 || request.start === MIN_START) {
             entries.push(request);
             continue;
         }
@@ -403,6 +408,7 @@ export async function loadFxRatesAndSignalsBulk(requests: FxRatesAndSignalsBulkR
     }
 
     const signalsBySlug = new Map<string, Array<z.output<typeof schemas.SignalResult>>>();
+    const firstDaysAsked = new Map<string, string>();
 
     if (entries.length > 0) {
         const toConvertRequest = (entry: RequestEntry) => {
@@ -445,6 +451,15 @@ export async function loadFxRatesAndSignalsBulk(requests: FxRatesAndSignalsBulkR
         for (const [slug, points] of pointsBySlug) {
             if (points.length > 0) getFxStore(slug).merge(points);
         }
+        // Asked from `min`: nothing exists before the first rate that came, and the session keeps its day
+        for (const entry of entries) {
+            if (entry.start !== MIN_START) continue;
+            const days = (pointsBySlug.get(entry.slug) ?? []).map((point) => point.date);
+            if (days.length === 0) continue;
+            const firstDay = days.reduce((earliest, day) => (day < earliest ? day : earliest));
+            firstDaysAsked.set(entry.slug, firstDay);
+            rememberFirstDate('fx', entry.slug, firstDay);
+        }
 
         // A request_index is local to the request that carried it: it points into that batch's entries.
         for (const {batch, answer} of outcome.answers) {
@@ -458,7 +473,8 @@ export async function loadFxRatesAndSignalsBulk(requests: FxRatesAndSignalsBulkR
 
         for (const {batch} of outcome.answers) {
             for (const entry of batch.items) {
-                getFxStore(entry.slug).markFetched(entry.start, entry.end);
+                const firstDay = entry.start === MIN_START ? firstDaysAsked.get(entry.slug) : entry.start;
+                if (firstDay !== undefined) getFxStore(entry.slug).markFetched(firstDay, entry.end);
             }
         }
 
@@ -466,7 +482,7 @@ export async function loadFxRatesAndSignalsBulk(requests: FxRatesAndSignalsBulkR
             const error = outcome.error as any;
             if (error?.response?.status === 404) {
                 for (const entry of outcome.failedBatch?.items ?? []) {
-                    getFxStore(entry.slug).markFetched(entry.start, entry.end);
+                    if (entry.start !== MIN_START) getFxStore(entry.slug).markFetched(entry.start, entry.end);
                 }
             }
             throw error;
@@ -474,7 +490,7 @@ export async function loadFxRatesAndSignalsBulk(requests: FxRatesAndSignalsBulkR
     }
 
     return {
-        dataBySlug: new Map(requests.map((request) => [request.slug, getFxStore(request.slug).getRange(request.start, request.end).data])),
+        dataBySlug: new Map(requests.map((request) => [request.slug, getFxStore(request.slug).getRange(request.start === MIN_START ? (firstDaysAsked.get(request.slug) ?? request.end) : request.start, request.end).data])),
         signalsBySlug,
     };
 }

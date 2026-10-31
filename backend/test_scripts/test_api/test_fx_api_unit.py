@@ -1205,7 +1205,11 @@ def _xr41_convert_bulk(monkeypatch: pytest.MonkeyPatch, rates: dict[tuple[str, s
 
     double = AsyncMock(side_effect=_convert)
     monkeypatch.setattr(fx_currencies_api, "convert_bulk", double)
-    monkeypatch.setattr(fx_currencies_api, "unit_rate_steps", steps_double(lambda source, destination, day: day if source == destination else filled.get(day, day)))
+    monkeypatch.setattr(
+        fx_currencies_api,
+        "unit_rate_steps",
+        steps_double(lambda source, destination, day: day if source == destination else filled.get(day, day), lambda source, destination, _day: rates.get((source, destination), Decimal(1))),
+    )
     return double
 
 

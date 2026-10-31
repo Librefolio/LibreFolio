@@ -41,6 +41,8 @@ def converted_point(
         currency="EUR",
         original_close=Decimal(native_close),
         original_currency="USD",
+        # MF-A13: the unit rate of the day's step, which the price query always gives a converted point
+        fx_rate=Decimal(target_close) / Decimal(native_close),
         source_plugin_key=source,
         backward_fill_info=(
             AssetBackwardFillInfo(
@@ -432,7 +434,9 @@ def test_fx_fingerprint_is_order_independent_and_content_sensitive():
         target_currency="EUR",
     )
     changed_results = fixture_results()
-    changed_results[0].prices[1] = changed_results[0].prices[1].model_copy(update={"close": Decimal("92")})
+    moved = changed_results[0].prices[1]
+    # the fingerprint covers the rate the point was converted with (MF-A13): the close moves with it, as a converted close does
+    changed_results[0].prices[1] = moved.model_copy(update={"close": Decimal("92"), "fx_rate": Decimal("92") / moved.original_close})
     changed = prepare_asset_series_set(
         changed_results,
         requested_range=request_range,

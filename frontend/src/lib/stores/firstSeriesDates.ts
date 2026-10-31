@@ -17,7 +17,8 @@ import {registerPortfolioMutationListener} from './portfolio/portfolioMutation';
 
 export type SeriesKind = 'asset' | 'fx';
 
-const firstDates = new Map<string, string>();
+/** The first day of a series, or `null` for a series that answered with no point at all (an asset with no price, a pair with no rate). */
+const firstDates = new Map<string, string | null>();
 
 function keyOf(kind: SeriesKind, id: number | string): string {
     return `${kind}:${id}`;
@@ -27,12 +28,26 @@ function keyOf(kind: SeriesKind, id: number | string): string {
 export function rememberFirstDate(kind: SeriesKind, id: number | string, date: string): void {
     const key = keyOf(kind, id);
     const held = firstDates.get(key);
-    if (held === undefined || date < held) firstDates.set(key, date);
+    if (held === undefined || held === null || date < held) firstDates.set(key, date);
 }
 
-/** The earliest date remembered for the series, or `undefined`. */
+/**
+ * Remember that the series answered with no point: a list that asks all its series at once knows then that nothing is left to find
+ * out about it, and starts the next «All» from the others' first days. A date remembered for the series is kept.
+ */
+export function rememberNoSeries(kind: SeriesKind, id: number | string): void {
+    const key = keyOf(kind, id);
+    if (!firstDates.has(key)) firstDates.set(key, null);
+}
+
+/** The earliest date remembered for the series, or `undefined` (nothing remembered, or the series has no point). */
 export function firstDateOf(kind: SeriesKind, id: number | string): string | undefined {
-    return firstDates.get(keyOf(kind, id));
+    return firstDates.get(keyOf(kind, id)) ?? undefined;
+}
+
+/** Whether the series was seen this session: it has a first day, or it is known to have no point. */
+export function isFirstDateKnown(kind: SeriesKind, id: number | string): boolean {
+    return firstDates.has(keyOf(kind, id));
 }
 
 export function forgetFirstDate(kind: SeriesKind, id: number | string): void {

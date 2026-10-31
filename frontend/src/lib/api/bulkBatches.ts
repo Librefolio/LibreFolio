@@ -27,13 +27,19 @@ export const BULK_SPLIT_MAX_DEPTH = 4;
 /** The backend's 100-year span (`RANGE_SPAN_LIMIT_DAYS`, lot X-R55): no range reaches further back from its end. */
 export const BULK_RANGE_SPAN_DAYS = 36_525;
 
-/** The days a range covers once the backend cuts it: at tomorrow, and 100 years back from its end; 0 when empty. */
+/** The start a page sends for «All» while the first stored day of the series is unknown: the server answers it with that day (FB-7b). */
+export const MIN_START = 'min';
+
+/**
+ * The days a range covers once the backend cuts it: at tomorrow, and 100 years back from its end; 0 when empty.
+ * A `min` start is a first day nobody here knows: it counts the most the backend allows, the whole 100-year span, never a guessed year.
+ */
 export function bulkRangeDays(start: string, end: string | null | undefined, today: string): number {
     const ceiling = addDays(today, 1);
-    const requestedEnd = end ?? start;
+    const requestedEnd = end ?? (start === MIN_START ? ceiling : start);
     const cutEnd = requestedEnd > ceiling ? ceiling : requestedEnd;
     const floor = addDays(cutEnd, -(BULK_RANGE_SPAN_DAYS - 1));
-    const cutStart = start < floor ? floor : start;
+    const cutStart = start === MIN_START || start < floor ? floor : start;
     return Math.max(0, daysBetween(cutStart, cutEnd) + 1);
 }
 
