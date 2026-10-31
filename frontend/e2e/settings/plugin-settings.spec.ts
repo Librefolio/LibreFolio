@@ -395,7 +395,8 @@ test.describe('Settings › Plugins — read only', () => {
                 // The options, looked at and left: the list opened, then closed with Escape, nothing chosen.
                 const trigger = field.getByTestId('plugin-setting-select-button');
                 await trigger.click();
-                const dropdown = field.getByTestId('plugin-setting-select-dropdown');
+                // The list of a SimpleSelect is in a portal on <body>, not inside the select: looked up from the page
+                const dropdown = field.page().getByTestId('plugin-setting-select-dropdown');
                 await expect(dropdown).toBeVisible();
                 await expect(dropdown.getByRole('option'), `${plugin.code} declares ${plugin.options.join(', ')}`).toHaveCount(plugin.options.length);
                 for (const value of plugin.options) await expect(dropdown.getByTestId(`plugin-setting-option-${value}`)).toBeVisible();
