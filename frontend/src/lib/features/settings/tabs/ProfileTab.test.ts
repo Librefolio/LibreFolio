@@ -1673,3 +1673,50 @@ describe('ProfileTab — a new username holding @, refused by the server (A-21a)
         expect(username()).toHaveValue('alice');
     });
 });
+
+/**
+ * A6-1 (A-28 and A-36): the e-mail row follows what the server keeps and what it asks.
+ *
+ *   - A-28: the server stores the address in its own form (the domain in lower case): once saved, the input takes that
+ *     form, so the row settles instead of staying «modified» for an address that is stored;
+ *   - A-36: where the tab and the server disagree on «same address» (here, only the capitals of the local part differ,
+ *     which the tab reads as no change), the server answers 400 CURRENT_PASSWORD_REQUIRED. The tab then asks for the
+ *     password (the field appears), keeps the address typed, and reads the stored address again; typing the password
+ *     sends it with the address.
+ */
+describe('ProfileTab — the e-mail row follows the server (A-28, A-36)', () => {
+    // red until A6-1
+    it('A-28: after a save, the input takes the address in the form the server kept, and the row settles', async () => {
+        checkAuth.mockImplementationOnce(async () => {
+            user.set({username: 'alice', email: 'Alice@example.com', created_at: '2024-03-05T10:00:00Z'});
+        });
+        await mountUnlocked();
+        await type(email(), 'Alice@Example.COM');
+
+        await fireEvent.click(fieldButtons('profile-email', 'save')[0]);
+
+        await waitFor(() => expect(email()).toHaveValue('Alice@example.com'));
+        await waitFor(() => expect(fieldButtons('profile-email', 'save')).toHaveLength(0));
+    });
+
+    // red until A6-1
+    it('A-36: a 400 CURRENT_PASSWORD_REQUIRED on an address the tab read as unchanged shows the password field, keeps the address and reads the stored one again', async () => {
+        profilePut().mockRejectedValueOnce(axiosError({error_code: 'CURRENT_PASSWORD_REQUIRED', message: 'Current password is required'}));
+        await mountUnlocked();
+        await type(email(), 'Alice@example.com');
+        expect(emailPassword(), 'premise: the tab reads capitals only as no change').toBeNull();
+
+        await fireEvent.click(fieldButtons('profile-email', 'save')[0]);
+
+        await waitFor(() => expect(emailPassword()).not.toBeNull());
+        expect(email()).toHaveValue('Alice@example.com');
+        expect(checkAuth, 'the stored address is read again').toHaveBeenCalled();
+
+        await typeEmailPassword(CURRENT_PASSWORD);
+        profilePut().mockClear();
+        await fireEvent.click(fieldButtons('profile-email', 'save')[0]);
+
+        await waitFor(() => expect(profilePut()).toHaveBeenCalledTimes(1));
+        expect(profilePut()).toHaveBeenCalledWith({email: 'Alice@example.com', current_password: CURRENT_PASSWORD});
+    });
+});

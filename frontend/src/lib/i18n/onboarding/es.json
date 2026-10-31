@@ -94,7 +94,8 @@
       "fx_page_guide": "Resumen de FX",
       "fx_detail_guide": "Guía de detalles del par de divisas",
       "asset_page_guide": "Resumen de activos",
-      "asset_detail_guide": "Guía de detalles del activo"
+      "asset_detail_guide": "Guía de detalles del activo",
+      "tools_page_guide": "Página de herramientas"
     },
     "status": {
       "pending": "Pendiente",
@@ -115,7 +116,8 @@
         "transactions": "Transacciones",
         "broker": "Brókeres",
         "fx": "FX",
-        "asset": "Activos"
+        "asset": "Activos",
+        "tools": "Herramientas"
       },
       "armedToast": "{flow} está listo en este navegador. Abre la función para empezar.",
       "cancelArmed": "Cancelar activación",
@@ -399,6 +401,18 @@
         "risk": {
           "title": "Escenarios de riesgo",
           "description": "Abre Riesgo para examinar medidas históricas, escenarios de estrés, simulaciones y el contexto de la cartera."
+        }
+      }
+    },
+    "toolsPageGuide": {
+      "steps": {
+        "overview": {
+          "title": "Tus herramientas",
+          "description": "Cada tarjeta es una herramienta que trabaja con los datos que elijas. Abre una tarjeta para usar esa herramienta; las nuevas herramientas aparecen aquí cuando están disponibles."
+        },
+        "refresh": {
+          "title": "Recarga la lista",
+          "description": "Recarga la lista si falta una herramienta o parece desactualizada."
         }
       }
     }

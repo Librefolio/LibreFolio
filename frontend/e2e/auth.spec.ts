@@ -137,7 +137,7 @@ test.describe('Authentication', () => {
     // «Register here» follows the instance's registration mode (K, step 22; accounts lot A5b). The login card reads
     // `GET /api/v1/system/instance` and offers the link only when `accounts.registration_mode` is 'open' — or, since
     // accounts lot A6d, when `accounts.first_account_open` is true: the first account of an empty instance can always be
-    // created; until the instance answers, the defaults apply and the link stays. In 'invite' the backend refuses
+    // created; until the instance answers (`data-instance="pending"` on the card) no link is offered (A6-2), and a failed request leaves the defaults. In 'invite' the backend refuses
     // `POST /auth/register` without an invitation, in 'disabled' with one too (403), so a link offered anyway would end
     // in a refusal after a filled-in form. Those two modes are served to this page only — the real response with that one
     // field changed, never a hand-built body (Zodios validates the response) — and never written: the mode is a global
@@ -147,7 +147,7 @@ test.describe('Authentication', () => {
     test.describe('Register link and the registration setting', () => {
         for (const mode of ['disabled', 'invite'] as const) {
             test(`the login page withdraws «Register here» once the instance answers registration_mode '${mode}'`, async ({page}) => {
-                // Held until the test has seen the defaults: the link must be there before the answer, and go because of it.
+                // Held until the test has seen the pending card: no link before the answer, and none after it because of it.
                 const stub = await serveRegistrationMode(page, mode, {hold: true});
                 try {
                     await openLoginPage(page);
@@ -157,11 +157,13 @@ test.describe('Authentication', () => {
 
                     // The read has reached the stub and waits there: until it is delivered, a link on screen is the default.
                     await expect.poll(() => stub.requested, {message: `The login page never asked GET ${INSTANCE_CONFIG_PATH}: it cannot know how this instance registers accounts`, timeout: 10_000}).toBeGreaterThan(0);
-                    await expect(page.getByTestId('goto-register'), 'Until the instance answers, the defaults apply: the link is offered').toBeVisible();
+                    await expect(page.getByTestId('login-modal'), 'Until the instance answers, the card says so').toHaveAttribute('data-instance', 'pending');
+                    await expect(page.getByTestId('goto-register'), 'Until the instance answers, no link is offered (A6-2): nothing to withdraw afterwards').toBeHidden();
 
                     stub.release();
                     await expect.poll(() => stub.answered, {message: `The held answer of GET ${INSTANCE_CONFIG_PATH} was never delivered`, timeout: 10_000}).toBeGreaterThan(0);
                     expect(stub.problems, `The stub could not answer registration_mode '${mode}': the precondition is broken, not the page`).toEqual([]);
+                    await expect(page.getByTestId('login-modal'), 'The answer is applied: the card is ready').toHaveAttribute('data-instance', 'ready', {timeout: 5_000});
 
                     await expect(page.getByTestId('goto-register'), `Registration is '${mode}': the login page must not offer «Register here»`).toBeHidden({timeout: 5_000});
                     await expect(page.getByTestId('goto-forgot'), 'Only the register link goes: the rest of the card stays').toBeVisible();
@@ -172,8 +174,8 @@ test.describe('Authentication', () => {
         }
 
         // The positive control of the two above, on the same path: the real answer goes through the stub untouched and is
-        // recorded. Its limit: the defaults offer the link too, and the card publishes no state for «answer applied», so
-        // this shows the link offered once the answer has been delivered, not proved drawn from it.
+        // recorded. The card publishes `data-instance="ready"` once the answer is applied, and the link is
+        // only offered then.
         test('the lane answers registration_mode open, and the login page offers «Register here»', async ({page}) => {
             const stub = await serveRegistrationMode(page, null);
             try {
@@ -192,16 +194,14 @@ test.describe('Authentication', () => {
 
         // A6d (decision 36): the first account of an empty instance can always be created — it becomes the administrator
         // — so the link stays while `accounts.first_account_open` is true, whatever the mode; a new install defaults to
-        // invite. One load that keeps the link would prove nothing: the defaults offer it before the answer too, and the
-        // card publishes no state for «answer applied». Hence two loads of the same mode, invite, through the hold of the
+        // invite. The card is pending, without the link, until the answer is applied. Two loads of the same mode, invite, through the hold of the
         // two tests above, whose answers differ only by the flag: with false the link goes once the held answer is
         // delivered — on this very path an invite answer is applied — and with true it is still offered after delivery.
-        // The limit that remains: the true half is checked once the stub has delivered its answer, and the card cannot say
-        // it has applied it; the pairing with the false half, not a state, is what gives that half its teeth.
+        // Both halves wait for `data-instance="ready"` before they assert what the link does.
         test('the login page keeps «Register here» on an instance by invitation while it has no account: first_account_open alone decides (A6d)', async ({page}) => {
             /**
              * One load of the login page whose GET /system/instance is answered with registration_mode 'invite' and
-             * `firstAccountOpen`, held until the defaults have been seen: the steps of the two tests above, for both
+             * `firstAccountOpen`, held until the pending card has been seen: the steps of the two tests above, for both
              * halves alike. `outcome` asserts what the page offers once that answer has been delivered.
              */
             async function inviteAnswered(firstAccountOpen: boolean, outcome: () => Promise<void>): Promise<void> {
@@ -215,12 +215,14 @@ test.describe('Authentication', () => {
 
                     // The read has reached the stub and waits there: until it is delivered, a link on screen is the default.
                     await expect.poll(() => stub.requested, {message: `The login page never asked GET ${INSTANCE_CONFIG_PATH}: it cannot know how this instance registers accounts`, timeout: 10_000}).toBeGreaterThan(0);
-                    await expect(page.getByTestId('goto-register'), 'Until the instance answers, the defaults apply: the link is offered').toBeVisible();
+                    await expect(page.getByTestId('login-modal'), 'Until the instance answers, the card says so').toHaveAttribute('data-instance', 'pending');
+                    await expect(page.getByTestId('goto-register'), 'Until the instance answers, no link is offered (A6-2): nothing to withdraw afterwards').toBeHidden();
 
                     stub.release();
                     await expect.poll(() => stub.answered, {message: `The held answer of GET ${INSTANCE_CONFIG_PATH} was never delivered`, timeout: 10_000}).toBeGreaterThan(0);
                     expect(stub.problems, `The stub could not answer ${answer}: the precondition is broken, not the page`).toEqual([]);
                     expect([...new Set(stub.servedFirstAccountOpen)], `The answer delivered must carry ${answer}`).toEqual([firstAccountOpen]);
+                    await expect(page.getByTestId('login-modal'), 'The answer is applied: the card is ready').toHaveAttribute('data-instance', 'ready', {timeout: 5_000});
 
                     await outcome();
                 } finally {

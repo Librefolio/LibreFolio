@@ -44,6 +44,7 @@ ONBOARDING_FLOW_VERSIONS: Mapping[OnboardingFlow, int] = {
     OnboardingFlow.ASSET_PAGE_GUIDE: 1,
     OnboardingFlow.ASSET_GUIDE: 1,
     OnboardingFlow.ASSET_DETAIL_GUIDE: 1,
+    OnboardingFlow.TOOLS_PAGE_GUIDE: 1,
 }
 
 ONBOARDING_FLOW_STEPS: Mapping[OnboardingFlow, tuple[str, ...]] = {

@@ -9103,3 +9103,49 @@ La sessione di E non c'è più: in questo lotto i suoi file (`i18n/email/*`, `se
 - `user_service.create_password_reset(..., email=None)` additivo (marcatura informativa). Docs: `admin/hosting_providers.en.md`, «Restoring a Backup on a Managed Instance: the Owner» (`#restore-owner`); la sezione completa del ripristino è di B.
 - **Modale** `features/backup/OwnerChoiceModal.svelte` (+ test, OCM-01…13): utente con l'email del titolare preselezionato e scelta forzata, altrimenti si sceglie; avviso sempre visibile; `busy`; 10 chiavi `backup.ownerChoice.*` ×4. Solo ruoli di colore.
 - **Rossi → verdi**: servizi 24 (15 rossi contro il codice attuale), modale 22; `front check` 0/0; `i18n check` 5184 chiavi.
+
+## Ondata 6 · A (30/10/2026; base `5efc0d973`; sessione A su Sonnet; corsia 6215)
+
+Lotti 1–3 (checkpoint 1): A6-4, A6-5, A6-2. Poi 4–6, 7–8, 9–11 (kickoff-A).
+
+### A6-4 · H-8: il comando Docker della password dimenticata ✅ (30/10)
+> **Note implementazione**: `ForgotPasswordCard.svelte` mostra ora la riga `docker compose exec librefolio sh -c 'exec gosu … python dev.py "$@"' sh user reset …` (la stessa di `admin/docker_advanced`, «docker exec»), costante `DOCKER_RESET_COMMAND`. Rosso: `FPM-12` in `ForgotPasswordCard.managed.test.ts`. Docs: una riga di `admin/cli_tools.en.md`.
+
+### A6-5 · A-61: i controlli di sicurezza al cambio d'account ✅ (30/10)
+> **Note implementazione**: `securityChecks.svelte.ts` ha `reset()` e registra `registerClientSessionReset('securityChecks', …)` (solo lo store dell'app, non quelli di `createSecurityChecks()` dei test); una risposta in volo per l'account uscito è scartata con `isClientSessionCurrent(generation)`. Test: 2 casi in `securityChecks.test.ts`.
+
+### A6-2 · A-19: «Register here» non lampeggia più ✅ (30/10)
+> **Note implementazione**: `LoginCard.svelte` mostra il blocco solo con `instanceConfig.loaded || instanceConfig.failed` (se la richiesta fallisce valgono i default, aperto) e pubblica `data-instance="pending|ready"` sulla scheda. Test: 3 casi in `LoginCard.test.ts`.
+
+Checkpoint 1 committed as `f5c732634`. Checkpoint 2: A6-3, A6-1, A-21b.
+
+### A6-3 · A-17 + TC-1: ordine dei campi e requisiti per i lettori di schermo ✅ (31/10)
+> **Note implementazione**: `RegisterCard.svelte`: Email prima, poi Username, poi la password (il gestore di password prende come nome utente il campo subito prima della password). `PasswordStrength.svelte`: accanto a ✓/✗ un testo `sr-only` (`data-testid="password-rulestate-<key>"`) con le chiavi `auth.passwordStrength.ruleMet` / `ruleNotMet` (4 lingue, `dev.py i18n add`); le icone sono `aria-hidden`. Il testid non è `password-rule-state-…` perché `rulesDrawn()` dei test seleziona `^password-rule-`. Rossi: 1 in `RegisterCard.test.ts`, 1 in `PasswordStrength.test.ts`.
+
+### A6-1 · A-28 + A-36: la riga email del Profilo segue il server ✅ (31/10)
+> **Note implementazione**: `ProfileTab.svelte`: dopo un salvataggio l'input prende la forma conservata dal server (`adoptStoredEmail`, solo se è lo stesso indirizzo a meno delle maiuscole: un indirizzo diverso nello store non è ciò che si è appena salvato); su un 400 `CURRENT_PASSWORD_REQUIRED` per un indirizzo che la scheda legge come invariato la scheda mostra il campo password (`serverAsksPassword`), tiene l'indirizzo scritto e rilegge l'indirizzo salvato. Rossi: 2 in `ProfileTab.test.ts`.
+> **⚠️ Fuori pista**: la prima versione adottava sempre l'email dello store e rompeva il test esistente «tries every field…» (il mock di `checkAuth` non aggiorna lo store); la guardia `sameEmail` lo risolve.
+
+### A-21b · doppioni di username solo in ingresso ✅ (31/10)
+> **Note implementazione**: `user_service.username_is_taken()` (confronto `lower()`, A–Z come SQLite) in `create_user` e `update_profile` (l'account esclude se stesso, può cambiare le maiuscole del proprio nome). Nessuna migrazione, nessun indice; il login resta esatto. Test UNAME-040…042 in `test_username_rules.py` (2 rossi su HEAD, 1 guardia). Il testo della voce di backlog con la «010» non esiste più nel codice: la voce è del coordinatore. Docstring di `get_user_by_username_or_email` riscritta.
+
+Checkpoint 2 committed as `7183dda68`. Checkpoint 3: A-63, then A-64 (a), (c), (e).
+
+### A-63 · note della revisione di A5-1 ✅ (31/10)
+> **Note implementazione**: (a) `cmd_create_user` valida e normalizza l'indirizzo con `EmailStr` come `set-email` (UPROT-021/022, 2 rossi su HEAD). (c) `user_service.ProtectionContext` + `protection_context()`: `account_protection(user, context=None)`; `GET /users` legge profilo e titolare una volta (UPROT-020, rosso su HEAD: una lettura per riga). Lo stub a un argomento di `_protect` in `test_users_admin_api.py` accetta ora `context`. (b) ed (e): una frase in `admin/hosting_providers.en.md` (l'indirizzo dal solo ambiente; nessun `user delete`, togliere la variabile non toglie la protezione perché il marchio di titolare resta: serve cambiare il profilo).
+> **Non fatte**: (d) il controllo `warning` in `config_audit` è di H; (f) il limite di accesso per identificatore è indipendente da A5-1 (decisione di prodotto).
+
+### A-64 · note della revisione di A5-1b (a), (c) ✅ — (e) non fatta (31/10)
+> **Note implementazione**: (a) `user_service.owner_address_reserved()`; `create_user(..., reserve_owner_address=False)` (la registrazione passa True) e `update_profile(..., reserve_owner_address=True)` (la CLI `set-email` passa False; il titolare registrato può): sul `managed` nessun altro prende l'indirizzo di `LIBREFOLIO_ADMIN_EMAIL`, risposta `EMAIL_TAKEN` come per un indirizzo in uso (UPROT-030). Gli inviti non hanno bisogno di nulla: la registrazione con l'invito passa da `register_user`. (c) `build_email_changed(..., by_host=True)` con testi propri `intro_host`/`advice_host` in 4 lingue (EMM-042); `confirm_owner_email_change` li usa (`email_changed_work(..., by_host=True)`).
+> **Per decidere (e)**: il fallback per indirizzo prima della prima sync protegge «per indirizzo, anche un utente comune» ed è fissato dal contratto UPROT-002 (`ordinary-account`) di A5-1. Cambiarlo è una scelta di prodotto; con la riserva (a) nessun altro può prendere l'indirizzo, quindi la finestra è ridotta a chi lo aveva già prima della variabile. Non toccato.
+
+Checkpoint 3 committed as `bb9cd3546`. Checkpoint 4: A6-6, A6-7, 21-7.
+
+### A6-6 · A-38: la regola dei validatori di campi segreti ✅ (31/10)
+> **Note implementazione**: `security.md#validation-errors` dice la regola («il validatore di un campo segreto dice cosa non va, mai con cosa») e il limite per i campi pubblici (le valute); `test_secret_validator_messages.py` (SVM-001 controllo positivo, SVM-002 scansione `ast` di `backend/app/schemas` per ogni `field_validator` di un campo con `password|token|secret|key|credential` nel nome che formatta il valore), registrato in `schemas secret-validator-messages` (isolation pure). Mutazione: un validatore cattivo aggiunto a `auth.py` rende SVM-002 rosso. `common.py`: solo un commento sul validatore della valuta; il messaggio con il codice resta (campo pubblico, test esistenti lo vogliono).
+
+### A6-7 · 21-2: catalogo TS e registro Python dei flussi ✅ (31/10)
+> **Note implementazione**: `onboardingGuideCatalog.contract.test.ts` legge `onboarding_service.py` come testo e confronta flussi, `ONBOARDING_FLOWS` e i passi dei flussi gestiti a passi; registrato in `front_component_unit`. Mutazione (passo rinominato e un flusso tolto dal Python): 3 dei 4 casi rossi.
+
+### 21-7 · guida «Tools» ✅ (31/10)
+> **Note implementazione**: nuovo flusso `tools_page_guide` (versione 1, due passi `tools.page.overview` su `tools-hub` e `tools.page.refresh` sul pulsante di ricarica, entrambi sempre presenti), accodato in fondo all'enum. Parte quando il catalogo ha risposto (`ToolsHub`); il vecchio ancoraggio `tools.hub` diventa `tools.page.overview`. Gruppo «Tools» nelle ripetizioni. Testi in 4 lingue. Nessuna migrazione: la colonna `flow` è una stringa senza CHECK; la 004 riempie solo i flussi di 1.2, quindi per gli utenti esistenti il flusso nuovo parte «pending», come ogni guida nuova. Pronta per i tool futuri: si aggiungono passi o card senza toccare il registro.

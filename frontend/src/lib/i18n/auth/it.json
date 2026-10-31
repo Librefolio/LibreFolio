@@ -43,7 +43,9 @@
         "hasLowercase": "Una lettera minuscola",
         "hasNumber": "Un numero",
         "hasSpecial": "Un carattere speciale"
-      }
+      },
+      "ruleMet": "soddisfatto",
+      "ruleNotMet": "non soddisfatto"
     },
     "serverUnreachable": {
       "title": "Il server non risponde",

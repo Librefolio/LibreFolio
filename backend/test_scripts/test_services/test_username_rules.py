@@ -876,3 +876,66 @@ async def test_an_account_error_survives_copy_deepcopy_and_pickle(engine: AsyncE
     assert isinstance(duplicated, str) and str(duplicated) == str(refusal) == USERNAME_TAKEN_MESSAGE, f"{how} must give the original message as a str, {USERNAME_TAKEN_MESSAGE!r}: {duplicated!r}"
     assert getattr(duplicated, "code", None) == refusal.code, f"{how} must keep the code {refusal.code!r}: {_shown((None, duplicated))}"
     print_success(f"{how}: an AccountError {refusal.code}, {str(duplicated)!r}")
+
+
+# =============================================================================
+# A-21b — A NEW USERNAME IS NOT THE SAME NAME IN OTHER CAPITALS (input only, no migration)
+# =============================================================================
+
+
+def _recapitalised(name: str) -> str:
+    """``name`` with its first letter in the other case: the same name for the rule, a different string for SQLite."""
+    return name[0].swapcase() + name[1:]
+
+
+# red until A-21b
+@pytest.mark.asyncio
+async def test_create_user_refuses_a_username_that_differs_from_a_taken_one_only_by_capitals(engine: AsyncEngine, db_path: Path) -> None:
+    """UNAME-040 — A-21b, input only, red until A-21b (today the second account is created): with ``holder_<tag>`` taken, ``user_service.create_user`` of ``Holder_<tag>`` answers ``(None, error)`` with the code ``USERNAME_TAKEN`` and the message of an exact doublet, and writes nothing. Barrier: a different name goes through. No migration, no index: accounts already saved are not touched."""
+    print_section("UNAME-040: create_user with a taken username in other capitals")
+    holder = f"holder_{_tag()}"
+    await _add_account(engine, username=holder, email=_address("holder"))
+    before = _rows(db_path)
+
+    user, error = await _create(engine, _recapitalised(holder), _address("new"))
+
+    assert user is None and error, f"red until A-21b: {_recapitalised(holder)!r} must be refused beside {holder!r}: got {(user, error)!r}"
+    assert getattr(error, "code", None) == "USERNAME_TAKEN" and str(error) == USERNAME_TAKEN_MESSAGE, f"the answer of an exact doublet: {error!r}"
+    assert _changed(before, _rows(db_path)) == [], "a refused create_user must write nothing"
+    fresh = f"fresh_{_tag()}"
+    created = await _create(engine, fresh, _address("new"))
+    assert created[0] is not None and created[1] is None, f"barrier: a different name goes through: {created!r}"
+    print_success("capitals-only doublet refused, nothing written")
+
+
+# red until A-21b
+@pytest.mark.asyncio
+async def test_update_profile_refuses_a_username_that_differs_from_another_accounts_only_by_capitals(engine: AsyncEngine, db_path: Path) -> None:
+    """UNAME-041 — A-21b, input only, red until A-21b: a member changing its username to another account's name in other capitals answers ``(None, error)``, ``USERNAME_TAKEN``, and writes nothing."""
+    print_section("UNAME-041: update_profile to a taken username in other capitals")
+    holder = f"holder_{_tag()}"
+    await _add_account(engine, username=holder, email=_address("holder"))
+    member = await _add_account(engine, username=f"member_{_tag()}", email=_address("member"))
+    before = _rows(db_path)
+
+    user, error = await _update(engine, member, username=_recapitalised(holder))
+
+    assert user is None and error, f"red until A-21b: {_recapitalised(holder)!r} must be refused beside {holder!r}: got {(user, error)!r}"
+    assert getattr(error, "code", None) == "USERNAME_TAKEN", f"the answer of an exact doublet: {error!r}"
+    assert _changed(before, _rows(db_path)) == [], "a refused update_profile must write nothing"
+    print_success("capitals-only doublet refused, nothing written")
+
+
+# GUARD — green today, must stay green
+@pytest.mark.asyncio
+async def test_an_account_may_change_the_capitals_of_its_own_username(engine: AsyncEngine) -> None:
+    """UNAME-042 — A-21b, GUARD: the account's own name does not count as another's: ``member_<tag>`` becomes ``Member_<tag>`` and the new form is stored."""
+    print_section("UNAME-042: an account re-capitalises its own username")
+    name = f"member_{_tag()}"
+    member = await _add_account(engine, username=name, email=_address("member"))
+
+    user, error = await _update(engine, member, username=_recapitalised(name))
+
+    stored = await _stored(engine, member)
+    assert user is not None and error is None and stored is not None and stored.username == _recapitalised(name), f"the own name in other capitals is allowed: {(user, error)!r}, {stored}"
+    print_success("own username re-capitalised")

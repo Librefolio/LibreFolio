@@ -208,7 +208,7 @@ async def confirm_owner_email_change(body: EmailChangeConfirmRequest, background
     except instance_owner.OwnerEmailChangeLinkInvalidError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail={"error_code": "TOKEN_INVALID", "status": exc.code, "message": "This confirmation link is not valid"}) from None
     # The notice to the old address (workstream E): after the answer, with a session of its own; never raises.
-    background.add_task(flows.email_changed_work, changed.user.id, changed.old_email, changed.user.email, engine=session.bind)
+    background.add_task(flows.email_changed_work, changed.user.id, changed.old_email, changed.user.email, engine=session.bind, by_host=True)
     return EmailChangeConfirmResponse(username=changed.user.username)
 
 

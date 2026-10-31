@@ -7,6 +7,7 @@
     import {notify} from '$lib/stores/app/notify.svelte';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
+    import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
     import {fetchToolCatalog} from './client';
     import {getToolAccountState, observeToolAccount, type ToolAccountState, type ToolClientError, type ToolDescriptor, type VerifiedToolCatalog} from './contracts';
     import {resolveToolRenderer, type ToolRendererResolution} from './registry';
@@ -131,7 +132,7 @@
             error = null;
             loading = next.authenticated;
             // The catalog holds the page's Refresh button (Y11).
-            if (next.authenticated) void pageBusy.track('tools-catalog', () => loadCatalog());
+            if (next.authenticated) void pageBusy.track('tools-catalog', () => loadCatalog()).then(() => onboardingGuide.maybeStartContextual('tools_page_guide'));
         });
         return () => {
             alive = false;
@@ -145,7 +146,7 @@
     });
 </script>
 
-<section class="min-w-0 space-y-6 text-lf-primary" data-testid="tools-hub" use:guideAnchor={'tools.hub'} data-state={viewState} data-busy={busy ? 'true' : 'false'} aria-busy={busy}>
+<section class="min-w-0 space-y-6 text-lf-primary" data-testid="tools-hub" use:guideAnchor={'tools.page.overview'} data-state={viewState} data-busy={busy ? 'true' : 'false'} aria-busy={busy}>
     <header class="space-y-2">
         <div class="flex min-w-0 items-center justify-between gap-3">
             <h1 bind:this={heading} tabindex="-1" class="flex items-center gap-2 text-2xl font-bold text-lf-primary outline-none">
@@ -160,6 +161,7 @@
                 class="inline-flex shrink-0 items-center gap-2 rounded-lg border border-lf-input bg-lf-card px-3 py-2 text-sm font-medium text-lf-secondary hover:bg-lf-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-lf-focus disabled:cursor-not-allowed disabled:opacity-50"
                 aria-label={$t('common.refresh')}
                 data-testid="tools-hub-refresh"
+                use:guideAnchor={'tools.page.refresh'}
             >
                 <RefreshCw size={16} aria-hidden="true" class={pageBusy.busy ? 'animate-spin' : ''} />
                 <span class="hidden sm:inline">{$t('common.refresh')}</span>
