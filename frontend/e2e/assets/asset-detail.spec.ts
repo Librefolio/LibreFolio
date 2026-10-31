@@ -8592,7 +8592,7 @@ test.describe('All-range event markers on a price-cache hit', () => {
         await expect(listMaxPreset, 'the list opens on a shorter range, so All is a fresh query').toHaveAttribute('data-active', 'false');
         const listMark = log.length;
         await listMaxPreset.click();
-        await waitForDeliveredPriceQuery(log, listMark, (entry) => entry.assetId === assetId && entry.includePrice === true && entry.start === '2000-01-01', 'the list must query the All prices from the 2000-01-01 sentinel');
+        await waitForDeliveredPriceQuery(log, listMark, (entry) => entry.assetId === assetId && entry.includePrice === true && entry.start === 'min', 'the list must query the All prices from the `min` sentinel');
         // data-busy turns false only after that answer is merged into the list's own cache.
         await waitForSettled(page.getByTestId('assets-page'), 20_000);
 
