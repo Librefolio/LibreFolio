@@ -153,6 +153,7 @@ import ast
 import contextlib
 import importlib
 import io
+import json
 import os
 import re
 import sqlite3
@@ -162,6 +163,7 @@ from types import SimpleNamespace
 
 import pytest
 
+import dev
 from scripts.test_runner import _backend_api as backend_api
 from scripts.test_runner import _backend_db as backend_db
 from scripts.test_runner import _backend_services as backend_services
@@ -2752,8 +2754,6 @@ class TestFrontCheckCoversTheE2ESpecs:
 
     @pytest.fixture
     def check_calls(self, monkeypatch):
-        import dev
-
         calls: list[list[str]] = []
         codes = {"check": 0, "check:e2e": 0}
 
@@ -2777,9 +2777,13 @@ class TestFrontCheckCoversTheE2ESpecs:
 
         assert dev.cmd_fe_check(argparse.Namespace()) == 2
 
-    def test_the_npm_script_points_at_the_e2e_tsconfig(self):
-        import json
+    def test_generate_api_neutralizes_the_openapi_descriptions_before_the_generator_reads_them(self):
+        """Z-37: a backtick in a referred model's docstring would break ``generated.ts``."""
+        script = json.loads((PROJECT_ROOT / "frontend" / "package.json").read_text(encoding="utf-8"))["scripts"]["generate-api"]
 
+        assert script.index("sanitize-openapi-descriptions.mjs") < script.index("openapi-zod-client")
+
+    def test_the_npm_script_points_at_the_e2e_tsconfig(self):
         scripts = json.loads((PROJECT_ROOT / "frontend" / "package.json").read_text(encoding="utf-8"))["scripts"]
 
         assert "tsconfig.e2e.json" in scripts["check:e2e"]

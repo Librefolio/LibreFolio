@@ -10898,3 +10898,20 @@ Sessione figlia T, ondata 6, base `5efc0d973`, corsia 6221 (`/tmp/librefolio-r13
 > pattern letterali del runner; `test_test_runner_cli.py` 857 verdi.
 > Mock rilanciati sulla corsia 6221: `db populate`, `db referential-integrity`, `api assets-metadata`, `assets-crud`,
 > `ai-export`, `ai-export-unpriced-asset`, `brokers`, `broker-access`: tutti rc 0 (log `ondata6/T-mocks-run.log`).
+
+### B6-1 (B-56) ✅ (2026-10-31)
+
+> **Note implementazione**: `dev.py db check --integrity [file]` → `backend/app/services/platform/db_integrity_check.py`
+> (sola lettura, `mode=ro`): `describe_database` (integrity_check, foreign_key_check, revisione), la scansione UTF-8 del
+> ripristino estratta in `undecodable_tables` (`staging.py`; `_refuse_undecodable_text` la usa), i rowid con una lettura
+> riga per riga solo delle tabelle segnalate (mai il contenuto), `_revision_plan` (head / più vecchia = nessun problema
+> / sconosciuta / mancante). Uscite 0/1/2. Test `test_db_integrity_check.py`: 9 rossi (modulo mancante) → 9 verdi;
+> `test_backup_staging` + `test_backup_cli_restore` 444 verdi. Azione `db integrity-check` registrata (isolation pure).
+> Provato sul DB della corsia 6221: nessun problema, 18 tabelle.
+
+### Z-37 ✅ (2026-10-31)
+
+> **Note implementazione**: `frontend/scripts/sanitize-openapi-descriptions.mjs` (apice inverso → apostrofo, `${` →
+> `$ {`, solo valori di `description`) prima di `openapi-zod-client` in `generate-api`. Riprodotto con un mini-documento:
+> il client grezzo non è TypeScript valido. Test `src/lib/api/openapiDescriptions.test.ts` (6 verdi), registrato in
+> `front_component_unit`. `dev.py api sync` completo rc 0. La cura di `FAPricePoint` resta (toglierla cambia lo schema).
