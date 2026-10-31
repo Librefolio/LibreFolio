@@ -426,6 +426,7 @@
       "title": "Vous ne pouvez pas changer l'e-mail ici",
       "message": "C'est l'adresse e-mail du titulaire de l'abonnement : elle ne peut pas être changée depuis LibreFolio. Demandez à l'hébergeur de cette instance de la changer.",
       "support": "Contacter l'assistance"
-    }
+    },
+    "lineShapeHint": "S'applique à tous les graphiques, dans ce navigateur. Un graphique peut avoir sa propre forme dans ses paramètres."
   }
 }

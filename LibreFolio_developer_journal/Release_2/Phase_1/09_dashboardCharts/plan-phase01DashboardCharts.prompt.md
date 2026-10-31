@@ -8722,6 +8722,100 @@ Fonte: i feedback del developer nella testlist del server (§1 e §2). Base `326
 > **Note implementazione**: verificato a mano nel browser sul server di prova (porta 6225): col mouse a x=524 il tooltip dice «16 Sept 2026 (Wed)» e la linea del puntatore sta sul 16 settembre (x=527); la rotella zooma il grafico «Return of the positions». FB-5 verificato solo con Vitest (jsdom), non su un telefono.
 > **Da fare da altri**: `GrowthChart.svelte` (~riga 1124, file di Y) — dopo `zoomInstance.on('updateAxisPointer', onAxisPointer)` aggiungere `attachDaySnap(zoomInstance)` + l'import: oggi il grafico principale ha ancora il puntatore a metà fra due giorni.
 
+## 28/10 · Ondata 6 · Y2 — checkpoint 2: FB-10 (pannello di scelta dell'asset) e `ViewModeToggle`
+
+Base: `8537f3a99` (checkpoint 1 committato). Ordine deciso dal coordinatore: FB-6 aspetta Y6-4 di Y, FB-3 dopo; qui FB-10 e `ViewModeToggle`.
+
+| Lotto | Cosa | Stato |
+|---|---|---|
+| FB-10 a | i menu dei filtri (Tipo, Valuta) si aprono fuori dal pannello, in coordinate dello schermo (`CheckMenu` → `SelectPopover` con `placement`): una lista corta non li taglia, e `dropdownPlacement` li tiene dentro lo schermo | ✅ 28/10 |
+| FB-10 b | la valuta della riga con la bandiera (`currencyCell`, `getCurrencyInfo`) | ✅ 28/10 |
+| FB-10 c | il tipo con il badge colorato del design system (`typeBadge`: `assetTypeBadgeClass` + il puntino del sottotipo, come le schede) | ✅ 28/10 |
+| FB-10 d | un tipo lungo ha una larghezza massima (`max-w-[7rem]`) e scorre (`scrollOnOverflow`): non copre più il nome | ✅ 28/10 |
+| FB-10 e | dopo i benchmark, i gruppi «tuoi / di altri / osservati» come nella lista Assets (`assetScope`, stesse chiavi `assets.panels.*`) | ✅ 28/10 |
+| `ViewModeToggle` | tooltip del design system al posto di `title`, nome accessibile tradotto (`sharedResource.viewGrid/viewTable`), il clic non fissa il suggerimento | ✅ 28/10 |
+
+> **Note implementazione**: i gruppi si formano solo per gli asset di cui il chiamante dice chi li tiene (`held_by_me`/`held_by_others`); gli altri restano nel «resto». `assetStore` ora copia i due campi (`normalize`); `BenchmarkSelect` li riceve così, `ChartSignalsSection` li legge dallo store (`getAssetInfo`) perché le pagine passano elenchi senza quei campi. `assetScope` è una terza copia della regola della pagina Assets, con il suo copy guard in `AssetPickerPanel.rows.test.ts`.
+> **Note implementazione**: la prova «un solo marquee per riga» dei test del panel e di `ChartSignalsSection` ora esclude il marquee del badge del tipo (è un'altra cosa: il nome dell'asset ne ha ancora uno solo).
+> **⚠️ Fuori pista**: `ChartSignalsSection.svelte` è il file di FB-11 di X (treno 13): la modifica è piccola (import + `comparisonPickerAssets`), da fondere con la loro. `files/+page.svelte` ha lo stesso difetto di `title` sui suoi pulsanti griglia/lista: non toccato.
+> **Note implementazione**: i menu dei filtri escono dal pannello **solo in modalità singola** (`CheckMenu` `floating`): nel «+» del laboratorio il pannello non taglia e `risk-lab.spec.ts` misura proprio la pagina che cresce sotto il menu (il primo tentativo, per tutte e due le modalità, lo aveva rotto: 2 rossi veri, rientrati).
+> **Note implementazione**: sulle pagine di dettaglio lo store degli asset non è caricato: `ChartSignalsSection` lo chiede al montaggio (`ensureAssetsLoaded`); senza, nessun asset veniva raggruppato (visto nel browser, poi corretto e rivisto: «Benchmarks · Your assets · Other users' assets · Watched»).
+> **Prove**: Vitest `src/lib/{components,stores,features/risk,features/dashboard,utils}` 321 file / 10 419 test verdi; `npm run check` 0 errori; E2E su corsia 6225: asset-list 53, fx-list 38, asset-browse 8, asset-detail 56, fx-detail 33, risk-lab (i test del selettore e dei filtri) verdi, preview del confronto 1. Rossi sotto carico (macchina a 30–50): timeout di hook in 6 file non miei e un login lento in 4 test, tutti verdi rilanciati da soli.
+
+### 28/10 sera · Triage dei rossi di `fx-list` e `fx-detail` nella verifica del coordinatore (skill `test-triage`)
+
+Rossi visti dal coordinatore a 2 worker: `fx-list` 3/38 (`:67`, `:210`, `:1021`) e `fx-detail` 1/33 (`:1373`, `waitForResponse` del confronto scaduto). Ipotesi dichiarata: `ChartSignalsSection` ora carica lo store degli asset al montaggio (FB-10).
+- **Prova sul codice, non sulla fiducia**: `ChartSignalsSection` è montata al caricamento solo dalle pagine di dettaglio asset e FX; in `fx-list` entra solo con la finestra delle impostazioni aperta. I tre rossi di `fx-list` sono login fermo sulla splash («none of [app-shell, …] at /dashboard») in test che non la toccano.
+- **Riproduzione**: `--workers 2`, corsia 6225, codice identico: il test `:1373` da solo due volte verde (8,3 s); `fx-list` 38/38 e `fx-detail` 33/33, **due volte di fila ciascuno** (carico 1,9 e 4,1; 1,3–1,4 min e 1,2 min). Nella verifica del coordinatore gli stessi spec impiegavano 2,2 e 2,9 min: il doppio, cioè la macchina era lenta in un modo che il carico non mostrava.
+- **Verdetto**: ambiente / lentezza (stesso sintomo di H5-11), non difetto di FB-10; nessun file di prodotto o di test toccato per questo.
+
+## 28/10 sera · Ondata 6 · Y2 — checkpoint 3: FB-6 (badge Weekly/Monthly su 26 anni) e livello annuale
+
+Base `03ecb80b0` (checkpoint 1 e 2 committati, ramo di Y unito con Y6-4).
+
+**Riproduzione, in ordine delle due ipotesi del kickoff**
+- **Ipotesi 1 (la densità conta gli step e non i giorni)**: letta nel codice (`countBuckets` conta le date degli ingressi: gli step più i giorni-testimone) e provata. Su una storia di 26 anni con **uno step al giorno** (la forma di una storia vera: 263 step in un anno nel campione `dashboard-report.json`) il badge **compare**, sia nel componente (`GrowthChart.steps.test.ts`, grafico finto di 1200 px: Weekly) sia nel browser vero con la rotella e la larghezza reale (`dashboard-growth-long-history.spec.ts`, report servito: Weekly o Monthly). **Non riprodotto con quei dati.**
+- **Ipotesi 2 (larghezza 0 al primo disegno, `timeSeriesAggregation.ts` `computeDensity`)**: il primo disegno a larghezza 0 sceglie `daily`, ma il `ResizeObserver` rilancia subito `scheduleResolutionSync()` con la larghezza vera; il browser vero mostra il badge al primo caricamento. Esclusa.
+- **Cosa resta** (da dire al developer): con una storia di 26 anni fatta di **pochi step** (meno di circa 1 000 su 800 px: prezzi mensili, pochi movimenti) il grafico disegna gli step stessi, nessun giorno è raggruppato e il badge giustamente non compare (D-P4-d: «il badge compare solo dove il grafico raggruppa i giorni»). Se il suo caso è questo, il comportamento è quello deciso; se i suoi dati hanno uno step al giorno, servono il periodo scelto, la larghezza del grafico e uno screenshot.
+
+**Livello annuale** (✅ 28/10): `ChartResolution` ha `'yearly'` (anno di calendario, fine periodo come gli altri); `chooseResolution`/`cascadeResolution`/`chooseInitialResolution` salgono da mensile ad annuale solo se il chiamante passa `yearlyCount` (oggi solo `GrowthChart`: gli altri grafici mantengono i loro tre livelli), con la stessa isteresi (1,3 sale, 0,8 scende); `bucketEndDays` dà i fine-anno; il tooltip di un punto annuale ha come intestazione l'anno (`chart.tooltip.yearLabel`); il badge dice «Annuale» (`chart.resolution.yearly`, 4 lingue). Una storia di 140 anni (1 680 mesi su 1 200 px: 1,4 a pixel) ora è un punto l'anno, lineare, con il badge Yearly (componente e browser vero).
+> **Note implementazione**: il compilatore ha indicato gli unici quattro punti esaustivi (`ResolutionBadge`, `PriceChartCompact` `COARSENESS`, i due `bucketEndDays` di Allocation History e GrowthChart): nessun altro grafico sceglie l'anno. Documentato in `user/dashboard/charts.en.md` (solo inglese: debito di traduzione).
+
+## 28/10 notte · Ondata 6 · Y2 — checkpoint 4: FB-3 (forma delle linee), `files/+page.svelte`, MF-C2 lato frontend
+
+Base `fc0c0cbb1` (X e MF uniti nel ramo; `api sync` e `front check` verdi prima di partire).
+
+### FB-3 — la forma delle linee (✅ 28/10)
+
+Decisione di progetto, in una riga: **una forma sola per tutti i grafici (globale, nello store dei grafici), con un'eccezione per grafico nelle impostazioni di asset e FX**.
+
+| Pezzo | Dove | Nota |
+|---|---|---|
+| L'helper | `components/charts/lineShape.ts` | `LineShape` = `segments` (predefinita) / `steps` / `spline`; `lineShapeOptions` dà sempre le tre chiavi (`step`, `smooth`, `smoothMonotone: 'x'`), così un cambio di forma sovrascrive il precedente in un merge parziale; `applyLineShape(series, shape, {holdsValue, isTrueValues})` è **l'aggancio di una riga** di ogni grafico. `smoothMonotone` e non una spline libera: una spline libera disegna valori mai esistiti. |
+| I gradini solo dove i punti sono gradini | `effectiveLineShape(shape, holdsValue)` | un grafico a settimane o a mesi unisce i bucket con segmenti anche se la scelta è «gradini» (un bucket non tiene un valore fino al successivo). L'MWRR (linea di valori veri, `step: false`) non prende mai i gradini. |
+| Lo store | `chartSettingsStore.svelte.ts` | `getGlobalLineShape` / `setGlobalLineShape` (campo di primo livello nel JSON già in `localStorage`, nessuna colonna nel DB, nessuna nuova versione di storage: il campo mancante vale `segments`); `ChartSettings.lineShape?` è l'eccezione di un grafico (assente = segue il globale), `resolveLineShape(settings)` la legge. Il globale cancella le eccezioni: «l'ultima parola vince». Un valore sconosciuto vale `segments`. |
+| I grafici agganciati | `LineChart` (schede, anteprime, rischio), `PriceChartFull` (dettagli asset/FX), `GrowthChart` (+ `growthChartSeries`), `PositionsReturnChart`, `AllocationHistoryChart`, `LotWacPriceChart`, `LotComparisonChart` | `GrowthChart` perde `lastRenderedStepped` e prende `lastRenderedShape`: la forma si fissa alla creazione della serie. Il tooltip «per giorno puntato» (D-P4) vale solo con i gradini disegnati: con segmenti o curva legge il punto disegnato più vicino, come ai livelli settimanale e mensile. Non toccati: `PerformanceChart` (disegno `custom`), grafici a dispersione del rischio. |
+| Il selettore | `LineShapePicker.svelte` (tre pulsanti, `aria-pressed`, `data-value`) | usato in tre posti, vedi sotto. |
+| Parametro di impostazione | `ChartAestheticsSection` (riga `chart-aesthetic-line-shape-row`, solo se la pagina passa `onlineshapechange`) | pagine di dettaglio asset e FX: scegliere la forma uguale al globale **toglie** l'eccezione. Le liste (modali di scope) non mostrano la riga: il globale è uno solo. |
+| Impostazioni utente | `PreferencesTab` (`preference-line-shape`) | applicata subito, senza Salva: è del browser (come le altre scelte locali), non dell'account. |
+| Welcome tour | `WelcomeForm` (prima pagina del tour) | selettore + `LineShapePreview` (grafico finto con un segnale sopra, dati deterministici di `lineShapePreviewData.ts`) che cambia forma dal vivo. Testi in `onboarding.welcome.lineShape*`; nessun testo annuncia un'altra guida (regola 3 della skill). Nessuna nuova versione del flusso: la pagina non è un passo del controller. |
+
+> **Note implementazione**: i test che affermavano i gradini (Growth, Allocation, Positions, LotWac, LotComparison, `growthChartSeries.stepped`) ora scelgono i gradini con `setGlobalLineShape('steps')` nel `beforeEach`; ognuno ha in più i casi «segmenti» e «curva». La forma predefinita cambia ciò che il developer vede: D-P4 resta nei dati (gli step), non nel disegno.
+> **⚠️ Fuori pista**: i colori segmentati per baseline (verde sopra, rosso sotto) in vista % sono più serie con un punto di incrocio interpolato: con **gradini** il gradino cade nel punto d'incrocio. Non corretto qui; se non piace, è un lotto a parte.
+
+### `files/+page.svelte` (✅ 28/10)
+
+I due pulsanti griglia/lista avevano `title="Grid view"`/`"List view"` (inglese, suggerimento del browser). Ora tooltip del design system con `sharedResource.viewGrid/viewTable` e nome accessibile tradotto, come FB-8 (`ViewModeToggle`); `on:click|stopPropagation` perché il clic non fissi il suggerimento. E2E in `files.spec.ts`.
+
+### MF-C2 lato frontend (✅ 28/10)
+
+Il backend dà `value: null` per ogni fetta di una lista le cui fette sommano zero o meno. Il frontend la leggeva come 0 (`toAllocEntries`: `parseFloat(null ?? '0')`), quindi la torta restava vuota o, peggio, **teneva il disegno di prima** (`AllocationPieChart` non pulisce con zero voci).
+- `AllocationPanel`: se *tutte* le fette di una lista sono senza percentuale, al posto della torta (o della mappa) c'è il blocco `allocation-no-shares`: il testo `dashboard.allocationNoShares` e una riga per fetta con `—` e l'importo (`personal`, nascosto in privacy). La nota «cassa negativa» non si ripete (le righe mostrano già l'importo negativo).
+- `allocationHistorySteps`: `AllocationStepComponent.value` è `string | null`; `stepHasShares`; `allocationRows` **non fa riga** per un giorno senza percentuali (un 0 disegnerebbe una quota mai esistita). `AllocationHistoryChart`: se nessun giorno ha percentuali, `allocation-history-no-shares` (`dashboard.allocationHistoryNoShares`); le categorie nascono solo dai giorni con percentuali. I due `?? 0` segnalati da MF (`:415`, `:423`) restano: dopo questo, ai bucket arrivano solo righe con percentuali.
+- **Limite noto** (da dire al developer): in una storia con giorni senza percentuali *in mezzo* a giorni con percentuali, l'area collega i giorni che ci sono, senza interrompersi sul vuoto (una lacuna vera chiederebbe `null` nelle righe e in tutte le somme del tooltip).
+
+## 30/10 · Ondata 6 · Y2 — Y2-I63: il tooltip apre il giorno sotto il puntatore (issue #63)
+
+Il developer vuole che la issue GitHub #63 («Portfolio Growth»: cursore sul 25 ottobre, dati di un altro giorno; gli ultimi giorni non si aprivano) resti chiusa. Sulla nightly non si riproduce più: qui ci sono i test che la fissano su tutti i grafici con un asse del tempo.
+
+### Cosa serve a un test per sapere «quale giorno»
+
+| Pezzo | Dove | Perché |
+|---|---|---|
+| Il giorno nel tooltip | `buildTooltipHeader(text, color, {from, to})` → `data-tooltip-from` / `data-tooltip-to` (ISO) | il testo dell'intestazione è nella lingua dell'interfaccia: un test non può leggerlo (regola 5). Un giorno solo (`from === to`) o un bucket (settimana, mese, anno). Anche `PriceChartFull` e `LineChart`, che hanno il loro costruttore. |
+| Il grafico che si lascia interrogare | `attachChartReady` tiene l'istanza in `container.__lfChart` (già lo facevano 5 grafici) | l'E2E chiede al grafico, nel momento della prova, il pixel di un giorno e i giorni che ha disegnato. **Non** si pubblica la geometria in un attributo: restava quella di prima dopo un ridimensionamento (primo giro E2E, 10 rossi su 12 per questo). |
+| Helper E2E | `e2e/fixtures/timeAxisTooltip.ts` | `expectTooltipOnDay` (un giorno noto, puntato a metà mattina: a mezzanotte netta una frazione di pixel decide fra due giorni) e `expectEdgesReachable` (il giorno più recente e il più vecchio, sul bordo del disegno e 10 px fuori nel margine destro). Asse a tempo e asse a categorie (`PriceChartFull`, `LineChart`). |
+| Helper Vitest | `src/__tests__/timeAxisPointer.ts` | `firePointerAt(handlers, giorno, momento)` con i momenti raggiungibili: i grafici agganciati al giorno più vicino (`attachDaySnap`) aprono il giorno più recente dal mezzogiorno del giorno prima fino alla sua mezzanotte, e il più vecchio dalla sua mezzanotte a un minuto prima di mezzogiorno; `tooltipHoldsDay(html, giorno)`. I falsi ECharts rimandano a chi ascolta il secondo `updateAxisPointer` dell'aggancio, come fa ECharts. |
+
+### Cosa è coperto
+
+- **E2E** `chart-tooltip-days.spec.ts` (`front-utility chart-tooltip-days`): crescita, allocazione storica, posizioni, prezzo asset, prezzo FX, lotti (WAC e confronto); ognuno con i gradini e con i segmenti, a 1280 e 600 px: un giorno noto, il più recente e il più vecchio, sul bordo e nel margine. 12 test.
+- **Vitest**: gli stessi casi sui grafici a gradini (crescita, allocazione, posizioni, WAC, confronto), e il giorno nell'intestazione di `PriceChartFull` e `LineChart` (tempo e categorie).
+- **Non coperti**: i grafici di rischio con date (`UnderwaterChart` e gli altri) usano lo stesso `LineChart` (coperto da Vitest), ma la loro pagina vive di dati simulati in `risk-analysis.spec.ts`: nessun E2E dedicato. Le miniature delle schede non hanno tooltip. `PerformanceChart` è a barre per posizione, senza asse del tempo.
+- **Il difetto sul commit vecchio**: non riprodotto. Non ho provato un commit prima di D-P4 (il ramo non si può cambiare da qui); la prova di sensibilità è una mutazione del bordo di `paramsAtDay` (`>` → `>=`), che fa diventare rossi i test del giorno più recente.
+
+> **⚠️ Fuori pista**: la crescita non agganciava il puntatore al giorno più vicino (Y6-1, ramo di Y, lo aggiunge). I due casi della crescita sul giorno più recente sono rossi sul ramo senza quel commit, verdi dopo l'unione: la ragione è giusta (un puntatore nella seconda metà del giorno prima è ancora il giorno più recente).
+
 ## 28/10 · Ondata 6 — checkpoint 3a (day snap · common.totalValue · Y6-1)
 
 Base: `19c9928ae` (checkpoint 2 `0f7709fc6` + checkpoint 1 di Y2 `8537f3a99`).
@@ -8754,6 +8848,25 @@ Base: `21016b21e` (checkpoint 3a `37c7aa68b` + X). `front check` sul ramo unito:
 - ✅ **Prove (29/10)**: Vitest `features/dashboard`, `features/brokers`, `components/table`: 61 file / 2111; `front check` 0/0; `front-portfolio dashboard` 34/34 (c'è il nuovo E2E del layout, sotto Portfolio e sotto Period); `front-broker detail` 41/41; `check-orphans` verde.
 - 📝 **FB-15** (vista Rolling) parte dopo il commit: modulo `positionsRolling` (richiesta del segnale `ASSET_CALENDAR_ROLLING_RETURN`, linea, controller) già scritto e provato in isolamento (15 casi), tenuto fuori dall'albero finché non è collegato (il lint delle esportazioni inutilizzate).
 
+## 31/10 · Ondata 6 · Y2-CMP — l'asse unione dei confronti (checkpoint 6)
+
+Decisione del developer (30/10): «anche nel confronto la data parte dal giorno più vecchio tra i 2, ovviamente il grafico non si deve rompere se il segnale dopo parte molto più avanti». Base: `80b2cd98f` (X cp5 già unito: «Tutto» dal primo prezzo salvato, `min`, `firstSeriesDates`).
+
+**Perché spariva il 1985–2010.** Due filtri tagliavano i giorni del confronto ai soli giorni del principale: `AssetComparisonSignal.computePoints` (e il fantasma delle conversioni, `FxPairSignal` allo stesso modo) e l'asse a categorie di `PriceChartFull`, fatto dei soli giorni del principale. In più la pagina chiedeva il confronto da `dateStart` del principale.
+
+| Pezzo | Dove | Cosa |
+|---|---|---|
+| Il segnale tiene i propri giorni | `AssetComparisonSignal` / `FxPairSignal`, solo con `_unionAxis` | la pagina di dettaglio lo chiede (`renderLocalSignals(..., {unionAxis: true})`); le **schede** delle liste no e restano sui giorni del loro grafico, con il % misurato dal primo di quei giorni (un test di guardia lo fissa: una scheda con un confronto più vecchio non sposta la base). `_unionAxis` è un dato del momento: `toConfig()` lo lascia fuori. `RenderedSignal.extendsAxis` dice al grafico «raggiungi i miei giorni». |
+| L'asse | `PriceChartFull`: `axisData = extendToOverlayDays(data, overlaySignals)` | davanti e dietro la serie del principale mette giorni vuoti (`missing`) per i giorni dei confronti che lo chiedono; i giorni *dentro* la serie che il principale non ha non si aggiungono (come prima). Il principale resta vuoto prima del proprio primo giorno: niente linea finta, niente zero. `toDisplaySeries` e la linea di base misurano dal primo giorno con prezzo (`!missing`). Cambiato l'asse, zoom e risoluzione si azzerano (gli indici sono cambiati). |
+| La richiesta | `comparisonStart` nelle due pagine = `'min'` con «Tutto», altrimenti `dateStart` | impronta, chiave di cache e `loadComparisonAssetsData` lo usano; il server risolve `min` per ogni asset. Con «Tutto» il giro forzato dopo la risoluzione di `dateStart` non serve più (la richiesta non cambia). |
+| Il FROM del calendario | `showEarliestStart` (le due pagine) + `earliestComparisonDate` | con «Tutto» il campo Da mostra il più vecchio fra il primo giorno della serie e quello dei confronti; si muove solo l'etichetta, le richieste della serie restano sul suo primo giorno. |
+| Le coppie FX confrontate | `ensureFxRangeFromFirstDay` (`fxStoreRegistry`) + `ensureSignalFxPairs(..., fromFirstDay)` | un confronto con una coppia FX parte dal primo giorno della coppia (`min`, ricordato per la sessione con `firstSeriesDates`); i punti della coppia si leggono nella finestra della pagina (`getRange`), tranne con «Tutto» (tutto lo store): senza la finestra una coppia già in memoria per un'altra visita allungherebbe l'asse. |
+
+**Decisione presa da me, da confermare:** l'asse si allunga anche *dopo* l'ultimo giorno del principale se un confronto arriva più avanti («unione»); il developer ha parlato solo dell'inizio.
+
+**Dichiarato, non curato:** gli indicatori del backend, i benchmark sintetici e la misura restano sui giorni del principale: prima del suo primo giorno non hanno valori. Gli E2E del verso opposto di X (`asset-detail`, `fx-detail`) non sono toccati; i miei sono in `chart-comparison-axis.spec.ts`.
+
+> **Note implementazione**: test rossi prima per l'helper (`extendToOverlayDays`) e il componente; i test dei segnali sono stati scritti prima del codice ma non lanciati rossi (prova di sensibilità: con la forma «sulle schede» rimessa, i test dell'asse unione diventano rossi).
 ## 30/10 · Ondata 6 — checkpoint 4 (FB-12b · FB-15 · Y6-6)
 
 Base: `2b5dcd2e0` (checkpoint 3b).

@@ -13,10 +13,14 @@ import {beforeAll, describe, expect, it, vi} from 'vitest';
 vi.mock('$lib/features/settings/SettingCurrency.svelte', async () => ({
     default: (await import('$test/harness/SettingCurrencyProbe.svelte')).default,
 }));
+vi.mock('$lib/components/charts/LineShapePreview.svelte', async () => ({
+    default: (await import('$test/harness/LineShapePreviewProbe.svelte')).default,
+}));
 
 import {fireEvent, render, screen, setupI18n} from '$test/component';
 import {availableLanguages} from '$lib/stores/app/language';
 import type {WelcomeCopy} from '$lib/features/onboarding/welcome';
+import {getGlobalLineShape, setGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
 import WelcomeForm from './WelcomeForm.svelte';
 
 const COPY: WelcomeCopy = {
@@ -214,5 +218,31 @@ describe('WelcomeForm — no theme control', () => {
         const themeRelated = document.querySelectorAll('[data-testid*="theme"]');
         expect(themeRelated).toHaveLength(1);
         expect(themeRelated[0]).toBe(screen.getByTestId('welcome-theme-hint'));
+    });
+});
+
+describe('WelcomeForm — the shape of the lines (Y2 FB-3)', () => {
+    it('shows the example in the shape that is in force, and changes it as the user picks, live', async () => {
+        setGlobalLineShape('segments');
+        mount();
+        expect(screen.getByTestId('line-shape-preview')).toHaveAttribute('data-shape', 'segments');
+
+        await fireEvent.click(screen.getByTestId('welcome-line-shape-picker-spline'));
+        expect(screen.getByTestId('line-shape-preview')).toHaveAttribute('data-shape', 'spline');
+        expect(getGlobalLineShape()).toBe('spline');
+
+        await fireEvent.click(screen.getByTestId('welcome-line-shape-picker-steps'));
+        expect(screen.getByTestId('line-shape-preview')).toHaveAttribute('data-shape', 'steps');
+    });
+
+    it('does not submit the form by picking a shape', async () => {
+        const {onsubmit} = mount();
+        await fireEvent.click(screen.getByTestId('welcome-line-shape-picker-steps'));
+        expect(onsubmit).not.toHaveBeenCalled();
+    });
+
+    it('locks the picker while the form is busy', () => {
+        mount({busy: true});
+        expect(screen.getByTestId('welcome-line-shape-picker-steps')).toBeDisabled();
     });
 });

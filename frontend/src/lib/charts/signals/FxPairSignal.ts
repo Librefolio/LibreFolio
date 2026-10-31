@@ -37,9 +37,18 @@ export class FxPairSignal extends ChartSignal {
 
         const isInverted = Boolean(this.params._inverted);
 
+        const points: LineDataPoint[] = [];
+        if (this.params._unionAxis === true) {
+            // On a detail page the chart's axis is the union of its days and the pair's (Y2-CMP): the pair's own days, which the chart finds by date
+            for (const point of resolvedData) {
+                const val = point.value;
+                if (val !== undefined && val !== null && val !== 0) points.push({date: point.date, value: isInverted ? 1 / val : val});
+            }
+            return points;
+        }
+
         // Build date→value lookup, then align to base chart's date axis
         const lookup = new Map(resolvedData.map((d) => [d.date, d.value]));
-        const points: LineDataPoint[] = [];
         for (const bd of baseData) {
             const val = lookup.get(bd.date);
             if (val !== undefined && val !== null && val !== 0) {
@@ -85,6 +94,7 @@ export class FxPairSignal extends ChartSignal {
             yAxisIndex: 0,
             aggregationProfile: 'last_with_range',
             connectNulls: false,
+            ...(this.params._unionAxis === true ? {extendsAxis: true} : {}),
         };
     }
 

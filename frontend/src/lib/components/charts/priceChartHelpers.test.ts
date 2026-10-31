@@ -58,6 +58,7 @@ import {
     synthesizeDailyOHLC,
     toAbsoluteValue,
     toDisplaySeries,
+    extendToOverlayDays,
     type BucketInfo,
     type EventScatterContext,
 } from './priceChartHelpers';
@@ -1100,6 +1101,74 @@ describe('toDisplaySeries', () => {
         expect(out.map((d) => d.value)).toEqual([0, 10, -10]);
         // Non-value fields are carried through.
         expect(out[1].date).toBe('2024-01-02');
+    });
+});
+
+describe('toDisplaySeries on a series that opens with days it has no price for (Y2-CMP)', () => {
+    const gap = (date: string): LineDataPoint => ({date, value: 0, missing: true});
+
+    it('rebases from the first day that has a price, and leaves the empty days empty', () => {
+        const data = [gap('2024-01-01'), gap('2024-01-02'), pt('2024-01-03', 100), pt('2024-01-04', 110)];
+        const out = toDisplaySeries(data, 'percentage');
+        expect(out.map((d) => d.value)).toEqual([0, 0, 0, 10]);
+        expect(out.slice(0, 2).every((d) => d.missing === true)).toBe(true);
+        expect(out[2].missing).toBeUndefined();
+    });
+
+    it('is the same series when no day has a price (nothing to rebase from)', () => {
+        const data = [gap('2024-01-01'), gap('2024-01-02')];
+        expect(toDisplaySeries(data, 'percentage')).toBe(data);
+    });
+});
+
+describe('extendToOverlayDays: the axis of a chart whose comparison is older than its main series (Y2-CMP)', () => {
+    const comparison = (days: string[], extendsAxis = true): RenderedSignal => ({
+        id: 'cmp',
+        label: 'Comparison',
+        data: days.map((date, index) => ({date, value: 100 + index})),
+        color: '#000',
+        lineWidth: 1,
+        lineType: 'solid',
+        markerStart: null,
+        markerEnd: null,
+        aggregationProfile: 'last_with_range',
+        ...(extendsAxis ? {extendsAxis: true} : {}),
+    });
+    const main = [pt('2024-01-03', 10), pt('2024-01-04', 11), pt('2024-01-05', 12)];
+
+    it('adds the comparison\'s days before the main series as days with no price, oldest first', () => {
+        const out = extendToOverlayDays(main, [comparison(['2023-12-28', '2023-12-29', '2024-01-03', '2024-01-04'])]);
+        expect(out.map((d) => d.date)).toEqual(['2023-12-28', '2023-12-29', '2024-01-03', '2024-01-04', '2024-01-05']);
+        expect(out.map((d) => d.missing === true)).toEqual([true, true, false, false, false]);
+        // the main series' own points are carried through as they were
+        expect(out.slice(2)).toEqual(main);
+    });
+
+    it('adds the days after the main series too: the axis is the union', () => {
+        const out = extendToOverlayDays(main, [comparison(['2024-01-05', '2024-01-08', '2024-01-09'])]);
+        expect(out.map((d) => d.date)).toEqual(['2024-01-03', '2024-01-04', '2024-01-05', '2024-01-08', '2024-01-09']);
+        expect(out.map((d) => d.missing === true)).toEqual([false, false, false, true, true]);
+    });
+
+    it('does not add a day inside the main series that the main series lacks: the axis keeps its own days there', () => {
+        const withHole = [pt('2024-01-03', 10), pt('2024-01-05', 12)];
+        expect(extendToOverlayDays(withHole, [comparison(['2024-01-03', '2024-01-04', '2024-01-05'])])).toBe(withHole);
+    });
+
+    it('asks the days of every comparison once, and a day two comparisons share only once', () => {
+        const out = extendToOverlayDays(main, [comparison(['2023-12-28', '2023-12-29']), comparison(['2023-12-29', '2024-01-01'])]);
+        expect(out.map((d) => d.date).slice(0, 3)).toEqual(['2023-12-28', '2023-12-29', '2024-01-01']);
+    });
+
+    it('is the same array when the comparison starts after the main series (the main axis stays) and when no signal asks', () => {
+        expect(extendToOverlayDays(main, [comparison(['2024-01-04', '2024-01-05'])])).toBe(main);
+        expect(extendToOverlayDays(main, [comparison(['2023-12-28'], false)])).toBe(main);
+        expect(extendToOverlayDays(main, [])).toBe(main);
+    });
+
+    it('stays empty on a main series with no day: there is no axis to extend', () => {
+        const empty: LineDataPoint[] = [];
+        expect(extendToOverlayDays(empty, [comparison(['2023-12-28'])])).toBe(empty);
     });
 });
 

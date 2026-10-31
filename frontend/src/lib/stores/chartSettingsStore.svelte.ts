@@ -14,6 +14,7 @@
 import {browser} from '$app/environment';
 import type {SignalConfig} from '$lib/charts/signals';
 import {DEFAULT_CALENDAR_RETURN_WINDOW, largestCalendarReturnPresetFor, sanitizeCalendarReturnWindow, type CalendarReturnWindowSelection} from '$lib/components/charts/calendarReturnWindow';
+import {DEFAULT_LINE_SHAPE, isLineShape, type LineShape} from '$lib/components/charts/lineShape';
 import {getClientSessionUserId, registerClientSessionReset} from '$lib/stores/app/clientSession';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -62,6 +63,11 @@ export interface ChartSettings {
     calendarReturnWindowAuto: boolean;
     /** The view the chart opens in (Y-40). */
     primaryView: ChartPrimaryView;
+    /**
+     * The shape of this chart's lines when it is not the global one (FB-3). Absent means the chart follows the global shape
+     * (`getGlobalLineShape`); read it through `resolveLineShape`.
+     */
+    lineShape?: LineShape;
     /** Overlay signal configurations */
     signals: SignalConfig[];
 }
@@ -105,6 +111,8 @@ const STORAGE_WRITE_DELAY_MS = 250;
 
 interface PersistedChartSettings {
     version: typeof STORAGE_VERSION;
+    /** The shape of the lines of every chart that has none of its own (FB-3). */
+    lineShape?: LineShape;
     globalSettings: ChartSettings;
     pairOverrides: Array<[string, ChartSettings]>;
 }
@@ -202,7 +210,7 @@ function sanitizeSettings(value: unknown, defaultView: ChartPrimaryView = DEFAUL
     if (!isRecord(value)) return {...deepClone(DEFAULT_CHART_SETTINGS), primaryView: defaultView};
     const calendarReturnWindow = sanitizeCalendarReturnWindow(value.calendarReturnWindow);
 
-    return {
+    const sanitized: ChartSettings = {
         colorByBaseline: typeof value.colorByBaseline === 'boolean' ? value.colorByBaseline : DEFAULT_CHART_SETTINGS.colorByBaseline,
         areaFill: typeof value.areaFill === 'boolean' ? value.areaFill : DEFAULT_CHART_SETTINGS.areaFill,
         gridLines: typeof value.gridLines === 'boolean' ? value.gridLines : DEFAULT_CHART_SETTINGS.gridLines,
@@ -214,6 +222,9 @@ function sanitizeSettings(value: unknown, defaultView: ChartPrimaryView = DEFAUL
         primaryView: isPrimaryView(value.primaryView) ? value.primaryView : defaultView,
         signals: normalizeSignalConfigs(value.signals),
     };
+    // A shape that is not one of ours is no choice: the chart follows the global one.
+    if (isLineShape(value.lineShape)) sanitized.lineShape = value.lineShape;
+    return sanitized;
 }
 
 function normalizeSignalConfigs(value: unknown): SignalConfig[] {
@@ -299,6 +310,7 @@ function parsePersistedSettings(raw: string | null): PersistedChartSettings | nu
 
         return {
             version: STORAGE_VERSION,
+            lineShape: isLineShape(parsed.lineShape) ? parsed.lineShape : DEFAULT_LINE_SHAPE,
             globalSettings: sanitizeStoredSettings(parsed.globalSettings),
             pairOverrides: [...overrides.entries()],
         };
@@ -313,6 +325,7 @@ function parsePersistedSettings(raw: string | null): PersistedChartSettings | nu
 
 let globalSettings: ChartSettings = deepClone(DEFAULT_CHART_SETTINGS);
 let pairOverrides = new Map<string, ChartSettings>();
+let globalLineShape: LineShape = DEFAULT_LINE_SHAPE;
 let hydratedStorageKey: string | null = null;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -339,6 +352,7 @@ function loadFromStorage(): void {
     const persisted = parsePersistedSettings(raw);
     globalSettings = persisted ? deepClone(persisted.globalSettings) : deepClone(DEFAULT_CHART_SETTINGS);
     pairOverrides = new Map(persisted?.pairOverrides ?? []);
+    globalLineShape = persisted?.lineShape ?? DEFAULT_LINE_SHAPE;
     hydratedStorageKey = storageKey;
     if (persisted) {
         const sanitizedRaw = JSON.stringify(persisted);
@@ -358,6 +372,7 @@ function persistNow(): void {
     const storageKey = getStorageKey();
     const payload: PersistedChartSettings = {
         version: STORAGE_VERSION,
+        lineShape: globalLineShape,
         globalSettings: sanitizeStoredSettings(globalSettings),
         pairOverrides: [...pairOverrides.entries()].map(([key, settings]) => [key, sanitizeStoredSettings(settings)] as [string, ChartSettings]),
     };
@@ -433,6 +448,19 @@ export function getSettingsForPair(slug: string, scope?: string): ChartSettings 
     return forScope(deepClone(globalSettings), scope);
 }
 
+/** The shape of the lines of every chart that has none of its own (FB-3). */
+export function getGlobalLineShape(): LineShape {
+    loadFromStorage();
+    // Access _version to register reactive dependency
+    void _version;
+    return globalLineShape;
+}
+
+/** The shape a chart draws its lines in: the one in its settings, else the global one (FB-3). */
+export function resolveLineShape(settings?: Pick<ChartSettings, 'lineShape'> | null): LineShape {
+    return settings?.lineShape ?? getGlobalLineShape();
+}
+
 /**
  * Get the reactive version counter (for Svelte 5 reactivity).
  * Use in derived/effect to track changes.
@@ -480,6 +508,24 @@ export function setGlobalSettings(settings: ChartSettings, scope?: string): void
 export function setPairSettings(slug: string, settings: ChartSettings): void {
     loadFromStorage();
     pairOverrides.set(slug, deepClone(withWindowChoice(sanitizeSettings(settings), pairOverrides.get(slug) ?? globalSettings)));
+    bump();
+    schedulePersist();
+}
+
+/**
+ * The shape of the lines of every chart (FB-3): the welcome tour's choice and the user settings'. Every chart follows it, the
+ * ones that had chosen a shape of their own included; nothing else they saved is touched.
+ */
+export function setGlobalLineShape(shape: LineShape): void {
+    loadFromStorage();
+    if (!isLineShape(shape)) return;
+    globalLineShape = shape;
+    const {lineShape: _own, ...baseSettings} = globalSettings;
+    globalSettings = baseSettings as ChartSettings;
+    for (const [key, settings] of pairOverrides) {
+        const {lineShape: _chosen, ...rest} = settings;
+        pairOverrides.set(key, rest as ChartSettings);
+    }
     bump();
     schedulePersist();
 }

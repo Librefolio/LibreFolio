@@ -14,6 +14,7 @@
  */
 
 import type {LineDataPoint} from './LineChart.svelte';
+import type {RenderedSignal} from '$lib/charts/signals/ChartSignal';
 import type {ViewMode} from './ChartToolbar.svelte';
 import type {EventMarker} from './PriceChartFull.svelte';
 import {backendSignalSchemas} from '$lib/charts/signals/backendTypes';
@@ -364,14 +365,41 @@ export function computeZoomWindow(points: LineDataPoint[], currentResolution: Ch
 /**
  * The series the chart actually draws for a view mode. Absolute view (and an
  * empty series) draws the raw values; percentage view rebases every point to
- * its change from the first point. A first value of exactly 0 has no defined
- * percentage change, so the series is left untouched rather than dividing by 0.
+ * its change from the first day that has a price (a day the axis was lengthened
+ * with, `missing`, has none and stays empty). A first value of exactly 0 has no
+ * defined percentage change, so the series is left untouched rather than
+ * dividing by 0.
  */
 export function toDisplaySeries(data: LineDataPoint[], viewMode: ViewMode): LineDataPoint[] {
     if (viewMode === 'absolute' || data.length === 0) return data;
-    const baseValue = data[0].value;
-    if (baseValue === 0) return data;
-    return data.map((d) => ({...d, value: ((d.value - baseValue) / baseValue) * 100}));
+    const baseValue = data.find((point) => !point.missing)?.value;
+    if (baseValue === undefined || baseValue === 0) return data;
+    return data.map((d) => (d.missing ? d : {...d, value: ((d.value - baseValue) / baseValue) * 100}));
+}
+
+/**
+ * The series a chart lays its axis on when a comparison is older (or younger) than the main series (Y2-CMP): the main series with, before its first
+ * day and after its last, an empty day (`missing`, no price) for every day of a comparison that says so (`extendsAxis`). The main line is empty there,
+ * the comparison line is drawn. Days inside the main series that it lacks are not added: the axis keeps its own days there, as it always did.
+ *
+ * Returns `data` itself when nothing is added, so a caller can tell by identity that the axis did not change.
+ */
+export function extendToOverlayDays(data: LineDataPoint[], overlays: ReadonlyArray<Pick<RenderedSignal, 'data' | 'extendsAxis'>>): LineDataPoint[] {
+    if (data.length === 0) return data;
+    const first = data[0].date;
+    const last = data[data.length - 1].date;
+    const before = new Set<string>();
+    const after = new Set<string>();
+    for (const overlay of overlays) {
+        if (!overlay.extendsAxis) continue;
+        for (const point of overlay.data) {
+            if (point.date < first) before.add(point.date);
+            else if (point.date > last) after.add(point.date);
+        }
+    }
+    if (before.size === 0 && after.size === 0) return data;
+    const emptyDay = (date: string): LineDataPoint => ({date, value: 0, missing: true});
+    return [...[...before].sort().map(emptyDay), ...data, ...[...after].sort().map(emptyDay)];
 }
 
 /**

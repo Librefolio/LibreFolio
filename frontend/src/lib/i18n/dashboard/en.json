@@ -169,6 +169,8 @@
       "rowSelect": "Select the row to draw its return",
       "viewRolling": "Rolling",
       "viewRollingHint": "Percent the price of the asset moved over a window that rolls along the period: to compare assets with each other"
-    }
+    },
+    "allocationNoShares": "No percentages to show: the slices add up to zero or less (for example, an overdraft that cancels your holdings). The amounts are listed below.",
+    "allocationHistoryNoShares": "No percentages to show: on these days the slices add up to zero or less."
   }
 }

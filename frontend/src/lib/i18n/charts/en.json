@@ -15,11 +15,13 @@
       "originalValue": "orig. {value}",
       "fxRateDate": "fx @ {date}",
       "fxDaysBack": "({days}d back)",
+      "yearLabel": "{year}",
       "staleBadge": "{days}d"
     },
     "resolution": {
       "weekly": "Weekly",
-      "monthly": "Monthly"
+      "monthly": "Monthly",
+      "yearly": "Yearly"
     },
     "marketPrice": "Market Price",
     "showPercentage": "Show percentage",
@@ -148,7 +150,12 @@
       "signal": "{name} axis",
       "volume": "Volume axis"
     },
-    "yAxisAuto": "Auto"
+    "yAxisAuto": "Auto",
+    "lineShape": "Line shape",
+    "lineShapeDesc": "How charts join their points. Applies to this chart only.",
+    "lineShapeSegments": "Segments",
+    "lineShapeSteps": "Steps",
+    "lineShapeSpline": "Smooth curve"
   },
   "measure": {
     "pending": "Start: {startDate} ({startValue}) — click chart for end point",

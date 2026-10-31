@@ -426,6 +426,7 @@
       "title": "Aquí no puedes cambiar el correo",
       "message": "Es la dirección de correo del titular de la suscripción, así que no se puede cambiar desde LibreFolio. Pide a quien aloja esta instancia que la cambie.",
       "support": "Contactar con soporte"
-    }
+    },
+    "lineShapeHint": "Se aplica a todos los gráficos, en este navegador. Un gráfico puede tener su propia forma en sus ajustes."
   }
 }

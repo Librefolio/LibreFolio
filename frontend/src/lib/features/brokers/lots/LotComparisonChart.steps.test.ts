@@ -26,6 +26,7 @@ const {chartInstances, echartsModule} = vi.hoisted(() => {
         off: (event: string) => void;
         getZr: () => {on: () => void; off: () => void};
         dispatchAction: (action: unknown) => void;
+        convertToPixel: (finder: unknown, value: number) => number;
         resize: () => void;
         clear: () => void;
         isDisposed: () => boolean;
@@ -51,7 +52,12 @@ const {chartInstances, echartsModule} = vi.hoisted(() => {
                 chart.handlers.delete(event);
             },
             getZr: () => ({on: () => {}, off: () => {}}),
-            dispatchAction: () => {},
+            // The pointer snap moves the pointer with a second `updateAxisPointer`: ECharts hands it back to the listeners
+            dispatchAction: (action) => {
+                const payload = action as {type?: string; axesInfo?: unknown};
+                if (payload.type === 'updateAxisPointer') for (const handler of chart.handlers.get('updateAxisPointer') ?? []) handler({axesInfo: payload.axesInfo});
+            },
+            convertToPixel: (_finder, value) => value / 1_000_000_000,
             resize: () => {},
             clear: () => {},
             isDisposed: () => disposed,
@@ -86,6 +92,8 @@ vi.mock('$lib/api', () => ({
 import {render, setupI18n, waitFor} from '$test/component';
 import {formatCurrencyAmountPlain} from '$lib/utils/currency/currencyFormat';
 import LotComparisonChart from './LotComparisonChart.svelte';
+import {setGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
+import {MOMENTS_ON_THE_NEWEST_DAY, MOMENTS_ON_THE_OLDEST_DAY, firePointerAt, tooltipHoldsDay} from '$test/timeAxisPointer';
 
 const value = (lot_id: number, date: string, through: string, open_value: number) => ({lot_id, date, through, open_value: String(open_value), proceeds: '0', total_value: String(open_value), original_cost: '100', pnl: String(open_value - 100)});
 const ret = (lot_id: number, date: string, through: string, total_return: number) => ({lot_id, date, through, total_return: String(total_return), relative_return: String(total_return)});
@@ -129,6 +137,7 @@ beforeAll(async () => {
 afterAll(() => restoreRects?.());
 beforeEach(() => {
     chartInstances.length = 0;
+    setGlobalLineShape('steps');
 });
 
 async function mountChart(): Promise<DrawnOption> {
@@ -203,5 +212,39 @@ describe('the tooltip of a step line', () => {
         const option = await mountChart();
         const html = option.tooltip.formatter([nearestParam(option, '2026-01-11')]);
         expect(html).toContain(money(170));
+    });
+
+    it.each(MOMENTS_ON_THE_NEWEST_DAY)('opens on the newest day with the pointer at its $label', async (moment) => {
+        const option = await mountChart();
+        // 31 January is the last day of lot 1; the point ECharts hands over is the first one.
+        firePointerAt(chartInstances[0].handlers.get('updateAxisPointer') ?? [], '2026-01-31', moment);
+        const html = option.tooltip.formatter([nearestParam(option, '2026-01-02')]);
+        expect(tooltipHoldsDay(html, '2026-01-31')).toBe(true);
+        expect(html).toContain(money(120));
+    });
+
+    it.each(MOMENTS_ON_THE_OLDEST_DAY)('opens on the oldest day shown with the pointer at its $label', async (moment) => {
+        const option = await mountChart();
+        firePointerAt(chartInstances[0].handlers.get('updateAxisPointer') ?? [], '2026-01-02', moment);
+        const html = option.tooltip.formatter([nearestParam(option, '2026-01-31')]);
+        expect(tooltipHoldsDay(html, '2026-01-02')).toBe(true);
+        expect(html).toContain(money(100));
+    });
+});
+
+describe('the line shape the user chose (Y2 FB-3)', () => {
+    const linesOf = (option: DrawnOption) => option.series.filter((series) => series.type === 'line');
+
+    it('joins the points by segments when the choice is segments', async () => {
+        setGlobalLineShape('segments');
+        const option = await mountChart();
+        expect(linesOf(option).length).toBeGreaterThan(0);
+        expect(linesOf(option).every((series) => series.step === false)).toBe(true);
+    });
+
+    it('draws smooth lines when the choice is spline', async () => {
+        setGlobalLineShape('spline');
+        const option = await mountChart();
+        expect(linesOf(option).every((series) => series.step === false && (series as {smooth?: boolean}).smooth === true)).toBe(true);
     });
 });

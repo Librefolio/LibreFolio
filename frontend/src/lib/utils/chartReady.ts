@@ -16,6 +16,9 @@
  *   - `data-chart-renders` — how many render passes have completed, so a
  *     *re*-render (new range, new series) can be awaited without a stale `true`
  *     letting the reader through too early.
+ *
+ * The container also keeps the chart instance as `__lfChart`, for a spec that needs what the chart really drew and where (the series it
+ * holds, the pixel of a day); the app never reads it.
  */
 import {notify} from '$lib/stores/app/notify.svelte';
 
@@ -26,6 +29,8 @@ type MinimalChart = {
 export function attachChartReady(instance: MinimalChart, container: HTMLElement | null | undefined, name: string): void {
     if (!container) return;
 
+    // The instance, for a spec that needs the series a chart actually drew (`e2e/fixtures/timeAxisTooltip.ts`); never read by the app
+    (container as unknown as Record<string, unknown>).__lfChart = instance;
     container.dataset.chartReady = 'false';
     container.dataset.chartRenders = '0';
 

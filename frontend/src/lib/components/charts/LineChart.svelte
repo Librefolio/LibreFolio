@@ -21,6 +21,7 @@
     import {CHART_INIT_THEME} from '$lib/components/charts/chartFont';
     import {chartInitOptions} from '$lib/components/charts/chartPixelRatio';
     import {attachChartReady} from '$lib/utils/chartReady';
+    import {dayOfAxisValue} from '$lib/utils/stepSeries';
     import {t} from '$lib/i18n';
     import type {RenderedSignal} from '$lib/charts/signals';
     import type {AxisScaleSettings} from '$lib/stores/chartSettingsStore.svelte';
@@ -38,6 +39,8 @@
     import {formatDay, formatDayWithWeekday} from '$lib/utils/core/formatAxisDate';
     import {chartNeutrals, PRICE_SERIES} from '$lib/theme/chartTheme';
     import {isDarkTheme, onChartColorsChange, onThemeClassChange} from '$lib/theme/themeMode';
+    import {applyLineShape, type LineShape} from '$lib/components/charts/lineShape';
+    import {getGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
 
     // =========================================================================
     // Types
@@ -78,6 +81,8 @@
         areaFill?: boolean;
         /** Show stale-data gradient (per-point opacity) */
         showGradient?: boolean;
+        /** The shape of the lines (FB-3). Without it the chart follows the global shape. */
+        lineShape?: LineShape;
         /** Enable baseline coloring (red below baseline, green above) */
         colorByBaseline?: boolean;
         /**
@@ -125,6 +130,7 @@
         currency = '',
         areaFill = true,
         showGradient = true,
+        lineShape,
         colorByBaseline = true,
         baselineValue: baselineOverride,
         showGridLines = true,
@@ -235,6 +241,8 @@
             void baselineOverride;
             void showGridLines;
             void showGradient;
+            void lineShape;
+            void getGlobalLineShape();
             void viewMode;
             void compact;
             void showMiniAxis;
@@ -779,7 +787,9 @@
                           const items = Array.isArray(params) ? params : [params];
                           if (!items.length) return '';
                           const date = items[0].axisValue || items[0].name;
-                          let html = `<strong>${formatDayWithWeekday(String(date))}</strong>`;
+                          // `data-tooltip-from` / `data-tooltip-to`: the ISO day the header stands for, which the specs read (the text is translated)
+                          const shownDay = /^\d+$/.test(String(date)) ? dayOfAxisValue(Number(date)) : String(date).slice(0, 10);
+                          let html = `<strong data-tooltip-from="${shownDay}" data-tooltip-to="${shownDay}">${formatDayWithWeekday(String(date))}</strong>`;
 
                           // Build a set of band helper series names to skip in tooltip
                           const bandHelperNames = new Set<string>();
@@ -856,7 +866,7 @@
                           return html;
                       },
                   },
-            series,
+            series: applyLineShape(series, lineShape ?? getGlobalLineShape()),
         };
 
         // Single pass: render everything at once — no visualMap needed
@@ -885,4 +895,4 @@
     }
 </script>
 
-<div bind:this={chartContainer} class="w-full" style="height: {height};"></div>
+<div bind:this={chartContainer} class="w-full" style="height: {height};" data-line-shape={lineShape ?? getGlobalLineShape()}></div>

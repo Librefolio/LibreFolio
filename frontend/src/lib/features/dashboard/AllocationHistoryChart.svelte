@@ -34,7 +34,7 @@
     import {currentLanguage} from '$lib/stores/app/language';
     import {debug} from '$lib/debug';
     import {axisLabelMeasure, buildResponsiveXAxisPolicy, timeAxisGridRight} from '$lib/components/charts/responsiveXAxis';
-    import {allocationCoverage, allocationRows, allocationWitnessDays, type AllocationStep} from './allocationHistorySteps';
+    import {allocationCoverage, allocationRows, allocationWitnessDays, stepHasShares, type AllocationStep} from './allocationHistorySteps';
     import {bucketEndDays} from './growthStepInputs';
     import {dayOfAxisValue, indexHoldingDay} from '$lib/utils/stepSeries';
     import {attachDaySnap} from '$lib/components/charts/dayPointerSnap';
@@ -42,6 +42,8 @@
     import {formatDay, formatDayWithWeekday} from '$lib/utils/core/formatAxisDate';
     import {bucketSpanUpTo} from '$lib/components/charts/priceChartHelpers';
     import {uiLocale} from '$lib/stores/app/uiLocale';
+    import {applyLineShape, effectiveLineShape} from '$lib/components/charts/lineShape';
+    import {getGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
     import {withHexAlpha} from '$lib/theme/colorAlpha';
     import {chartNeutrals} from '$lib/theme/chartTheme';
     import {CATEGORY_SEQUENCE, categoryColor, COUNTRY_SEQUENCE, isUnclassifiedCountry, sequenceColor} from '$lib/theme/chartCategories';
@@ -51,7 +53,8 @@
 
     interface AllocationComponent {
         name: string;
-        value: string;
+        /** The share in percent; null on a step whose slices add up to zero or less (MF-C2). */
+        value: string | null;
         amount: string;
         /** The asset id, on the asset dimension; the cash slice has none. */
         id?: number | null;
@@ -116,6 +119,9 @@
     const CHART_SERIES_UPDATE_OPTS: {notMerge: boolean; replaceMerge: string[]} = {notMerge: false, replaceMerge: ['series', 'dataZoom', 'xAxis']};
 
     let {data = [], height = '100%', loading = false, dimension = 'type', colorRanks}: Props = $props();
+
+    /** At least one step has percentages; if none has (the slices always add up to zero or less), there is nothing to draw (MF-C2). */
+    let hasShares = $derived(data.some(stepHasShares));
 
     let chartContainer: HTMLDivElement | undefined = $state(undefined);
     let chartInstance: echarts.ECharts | undefined = undefined;
@@ -352,8 +358,9 @@
         return coverage && bucketEndDays(coverage, resolution) !== null ? resolution : 'daily';
     }
 
-    /** The steps are drawn as they are: the daily resolution, one row per step. */
-    const isStepped = () => currentResolution === 'daily';
+    /** The steps themselves are the daily resolution, one row per step; the user's line shape (FB-3) decides how they are drawn. */
+    const lineShape = () => effectiveLineShape(getGlobalLineShape(), currentResolution === 'daily');
+    const isStepped = () => lineShape() === 'steps';
 
     function finalizeDataset(resolution: ChartResolution, rows: TemporalBucketRow[], categoryNames: string[]): AggregatedAllocationDataset {
         const avgWeights: Record<string, number> = {};
@@ -389,7 +396,8 @@
 
     function buildDailyDataset(): AggregatedAllocationDataset {
         const steps = sortedSteps();
-        const categoryNames = [...new Set(steps.flatMap((point) => point.components.map((component) => component.name)))];
+        // A step without percentages draws nothing and names no category (MF-C2).
+        const categoryNames = [...new Set(steps.filter(stepHasShares).flatMap((point) => point.components.map((component) => component.name)))];
         // One row per step (and the last day of the range), read from the step that holds it: the cost is the steps, not the days.
         return finalizeDataset('daily', allocationRows(steps as AllocationStep[], categoryNames, allocationWitnessDays(steps as AllocationStep[], [])), categoryNames);
     }
@@ -569,14 +577,14 @@
     function buildAllocationTooltipHeader(row: TemporalBucketRow, mutedColor: string): string {
         if (currentResolution === 'weekly') {
             const span = bucketSpanUpTo(row.date, row);
-            return buildTooltipHeader($t('chart.tooltip.weekRange', {values: {start: formatDay(span.bucketStart), end: formatDay(span.bucketEnd)}}), mutedColor) + buildTooltipHeader($t('chart.tooltip.valueAt', {values: {date: formatDay(row.date)}}), mutedColor);
+            return buildTooltipHeader($t('chart.tooltip.weekRange', {values: {start: formatDay(span.bucketStart), end: formatDay(span.bucketEnd)}}), mutedColor, {from: span.bucketStart, to: span.bucketEnd}) + buildTooltipHeader($t('chart.tooltip.valueAt', {values: {date: formatDay(row.date)}}), mutedColor);
         }
 
         if (currentResolution === 'monthly') {
-            return buildTooltipHeader($t('chart.tooltip.monthLabel', {values: {month: formatMonthLabel(row.bucketStart)}}), mutedColor) + buildTooltipHeader($t('chart.tooltip.valueAt', {values: {date: formatDay(row.date)}}), mutedColor);
+            return buildTooltipHeader($t('chart.tooltip.monthLabel', {values: {month: formatMonthLabel(row.bucketStart)}}), mutedColor, {from: row.bucketStart, to: row.date}) + buildTooltipHeader($t('chart.tooltip.valueAt', {values: {date: formatDay(row.date)}}), mutedColor);
         }
 
-        return buildTooltipHeader(formatDayWithWeekday(row.date), mutedColor);
+        return buildTooltipHeader(formatDayWithWeekday(row.date), mutedColor, {from: row.date, to: row.date});
     }
 
     function getDisplayName(rawName: string): string {
@@ -715,7 +723,7 @@
         // changes, the colours do not.
         const styling: SeriesStyle[] = dimension === 'type' ? familyStyling(dataset, isDark) : keyedStyling(dataset, isDark);
 
-        const series: echarts.SeriesOption[] = styling.map(({id, color, members}) => {
+        const series: echarts.SeriesOption[] = applyLineShape(styling.map(({id, color, members}) => {
             const emoji = getCategoryEmoji(id);
             const averageWeight = members.reduce((sum, member) => sum + (dataset.avgWeights[member] ?? 0), 0);
             const showLabel = averageWeight >= 3 && emoji;
@@ -736,9 +744,6 @@
                                   members.reduce((sum, member) => sum + (row.valuesByName[member] ?? 0), 0),
                               ),
                           ),
-                smooth: false,
-                // The steps themselves hold each share to the next row; a coarser resolution joins its buckets as it always did.
-                ...(isStepped() ? {step: 'end' as const} : {}),
                 symbol: 'none',
                 lineStyle: {color, width: 1, opacity: 0.7},
                 areaStyle: {color: withHexAlpha(color, '88')},
@@ -756,7 +761,7 @@
                       }
                     : {show: false},
             };
-        });
+        }), lineShape());
 
         return {
             ...(skipAnimation ? {animation: false, animationDuration: 0, animationDurationUpdate: 0} : CHART_ANIMATION_CONFIG),
@@ -902,7 +907,7 @@
     }
 
     function renderChart(options: {skipAnimation?: boolean} = {}) {
-        if (!chartContainer || loading || data.length === 0) return;
+        if (!chartContainer || loading || data.length === 0 || !hasShares) return;
         if (!isChartVisible(chartContainer)) return;
 
         invalidateTemporalCacheIfNeeded();
@@ -990,7 +995,12 @@
         <div class="absolute inset-0 z-10 flex items-center justify-center text-lf-muted text-sm">
             {$_('common.noData')}
         </div>
+    {:else if !hasShares}
+        <!-- Every day's slices add up to zero or less (MF-C2): there is no percentage to draw -->
+        <div class="absolute inset-0 z-10 flex items-center justify-center px-4 text-center text-lf-muted text-sm" data-testid="allocation-history-no-shares">
+            {$_('dashboard.allocationHistoryNoShares')}
+        </div>
     {/if}
 
-    <div bind:this={chartContainer} style="height: 100%; width: 100%;" class:invisible={loading || data.length === 0} data-testid="allocation-history-chart"></div>
+    <div bind:this={chartContainer} style="height: 100%; width: 100%;" class:invisible={loading || data.length === 0 || !hasShares} data-testid="allocation-history-chart"></div>
 </div>

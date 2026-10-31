@@ -8,7 +8,7 @@
 import {describe, expect, it} from 'vitest';
 import {dailyFromSteps} from '$lib/utils/__tests__/stepSeriesTestKit';
 import {aggregateLineSeries} from '$lib/components/charts/timeSeriesAggregation';
-import {allocationCoverage, allocationRows, allocationWitnessDays, type AllocationStep} from './allocationHistorySteps';
+import {allocationCoverage, allocationRows, allocationWitnessDays, stepHasShares, type AllocationStep} from './allocationHistorySteps';
 
 const component = (name: string, value: number) => ({name, value: String(value), amount: String(value * 100), emoji: null, id: null});
 
@@ -87,5 +87,30 @@ describe('a history that starts in the year 1', () => {
         const days = allocationWitnessDays(typo, []);
         expect(days).toHaveLength(5);
         expect(allocationRows(typo, ['Alpha'], days)).toHaveLength(5);
+    });
+});
+
+describe('steps whose slices add up to zero or less have no percentages (MF-C2)', () => {
+    const noShare = (name: string, amount: number) => ({name, value: null, amount: String(amount), emoji: null, id: null});
+    /** Alpha 100 to 10 January; then 500 of Alpha on an overdraft of -500 (the slices add up to zero, no percentages) to 19 February; then Alpha 100 again. */
+    const WITH_A_HOLE: AllocationStep[] = [
+        {date: '2026-01-01', through: '2026-01-10', components: [component('Alpha', 100)]},
+        {date: '2026-01-11', through: '2026-02-19', components: [noShare('Alpha', 500), noShare('Liquidity', -500)]},
+        {date: '2026-02-20', through: '2026-03-01', components: [component('Alpha', 100)]},
+    ];
+
+    it('tells a step with percentages from one without', () => {
+        expect(stepHasShares(WITH_A_HOLE[0])).toBe(true);
+        expect(stepHasShares(WITH_A_HOLE[1])).toBe(false);
+        expect(stepHasShares({components: []})).toBe(false);
+    });
+
+    it('draws no row for the days of such a step, and reads no 0 where a percentage is missing', () => {
+        const rows = allocationRows(WITH_A_HOLE, ['Alpha', 'Liquidity'], ['2026-01-01', '2026-01-11', '2026-02-20']);
+        expect(rows.map((row) => row.date)).toEqual(['2026-01-01', '2026-02-20']);
+    });
+
+    it('has no row at all when every step is without percentages', () => {
+        expect(allocationRows([WITH_A_HOLE[1]], ['Alpha', 'Liquidity'], ['2026-01-11'])).toEqual([]);
     });
 });

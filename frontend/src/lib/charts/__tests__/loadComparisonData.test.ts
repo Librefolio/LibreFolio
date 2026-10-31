@@ -16,6 +16,7 @@ import {
     comparisonAnswerGenerations,
     comparisonAnswerIsCacheable,
     comparisonAnswerKey,
+    earliestComparisonDate,
     getComparisonEventFxDependency,
     loadComparisonAssetsData,
     type ComparisonAssetLoadItem,
@@ -891,5 +892,20 @@ describe('comparisonAnswerIsCacheable: an answer with a failed conversion is not
         expect(comparisonAnswerIsCacheable({items: [item(7, {_conversionFailed: false, _resolvedData: [{date: '2024-02-01', value: 10}]}), item(8, {})]})).toBe(true);
         expect(comparisonAnswerIsCacheable({items: [item(7, {_resolvedData: []})]})).toBe(true);
         expect(comparisonAnswerIsCacheable({items: []})).toBe(true);
+    });
+});
+
+describe('earliestComparisonDate (Y2-CMP)', () => {
+    const item = (assetId: number, days: string[] | undefined): ComparisonAssetLoadItem => ({assetId, runtimeParams: {_resolvedData: days?.map((date) => ({date, value: 1}))}, events: []}) as unknown as ComparisonAssetLoadItem;
+
+    it('is the oldest first day of any loaded comparison', () => {
+        const loaded: ComparisonAssetsLoadResult = {items: [item(7, ['2010-03-01', '2010-03-02']), item(8, ['1985-06-03', '1985-06-04'])]};
+        expect(earliestComparisonDate(loaded)).toBe('1985-06-03');
+    });
+
+    it('ignores a comparison that has no price, and is null when none has one', () => {
+        expect(earliestComparisonDate({items: [item(7, undefined), item(8, ['2015-01-02'])]})).toBe('2015-01-02');
+        expect(earliestComparisonDate({items: [item(7, undefined)]})).toBeNull();
+        expect(earliestComparisonDate({items: []})).toBeNull();
     });
 });

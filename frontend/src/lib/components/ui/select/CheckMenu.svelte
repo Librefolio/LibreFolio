@@ -35,14 +35,16 @@
         onclear: () => void;
         clearLabel: string;
         testId: string;
+        /** Open in viewport coordinates, out of any clipping parent: for a menu inside a panel that clips (`overflow-hidden`), where a short list would cut it. */
+        floating?: boolean;
     }
 
-    let {label, icon: Icon, items, selected, ontoggle, onclear, clearLabel, testId}: Props = $props();
+    let {label, icon: Icon, items, selected, ontoggle, onclear, clearLabel, testId, floating = false}: Props = $props();
 
     let active = $derived(selected.length > 0);
 </script>
 
-<SelectPopover testId="{testId}-panel" panelClass="w-60">
+<SelectPopover testId="{testId}-panel" panelClass="w-60" placement={floating ? {position: 'auto', minWidth: 240} : undefined}>
     {#snippet trigger({open, toggle})}
         <button
             type="button"

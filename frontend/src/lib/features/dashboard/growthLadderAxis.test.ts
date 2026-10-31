@@ -1366,7 +1366,8 @@ describe('L14-self — the oracle reproduces every pin (green on the old planner
         expect({b: groups.b, c: groups.c, d: groups.d, skippedOnlyOnBoundaries: skipped <= coverage.ambiguous}).toEqual({b: clean, c: clean, d: clean, skippedOnlyOnBoundaries: true});
     });
 
-    it('L14-self.4 — L14c and L14d catch plans that break the contract (positive control)', () => {
+    // A ceiling, not a delay: the case runs the 4 160-plan sweep once per mutant (CPU only, 6.3 s measured), past the 5 s default of a case outside the sweep's own describe.
+    it('L14-self.4 — L14c and L14d catch plans that break the contract (positive control)', {timeout: 60_000}, () => {
         // WHY: "no problem found" is also what a check that never fires reports; every mutant of a conforming plan must be caught.
         type Change = (plan: LadderAxisPlan, oracle: OracleCase, closings: readonly string[]) => void;
         const caughtBy = (id: GroupId, change: Change): boolean => {

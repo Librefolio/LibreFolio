@@ -64,11 +64,17 @@ export function fxPointToLineDataPoint(point: FxRatePoint, inverted: boolean): L
     };
 }
 
+/** How a chart draws its local signals. */
+export interface RenderLocalOptions {
+    /** The chart lays its axis on the union of its days and those of its comparisons (the detail pages): a comparison keeps every day of its own. */
+    unionAxis?: boolean;
+}
+
 /**
  * One saved local signal, drawn on `baseData`: nothing when its type is unknown, or when the series it reads is missing.
  * The signal is rebuilt from `config` and given its data; `config` itself is never written into.
  */
-export function renderLocalSignal(config: SignalConfig, baseData: LineDataPoint[], viewMode: ViewMode, sources: SignalDataSources): RenderedSignal[] {
+export function renderLocalSignal(config: SignalConfig, baseData: LineDataPoint[], viewMode: ViewMode, sources: SignalDataSources, options: RenderLocalOptions = {}): RenderedSignal[] {
     const instance = signalFromConfig(config);
     if (!instance) return [];
 
@@ -93,16 +99,19 @@ export function renderLocalSignal(config: SignalConfig, baseData: LineDataPoint[
         if (target.basePoint != null) instance.params._basePoint = target.basePoint;
     }
 
+    // A detail page's chart lays its axis on the union of its days and its comparisons': they keep their own days (Y2-CMP)
+    if (options.unionAxis === true && (config.signalType === 'fx-pair' || config.signalType === 'asset-comparison')) instance.params._unionAxis = true;
+
     return instance.renderMulti(baseData, viewMode).filter((result) => result.data.length > 0);
 }
 
 /** A chart's saved local signals, in their order. Backend-owned and unknown definitions are left to the backend results. */
-export function renderLocalSignals(configs: readonly SignalConfig[], definitionsByType: ReadonlyMap<string, SignalDefinition>, baseData: LineDataPoint[], viewMode: ViewMode, sources: SignalDataSources): RenderedSignal[] {
+export function renderLocalSignals(configs: readonly SignalConfig[], definitionsByType: ReadonlyMap<string, SignalDefinition>, baseData: LineDataPoint[], viewMode: ViewMode, sources: SignalDataSources, options: RenderLocalOptions = {}): RenderedSignal[] {
     const rendered: RenderedSignal[] = [];
     for (const config of configs) {
         const definition = definitionsByType.get(config.signalType);
         if (!definition || definition.source === 'backend') continue;
-        rendered.push(...renderLocalSignal(config, baseData, viewMode, sources));
+        rendered.push(...renderLocalSignal(config, baseData, viewMode, sources, options));
     }
     return rendered;
 }

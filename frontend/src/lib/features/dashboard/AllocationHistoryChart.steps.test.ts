@@ -29,7 +29,9 @@ const {chartInstances, echartsModule} = vi.hoisted(() => {
         getHeight: () => number;
         on: (event: string, handler: (event: unknown) => void) => void;
         off: (event: string, handler?: (event: unknown) => void) => void;
+        getZr: () => {on: () => void; off: () => void};
         dispatchAction: (action: unknown) => void;
+        convertToPixel: (finder: unknown, value: number) => number;
         resize: () => void;
         isDisposed: () => boolean;
         dispose: () => void;
@@ -59,7 +61,13 @@ const {chartInstances, echartsModule} = vi.hoisted(() => {
                         (chart.handlers.get(event) ?? []).filter((entry) => entry !== handler),
                     );
             },
-            dispatchAction: () => {},
+            getZr: () => ({on: () => {}, off: () => {}}),
+            // The pointer snap moves the pointer with a second `updateAxisPointer`: ECharts hands it back to the listeners
+            dispatchAction: (action) => {
+                const payload = action as {type?: string; axesInfo?: unknown};
+                if (payload.type === 'updateAxisPointer') for (const handler of chart.handlers.get('updateAxisPointer') ?? []) handler({axesInfo: payload.axesInfo});
+            },
+            convertToPixel: (_finder, value) => value / 1_000_000_000,
             resize: () => {},
             isDisposed: () => disposed,
             dispose: () => {
@@ -90,9 +98,11 @@ vi.mock('$lib/api', () => ({
     ),
 }));
 
-import {render, setupI18n, waitFor} from '$test/component';
+import {render, screen, setupI18n, waitFor} from '$test/component';
 import {formatPercent} from '$lib/utils/core/formatPercent';
 import {addDays} from '$lib/utils/dateOnly';
+import {setGlobalLineShape} from '$lib/stores/chartSettingsStore.svelte';
+import {MOMENTS_ON_THE_NEWEST_DAY, MOMENTS_ON_THE_OLDEST_DAY, firePointerAt, tooltipHoldsDay} from '$test/timeAxisPointer';
 
 const GENERATED_TS = join(process.cwd(), 'src', 'lib', 'api', 'generated.ts');
 const CHART_CONTAINER_TESTID = 'allocation-history-chart';
@@ -119,6 +129,7 @@ beforeAll(async () => {
 afterAll(() => restoreLayout?.());
 beforeEach(() => {
     chartInstances.length = 0;
+    setGlobalLineShape('steps');
 });
 
 const component = (name: string, value: number) => ({name, value: String(value), amount: String(value * 100)});
@@ -200,7 +211,7 @@ describe('dense steps are the weekly line they always were', () => {
             {timeout: 5_000},
         );
         const option = lastFullOption()!;
-        expect(option.series.every((series) => series.step === undefined)).toBe(true);
+        expect(option.series.every((series) => !series.step)).toBe(true);
         expect(option.series[0].data.length).toBeGreaterThan(150);
     });
 });
@@ -245,5 +256,63 @@ describe('the tooltip of a step area', () => {
         const option = await mountChart(STEPS);
         expect(option.tooltip.axisPointer.snap).toBe(false);
         expect(option.xAxis.axisPointer.snap).toBe(false);
+    });
+});
+
+describe('the edges of the plot (Y2-I63, issue #63)', () => {
+    const handlers = () => chartInstances[0].handlers.get('updateAxisPointer') ?? [];
+    const share = (value: number) => formatPercent(value, {digits: 1, signed: false});
+
+    it.each(MOMENTS_ON_THE_NEWEST_DAY)('opens on the newest day with the pointer at its $label', async (moment) => {
+        const option = await mountChart(STEPS);
+        // 1 March is the last day of the last step (Alpha 70, Gamma 30); the row ECharts hands over is the first one.
+        firePointerAt(handlers(), '2026-03-01', moment);
+        const html = option.tooltip.formatter([{dataIndex: 0}]);
+        expect(tooltipHoldsDay(html, '2026-03-01')).toBe(true);
+        expect(html).toContain(share(70));
+        expect(html).not.toContain(share(60));
+    });
+
+    it.each(MOMENTS_ON_THE_OLDEST_DAY)('opens on the oldest day shown with the pointer at its $label', async (moment) => {
+        const option = await mountChart(STEPS);
+        firePointerAt(handlers(), '2026-01-01', moment);
+        const html = option.tooltip.formatter([{dataIndex: 3}]);
+        expect(tooltipHoldsDay(html, '2026-01-01')).toBe(true);
+        expect(html).toContain(share(60));
+    });
+});
+
+describe('the line shape the user chose (Y2 FB-3)', () => {
+    it('joins the areas by segments when the choice is segments', async () => {
+        setGlobalLineShape('segments');
+        const option = await mountChart(STEPS);
+        expect(option.series.length).toBeGreaterThan(0);
+        expect(option.series.every((series) => series.step === false)).toBe(true);
+    });
+
+    it('draws smooth areas when the choice is spline', async () => {
+        setGlobalLineShape('spline');
+        const option = await mountChart(STEPS);
+        expect(option.series.every((series) => series.step === false && (series as {smooth?: boolean}).smooth === true)).toBe(true);
+    });
+});
+
+describe('days without percentages (MF-C2)', () => {
+    const noShare = (name: string, amount: number) => ({name, value: null, amount: String(amount * 100)});
+    const OVERDRAFT = (date: string, through: string) => ({date, through, components: [noShare('Alpha', 5), noShare('Liquidity', -5)]});
+
+    it('says so when no day has percentages, instead of drawing a chart of zeros', async () => {
+        render(AllocationHistoryChart, {props: {data: [OVERDRAFT('2026-01-01', '2026-03-01')] as never, dimension: 'sector', height: '400px'}});
+        await waitFor(() => expect(screen.getByTestId('allocation-history-no-shares')).toBeInTheDocument());
+        expect(screen.getByTestId('allocation-history-chart').classList.contains('invisible')).toBe(true);
+        expect(lastFullOption(), 'nothing is drawn').toBeUndefined();
+    });
+
+    it('draws the days that have percentages and leaves the others out, with no message', async () => {
+        const option = await mountChart([STEPS[0], OVERDRAFT('2026-01-11', '2026-02-19') as never, STEPS[2]]);
+        expect(screen.queryByTestId('allocation-history-no-shares')).toBeNull();
+        const alpha = option.series.find((series) => series.id === 'Alpha')!;
+        expect(alpha.data.map((point) => point.value[0])).not.toContain('2026-01-11');
+        expect(alpha.data[0].value[0]).toBe('2026-01-01');
     });
 });

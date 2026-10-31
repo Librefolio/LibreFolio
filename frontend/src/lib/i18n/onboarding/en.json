@@ -13,7 +13,9 @@
       "skip": "Skip setup permanently",
       "completed": "Setup saved. You can continue to LibreFolio.",
       "skipped": "Setup skipped. You can replay it later from Settings.",
-      "logout": "Log out"
+      "logout": "Log out",
+      "lineShapeLabel": "How charts draw lines",
+      "lineShapeHint": "Pick one and watch the example change. You can change it later in Settings or for a single chart."
     },
     "errors": {
       "loadTitle": "We couldn't load onboarding",
