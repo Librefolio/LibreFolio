@@ -251,7 +251,8 @@ describe('riskStore', () => {
         expect(queryApi).toHaveBeenCalledWith(
             expect.objectContaining({
                 target_currency: 'EUR',
-                scope: {kind: 'portfolio', broker_ids: [3, 9]},
+                // The generated schema carries `apply_ownership_share` (MF6-3, default true): the wire has it, no caller sets it.
+                scope: {kind: 'portfolio', broker_ids: [3, 9], apply_ownership_share: true},
             }),
         );
     });
