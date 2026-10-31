@@ -142,7 +142,8 @@ nel menu **⋮** di una riga, apre i dettagli, con gli avvisi e le note elencati
 - **Avvisi e note**: **Continua** elenca prima gli avvisi, poi le note; leggili, poi clicca
   **Continua comunque**.
 - **Un file non è stato elaborato**: un banner ne indica il motivo. Correggi il suo plugin in
-  **Seleziona File**, poi clicca **Rianalizza tutti**.
+  **Seleziona File**, poi analizza di nuovo. **Rianalizza tutti** c'è nell'analisi solo quando almeno un
+  file è stato letto; se nessuno lo è stato, torna a **Seleziona File** e clicca **Analizza (N)**.
 
 ### 🧩 Passaggi che compaiono solo quando servono {: #only-when-needed }
 

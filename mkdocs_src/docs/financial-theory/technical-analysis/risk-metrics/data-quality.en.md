@@ -171,7 +171,7 @@ Analytics also refuse to answer rather than answer badly. Each one declares the 
 
 !!! warning "A holding valued from its trades stands still"
 
-    On a portfolio's TWRR, a holding that no market prices is valued at [the price of its last purchase or sale](../performance-metrics/portfolio-engine/price-resolution.md), so in its own currency it stands still from one trade to the next; with neither, it is valued at its cost, which stands still in the target currency too. For a loan held at its nominal value — a typical crowdfunding investment — that is the truth. For a holding whose value really moves, it flattens every figure read on the TWRR, just as a held-over price does. No status flags it: the portfolio's report does not count a valuation from trades or at cost against its status, and for a holding with no price source it treats that valuation as the intended, permanent state.
+    On a portfolio's TWRR, a holding that no market prices is valued at [the price of its last purchase or sale](../performance-metrics/portfolio-engine/price-resolution.md) — or, received only by transfer, at that transfer's cost —, so in its own currency it stands still from one trade to the next; with neither, it is valued at its cost, which stands still in the target currency too. For a loan held at its nominal value — a typical crowdfunding investment — that is the truth. For a holding whose value really moves, it flattens every figure read on the TWRR, just as a held-over price does. No status flags it: the portfolio's report does not count a valuation from trades or at cost against its status, and for a holding with no price source it treats that valuation as the intended, permanent state.
 
 !!! warning "No quality threshold discards a figure"
 

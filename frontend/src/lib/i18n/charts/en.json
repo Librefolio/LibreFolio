@@ -208,8 +208,7 @@
       "zero": "Zero"
     },
     "gapsJoined": {
-      "label": "gaps joined",
-      "warning": "Too many gaps to draw: the line joins them."
+      "label": "gaps joined"
     },
     "regions": {
       "oversoldDescription": "Lower extreme below the configured threshold.",

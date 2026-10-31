@@ -17,7 +17,7 @@ The contract (developer's decisions of 16/10):
 * ``Transaction.quantity`` is ``RealDecimal(22, 10)``; ``Transaction.cost_basis_override`` (a PER-UNIT price,
   decision D5) and ``PriceHistory`` open, high, low, close and adjusted_close are ``RealDecimal(24, 12)``.
   Unchanged by C-97a: ``amount``, ``AssetEvent.value`` (``Numeric(18, 6)``, until W-B60 below), ``volume``
-  (``Numeric(24, 0)``), ``FxRate.rate`` (``Numeric(24, 10)``).
+  (``Numeric(24, 0)``), ``FxRate.rate`` (``Numeric(24, 10)``; both until W-B63 below).
 * ``db/precision.py``: ``get_model_column_precision`` reads a ``RealDecimal`` column;
   ``truncate_to_db_precision`` / ``truncate_priceHistory`` cut to the scale, then, on a ``RealDecimal``
   column, to 15 significant digits, both ``ROUND_DOWN``; ``truncate_fx_rate`` is unchanged. New
@@ -91,6 +91,15 @@ significant digits of an amount and ``round_computed_value`` 16, more than the c
   digits, both ``ROUND_DOWN`` (``1234567890123.4567891`` → ``1234567890123.45``), and ``round_computed_value`` rounds it
   to 6 decimals, then 15 significant digits, both ``ROUND_HALF_EVEN`` (``1234567890.1234567`` → ``1234567890.12346``).
 
+W-B63 (17/10, decided 22/10 for wave 6; W-B58's last two columns): ``PriceHistory.volume`` (``Numeric(24, 0)``) and
+``FxRate.rate`` (``Numeric(24, 10)``) were still plain ``Numeric``: a stored REAL ±inf — written before W-B58, or by hand —
+reads ``Decimal('Infinity')`` (``'%.Nf'`` of inf), which the JSON writes as ``Infinity`` and breaks every response that
+carries it; nothing refuses ``Decimal('1E+400')`` on write. The cure's contract: both become ``RealDecimal`` with the
+declaration they have (24, 0) and (24, 10), the same DDL, so the 005 performs no DDL and no data step (a docstring
+paragraph only); a stored ±inf reads ``None``; binding a value a double cannot hold raises the ``ValueError`` of W-B58,
+naming "finite"; a whole volume and a rate that read well today read back equal. The bonification of the ±inf already
+stored was discarded (the developer, 22/10/2026): an external script, if a real database holds one.
+
 Reds fail at run time, never at collection: the column types are read from the models when a test
 runs (``Transaction.__table__.c.quantity.type``), and ``decimal_limit_issue``, ``round_computed_value``,
 ``max_integer_digits``, ``integer_digits_issue``, ``storable_value``, ``storable_fx_rate`` and ``INTEGER_DIGITS_EXCEEDED``
@@ -125,8 +134,8 @@ _REAL_DECIMAL_COLUMNS = [
     pytest.param(PriceHistory, "adjusted_close", (24, 12), id="PriceHistory.adjusted_close"),
 ]
 
-# The numeric columns C-97a and W-B60 leave as they are: an amount and an event value go to RealDecimal in W-B60.
-_UNCHANGED_COLUMNS = [
+# The columns W-B63 moves to RealDecimal, with the declaration they keep: a volume (whole units), an exchange rate.
+_WB63_COLUMNS = [
     pytest.param(PriceHistory, "volume", (24, 0), id="PriceHistory.volume"),
     pytest.param(FxRate, "rate", (24, 10), id="FxRate.rate"),
 ]
@@ -326,16 +335,6 @@ def test_get_model_column_precision_reads_the_new_declaration(model, column, dec
     found = precision.get_model_column_precision(model, column)
 
     assert found == declared, f"{model.__name__}.{column} is declared {found}: a BTC buy of 0.12345678, a PEPE close of 0.0000034573 cannot be kept (C-97a: {declared})"
-
-
-@pytest.mark.parametrize(("model", "column", "declared"), _UNCHANGED_COLUMNS)
-def test_guard_the_other_numeric_columns_keep_their_type_and_declaration(model, column, declared):
-    """GUARD (green before and after): the volume and FX rates are part of neither C-97a nor W-B60. An amount and an event
-    value left this list with W-B60 (``test_an_amount_and_an_event_value_are_real_decimals``)."""
-    column_type = _column_type(model, column)
-
-    assert type(column_type) is Numeric, f"{model.__name__}.{column} became a {type(column_type).__name__}: C-97a leaves it Numeric{declared}"
-    assert precision.get_model_column_precision(model, column) == declared
 
 
 # --------------------------------------------------------------------------- #
@@ -1183,3 +1182,89 @@ def test_writing_a_value_a_double_cannot_hold_into_an_amount_or_an_event_value_i
         assert isinstance(refusal.orig, ValueError) and "finite" in str(refusal.orig), f"Decimal('1E+400') in {model.__name__}.{column} was refused with {refusal.orig!r}: expected the ValueError of process_bind_param, naming 'finite'"
         return
     pytest.fail(f"Decimal('1E+400') was written to {model.__name__}.{column} as {storage} and reads back {read!r} (W-B60: refuse it on write)")
+
+
+# --------------------------------------------------------------------------- #
+# W-B63: a volume and an exchange rate are real decimals
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.parametrize(("model", "column", "declared"), _WB63_COLUMNS)
+def test_a_volume_and_an_exchange_rate_are_real_decimals(model, column, declared):
+    """Red today: both are a plain ``Numeric``, read through ``'%.Nf'`` of the stored double, which turns a REAL ±inf into
+    ``Decimal('Infinity')``.
+
+    Contract (W-B63): ``backend.app.db.real_decimal.RealDecimal``, a TypeDecorator over Numeric, as the nine columns of
+    C-97a and W-B60.
+    """
+    column_type = _column_type(model, column)
+    kind = f"{type(column_type).__module__}.{type(column_type).__qualname__}"
+
+    assert kind == "backend.app.db.real_decimal.RealDecimal", f"{model.__name__}.{column} is a {kind}: a stored ±inf reads Infinity and breaks every response that carries it (W-B63: RealDecimal{declared})"
+    assert isinstance(column_type, TypeDecorator), f"RealDecimal must be a TypeDecorator, it is a {type(column_type).__mro__}"
+    assert isinstance(column_type.impl, Numeric), f"RealDecimal must decorate Numeric, it decorates {column_type.impl!r}"
+
+
+@pytest.mark.parametrize(("model", "column", "declared"), _WB63_COLUMNS)
+def test_guard_a_volume_and_an_exchange_rate_keep_their_declaration_and_ddl(model, column, declared):
+    """GUARD (green before and after): W-B63 changes how the value is read, not the column: the same precision and scale,
+    the same DDL (``NUMERIC(24, 0)``, ``NUMERIC(24, 10) NOT NULL``), so the 005 performs no DDL and every file already
+    written stays readable."""
+    table_column = model.__table__.c[column]
+    expected = {"volume": "volume NUMERIC(24, 0)", "rate": "rate NUMERIC(24, 10) NOT NULL"}[column]
+
+    assert precision.get_model_column_precision(model, column) == declared, f"{model.__name__}.{column} is declared {precision.get_model_column_precision(model, column)}: W-B63 keeps {declared}"
+    ddl = str(CreateColumn(table_column).compile(dialect=_SQLITE))
+    assert ddl == expected, f"{model.__name__}.{column} is created as {ddl!r}: W-B63 keeps {expected!r}, without a migration"
+
+
+@pytest.mark.parametrize(("model", "column", "declared"), _WB63_COLUMNS)
+@pytest.mark.parametrize("stored", [pytest.param(float("inf"), id="plus-inf"), pytest.param(float("-inf"), id="minus-inf")])
+def test_a_stored_infinite_volume_or_exchange_rate_reads_back_as_none(memory_engine, model, column, declared, stored):
+    """Red today: ``Numeric`` reads a REAL ±inf as ``Decimal('Infinity')``, which the JSON of a price list or of a rate
+    list writes as ``Infinity``: the response cannot be parsed.
+
+    Contract (W-B63): ``None``, as in every ``RealDecimal`` column (W-B58): the row loads, is listed, and can be deleted.
+    """
+    read, storage = _read_back_never_raising(memory_engine, model, column, stored)
+
+    assert storage == "real", f"the fixture itself is wrong: {stored!r} was stored as {storage}"
+    assert read is None, f"a REAL {stored!r} in {model.__name__}.{column} reads back {read!r}: expected None, since no Decimal of the column is infinite (W-B63)"
+
+
+@pytest.mark.parametrize(("model", "column", "declared"), _WB63_COLUMNS)
+@pytest.mark.parametrize("value", _BEYOND_A_DOUBLE)
+def test_binding_a_value_a_double_cannot_hold_into_a_volume_or_an_exchange_rate_raises_naming_finite(model, column, declared, value):
+    """Red today: a plain ``Numeric`` has no ``process_bind_param``; the value is bound as ``float('inf')``.
+
+    Contract (W-B63): the ``process_bind_param`` of ``RealDecimal`` (W-B58) raises ``ValueError``, its message containing
+    "finite", for any value that becomes ±inf as a float.
+    """
+    bind = _process_bind_param(model, column)
+
+    with pytest.raises(ValueError, match="finite"):
+        bind(value, _SQLITE)
+
+
+@pytest.mark.parametrize(
+    ("model", "column", "typed", "form", "storage"),
+    [
+        pytest.param(PriceHistory, "volume", "1234567", "1234567.000000", "integer", id="volume-whole"),
+        pytest.param(PriceHistory, "volume", "0", "0.000000", "integer", id="volume-zero"),
+        pytest.param(FxRate, "rate", "1.0850123456", "1.0850123456", "real", id="rate-10-decimals"),
+        pytest.param(FxRate, "rate", "151.25", "151.250000", "real", id="rate-2-decimals"),
+    ],
+)
+def test_guard_a_volume_or_an_exchange_rate_that_reads_well_today_reads_back_equal(memory_engine, model, column, typed, form, storage):
+    """GUARD (green on the value before and after): what ``Numeric`` reads without noise today reads back the same
+    NUMBER after W-B63, written as today (a whole value as an INTEGER, a fraction as a REAL).
+
+    Only the text form changes, and only for a whole volume: a ``RealDecimal`` pads to 6 decimals, as every column since
+    C-97 (``1234567`` reads ``1234567.000000``, equal to it). A rate with at least 6 decimals reads in the same form.
+    """
+    read, stored_as = _write_and_read(memory_engine, _column_type(model, column), Decimal(typed))
+
+    assert isinstance(read, Decimal) and read == Decimal(typed), f"{typed} in {model.__name__}.{column} reads back {read!r}: expected the same number"
+    assert stored_as == storage, f"{typed} in {model.__name__}.{column} is stored as {stored_as}: expected {storage}, as today"
+    if column == "rate":
+        assert str(read) == form, f"{typed} in {model.__name__}.{column} reads back as {read}: expected {form}"

@@ -5,6 +5,7 @@ from __future__ import annotations
 import bisect
 from collections import defaultdict
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import date as date_type
 from datetime import timedelta
 from decimal import Decimal
@@ -17,8 +18,9 @@ from backend.app.services.financial_math.average_cost import (
     CostEffect,
     CostStep,
 )
+from backend.app.services.financial_math.change_days import change_days, reading_change_days
 from backend.app.services.financial_math.fx_rates import AskedDayRates
-from backend.app.services.financial_math.native_cash import NativeCash, change_days
+from backend.app.services.financial_math.native_cash import NativeCash
 from backend.app.services.financial_math.portfolio.classifier import _CASH_LINKED_TYPES, _LINKED_TYPES
 from backend.app.services.financial_math.portfolio.models import (
     AcquisitionFundingContribution,
@@ -42,11 +44,18 @@ from backend.app.services.financial_math.portfolio.models import (
     ValuationResult,
     ValuationSource,
 )
-from backend.app.services.financial_math.price_marks import AssetPriceSeries
+from backend.app.services.financial_math.price_marks import AssetPriceSeries, ResolvedMark
 from backend.app.services.financial_math.valuation import compute_holding_value
-from backend.app.services.platform.data_quality_thresholds import STALE_PRICE_THRESHOLD_DAYS
+from backend.app.services.platform.data_quality_thresholds import QUANTITY_DUST_THRESHOLD, STALE_PRICE_THRESHOLD_DAYS
 
 logger = structlog.get_logger(__name__)
+
+
+def _is_held(qty: Decimal) -> bool:
+    """A position is held above the dust threshold (MF-A6): a residual of ``QUANTITY_DUST_THRESHOLD`` units or fewer
+    has no value, cost, slice, frame or snapshot of its own — as the Performance rows and the position series count it —
+    and its cost leaves the open cost basis, so it ends in the period's other effects."""
+    return qty > QUANTITY_DUST_THRESHOLD
 
 
 def _cumulative_split_ratio(history: SplitHistory, reference_date: date_type, valuation_date: date_type) -> tuple[Decimal, bool]:
@@ -79,9 +88,134 @@ def _valued_at_cost(cost_value: Decimal) -> ValuationResult:
     )
 
 
+@dataclass(frozen=True, slots=True)
+class MarkedPrice:
+    """An asset's mark on a day as the portfolio values it, in the mark's own currency (MF6-1, T-U5).
+
+    ``unit_price`` is the price ``compute_holding_value`` multiplies: on the market × quote_base_quantity axis, a trade
+    mark restated to current units through the splits since it was observed. ``reference_unit_price`` is the price as
+    its observation reported it.
+    """
+
+    mark: ResolvedMark
+    unit_price: Decimal
+    currency: str
+    source: ValuationSource
+    reference_unit_price: Decimal
+    split_adjusted: bool
+
+
+def marked_price(series: AssetPriceSeries | None, splits: SplitHistory, quote_base: int | None, day: date_type, default_currency: str) -> MarkedPrice | None:
+    """The mark of an asset on ``day`` (None when it has none): the one rule of the valuation
+    (:meth:`DailyStateBuilder._market_value_for`) and of the engine's price reader (:class:`AssetMarks`)."""
+    if series is None:
+        return None
+    mark = series.resolve(day)
+    if mark.is_missing:
+        return None
+    if not mark.estimated:
+        return MarkedPrice(mark=mark, unit_price=mark.unit_price, currency=mark.currency or default_currency, source=ValuationSource.MARKET_PRICE, reference_unit_price=mark.unit_price, split_adjusted=False)
+    # Trade-derived mark: restate the observed unit price to current units through any intervening splits (real
+    # asset-system quotes already sit on the current-unit axis). Trade observations were lifted onto the market
+    # ×quote_base_quantity axis at ingestion (price_marks); the reference price goes back to the source per-unit axis,
+    # as it appeared in the trade record.
+    split_ratio, split_adjusted = _cumulative_split_ratio(splits, mark.as_of_date, day)
+    scale = Decimal(quote_base if quote_base and quote_base > 0 else 1)
+    return MarkedPrice(
+        mark=mark,
+        unit_price=mark.unit_price / split_ratio,
+        currency=mark.currency or default_currency,
+        source=ValuationSource.LAST_TRADE_PRICE,
+        reference_unit_price=mark.unit_price / scale,
+        split_adjusted=split_adjusted,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class AssetMarks:
+    """The price of an asset on a day as the engine values it (MF6-1, T-U5): the one home of «the price at a date» for a
+    reader of the engine's result. Read-only: the result that holds it is shared by the requests of the blob cache.
+
+    It answers on the engine's days only, ``first_day`` … ``last_day``: the rates it converts with are the ones the
+    engine asked (``AskedDayRates``), so a day outside them has no price, in any currency.
+    """
+
+    mark_series: Mapping[int, AssetPriceSeries]
+    split_history: Mapping[int, SplitHistory]
+    quote_base_map: Mapping[int, int | None]
+    fx_rate_map: Mapping[tuple[str, str, date_type], Decimal]
+    target_currency: str
+    first_day: date_type
+    last_day: date_type
+
+    def _inside(self, day: date_type) -> bool:
+        return self.first_day <= day <= self.last_day
+
+    def price_at(self, asset_id: int, day: date_type) -> MarkedPrice | None:
+        """The asset's mark on ``day``, as the valuation reads it; None without one."""
+        if not self._inside(day):
+            return None
+        return marked_price(self.mark_series.get(asset_id), self.split_history.get(asset_id, ()), self.quote_base_map.get(asset_id), day, self.target_currency)
+
+    def last_market_price_at(self, asset_id: int, day: date_type) -> MarkedPrice | None:
+        """The asset's last market quote on or before ``day`` (a trade observed after it does not move it); None without one."""
+        series = self.mark_series.get(asset_id)
+        quote_day = series.last_market_date(day) if series is not None and self._inside(day) else None
+        if quote_day is None:
+            return None
+        return marked_price(series, self.split_history.get(asset_id, ()), self.quote_base_map.get(asset_id), quote_day, self.target_currency)
+
+    def in_target(self, amount: Decimal, currency: str, day: date_type) -> Decimal | None:
+        """``amount`` in ``currency`` at ``day``'s rate in the target currency, as the valuation converts a mark; None
+        without a rate or outside the engine's days."""
+        if not self._inside(day):
+            return None
+        if currency == self.target_currency:
+            return amount
+        rate = self.fx_rate_map.get((currency, self.target_currency, day))
+        return amount * rate if rate is not None else None
+
+
 # =============================================================================
 # DAILY STATE BUILDER — Pure function, no I/O
 # =============================================================================
+
+
+def _deposit_pools(bid: int, amount: Decimal, K: dict[int, Decimal], R: dict[int, Decimal], withdrawn: Decimal) -> Decimal:
+    """The pools of cash coming into the scope (a DEPOSIT): it first restores withdrawn returns into R, the rest is
+    capital in K. Returns the withdrawn pool after it."""
+    restore = min(amount, withdrawn)
+    R[bid] += restore
+    K[bid] += amount - restore
+    return withdrawn - restore
+
+
+def _withdrawal_pools(bid: int, amount: Decimal, K: dict[int, Decimal], R: dict[int, Decimal], withdrawn: Decimal) -> Decimal:
+    """The pools of cash leaving the scope (a WITHDRAWAL): capital first, then returns, which go to the withdrawn pool.
+    Returns the withdrawn pool after it."""
+    zero = Decimal("0")
+    from_k = min(amount, max(K[bid], zero))
+    K[bid] -= from_k
+    from_r = min(amount - from_k, max(R[bid], zero))
+    R[bid] -= from_r
+    return withdrawn + from_r
+
+
+def _cash_transfer_pools(ctxn: ClassifiedTransaction, amount: Decimal, K: dict[int, Decimal], R: dict[int, Decimal], withdrawn: Decimal, transfer_splits: dict[int, tuple[Decimal, Decimal]] | None) -> Decimal:
+    """The pools of one CASH_TRANSFER or FX_CONVERSION leg; returns the withdrawn pool after it.
+
+    A linked-internal leg moves its split between the two brokers (:func:`_move_linked_cash`, J2). A leg whose partner is
+    outside the scope, or an orphan, is an external flow of the capital baseline (the classifier counts it so): its pools
+    move as a deposit into the scope or a withdrawal out of it (B3, MF-J3).
+    """
+    if ctxn.classification == "linked_internal":
+        _move_linked_cash(ctxn, amount, K, R, transfer_splits)
+        return withdrawn
+    if ctxn.tx.amount > 0:
+        return _deposit_pools(ctxn.tx.broker_id, amount, K, R, withdrawn)
+    if ctxn.tx.amount < 0:
+        return _withdrawal_pools(ctxn.tx.broker_id, amount, K, R, withdrawn)
+    return withdrawn
 
 
 def _move_linked_cash(ctxn: ClassifiedTransaction, amount: Decimal, K: dict[int, Decimal], R: dict[int, Decimal], transfer_splits: dict[int, tuple[Decimal, Decimal]] | None) -> None:
@@ -468,7 +602,7 @@ class DailyStateBuilder:
             unrealized_parts: dict[str, list[Decimal]] = {}
 
             for (asset_id, position_broker_id), qty in cumulative_qty.items():
-                if qty <= 0:
+                if not _is_held(qty):
                     continue
                 valuation = self._value_held_position(asset_id, position_broker_id, qty, current, cost_pool, compute_ohlc=self.compute_candles)
                 if valuation.market_value is not None:
@@ -599,7 +733,7 @@ class DailyStateBuilder:
             # 4b2. Position state snapshot at the end of the period's start day
             if current == self.period_start:
                 for (aid, bid), qty in cumulative_qty.items():
-                    if qty <= 0:
+                    if not _is_held(qty):
                         continue
                     ps = self._build_position_state(aid, bid, qty, current, cost_pool)
                     position_states_start.append(ps)
@@ -650,7 +784,7 @@ class DailyStateBuilder:
 
         # End-of-frame position snapshot (t1)
         for (aid, bid), qty in cumulative_qty.items():
-            if qty <= 0:
+            if not _is_held(qty):
                 continue
             ps = self._build_position_state(aid, bid, qty, self.date_to, cost_pool)
             position_states_end.append(ps)
@@ -670,6 +804,15 @@ class DailyStateBuilder:
             position_states_end=position_states_end,
             internal_asset_transfers=self._internal_asset_transfers(),
             native_cash=self.native_cash,
+            marks=AssetMarks(
+                mark_series=self.mark_series,
+                split_history=self.split_history,
+                quote_base_map=self.quote_base_map,
+                fx_rate_map=self.fx_rate_map,
+                target_currency=self.target_currency,
+                first_day=self.date_from,
+                last_day=self.date_to,
+            ),
             end_state=EngineEndState(
                 cumulative_cash=cumulative_cash,
                 cumulative_ecf=cumulative_ecf,
@@ -925,24 +1068,18 @@ class DailyStateBuilder:
         spends R first. A linked-internal cash transfer or currency conversion leaves R first, and its arrival brings back
         what the departure took from each pool, the gap between the two legs booked as a result (J2, D-MF4):
         ``transfer_splits`` keeps each departure's ``(from R, amount)`` by its id until its arrival takes it up. An arrival
-        whose departure is unknown arrives in K.
+        whose departure is unknown arrives in K. A cash transfer or currency conversion leg whose partner is outside the
+        scope, or an orphan, moves the pools as a deposit (incoming) or a withdrawal (outgoing) — the external flow the
+        capital baseline counts it as (B3, MF-J3).
         """
         zero = Decimal("0")
         tx = ctxn.tx
         bid = tx.broker_id
         buy_from_k = buy_from_r = zero
         if tx.type == TransactionType.DEPOSIT:
-            restore = min(amount, withdrawn)
-            R[bid] += restore
-            withdrawn -= restore
-            K[bid] += amount - restore
+            withdrawn = _deposit_pools(bid, amount, K, R, withdrawn)
         elif tx.type == TransactionType.WITHDRAWAL:
-            from_k = min(amount, max(K[bid], zero))
-            K[bid] -= from_k
-            remaining = amount - from_k
-            from_r = min(remaining, max(R[bid], zero))
-            R[bid] -= from_r
-            withdrawn += from_r
+            withdrawn = _withdrawal_pools(bid, amount, K, R, withdrawn)
         elif tx.type in (TransactionType.DIVIDEND, TransactionType.INTEREST):
             # Signed: preserve a legacy negative correction (plan §4.4). `amount` is abs(tx.amount) converted through
             # the same (sign-agnostic) FX rate — flip its sign to match the original tx.amount instead of re-querying.
@@ -957,8 +1094,8 @@ class DailyStateBuilder:
             R[bid] -= buy_from_r
             buy_from_k = amount - buy_from_r
             K[bid] -= buy_from_k
-        elif tx.type in (TransactionType.CASH_TRANSFER, TransactionType.FX_CONVERSION) and ctxn.classification == "linked_internal":
-            _move_linked_cash(ctxn, amount, K, R, transfer_splits)
+        elif tx.type in (TransactionType.CASH_TRANSFER, TransactionType.FX_CONVERSION):
+            withdrawn = _cash_transfer_pools(ctxn, amount, K, R, withdrawn, transfer_splits)
         return withdrawn, buy_from_k, buy_from_r
 
     def _stale_turn_days(self) -> set[date_type]:
@@ -1028,18 +1165,9 @@ class DailyStateBuilder:
         they are its steps and window bounds (``reading_change_days``); on a plain map, each key's day and the day after.
         No day before ``date.min``: there a rate counts as a change, as on a calendar's first day.
         """
-        rates = self.fx_rate_map
         candidates: set[date_type] = set()
-        if isinstance(rates, AskedDayRates):
-            for currency in currencies:
-                candidates.update(rates.reading_change_days(currency, self.target_currency))
-        else:
-            for key in rates:
-                if len(key) == 3 and key[0] in currencies and key[1] == self.target_currency:
-                    day = key[2]
-                    candidates.add(day)
-                    if day < date_type.max:
-                        candidates.add(day + timedelta(days=1))
+        for currency in currencies:
+            candidates.update(reading_change_days(self.fx_rate_map, currency, self.target_currency))
         days: set[date_type] = {first - timedelta(days=1)} if first > date_type.min else set()
         for day in candidates:
             if first <= day <= last:
@@ -1150,63 +1278,29 @@ class DailyStateBuilder:
         ``market_value_open/high/low`` through the exact same conversion as ``market_value``,
         when the mark carries a same-day OHLC triple (never for CARRIED/TRADE_AVG/MISSING).
         """
-        mark_series = self.mark_series.get(asset_id)
-        if mark_series is not None:
-            mark = mark_series.resolve(dt)
-            if not mark.is_missing:
-                quote_base = self.quote_base_map.get(asset_id)
-                days_back = mark.price_backward_fill.days_back if mark.price_backward_fill else 0
-                native_ref = mark.unit_price  # native currency, pre-split, par-axis scale
-                native_ccy = mark.currency or self.target_currency
-                if mark.estimated:
-                    # Trade-derived mark: restate the observed unit price to current units through any
-                    # intervening splits (real asset-system quotes already sit on the current-unit axis).
-                    split_ratio, split_adjusted = _cumulative_split_ratio(self.split_history.get(asset_id, ()), mark.as_of_date, dt)
-                    native_effective = native_ref / split_ratio
-                    # Trade observations were lifted onto the market ×quote_base_quantity axis at
-                    # ingestion (price_marks), so ``native_ref`` is on that axis. Restate the
-                    # *reference* unit price back to the source per-unit axis so it reports the price
-                    # as it appeared in the trade record. ``effective_unit_price`` stays on the market
-                    # axis (it is the price actually fed to ``compute_holding_value``). Market quotes
-                    # already report on their native per-unit axis and need no restatement.
-                    scale = Decimal(quote_base if quote_base and quote_base > 0 else 1)
-                    display_ref = native_ref / scale
-                    source = ValuationSource.LAST_TRADE_PRICE
-                else:
-                    native_effective = native_ref
-                    split_adjusted = False
-                    display_ref = native_ref
-                    source = ValuationSource.MARKET_PRICE
-                holding_value = compute_holding_value(qty, native_effective, quote_base)
-                # G1b: OHLC is only ever present on a mark.estimated=False exact MARKET day (see
-                # price_marks — CARRIED/TRADE_AVG always report None), so it never needs the
-                # split-restatement above (real quotes already sit on the current-unit axis).
-                holding_open = holding_high = holding_low = None
-                if compute_ohlc and mark.open is not None and mark.high is not None and mark.low is not None:
-                    holding_open = compute_holding_value(qty, mark.open, quote_base)
-                    holding_high = compute_holding_value(qty, mark.high, quote_base)
-                    holding_low = compute_holding_value(qty, mark.low, quote_base)
-                is_stale = days_back > STALE_PRICE_THRESHOLD_DAYS
-                if native_ccy == self.target_currency:
-                    return ValuationResult(
-                        market_value=holding_value,
-                        source=source,
-                        effective_unit_price=native_effective,
-                        effective_currency=native_ccy,
-                        reference_date=mark.as_of_date,
-                        reference_unit_price=display_ref,
-                        reference_currency=native_ccy,
-                        stale=is_stale,
-                        split_adjusted=split_adjusted,
-                        market_value_open=holding_open,
-                        market_value_high=holding_high,
-                        market_value_low=holding_low,
-                    )
-                # Foreign mark: convert to the reporting currency at the *valuation date* dt (never at
-                # the observation date) so a carried mark tracks the current FX, not a frozen one.
-                rate = self.fx_rate_map.get((native_ccy, self.target_currency, dt))
+        quote_base = self.quote_base_map.get(asset_id)
+        priced = marked_price(self.mark_series.get(asset_id), self.split_history.get(asset_id, ()), quote_base, dt, self.target_currency)
+        if priced is not None:
+            mark = priced.mark
+            days_back = mark.price_backward_fill.days_back if mark.price_backward_fill else 0
+            native_ccy = priced.currency
+            native_effective = priced.unit_price
+            display_ref = priced.reference_unit_price
+            split_adjusted = priced.split_adjusted
+            source = priced.source
+            holding_value = compute_holding_value(qty, native_effective, quote_base)
+            # G1b: OHLC is only ever present on a mark.estimated=False exact MARKET day (see
+            # price_marks — CARRIED/TRADE_AVG always report None), so it never needs the
+            # split-restatement above (real quotes already sit on the current-unit axis).
+            holding_open = holding_high = holding_low = None
+            if compute_ohlc and mark.open is not None and mark.high is not None and mark.low is not None:
+                holding_open = compute_holding_value(qty, mark.open, quote_base)
+                holding_high = compute_holding_value(qty, mark.high, quote_base)
+                holding_low = compute_holding_value(qty, mark.low, quote_base)
+            is_stale = days_back > STALE_PRICE_THRESHOLD_DAYS
+            if native_ccy == self.target_currency:
                 return ValuationResult(
-                    market_value=holding_value * rate if rate is not None else None,
+                    market_value=holding_value,
                     source=source,
                     effective_unit_price=native_effective,
                     effective_currency=native_ccy,
@@ -1215,11 +1309,28 @@ class DailyStateBuilder:
                     reference_currency=native_ccy,
                     stale=is_stale,
                     split_adjusted=split_adjusted,
-                    missing_fx_pair=f"{native_ccy}/{self.target_currency}" if rate is None else None,
-                    market_value_open=holding_open * rate if (rate is not None and holding_open is not None) else None,
-                    market_value_high=holding_high * rate if (rate is not None and holding_high is not None) else None,
-                    market_value_low=holding_low * rate if (rate is not None and holding_low is not None) else None,
+                    market_value_open=holding_open,
+                    market_value_high=holding_high,
+                    market_value_low=holding_low,
                 )
+            # Foreign mark: convert to the reporting currency at the *valuation date* dt (never at
+            # the observation date) so a carried mark tracks the current FX, not a frozen one.
+            rate = self.fx_rate_map.get((native_ccy, self.target_currency, dt))
+            return ValuationResult(
+                market_value=holding_value * rate if rate is not None else None,
+                source=source,
+                effective_unit_price=native_effective,
+                effective_currency=native_ccy,
+                reference_date=mark.as_of_date,
+                reference_unit_price=display_ref,
+                reference_currency=native_ccy,
+                stale=is_stale,
+                split_adjusted=split_adjusted,
+                missing_fx_pair=f"{native_ccy}/{self.target_currency}" if rate is None else None,
+                market_value_open=holding_open * rate if (rate is not None and holding_open is not None) else None,
+                market_value_high=holding_high * rate if (rate is not None and holding_high is not None) else None,
+                market_value_low=holding_low * rate if (rate is not None and holding_low is not None) else None,
+            )
 
         return ValuationResult(
             market_value=None,

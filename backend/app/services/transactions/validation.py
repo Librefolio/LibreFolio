@@ -50,7 +50,13 @@ class TransactionValidationMixin:
           the other, no unit is created or lost.
         - FX_CONVERSION requires both legs on one broker (a multi-currency account): ``broker_id`` is ``equal`` in
           ``TX_TYPE_METADATA``, as the form, the promotion and the imports write it (W-B17).
-        - CASH_TRANSFER requires distinct brokers (same-broker is a no-op).
+        - CASH_TRANSFER requires distinct brokers (same-broker is a no-op), one currency and exactly opposite amounts, in
+          ``Decimal``: the cash that leaves one broker arrives at the other (W6-7: the developer's decision, 23/10/2026).
+        - FX_CONVERSION also requires two different currencies (W6-7).
+
+        These are the ``pair_field_constraints`` of ``TX_TYPE_METADATA``; ``test_linked_cash_pair.py`` fails when the table
+        declares one this function does not know. Only a pair being created is judged: a pair a database already holds is
+        never read by this rule.
 
         Returns None when the pair is valid, otherwise a tuple of
         (error_message, code, params).
@@ -96,6 +102,34 @@ class TransactionValidationMixin:
                 f"FX_CONVERSION requires both legs on one broker (got brokers {a.broker_id} and {b.broker_id})",
                 "pairBrokerMismatch",
                 {"brokerA": a.broker_id, "brokerB": b.broker_id},
+            )
+        return TransactionValidationMixin._cash_pair_values_issue(a, b)
+
+    @staticmethod
+    def _cash_pair_values_issue(a: Transaction, b: Transaction) -> Optional[tuple[str, str, dict]]:
+        """The currency and amount rules of a linked cash pair (W6-7), after the broker rules of ``_validate_linked_pair``.
+
+        CASH_TRANSFER: one currency, exactly opposite amounts in ``Decimal``. FX_CONVERSION: two different currencies.
+        Returns None when the pair is valid, otherwise (error_message, code, params).
+        """
+        if a.type == TransactionType.CASH_TRANSFER:
+            if a.currency != b.currency:
+                return (
+                    f"CASH_TRANSFER must move one currency (got {a.currency} and {b.currency}): use an FX conversion to change currency",
+                    "pairCurrencyMismatch",
+                    {"currencyA": a.currency, "currencyB": b.currency},
+                )
+            if a.amount is None or b.amount is None or a.amount != -b.amount:
+                return (
+                    f"CASH_TRANSFER pair must move the same amount out and in (got {a.amount} and {b.amount})",
+                    "pairAmountMismatch",
+                    {"amountA": str(a.amount), "amountB": str(b.amount)},
+                )
+        elif a.type == TransactionType.FX_CONVERSION and a.currency == b.currency:
+            return (
+                f"FX_CONVERSION must change currency (both legs are {a.currency})",
+                "pairCurrencySame",
+                {"currency": a.currency},
             )
         return None
 

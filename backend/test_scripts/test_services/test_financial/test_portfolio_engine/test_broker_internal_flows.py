@@ -464,9 +464,9 @@ def _case_05d_unpriced_with_known_cost_between_brokers():
 
 
 def _case_05e_unpriced_pair_between_shares(share_a: str, share_b: str, received_unit_cost: str = "10"):
-    """Case 5d's book with ownership shares s_A / s_B and no price at all: A's 10 units arrive on d0 by an orphan
-    TRANSFER at 10 EUR a unit, then move A -> B by a pair on d2 (one day, no transit) whose legs carry
-    ``received_unit_cost`` EUR a unit."""
+    """Case 5d's book with ownership shares s_A / s_B and no quote or trade at all: A's 10 units arrive on d0 by an
+    orphan TRANSFER at 10 EUR a unit (the asset's estimated price, W-B94 road (b)), then move A -> B by a pair on d2
+    (one day, no transit) whose legs carry ``received_unit_cost`` EUR a unit."""
     orphan_in = _tx(id=1, broker_id=A, type="TRANSFER", dt=D0, currency=None, quantity="10", asset_id=UNPRICED_ASSET, cost_basis_override="10", cost_basis_currency="EUR")
     out_leg, in_leg = _transfer_pair(2, 3, sender=A, receiver=B, out_dt=D2, in_dt=D2, qty="10", asset_id=UNPRICED_ASSET, cost_basis_override=received_unit_cost, cost_basis_currency="EUR")
     classification = _classify([orphan_in, out_leg, in_leg], {A, B}, shares={A: share_a, B: share_b})
@@ -840,22 +840,38 @@ class TestSecuritiesPairsBetweenBrokers:
             pytest.param("0.5", "0.5", "10", "50", {A: ("0", "0"), B: ("50", "0")}, ("50", "0"), id="a50_b50"),
             pytest.param("0.5", "1", "10", "50", {A: ("0", "0"), B: ("50", "50")}, ("50", "50"), id="a50_b100"),
             pytest.param("1", "0.5", "10", "100", {A: ("0", "0"), B: ("100", "-50")}, ("100", "-50"), id="a100_b50"),
-            pytest.param("0.5", "1", "12", "50", {A: ("-10", "10"), B: ("60", "60")}, ("50", "70"), id="a50_b100_received_at_12"),
+            pytest.param("0.5", "1", "12", "50", {A: ("0", "0"), B: ("50", "50")}, ("50", "50"), id="a50_b100_received_at_12"),
         ],
     )
-    def test_case_05e_unpriced_pair_moves_the_receivers_cost_at_the_senders_share(self, share_a, share_b, received_unit_cost, capital_a_before, lines_after, aggregate_after):
-        """Case 5e (J-17): case 5d's book with ownership shares s_A / s_B, the pair on one day (d2), no price
-        at all. A's 10 units came on d0 by an orphan TRANSFER at 10 EUR a unit: capital at cost, 100 x s_A,
-        and A's line flat. On d2 X is the book cost the arrival adds to B's pool — its leg's unit cost x 10 x
-        s_B — rescaled from B's share to the SENDER's (/ s_B x s_A), like case 8: X = unit cost x 10 x s_A.
-        As in case 8, B's line keeps the share-mismatch residual (s_B - s_A) x its leg's unit cost x 10 (D6),
-        and the aggregate is B's NAV at cost against A's capital. The last row costs B's leg at 12 against
-        A's 10: X follows B's cost, 60, not the 50 A's pool gives up, so A keeps (12 - 10) x 10 x s_A = 10
-        (P22).
+    def test_case_05e_estimated_pair_moves_its_value_at_the_senders_share(self, share_a, share_b, received_unit_cost, capital_a_before, lines_after, aggregate_after):
+        """Case 5e (J-17, W-B94 road (b)): case 5d's book with ownership shares s_A / s_B, the pair on one day
+        (d2), no quote and no trade ever. A's 10 units came on d0 by an orphan TRANSFER at 10 EUR a unit, the
+        asset's first operation: that cost is its estimated price, 10 (LAST_TRADE_PRICE), carried on every
+        later day. The pair's outgoing leg on d2 stops any further estimate, so B's leg cost (10 or 12) is
+        never a price.
 
+        d0-d1: A holds 10 x s_A units at 10, NAV 100 x s_A, and the orphan leg is capital at that market value,
+        100 x s_A: A (100 x s_A, 0), B (0, 0); the aggregate the same.
+
+        d2-d3: X is the market value of the 10 units received, at the estimated 10 and at the SENDER's share,
+        like case 8: X = 10 x 10 x s_A. A gives up X and holds nothing: (0, 0). B receives X and holds 10 x s_B
+        units at 10, NAV 100 x s_B: (100 x s_A, 100 x s_B - 100 x s_A) — the share-mismatch residual stays on
+        B's line (D6). The aggregate capital is unchanged (an internal flow moves no scope capital), its P&L is
+        B's NAV against it.
+
+        - a50_b50: X = 50; B (50, 50 - 50 = 0); aggregate (50, 0).
+        - a50_b100: X = 50; B (50, 100 - 50 = 50); aggregate (50, 50).
+        - a100_b50: X = 100; B (100, 50 - 100 = -50); aggregate (100, -50).
+        - a50_b100_received_at_12: B's leg costs 12 a unit (book cost 120 in B's pool), but B is valued at the
+          estimated price 10 x 10 = 100, not at its book cost, and X is that value at A's share, 50 — so the
+          same lines as a50_b100: A (0, 0), B (50, 50); aggregate (50, 50).
+
+        Before W-B94 (formerly ``test_case_05e_unpriced_pair_moves_the_receivers_cost_at_the_senders_share``):
+        no price at all, so the holdings were at cost and X was the book cost the arrival added to B's pool,
+        rescaled to the sender's share — the same numbers for the first three rows; the last one followed
+        B's cost: X = 12 x 10 x s_A = 60, A (-10, 10), B (60, 60), aggregate (50, 70) (P22).
         Before J-17: no price, so no value, no capital for the orphan leg and no flow: both lines (0, 0)
-        on every day, the aggregate too. (J-17's first version moved what A's pool gave up: the same lines,
-        but for the last row, A (0, 0) and B (50, 70).)
+        on every day, the aggregate too.
         """
         classification, overrides = _case_05e_unpriced_pair_between_shares(share_a, share_b, received_unit_cost)
         assert _classifications(classification) == {1: "normal", 2: "linked_internal", 3: "linked_internal"}
