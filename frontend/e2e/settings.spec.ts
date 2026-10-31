@@ -929,9 +929,9 @@ test.describe('Settings', () => {
                 await expect(html, 'precondition: the seeded language is the one on screen').toHaveAttribute('lang', 'en');
 
                 await trigger.click();
-                // Precondition, read back: the seeded language is the selected option.
-                await expect(row.getByTestId('setting-select-option-en')).toHaveAttribute('aria-selected', 'true');
-                await row.getByTestId('setting-select-option-it').click();
+                // Precondition, read back: the seeded language is the selected option (the list is in a portal on <body>: looked up from the page).
+                await expect(page.getByTestId('setting-select-option-en')).toHaveAttribute('aria-selected', 'true');
+                await page.getByTestId('setting-select-option-it').click();
                 await expect(trigger).toHaveAttribute('aria-expanded', 'false');
                 const since = await eventSeq(page);
                 const put = page.waitForResponse(isPreferencesPut);
@@ -958,7 +958,7 @@ test.describe('Settings', () => {
                 await expect(row.getByTestId('setting-save')).toBeHidden();
                 // And the tab shows the value it re-reads from the server.
                 await trigger.click();
-                await expect(row.getByTestId('setting-select-option-it')).toHaveAttribute('aria-selected', 'true');
+                await expect(page.getByTestId('setting-select-option-it')).toHaveAttribute('aria-selected', 'true');
                 await trigger.press('Escape');
                 await expect(trigger).toHaveAttribute('aria-expanded', 'false');
             } finally {
