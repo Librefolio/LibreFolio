@@ -19,7 +19,7 @@ import type {ComparisonTarget} from '$lib/charts/chartSignalRendering';
 import type {SignalConfig} from '$lib/charts/signals';
 import type {LineDataPoint} from '$lib/components/charts/LineChart.svelte';
 import {apiPricesToAssetPricePoints, getAssetPriceStore} from '$lib/stores/assetPriceStoreRegistry';
-import {ensureFxRangeLoaded} from '$lib/stores/fxStoreRegistry';
+import {ensureFxRangeFromFirstDay, ensureFxRangeLoaded} from '$lib/stores/fxStoreRegistry';
 import {todayIso} from '$lib/utils/dateOnly';
 
 /** An asset a comparison draws, with the currency its series is cached in. */
@@ -105,9 +105,10 @@ export function fxPairSlugsOf(configs: readonly Pick<SignalConfig, 'signalType' 
 }
 
 /**
- * Load into the FX stores the rates of the pairs the `fx-pair` signals name, over `range` (the stores' own gap detection).
+ * Load into the FX stores the rates of the pairs the `fx-pair` signals name, over `range` (the stores' own gap detection), or, with
+ * `fromFirstDay`, from each pair's own first stored day to `range.end` (a detail page on «All», Y2-CMP).
  * One pair failing does not stop the others. Never throws. The caller redraws afterwards: the stores are not reactive.
  */
-export async function ensureSignalFxPairs(configs: readonly Pick<SignalConfig, 'signalType' | 'params'>[], ownSlug: string | undefined, range: {start: string; end: string}): Promise<void> {
-    await Promise.allSettled(fxPairSlugsOf(configs, ownSlug).map((slug) => ensureFxRangeLoaded(slug, range.start, range.end)));
+export async function ensureSignalFxPairs(configs: readonly Pick<SignalConfig, 'signalType' | 'params'>[], ownSlug: string | undefined, range: {start: string; end: string}, fromFirstDay = false): Promise<void> {
+    await Promise.allSettled(fxPairSlugsOf(configs, ownSlug).map((slug) => (fromFirstDay ? ensureFxRangeFromFirstDay(slug, range.end) : ensureFxRangeLoaded(slug, range.start, range.end))));
 }

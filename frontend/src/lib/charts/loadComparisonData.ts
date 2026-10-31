@@ -35,6 +35,20 @@ export interface ComparisonAssetsLoadResult {
     readonly items: readonly ComparisonAssetLoadItem[];
 }
 
+/**
+ * The oldest day any loaded comparison has a price for, or null when none has one (Y2-CMP). With «All» a comparison is asked from its own first
+ * price, so this is where the chart starts when a comparison is older than the page's own series, and what the date picker's From shows.
+ */
+export function earliestComparisonDate(loaded: ComparisonAssetsLoadResult): string | null {
+    let earliest: string | null = null;
+    for (const item of loaded.items) {
+        const resolved = item.runtimeParams._resolvedData as Array<{date: string}> | undefined;
+        const first = resolved?.[0]?.date;
+        if (first !== undefined && (earliest === null || first < earliest)) earliest = first;
+    }
+    return earliest;
+}
+
 export interface ComparisonSyncRange {
     start: string;
     end: string;

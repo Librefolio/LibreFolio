@@ -172,8 +172,9 @@ beforeAll(async () => {
     PriceChartFull = (await import('./PriceChartFull.svelte')).default;
     helpers = await import('./priceChartHelpers');
     signalLabel = await import('$lib/charts/signalLabel');
-    // The dynamic imports compile the component tree inside this hook: a budget of its own under a loaded machine.
-}, 60_000);
+    // The dynamic imports compile the component tree inside this hook: a budget of its own under a loaded machine (the whole suite runs
+    // while other lanes work: 60 s was not a ceiling there).
+}, 180_000);
 
 beforeEach(() => {
     chartInstances.length = 0;

@@ -273,6 +273,76 @@ describe('AssetComparisonSignal — legend label', () => {
     });
 });
 
+describe('A comparison on a chart that lays its axis on the union of the days (Y2-CMP)', () => {
+    /** The chart opens on 4 March; the comparison has prices from 2 March. */
+    const youngChart: LineDataPoint[] = [
+        {date: '2026-03-04', value: 1020},
+        {date: '2026-03-05', value: 1030},
+    ];
+    const older = [
+        {date: '2026-03-02', value: 200},
+        {date: '2026-03-03', value: 210},
+        {date: '2026-03-04', value: 220},
+        {date: '2026-03-05', value: 180},
+    ];
+    const union = (extra: Record<string, unknown> = {}) => new AssetComparisonSignal('a1', style, {assetId: '7', _unionAxis: true, _resolvedData: older, ...extra});
+
+    it('keeps every day of its own data: the days before the chart opens are what makes the axis start where the older of the two starts', () => {
+        expect(dates(union().render(youngChart, 'absolute').data)).toEqual(['2026-03-02', '2026-03-03', '2026-03-04', '2026-03-05']);
+    });
+
+    it('measures the percentage view from its own first value, which is the older one', () => {
+        expect(values(union().render(youngChart, 'percentage').data)).toEqual([0, 5, 10, -10]);
+    });
+
+    it('asks the chart to reach its days', () => {
+        expect(union().render(youngChart, 'absolute').extendsAxis).toBe(true);
+    });
+
+    it('does the same for the unconverted ghost, which lies on the same days', () => {
+        const signal = union({_targetCurrency: 'EUR', _resolvedData: older.map((point) => ({...point, originalValue: point.value + 1, originalCurrency: 'USD'}))});
+        const [main, ghost] = signal.renderMulti(youngChart, 'absolute');
+        expect(dates(ghost.data)).toEqual(dates(main.data));
+        expect(ghost.extendsAxis).toBe(true);
+    });
+
+    it('the other way, a comparison that starts after the chart does: its line starts on its own first day', () => {
+        const signal = union({
+            _resolvedData: [
+                {date: '2026-03-04', value: 220},
+                {date: '2026-03-05', value: 230},
+            ],
+        });
+        expect(dates(signal.render(chart, 'absolute').data)).toEqual(['2026-03-04', '2026-03-05']);
+        expect(values(signal.render(chart, 'percentage').data)[0]).toBe(0);
+    });
+
+    it('a card does not ask: the same data stays on the chart\'s days, measured from the first of them, and does not ask the chart for more days (guard)', () => {
+        const card = new AssetComparisonSignal('a1', style, {assetId: '7', _resolvedData: older});
+        const rendered = card.render(youngChart, 'percentage');
+        expect(dates(rendered.data)).toEqual(['2026-03-04', '2026-03-05']);
+        expect(values(rendered.data)).toEqual([0, -18.181818181818183]);
+        expect(rendered.extendsAxis).toBeUndefined();
+    });
+
+    it('an FX pair comparison does the same, and keeps the chart\'s days when it is not asked', () => {
+        const rates = [
+            {date: '2026-03-02', value: 1.1},
+            {date: '2026-03-04', value: 1.2},
+        ];
+        const onUnion = new FxPairSignal('fx1', style, {pairSlug: 'EUR-USD', _unionAxis: true, _resolvedData: rates}).render(youngChart, 'absolute');
+        expect(dates(onUnion.data)).toEqual(['2026-03-02', '2026-03-04']);
+        expect(onUnion.extendsAxis).toBe(true);
+        const onCard = new FxPairSignal('fx1', style, {pairSlug: 'EUR-USD', _resolvedData: rates}).render(youngChart, 'absolute');
+        expect(dates(onCard.data)).toEqual(['2026-03-04']);
+        expect(onCard.extendsAxis).toBeUndefined();
+    });
+
+    it('the flag is data of the moment: toConfig() leaves it out, like `_resolvedData`', () => {
+        expect(union().toConfig().params).not.toHaveProperty('_unionAxis');
+    });
+});
+
 describe('FxPairSignal', () => {
     const rates: LineDataPoint[] = [
         {date: '2026-03-02', value: 1.1},

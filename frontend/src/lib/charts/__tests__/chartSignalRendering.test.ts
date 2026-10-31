@@ -638,3 +638,43 @@ describe('renderCalendarPairComparisons — the FX pairs of the rolling-return v
         ).toEqual([]);
     });
 });
+
+describe('renderLocalSignal — on a chart that lays its axis on the union of the days (Y2-CMP)', () => {
+    it('a comparison keeps every day of its target, those before and after the chart too, and asks the chart to reach them', () => {
+        const [signal] = renderLocalSignal(comparison(), CHART, 'absolute', sourcesWith(), {unionAxis: true});
+
+        expect(datesOf(signal)).toEqual(PEER.map((point) => point.date));
+        expect(signal.extendsAxis).toBe(true);
+    });
+
+    it('an FX pair keeps every day of its rates, the day before the chart too', () => {
+        const [signal] = renderLocalSignal(fxPair(), CHART, 'absolute', sourcesWith(), {unionAxis: true});
+
+        expect(datesOf(signal)).toEqual(EUR_GBP.map((point) => point.date));
+        expect(signal.extendsAxis).toBe(true);
+    });
+
+    it('measures the percentage view from the oldest day, the comparison\'s own first value', () => {
+        const [signal] = renderLocalSignal(comparison(), CHART, 'percentage', sourcesWith(), {unionAxis: true});
+
+        expect(valuesOf(signal)[0]).toBe(0);
+        // 190 on 27 February, 200 on 2 March: +5.263157895 %
+        expect(valuesOf(signal)[1]).toBe(5.263157895);
+    });
+
+    it('without the option nothing changes: the card\'s signal stays on the chart\'s days and asks for no more (guard)', () => {
+        const [signal] = renderLocalSignal(comparison(), CHART, 'absolute', sourcesWith());
+
+        expect(datesOf(signal)).toEqual(PEER_DATES);
+        expect(signal.extendsAxis).toBeUndefined();
+    });
+
+    it('does not write the flag into the saved config, nor give it to a benchmark', () => {
+        const config = frozen(comparison());
+        expect(() => renderLocalSignal(config, CHART, 'absolute', sourcesWith(), {unionAxis: true})).not.toThrow();
+        expect(config.params).not.toHaveProperty('_unionAxis');
+        const [benchmark] = renderLocalSignal(linear(), CHART, 'absolute', sourcesWith(), {unionAxis: true});
+        expect(benchmark.extendsAxis).toBeUndefined();
+        expect(datesOf(benchmark)).toEqual(CHART.map((point) => point.date));
+    });
+});

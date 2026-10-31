@@ -8847,3 +8847,23 @@ Base: `21016b21e` (checkpoint 3a `37c7aa68b` + X). `front check` sul ramo unito:
   - Rossi prima, verdi dopo: `PositionsReturnChart.test.ts` (2), `PositionsPanel.test.ts` (5 nuovi/cambiati), `ContributionTable.test.ts` (4 + 6 di guardia).
 - ✅ **Prove (29/10)**: Vitest `features/dashboard`, `features/brokers`, `components/table`: 61 file / 2111; `front check` 0/0; `front-portfolio dashboard` 34/34 (c'è il nuovo E2E del layout, sotto Portfolio e sotto Period); `front-broker detail` 41/41; `check-orphans` verde.
 - 📝 **FB-15** (vista Rolling) parte dopo il commit: modulo `positionsRolling` (richiesta del segnale `ASSET_CALENDAR_ROLLING_RETURN`, linea, controller) già scritto e provato in isolamento (15 casi), tenuto fuori dall'albero finché non è collegato (il lint delle esportazioni inutilizzate).
+
+## 31/10 · Ondata 6 · Y2-CMP — l'asse unione dei confronti (checkpoint 6)
+
+Decisione del developer (30/10): «anche nel confronto la data parte dal giorno più vecchio tra i 2, ovviamente il grafico non si deve rompere se il segnale dopo parte molto più avanti». Base: `80b2cd98f` (X cp5 già unito: «Tutto» dal primo prezzo salvato, `min`, `firstSeriesDates`).
+
+**Perché spariva il 1985–2010.** Due filtri tagliavano i giorni del confronto ai soli giorni del principale: `AssetComparisonSignal.computePoints` (e il fantasma delle conversioni, `FxPairSignal` allo stesso modo) e l'asse a categorie di `PriceChartFull`, fatto dei soli giorni del principale. In più la pagina chiedeva il confronto da `dateStart` del principale.
+
+| Pezzo | Dove | Cosa |
+|---|---|---|
+| Il segnale tiene i propri giorni | `AssetComparisonSignal` / `FxPairSignal`, solo con `_unionAxis` | la pagina di dettaglio lo chiede (`renderLocalSignals(..., {unionAxis: true})`); le **schede** delle liste no e restano sui giorni del loro grafico, con il % misurato dal primo di quei giorni (un test di guardia lo fissa: una scheda con un confronto più vecchio non sposta la base). `_unionAxis` è un dato del momento: `toConfig()` lo lascia fuori. `RenderedSignal.extendsAxis` dice al grafico «raggiungi i miei giorni». |
+| L'asse | `PriceChartFull`: `axisData = extendToOverlayDays(data, overlaySignals)` | davanti e dietro la serie del principale mette giorni vuoti (`missing`) per i giorni dei confronti che lo chiedono; i giorni *dentro* la serie che il principale non ha non si aggiungono (come prima). Il principale resta vuoto prima del proprio primo giorno: niente linea finta, niente zero. `toDisplaySeries` e la linea di base misurano dal primo giorno con prezzo (`!missing`). Cambiato l'asse, zoom e risoluzione si azzerano (gli indici sono cambiati). |
+| La richiesta | `comparisonStart` nelle due pagine = `'min'` con «Tutto», altrimenti `dateStart` | impronta, chiave di cache e `loadComparisonAssetsData` lo usano; il server risolve `min` per ogni asset. Con «Tutto» il giro forzato dopo la risoluzione di `dateStart` non serve più (la richiesta non cambia). |
+| Il FROM del calendario | `showEarliestStart` (le due pagine) + `earliestComparisonDate` | con «Tutto» il campo Da mostra il più vecchio fra il primo giorno della serie e quello dei confronti; si muove solo l'etichetta, le richieste della serie restano sul suo primo giorno. |
+| Le coppie FX confrontate | `ensureFxRangeFromFirstDay` (`fxStoreRegistry`) + `ensureSignalFxPairs(..., fromFirstDay)` | un confronto con una coppia FX parte dal primo giorno della coppia (`min`, ricordato per la sessione con `firstSeriesDates`); i punti della coppia si leggono nella finestra della pagina (`getRange`), tranne con «Tutto» (tutto lo store): senza la finestra una coppia già in memoria per un'altra visita allungherebbe l'asse. |
+
+**Decisione presa da me, da confermare:** l'asse si allunga anche *dopo* l'ultimo giorno del principale se un confronto arriva più avanti («unione»); il developer ha parlato solo dell'inizio.
+
+**Dichiarato, non curato:** gli indicatori del backend, i benchmark sintetici e la misura restano sui giorni del principale: prima del suo primo giorno non hanno valori. Gli E2E del verso opposto di X (`asset-detail`, `fx-detail`) non sono toccati; i miei sono in `chart-comparison-axis.spec.ts`.
+
+> **Note implementazione**: test rossi prima per l'helper (`extendToOverlayDays`) e il componente; i test dei segnali sono stati scritti prima del codice ma non lanciati rossi (prova di sensibilità: con la forma «sulle schede» rimessa, i test dell'asse unione diventano rossi).

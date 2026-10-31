@@ -18,6 +18,7 @@
 import type {TimeSeriesPoint} from './core/TimeSeriesStore';
 import {TimeSeriesStore} from './core/TimeSeriesStore';
 import {registerPortfolioMutationListener} from './portfolio/portfolioMutation';
+import {firstDateOf, rememberFirstDate} from './firstSeriesDates';
 import type {ChainStep} from '$lib/utils/currency/currencyGraph';
 import {zodiosApi} from '$lib/api';
 import {BULK_SIGNAL_MARGIN_DAYS, bulkRangeDays, sendBulkBatches} from '$lib/api/bulkBatches';
@@ -278,6 +279,32 @@ export async function ensureFxRangeLoaded(slug: string, start: string, end: stri
     }
 
     return store.getRange(start, end).data;
+}
+
+/**
+ * Load a pair's rates from its first stored day to `end` (Y2-CMP): the comparison of a detail page on «All» starts where the pair begins.
+ * The server resolves the sentinel `min`; the day it answers with is remembered for the session (`firstSeriesDates`), so a next call asks
+ * the store's own gaps from there. A pair the server does not know, or a failed request, leaves the store as it was. Never throws.
+ */
+export async function ensureFxRangeFromFirstDay(slug: string, end: string): Promise<void> {
+    const known = firstDateOf('fx', slug);
+    if (known !== undefined) {
+        await ensureFxRangeLoaded(slug, known, end);
+        return;
+    }
+    const {base, quote} = parsePairSlug(slug);
+    try {
+        const response = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post([{from_amount: {code: base, amount: '1'}, to: quote, date_range: {start: 'min' as const, end}}]);
+        const points = ((response as any)?.results ?? []).map(apiResultToFxDataPoint) as FxDataPoint[];
+        if (points.length === 0) return;
+        const store = getFxStore(slug);
+        store.merge(points);
+        const first = points.reduce((earliest, point) => (point.date < earliest ? point.date : earliest), points[0].date);
+        rememberFirstDate('fx', slug, first);
+        store.markFetched(first, end);
+    } catch {
+        // Network or server failure: nothing marked, the next call asks again
+    }
 }
 
 /**
