@@ -2940,7 +2940,9 @@ test.describe('FB-7b asset list: All starts at the first stored price', () => {
             onList.filter((ask) => ask.start === 'min'),
             'the first day is remembered for the session: the list does not ask the card from min again',
         ).toEqual([]);
-=======
+    });
+});
+
 test.describe('Asset List Page — the live poll brings the Δ with the quote (Y6-1)', () => {
     test.beforeEach(async ({page}) => {
         await login(page, TEST_USER);
