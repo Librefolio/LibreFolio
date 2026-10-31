@@ -469,6 +469,37 @@ class PortfolioService:
         """Effective base currency: per-user setting, global default, EUR (P0-1)."""
         return await get_effective_base_currency(self.db, user_id)
 
+    async def _engine_run(
+        self,
+        *,
+        user_id: int,
+        broker_ids: list[int] | None,
+        date_from: date_type | None,
+        date_to: date_type | None,
+        target_currency: str,
+        include_candles: bool = False,
+    ):
+        """The one engine run of the report, the Performance table and the positions chart (FB-14).
+
+        Every caller asks the same run — the replay from t=0, with the position frames, the BUY funding split and the
+        positions at the end of ``date_from`` — so the requests of one page share the engine's blob-cache key: the first
+        builds the run, the others read it, or wait on it (single-flight). Each caller serializes only what its query asks.
+        The candles stay a flag of their own: their OHLC work is kept off the ordinary reports.
+        """
+        from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine  # noqa: PLC0415
+
+        return await PortfolioCalculationEngine(self.db).calculate(
+            user_id=user_id,
+            broker_ids=broker_ids,
+            date_from=None,  # always from t=0 for correct cumulative values
+            date_to=date_to,
+            target_currency=target_currency,
+            include_candles=include_candles,
+            include_acquisition_funding=True,
+            period_start=date_from,
+            include_positions=True,
+        )
+
     async def _get_user_broker_access(
         self,
         user_id: int,
@@ -1505,21 +1536,12 @@ class PortfolioService:
         the shared engine run or every day comes back empty" caveat).
         """
         from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder  # noqa: PLC0415
-        from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine  # noqa: PLC0415
 
         base_currency = target_currency_override or await self._get_base_currency(user_id)
         if _precomputed_engine_result is not None:
             result = _precomputed_engine_result
         else:
-            engine = PortfolioCalculationEngine(self.db)
-            result = await engine.calculate(
-                user_id=user_id,
-                broker_ids=broker_ids,
-                date_from=None,  # Always compute from t=0 for correct cumulative pool state
-                date_to=date_to,
-                target_currency=base_currency,
-                include_acquisition_funding=True,
-            )
+            result = await self._engine_run(user_id=user_id, broker_ids=broker_ids, date_from=date_from, date_to=date_to, target_currency=base_currency)
 
         if not result.daily_states:
             return AcquisitionFundingSeries(points=[])
@@ -1569,30 +1591,9 @@ class PortfolioService:
             return PositionsContribution(gross_gains=Decimal("0"), gross_losses=Decimal("0"))
 
         engine_result = _precomputed_engine_result
-        if engine_result is None:
-            from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine  # noqa: PLC0415
-
-            engine = PortfolioCalculationEngine(self.db)
-            engine_result = await engine.calculate(
-                user_id=user_id,
-                broker_ids=broker_ids,
-                date_from=None,
-                date_to=date_to,
-                target_currency=base_currency,
-                period_start=date_from,
-            )
-        elif date_from is not None and engine_result.position_states_start_date != date_from:
-            # A shared run taken for another period start has no positions at this one's: replay with it.
-            from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine  # noqa: PLC0415
-
-            engine_result = await PortfolioCalculationEngine(self.db).calculate(
-                user_id=user_id,
-                broker_ids=broker_ids,
-                date_from=None,
-                date_to=date_to,
-                target_currency=base_currency,
-                period_start=date_from,
-            )
+        # Without a shared run, or with one taken for another period start (no positions at this one's): the page's run.
+        if engine_result is None or (date_from is not None and engine_result.position_states_start_date != date_from):
+            engine_result = await self._engine_run(user_id=user_id, broker_ids=broker_ids, date_from=date_from, date_to=date_to, target_currency=base_currency)
 
         # Quantity-affecting transactions: BUY/SELL plus in-kind ADJUSTMENT and TRANSFER,
         # mirroring _LOT_AFFECTING_TYPES / the engine's position model. Restricting this to
@@ -1926,14 +1927,12 @@ class PortfolioService:
     async def get_positions_series(self, user_id: int, query: PositionsSeriesQuery) -> PositionsSeriesResponse:
         """The daily series of the chosen positions: the Dashboard's positions chart (#48).
 
-        One engine run with the position frames (``include_positions``, part of the engine's blob-cache key: the first chart
-        request pays it, a change of the selection reuses it). The series are built by ``financial_math.portfolio.position_series``
+        The page's engine run (``_engine_run``, FB-14): the same blob-cache key as the report and the Performance table of
+        that period, so the chart reads the run the report built, and a change of the selection reuses it. The series are built by ``financial_math.portfolio.position_series``
         from that run's frames, realized sales, internal transfers and average costs, and the native cash's income and costs by
         day; only the asked positions are read. A position of a broker the user cannot read has no frame in the run, so it
         comes back empty. Period figures are those of ``get_positions_contribution`` at each day.
         """
-        from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine  # noqa: PLC0415
-
         today = date_type.today()
         base_currency = query.target_currency or await self._get_base_currency(user_id)
         date_from = query.date_range.resolved_start() if query.date_range else None
@@ -1949,15 +1948,7 @@ class PortfolioService:
         series_data = []
         engine_result = None
         if accesses:
-            engine_result = await PortfolioCalculationEngine(self.db).calculate(
-                user_id=user_id,
-                broker_ids=query.broker_ids,
-                date_from=None,
-                date_to=date_to,
-                target_currency=base_currency,
-                period_start=date_from,
-                include_positions=True,
-            )
+            engine_result = await self._engine_run(user_id=user_id, broker_ids=query.broker_ids, date_from=date_from, date_to=date_to, target_currency=base_currency)
         if engine_result is not None and engine_result.position_frames is not None:
             frames: dict[tuple[int, int], list] = defaultdict(list)
             for frame in engine_result.position_frames:
@@ -2034,7 +2025,7 @@ class PortfolioService:
         Uses Layer 2 cache: keyed by (user, scope, date_range, query_features, data_fingerprint).
         """
         from backend.app.services.financial_math.portfolio.derived_views import DerivedViewsBuilder  # noqa: PLC0415
-        from backend.app.services.financial_math.portfolio.engine import PortfolioCalculationEngine, compute_portfolio_fx_cache_identity, compute_tx_fingerprint  # noqa: PLC0415
+        from backend.app.services.financial_math.portfolio.engine import compute_portfolio_fx_cache_identity, compute_tx_fingerprint  # noqa: PLC0415
 
         today = date_type.today()
         base_currency = query.target_currency or await self._get_base_currency(user_id)
@@ -2120,18 +2111,14 @@ class PortfolioService:
                 _logger.debug("Portfolio L2 cache hit", user_id=user_id)
                 return cached
 
-        # ── 1. Single engine run ──
-        engine = PortfolioCalculationEngine(self.db)
-        engine_result = await engine.calculate(
+        # ── 1. Single engine run: the page's run, shared with the Performance table and the positions chart (FB-14) ──
+        engine_result = await self._engine_run(
             user_id=user_id,
             broker_ids=query.broker_ids,
-            date_from=None,  # always from t=0 for correct cumulative values
+            date_from=date_from,
             date_to=effective_date_to,
             target_currency=base_currency,
             include_candles=query.include_pnl_candles,
-            include_acquisition_funding=query.include_acquisition_funding,
-            # The positions at the end of the period's start day, for the Performance table (MF-A).
-            period_start=date_from if query.include_positions_contribution else None,
         )
 
         views = DerivedViewsBuilder(engine_result.daily_states, base_currency)
@@ -2258,9 +2245,7 @@ class PortfolioService:
             )
 
         # ── 4h. New-vs-reinvested BUY funding split (batch 2 — Income submode's
-        # acquisition-size dimension). Requires the shared engine run to have been
-        # computed with include_acquisition_funding=True (see above), mirroring
-        # pnl_candles's own shared-engine-result requirement.
+        # acquisition-size dimension). The page's run always carries it (_engine_run, FB-14).
         acquisition_funding: AcquisitionFundingSeries | None = None
         if query.include_acquisition_funding:
             included.append("acquisition_funding")
