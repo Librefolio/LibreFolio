@@ -38,7 +38,7 @@ import {expect, test, type Locator, type Page} from '../fixtures/playwright';
 import {login, navigateTo} from '../fixtures/auth-helpers';
 import {waitForSettled} from '../fixtures/app-events';
 import {t as catalogueText} from '../fixtures/i18n-data';
-import {continueToReview, deleteOwnedReports, parseSelectedFile, selectBrokerFile, type OwnedReport} from '../fixtures/import-wizard';
+import {continueToReview, deleteOwnedReports, parseSelectedFile, selectBrokerFile, type OwnedReport, type ParseResponse} from '../fixtures/import-wizard';
 import {TEST_USER} from '../fixtures/test-users';
 import {uniqueSuffix, uniqueToken} from '../fixtures/unique';
 import {readFileSync} from 'fs';
@@ -58,7 +58,7 @@ test.setTimeout(120_000);
 
 type Owned = {id: number; name: string};
 type ParsedTodo = {tx_index: number; field: string; severity: string; reason_code: string; context?: Record<string, unknown>};
-type ParsedFile = {plugin_code: string; transactions: unknown[]; field_todos?: ParsedTodo[]};
+type ParsedFile = Pick<ParseResponse, 'file_id' | 'broker_id'> & {plugin_code: string; transactions: unknown[]; field_todos?: ParsedTodo[]};
 
 /** What the running test created, emptied by afterEach. Module state on purpose: a worker runs one test at a time. */
 const ownedReports: OwnedReport[] = [];
