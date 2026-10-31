@@ -99,12 +99,12 @@
                         <div class="flex items-center gap-1.5 text-xs" data-passed={rule.passed} data-testid="password-rule-{rule.key}">
                             {#if rule.passed}
                                 <Check aria-hidden="true" class="w-3.5 h-3.5 text-lf-success" />
-                                <span class="sr-only" data-testid="password-rulestate-{rule.key}">{$_('auth.passwordStrength.ruleMet')}</span>
                                 <span class="text-lf-secondary">{rule.value === null ? $_(`auth.passwordStrength.rules.${rule.key}`) : $_(`auth.passwordStrength.rules.${rule.key}`, {values: {value: rule.value}})}</span>
+                                <span class="sr-only" data-testid="password-rulestate-{rule.key}">{$_('auth.passwordStrength.ruleMet')}</span>
                             {:else}
                                 <X aria-hidden="true" class="w-3.5 h-3.5 text-lf-muted" />
-                                <span class="sr-only" data-testid="password-rulestate-{rule.key}">{$_('auth.passwordStrength.ruleNotMet')}</span>
                                 <span class="text-lf-muted">{rule.value === null ? $_(`auth.passwordStrength.rules.${rule.key}`) : $_(`auth.passwordStrength.rules.${rule.key}`, {values: {value: rule.value}})}</span>
+                                <span class="sr-only" data-testid="password-rulestate-{rule.key}">{$_('auth.passwordStrength.ruleNotMet')}</span>
                             {/if}
                         </div>
                     {/each}
