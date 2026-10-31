@@ -735,6 +735,7 @@ def test_pqs_s05_the_answer_says_its_resolution():
     assert annotation is _sampling().SampleResolution, f"resolution is typed {annotation!r}, not {SAMPLING_MODULE}.SampleResolution"
     point_fields = {"date", "open", "high", "low", "close", "volume", "currency", "source_plugin_key", "backward_fill_info"}
     point_fields |= {"original_currency", "original_close", "original_open", "original_high", "original_low"}
+    point_fields |= {"fx_rate"}  # MF-A13: the unit rate the point was converted with
     assert set(FAPricePoint.model_fields) == point_fields
 
 

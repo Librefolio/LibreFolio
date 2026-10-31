@@ -27,6 +27,7 @@ vi.mock('$lib/api', () => ({
     zodiosApi: {
         sync_prices_bulk_api_v1_assets_prices_sync_post: vi.fn(),
         sync_rates_api_v1_fx_currencies_sync_post: vi.fn(),
+        count_stored_prices_api_v1_assets_prices_stored_count_post: vi.fn(),
         // Exactly one asset provider carries an icon, so both halves of the badge
         // — image and code text — are reachable from this file.
         list_providers_api_v1_assets_provider_get: vi.fn().mockResolvedValue([{code: 'stooq', name: 'Stooq', icon_url: '/icons/providers/stooq.png'}]),
@@ -50,6 +51,7 @@ import {writeExportToClipboard} from '$lib/utils/clipboard';
 
 const syncPrices = vi.mocked(zodiosApi.sync_prices_bulk_api_v1_assets_prices_sync_post);
 const syncRates = vi.mocked(zodiosApi.sync_rates_api_v1_fx_currencies_sync_post);
+const countStored = vi.mocked(zodiosApi.count_stored_prices_api_v1_assets_prices_stored_count_post);
 const copied = vi.mocked(writeExportToClipboard);
 
 type WireResult = Record<string, unknown>;
@@ -125,6 +127,9 @@ beforeAll(async () => {
 beforeEach(() => {
     syncPrices.mockReset();
     syncRates.mockReset();
+    countStored.mockReset();
+    // No stored price anywhere unless a case says so
+    countStored.mockImplementation((async (items: Array<{asset_id: number}>) => ({items: items.map((item) => ({asset_id: item.asset_id, stored_count: 0, manual_count: 0}))})) as never);
     copied.mockClear();
 });
 
@@ -186,28 +191,36 @@ describe('PageSyncModal — the two sections', () => {
 // =========================================================================
 
 /**
- * A detail page knows which of its assets already have stored prices, and which of
- * its pairs stored rates, in the range it is about to sync. It hands the two lists
- * over apart — `assetsWithDataInRange` (asset ids) and `fxPairsWithDataInRange`
- * (pairs as the dialog names them) — and this modal passes each to its own section
- * as `existingIds`, asset ids as strings like their targets. SyncModalBase then warns
- * before Start, once per section; what it says is SyncModalBase.test.ts's.
- *
- * Red today: the two props do not exist, and no warning is rendered.
+ * A detail page hands over the pairs whose rate store holds a stored row in the range as `fxPairsWithDataInRange` (pairs as
+ * the dialog names them); the assets it syncs are counted by the server when the dialog opens (`POST /assets/prices/stored-count`,
+ * the range of the dialog), the ids that hold some and the stored prices entered by hand going to the assets section. Each goes
+ * to its own section as `existingIds`, asset ids as strings like their targets. SyncModalBase then warns before Start, once per
+ * section; what it says is SyncModalBase.test.ts's.
  */
-describe('PageSyncModal — what the page already holds in the range', () => {
-    it('hands each list to its own section: asset ids to assets, pairs to fx', async () => {
+describe('PageSyncModal — what the range already holds', () => {
+    it('warns for each section with its own counts: the server’s for assets, the page’s for pairs', async () => {
         assetsRespond();
         fxResponds();
-        mount({assets: [asset(1), asset(2)], fxPairs: ['EUR-USD', 'EUR-GBP', 'USD-CHF'], assetsWithDataInRange: [2], fxPairsWithDataInRange: ['EUR-USD', 'USD-CHF']});
+        countStored.mockResolvedValue({
+            items: [
+                {asset_id: 1, stored_count: 0, manual_count: 0},
+                {asset_id: 2, stored_count: 4, manual_count: 1},
+            ],
+        } as never);
+        mount({assets: [asset(1), asset(2)], fxPairs: ['EUR-USD', 'EUR-GBP', 'USD-CHF'], fxPairsWithDataInRange: ['EUR-USD', 'USD-CHF']});
 
+        await waitFor(() => expect(document.querySelectorAll('[data-testid="page-sync-modal-overwrite-warning"]').length).toBe(2));
         // Read by section, never by position: one warning each, with its own counts.
         const warned = [...document.querySelectorAll<HTMLElement>('[data-testid="page-sync-modal-overwrite-warning"]')]
-            .map((el) => ({section: el.getAttribute('data-section'), existing: num(el, 'data-existing'), total: num(el, 'data-total')}))
+            .map((el) => ({section: el.getAttribute('data-section'), existing: num(el, 'data-existing'), total: num(el, 'data-total'), manual: el.getAttribute('data-manual')}))
             .sort((a, b) => String(a.section).localeCompare(String(b.section)));
         expect(warned).toEqual([
-            {section: 'assets', existing: 1, total: 2},
-            {section: 'fx', existing: 2, total: 3},
+            {section: 'assets', existing: 1, total: 2, manual: '1'},
+            {section: 'fx', existing: 2, total: 3, manual: null},
+        ]);
+        expect(countStored).toHaveBeenCalledWith([
+            {asset_id: 1, date_range: {start: '2024-03-01', end: '2024-03-31'}},
+            {asset_id: 2, date_range: {start: '2024-03-01', end: '2024-03-31'}},
         ]);
     });
 });

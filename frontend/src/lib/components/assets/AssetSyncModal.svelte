@@ -13,6 +13,7 @@
     import type {SyncRequestOptions, SyncResult, SyncSection} from '$lib/utils/sync/syncHelpers';
     import {DEFAULT_PROVIDER_COLOR, ensureAssetProvidersCached, getAssetProviderIconUrl, PROVIDER_COLORS} from '$lib/utils/providerHelpers';
     import {clearTimer} from '$lib/utils/core/clearTimer';
+    import {loadStoredPriceCounts, type StoredPriceCount} from '$lib/utils/sync/storedPriceCounts';
 
     interface AssetSyncItem {
         id: number;
@@ -27,13 +28,11 @@
         dateStart: string;
         dateEnd: string;
         assets: AssetSyncItem[];
-        /** The assets whose shown prices already hold a stored row in the range: the dialog warns (C-66). */
-        withDataInRange?: number[];
         onsynced: () => void;
         onclose: () => void;
     }
 
-    let {open = $bindable(), dateStart, dateEnd, assets, withDataInRange = [], onsynced, onclose}: Props = $props();
+    let {open = $bindable(), dateStart, dateEnd, assets, onsynced, onclose}: Props = $props();
 
     let syncModalBase: SyncModalBase | undefined = $state(undefined);
     let longPressTimer: ReturnType<typeof setTimeout> | null = null;
@@ -86,6 +85,28 @@
 
     let targetIds = $derived(assets.filter((a) => !!a.provider_code).map((a) => a.id.toString()));
 
+    // The prices stored in the range the sync would replace, counted by the server (X-R29) when the dialog opens: the ids that
+    // hold some warn, with how many were entered by hand. A count that cannot be read leaves the dialog without a warning.
+    let stored = $state<ReadonlyMap<number, StoredPriceCount>>(new Map());
+    let countGeneration = 0;
+    $effect(() => {
+        const ids = targetIds.map(Number);
+        const range = {start: dateStart, end: dateEnd};
+        const mine = ++countGeneration;
+        if (!open || ids.length === 0) {
+            stored = new Map();
+            return;
+        }
+        loadStoredPriceCounts(ids, range)
+            .then((counts) => {
+                if (mine === countGeneration) stored = counts;
+            })
+            .catch((error) => {
+                console.error('Stored prices not counted before the sync', error);
+                if (mine === countGeneration) stored = new Map();
+            });
+    });
+
     let sections: SyncSection[] = $derived([
         {
             id: 'assets',
@@ -94,7 +115,8 @@
             targetIds,
             resultRow,
             countLabel: $t('assets.sync.assetsCount') ?? 'assets',
-            existingIds: withDataInRange.map(String),
+            existingIds: [...stored].filter(([, count]) => count.stored > 0).map(([id]) => String(id)),
+            manualCount: [...stored.values()].reduce((sum, count) => sum + count.manual, 0),
         },
     ]);
 </script>

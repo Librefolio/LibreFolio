@@ -72,6 +72,7 @@
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
     import {ensureFxRangeLoaded, getFxStore} from '$lib/stores/fxStoreRegistry';
     import {getAssetPriceStore, invalidateAssetPriceStore, apiPricesToAssetPricePoints} from '$lib/stores/assetPriceStoreRegistry';
+    import {firstDateOf, forgetFirstDate, rememberFirstDate} from '$lib/stores/firstSeriesDates';
     import {hasStoredPointInRange} from '$lib/utils/sync/syncHelpers';
     import {buildIdentifiersList} from '$lib/utils/assetTypes';
     import {ensureAssetProvidersCached, getAssetProviderIconUrl, getAssetProviderName, isParametricProvider, assetProvidersVersion} from '$lib/utils/providerHelpers';
@@ -82,9 +83,10 @@
     import type {SignalLabelInfo} from '$lib/charts/signalLabel';
     import {buildOverlaySignalInfoMap} from '$lib/charts/signalLabel';
     import {ensureSignalFxPairs, fxPairSlugsOf} from '$lib/charts/comparisonSeries';
+    import {buildFxPairComparisonQuery, fxPairComparisonViews} from '$lib/charts/crossTypeCalendar';
     import {applyComparisonAssetsData, buildComparisonSyncRange, clearComparisonAssetsData, collectConfiguredComparisonFxSlugs, comparisonAnswerGenerations, comparisonAnswerIsCacheable, comparisonAnswerKey, loadComparisonAssetsData} from '$lib/charts/loadComparisonData';
     import {comparisonAssetIds as comparisonPeerAssetIds, detailPageSignalSources, parseBackendSignalResults, signalDataContextFingerprint} from '$lib/charts/chartPageSignals';
-    import {renderBackendResults, renderLocalSignals, type SignalDataSources} from '$lib/charts/chartSignalRendering';
+    import {renderBackendResults, renderCalendarPairComparisons, renderLocalSignals, type SignalDataSources} from '$lib/charts/chartSignalRendering';
     import {getStart, getEnd, setDateRange, resolveDateSentinel, isMaxSentinel} from '$lib/stores/dateRangeStore.svelte';
     import {buildAssetSyncToast, buildFxSyncToast} from '$lib/utils/sync/syncToastHelpers';
     import {COLORS} from '$lib/components/charts/lineChartHelpers';
@@ -213,6 +215,9 @@
     let calendarRangeDays = $derived(calendarReturnRangeDays(dateStart, dateEnd));
     let calendarReturnView: CalendarReturnView = $state(emptyCalendarReturnView());
     let calendarComparisonViews: Map<number, CalendarReturnView> = $state(new Map());
+    // FB-11: the rolling return of the FX pairs its `fx-pair` signals compare, by signal id; asked on its own, apart from the asset's
+    let calendarPairViews: Map<string, CalendarReturnView> = $state(new Map());
+    let calendarPairRequestGeneration = 0;
     let calendarComparisonProblems: Map<number, SignalProblem> = $state(new Map());
     let calendarComparisonFxFailures: Set<number> = $state(new Set());
     let calendarSnapshotFingerprint: string | null = $state(null);
@@ -750,7 +755,16 @@
         }
         return rendered;
     });
-    let calendarOverlaySignals = $derived([...calendarComparisonSignals, ...calendarMeasureSignals]);
+    let calendarPairSignals: RenderedSignal[] = $derived(renderCalendarPairComparisons(signals, calendarPairViews));
+    let calendarOverlaySignals = $derived([...calendarComparisonSignals, ...calendarPairSignals, ...calendarMeasureSignals]);
+    /** The `fx-pair` signals compared in the rolling return by the state of their view (signal ids). */
+    let calendarPairComparisonState = $derived.by(() => {
+        const byState: Record<'ready' | 'partial' | 'unavailable' | 'error', string[]> = {ready: [], partial: [], unavailable: [], error: []};
+        for (const [configId, view] of calendarPairViews) {
+            if (view.state === 'ready' || view.state === 'partial' || view.state === 'unavailable' || view.state === 'error') byState[view.state].push(configId);
+        }
+        return byState;
+    });
     let calendarComparisonState = $derived.by(() => {
         const state: Record<CalendarReturnViewState, number[]> = {
             idle: [],
@@ -1063,7 +1077,7 @@
         error = null;
         // Reset state for new asset
         // «All» resolves against the new asset's own history, not the earliest date of the one before.
-        rearmMaxPendingBeforeReload();
+        rearmMaxPendingBeforeReload(false);
         assetInfo = null;
         providerAssignment = null;
         providerAssignmentLoaded = false;
@@ -1081,6 +1095,8 @@
         comparisonInFlight = null;
         calendarReturnView = emptyCalendarReturnView();
         calendarComparisonViews = new Map();
+        calendarPairViews = new Map();
+        calendarPairRequestGeneration += 1;
         calendarComparisonProblems = new Map();
         calendarComparisonFxFailures = new Set();
         calendarSnapshotFingerprint = null;
@@ -1273,8 +1289,11 @@
      * and re-arming isMaxPending lets resolveMaxStartFromChartData() pick up
      * the new true earliest date once the fresh (wide) query returns.
      */
-    function rearmMaxPendingBeforeReload() {
+    function rearmMaxPendingBeforeReload(dataChanged = true) {
         if (activePreset !== 'MAX') return;
+        // FB-7b: a sync, a save or Refresh may have moved the asset's first day: it is asked again. A page that only loads the
+        // asset (`reloadPage`) changed no data, and keeps the first day the session already knows
+        if (dataChanged) forgetFirstDate('asset', data.assetId);
         isMaxPending = true;
         dateStart = resolveDateSentinel('min');
         displayDateStart = 'min';
@@ -1284,12 +1303,52 @@
      * `silent`: the reload after a price catch-up (Y5-1) — the chart and the signals on screen stay as they are, and nothing
      * says the page is busy (no `loading`, no calendar `loading`, no `signalsLoading`): it is not a load the user asked for.
      */
+    /** The `fx-pair` signals of `configs` as the FX page reads them: the pair, and whether the signal shows it inverted. */
+    function fxPairTargetsOf(configs: readonly SignalConfig[]): Array<{configId: string; pairSlug: string; inverted: boolean}> {
+        return configs.filter((config) => config.signalType === 'fx-pair' && config.params.pairSlug).map((config) => ({configId: config.id, pairSlug: String(config.params.pairSlug), inverted: Boolean(config.params._inverted)}));
+    }
+
+    /**
+     * FB-11: the rolling return of the FX pairs the `fx-pair` signals compare, asked of `POST /fx/currencies/convert` over the
+     * period on screen and the window (`buildFxPairComparisonQuery`). Independent of the asset's own request: it never throws
+     * and a failure marks each pair `error`; a request the page has moved past is dropped.
+     */
+    async function loadCalendarPairComparisons(configs: SignalConfig[] = signals): Promise<void> {
+        const requestedAssetId = data.assetId;
+        const sessionGeneration = getClientSessionGeneration();
+        const requestVersion = ++calendarPairRequestGeneration;
+        const current = () => pageAlive && requestVersion === calendarPairRequestGeneration && primaryMode === 'calendar-return' && data.assetId === requestedAssetId && isClientSessionCurrent(sessionGeneration);
+        const entries = buildFxPairComparisonQuery({start: dateStart, end: dateEnd, windowDays: calendarWindowDays, pairTargets: fxPairTargetsOf(configs)});
+        if (entries.length === 0) {
+            calendarPairViews = new Map();
+            return;
+        }
+        try {
+            const response = await zodiosApi.convert_currency_bulk_api_v1_fx_currencies_convert_post(entries.map((entry) => entry.request));
+            if (!current()) return;
+            calendarPairViews = fxPairComparisonViews(response, entries);
+        } catch (e) {
+            if (!current()) return;
+            console.error('Failed to load the rolling return of the compared FX pairs:', e);
+            calendarPairViews = new Map(entries.map((entry) => [entry.configId, emptyCalendarReturnView('error')]));
+        }
+    }
+
     async function loadChartData(force = false, requestedSignalConfigs: SignalConfig[] = signals, propagateError = false, silent = false) {
         lastChartLoadAskedServer = false;
         const requestedAssetId = data.assetId;
         const sessionGeneration = getClientSessionGeneration();
         const current = () => pageAlive && data.assetId === requestedAssetId && isClientSessionCurrent(sessionGeneration);
         if (!current()) return;
+        // FB-7b: «All» still pending and the asset's first day already known this session: start from it, and from the cache
+        if (isMaxPending) {
+            const knownFirstDay = firstDateOf('asset', requestedAssetId);
+            if (knownFirstDay !== undefined) {
+                dateStart = knownFirstDay;
+                displayDateStart = knownFirstDay;
+                isMaxPending = false;
+            }
+        }
         let requestedStart = dateStart;
         const requestedEnd = dateEnd;
         const requestedDisplayCurrency = displayCurrency;
@@ -1297,6 +1356,7 @@
         const effectiveCurrency = displayCurrency && assetInfo?.currency && displayCurrency !== assetInfo.currency ? displayCurrency : (assetInfo?.currency ?? '');
         const targetCurrency = displayCurrency && assetInfo?.currency && displayCurrency !== assetInfo.currency ? displayCurrency : undefined;
         const wantsCalendarReturn = primaryMode === 'calendar-return';
+        if (wantsCalendarReturn) void loadCalendarPairComparisons(requestedSignalConfigs);
         const backendSignalConfigs = wantsCalendarReturn ? [] : requestedSignalConfigs;
         const requestPlan = buildBackendSignalRequestPlan(backendSignalConfigs, signalDefinitions);
         const requestVersion = signalResultState.beginRequest();
@@ -1345,8 +1405,12 @@
                 backward_fill_info: p.backwardFillInfo ? {days_back: p.backwardFillInfo.daysBack} : null,
             }));
 
+        // FB-7b: «All» still pending, its first day unknown: the series is asked from the sentinel `min` (the server answers the asset's
+        // first stored day, whatever its year) and never from a made-up start; the store cannot answer a start it does not know
+        const askedFromMin = isMaxPending;
+
         // Cache-first: check if the price store already covers this range
-        if (!force && effectiveCurrency) {
+        if (!force && effectiveCurrency && !askedFromMin) {
             const store = getAssetPriceStore(data.assetId, effectiveCurrency);
             const gaps = store.getMissingIntervals(dateStart, dateEnd);
             if (gaps.length > 0 && store.isStale) {
@@ -1383,7 +1447,7 @@
         const requestBody: AssetPriceBulkQueryBody = [
             {
                 asset_id: data.assetId,
-                date_range: {start: dateStart, end: dateEnd},
+                date_range: {start: askedFromMin ? ('min' as const) : dateStart, end: dateEnd},
                 include_price: !pricesFromCache,
                 include_events: true,
                 target_currency: targetCurrency,
@@ -1391,7 +1455,8 @@
             },
             ...calendarComparisonAssetIds.map((assetId) => ({
                 asset_id: assetId,
-                date_range: {start: dateStart, end: dateEnd},
+                // every item of the bulk shares the main one's range: the peer's own first day, when the main one asks from `min`
+                date_range: {start: askedFromMin ? ('min' as const) : dateStart, end: dateEnd},
                 include_price: false,
                 include_events: true,
                 target_currency: effectiveCurrency || undefined,
@@ -1477,7 +1542,10 @@
                 if (!pricesFromCache && cacheCurrency && chartData.length > 0) {
                     const store = getAssetPriceStore(data.assetId, cacheCurrency);
                     store.merge(apiPricesToAssetPricePoints(chartData));
-                    store.markFetched(dateStart, dateEnd);
+                    // From the first day the server held, when the series was asked from `min`: nothing exists before it, and the
+                    // placeholder start the page waits on was never asked
+                    store.markFetched(askedFromMin ? chartData[0].date : dateStart, dateEnd);
+                    if (askedFromMin) rememberFirstDate('asset', requestedAssetId, chartData[0].date);
                 }
             } else {
                 if (!pricesFromCache) chartData = [];
@@ -1831,9 +1899,7 @@
 
     let syncAllFxPairs = $derived(requiredFxPairs.filter((p) => p.status !== 'missing').map((p) => p.slug));
 
-    /** The sync dialog's targets whose shown data holds a stored row in its range (C-66), for its warning: this asset
-     * from its chart, a pair from its rate store; a comparison asset is not counted. */
-    let syncAssetsWithData = $derived(showPageSyncModal && hasStoredPointInRange(chartData, syncDateStart, dateEnd) ? [data.assetId] : []);
+    /** The sync dialog's pairs whose rate store holds a stored row in its range (C-66), for its warning; its assets are counted by the server. */
     let syncFxPairsWithData = $derived(showPageSyncModal ? syncAllFxPairs.filter((slug) => hasStoredPointInRange(getFxStore(slug).getRange(dateStart, dateEnd).data, syncDateStart, dateEnd)) : []);
 
     function handleSync() {
@@ -1975,8 +2041,15 @@
         const shouldReloadCalendarComparisons = calendarComparisonFingerprint(signals) !== calendarComparisonFingerprint(newSignals);
         const shouldReloadPriceComparisons = priceComparisonLoadFingerprint(signals) !== priceComparisonLoadFingerprint(newSignals);
         const shouldLoadFxPairs = fxPairSlugsOf(signals).join() !== fxPairSlugsOf(newSignals).join();
+        // FB-11: read before `setPairSettings`, which makes `signals` the new list at once
+        const pairTargetsFingerprint = (configs: SignalConfig[]) =>
+            fxPairTargetsOf(configs)
+                .map((t) => `${t.configId}:${t.pairSlug}:${t.inverted}`)
+                .join();
+        const shouldReloadCalendarPairs = pairTargetsFingerprint(signals) !== pairTargetsFingerprint(newSignals);
         setPairSettings(`asset-${data.assetId}`, {...settings, signals: JSON.parse(JSON.stringify(newSignals))});
         if (shouldLoadFxPairs) void loadSignalFxPairs(newSignals);
+        if (primaryMode === 'calendar-return' && shouldReloadCalendarPairs) void loadCalendarPairComparisons(newSignals);
         if (primaryMode === 'price' && shouldReloadPriceComparisons) {
             void trackComparisonLoad('asset-comparison', newSignals);
         }
@@ -2442,7 +2515,7 @@
             <ChartSignalsSection
                 signals={signalPanelConfigs}
                 definitions={signalDefinitions}
-                allowedSignalTypes={primaryMode === 'calendar-return' ? ['asset-comparison'] : undefined}
+                allowedSignalTypes={primaryMode === 'calendar-return' ? ['asset-comparison', 'fx-pair'] : undefined}
                 backendError={primaryMode === 'price' ? signalBackendError : null}
                 {signalsLoading}
                 onretrybackend={retryBackendSignals}
@@ -2484,6 +2557,10 @@
             data-calendar-comparison-partial={primaryMode === 'calendar-return' ? calendarComparisonState.partial.join(',') : undefined}
             data-calendar-comparison-unavailable={primaryMode === 'calendar-return' ? calendarComparisonState.unavailable.join(',') : undefined}
             data-calendar-comparison-error={primaryMode === 'calendar-return' ? calendarComparisonState.error.join(',') : undefined}
+            data-calendar-pair-comparison-ready={primaryMode === 'calendar-return' ? calendarPairComparisonState.ready.join(',') : undefined}
+            data-calendar-pair-comparison-partial={primaryMode === 'calendar-return' ? calendarPairComparisonState.partial.join(',') : undefined}
+            data-calendar-pair-comparison-unavailable={primaryMode === 'calendar-return' ? calendarPairComparisonState.unavailable.join(',') : undefined}
+            data-calendar-pair-comparison-error={primaryMode === 'calendar-return' ? calendarPairComparisonState.error.join(',') : undefined}
             data-calendar-primary-problem-code={primaryMode === 'calendar-return' ? (calendarReturnView.problem?.code ?? undefined) : undefined}
             data-calendar-primary-problem-status={primaryMode === 'calendar-return' ? (calendarReturnView.problem?.status ?? undefined) : undefined}
             data-series-state={chartSeriesState}
@@ -2769,6 +2846,7 @@
                         currency={assetInfo?.currency}
                         {chartData}
                         {events}
+                        hasProvider={!!providerAssignment?.provider_code}
                         bind:saving={savingEdit}
                         bind:dirtyCount={editorDirtyCount}
                         onsave={async (expandedRange) => {
@@ -2911,16 +2989,6 @@
 
     <!-- Page Sync Modal (sync all assets + FX pairs) -->
     {#if assetInfo}
-        <PageSyncModal
-            bind:open={showPageSyncModal}
-            dateStart={syncDateStart}
-            {dateEnd}
-            assets={syncAllAssets}
-            fxPairs={syncAllFxPairs}
-            assetsWithDataInRange={syncAssetsWithData}
-            fxPairsWithDataInRange={syncFxPairsWithData}
-            onsynced={handlePageSyncComplete}
-            onclose={() => (showPageSyncModal = false)}
-        />
+        <PageSyncModal bind:open={showPageSyncModal} dateStart={syncDateStart} {dateEnd} assets={syncAllAssets} fxPairs={syncAllFxPairs} fxPairsWithDataInRange={syncFxPairsWithData} onsynced={handlePageSyncComplete} onclose={() => (showPageSyncModal = false)} />
     {/if}
 </div>

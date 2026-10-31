@@ -38,6 +38,7 @@ const mocks = vi.hoisted(() => ({
     api: {
         event_reconciliation_api_v1_transactions_event_reconciliation_get: vi.fn(),
         commit_transactions_api_v1_transactions_commit_post: vi.fn(),
+        upsert_events_bulk_api_v1_assets_events_post: vi.fn(),
     },
 }));
 vi.mock('$lib/api', () => ({zodiosApi: mocks.api}));
@@ -45,10 +46,11 @@ vi.mock('$lib/stores/app/toastStore.svelte', () => ({
     toasts: {success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn()},
 }));
 
-import {linkReconciliation, linkUpdates, loadEventReconciliation, uniqueRows, type ReconciliationRow} from './eventReconciliation';
+import {createMissingEvents, eventTypesOfRow, eventTypeToShow, linkReconciliation, linkUpdates, loadEventReconciliation, plainEventAmount, suggestedEventAmount, uniqueRows, type ReconciliationRow} from './eventReconciliation';
 
 const listCall = mocks.api.event_reconciliation_api_v1_transactions_event_reconciliation_get;
 const commitCall = mocks.api.commit_transactions_api_v1_transactions_commit_post;
+const createEventsCall = mocks.api.upsert_events_bulk_api_v1_assets_events_post;
 
 /** One candidate event as the server lists it. */
 function serverCandidate(id: number, over: Record<string, unknown> = {}) {
@@ -57,7 +59,7 @@ function serverCandidate(id: number, over: Record<string, unknown> = {}) {
 
 /** One item as the server lists it. */
 function serverItem(transactionId: number, status: 'unique' | 'none' | 'several', candidates: ReturnType<typeof serverCandidate>[], over: Record<string, unknown> = {}) {
-    return {transaction_id: transactionId, broker_id: 3, asset_id: 7, date: '2025-03-04', type: 'DIVIDEND', status, candidates, ...over};
+    return {transaction_id: transactionId, broker_id: 3, asset_id: 7, date: '2025-03-04', type: 'DIVIDEND', status, candidates, amount: '5.00', currency: 'USD', quantity: '0', ...over};
 }
 
 /** A row as the module hands it on (camelCase), for the pure functions' cases. */
@@ -70,12 +72,16 @@ function row(transactionId: number, status: ReconciliationRow['status'], candida
         type: 'DIVIDEND',
         status,
         candidates: candidateIds.map((id) => ({id, date: '2025-03-04', type: 'DIVIDEND', value: '1.25', currency: 'USD', isAuto: false})),
+        amount: '5.00',
+        currency: 'USD',
+        quantity: '0',
     };
 }
 
 beforeEach(() => {
     listCall.mockReset();
     commitCall.mockReset();
+    createEventsCall.mockReset();
 });
 
 describe('loadEventReconciliation', () => {
@@ -137,8 +143,8 @@ describe('loadEventReconciliation', () => {
         const rows = await loadEventReconciliation();
 
         expect(rows).toEqual([
-            {transactionId: 11, brokerId: 3, assetId: 7, date: '2025-03-04', type: 'DIVIDEND', status: 'unique', candidates: [{id: 501, date: '2025-03-04', type: 'DIVIDEND', value: '1.25', currency: 'USD', isAuto: true}]},
-            {transactionId: 12, brokerId: 4, assetId: 8, date: '2025-04-05', type: 'INTEREST', status: 'none', candidates: []},
+            {transactionId: 11, brokerId: 3, assetId: 7, date: '2025-03-04', type: 'DIVIDEND', status: 'unique', candidates: [{id: 501, date: '2025-03-04', type: 'DIVIDEND', value: '1.25', currency: 'USD', isAuto: true}], amount: '5.00', currency: 'USD', quantity: '0'},
+            {transactionId: 12, brokerId: 4, assetId: 8, date: '2025-04-05', type: 'INTEREST', status: 'none', candidates: [], amount: '5.00', currency: 'USD', quantity: '0'},
         ]);
     });
 
@@ -313,5 +319,101 @@ describe('linkReconciliation', () => {
         await linkReconciliation([row(1, 'unique', [101]), row(2, 'unique', [102])]);
 
         expect(commitCall).toHaveBeenCalledTimes(1);
+    });
+});
+
+// ---------------------------------------------------------------------------
+// FB-19: creating the event a row misses
+// ---------------------------------------------------------------------------
+
+describe('the event a row misses (FB-19)', () => {
+    const own = (type: string, over: Partial<ReconciliationRow> = {}): ReconciliationRow => ({...row(21, 'none', []), type, ...over});
+
+    it('carries the transaction’s own cash and quantity from the server', async () => {
+        listCall.mockResolvedValue([serverItem(31, 'none', [], {type: 'INTEREST', amount: '-2.5', currency: 'EUR', quantity: '0'})]);
+
+        const [only] = await loadEventReconciliation();
+
+        expect([only.amount, only.currency, only.quantity]).toEqual(['-2.5', 'EUR', '0']);
+    });
+
+    it('a row without cash has a null currency', async () => {
+        listCall.mockResolvedValue([serverItem(32, 'none', [], {type: 'ADJUSTMENT', amount: '0', currency: null, quantity: '5'})]);
+
+        const [only] = await loadEventReconciliation();
+
+        expect([only.amount, only.currency, only.quantity]).toEqual(['0', null, '5']);
+    });
+
+    it('eventTypesOfRow: one type for a dividend or an interest, a split or a price adjustment for an adjustment', () => {
+        expect(eventTypesOfRow(own('DIVIDEND'))).toEqual(['DIVIDEND']);
+        expect(eventTypesOfRow(own('INTEREST'))).toEqual(['INTEREST']);
+        expect(eventTypesOfRow(own('ADJUSTMENT'))).toEqual(['SPLIT', 'PRICE_ADJUSTMENT']);
+    });
+
+    it('eventTypeToShow: the type the server found, else the one the transaction asks for, null for an adjustment with no event', () => {
+        expect(eventTypeToShow(own('ADJUSTMENT', {candidates: [{id: 1, date: '2025-03-04', type: 'SPLIT', value: '2', currency: 'USD', isAuto: false}]}))).toBe('SPLIT');
+        expect(eventTypeToShow(own('INTEREST'))).toBe('INTEREST');
+        expect(eventTypeToShow(own('ADJUSTMENT'))).toBeNull();
+    });
+
+    it('suggestedEventAmount: the cash, unsigned, when it is in the asset’s currency; nothing otherwise', () => {
+        expect(suggestedEventAmount(own('DIVIDEND', {amount: '5.00', currency: 'USD'}), 'USD')).toBe('5.00');
+        expect(suggestedEventAmount(own('INTEREST', {amount: '-2.5', currency: 'USD'}), 'USD')).toBe('2.5');
+        expect(suggestedEventAmount(own('DIVIDEND', {amount: '5', currency: 'EUR'}), 'USD'), 'another currency').toBe('');
+        expect(suggestedEventAmount(own('DIVIDEND', {amount: '0', currency: 'USD'}), 'USD'), 'no cash').toBe('');
+        expect(suggestedEventAmount(own('DIVIDEND', {amount: '5', currency: null}), 'USD')).toBe('');
+        expect(suggestedEventAmount(own('ADJUSTMENT', {amount: '5', currency: 'USD', quantity: '5'}), 'USD'), 'an adjustment: the user types the ratio').toBe('');
+        expect(suggestedEventAmount(own('DIVIDEND', {amount: '5', currency: 'USD'}), undefined), 'the asset’s currency is unknown').toBe('');
+    });
+
+    it('plainEventAmount: a positive plain decimal of at most six decimals, the locale’s comma read', () => {
+        expect(plainEventAmount('1.25')).toBe('1.25');
+        expect(plainEventAmount(' 1,25 ')).toBe('1.25');
+        expect(plainEventAmount('0.123456')).toBe('0.123456');
+        expect(plainEventAmount('0.1234567'), 'a seventh decimal is refused, never cut').toBeNull();
+        expect(plainEventAmount('0.1234560')).toBe('0.1234560');
+        expect(plainEventAmount('0')).toBeNull();
+        expect(plainEventAmount('-1')).toBeNull();
+        expect(plainEventAmount('')).toBeNull();
+        expect(plainEventAmount('abc')).toBeNull();
+    });
+
+    it('createMissingEvents sends ONE request, one item per asset, mode create, the value as its digits, on the transaction’s day', async () => {
+        createEventsCall.mockResolvedValue({results: []});
+        const a = own('DIVIDEND', {transactionId: 41, assetId: 7, date: '2025-03-04'});
+        const b = own('INTEREST', {transactionId: 42, assetId: 8, date: '2025-04-05'});
+        const c = own('DIVIDEND', {transactionId: 43, assetId: 7, date: '2025-06-06'});
+
+        await createMissingEvents([
+            {row: a, type: 'DIVIDEND', amount: '1.25', currency: 'USD'},
+            {row: b, type: 'INTEREST', amount: '0.4', currency: 'EUR'},
+            {row: c, type: 'DIVIDEND', amount: '2', currency: 'USD'},
+        ]);
+
+        expect(createEventsCall).toHaveBeenCalledTimes(1);
+        expect(createEventsCall).toHaveBeenCalledWith([
+            {
+                asset_id: 7,
+                mode: 'create',
+                events: [
+                    {date: '2025-03-04', type: 'DIVIDEND', value: {code: 'USD', amount: '1.25'}},
+                    {date: '2025-06-06', type: 'DIVIDEND', value: {code: 'USD', amount: '2'}},
+                ],
+            },
+            {asset_id: 8, mode: 'create', events: [{date: '2025-04-05', type: 'INTEREST', value: {code: 'EUR', amount: '0.4'}}]},
+        ]);
+    });
+
+    it('createMissingEvents with nothing to create sends nothing', async () => {
+        await createMissingEvents([]);
+
+        expect(createEventsCall).not.toHaveBeenCalled();
+    });
+
+    it('createMissingEvents rejects with the request’s error, so that nothing is said to be created', async () => {
+        createEventsCall.mockRejectedValue(new Error('refused'));
+
+        await expect(createMissingEvents([{row: own('DIVIDEND'), type: 'DIVIDEND', amount: '1', currency: 'USD'}])).rejects.toThrow('refused');
     });
 });

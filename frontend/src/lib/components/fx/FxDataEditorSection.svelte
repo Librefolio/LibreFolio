@@ -22,6 +22,8 @@
     import {rejectedMessage, saveErrorText, type Rejection} from '$lib/api/writeRefusal';
     import {t} from '$lib/i18n';
     import FxDataImportModal from './FxDataImportModal.svelte';
+    import DataExportModal from '$lib/components/ui/data-editor/DataExportModal.svelte';
+    import {downloadFxRatesBackup} from '$lib/api/backupDownload';
 
     // =========================================================================
     // Props
@@ -303,6 +305,9 @@
 
     <!-- Data Editor -->
     <DataEditor bind:rows bind:this={dataEditor} columns={fxColumns} onchange={handleDataChange}>
+        {#snippet exportModal({open, setOpen})}
+            <DataExportModal {open} title={$t('dataEditor.exportRates')} onexport={(format) => downloadFxRatesBackup(base, quote, format)} onclose={() => setOpen(false)} />
+        {/snippet}
         {#snippet importModal({open, setOpen, onimport})}
             <FxDataImportModal
                 {open}

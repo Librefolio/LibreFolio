@@ -996,3 +996,110 @@ async def test_bll07_a_full_history_never_shortens_a_finite_warmup_beside_it(pri
     assert (status, reason, complete) == ("ok", None, True), said
     assert used >= 400 and first_input <= warmup_start, said
     assert _sma200_series(beside) == _sma200_series(alone)
+
+
+# =============================================================================
+# BL-S — THE SPAN OF A PLAIN QUERY (X6, 28/10): a calendar-wide range costs the rows it holds, and the fills it asks for are counted before
+# =============================================================================
+#
+# The question (lot X6, «tetto di span»): does a huge visible span get read before the budget checks it? The answer, pinned
+# here: the read is one indexed range over the stored rows, so it costs what the asset stores, not the span; a fill costs
+# its days, and ``_fill_span`` counts them from the dates alone, before ``_build_backward_filled_series`` runs. So no cap of
+# the span itself is needed. Both cases are GUARDS, green on HEAD 4577ecb65 (no cure).
+
+
+@pytest.mark.asyncio
+async def test_bls01_the_whole_calendar_over_a_small_history_builds_only_its_own_days(private_db, frozen_ceiling, no_market_holidays):
+    """BL-S01: one item from 0001-01-01 to 9999-12-31 over an asset with four closes in the last 30 days. The end is the
+    ceiling (X-R55); with no row before the start the fill begins at the first close: 31 points, 4 of them stored, and no
+    refusal. (The span of 3 million days is never walked.)"""
+    closes = [_day(-30), _day(-20), _day(-10), _day(0)]
+    asset_id = await _asset(private_db, prices_on=closes)
+
+    (result,) = await _query(private_db, _item(asset_id, YEAR_ONE, LAST_DAY))
+
+    days = [point.date for point in result.prices]
+    assert (days[0], days[-1], len(days)) == (_day(-30), CEILING, 32), f"{len(days)} points from {days[:1]} to {days[-1:]}: the fill should run from the first close to the ceiling"
+
+
+@pytest.mark.asyncio
+async def test_bls02_two_calendar_wide_items_seeded_from_year_one_are_refused_before_the_fill(private_db, monkeypatch, frozen_ceiling, no_market_holidays):
+    """BL-S02: two plain items from 0001-01-01 to the ceiling, over two assets each holding a row dated 0001-01-02 (an
+    older version stored one): each fill would emit about 739 000 days, 1.48 million in all, past the budget.
+    ``BulkTooManyDaysError`` with ``max_item_days`` 1 000 000 and an ``item_days`` over it, within ``GUARD_SECONDS``, the
+    fill never started (the fuse on ``price_query.timedelta`` stops a fill past ``FUSE_DAY_STEPS`` days)."""
+    first = await _asset(private_db, prices_on=[YEAR_ONE + timedelta(days=1)])
+    second = await _asset(private_db, prices_on=[YEAR_ONE + timedelta(days=1)])
+    _install_fuse(monkeypatch, price_query)
+
+    error = await _within_guard(lambda: _refused_for_days(lambda: _query(private_db, _item(first, YEAR_ONE, LAST_DAY), _item(second, YEAR_ONE, LAST_DAY))))
+
+    assert error.max_item_days == MAX_ITEM_DAYS and error.item_days > MAX_ITEM_DAYS, (error.item_days, error.max_item_days)
+
+
+# =============================================================================
+# BL-M — FB-7b: A START OF "min" READS FROM THE ASSET'S FIRST PRICE (get_prices_bulk, on a private database)
+# =============================================================================
+#
+# The Assets pages asked the history ("All") from a placeholder, 2000-01-01, because the price query wanted a real date: a
+# history that begins in 1985 showed from 2000. ``date_range.start`` now also takes the sentinel ``"min"``: the day of the asset's
+# first stored price, whatever its year (an asset with no price answers an empty series). RED until FB-7b: the item refuses
+# ``"min"`` (a validation error).
+
+
+def _min_item(asset_id: int, end: date) -> FAPriceQueryItem:
+    return FAPriceQueryItem.model_validate({"asset_id": asset_id, "date_range": {"start": "min", "end": end.isoformat()}})
+
+
+@pytest.mark.asyncio
+async def test_blm01_a_min_start_reads_from_the_first_price_before_2000(private_db, frozen_ceiling, no_market_holidays):
+    """BL-M01: closes on 1985-03-01 and 1985-03-04, and on FROZEN_TODAY. Asked from ``"min"`` to the ceiling: the series
+    starts on 1985-03-01 (the first price, not 2000-01-01) and holds that close."""
+    first = date(1985, 3, 1)
+    asset_id = await _asset(private_db, prices_on=[first, date(1985, 3, 4), FROZEN_TODAY])
+
+    (result,) = await _query(private_db, _min_item(asset_id, CEILING))
+
+    days = [point.date for point in result.prices]
+    assert (days[0], days[-1]) == (first, CEILING), f"{len(days)} points from {days[:1]}"
+    assert result.prices[0].close == Decimal("100")
+
+
+@pytest.mark.asyncio
+async def test_blm02_a_min_start_over_an_asset_without_prices_answers_an_empty_series(private_db, frozen_ceiling, no_market_holidays):
+    """BL-M02: no stored price, so no first day: an empty series, no error."""
+    asset_id = await _asset(private_db)
+
+    (result,) = await _query(private_db, _min_item(asset_id, CEILING))
+
+    assert result.prices == []
+
+
+@pytest.mark.asyncio
+async def test_blm03_each_item_starts_at_its_own_first_price_and_a_dated_item_is_untouched(private_db, frozen_ceiling, no_market_holidays):
+    """BL-M03: one request, three items: asset A from ``"min"`` (first price 1990-05-02), asset B from ``"min"`` (first price
+    2010-07-01), and asset A from a real day (2024-01-10). Each series starts where it should."""
+    a = await _asset(private_db, prices_on=[date(1990, 5, 2), FROZEN_TODAY])
+    b = await _asset(private_db, prices_on=[date(2010, 7, 1), FROZEN_TODAY])
+
+    min_a, min_b, dated_a = await _query(private_db, _min_item(a, CEILING), _min_item(b, CEILING), _item(a, date(2024, 1, 10), CEILING))
+
+    assert [min_a.prices[0].date, min_b.prices[0].date, dated_a.prices[0].date] == [date(1990, 5, 2), date(2010, 7, 1), date(2024, 1, 10)]
+
+
+@pytest.mark.asyncio
+async def test_blm04_a_target_sampled_like_a_min_card_follows_its_buckets_from_its_own_first_price(private_db, frozen_ceiling, no_market_holidays):
+    """BL-M04: the Assets grid's «All»: a card (first price 1985-03-01) and its comparison target (first price 2015-06-01), both
+    from ``"min"`` to the ceiling, the target ``sample_like`` the card. Once each starts on its own first price the two
+    ranges differ, but they were the same as asked: the request is not refused (``range_mismatch``), the target is sampled
+    on the card's step, and starts on its own first price."""
+    card_asset = await _asset(private_db, prices_on=[date(1985, 3, 1), FROZEN_TODAY])
+    target_asset = await _asset(private_db, prices_on=[date(2015, 6, 1), FROZEN_TODAY])
+    card = _min_item(card_asset, CEILING).model_copy(update={"key": "asset:card", "max_points": 40})
+    target = _min_item(target_asset, CEILING).model_copy(update={"sample_like": "asset:card"})
+
+    card_result, target_result = await _query(private_db, card, target)
+
+    assert card_result.resolution == target_result.resolution != "daily", (card_result.resolution, target_result.resolution)
+    assert card_result.prices[0].date >= date(1985, 3, 1) and target_result.prices[0].date >= date(2015, 6, 1)
+    assert min(point.date for point in target_result.prices) > min(point.date for point in card_result.prices)

@@ -9301,3 +9301,113 @@ Corsia 6209, `/tmp/librefolio-r13-o6-x`. Brief: `salvataggi-worktrees-20261021/o
 > 4 chiavi nuove in 4 lingue (`assets.sync.confirm*`). Test: servizio `asset-source-guards` (conteggio per voce), API `assets-price` (2), E2E `asset-card-sync-confirm` (4, tutto mockato).
 > **⚠️ Fuori pista**: il servizio è stato scritto prima del suo test (nessun rosso vero: la funzione non esisteva). Non toccato: l'avviso di `SyncModalBase` («Sync all», selezione, pagina
 > dell'asset) conta ancora dai dati mostrati e non nomina i manuali; portarlo sull'endpoint è un seguito.
+
+> **Checkpoint 1** committato dal coordinatore: `4577ecb65` (28/10).
+
+### Checkpoint 2
+
+#### X6-3 · W-B16: l'import degli eventi legge la colonna `source` (28/10)
+
+> **Note implementazione** (✅ 28/10/2026): `EventDataImportModal.svelte` legge la colonna `source` (facoltativa). `AssetDataEditorSection.svelte` ha una prop `hasProvider` (la passa la pagina di
+> dettaglio, `providerAssignment?.provider_code`) e `withoutProviderEvents()`: con un fornitore sull'asset, le righe `PROVIDER` non entrano nell'editor e un solo avviso dice quante («sincronizza
+> l'asset per caricarle»); senza fornitore entrano come eventi manuali; `source` non arriva mai nelle righe. Chiave `dataEditor.importProviderEventsLeftOut` in 4 lingue.
+> **Rosso prima** (Vitest, `AssetDataEditorSection.test.ts`): la riga `PROVIDER` entrava (1 rosso su 2; la guardia «senza fornitore» verde prima e dopo).
+> **⚠️ Fuori pista**: il kickoff nomina `DataEditor.svelte` (`handleImport`); il filtro sta invece nella sezione dell'asset, che conosce il fornitore: `DataEditor.svelte` non è toccato, quindi Y6-3 non
+> aspetta più niente su quel file. L'«opzione» del backlog (importare comunque come manuali) non c'è: il caso per cui serviva (asset senza fornitore) è già coperto dalla regola; se il developer la vuole lo stesso, è una domanda di prodotto.
+
+#### X6-5 + X-R39 · documentazione, `dateLabel`, scrittura parziale (28/10)
+
+> **Note implementazione** (✅ 28/10/2026): doc in inglese: `provider_policy.py` nella tabella dei moduli di `developer/backend/assets/architecture.md` (con le righe di `price_store.py` aggiornate per X-R78 e
+> X-R29), «Maturity Settlement» nella tabella degli eventi di `user/assets/providers/scheduled-investment.en.md` (pagina con traduzioni: debito dichiarato), la guida dell'import degli eventi in
+> `user/assets/detail/data-editor.en.md` (righe `PROVIDER`). Codice: `AssetDataEditorSection.svelte` passa `(iso) => formatDay(iso)` a `eventSaveErrorMessage` e `saveErrorText` (le date degli errori degli
+> eventi non sono più ISO); i `counts` sono fuori dal `try`, e un salvataggio che si ferma dopo aver scritto o cancellato prezzi aggiunge «Già salvato: N prezzi scritti, M cancellati…»
+> (`dataEditor.savePartial`, 4 lingue; l'evento `assets.data.saveFailed` porta `pricesSaved` e `pricesDeleted`). W-B27: il prefisso «Save failed:» era già tradotto (`dataEditor.saveFailed`); restava il `dateLabel`.
+> **Rossi prima** (Vitest): messaggio parziale e `dateLabel` (2 rossi su 3; la guardia «nulla scritto, nessuna frase» verde).
+
+#### Tetto di span della query prezzi (28/10)
+
+> **Note implementazione** (✅ 28/10/2026): prova fatta, **già coperto, nessuna cura**. `get_prices_bulk` legge le righe salvate (un intervallo indicizzato: costa quello che l'asset salva, non lo span) e
+> conta i giorni di ogni riempimento con `_fill_span` prima di costruirli, quindi un intervallo di tutto il calendario non costa niente e due serie con una riga all'anno 1 sono rifiutate prima del fill
+> (422 `bulk_too_many_days`). Due test lo fissano (`test_bulk_limits.py`, BL-S01 e BL-S02, verdi su HEAD senza cure).
+
+> **Checkpoint 2** committato dal coordinatore: `1054b9111` (28/10).
+
+### Checkpoint 3
+
+#### FB-11 · asset ↔ coppia FX: la riproduzione (28/10, server di prova sulla 6209, utente `e2e_test_user`)
+
+> **Verdetto** (prima di cambiare codice):
+> - **Vista prezzi, dettaglio asset:** la coppia FX **si aggiunge** (scheda «FX Pair», 93 punti) **e si disegna**: dopo la ricarica della pagina la linea c'è (in modalità %; in Abs un tasso ~1,08 accanto a un prezzo di 345 $ sarebbe una riga piatta a fondo scala).
+> - **Rolling Return, dettaglio asset e dettaglio FX:** il menu «Data comparison» offre **solo il tipo della pagina** (`allowedSignalTypes`), e la scheda dell'altro tipo già salvata sparisce (`visibleSignals` la filtra). Il dato dell'altro tipo non viene nemmeno chiesto: l'asset chiede i rendimenti solo agli `asset-comparison` (`calendarComparisonAssetIds`), la pagina FX solo le conversioni dei `fx-pair` (`buildFxDetailCalendarQuery`).
+> - **Impostazioni delle card (liste Assets e FX):** nell'anteprima normale il menu offre i due tipi; nell'anteprima Rolling Return solo il tipo della lista (`ChartSettingsModal.svelte:243`, `signalTypesShown`). Le card della lista in Rolling Return disegnano solo il proprio tipo (`renderCalendarComparisons` in `assets/+page.svelte`, `renderCalendarPairComparisons` in `fx/+page.svelte`).
+> - **Card della lista Assets, vista prezzi:** nessuno carica i tassi di una coppia FX in confronto (`ensureSignalFxPairs` lo chiamano solo i dettagli, Y-41): da verificare con un E2E.
+
+#### FB-11 · asset ↔ coppia FX nel Rolling Return (28/10)
+
+> **Note implementazione** (✅ 28/10/2026): le due pagine di dettaglio ora accettano **i due tipi** nella vista Rolling Return e ne calcolano il rendimento a finestra.
+> - **Dettaglio asset** (`assets/[id]/+page.svelte`): `allowedSignalTypes` = `['asset-comparison','fx-pair']`; `loadCalendarPairComparisons` chiede le coppie a `POST /fx/currencies/convert` (1 unità, direzione del segnale, segnale `ASSET_CALENDAR_ROLLING_RETURN`); le linee passano per `renderCalendarPairComparisons`; il grafico porta `data-calendar-pair-comparison-ready|partial|unavailable|error` (id dei segnali).
+> - **Dettaglio FX** (`fx/[pair]/+page.svelte`): `['fx-pair','asset-comparison']`; `loadCalendarAssetComparisons` chiede gli asset a `POST /assets/prices/query` (`include_price:false`, `include_events:false`, nella valuta propria dell'asset); linee da `renderCalendarComparisons`; `data-calendar-asset-comparison-ready|partial|unavailable|error` (id degli asset).
+> - Moduli puri `charts/crossTypeCalendar.ts` (`buildFxPairComparisonQuery`, `fxPairComparisonViews`, `buildAssetComparisonQuery`). `ChartSignalsSection.svelte` **non è toccato**: la restrizione viveva nelle pagine.
+> - **Rossi prima**: Vitest `crossTypeCalendar.test.ts` (modulo mancante); E2E (test-author): un confronto aggiunto dal menu in Rolling Return non partiva su nessuna delle due pagine.
+> - **⚠️ Fuori pista**: il test-author ha trovato un **mio** errore: confrontavo le impronte dei bersagli *dopo* `setPairSettings`, che aggiorna `signals` subito, quindi un confronto aggiunto dal pannello non caricava mai (in FX valeva già per le coppie `fx-pair`, senza test). Ora il flag si calcola prima, come gli altri (`shouldReloadCalendarTargets`, `shouldReloadCalendarPairs`).
+> - **Non fatto (seguito)**: le **card delle liste** (`ChartSettingsModal.svelte:243`, `signalTypesShown`; `renderCalendarComparisons` in `assets/+page.svelte`, `renderCalendarPairComparisons` in `fx/+page.svelte`) restano del solo tipo della lista nel Rolling Return: servirebbe far chiedere alle liste anche l'altro tipo. In vista prezzi le card offrono già i due tipi.
+
+#### FB-30 · pulsante «Esporta» negli editor dei dati (28/10)
+
+> **Note implementazione** (✅ 28/10/2026, E2E dopo): `DataEditor.svelte` ha uno snippet `exportModal` e, con esso, un pulsante `data-editor-export-btn` accanto a «Importa CSV» (resta anche in sola lettura). Nuova `DataExportModal.svelte` (CSV di default o JSON; un download fallito tiene la finestra aperta con l'errore; il confirm non si preme due volte). `AssetDataEditorSection` la apre per **Prezzi** (`/backup/asset/{id}/prices`) e **Eventi** (`/events`) con `downloadAssetBackup`; `FxDataEditorSection` per i **tassi** (`/backup/fx/{base}/{quote}/rates`) con il nuovo `downloadFxRatesBackup`. 6 chiavi `dataEditor.export*` in 4 lingue. Rosso prima: `DataExportModal.test.ts` (componente mancante).
+> **⚠️ Fuori pista**: tocca `DataEditor.svelte`, che Y6-3 aspetta: va committato prima di Y6-3.
+
+> **Checkpoint 3, rifacimento** (28/10): il coordinatore ha trovato un rosso vero in `front-asset asset-detail` (`asset-detail.spec.ts:577`, `signal-tree-option-fx-pair` atteso assente). Era il test che **fissava la restrizione** che FB-11 toglie; corretto il test (ora l'opzione deve essere visibile), non il codice. Rifatti interi: `front-asset asset-detail` 58/58, `front-fx all` 157 E2E + 169 Vitest, tutti verdi.
+
+> **Checkpoint 3** committato dal coordinatore: `6af06a577` (28/10); rifatto `asset-detail` (58/58) dopo il rosso del test che fissava la restrizione di FB-11.
+
+### Checkpoint 4
+
+#### FB-19 · la finestra «Relink events» (29/10)
+
+> **Note implementazione** (✅ 29/10/2026): `EventReconciliationModal.svelte` passa alla `DataTable` del progetto (asset, broker, giorno, evento, stato, azione; filtri di colonna per asset/broker/evento/stato; selezione con barra `SelectionBar`: «Collega i selezionati» e «Crea gli eventi»; «Link every row» agisce sulle righe che i filtri lasciano). L'evento è nominato con emoji e nome tradotto (`[data-event-type]`). Una riga senza evento ha «Crea evento»: `EventReconciliationCreateModal.svelte` crea ciò che manca, una riga per evento (righe di stesso asset, giorno e tipo condividono UN evento), tipo (split o rettifica prezzo per un'ADJUSTMENT) e valore, suggerito dal cash della transazione se nella valuta dell'asset; una sola richiesta `POST /assets/events` (modo `create`, un item per asset, tutto o niente), poi la lista si rilegge e le righe sono `unique` da collegare (la creazione non collega). Backend: `GET /transactions/event-reconciliation` porta anche `amount`, `currency`, `quantity` della transazione. Helper puri in `eventReconciliation.ts`; 19 chiavi in 4 lingue (`transactions.reconcile.*`).
+> **Rossi prima**: il test API (chiavi dell'item), Vitest per i puri; E2E (test-author) 14/14, anche con 4 worker. Il test-author ha trovato due miei difetti, corretti: le opzioni dei filtri sparivano dopo il collegamento (ora vengono dalla lista com'era stata letta), e il dialogo di creazione riscriveva il valore digitato quando la cache degli asset si aggiornava (ora i suggerimenti partono solo all'apertura); e l'emoji non era reattiva (ora segue `typesVersion` e i tipi si chiedono all'apertura).
+> **⚠️ Fuori pista**: il servizio per l'item API e i puri sono stati scritti prima dei loro test (nessun rosso vero su quei due); nessuna «opzione» prodotto in più.
+
+#### FB-7b · `"min"` sulle rotte prezzi e FX: solo il backend (29/10)
+
+> **Note implementazione** (◐ 29/10/2026): `date_range.start` accetta `"min"` (con `end` obbligatorio) in `POST /assets/prices/query` e in `POST /fx/currencies/convert`: il giorno del primo prezzo salvato dell'asset, o del primo tasso usabile della coppia; senza niente salvato la serie è vuota (un solo giorno, `end`). Nuovo modello `MinStartDateRangeModel` (`schemas/common.py`); `PriceQueryOperations._resolve_min_starts` e `fx.conversion.resolve_min_start_ranges` risolvono all'ingresso, dopo il controllo dei `sample_like` (che confronta l'intervallo chiesto). **Rossi prima**: `test_bulk_limits` BL-M01…03 (storia dal 1985), API `assets-price` e `fx`. **Il frontend NON è fatto**: vedi la domanda nel checkpoint (le pagine tengono `dateStart` come data vera nei negozi di serie e nei calcoli del budget; mandare `"min"` richiede di rifare la gestione di «All» in cache e liste).
+> **⚠️ Fuori pista**: il generatore del client TypeScript si rompe sulle virgolette doppie nelle descrizioni dei campi (`"min"`): le descrizioni usano `min` senza virgolette. Il rischio (`/risk`) non è toccato: `bounded_range` taglia già a 100 anni.
+
+#### Avviso di `SyncModalBase` dall'endpoint nuovo (29/10)
+
+> **Note implementazione** (✅ 29/10/2026): `utils/sync/storedPriceCounts.ts` (`loadStoredPriceCounts`: 1 000 asset a richiesta, mappa per id). `AssetSyncModal` (Sync all e selezione) e `PageSyncModal` (la sezione asset della pagina di dettaglio) contano dal server all'apertura, sul loro intervallo, sugli asset che sincronizzano; passano `existingIds` e il nuovo `manualCount` alla sezione, e `SyncModalBase` aggiunge nella stessa avvertenza la frase dei prezzi inseriti a mano (`assets.sync.overwriteManual`, `data-manual`). Un conteggio che fallisce non mette avviso e non blocca Start. Tolte le proprietà `withDataInRange`/`assetsWithDataInRange` e i calcoli delle pagine (`syncModalWithData`, `syncAssetsWithData`) e `hasStoredRowBehindSample` (non più usata). I conti ora vengono dal backend e non dai punti mostrati.
+> **Rossi prima**: Vitest `SyncModalBase` (riga dei manuali), `AssetSyncModal` (3), `PageSyncModal`, `storedPriceCounts`.
+
+#### MF-A13 · il tasso del punto di prezzo (29/10)
+
+> **Note implementazione** (✅ 29/10/2026), contratto di MF: `FAPricePoint.fx_rate` (il tasso unitario del gradino del giorno, da `original_currency` a `currency`; assente senza conversione); `observed_prices._converted` scala open/high/low e il close con quel tasso, **close = original_close × fx_rate** (decisione (b), una sola formula col motore), senza divisioni; `market_series._valuation_point` legge `fx_rate`; `POST /fx/currencies/convert` dà `rate` = tasso unitario del gradino (`convert_by_stretch` ha un parametro `unit_rates` che lo riempie). **Rossi prima**: `test_price_query_observations` OQ-A13 (due casi) e `test_fx_api` (`rate` su una coppia inversa, 0,0123 con 13: …813 e non …815). **Test cambiati per il contratto**: il riferimento «HEAD» di `test_price_query_observations` (close = original × tasso salvato, `fx_rate` presente), il riferimento «ogni giorno» di `test_fx_stretch_conversion` (riempie `unit_rates`), l'elenco dei campi di `FAPricePoint` in `test_price_query_sampling`.
+> **Per MF, punti da rivedere**: il riferimento di parità di `test_price_query_observations` (`head_convert`, ~riga 255); `unit_rates` in `stretch_conversion.py`; `observed_prices.py` (`asked` ora porta il tasso unitario); `market_series.py:169`; `api/v1/fx/currencies.py` (`rate`). AI Export: `asset_resources.py:209` legge `original_close`: con (b) un close cambia solo alla 28ª cifra; il bump, se il dataset scrive il close a piena precisione, è di AIX (non toccato).
+
+### Checkpoint 5
+
+#### FB-7b · «All» parte dal primo prezzo salvato: frontend dettaglio asset e dettaglio FX (30/10)
+
+> **Note implementazione** (◐ 30/10/2026), disegno approvato dal coordinatore: la pagina manda `"min"` solo mentre «All» è in attesa e il primo giorno è sconosciuto; poi adotta la prima data ricevuta e fa `markFetched` da quel giorno vero in poi (il segnaposto 2000-01-01 non viene mai chiesto né finisce nel budget `MAX_BULK_ITEM_DAYS`). Memoria di sessione `frontend/src/lib/stores/firstSeriesDates.ts` (per asset / per coppia; si dimentica a una mutazione dei prezzi o al reset di sessione): una seconda visita parte dal giorno ricordato, dalla cache. Dove «All» si riarma per un cambio di dati (sync, Refresh, fine creazione FX) la data si dimentica; un semplice `reloadPage` (apertura/cambio asset) NO (`rearmMaxPendingBeforeReload(dataChanged)`). Pagine: `assets/[id]/+page.svelte`, `fx/[pair]/+page.svelte` (anche la richiesta con segnali parte da `min`). Le liste (asset, FX) restano per un checkpoint a parte.
+> **Rossi prima**: Vitest `firstSeriesDates.test.ts` (5); E2E del test-author: 3 per l'asset (campo FROM = 1985-03-01, prima richiesta con `min`, seconda visita senza `min`) rossi sul codice vecchio (`X-fb7b-red.log`).
+> **Test cambiati per il contratto**: i vecchi test di `asset-detail.spec.ts` (e `expectRsiAskedOverAll` di `fx-detail.spec.ts`) fissavano `date_range.start === '2000-01-01'` per la richiesta principale: ora `'min'`; le richieste dei confronti e delle liste mantengono l'ancora.
+
+#### Seguiti di MF-A13 dalla revisione di MF (30/10)
+
+> **Note implementazione** (✅ 30/10/2026): (1) copiato il test di parità di MF `test_price_point_fx_rate_parity.py` (24 test) e registrato `services price-point-fx-rate-parity`; (2) tolto il ripiego `close / native_close` in `market_series._valuation_point` (un punto convertito senza `fx_rate` ora solleva `ValueError`); (3) tolta la lettura in più di `convert_bulk` in `observed_prices.resolve_days` (il tasso unitario già letto per il gradino basta): `test_price_query_observations` oq04 ora conta le chiamate a `_converted` e verifica che `convert_bulk` non sia chiamato. pytest di `test_price_query_observations` + parità: 67 passati. Lasciati come detto: `rate` di `/fx/convert`, `period_changes.py:123`, conversione eventi `price_query.py:861` (T-U1).
+
+### Checkpoint 5b
+
+#### FB-7c · «All» con un confronto che parte dopo il principale: solo test (30/10)
+
+> **Note implementazione** (◐ 30/10/2026): letto il codice: `AssetComparisonSignal.computePoints(baseData)` tiene i punti del confronto solo nei giorni in cui il principale ha un punto, e l'asse del grafico è a categorie sui giorni del principale. Quindi **il verso «confronto più recente del principale» funziona già** (il confronto parte al suo primo punto; in % si misura dal suo primo close, `_basePoint`); il verso «confronto più vecchio» richiede un asse che sia l'unione dei giorni dei due: decisione del developer, strada 2, la fa Y2 (possiede `LineChart`/`PriceChartFull`). **Questo checkpoint porta solo i test del primo verso**, tre, verdi sul codice attuale: dettaglio asset in vista prezzi (Abs e %), dettaglio asset in calendario, dettaglio FX con un confronto di asset.
+> **Osservazioni dal test-author**: (1) su un grafico a bucket mensili il primo punto del confronto è a fine mese (2015-06-30) e in % vale 2, non 0, perché la misura parte dal close del suo primo giorno, non dal primo punto disegnato (Z-29d-0): il test fissa la formula; (2) in calendario lo stato è `partial`, non `ready` (confronto in `data-calendar-comparison-partial`, nessun errore): accettato `ready|partial` come `expectCalendarReturnsDrawn`, senza prova di dove nasca il `partial`.
+
+### Checkpoint 6
+
+#### FB-7b · «All» dal primo prezzo/tasso salvato: le liste Asset e FX (31/10)
+
+> **Note implementazione** (✅ 31/10/2026): con «All» in attesa e i primi giorni sconosciuti, ogni scheda della lista chiede `min` (asset: `date_range.start` della scheda e dei suoi confronti `sample_like`; FX: le conversioni delle coppie e dei rendimenti a finestra); le risposte si archiviano sotto l'intervallo su cui «All» si assesta (il giorno più vecchio fra gli elencati), e la sessione ricorda il primo giorno di ogni serie (`firstSeriesDates`, ora anche «nessuna serie» per un asset senza prezzi o una coppia senza tassi: `rememberNoSeries`, `isFirstDateKnown`). Con tutti i primi giorni noti la visita seguente parte da un giorno vero, dalla cache, senza `min`. Il Δ sul periodo si chiede dopo i prezzi finché «All» è in attesa (altrimenti sarebbe misurato da un giorno che nessuno conosce). Nei negozi FX della lista, una coppia che parte dopo il più vecchio segna come già letto lo spazio fra i due giorni. Il budget di un item `min` conta tutto il tetto di 100 anni (`MIN_START` in `bulkBatches.ts`), mai un anno inventato.
+> **Backend**: difetto trovato dalla lista: una scheda con `min` e il suo confronto `sample_like` con un altro primo giorno dava 422 `range_mismatch`, perché `_plan_samples` ricalcolava i riferimenti dopo aver risolto `min`; ora usa quelli calcolati sulla richiesta com'era (`price_query.py`). Rosso prima: BL-M04 (`range_mismatch`), verde dopo.
+> **⚠️ Fuori pista**: con `min` la lista FX si divide in due gruppi e quello fatto solo di coppie senza tassi riceve 404 `All conversions failed`, che scartava anche i risultati buoni (la regola «la 404 si rilancia» del loader è fissata da test): nella pagina, con `min`, una 404 vale «nessun tasso qui» e «All» si assesta sulle altre coppie; il loader non cambia. Trovato col server di prova e il browser, non dai test.
+> **Rossi prima** (test-author): 3 + 3 E2E (`asset-list`, `fx-list`): FROM = 2000-01-01 e richiesta `2000-01-01` sul codice vecchio. **Triage del gate treno 12** (31/10): 4 gruppi di test aggiornati, nessun difetto del prodotto (fixture di `test_series_preparation` senza `fx_rate`; `steps_double` con il tasso unitario; `inf` che si legge `None` dopo W2; `expected_truncation` con `Decimal(10) ** 9` che non taglia).

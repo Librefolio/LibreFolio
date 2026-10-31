@@ -76,7 +76,7 @@ A save is refused, with a message that names the event at fault, when:
     `value` is accepted in place of `amount`, so an events file exported by LibreFolio (the backup offered when you [change an asset's currency](../create-edit.md#editing-an-asset)) imports back, its other columns ignored. Mind two limits:
 
     - **One event per date and type**: rows sharing both a date and a type are all left out as duplicates; a dividend and a split on the same day import together.
-    - **Every row becomes your own event**, a provider's included: leave out the rows whose `source` is `PROVIDER` if the provider will send them again, or they will show twice.
+    - **Rows marked `PROVIDER`**: when the asset has a provider, they are left out and the editor tells you how many; sync the asset to load them. When the asset has no provider, they are added as your own events.
 
     In that file, a note that starts with `=`, `+`, `-` or `@` has an apostrophe in front of it, so that a spreadsheet shows it as text instead of running it as a formula: the import removes that apostrophe, and the note comes back as it was.
 
