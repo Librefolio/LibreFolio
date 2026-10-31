@@ -10915,3 +10915,13 @@ Sessione figlia T, ondata 6, base `5efc0d973`, corsia 6221 (`/tmp/librefolio-r13
 > `$ {`, solo valori di `description`) prima di `openapi-zod-client` in `generate-api`. Riprodotto con un mini-documento:
 > il client grezzo non è TypeScript valido. Test `src/lib/api/openapiDescriptions.test.ts` (6 verdi), registrato in
 > `front_component_unit`. `dev.py api sync` completo rc 0. La cura di `FAPricePoint` resta (toglierla cambia lo schema).
+
+### W6-10 · conseguenza sugli E2E: `tx-import-flow` ✅ (2026-10-31)
+
+> **Note implementazione**: dopo W6-10 «Interactive Brokers» ha come plugin predefinito il suo, che non legge il CSV
+> generico: il wizard chiede «This file may belong to another broker» e A1–A5/R1–R3 cadevano (8 rossi, 2 verdi). Il
+> prodotto è giusto, il test no. `tx-import-flow.spec.ts`: `createFlowBroker` crea nel `beforeEach` un broker del test con
+> `default_import_plugin: 'broker_generic_csv'`, `assignBroker` lo usa per default (errore chiaro se manca),
+> `afterEach` lo cancella in un `finally`. Rilanciati sulla corsia 6221: `tx-import-flow` 10/10 (era 2/10),
+> `tx-import-upload` 10/10, `tx-ca-contract` 12/12 (log `ondata6/T-txflow-run.log`). Gli altri spec del percorso scelgono
+> già un broker creato dal test.
