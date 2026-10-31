@@ -770,14 +770,20 @@ def _refuse_undecodable_text(database: Path) -> None:
     by storage class (``typeof = 'text'``: dates and timestamps are text in DATE and DATETIME columns). Run before the upgrade, so no migration meets such a text
     first. Read only, ``trusted_schema`` off first (B-37), each text through a strict ``text_factory``. The log has the
     number of tables, never a text, a name or a path: they are the archive's."""
+    undecodable = len(undecodable_tables(database))
+    if undecodable:
+        logger.warning("A backup's database holds text that is not UTF-8", tables=undecodable)
+        raise StagingError("database_damaged", "The backup's database holds text that is not UTF-8: it cannot be restored")
+
+
+def undecodable_tables(database: Path) -> list[str]:
+    """The tables of ``database`` holding a text that is not UTF-8, by name (B-49; ``dev.py db check --integrity``, B-56).
+    The scan of the restore: read only, ``trusted_schema`` off, every text of every table through a strict decoder."""
     with closing(sqlite3.connect(f"{database.resolve().as_uri()}?mode=ro", uri=True)) as conn:
         conn.execute("PRAGMA trusted_schema=OFF")
         tables = conn.execute("SELECT name, wr FROM pragma_table_list WHERE schema = 'main' AND type = 'table' AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\'").fetchall()
         conn.text_factory = _strict_text
-        undecodable = sum(1 for name, without_rowid in tables if _holds_undecodable_text(conn, name, bool(without_rowid)))
-    if undecodable:
-        logger.warning("A backup's database holds text that is not UTF-8", tables=undecodable)
-        raise StagingError("database_damaged", "The backup's database holds text that is not UTF-8: it cannot be restored")
+        return [name for name, without_rowid in tables if _holds_undecodable_text(conn, name, bool(without_rowid))]
 
 
 def _holds_undecodable_text(conn: sqlite3.Connection, table: str, without_rowid: bool) -> bool:
