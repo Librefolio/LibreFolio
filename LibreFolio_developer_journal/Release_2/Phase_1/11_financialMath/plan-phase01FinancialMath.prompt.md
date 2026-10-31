@@ -5223,3 +5223,23 @@ Ambiente: `npm ci` e `api sync` fatti (nessuna differenza nei contratti); corsia
    > **⚠️ Fuori pista — correzione dell'analisi**: «nessun valore arrotondato cambia» è falso a un pareggio
    > d'arrotondamento: GBP→EUR del 20/06/2025, `399.5129875` → `399.5129874999…9` (a 1e-6: …988 → …987); 3 volte a
    > 1e-6 sul corpus, mai a 1e-12 né ai centesimi. Segnalato per il bump di AIX.
+3. ✅ **FB-14 — un solo calcolo del motore per pagina** (31/10, base `09f2aed57`) — `PortfolioService._engine_run()`:
+   da t=0, sempre con `include_positions`, `include_acquisition_funding` e `period_start` = inizio del periodo; le
+   candele restano a parte. Lo chiamano `get_report`, `get_positions_contribution` (i due rami), `get_positions_series`,
+   `get_acquisition_funding_history`. Esempio: la pagina Portfolio chiede report (con la tabella Performance) e grafico
+   delle posizioni sullo stesso periodo → prima due chiavi del blob e due calcoli, ora una chiave e un calcolo (il
+   secondo legge la cache o aspetta il volo). Misura sui mock (76 transazioni, minimo di 3): base 0,306 s, con tutte le
+   uscite tranne le candele 0,266 s (rumore: il costo in più è sotto il rumore); segmenti 396 in ogni combinazione.
+   `period_start` resta nella chiave: un `PositionFrame` non ha tutti i campi di `DailyPositionState`.
+   > **Note implementazione**: `position_series.py` non toccato (J5-4 lì è di J). Docs developer `financial_math.md`
+   > ancora `#one-run-per-page`. MF6-3 aggiungerà un flag alla chiave base e un parametro a `_engine_run`.
+   > **Note implementazione (test)**: test-author, `test_financial/test_engine_shared_run.py` (14, azione
+   > `services engine-shared-run`, eseguito anche da `roi-fifo-utils`): un solo calcolo per report + grafico, anche in
+   > parallelo (single-flight), 0 calcoli nuovi per contribution e funding dopo il report; parità campo per campo con i
+   > vecchi flag (5 casi × 2 finestre): nessuna differenza, nemmeno nel report solo summary+history (`period_start` da
+   > None a `date_from`). Guardia: coi vecchi flag i calcoli sono 2.
+   > **⚠️ Fuori pista — rossi del treno 12**: (1) `test_portfolio_allocation_source.py`, 3 test patchavano
+   > `portfolio_service.convert_bulk`, sparito con MF6-1 (`01f1da513`): ora patchano `financial_math.average_cost`, il
+   > modulo che converte (102 verdi). (2) il golden di `test_native_cash_guard` cambia d'esponente (dieci zeri in meno
+   > su `cost_asset`/`wac_asset`, asset in IDR) per W-B63 di W2 (`d90612861`, `fx_rates.rate` RealDecimal): stessi
+   > valori; lo rigenero dopo l'unione di W2 nel ramo.
