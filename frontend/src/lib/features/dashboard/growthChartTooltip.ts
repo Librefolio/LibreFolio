@@ -9,7 +9,7 @@
 import {utcMs} from '$lib/utils/dateOnly';
 import {indexHoldingDay} from '$lib/utils/stepSeries';
 import {escapeHtml} from '$lib/utils/core/escapeHtml';
-import {formatDay} from '$lib/utils/core/formatAxisDate';
+import {formatDay, formatDayWithWeekday} from '$lib/utils/core/formatAxisDate';
 import {formatPercent} from '$lib/utils/core/formatPercent';
 import {maskFormattedNumber} from '$lib/utils/privacy/maskable';
 import {uiLocale} from '$lib/stores/app/uiLocale';
@@ -88,7 +88,7 @@ export function buildTooltipBucketHeader(bucket: BucketInfo, theme: TooltipTheme
     // judged by its period: a week the series covers for one day still prints its week.
     const span = bucket.period ?? {start: bucket.bucketStart, end: bucket.bucketEnd};
     if (span.start === span.end) {
-        return `${buildTooltipHeader(formatDay(bucket.bucketEnd), theme.textColor)}${partialHtml}`;
+        return `${buildTooltipHeader(formatDayWithWeekday(bucket.bucketEnd), theme.textColor)}${partialHtml}`;
     }
 
     if (ladderActive) {

@@ -22,7 +22,8 @@
       "navigate_fx": "View FX",
       "add_fx_pair": "Add FX pair",
       "sync_fx_pair": "Sync rates",
-      "sync_asset_prices": "Sync prices"
+      "sync_asset_prices": "Sync prices",
+      "sync_stale_fx": "Sync rates"
     },
     "referencePriceFallback": "Lots opened by an adjustment on a day without a market quote: their Open Return starts from the last price on or before that day, an earlier quote or the price of a purchase or sale",
     "referencePriceUnavailable": "Lots opened by an adjustment before any price: their Open Return starts from their own purchase cost per unit, and is not available without one",
@@ -43,6 +44,7 @@
     "nonIsoCurrencyCandidates": "Amounts in “{value}”, not an ISO currency code (it may stand for {candidates}) — their conversions may be missing, and their rows cannot be saved again until the code is corrected",
     "nonIsoCurrencyUnknown": "Amounts in “{value}”, not an ISO currency code — their conversions may be missing, and their rows cannot be saved again until the code is corrected",
     "nonIsoReportCurrency": "This report converts to “{value}”, not an ISO currency code (it stands for {suggestion}) — choose {suggestion} as “Default Currency” in Settings › Preferences",
-    "nonIsoReportCurrencyUnknown": "This report converts to “{value}”, not an ISO currency code — choose the “Default Currency” again in Settings › Preferences"
+    "nonIsoReportCurrencyUnknown": "This report converts to “{value}”, not an ISO currency code — choose the “Default Currency” again in Settings › Preferences",
+    "staleFx": "{count} exchange rate(s) are out of date, the oldest by {days} days — sync the rates to update the totals"
   }
 }

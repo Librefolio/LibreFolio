@@ -1224,7 +1224,9 @@ describe('LotComparisonChart tooltip header — the glue on the source', () => {
     // Why: positive control on the same slice — without it the pins above could pass on an empty or wrong slice.
     it('slices the header itself: the daily fallback and the three header keys', () => {
         const body = headerBody();
-        expect(body).toContain('formatLongDate(fallbackDate)');
+        // Y2 FB-1: the daily header carries the weekday, so the fallback is the weekday form, no longer the bare long date.
+        expect(body).toContain('formatDayWithWeekday(fallbackDate)');
+        expect(body).not.toContain('formatLongDate(fallbackDate)');
         expect(body).toContain('chart.tooltip.valueAt');
         expect(body).toContain('chart.tooltip.weekRange');
         expect(body).toContain('chart.tooltip.monthLabel');

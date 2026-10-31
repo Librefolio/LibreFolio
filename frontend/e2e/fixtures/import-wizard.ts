@@ -234,6 +234,66 @@ export async function parseSelectedFile(page: Page, fileId: string): Promise<Par
 }
 
 // ---------------------------------------------------------------------------
+// A report set: step 2 → 3
+// ---------------------------------------------------------------------------
+
+/** A report set uploaded in one batch: the wizard shows it as ONE card, and the analysis reads it as ONE row. */
+export interface ReportSetTarget {
+    brokerId: number;
+    /** The set plugin's code (`broker_credit_agricole`): the card's key is `set:<broker>:<plugin>:<batch>`. */
+    pluginCode: string;
+    batchId: string;
+}
+
+/** Every parse the wizard asks for: a single file's, or — for a set — its combined file's (the file id is the server's, not the test's). */
+const ANY_PARSE_PATH = /^\/api\/v1\/brokers\/import\/files\/[^/]+\/parse$/;
+
+/**
+ * Select a report set in step 2: its card, by key, in its broker's panel; ticked whole.
+ *
+ * Waits for step 2 to settle, opens the broker's panel if it is folded, waits for the card to reach a terminal status and
+ * asserts it `complete` — a set missing an export would hold the analysis, and that is a different test. A wizard opened
+ * on files uploaded earlier ticks nothing, and nothing else ticks the set: the tick is asked first (a toggle, rule 14),
+ * clicked only from 'none', and the end state asserted. Returns the card.
+ */
+export async function selectReportSet(page: Page, target: ReportSetTarget): Promise<Locator> {
+    const step2 = page.getByTestId('import-wizard-step2');
+    await expect(step2, 'the wizard is on the file selection').toBeVisible({timeout: STEP_TIMEOUT});
+    await waitForSettled(step2, STEP_TIMEOUT);
+
+    const {brokerId, pluginCode, batchId} = target;
+    const panel = step2.getByTestId(`import-wizard-broker-files-${brokerId}`);
+    await expect(panel, `broker ${brokerId} has files listed in step 2`).toBeVisible({timeout: UI_TIMEOUT});
+    const toggle = panel.getByTestId(`import-wizard-broker-toggle-${brokerId}`);
+    await expect(toggle).toBeVisible({timeout: UI_TIMEOUT});
+    if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+    await expect(toggle, `broker ${brokerId}'s panel is open`).toHaveAttribute('aria-expanded', 'true', {timeout: UI_TIMEOUT});
+
+    const card = step2.locator(`[data-testid="report-set-card"][data-set-key="set:${brokerId}:${pluginCode}:${batchId}"]`);
+    await expect(card, `the upload batch ${batchId} is one report set of ${pluginCode}`).toHaveAttribute('data-set-status', 'complete', {timeout: STEP_TIMEOUT});
+    await expect(card, 'a wizard opened on files uploaded earlier ticks nothing, and nothing else ticks the set').toHaveAttribute('data-selected', /^(none|all)$/);
+    if ((await card.getAttribute('data-selected')) !== 'all') await card.getByTestId('report-set-select').click();
+    await expect(card, 'the set is ticked whole').toHaveAttribute('data-selected', 'all', {timeout: UI_TIMEOUT});
+    return card;
+}
+
+/**
+ * Click Parse with a report set (and nothing else) selected and return the parse response of its combined file, captured
+ * as the request goes out: the set is combined first (`POST /sets/combine`), then the combined file is parsed — the one
+ * parse the wizard asks for. Waits for the analysis verdict, which throws with the wizard's own reason when the parse
+ * produced nothing usable. The counterpart of {@link parseSelectedFile} for a set; first analysis of a selection only.
+ */
+export async function parseSelectedSet(page: Page): Promise<ParseResponse> {
+    const parse = page.getByTestId('import-wizard-parse');
+    await expect(parse, 'Parse is offered for the selected set').toBeEnabled({timeout: UI_TIMEOUT});
+    const [response] = await Promise.all([page.waitForResponse((candidate) => candidate.request().method() === 'POST' && ANY_PARSE_PATH.test(new URL(candidate.url()).pathname), {timeout: STEP_TIMEOUT}), parse.click()]);
+    const parsed = await jsonFrom<ParseResponse>(response, 'parse the combined file of the set');
+    await expect(page.getByTestId('import-wizard-step3'), 'the wizard is on the analysis').toBeVisible({timeout: UI_TIMEOUT});
+    await waitForParseVerdict(page);
+    return parsed;
+}
+
+// ---------------------------------------------------------------------------
 // Step 3 → later steps
 // ---------------------------------------------------------------------------
 

@@ -22,7 +22,7 @@
     import {lotDisplayState, lotStateColor, lotStateSymbol, type LotDisplayState} from './lotStateVisual';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {translateOr} from '$lib/utils/core/translateOr';
-    import {formatAxisDate} from '$lib/utils/core/formatAxisDate';
+    import {formatAxisDate, formatDayWithWeekday} from '$lib/utils/core/formatAxisDate';
     import {buildResponsiveXAxisPolicy} from '$lib/components/charts/responsiveXAxis';
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
     import {safeDecimal, safeNumber, safeScalar, safeString} from '$lib/types';
@@ -62,6 +62,7 @@
     import {expandAtDays, lotWitnessDays, withBucketEnds} from './lotStepRows';
     import {paramsAtDay} from '$lib/components/charts/stepTooltip';
     import {dayOfAxisValue} from '$lib/utils/stepSeries';
+    import {attachDaySnap} from '$lib/components/charts/dayPointerSnap';
 
     type BrokerWACHistoryPoint = z.infer<typeof schemas.BrokerWACHistoryPoint>;
     type CumulativeWACHistoryPoint = z.infer<typeof schemas.CumulativeWACHistoryPoint>;
@@ -1474,7 +1475,7 @@
             rows.push(markerTooltipRow(labels.totalCost, labels.unchanged));
         }
 
-        const header = `${markerHeaderLabel(event, snapshot)} · ${formatDate(datum.date)}`;
+        const header = `${markerHeaderLabel(event, snapshot)} · ${formatDayWithWeekday(datum.date)}`;
         return `<div style="font-size:11px;color:${theme.textColor}">${buildTooltipHeader(escapeHtml(header), theme.textColor)}${buildTooltipDivider(theme.border)}${rows.join('')}</div>`;
     }
 
@@ -1500,7 +1501,7 @@
             .filter((row): row is string => row != null);
 
         if (rows.length === 0) return '';
-        return `<div style="font-size:11px;color:${theme.textColor}">${buildTooltipHeader(escapeHtml(formatDate(rawDate)), theme.textColor)}${buildTooltipDivider(theme.border)}${rows.join('')}</div>`;
+        return `<div style="font-size:11px;color:${theme.textColor}">${buildTooltipHeader(escapeHtml(formatDayWithWeekday(rawDate)), theme.textColor)}${buildTooltipDivider(theme.border)}${rows.join('')}</div>`;
     }
 
     /** Legend names, excluding internal helper series that shouldn't appear as toggles: the per-lot
@@ -1706,6 +1707,7 @@
                 pointedDay = typeof value === 'number' && Number.isFinite(value) ? dayOfAxisValue(value) : null;
             };
             zoomInstance.on('updateAxisPointer', onAxisPointer);
+            attachDaySnap(zoomInstance);
             dataZoomResolutionCleanup = () => {
                 zoomInstance.off('dataZoom', onDataZoom);
                 zoomInstance.off('updateAxisPointer', onAxisPointer);

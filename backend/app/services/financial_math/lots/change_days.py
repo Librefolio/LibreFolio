@@ -16,7 +16,7 @@ day after the first value of the performance, and the price line of a closed lot
 closure. Every change day therefore brings the day after it.
 
 The rule is the portfolio engine's (decision 28, «recompute whenever a term of the formula changes»), not its function:
-``native_cash.change_days`` finds the day a rate changes, comparing rates; here the converted mark itself is compared, in
+``financial_math.change_days.change_days`` finds the day a rate changes, comparing rates; here the converted mark itself is compared, in
 its exact representation, because the series must stay byte-identical.
 """
 
@@ -29,6 +29,7 @@ from decimal import Decimal
 from typing import Any, Protocol, overload
 
 from backend.app.services.financial_math.average_cost import AverageCost
+from backend.app.services.financial_math.change_days import with_next_days
 from backend.app.services.financial_math.fifo.models import FifoEngineResult
 from backend.app.services.financial_math.lots.economic_events import WithheldEconomics
 from backend.app.services.financial_math.series_steps import steps_from_rows
@@ -69,9 +70,7 @@ def lot_change_days(
     if at_cost_until is not None:
         changes.add(at_cost_until + _ONE_DAY)
     changes.update(event_dates)
-    inside = {day for day in changes if day in calendar}
-    inside.update(day + _ONE_DAY for day in list(inside) if day + _ONE_DAY in calendar)
-    return sorted(inside)
+    return sorted(with_next_days(changes, calendar))
 
 
 def analysis_event_dates(
@@ -169,9 +168,7 @@ def price_candidate_days(
     seeds.update(event_dates)
     if at_cost_until is not None:
         seeds.add(at_cost_until + _ONE_DAY)
-    inside = {day for day in seeds if first <= day <= last}
-    inside.update(day + _ONE_DAY for day in list(inside) if day + _ONE_DAY <= last)
-    return sorted(inside)
+    return sorted(with_next_days(seeds, DayRange(first, last)))
 
 
 def _row_values(row: Any) -> tuple[Any, ...]:

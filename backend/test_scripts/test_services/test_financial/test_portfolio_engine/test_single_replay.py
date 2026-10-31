@@ -583,7 +583,16 @@ class TestApplyPoolRule:
 
     @pytest.mark.parametrize("tx_type", ["CASH_TRANSFER", "FX_CONVERSION"])
     @pytest.mark.parametrize("classification", ["normal", "linked_external_inflow", "linked_external_outflow"])
-    @pytest.mark.parametrize("signed_amount", ["60", "-60"])
-    def test_a_cash_transfer_that_is_not_linked_internal_moves_no_pool(self, tx_type, classification, signed_amount):
-        """An orphan leg, or one whose partner is outside the scope, is an external cash flow: no pool moves."""
-        assert _apply(tx_type, signed_amount, capital="100", returns="40", withdrawn="5", classification=classification) == _d("100", "40", "5", "0", "0")
+    @pytest.mark.parametrize(
+        ("signed_amount", "expected"),
+        [
+            pytest.param("60", ("155", "45", "0", "0", "0"), id="60"),
+            pytest.param("-60", ("40", "40", "5", "0", "0"), id="-60"),
+        ],
+    )
+    def test_a_cash_transfer_that_is_not_linked_internal_moves_the_pools_as_a_deposit_or_withdrawal(self, tx_type, classification, signed_amount, expected):
+        """An orphan leg, or one whose partner is outside the scope, is an external cash flow, and it moves the pools
+        as a DEPOSIT or a WITHDRAWAL from outside the perimeter would (B3 / MF-J3). The sign of ``tx.amount`` decides,
+        whatever the classification says: K 100 / R 40 / W 5, +60 restores W 5 into R and the other 55 into K
+        (K 155, R 45, W 0); -60 leaves capital first (K 40, R 40, W 5)."""
+        assert _apply(tx_type, signed_amount, capital="100", returns="40", withdrawn="5", classification=classification) == _d(*expected)

@@ -19,7 +19,7 @@
     import {utcMs} from '$lib/utils/dateOnly';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {translateOr} from '$lib/utils/core/translateOr';
-    import {parseDisplayDate} from '$lib/utils/core/formatAxisDate';
+    import {formatDayWithWeekday, parseDisplayDate} from '$lib/utils/core/formatAxisDate';
     import {axisLabelMeasure, buildResponsiveXAxisPolicy, timeAxisGridRight} from '$lib/components/charts/responsiveXAxis';
     import {bucketSpanUpTo} from '$lib/components/charts/priceChartHelpers';
     import {createResizeWatcher} from '$lib/utils/core/resizeWatcher';
@@ -60,6 +60,7 @@
     import {expandAtDays, lotWitnessDays, withBucketEnds} from './lotStepRows';
     import {paramsAtDay} from '$lib/components/charts/stepTooltip';
     import {dayOfAxisValue} from '$lib/utils/stepSeries';
+    import {attachDaySnap} from '$lib/components/charts/dayPointerSnap';
     import {isPrivacyEnabled} from '$lib/stores/app/privacyStore.svelte';
     import {uiLocale} from '$lib/stores/app/uiLocale';
     import {themed} from '$lib/theme/themePair';
@@ -423,7 +424,7 @@
 
     function buildTooltipBucketHeader(params: any[], fallbackDate: number | string, theme: ReturnType<typeof buildTooltipTheme>): string {
         const bucket = tooltipBucketInfo(params);
-        if (!bucket || bucket.resolution === 'daily') return buildTooltipHeader(escapeHtml(formatLongDate(fallbackDate)), theme.textColor);
+        if (!bucket || bucket.resolution === 'daily') return buildTooltipHeader(escapeHtml(formatDayWithWeekday(fallbackDate)), theme.textColor);
 
         // The point stands for its bucket up to its own day, the last one with data: the period still running ends there.
         const span = bucketSpanUpTo(bucket.date, bucket);
@@ -892,7 +893,7 @@
                     );
                 }
 
-                return `${buildTooltipHeader(escapeHtml(`${lot.label} · ${formatLongDate(pointDate)}`), theme.textColor)}${rows.join('')}`;
+                return `${buildTooltipHeader(escapeHtml(`${lot.label} · ${formatDayWithWeekday(pointDate)}`), theme.textColor)}${rows.join('')}`;
             })
             .filter((block): block is string => block != null);
         const aggregateRows = timestamp == null ? [] : buildAggregateReturnTooltipRows(timestamp);
@@ -1282,6 +1283,7 @@
             dataZoomTouchPanHandle = attachDataZoomTouchPan(chartInstance, chartContainer);
             chartInstance.on('datazoom', handleDataZoom);
             chartInstance.on('updateAxisPointer', handleUpdateAxisPointer);
+            attachDaySnap(chartInstance);
             chartInstance.getZr().on('globalout', handleChartGlobalOut);
         }
 
