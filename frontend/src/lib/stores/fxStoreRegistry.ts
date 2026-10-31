@@ -22,7 +22,6 @@ import {firstDateOf, rememberFirstDate} from './firstSeriesDates';
 import type {ChainStep} from '$lib/utils/currency/currencyGraph';
 import {zodiosApi} from '$lib/api';
 import {BULK_SIGNAL_MARGIN_DAYS, MIN_START, bulkRangeDays, sendBulkBatches} from '$lib/api/bulkBatches';
-import {rememberFirstDate} from '$lib/stores/firstSeriesDates';
 import {todayIso} from '$lib/utils/dateOnly';
 import {schemas} from '$lib/api/generated';
 import {z} from 'zod';
