@@ -39,6 +39,12 @@ describe('buildPositionsSeriesQuery', () => {
         expect(buildPositionsSeriesQuery([key(7)], {ready: true})).toEqual({positions: [{asset_id: 7, broker_id: null}]});
     });
 
+    it('counts the brokers whole when the page does (MF6-3, D4), and says nothing otherwise', () => {
+        expect(buildPositionsSeriesQuery([key(7)], {ready: true, fullShare: true}).apply_ownership_share).toBe(false);
+        expect(buildPositionsSeriesQuery([key(7)], {ready: true}).apply_ownership_share).toBeUndefined();
+        expect(positionsSeriesScopeKey({ready: true, fullShare: true})).not.toBe(positionsSeriesScopeKey({ready: true}));
+    });
+
     it('sends an open end of the period as the start alone', () => {
         expect(buildPositionsSeriesQuery([key(7)], {ready: true, start: 'min'}).date_range).toEqual({start: 'min'});
     });

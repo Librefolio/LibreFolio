@@ -109,7 +109,7 @@
     import {signalCatalogStore} from '$lib/stores/signalCatalogStore.svelte';
     import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
     import type {FxPairCreatedDetail, FxPairSyncCompleteDetail} from '$lib/services/fxCreationSync';
-    import {buildTransactionsFiltersUrl} from '../../transactions/filterState';
+    import {buildTransactionsFiltersUrl} from '$lib/features/transactions/filterState';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
     import {onboardingGuide} from '$lib/features/onboarding/onboardingGuide.svelte';
 

@@ -45,7 +45,7 @@ def front_tx_unit(verbose: bool = False, ui: bool = False, headed: bool = False,
            "src/lib/features/transactions/bulk/TxBulkBanners.preFloor.test.ts",
            "src/lib/features/transactions/import/ReviewStep.preFloor.test.ts",
            "src/lib/features/transactions/transactionTypeStore.test.ts",
-           "src/routes/(app)/transactions/filterState.test.ts"]
+           "src/lib/features/transactions/filterState.test.ts"]
     print(f"\n{Colors.BLUE}Running: TX Vitest unit tests{Colors.NC}")
     print(f"Command:\n└─▶ $ cd frontend && {' '.join(cmd)}")
     try:

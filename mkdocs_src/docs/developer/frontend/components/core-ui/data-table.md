@@ -345,7 +345,7 @@ presets (`compact`, `stacked`), and it applies a `DateFilter`, `{type: 'date', f
 before `from` or after `to`, as does `TransactionsTable`'s own pre-filter, so a date in «From» alone
 keeps the rows from that day on, and one in «To» alone the rows up to that day. In the URL the filter
 reads `from,to`, either side empty (`lib/utils/urlFilters.ts`); the Transactions page keeps its own
-`date_start` and `date_end` (`routes/(app)/transactions/filterState.ts`).
+`date_start` and `date_end` (`lib/features/transactions/filterState.ts`).
 
 The picker cannot make a filter of one day
 ([No range of a single day](datePickers.md#no-single-day-range)). Until Y-N65, a date typed in

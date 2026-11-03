@@ -594,6 +594,44 @@ describe('PositionsPanel — the positions sold inside the period (FB-13)', () =
 });
 
 // =============================================================================
+// T1 · a position that moved to another broker is not a position that was sold
+// =============================================================================
+
+describe('PositionsPanel — closed by a transfer (T1)', () => {
+    /** Asset 55 closed at broker 1 by `closedBy`; the contribution otherwise as the FB-13 fixture. */
+    const withClosure = (closedBy: 'SELL' | 'TRANSFER' | 'ADJUSTMENT', closedTo: number | null) => {
+        const positions = [contributionPosition(11, 1, false), contributionPosition(22, 1, false), contributionPosition(33, 2, false), {...contributionPosition(55, 1, true), closed_by: closedBy, closed_to_broker_id: closedTo}];
+        return {positions, unallocated: [], other_effects: [], gross_gains: '10', gross_losses: '0'} as never;
+    };
+    const rowIds = () => [...document.querySelectorAll<HTMLElement>('tbody tr[data-row-id]')].map((row) => row.dataset.rowId);
+
+    it('moved to a broker in the report that holds it: no sold-out row at the origin, the destination row is a full one', async () => {
+        await mountPanel({summary: summaryOf(holding(11, 1), holding(22, 1), holding(33, 2), holding(55, 2)), contribution: withClosure('TRANSFER', 2)});
+        await waitFor(() => expect(rowIds()).toContain('55-2'));
+        expect(rowIds()).not.toContain('55-1');
+        expect(document.querySelector('tbody tr[data-row-id="55-2"]')?.className ?? '').not.toContain('italic');
+    });
+
+    it('moved to a broker the report does not hold it in: still a closed row, in italics', async () => {
+        await mountPanel({contribution: withClosure('TRANSFER', 2)});
+        await waitFor(() => expect(rowIds()).toContain('55-1'));
+        expect(document.querySelector('tbody tr[data-row-id="55-1"]')?.className).toContain('italic');
+    });
+
+    it('sold while another broker holds the same asset: the sale stays a closed row, in italics', async () => {
+        await mountPanel({summary: summaryOf(holding(11, 1), holding(22, 1), holding(33, 2), holding(55, 2)), contribution: withClosure('SELL', null)});
+        await waitFor(() => expect(rowIds()).toContain('55-1'));
+        expect(document.querySelector('tbody tr[data-row-id="55-1"]')?.className).toContain('italic');
+    });
+
+    it('an adjustment to zero stays a closed row, in italics', async () => {
+        await mountPanel({contribution: withClosure('ADJUSTMENT', null)});
+        await waitFor(() => expect(rowIds()).toContain('55-1'));
+        expect(document.querySelector('tbody tr[data-row-id="55-1"]')?.className).toContain('italic');
+    });
+});
+
+// =============================================================================
 // FB-15 · the Rolling view: the percent the asset's price moved over a rolling window
 // =============================================================================
 

@@ -948,7 +948,10 @@ test.describe('Page busy: the Refresh button waits for the big requests of its o
             expect(cascaded.postDataJSON(), 'the held contribution is not the contribution on screen asked again').toEqual(contributionOnScreen.postDataJSON());
             const inFlight = await reports();
             expect(inFlight.sent - inFlight.landed, 'the page does not count the held reports in flight (is a report still sent by XHR?): their landing could not be read').toBeGreaterThanOrEqual(held());
-            await expect(panel, 'the panel does not show its own loading for the contribution it asked again (N55)').toHaveAttribute('data-busy', 'true');
+            // Y6-7: the contribution on screen stays while it is asked again, as on the Dashboard (the controller is one):
+            // the table is not replaced by a skeleton, so the panel says nothing of the request in flight (Z-18).
+            await expect(contributionTable, 'the contribution on screen stays while the reload asks it again (Y6-7: the broker page keeps the cached rows, as the Dashboard does)').toBeVisible();
+            await expect(panel).toHaveAttribute('data-busy', 'false');
             await expectNeverWaited(refresh, busySeen, 'the reload in background after a price catch-up and the contribution it cascades into (P3, N55: alone, with no token)');
 
             await reload.release();
