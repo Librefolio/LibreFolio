@@ -422,7 +422,8 @@
           "observations": "{count} giorni osservati",
           "cut": "Soglia VaR a {value}",
           "noCut": "Nessuna soglia pubblicata per questa finestra.",
-          "empty": "Nessuna distribuzione dei rendimenti per questo periodo."
+          "empty": "Nessuna distribuzione dei rendimenti per questo periodo.",
+          "bin": "{range}: {count, plural, one {# giorno} other {# giorni}} ({share})"
         }
       },
       "l2": {
@@ -590,7 +591,14 @@
         "partialTitle": "Alcuni risultati sono parziali",
         "notesTitle": "Da sapere su questi risultati",
         "noPriceSourceTitle": "Posizioni senza prezzi, escluse da alcune misure",
-        "affected": "Misure interessate"
+        "affected": "Misure interessate",
+        "excluded": {
+          "missing_price": "{count, plural, one {# asset escluso} other {# asset esclusi}}: nessun prezzo di mercato nel periodo.",
+          "missing_fx": "{count, plural, one {# asset escluso} other {# asset esclusi}}: manca il cambio verso la tua valuta.",
+          "invalid_currency": "{count, plural, one {# asset escluso} other {# asset esclusi}}: la valuta dei prezzi non è valida.",
+          "insufficient_history": "{count, plural, one {# asset escluso} other {# asset esclusi}}: storico insufficiente nel periodo.",
+          "no_price_source": "{count, plural, one {# asset escluso} other {# asset esclusi}}: nessuna fonte di prezzo assegnata e nessun prezzo mai registrato."
+        }
       }
     },
     "eligibility": {
