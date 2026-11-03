@@ -5275,3 +5275,15 @@ Ambiente: `npm ci` e `api sync` fatti (nessuna differenza nei contratti); corsia
    > `closed_by` None.
    > **⚠️ Fuori pista**: il golden di `test_native_cash_guard` (dump della contribution) ha preso i due campi nuovi a
    > `null` → rigenerato, +28 righe, 0 tolte, nessun numero cambiato.
+7. ✅ **MF-FA — `fetched_at` = ultimo cambio della riga** (03/11, base `45a80320c`) — da FB-28 (Y cp9): il poll live
+   (`POST /assets/prices/current`) timbrava `fetched_at` della riga di oggi a ogni quotazione, anche uguale, e
+   l'impronta prezzi `COUNT + MAX(fetched_at)` del motore e della cache L2 del report cambiava a ogni poll a mercato
+   aperto → ogni report ricalcolava tutta la storia. Ora (ramo F.3) `close` si scrive solo se diverso (confronto
+   numerico) e `fetched_at` solo se cambia una colonna. Esempio: riga di oggi alle 10:00 a 102, letta uguale alle
+   10:01–10:03 → resta 10:00; 102,5 alle 10:04 → 10:04.
+   > **Note implementazione**: test-author 15 test (`test_current_price_fetched_at.py`, puri, azione
+   > `services current-price-fetched-at`), 7 rossi prima del codice. Il log del commit conta le righe cambiate, non le
+   > quotazioni. Docstring del modello e dell'export, docs `assets/architecture.md` e `database/index.md`.
+   > **⚠️ Fuori pista**: nessuna pagina sviluppatore dedicata all'export → significato scritto nelle due pagine sopra e
+   > nella docstring dell'endpoint (OpenAPI). Cambio visibile solo nella colonna `fetched_at` del CSV/JSON scaricato:
+   > risposta finale del developer prima del commit.

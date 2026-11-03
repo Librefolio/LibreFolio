@@ -1419,6 +1419,17 @@ def services_current_prices_bulk(verbose: bool = False, test_names: list = None)
     return run_command(cmd, "Current prices bulk tests", verbose=verbose)
 
 
+def services_current_price_fetched_at(verbose: bool = False, test_names: list = None) -> bool:
+    """MF-FA: today's price row keeps fetched_at = the time of its last change (private SQLite, no server, no network)."""
+    print_section("Services: Current Price fetched_at (MF-FA)")
+    print_info("Testing: services/assets/price_query.py (get_current_prices_bulk F.2/F.3), financial_math/portfolio/engine.py (_compute_price_fingerprint)")
+    print_info(
+        "Tests: the same quote again keeps close, fetched_at and the price fingerprint; a numerically equal quote (102.50 after 102.5, 15 digits) is no change; a quote above the high, below the low or inside the bounds moves the row and stamps it; F.2 creates and stamps; a missing bound is filled and stamped; a db:last_known fallback on today's row writes nothing"
+    )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_current_price_fetched_at.py", test_names)
+    return run_command(cmd, "Current price fetched_at tests", verbose=verbose)
+
+
 def services_fx_pairs_per_query(verbose: bool = False, test_names: list = None) -> bool:
     """R13-SEC9-2: rate queries read 1 000+ pairs in chunks SQLite can parse (private in-memory DB)."""
     print_section("Services: FX Pairs per Query (R13-SEC9-2)")
@@ -3364,6 +3375,16 @@ Note: No backend server required.
         # PURE: the service on a private in-memory SQLite (create_all), the provider a double behind core.configured_provider,
         # a private current-value cache, the route called directly or through a fresh in-process app (httpx.ASGITransport),
         # its service and live_range_changes replaced by recorders, all by monkeypatch.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "current-price-fetched-at",
+        services_current_price_fetched_at,
+        name="Current Price fetched_at (MF-FA)",
+        desc="MF-FA: on the F.3 path close is written only when it differs numerically and fetched_at stamped only when open, high, low or close changes, so an unchanged quote leaves the price fingerprint (COUNT + MAX(fetched_at)) of the engine and of the report's L2 key alone; F.2 still creates and stamps; a db:last_known fallback on today's row writes nothing",
+        # PURE: the service on a private SQLite file under tmp_path (create_all), a fresh session per poll; the live quote
+        # is price_query._live_quote_item replaced by a double, the service's today and utcnow frozen, all by monkeypatch.
         isolation="pure",
     )
     add_test(

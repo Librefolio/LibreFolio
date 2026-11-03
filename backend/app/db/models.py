@@ -1027,6 +1027,8 @@ class PriceHistory(SQLModel, table=True):
 
     currency: str = Field(nullable=False)  # ISO 4217
     source_plugin_key: str = Field(nullable=False)
+    # When the row last changed, not when it was last read: a live quote equal to today's row stamps nothing (MF-FA).
+    # It feeds the price fingerprint (COUNT + MAX(fetched_at)) of the portfolio engine and report caches.
     fetched_at: datetime = Field(default_factory=utcnow, sa_type=DateTime)
 
     @field_validator("currency", mode="before")

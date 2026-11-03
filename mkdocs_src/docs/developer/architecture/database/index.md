@@ -169,6 +169,9 @@ is read back (`backend/app/db/models.py`; C-97, issue #43).
 Every timestamp column (`created_at`, `updated_at`, `fetched_at`, `expires_at`,
 `email_verified_at`, `last_fetch_at`…) holds **UTC without an offset**: SQLite has no
 timezone type, and the text on disk reads `2026-10-22 10:00:00.123456`.
+`price_history.fetched_at` is the time of the row's last change, not of its last read: a live
+quote equal to today's row stamps nothing
+([Current Quotes and Today's OHLC](../../backend/assets/architecture.md#current-quotes-and-todays-ohlc), MF-FA).
 
 - **Write.** The application writes `utcnow()` (`backend/app/utils/datetime_utils.py`), an
   aware UTC datetime. The plain `DateTime` column drops the offset when it binds the value:
