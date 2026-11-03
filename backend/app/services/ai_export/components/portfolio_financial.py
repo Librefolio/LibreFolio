@@ -40,7 +40,7 @@ from pydantic import Field
 
 from backend.app.db.models import Asset
 from backend.app.schemas.common import Currency, CurrencyCode, PeriodBoundedModel, SafeDecimal, StrictModel
-from backend.app.schemas.portfolio import PortfolioHistoryPoint
+from backend.app.schemas.portfolio import OtherPeriodEffectCode, PortfolioHistoryPoint
 from backend.app.services.ai_export.components.broker_concentration_context import (
     ConcentrationCoverage,
     CurrencyAllocationSlice,
@@ -392,6 +392,10 @@ class PortfolioFlowsIncomePayload(PeriodBoundedModel):
     period_income: Currency | None = None
     unallocated: list[UnallocatedRow] = Field(default_factory=list)
     income_effects: list[EffectRow] = Field(default_factory=list)
+    fx_on_cash_effects: list[EffectRow] = Field(
+        default_factory=list,
+        description="Each broker's exchange result on foreign cash, one row per broker, recognized by its `code` (`fx_on_cash`). Not income: it is part of the period's other result and stays out of `income_effects`.",
+    )
 
 
 async def _build_portfolio_flows_income(context: BuildContext, dependencies: Mapping[str, SectionEnvelope]) -> PortfolioFlowsIncomePayload:
@@ -402,6 +406,7 @@ async def _build_portfolio_flows_income(context: BuildContext, dependencies: Map
     currency_code = scope.target_currency
     unallocated = sort_unallocated([map_unallocated_row(item, currency_code=currency_code) for item in contribution.unallocated]) if contribution is not None else []
     income_effects = sort_effects([map_effect_row(item, currency_code=currency_code) for item in contribution.other_effects if item.category == "Income"]) if contribution is not None else []
+    fx_on_cash_effects = sort_effects([map_effect_row(item, currency_code=currency_code) for item in contribution.other_effects if item.code == OtherPeriodEffectCode.FX_ON_CASH]) if contribution is not None else []
     return PortfolioFlowsIncomePayload(
         period_start=scope.period_start,
         period_end=scope.period_end,
@@ -413,6 +418,7 @@ async def _build_portfolio_flows_income(context: BuildContext, dependencies: Map
         period_income=summary.period_income if summary else None,
         unallocated=unallocated,
         income_effects=income_effects,
+        fx_on_cash_effects=fx_on_cash_effects,
     )
 
 
@@ -668,7 +674,7 @@ PORTFOLIO_POSITIONS_COMPONENT = ComponentSpec(
 
 PORTFOLIO_ALLOCATIONS_CASH_COMPONENT = ComponentSpec(
     component_id="portfolio.allocations_cash",
-    version=1,
+    version=2,  # v2 (MF-C2): slice percents are null when the slices sum to zero or less
     domains=frozenset({Domain.PORTFOLIO}),
     output_model=PortfolioAllocationsCashPayload,
     builder=_build_portfolio_allocations_cash,
@@ -696,7 +702,7 @@ PORTFOLIO_PERFORMANCE_COMPONENT = ComponentSpec(
 
 PORTFOLIO_FLOWS_INCOME_COMPONENT = ComponentSpec(
     component_id="portfolio.flows_income",
-    version=1,
+    version=2,  # v2 (F-AI b): `fx_on_cash_effects`, and a `code` on every effect row
     domains=frozenset({Domain.PORTFOLIO}),
     output_model=PortfolioFlowsIncomePayload,
     builder=_build_portfolio_flows_income,
@@ -705,7 +711,7 @@ PORTFOLIO_FLOWS_INCOME_COMPONENT = ComponentSpec(
 
 PORTFOLIO_FEES_TAXES_COMPONENT = ComponentSpec(
     component_id="portfolio.fees_taxes",
-    version=1,
+    version=2,  # v2 (F-AI b): a `code` on every effect row
     domains=frozenset({Domain.PORTFOLIO}),
     output_model=PortfolioFeesTaxesPayload,
     builder=_build_portfolio_fees_taxes,

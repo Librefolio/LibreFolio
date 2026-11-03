@@ -101,7 +101,9 @@ _PRICE_PROVENANCE_NOTE = (
     "Position valuations (asset.positions_by_broker, asset.cost_value_pl) use the Portfolio Engine's "
     "valuation hierarchy (valuation_source), which may fall back to WAC/cost when no market price is "
     "available. asset.market_snapshot is always the directly observed market price (or absent), never a "
-    "WAC/cost substitute presented as a market price."
+    "WAC/cost substitute presented as a market price. A price converted into the report currency is the "
+    "stored price times the unit exchange rate of its day, shown to six decimals: dividing one rounded "
+    "figure by another can differ from that rate by one unit of the last decimal."
 )
 
 

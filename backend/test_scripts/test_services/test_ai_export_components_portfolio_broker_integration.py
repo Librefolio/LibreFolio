@@ -661,12 +661,22 @@ def _patch_broker_period_activity(monkeypatch: pytest.MonkeyPatch, *, ownership_
     monkeypatch.setattr(broker_cost_efficiency, "_load_broker_period_activity", _fake_load)
 
 
+def _patch_broker_access(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Patches the access row `broker.provenance` reads for its ownership note (R11): an owner at 30 %."""
+
+    async def _fake_query(session, *, user_id, broker_id):  # noqa: ARG001
+        return ("OWNER", Decimal("0.3"))
+
+    monkeypatch.setattr(broker_financial, "_query_broker_access", _fake_query)
+
+
 def _setup_broker_scenario(monkeypatch: pytest.MonkeyPatch, scope: BuildScope, broker_id: int = 9) -> None:
     _patch_report(monkeypatch, _broker_report_full(scope, broker_id))
     _patch_lots(monkeypatch, {4: _broker_fifo_lots_response(broker_id)}, asset_ids={4})
     _patch_metadata(monkeypatch, asset_ids=[4], broker_ids=[broker_id])
     _patch_get_prices_bulk(monkeypatch)
     _patch_broker_period_activity(monkeypatch)
+    _patch_broker_access(monkeypatch)
     _patch_drawdown(monkeypatch)
 
 
@@ -1241,6 +1251,7 @@ class TestEmptyPortfolioAndBroker:
         _patch_lots(monkeypatch, {}, asset_ids=set())
         _patch_metadata(monkeypatch)
         _patch_get_prices_bulk(monkeypatch)
+        _patch_broker_access(monkeypatch)
         dataset_registry = build_portfolio_broker_dataset_registry()
         context = _full_context(scope, _make_async_session())
         composer = Composer()

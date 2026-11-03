@@ -338,6 +338,33 @@ class TestIntegratedComponentCatalog:
             "schema_version": 1,
         }
 
+    @pytest.mark.parametrize(
+        "component_id",
+        ["portfolio.allocations_cash", "broker.concentration_context", "broker.concentration_comparison", "portfolio.flows_income", "portfolio.fees_taxes", "broker.flows_income_costs"],
+    )
+    def test_wave6_components_are_version_2_on_both_sides_of_the_catalog(
+        self,
+        component_registry: ComponentRegistry,
+        component_id: str,
+    ):
+        """T-U9 + MF-C2 + F-AI (b) (wave 6): the allocation, concentration and effect-row components move to version 2 — on the real spec AND on
+        its frozen placeholder, which the replacement validation requires to be equal. The payload shape does not change:
+        schema_version stays 1. `broker.allocation_concentration` carries no slice and stays at version 1."""
+        placeholder = next(spec for spec in ALL_FOUNDATION_COMPONENTS if spec.component_id == component_id)
+        real = next(spec for spec in ALL_REAL_COMPONENTS if spec.component_id == component_id)
+        registered = component_registry.get(component_id)
+
+        validate_portfolio_broker_replacements(PORTFOLIO_BROKER_COMPONENTS, placeholders=ALL_FOUNDATION_COMPONENTS)
+        assert registered is real
+        assert {"placeholder": placeholder.version, "real": real.version, "registered": registered.version, "schema_version": real.schema_version} == {
+            "placeholder": 2,
+            "real": 2,
+            "registered": 2,
+            "schema_version": 1,
+        }
+        untouched = next(spec for spec in ALL_REAL_COMPONENTS if spec.component_id == "broker.allocation_concentration")
+        assert untouched.version == 1
+
 
 class TestAnalysisCatalog:
     def test_expected_analysis_counts(self):
