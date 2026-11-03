@@ -42,9 +42,22 @@ const V2_SECTIONS: ReadonlyArray<[string, Record<string, unknown>]> = [
         },
     ],
     ['broker.concentration_comparison', {status: 'unavailable', reason_code: 'broker_has_no_positions', message: 'placeholder', broker_id: 5, target_currency: 'EUR'}],
+    [
+        'portfolio.flows_income',
+        {
+            period_start: '2024-01-01',
+            period_end: '2024-12-31',
+            target_currency: 'EUR',
+            unallocated: [],
+            income_effects: [],
+            fx_on_cash_effects: [{description: 'FX on cash', code: 'fx_on_cash', category: 'Other', period_pnl: EUR('-30'), broker_id: 5, broker_name: 'Named Broker'}],
+        },
+    ],
+    ['portfolio.fees_taxes', {period_start: '2024-01-01', period_end: '2024-12-31', target_currency: 'EUR', unallocated: [], cost_effects: []}],
+    ['broker.flows_income_costs', {broker_id: 5, period_start: '2024-01-01', period_end: '2024-12-31', target_currency: 'EUR', unallocated: [], effects: []}],
 ];
 
-describe('AI Export v2 bump — T-U9 and MF-C2', () => {
+describe('AI Export v2 bump — T-U9, MF-C2 and F-AI (b)', () => {
     it.each(V2_SECTIONS)('%s v2 renders compactly, not as YAML', (componentId, payload) => {
         expect(render(componentId, 2, payload)).not.toContain(FALLBACK);
     });

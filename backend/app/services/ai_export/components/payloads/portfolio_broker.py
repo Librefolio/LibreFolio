@@ -48,6 +48,7 @@ from backend.app.schemas.portfolio import (
     LotsAnalysisResponse,
     LotSummarySchema,
     OtherPeriodEffect,
+    OtherPeriodEffectCode,
     PortfolioHistoryPoint,
     PortfolioHolding,
     PortfolioReportQuery,
@@ -267,6 +268,8 @@ class EffectRow(StrictModel):
     """Non-position period P&L row, mirroring `OtherPeriodEffect`."""
 
     description: str
+    #: Fixed code of the rows a reader recognizes by it, never by `description` (`fx_on_cash`); None for every other row.
+    code: OtherPeriodEffectCode | None = None
     category: str
     period_pnl: Currency
     broker_id: int | None = None
@@ -795,6 +798,7 @@ def sort_unallocated(rows: Sequence[UnallocatedRow]) -> list[UnallocatedRow]:
 def map_effect_row(item: OtherPeriodEffect, *, currency_code: str) -> EffectRow:
     return EffectRow(
         description=item.description,
+        code=item.code,
         category=item.category,
         period_pnl=_currency_required(currency_code, item.period_pnl),
         broker_id=item.broker_id,

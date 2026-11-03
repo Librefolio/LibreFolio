@@ -461,10 +461,17 @@ class UnallocatedContribution(StrictModel):
     unallocated_fees_taxes: Optional[SafeDecimal] = Field(None, description="FEE/TAX without asset_id in period (positive value)")
 
 
+class OtherPeriodEffectCode(StrEnum):
+    """Fixed code of an `OtherPeriodEffect` row a reader must recognize without parsing its English description."""
+
+    FX_ON_CASH = "fx_on_cash"
+
+
 class OtherPeriodEffect(StrictModel):
     """Period P&L row not linked to a specific asset position."""
 
     description: str
+    code: Optional[OtherPeriodEffectCode] = Field(None, description="Fixed code of the rows a reader recognizes by it, never by `description`: `fx_on_cash` is a broker's exchange result on foreign cash. None for every other row")
     category: str = Field(..., pattern="^(Income|Cost|Other)$")
     period_pnl: SafeDecimal
     broker_id: Optional[int] = Field(None, description="Nullable when effect is not broker-specific")
