@@ -164,7 +164,7 @@ export type PositionsContribution = Extract<NonNullable<RawContrib>, {positions?
 type CacheKey = string;
 
 /** Trailing feature selection of `fetchReport` / `peekReport` (plan §4.1: no more positional booleans). */
-export type ReportOptions = {includeBrokerPnlHistory?: boolean; includePnlCandles?: boolean; includeIncomeHistory?: boolean; includeCostHistory?: boolean; includeDepositHistory?: boolean; includeAcquisitionFunding?: boolean};
+export type ReportOptions = {includeBrokerPnlHistory?: boolean; includePnlCandles?: boolean; includeIncomeHistory?: boolean; includeCostHistory?: boolean; includeDepositHistory?: boolean; includeAcquisitionFunding?: boolean; fullShare?: boolean};
 
 /** A cached report and the mark it was asked under: asked before the last `invalidate()` = stale. */
 interface ReportEntry {
@@ -223,7 +223,8 @@ function reportKey(
         (options?.includeIncomeHistory ? '|incomehist' : '') +
         (options?.includeCostHistory ? '|costhist' : '') +
         (options?.includeDepositHistory ? '|deposithist' : '') +
-        (options?.includeAcquisitionFunding ? '|acqfunding' : '')
+        (options?.includeAcquisitionFunding ? '|acqfunding' : '') +
+        (options?.fullShare ? '|fullshare' : '')
     );
 }
 
@@ -280,6 +281,8 @@ export function portfolioError(): string | null {
  * @param options.includeAcquisitionFunding — Request acquisition_funding (batch 2
  *   new-vs-reinvested BUY funding split). Same eager/sparse caller policy as
  *   includeIncomeHistory.
+ * @param options.fullShare — MF6-3 (D4): count every broker whole instead of the owner's share (the broker
+ *   page). Part of the cache key: the dashboard's scaled answer and the broker's whole one never share an entry.
  */
 export async function fetchReport(
     brokerIds?: number[],
@@ -315,6 +318,8 @@ export async function fetchReport(
         include_deposit_history: options?.includeDepositHistory ?? false,
         include_acquisition_funding: options?.includeAcquisitionFunding ?? false,
     };
+    // MF6-3 (D4): the brokers counted whole, as an editor sees them. Absent = the owner's share, as every other page.
+    if (options?.fullShare) body.apply_ownership_share = false;
     if (brokerIds && brokerIds.length > 0) body.broker_ids = brokerIds;
     if (dateFrom || dateTo) {
         body.date_range = {

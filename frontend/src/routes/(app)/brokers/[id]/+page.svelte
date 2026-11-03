@@ -23,8 +23,7 @@
     import AllocationPanel from '$lib/features/dashboard/AllocationPanel.svelte';
     import GrowthChart from '$lib/features/dashboard/GrowthChart.svelte';
     import PositionsPanel from '$lib/features/dashboard/PositionsPanel.svelte';
-    import {createPositionsSeriesController, type PositionsSeriesScope} from '$lib/features/dashboard/positionsSeriesController';
-    import {createPositionsRollingController, type RollingScope} from '$lib/features/dashboard/positionsRolling';
+    import {createPortfolioData} from '$lib/features/portfolio-view/portfolioData';
     import RiskLevelsPanel from '$lib/features/risk/levels/RiskLevelsPanel.svelte';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import PageToolbar from '$lib/components/ui/toolbar/PageToolbar.svelte';
@@ -42,11 +41,8 @@
     import type {FilterValue} from '$lib/components/table/types';
     import {buildTransactionsFiltersUrl, applyTransactionColumnFilters} from '../../transactions/filterState';
     import {
-        fetchReport,
         invalidate,
-        peekReport,
         portfolioError,
-        type PortfolioReport,
         type AllocationHistoryDimensions,
         type PortfolioHistoryPoint,
         type PortfolioRange,
@@ -77,7 +73,6 @@
     import {buildAiExportMenuLabels, getAiExportErrorMessage, getAiExportSuccessMessages} from '$lib/features/ai-export/ui';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {registerPortfolioMutationListener, requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
-    import {createLazyReportRetry} from '$lib/stores/portfolio/lazyReportRetry.svelte';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import {setTweenHydration} from '$lib/components/ui/TweenedValue.svelte';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
@@ -89,9 +84,33 @@
 
     let broker: BrokerSummary | null = null;
     let loading = true;
-    let reportLoading = true;
     let error: string | null = null;
 
+    // The report, the contribution and the candles of this broker, and the way they are asked, are the portfolio data
+    // controller's (Y6-7): this page gives it its scope and reads what it shows through `$portfolioData`. The brokers are
+    // counted whole (MF6-3, D4): the figures here are the broker's, not the owner's share of them, as the Transactions are.
+    let pageAlive = true;
+    const portfolioData = createPortfolioData({
+        scope: () => ({brokerIds: [data.brokerId], start: historyStart(isMaxPending, dateFrom), end: dateTo || undefined, currency: targetCurrency || baseCurrency, fullShare: true}),
+        canAsk: () => true,
+        positionsReady: () => broker !== null,
+        alive: () => pageAlive,
+        wantsBrokerPnlHistory: () => false,
+        rollingPeriod: () => ({start: dateFrom || undefined, end: dateTo || undefined}),
+        onFirstDay: (day) => {
+            if (!isMaxPending || !day) return;
+            dateFrom = day;
+            displayDateFrom = dateFrom;
+            isMaxPending = false;
+        },
+        onRefreshFailed: () => toasts.error(`${$_('common.refresh')} — ${escapeHtml(portfolioError() ?? $_('common.error'))}`),
+        initialLoading: true,
+    });
+    onDestroy(() => {
+        pageAlive = false;
+        portfolioData.dispose();
+    });
+    let reportLoading = true;
     let portfolioSummary: PortfolioSummary | null = null;
     let portfolioHistory: PortfolioHistoryPoint[] = [];
     /** The days the report's step series cover, and the history's MWRR as true points (D-P4). */
@@ -101,44 +120,34 @@
     let costHistory: PortfolioCostHistorySeries | undefined = undefined;
     let depositHistory: PortfolioDepositHistorySeries | undefined = undefined;
     let acquisitionFunding: PortfolioAcquisitionFundingSeries | undefined = undefined;
-    // G1b — lazy, unlike the income family above: the OHLC composition is expensive, so it
-    // is fetched only when the user first opens the candles submode (plan §4.1 caller policy).
     let pnlCandles: PortfolioPnlCandleSeries | null = null;
     let pnlCandlesLoading = false;
     let allocationHistoryFromReport: AllocationHistoryDimensions | null = null;
     let positionsContribution: PositionsContribution | null = null;
     let contributionLoading = false;
-    // Y-24: a failed candles or contribution request is asked again at most three times, 2, 4 and 8 s later, then not
-    // until the scope changes or the user's Refresh (`handleRefresh`). Before, the contribution was asked again at
-    // once, without end, and the candles never again.
-    const candlesRetry = createLazyReportRetry();
-    const contributionRetry = createLazyReportRetry();
-    // The per-position return chart (Y5-2): the lines of the positions ticked, asked for this broker, period and currency,
-    // and asked again when one of them or `refreshVersion` moves.
-    const positionsSeriesCtl = createPositionsSeriesController();
-    // The Rolling view of that chart (FB-15): the rolling return of the ticked positions' assets over the same period.
-    const positionsRollingCtl = createPositionsRollingController();
-    onDestroy(() => {
-        candlesRetry.dispose();
-        contributionRetry.dispose();
-        positionsSeriesCtl.dispose();
-        positionsRollingCtl.dispose();
-    });
-    // The candles' loading flag must be a signal, as on the Dashboard: the loader's guard reads it inside GrowthChart's
-    // effect, which has to wake when a request ends — to ask for the scope on screen once an old scope's answer was
-    // dropped, or to wait for the retry after a failure (Y-24). The legacy compiler makes a `let` a signal only when a
-    // reactive statement or the template reads it.
-    $: void pnlCandlesLoading;
-    let positionsSeriesScope: PositionsSeriesScope;
-    $: positionsSeriesScope = {brokerIds: [data.brokerId], start: historyStart(isMaxPending, dateFrom), end: dateTo || undefined, currency: targetCurrency || baseCurrency, ready: broker !== null, version: refreshVersion};
-    $: positionsSeriesCtl.sync(positionsSeriesScope);
-    let positionsRollingScope: RollingScope;
-    $: positionsRollingScope = {start: dateFrom || undefined, end: dateTo || undefined, ready: broker !== null, version: refreshVersion};
-    $: positionsRollingCtl.sync(positionsRollingScope);
-
-    /** The scope of a lazy report section: this broker, the period and the currency. An answer of another scope is not applied, and a failure counts for its own scope only (Y-24). */
-    function reportScope(): string {
-        return `${data.brokerId}|${historyStart(isMaxPending, dateFrom)}|${dateTo}|${targetCurrency}`;
+    $: ({
+        summary: portfolioSummary,
+        history: portfolioHistory,
+        range: reportRange,
+        mwrrLine,
+        incomeHistory,
+        costHistory,
+        depositHistory,
+        acquisitionFunding,
+        pnlCandles,
+        pnlCandlesLoading,
+        allocationHistory: allocationHistoryFromReport,
+        positionsContribution,
+        contributionLoading,
+        reportLoading,
+    } = $portfolioData);
+    // The per-position return chart (Y5-2) and its Rolling view (FB-15): the controller owns them and asks again when the
+    // scope or `refreshVersion` moves. The statement lists what the scope reads, for the legacy compiler to run it again.
+    const positionsSeriesCtl = portfolioData.positionsSeries;
+    const positionsRollingCtl = portfolioData.positionsRolling;
+    $: {
+        void [data.brokerId, dateFrom, dateTo, isMaxPending, targetCurrency, baseCurrency, broker];
+        portfolioData.syncPositions(refreshVersion);
     }
 
     let editModalOpen = false;
@@ -401,90 +410,23 @@
      * Page cache (E1): the overview of the scope on screen comes from the cache at once — stale or
      * not — and only a stale or missing one is asked again; a refresh that fails keeps it, with a toast.
      */
-    async function loadOverview(force = false) {
-        const options = {includeIncomeHistory: true, includeCostHistory: true, includeDepositHistory: true, includeAcquisitionFunding: true};
-        const cached = peekReport([data.brokerId], historyStart(isMaxPending, dateFrom), dateTo || undefined, targetCurrency, false, false, true, true, options);
-        if (cached) applyOverview(cached.report);
-        if (cached && !cached.stale && !force) {
-            reportLoading = false;
-            return;
-        }
-        reportLoading = true;
-        try {
-            const report = await fetchReport([data.brokerId], historyStart(isMaxPending, dateFrom), dateTo || undefined, targetCurrency, force, undefined, undefined, undefined, undefined, options);
-            if (report || !cached) applyOverview(report);
-            else toasts.error(`${$_('common.refresh')} — ${escapeHtml(portfolioError() ?? $_('common.error'))}`);
-        } finally {
-            reportLoading = false;
-        }
-    }
-
-    function applyOverview(report: PortfolioReport | null) {
-        portfolioSummary = (report?.summary as PortfolioSummary | null | undefined) ?? null;
-        portfolioHistory = (report?.history as PortfolioHistoryPoint[] | null | undefined) ?? [];
-        reportRange = (report?.range as PortfolioRange | null | undefined) ?? null;
-        mwrrLine = (report?.mwrr_line as PortfolioMwrrLinePoint[] | null | undefined) ?? [];
-        // Eager per plan §4.1's sparse-payload caller policy ("Dashboard/Broker overview true").
-        incomeHistory = (report?.income_history as PortfolioIncomeHistorySeries | null | undefined) ?? undefined;
-        costHistory = (report?.cost_history as PortfolioCostHistorySeries | null | undefined) ?? undefined;
-        depositHistory = (report?.deposit_history as PortfolioDepositHistorySeries | null | undefined) ?? undefined;
-        acquisitionFunding = (report?.acquisition_funding as PortfolioAcquisitionFundingSeries | null | undefined) ?? undefined;
-        allocationHistoryFromReport = (report?.allocation_history as AllocationHistoryDimensions | null | undefined) ?? null;
-        positionsContribution = (report?.positions_contribution as PositionsContribution | null | undefined) ?? null;
-        // Scope, currency or date range may have changed, so any previously fetched
-        // candle series is stale. Nulling it lets GrowthChart ask again on its next
-        // candles activation instead of rendering the old window's OHLC.
-        pnlCandles = null;
-        resolveMaxStartFromHistory();
+    function loadOverview(force = false) {
+        return portfolioData.loadAll(force);
     }
 
     /**
-     * G1b lazy candle fetch, scoped to THIS broker.
-     *
-     * Deliberately not the Dashboard's loader: that one requests the currently selected
-     * portfolio scope, so reusing it here would paint whole-portfolio OHLC under a single
-     * broker's heading — a wrong number, which is worse than the empty plot this replaces
-     * because an empty plot is visible and a wrong number is not.
-     *
-     * `brokerPnlHistory` stays unpassed on purpose: plan §3.3 says "one broker or Broker
-     * detail: total candle only", and the per-broker overlay is exactly what must not appear.
+     * The P&L candles of THIS broker, asked by GrowthChart when the user first opens the candles submode. `$portfolioData` is
+     * read here for GrowthChart's effect to depend on: the candles on screen and the request on its way (Y-24: the retry
+     * falls due). The broker's own scope — never the Dashboard's, which would draw the whole portfolio under one broker's name.
      */
-    async function loadPnlCandles() {
-        // Read before the first await, and `canAsk` before the other guards: GrowthChart's effect depends on all of them,
-        // so a request ending or a retry falling due wakes it (Y-24).
-        const askedScope = reportScope();
-        const allowed = candlesRetry.canAsk(askedScope);
-        if (pnlCandles || pnlCandlesLoading || !allowed) return;
-        pnlCandlesLoading = true;
-        try {
-            // Only pnl_candles is read, so every other section is switched off.
-            const report = await fetchReport([data.brokerId], historyStart(isMaxPending, dateFrom), dateTo || undefined, targetCurrency, false, false, false, false, false, {includePnlCandles: true});
-            // An answer of another scope is not this one's: the scope on screen asks for its own.
-            if (reportScope() !== askedScope) return;
-            if (report) candlesRetry.succeeded(askedScope);
-            else candlesRetry.failed(askedScope);
-            pnlCandles = (report?.pnl_candles as PortfolioPnlCandleSeries | null | undefined) ?? null;
-        } finally {
-            pnlCandlesLoading = false;
-        }
+    function loadPnlCandles() {
+        void [$portfolioData.pnlCandles, $portfolioData.pnlCandlesLoading];
+        return portfolioData.loadPnlCandles();
     }
 
-    async function loadContribution() {
-        const askedScope = reportScope();
-        const allowed = contributionRetry.canAsk(askedScope);
-        if (!broker || positionsContribution || contributionLoading || !allowed) return;
-        contributionLoading = true;
-        try {
-            // includeHistory/includeAllocationHistory=false: only positions_contribution is read below.
-            const report = await fetchReport([broker.id], historyStart(isMaxPending, dateFrom), dateTo || undefined, targetCurrency, false, true, false, false, false);
-            if (reportScope() !== askedScope) return;
-            // The outcome is recorded before `finally` lets the flag go: the effect it wakes reads it (Y-24).
-            if (report) contributionRetry.succeeded(askedScope);
-            else contributionRetry.failed(askedScope);
-            positionsContribution = (report?.positions_contribution as PositionsContribution | null | undefined) ?? null;
-        } finally {
-            contributionLoading = false;
-        }
+    function loadContribution() {
+        void [$portfolioData.contributionLoading, $portfolioData.contributionRefreshing, $portfolioData.positionsContribution];
+        return portfolioData.loadContribution();
     }
 
     /** Full transaction history for this broker, paginated client-side by
@@ -521,13 +463,6 @@
         void pageBusy.track('broker-transactions', () => loadTransactions());
     }
 
-    function resolveMaxStartFromHistory() {
-        if (!isMaxPending || portfolioHistory.length === 0) return;
-        dateFrom = portfolioHistory[0].date;
-        displayDateFrom = dateFrom;
-        isMaxPending = false;
-    }
-
     function handleBack() {
         goBack('/brokers');
     }
@@ -547,8 +482,7 @@
 
     async function handleRefresh() {
         // The user's Refresh: the lazy sections may be asked again whatever failed before (Y-24).
-        candlesRetry.reset();
-        contributionRetry.reset();
+        portfolioData.resetRetries();
         requestPortfolioRefresh();
         refreshVersion += 1;
         await pageBusy.track('broker-refresh', async () => {
@@ -564,7 +498,8 @@
      * they next load. Run after the dispatch, so every store has marked its answers stale first.
      */
     function reloadAfterPriceCatchUp() {
-        void loadOverview();
+        // Not busy (Z-18): the page keeps its figures and does not say so for a simple price refresh.
+        void portfolioData.loadAll(false, false, {background: true});
     }
     onMount(() =>
         registerPortfolioMutationListener(`broker-page:${data.brokerId}:prices`, (signal) => {
@@ -833,9 +768,9 @@
                     positionsSeries={$positionsSeriesCtl.response}
                     positionsSeriesLoading={$positionsSeriesCtl.loading}
                     positionsSeriesFailed={$positionsSeriesCtl.failed}
-                    onRequestPositionsSeries={(keys) => positionsSeriesCtl.request(keys, positionsSeriesScope)}
+                    onRequestPositionsSeries={(keys) => positionsSeriesCtl.request(keys, portfolioData.positionsSeriesScope(refreshVersion))}
                     positionsRolling={$positionsRollingCtl}
-                    onRequestPositionsRolling={(assetIds) => positionsRollingCtl.request(assetIds, positionsRollingScope)}
+                    onRequestPositionsRolling={(assetIds) => positionsRollingCtl.request(assetIds, portfolioData.positionsRollingScope(refreshVersion))}
                 />
                 <LotsAnalysisPanel open={activeAssetId != null} assetId={activeAssetId} brokerIds={[broker.id]} brokers={panelBrokers} currency={activeAsset?.currency ?? baseCurrency} assetName={activeAsset?.display_name ?? null} onClose={closeAssetPanel} {refreshVersion} />
             </div>

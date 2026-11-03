@@ -25,6 +25,8 @@ export interface PositionsSeriesScope {
     start?: string;
     end?: string;
     currency?: string;
+    /** MF6-3 (D4): count every broker whole, as the report of the same page does. */
+    fullShare?: boolean;
     /** False while the page cannot ask yet (the brokers are not known): nothing goes out. */
     ready: boolean;
     /** Bumped by the page when its figures are asked again (Refresh, a price catch-up): the series follows. */
@@ -41,12 +43,13 @@ export function buildPositionsSeriesQuery(keys: ReadonlyArray<PositionKey>, scop
     if (scope.brokerIds && scope.brokerIds.length > 0) body.broker_ids = [...scope.brokerIds];
     if (scope.start || scope.end) body.date_range = {...(scope.start ? {start: scope.start} : {}), ...(scope.end ? {end: scope.end} : {})};
     if (scope.currency) body.target_currency = scope.currency;
+    if (scope.fullShare) body.apply_ownership_share = false;
     return body;
 }
 
 /** Two scopes are the same question when this is equal. */
 export function positionsSeriesScopeKey(scope: PositionsSeriesScope): string {
-    return [scope.brokerIds ? [...scope.brokerIds].sort((a, b) => a - b).join(',') : '', scope.start ?? '', scope.end ?? '', scope.currency ?? '', scope.version ?? 0].join('|');
+    return [scope.brokerIds ? [...scope.brokerIds].sort((a, b) => a - b).join(',') : '', scope.start ?? '', scope.end ?? '', scope.currency ?? '', scope.fullShare ? 'whole' : 'share', scope.version ?? 0].join('|');
 }
 
 /** What the panel shows: the newest answer, whether a request is on its way, whether the last one failed. */

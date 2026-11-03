@@ -13,7 +13,7 @@
   Pattern: Svelte 5 Runes, Tailwind CSS 4, dark mode, data-testid everywhere.
 -->
 <script lang="ts">
-    import {onDestroy, onMount, tick, untrack} from 'svelte';
+    import {onDestroy, onMount, tick} from 'svelte';
     import {page} from '$app/stores';
     import {_} from '$lib/i18n';
     import {RefreshCw, Briefcase, TrendingUp, ArrowRightLeft, Wallet, Shield} from 'lucide-svelte';
@@ -31,29 +31,9 @@
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
 
-    import {
-        fetchReport,
-        invalidate,
-        peekReport,
-        portfolioError,
-        type ReportOptions,
-        type PortfolioReport,
-        type PortfolioSummary,
-        type PortfolioHistoryPoint,
-        type PortfolioRange,
-        type PortfolioMwrrLinePoint,
-        type AllocationHistoryDimensions,
-        type PositionsContribution,
-        type PortfolioBrokerPnlHistory,
-        type PortfolioPnlCandleSeries,
-        type PortfolioIncomeHistorySeries,
-        type PortfolioCostHistorySeries,
-        type PortfolioDepositHistorySeries,
-        type PortfolioAcquisitionFundingSeries,
-    } from '$lib/stores/portfolio/portfolioStore.svelte';
+    import {invalidate, portfolioError} from '$lib/stores/portfolio/portfolioStore.svelte';
     import {ensureBrokersLoaded, getAllBrokers, getOwnedBrokers} from '$lib/stores/reference/brokerStore';
     import {registerPortfolioMutationListener, requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
-    import {createLazyReportRetry} from '$lib/stores/portfolio/lazyReportRetry.svelte';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import {readDashboardView, writeDashboardView} from '$lib/features/dashboard/dashboardViewStore';
     import {setTweenHydration} from '$lib/components/ui/TweenedValue.svelte';
@@ -71,8 +51,7 @@
     import KpiSection from '$lib/features/dashboard/KpiSection.svelte';
     import RiskLevelsPanel from '$lib/features/risk/levels/RiskLevelsPanel.svelte';
     import PositionsPanel from '$lib/features/dashboard/PositionsPanel.svelte';
-    import {createPositionsSeriesController, type PositionsSeriesScope} from '$lib/features/dashboard/positionsSeriesController';
-    import {createPositionsRollingController, type RollingScope} from '$lib/features/dashboard/positionsRolling';
+    import {createPortfolioData} from '$lib/features/portfolio-view/portfolioData';
     import LotsAnalysisPanel from '$lib/features/brokers/lots/LotsAnalysisPanel.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
@@ -103,27 +82,39 @@
     // State
     // =========================================================================
 
-    let summary = $state<PortfolioSummary | null>(null);
-    let history = $state<PortfolioHistoryPoint[]>([]);
+    // The report, the contribution and the candles of the scope on screen, and the way they are asked, are the
+    // portfolio data controller's (Y6-7): this page gives it its scope and reads what it shows. A store, so that
+    // `$data` is followed by the lazy loaders' wrappers below.
+    const data = createPortfolioData({
+        scope: () => ({brokerIds: activeBrokerIds, start: dateRangeCtl.historyStart, end: dateRangeCtl.end || undefined, currency: targetCurrency, fullShare: false}),
+        canAsk: () => canAsk,
+        brokersKnown: () => brokersReady,
+        alive: () => pageAlive,
+        wantsBrokerPnlHistory: () => wantsBrokerPnlHistory,
+        rollingPeriod: () => ({start: dateRangeCtl.start, end: dateRangeCtl.end || undefined}),
+        onFirstDay: (day) => dateRangeCtl.markMaxResolved(day),
+        onRefreshFailed: () => toasts.error(`${$_('common.refresh')} — ${escapeHtml(portfolioError() ?? $_('common.error'))}`),
+        failureMessage: () => $_('common.error'),
+        initialLoading: true,
+    });
+    const summary = $derived($data.summary);
+    const history = $derived($data.history);
     /** The days the report's step series cover, and the history's MWRR as true points (D-P4). */
-    let historyRange = $state<PortfolioRange | null>(null);
-    let mwrrLine = $state<PortfolioMwrrLinePoint[]>([]);
-    let brokerPnlHistory = $state<PortfolioBrokerPnlHistory[]>([]);
-    let pnlCandles = $state<PortfolioPnlCandleSeries | null>(null);
-    let pnlCandlesLoading = $state(false);
-    let incomeHistory = $state<PortfolioIncomeHistorySeries | undefined>(undefined);
-    let costHistory = $state<PortfolioCostHistorySeries | undefined>(undefined);
-    let depositHistory = $state<PortfolioDepositHistorySeries | undefined>(undefined);
-    let acquisitionFunding = $state<PortfolioAcquisitionFundingSeries | undefined>(undefined);
-    let allocationHistoryFromReport = $state<AllocationHistoryDimensions | null>(null);
-    let positionsContribution = $state<PositionsContribution | null>(null);
-    let contributionLoading = $state(false);
+    const historyRange = $derived($data.range);
+    const mwrrLine = $derived($data.mwrrLine);
+    const brokerPnlHistory = $derived($data.brokerPnlHistory);
+    const pnlCandles = $derived($data.pnlCandles);
+    const pnlCandlesLoading = $derived($data.pnlCandlesLoading);
+    const incomeHistory = $derived($data.incomeHistory);
+    const costHistory = $derived($data.costHistory);
+    const depositHistory = $derived($data.depositHistory);
+    const acquisitionFunding = $derived($data.acquisitionFunding);
+    const allocationHistoryFromReport = $derived($data.allocationHistory);
+    const positionsContribution = $derived($data.positionsContribution);
+    const contributionLoading = $derived($data.contributionLoading);
     /** A contribution already on screen is being refreshed in background: busy, but no skeleton. */
-    let contributionRefreshing = $state(false);
-    /** The same refresh after a price catch-up (Z-18): it guards against a second request like `contributionRefreshing`,
-     *  but the root's `aria-busy` does not read it. Never rendered, so not reactive. */
-    let contributionInBackground = false;
-    let reportLoading = $state(true);
+    const contributionRefreshing = $derived($data.contributionRefreshing);
+    const reportLoading = $derived($data.reportLoading);
     /** True only on first load when no data exists yet. Once data is loaded, subsequent fetches are "refreshing". */
     let summaryLoading = $derived(reportLoading && !summary);
     let historyLoading = $derived(reportLoading && history.length === 0);
@@ -206,7 +197,8 @@
     /** Display currency override — always concrete, defaults to user base currency (or the one the user left). */
     const initialCurrency = restoredView.targetCurrency ?? $defaultDisplayCurrency;
     let targetCurrency = $state(initialCurrency);
-    let appliedCurrency = $state(initialCurrency);
+    /** The currency of the figures on screen: the one the last answer was asked in (the one the user left, before the first). */
+    const appliedCurrency = $derived($data.appliedCurrency ?? initialCurrency);
     let targetCurrencyManuallySet = $state(restoredView.targetCurrency !== null);
 
     /** Broker filter dropdown open state. */
@@ -315,14 +307,9 @@
     /** FxPairAddModal state for CTA-driven pair creation */
     let showFxPairAddModal = $state(false);
     let pageAlive = true;
-    // Y-24: a failed candles or contribution request is asked again at most three times, 2, 4 and 8 s later, then not
-    // until the scope changes or the user's Refresh (`handleSync`); before, it was asked again at once, without end.
-    const candlesRetry = createLazyReportRetry();
-    const contributionRetry = createLazyReportRetry();
     onDestroy(() => {
         pageAlive = false;
-        candlesRetry.dispose();
-        contributionRetry.dispose();
+        data.dispose();
     });
     let fxPairCreateSlug = $state('');
 
@@ -539,121 +526,13 @@
         void force;
     }
 
-    /**
-     * When "All" (MAX) is pending resolution, extract the real earliest date
-     * from the just-loaded portfolio history via the shared date controller.
-     * No-op once already resolved or if there's no history data yet.
-     */
-    function resolveMaxStartFromHistory() {
-        dateRangeCtl.markMaxResolved(history.length > 0 ? history[0].date : null);
-    }
-
-    /** What `loadAll` asks on top of the defaults: the main report, without contribution or candles. */
-    function mainReportOptions(): ReportOptions {
-        return {includeBrokerPnlHistory: wantsBrokerPnlHistory, includeIncomeHistory: true, includeCostHistory: true, includeDepositHistory: true, includeAcquisitionFunding: true};
-    }
-
-    /** The report on screen: a page that finds the same cached report again leaves its charts alone. */
-    let shownReport: PortfolioReport | null = null;
-
-    function applyReport(report: PortfolioReport | null, requested: string) {
-        shownReport = report;
-        // Cast from the Zodios union types to the concrete types the dashboard expects
-        summary = (report?.summary as PortfolioSummary | null | undefined) ?? null;
-        history = (report?.history as PortfolioHistoryPoint[] | null | undefined) ?? [];
-        historyRange = (report?.range as PortfolioRange | null | undefined) ?? null;
-        mwrrLine = (report?.mwrr_line as PortfolioMwrrLinePoint[] | null | undefined) ?? [];
-        brokerPnlHistory = (report?.broker_pnl_history as PortfolioBrokerPnlHistory[] | null | undefined) ?? [];
-        // Always reassigned (defaulting to null since loadAll() never requests candles):
-        // this is also what invalidates a stale candle series from a prior broker/date-range
-        // scope. loadPnlCandles() re-fetches lazily once GrowthChart notices pnlCandles==null
-        // again while still in the candles submode.
-        pnlCandles = (report?.pnl_candles as PortfolioPnlCandleSeries | null | undefined) ?? null;
-        // Eager (unlike pnlCandles): requested on every ordinary load per plan §4.1's
-        // sparse-payload policy, so this is always fresh — no separate lazy loader needed.
-        incomeHistory = (report?.income_history as PortfolioIncomeHistorySeries | null | undefined) ?? undefined;
-        costHistory = (report?.cost_history as PortfolioCostHistorySeries | null | undefined) ?? undefined;
-        depositHistory = (report?.deposit_history as PortfolioDepositHistorySeries | null | undefined) ?? undefined;
-        acquisitionFunding = (report?.acquisition_funding as PortfolioAcquisitionFundingSeries | null | undefined) ?? undefined;
-        allocationHistoryFromReport = (report?.allocation_history as AllocationHistoryDimensions | null | undefined) ?? null;
-        resolveMaxStartFromHistory();
-        appliedCurrency = requested;
-    }
-
-    let shownContribution: PortfolioReport['positions_contribution'] = null;
-
-    function setContribution(report: PortfolioReport | null) {
-        const contribution = report?.positions_contribution ?? null;
-        if (contribution === shownContribution) return;
-        shownContribution = contribution;
-        positionsContribution = (contribution as PositionsContribution | null | undefined) ?? null;
-    }
-
-    /** The contribution of the scope on screen as the cache holds it (null: never asked, PositionsPanel
-     *  asks when its Performance view needs it). Returns whether the cached one is stale. */
-    function showCachedContribution(): boolean {
-        const cached = peekReport(activeBrokerIds, dateRangeCtl.historyStart, dateRangeCtl.end || undefined, targetCurrency, true, false, false, false);
-        setContribution(cached?.report ?? null);
-        return cached?.stale === true;
-    }
-
-    /**
-     * Page cache (E1): the report of the scope on screen comes from the cache at once — stale or
-     * not — and only a stale or missing one is asked again, in background: the figures stay up and
-     * move to the fresh values when they land. A refresh that fails keeps them, with a toast.
-     * With `background` (after a price catch-up, Z-18) the page does not say it is busy either: neither
-     * `reportLoading` nor `contributionRefreshing` turns on, so the root's `aria-busy` stays off.
-     */
-    let loadSeq = 0;
-
-    async function loadAll(force = false, propagateError = false, {background = false}: {background?: boolean} = {}) {
-        const sessionGeneration = getClientSessionGeneration();
-        const current = () => pageAlive && isClientSessionCurrent(sessionGeneration);
-        if (!current() || !brokersReady) return;
-        if (!canAsk) {
-            reportLoading = false;
-            return;
-        }
-        const load = ++loadSeq;
-        const requested = targetCurrency;
-        const brokerIds = activeBrokerIds;
-        const start = dateRangeCtl.historyStart;
-        const end = dateRangeCtl.end || undefined;
-        const options = mainReportOptions();
-
-        const cached = peekReport(brokerIds, start, end, requested, false, false, true, true, options);
-        if (cached && cached.report !== shownReport) applyReport(cached.report, requested);
-        const request = !cached || cached.stale || force ? fetchReport(brokerIds, start, end, requested, force, undefined, undefined, undefined, undefined, options) : null;
-        if (showCachedContribution()) void loadContribution({background});
-        if (!request) {
-            reportLoading = false;
-            return;
-        }
-
-        if (!background) reportLoading = true;
-        try {
-            const report = await request;
-            if (!current() || load !== loadSeq) return;
-            if (report) {
-                if (report !== shownReport) applyReport(report, requested);
-            } else if (propagateError) {
-                throw new Error($_('common.error'));
-            } else if (cached) {
-                toasts.error(`${$_('common.refresh')} — ${escapeHtml(portfolioError() ?? $_('common.error'))}`);
-            } else {
-                applyReport(null, requested);
-            }
-        } finally {
-            if (current() && load === loadSeq) reportLoading = false;
-        }
+    /** The main report of the scope on screen, from the cache at once and asked again when stale (E1); see the controller. */
+    function loadAll(force = false, propagateError = false, options: {background?: boolean} = {}) {
+        return data.loadAll(force, propagateError, options);
     }
 
     function hydrateFromCache() {
-        if (!brokersReady || ownedBrokerIds.length === 0) return;
-        const cached = peekReport(activeBrokerIds, dateRangeCtl.historyStart, dateRangeCtl.end || undefined, targetCurrency, false, false, true, true, mainReportOptions());
-        if (!cached) return;
-        applyReport(cached.report, targetCurrency);
-        showCachedContribution();
+        data.hydrateFromCache();
     }
 
     async function handleFxPairCreated() {
@@ -669,105 +548,34 @@
         await loadAll(true, true);
     }
 
-    /** The scope of a lazy report section: brokers, period and currency. An answer of another scope is not applied, and a failure counts for its own scope only (Y-24). */
-    function reportScope(): string {
-        return `${activeBrokerIds?.join(',')}|${dateRangeCtl.historyStart}|${dateRangeCtl.end}|${targetCurrency}`;
+    /**
+     * The contribution of the scope on screen: asked by PositionsPanel when its Performance view has none, and by `loadAll`
+     * when the cached one is stale. The flags are read here through `$data`, so the panel's effect that calls this wakes when
+     * a request ends (the controller's own reads of its store register nothing).
+     */
+    function loadContribution(options: {background?: boolean} = {}) {
+        void [$data.contributionLoading, $data.contributionRefreshing];
+        return data.loadContribution(options);
     }
 
-    /**
-     * The contribution of the scope on screen: asked by PositionsPanel when its Performance view has
-     * none, and by `loadAll` when the cached one is stale — then in background, with the cached rows
-     * kept on screen (`contributionRefreshing`, not the skeleton of `contributionLoading`). With `background`
-     * (after a price catch-up, Z-18), `contributionInBackground` instead, which the root's `aria-busy` does not read.
-     */
-    async function loadContribution({background = false}: {background?: boolean} = {}) {
-        const askedScope = reportScope();
-        if (!canAsk || contributionLoading || contributionRefreshing || contributionInBackground || !contributionRetry.canAsk(askedScope)) return;
-        const requested = targetCurrency;
-        const brokerIds = activeBrokerIds;
-        const start = dateRangeCtl.historyStart;
-        const end = dateRangeCtl.end || undefined;
-        const cached = peekReport(brokerIds, start, end, requested, true, false, false, false);
-        if (cached && !cached.stale) {
-            setContribution(cached.report);
-            return;
-        }
-        if (cached && background) contributionInBackground = true;
-        else if (cached) contributionRefreshing = true;
-        else contributionLoading = true;
-        try {
-            // includeHistory/includeAllocationHistory=false: only positions_contribution is read below.
-            const report = await fetchReport(brokerIds, start, end, requested, false, true, false, false, false);
-            if (!pageAlive || reportScope() !== askedScope) return;
-            // The outcome is recorded before the flags fall back in `finally`: the effect they wake reads it (Y-24).
-            if (report) {
-                contributionRetry.succeeded(askedScope);
-                setContribution(report);
-                appliedCurrency = requested;
-            } else {
-                contributionRetry.failed(askedScope);
-                if (!cached) setContribution(null);
-            }
-        } finally {
-            contributionLoading = false;
-            contributionRefreshing = false;
-            contributionInBackground = false;
-        }
+    /** Lazy-load the synthetic P&L candle series (G1b), called by GrowthChart when the user first activates the candles submode.
+     *  `$data` is read here for GrowthChart's effect to depend on: the candles on screen and the request on its way
+     *  (Y-16: `canAsk` turning true asks again once the brokers are known; Y-24: the retry falls due). */
+    function loadPnlCandles() {
+        void [$data.pnlCandles, $data.pnlCandlesLoading];
+        return data.loadPnlCandles();
     }
 
     /**
      * The per-position return chart (Y5-2): the lines of the positions the user ticked, asked for the scope on screen —
-     * its brokers, period and currency — and asked again when the scope or `refreshVersion` moves.
+     * its brokers, period and currency — and asked again when the scope or `refreshVersion` moves. Its Rolling view (FB-15)
+     * follows the same period.
      */
-    const positionsSeriesCtl = createPositionsSeriesController();
-    const positionsSeriesScope = $derived<PositionsSeriesScope>({
-        brokerIds: activeBrokerIds,
-        start: dateRangeCtl.historyStart,
-        end: dateRangeCtl.end || undefined,
-        currency: targetCurrency,
-        ready: canAsk,
-        version: refreshVersion,
-    });
     $effect(() => {
-        const scope = positionsSeriesScope;
-        untrack(() => positionsSeriesCtl.sync(scope));
+        data.syncPositions(refreshVersion);
     });
-    onDestroy(() => positionsSeriesCtl.dispose());
-
-    // The Rolling view of that chart (FB-15): the rolling return of the ticked positions' assets over the same period.
-    const positionsRollingCtl = createPositionsRollingController();
-    const positionsRollingScope = $derived<RollingScope>({start: dateRangeCtl.start, end: dateRangeCtl.end || undefined, ready: canAsk, version: refreshVersion});
-    $effect(() => {
-        const scope = positionsRollingScope;
-        untrack(() => positionsRollingCtl.sync(scope));
-    });
-    onDestroy(() => positionsRollingCtl.dispose());
-
-    /** Lazy-load the synthetic P&L candle series (G1b — called by GrowthChart's
-     *  onRequestPnlCandles when the user first activates the candles submode; caller
-     *  policy per plan §4.1: "expensive OHLC work stays off ordinary reports").
-     *  The guard's reads run synchronously inside GrowthChart's effect, so they are its
-     *  dependencies: `canAsk` turning true is what makes a saved Candles view on a fresh
-     *  page ask again once the brokers are known (Y-16), and `candlesRetry.canAsk` is what
-     *  asks again 2, 4 and 8 s after a failure (Y-24). Keep them before the first await. */
-    async function loadPnlCandles() {
-        const askedScope = reportScope();
-        if (!canAsk || pnlCandles || pnlCandlesLoading || !candlesRetry.canAsk(askedScope)) return;
-        pnlCandlesLoading = true;
-        const requested = targetCurrency;
-        try {
-            // includeHistory/includeAllocationHistory/includeContribution/includeBreakdown=false:
-            // only pnl_candles is read below.
-            const report = await fetchReport(activeBrokerIds, dateRangeCtl.historyStart, dateRangeCtl.end || undefined, requested, false, false, false, false, false, {includePnlCandles: true});
-            // An answer of another scope is not this one's: the scope on screen asks for its own.
-            if (!pageAlive || reportScope() !== askedScope) return;
-            if (report) candlesRetry.succeeded(askedScope);
-            else candlesRetry.failed(askedScope);
-            pnlCandles = (report?.pnl_candles as PortfolioPnlCandleSeries | null | undefined) ?? null;
-        } finally {
-            pnlCandlesLoading = false;
-        }
-    }
+    const positionsSeriesCtl = data.positionsSeries;
+    const positionsRollingCtl = data.positionsRolling;
 
     // =========================================================================
     // Event handlers
@@ -796,8 +604,7 @@
     async function handleSync() {
         syncLoading = true;
         // The user's Refresh: the lazy sections may be asked again whatever failed before (Y-24).
-        candlesRetry.reset();
-        contributionRetry.reset();
+        data.resetRetries();
         requestPortfolioRefresh();
         refreshVersion += 1;
         try {
@@ -930,11 +737,8 @@
                 writeDashboardView({brokerIds: kept});
             }
             brokersReady = true;
-            if (allBrokers.length > 0) {
-                await loadAll();
-            } else {
-                reportLoading = false;
-            }
+            // A user who owns nothing is asked nothing: `loadAll` only stops the page from being busy.
+            await loadAll();
         });
         return () => document.removeEventListener('click', handleDocumentClick);
     });
@@ -1152,9 +956,9 @@
                 positionsSeries={$positionsSeriesCtl.response}
                 positionsSeriesLoading={$positionsSeriesCtl.loading}
                 positionsSeriesFailed={$positionsSeriesCtl.failed}
-                onRequestPositionsSeries={(keys) => positionsSeriesCtl.request(keys, positionsSeriesScope)}
+                onRequestPositionsSeries={(keys) => positionsSeriesCtl.request(keys, data.positionsSeriesScope(refreshVersion))}
                 positionsRolling={$positionsRollingCtl}
-                onRequestPositionsRolling={(assetIds) => positionsRollingCtl.request(assetIds, positionsRollingScope)}
+                onRequestPositionsRolling={(assetIds) => positionsRollingCtl.request(assetIds, data.positionsRollingScope(refreshVersion))}
             />
             <!-- The lot detail opens below the positions, as on a broker's page (FB-12b): the chart stays; the panel's ✕ or the browser's back closes it. -->
             <LotsAnalysisPanel
