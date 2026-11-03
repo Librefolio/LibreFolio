@@ -2789,5 +2789,43 @@ class TestFrontCheckCoversTheE2ESpecs:
         assert "tsconfig.e2e.json" in scripts["check:e2e"]
 
 
+class TestRunnerBuildsTheFrontendLikeTheTestServer:
+    """C6-2 (C-67 + J-7 + L-12): ``dev.py server --test`` always serves a debug build, so the runner builds debug too."""
+
+    @pytest.fixture
+    def asked_builds(self, monkeypatch, tmp_path):
+        """``_ensure_frontend_build`` with the build itself replaced: what ``auto_build_frontend`` was asked, and what its
+        ``build_func`` hands ``cmd_fe_build``."""
+        asked: dict = {"auto": [], "built": []}
+
+        def fake_auto_build(debug=False, force=False, build_func=None):
+            asked["auto"].append({"debug": debug, "force": force})
+            return build_func(debug=debug)
+
+        def fake_cmd_fe_build(args):
+            asked["built"].append(args.debug)
+            return 0
+
+        monkeypatch.setattr(_frontend_common, "auto_build_frontend", fake_auto_build)
+        monkeypatch.setattr(dev, "cmd_fe_build", fake_cmd_fe_build)
+        monkeypatch.setattr(_frontend_common, "_SETUP_DONE", set())
+        monkeypatch.chdir(tmp_path)  # the build kind marker is written below the working directory
+        return asked
+
+    def test_the_runner_asks_for_a_debug_build(self, asked_builds):
+        assert _frontend_common._ensure_frontend_build() is True
+
+        assert [call["debug"] for call in asked_builds["auto"]] == [True]
+        assert asked_builds["built"] == [True]
+
+    def test_the_server_that_follows_finds_the_build_of_its_own_mode(self, monkeypatch):
+        """The server's ``auto_build_frontend(debug=True)`` rebuilds on a mode mismatch only: after the runner's build the marker says debug."""
+        monkeypatch.setattr(dev, "_read_frontend_build_mode_marker", lambda: True)
+        monkeypatch.setattr(dev, "cmd_fe_build", lambda args: pytest.fail("the server rebuilt a build of its own mode"))
+        monkeypatch.setattr("scripts.cli_base.check_frontend_needs_build", lambda: False)
+
+        assert dev.auto_build_frontend(debug=True) is None
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))

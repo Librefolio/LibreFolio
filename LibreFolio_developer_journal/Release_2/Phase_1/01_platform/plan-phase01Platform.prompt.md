@@ -10998,3 +10998,16 @@ Sessione figlia T, ondata 6, base `5efc0d973`, corsia 6221 (`/tmp/librefolio-r13
 > `afterEach` lo cancella in un `finally`. Rilanciati sulla corsia 6221: `tx-import-flow` 10/10 (era 2/10),
 > `tx-import-upload` 10/10, `tx-ca-contract` 12/12 (log `ondata6/T-txflow-run.log`). Gli altri spec del percorso scelgono
 > già un broker creato dal test.
+
+### C6-2 (C-67 + J-7 + L-12) ✅ (2026-11-03)
+
+> **Note implementazione**: il server di test costruisce sempre in debug (`dev.py` `debug_mode = True` sotto `--test`),
+> il runner chiedeva `debug=False`: due build a ogni giro, e con la coverage JS la strumentata perdeva il marcatore.
+> `_frontend_common.TEST_SERVER_BUILDS_DEBUG = True`, usata da `_ensure_frontend_build`; commento incrociato in `dev.py`.
+> Test `TestRunnerBuildsTheFrontendLikeTheTestServer` (rosso `debug=False` → verde); `test_test_runner_cli`,
+> `test_test_server_preparation`, `test_dev_designer_lab_banner` 1050 verdi. Corsia 6221: `utils test-runner-cli` 892,
+> `tx-import-flow` 10/10, `api brokers` 36, `--coverage js tx-import-flow` 9/10 con marcatore strumentato intatto.
+>
+> **⚠️ Fuori pista**: A1 rosso nel run con coverage (500 «Internal Error» al primo login, carico ~32 per suite cloud fuori
+> lock). Rilanciato da solo due volte con `--coverage js`: 1 passed, 1 passed. Verdetto: ambiente (primo caricamento della
+> build strumentata sotto carico), non C6-2.
