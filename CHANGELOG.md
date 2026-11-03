@@ -126,6 +126,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Self-hosting: `LIBREFOLIO_DEFAULT_CURRENCY` and `LIBREFOLIO_DEFAULT_TIMEZONE`** set the default currency and the timezone at the first start, until an administrator saves the setting; an invalid value stops the start and names the variable.
 - `./dev.py db check --integrity` checks the database without changing it: integrity, broken references, text that is not UTF-8 and the schema revision.
 - Hosting panel: a `metrics` access with `GET /api/v1/panel/metrics` (storage, database size, price refresh health, counts).
+- **Risk tables show five rows per page** (5, 10, 25 or all), in the risk lab and in the risk levels; a click on a point of the risk/return chart opens the page of its row without moving the view.
+- **Risk: the partial-results notice counts the excluded assets** and shows each one as a badge; the return histogram's bars show their days and share.
+- Positions contribution: a row closed in the period says how it closed (a sale, a transfer, with the receiving broker when you can see it, or an adjustment).
 
 ### 🔄 Changed
 
@@ -216,6 +219,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A new username that differs from an existing one only by capitals is refused.
 - On a managed instance nobody else can register with, or move their profile to, the administrator's address.
 - The documentation site draws its diagrams with its own copy of Mermaid, with no request to a third party; the ELK layout is no longer available.
+- **The broker page shows the broker's whole amounts**, no longer your share of it, risk included; for the figures reduced by your share use the Dashboard filtered on that broker.
+- **AI Export from a broker page gives the broker's full amounts**, like the page, with a note on your role and ownership stake; the broker-versus-portfolio comparison says it counts every broker whole. Converted prices may differ by one unit of the sixth decimal.
+- **AI Export: the exchange result on foreign cash appears on its own, broker by broker**, in the portfolio export, recognised by a fixed code instead of its English label.
+- AI Export: a concentration or allocation share that cannot be computed (a total of zero or less) is reported as not available instead of a reversed number.
 
 #### 🎨 A new colour palette
 
@@ -245,6 +252,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🐛 Fixed
 
+- **Positions: an asset moved to another of your brokers is no longer listed as sold** when that broker is shown: its row there holds the units. A transfer to a broker not on screen stays in italics.
+- **Dashboard and broker page: a live price that has not moved no longer makes the next report recompute the whole history.** In the downloaded price history, `fetched_at` is now when the row last changed.
+- The broker page no longer turns busy after new prices arrive, and keeps the contribution on screen while it refreshes.
 - **The cost preview names a stock split as «Split adjustment»**, no longer as «Dilution».
 - **The status bar of the CSV editor is translated** («3 valid rows», «1 error», «duplicate date») in Italian, French and Spanish too, in every CSV import.
 - **Emptying the manual cost of a transfer is refused at once in the form**, no longer only at «Save all»; the help text and the page on adjustments no longer say «leave empty = Auto».
