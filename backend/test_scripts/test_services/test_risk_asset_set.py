@@ -1248,7 +1248,12 @@ def test_asset_set_comparison_measures_the_others_identically_when_the_reference
     assert actual.output.comparison_asset_id == REFERENCE_ASSET_ID
     assert [item.asset_id for item in actual.output.items] == [CHOPPY_ASSET_ID, STEADY_ASSET_ID]
     for measured, baseline in zip(actual.output.items, expected.output.items, strict=True):
-        assert measured.model_dump() == pytest.approx(baseline.model_dump(), rel=1e-12, abs=1e-12), measured.asset_id
+        got, want = measured.model_dump(), baseline.model_dump()
+        # pytest.approx rejects None: a None must be None on both sides, numbers go through approx.
+        assert got.keys() == want.keys(), measured.asset_id
+        assert {k for k, v in got.items() if v is None} == {k for k, v in want.items() if v is None}, measured.asset_id
+        numeric = {k for k, v in want.items() if v is not None}
+        assert {k: got[k] for k in numeric} == pytest.approx({k: want[k] for k in numeric}, rel=1e-12, abs=1e-12), measured.asset_id
     assert actual.output.observations == expected.output.observations == OBSERVATIONS
     assert actual.output.comparison_volatility == pytest.approx(expected.output.comparison_volatility, rel=1e-12, abs=1e-12)
     assert actual.output.comparison_expected_annual_return == pytest.approx(expected.output.comparison_expected_annual_return, rel=1e-12, abs=1e-12)
