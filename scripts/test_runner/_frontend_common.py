@@ -49,6 +49,13 @@ def require_frontend_tools() -> bool:
 _SETUP_DONE: set[str] = set()
 
 
+#: The mode the shared test server builds in: ``dev.py server --test`` always serves a debug build (the Designer Lab is only
+#: in it). The runner builds the same, so the server that follows finds a build of its own mode and rebuilds nothing:
+#: a production build here was rebuilt in debug by the server at every run (C-67, J-7), and an instrumented one lost
+#: its marker doing so; the runner in turn rebuilt in release under a server already serving (L-12).
+TEST_SERVER_BUILDS_DEBUG = True
+
+
 def reset_setup_scope() -> None:
     """Open a new setup scope, so the next ``_ensure_*`` call works for real."""
     _SETUP_DONE.clear()
@@ -65,7 +72,8 @@ def _ensure_frontend_build() -> bool:
     ``Could not resolve "./generated" from src/lib/api/index.ts``. Routing the
     build through ``cmd_fe_build`` — the same path ``dev.py server --force`` uses —
     regenerates them first. ``auto_build_frontend`` still only rebuilds when the
-    sources actually changed.
+    sources actually changed. The build is a debug one, like the test server's
+    (``TEST_SERVER_BUILDS_DEBUG``), so the server started next rebuilds nothing.
     """
     from dev import cmd_fe_build  # noqa: PLC0415 — avoid dev.py import cycle
 
@@ -105,7 +113,7 @@ def _ensure_frontend_build() -> bool:
 
     try:
         result = auto_build_frontend(
-            debug=False,
+            debug=TEST_SERVER_BUILDS_DEBUG,
             force=force,
             build_func=lambda debug=False: cmd_fe_build(SimpleNamespace(debug=debug)),
         )
