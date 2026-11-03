@@ -8984,3 +8984,26 @@ Risposta di MF (`MF-FB28-analisi-poll.md`): il report leggero esiste già (`incl
 - ✅ **Prove di regressione** (insieme a cp9d): `front check` 0/0; Vitest portfolio-view + dashboard + live-updates + gate 49 file / 1340 verdi; E2E: `dashboard` 35, `dashboard-cache` 6, `lazy-report-retry` 7, `page-busy` 17, `banners` 24, `privacy-masking` 18, `default-currency` 6, `broker-filter-label` 2, `risk` 38, `broker detail` 42 (alla seconda), `broker-whole-amounts` 4, `tx-transfer-auto-cost` 2, `transactions-table` 26, `toolbar-width-sweep` 24.
 - ⏳ **Pendente**: la correzione di MF su `fetched_at` (il motore riparte a ogni quotazione anche a prezzo invariato) entra col treno: finché non c'è, a mercato aperto ogni giro ricalcola il motore. Variazione del giorno in euro per posizione: solo se il developer la vuole (campo nuovo di MF).
 - CHANGELOG (proposta, la inserisce il coordinatore): ✨ «Dashboard e pagina del broker seguono i prezzi correnti: ogni minuto, mentre la usi, importi, KPI e posizioni si aggiornano da soli; si fermano a scheda nascosta o dopo due minuti di inattività (compare "Aggiornamenti in pausa")».
+
+### 3/11 · Ondata 6 — stato finale della sessione Y (cruscotto, liste, banner): fatto e pendente
+
+**Fatto (tutto committato dal coordinatore; nessun SHA qui: la storia viene riscritta)**
+- ✅ Checkpoint 7 · T1 «Analizza lotto» sotto la lista con scorrimento a inizio sezione, fissato con due E2E (Dashboard e broker).
+- ✅ **Y6-7 consegna 1** · un solo controllore dei dati (`features/portfolio-view/portfolioData.ts` + `portfolioDataScope.ts`) per Dashboard e pagina del broker: report, contributo, candele, serie, Rolling, tentativi di Y-24, cache, ricarico dopo i prezzi nuovi. La pagina del broker conta i broker interi (`apply_ownership_share:false`, MF6-3, D4), con E2E sull'Owner al 30 %.
+- ✅ **cp9a** · il rischio della pagina del broker chiede il broker intero (`wholeBroker`), con E2E.
+- ✅ **Y6-7 consegna 2 (cp9b–cp9d)** · il corpo della Dashboard è `PortfolioView.svelte`; la rotta `/dashboard` è un involucro. Estratti: Panoramica, Posizioni (+ dettaglio lotti), Rischio, Transazioni (con la classe `PortfolioTransactions`); `filterState` sotto `lib/features/transactions/`. `PortfolioView` è a 895 righe. Markup, `data-testid`, URL ed E2E della Dashboard senza cambi.
+- ✅ **T1 (trasferito ≠ venduto)** · con `closed_by` / `closed_to_broker_id` di MF-CB: nella tabella Portfolio una posizione chiusa da un trasferimento verso un broker del report che tiene ancora l'asset non compare tra le vendute; vendite, rettifiche e trasferimenti verso broker non a schermo restano in corsivo. La tabella Performance non cambia. Provato anche per mutazione.
+- ✅ **FB-28** · la Dashboard (e la pagina del broker, che condivide il controllore) segue i prezzi correnti: ogni minuto prezzi dei titoli tenuti → riepilogo leggero; pausa a scheda nascosta o dopo 2 minuti senza input (nessuna richiesta), attesa doppia su errore, distintivo «in pausa» e `data-live-updates`. Decisione del developer (3/11): **acceso per sempre, nessun interruttore** per l'utente; il gancio `livePrices?()` del controllore resta solo per i test.
+
+**Pendente**
+- ⏳ **cp9e** · estrarre da `PortfolioView` la toolbar (periodo, valuta, selettore broker con il suo menu a posizione fissa, Esporta AI, Refresh) e i banner con le loro azioni (`syncMissingFxRates`, `handleBannerAction`, `FxPairAddModal`): sono ciò che la pagina del broker dovrà avere identico. Piano in `Y-Y6-7-consegna2-analisi.md` (note del coordinatore).
+- ⏳ **Y6-7 consegna 3** · la pagina del broker come involucro di `PortfolioView` con `scope: broker` (la prop `scope` e i prefissi dei `data-testid`/`pageBusy` nascono qui, con il secondo utente): intestazione del broker e scheda Info come snippet, azioni di scrittura per Owner/Editor, migrazione del broker alle rune. Il controllore e le quattro schede sono già condivisi.
+- ⏳ **Y6-7 consegna 4** · cambi visibili al broker: banner e sincronizzazioni (anche per il Viewer), Transazioni nel periodo, quota intera (già), E2E nuovi, CHANGELOG, documentazione (insieme a Y6-5).
+
+**Seguiti e punti da tenere d'occhio**
+- La correzione di MF su `fetched_at` (`POST /assets/prices/current` timbra l'ora anche a prezzo invariato; il motore riparte a ogni giro): entra col treno; senza, a mercato aperto ogni giro del poll ricalcola il motore.
+- Variazione del giorno **in euro** per posizione: solo se il developer la vuole (campo nuovo di MF su `PortfolioHolding`, ~0,5 giorni); oggi c'è la percentuale (`gain_loss_change_1d`).
+- Limite di FB-28: `total_pnl`/`twrr` dell'ultimo gradino restano quelli dell'ultimo report intero; la Crescita in modalità P&L/rendimento si aggiorna al prossimo report intero.
+- Un rosso non spiegato e non ripetuto: `brokers-detail.spec.ts:348` (scorrimento di «Analizza lotto») è fallito una volta a macchina carica; se torna, triage.
+- Il traffico complessivo di una Dashboard lasciata aperta non è stato misurato: l'E2E di FB-28 conta solo le sue due rotte.
+- CHANGELOG (inserisce il coordinatore): ✨ Dashboard e broker seguono i prezzi correnti; 🐛 un asset trasferito a un altro tuo broker non compare più come «venduto»; 🔄 la pagina di un broker mostra gli importi interi del conto (Owner con meno del 100 %).
