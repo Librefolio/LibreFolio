@@ -20,3 +20,10 @@ export const ASSET_LIST_LIVE_INTERVAL_MS = 60_000;
 
 /** Cadence of the live price on the page of one asset. */
 export const ASSET_DETAIL_LIVE_INTERVAL_MS = 30_000;
+
+/**
+ * Cadence of the live prices on the portfolio view (FB-28): each poll asks the prices of the held assets and then the
+ * summary alone of the scope on screen (a few KB, one engine pass). The full report is not polled: it carries the history
+ * and its returns, and is asked at the load, after a long pause and after a price catch-up.
+ */
+export const PORTFOLIO_LIVE_INTERVAL_MS = 60_000;

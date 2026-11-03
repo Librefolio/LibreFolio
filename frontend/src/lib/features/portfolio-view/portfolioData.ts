@@ -23,7 +23,11 @@ import {fetchReport as fetchStoreReport, peekReport as peekStoreReport, type All
 import {createLazyReportRetry, type LazyReportRetry} from '$lib/stores/portfolio/lazyReportRetry.svelte';
 import {createPositionsSeriesController, type PositionsSeriesController, type PositionsSeriesScope} from '$lib/features/dashboard/positionsSeriesController';
 import {createPositionsRollingController, type PositionsRollingController, type RollingScope} from '$lib/features/dashboard/positionsRolling';
-import {contributionCall, mainReportCall, pnlCandlesCall, scopeKey, type PortfolioScope, type ReportCall} from './portfolioDataScope';
+import {startActivePolling, type ActivePolling, type ActivePollingState, type PollOutcome} from '$lib/features/live-updates/activePolling';
+import {PORTFOLIO_LIVE_INTERVAL_MS} from '$lib/features/live-updates/cadence';
+import {fetchCurrentPrices, livePollFailure, livePollOutcome, type LivePriceResult} from '$lib/services/livePriceService';
+import {todayIso} from '$lib/utils/dateOnly';
+import {contributionCall, lightSummaryCall, mainReportCall, pnlCandlesCall, scopeKey, withLiveLastPoint, type PortfolioScope, type ReportCall} from './portfolioDataScope';
 
 /** What a page shows of its report. */
 export interface PortfolioDataState {
@@ -50,6 +54,8 @@ export interface PortfolioDataState {
     /** The same, after a price catch-up: the page does not say it is busy (Z-18). */
     contributionInBackground: boolean;
     pnlCandlesLoading: boolean;
+    /** The live poll of the current prices (FB-28): `running`, paused (hidden tab, no input for two minutes) or `stopped` (not started). */
+    liveState: ActivePollingState;
 }
 
 /** What a controller reads from its page. Every function is read at the moment it is used, so a page passes getters of its own state. */
@@ -76,6 +82,8 @@ export interface PortfolioDataInputs {
     failureMessage?(): string;
     /** The page shows its skeleton before the first answer: `reportLoading` starts true (the Dashboard). Default false. */
     initialLoading?: boolean;
+    /** The figures follow the current prices (FB-28). Default true: both pages do. */
+    livePrices?(): boolean;
 }
 
 /** The network and the session, injectable for the tests. */
@@ -83,6 +91,11 @@ export interface PortfolioDataDeps {
     fetchReport(call: ReportCall, force: boolean): Promise<PortfolioReport | null>;
     peekReport(call: ReportCall): {report: PortfolioReport; stale: boolean} | null;
     session: {generation(): number; isCurrent(generation: number): boolean};
+    /** The current price of these assets (it writes today's quote): the first step of a live poll. */
+    fetchPrices(ids: number[]): Promise<LivePriceResult[]>;
+    startPolling: typeof startActivePolling;
+    /** Today in the user's calendar. */
+    today(): string;
     positionsSeries?: PositionsSeriesController;
     positionsRolling?: PositionsRollingController;
 }
@@ -116,6 +129,9 @@ const defaultDeps: PortfolioDataDeps = {
     fetchReport: (call, force) => fetchStoreReport(call.brokerIds, call.start, call.end, call.currency, force, call.includeContribution, call.includeBreakdown, call.includeHistory, call.includeAllocationHistory, call.options),
     peekReport: (call) => peekStoreReport(call.brokerIds, call.start, call.end, call.currency, call.includeContribution, call.includeBreakdown, call.includeHistory, call.includeAllocationHistory, call.options),
     session: {generation: getClientSessionGeneration, isCurrent: isClientSessionCurrent},
+    fetchPrices: (ids) => fetchCurrentPrices(ids),
+    startPolling: startActivePolling,
+    today: todayIso,
 };
 
 const EMPTY: PortfolioDataState = {
@@ -137,6 +153,7 @@ const EMPTY: PortfolioDataState = {
     contributionRefreshing: false,
     contributionInBackground: false,
     pnlCandlesLoading: false,
+    liveState: 'stopped',
 };
 
 export function createPortfolioData(inputs: PortfolioDataInputs, deps: Partial<PortfolioDataDeps> = {}): PortfolioData {
@@ -159,6 +176,60 @@ export function createPortfolioData(inputs: PortfolioDataInputs, deps: Partial<P
 
     const alive = () => inputs.alive() && !disposed;
 
+    // FB-28: the figures follow the current prices. One poller per report on screen: it is started again each time a main
+    // report is applied (a load, a Refresh, a price catch-up, a new scope), with its first poll a whole interval away, so a
+    // poll never lands on the heels of the report it follows, and one in flight for another scope is dropped.
+    let poller: ActivePolling | null = null;
+
+    function stopLivePoll() {
+        poller?.stop();
+        poller = null;
+        patch({liveState: 'stopped'});
+    }
+
+    function restartLivePoll() {
+        stopLivePoll();
+        if (!alive() || !inputs.canAsk() || !(inputs.livePrices?.() ?? true)) return;
+        const scope = inputs.scope();
+        // A period that ended before today has no current price to follow.
+        if (scope.end && scope.end < api.today()) return;
+        const askedScope = scopeKey(scope);
+        // Not read inside this call: `restartLivePoll` runs from the page's effects, and the poll's head would subscribe them.
+        poller = api.startPolling({
+            run: () => livePoll(askedScope),
+            intervalMs: PORTFOLIO_LIVE_INTERVAL_MS,
+            initialDelayMs: PORTFOLIO_LIVE_INTERVAL_MS,
+            onstatechange: (liveState) => patch({liveState}),
+        });
+    }
+
+    /**
+     * One poll: the prices of the held assets (this writes today's quote), then the summary alone, forced. The summary is asked
+     * even when the prices were not had: the stored ones may have moved. The page is not busy meanwhile, nothing is retried
+     * (the poller spaces the next one), and a failure is silent.
+     */
+    async function livePoll(askedScope: string): Promise<PollOutcome> {
+        const generation = api.session.generation();
+        const stale = () => !alive() || !api.session.isCurrent(generation) || scopeKey(inputs.scope()) !== askedScope;
+        if (stale()) return {ok: true};
+        const held = [...new Set((get(state).summary?.holdings ?? []).map((holding) => holding.asset_id))];
+        if (held.length === 0) return {ok: true};
+        const scope = inputs.scope();
+        let outcome: PollOutcome;
+        try {
+            outcome = livePollOutcome(await api.fetchPrices(held));
+        } catch (error) {
+            outcome = livePollFailure(error);
+        }
+        if (stale()) return outcome;
+        const report = await api.fetchReport(lightSummaryCall(scope), true);
+        if (stale()) return outcome;
+        const summary = report?.summary as PortfolioSummary | null | undefined;
+        if (!summary) return {...outcome, ok: false};
+        state.update((current) => ({...current, summary, history: withLiveLastPoint(current.history, summary)}));
+        return outcome;
+    }
+
     function applyReport(report: PortfolioReport | null, requested: string | undefined) {
         shownReport = report;
         const history = (report?.history as PortfolioHistoryPoint[] | null | undefined) ?? [];
@@ -180,6 +251,7 @@ export function createPortfolioData(inputs: PortfolioDataInputs, deps: Partial<P
             appliedCurrency: requested ?? null,
         });
         inputs.onFirstDay?.(history.length > 0 ? history[0].date : null);
+        if (report) restartLivePoll();
     }
 
     function setContribution(report: PortfolioReport | null) {
@@ -333,6 +405,7 @@ export function createPortfolioData(inputs: PortfolioDataInputs, deps: Partial<P
         positionsRollingScope,
         dispose() {
             disposed = true;
+            stopLivePoll();
             candlesRetry.dispose();
             contributionRetry.dispose();
             positionsSeries.dispose();

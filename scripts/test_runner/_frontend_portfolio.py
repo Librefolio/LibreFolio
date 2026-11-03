@@ -154,6 +154,18 @@ def front_portfolio_broker_filter_label(verbose: bool = False, ui: bool = False,
     return _run_playwright("portfolio/dashboard-broker-filter-label.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
 
 
+def front_portfolio_dashboard_live_prices(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
+    """Run the Dashboard live-prices E2E (FB-28) on the desktop project, the runner default."""
+    print_section("Frontend Portfolio Dashboard Live Prices Tests")
+    if not _ensure_frontend_build():
+        return False
+    if not _ensure_db_populated():
+        return False
+    if not _ensure_test_users():
+        return False
+    return _run_playwright("portfolio/dashboard-live-prices.spec.ts", ui=ui, headed=headed, debug=debug, test_names=test_names, coverage=coverage)
+
+
 def front_portfolio_broker_icons(verbose: bool = False, ui: bool = False, headed: bool = False, debug: bool = False, test_names: list = None, coverage: bool = False) -> bool:
     """Run dashboard broker icon fallback E2E tests."""
     print_section("Frontend Portfolio Broker Icon Tests")
@@ -542,6 +554,14 @@ def populate_registry(registry: dict) -> None:
         name="Broker Filter Label Tests",
         desc="Dashboard broker filter scoped to one long-named broker (on a disposable account that owns it and one plain broker, all deleted at the end — the shared E2E user is never touched): at the 320 px layout (viewport 320 + the scrollbar gutter measured at load, a 254 px bar on every host) the trigger and the visible part of its label stay inside the bar card and the page does not scroll sideways, the label staying the whole name in the DOM and in the accessible name; at 2560 px (oneRow, room to spare) the whole name is shown unclipped, on arrival and after a trip to the 320 px layout — each absence with its positive control",
         tests="portfolio/dashboard-broker-filter-label.spec.ts",
+    )
+    add_test(
+        cat,
+        "dashboard-live-prices",
+        front_portfolio_dashboard_live_prices,
+        name="Dashboard Live Prices Tests",
+        desc="FB-28, on a page clock the test drives (price route answered in the browser, nothing written): a minute after the main report and every minute the Dashboard asks the held assets' current prices and then the summary alone (every other section off, same scope as the report), the net worth on screen is the summary the poll brought, a hidden tab polls nothing and a poll that fell due runs once on return, two minutes without input pause the polls and the next input resumes with one, a period that ended before today polls nothing, and a poll whose prices failed still asks the summary while the next one waits twice as long",
+        tests="portfolio/dashboard-live-prices.spec.ts",
     )
     add_test(cat, "broker-icons", front_portfolio_broker_icons, name="Broker Icon Tests", desc="Dashboard positions broker fallback chain", tests="portfolio/broker-icons.spec.ts")
     add_test(cat, "dashboard-cache", front_portfolio_dashboard_cache, name="Dashboard Page Cache", desc="Return to the Dashboard reuses cached data, shows it while refreshing, owned-broker scope, restored filters, Refresh", tests="portfolio/dashboard-cache.spec.ts")

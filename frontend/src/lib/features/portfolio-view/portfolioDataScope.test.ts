@@ -6,7 +6,7 @@
  * flag: so one function builds the scope, and the three questions cannot drift apart.
  */
 import {describe, expect, it} from 'vitest';
-import {contributionCall, mainReportCall, pnlCandlesCall, scopeKey, type PortfolioScope} from './portfolioDataScope';
+import {contributionCall, lightSummaryCall, mainReportCall, pnlCandlesCall, scopeKey, withLiveLastPoint, type PortfolioScope} from './portfolioDataScope';
 
 const scope: PortfolioScope = {brokerIds: [3, 1], start: '2026-01-01', end: '2026-10-28', currency: 'EUR', fullShare: false};
 
@@ -68,5 +68,47 @@ describe('the three questions of one scope', () => {
         for (const call of [mainReportCall(whole, {wantsBrokerPnlHistory: false}), contributionCall(whole), pnlCandlesCall(whole)]) {
             expect(call.options?.fullShare).toBe(true);
         }
+    });
+});
+
+describe('the live poll’s question (FB-28)', () => {
+    it('asks the summary of the same scope and nothing else: history and allocation history, on by default, are off', () => {
+        const call = lightSummaryCall(scope);
+        expect(call).toMatchObject({brokerIds: [3, 1], start: '2026-01-01', end: '2026-10-28', currency: 'EUR', includeContribution: false, includeBreakdown: false, includeHistory: false, includeAllocationHistory: false});
+        expect(call.options).toBeUndefined();
+    });
+
+    it('counts the brokers whole when the page does (MF6-3), like the question it follows', () => {
+        expect(lightSummaryCall({...scope, fullShare: true}).options).toEqual({fullShare: true});
+    });
+});
+
+describe('withLiveLastPoint — the last step of the history follows the summary’s state (FB-28)', () => {
+    const money = (amount: string) => ({code: 'EUR', amount});
+    const point = (date: string, nav: string) => ({date, through: date, nav_value: money(nav), market_value: money('1'), cash_value: money('2'), total_pnl: money('7')});
+    const summary = {net_worth: money('150'), market_value: money('120'), cash_total: money('30')};
+
+    it('replaces the value fields of the last point with the summary’s, in a new array and a new point', () => {
+        const history = [point('2026-10-27', '100'), point('2026-10-28', '110')] as never;
+        const next = withLiveLastPoint(history, summary as never);
+        expect(next).not.toBe(history);
+        expect(next[0]).toBe((history as unknown[])[0]);
+        expect(next[1]).toMatchObject({date: '2026-10-28', nav_value: money('150'), market_value: money('120'), cash_value: money('30')});
+        expect(next[1]).not.toBe((history as unknown[])[1]);
+    });
+
+    it('leaves what the summary does not state alone: the point’s own P&L is the engine’s', () => {
+        const next = withLiveLastPoint([point('2026-10-28', '110')] as never, summary as never);
+        expect(next[0]).toMatchObject({total_pnl: money('7'), through: '2026-10-28'});
+    });
+
+    it('does not touch the original point', () => {
+        const history = [point('2026-10-28', '110')] as never;
+        withLiveLastPoint(history, summary as never);
+        expect((history as unknown as Array<{nav_value: unknown}>)[0].nav_value).toEqual(money('110'));
+    });
+
+    it('an empty history stays empty', () => {
+        expect(withLiveLastPoint([], summary as never)).toEqual([]);
     });
 });
