@@ -11011,3 +11011,31 @@ Sessione figlia T, ondata 6, base `5efc0d973`, corsia 6221 (`/tmp/librefolio-r13
 > **⚠️ Fuori pista**: A1 rosso nel run con coverage (500 «Internal Error» al primo login, carico ~32 per suite cloud fuori
 > lock). Rilanciato da solo due volte con `--coverage js`: 1 passed, 1 passed. Verdetto: ambiente (primo caricamento della
 > build strumentata sotto carico), non C6-2.
+
+### Ondata 6 · T — stato finale (2026-11-03)
+
+**Fatto** (tutti i lotti committati dal coordinatore, nessuno pendente nel worktree):
+
+| Lotto | ID backlog | Esito |
+|-------|-----------|-------|
+| C6-7 | V-17 | ✅ `settings.spec.ts` → `e2e/settings.spec.ts` (e `auth.spec.ts`); test che ogni selettore di spec ne sceglie uno solo |
+| C6-8 | H-20 + J-15 | ✅ output del runner e della galleria a righe (`line_buffer_output`, `flush=True`) |
+| C6-5 | I-07 | ✅ `front check` esegue anche `tsc -p tsconfig.e2e.json` (`check:e2e`); 2 errori veri corretti |
+| C6-6 | C-51 | ✅ mock allineati al modello; test che li valida tutti contro `FAClassificationParams` |
+| W6-10 | U-B9 | ✅ `brim_plugin_key` → `default_import_plugin`; test sui broker mock |
+| (extra) | — | ✅ `tx-import-flow` adattato (broker creato dal test) |
+| B6-1 | B-56 | ✅ `db check --integrity` + `db_integrity_check.py`, riusa i controlli del ripristino |
+| Z-37 | Z-37 | ✅ sanificazione delle descrizioni OpenAPI nel client generato |
+| C6-2 | C-67 + J-7 + L-12 | ✅ il runner costruisce il frontend in debug come il server di test |
+
+**Pendente** (non mio da decidere):
+- **`LF_SETUP_DONE`** (proposta, non applicata): 42 chiamate `_run_playwright` in `_frontend_utility.py`, un solo
+  `_ensure_db_populated`; ~20 s per invocazione, fino a ~14 min per `front-utility all`. Cura: chiamare
+  `_ensure_db_populated()` prima di `_ensure_test_users()` in `front_utility_all` e nelle azioni singole. Rischio: gli
+  spec vedrebbero lo stato lasciato dai precedenti; serve un `front-utility all` intero in una finestra pesante prima di
+  adottarla. Attende il developer.
+- **Fixture della galleria per il sito** (titolo di fantasia, utente «Demo»): lotto eventuale, parte solo se il
+  coordinatore scrive dopo il sì del developer.
+
+**Debito noto, non toccato**: `F401 get_server_port` in `dev.py` (preesistente); ruff/black su `dev.py` già rossi in
+partenza.
