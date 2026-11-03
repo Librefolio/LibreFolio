@@ -39,7 +39,7 @@
     import {guardEditableRows} from '$lib/features/transactions/bulk/selectionGuards';
     import type {TXReadItem, AssetEvent} from '$lib/features/transactions/types';
     import type {FilterValue} from '$lib/components/table/types';
-    import {buildTransactionsFiltersUrl, applyTransactionColumnFilters} from '../../transactions/filterState';
+    import {buildTransactionsFiltersUrl, applyTransactionColumnFilters} from '$lib/features/transactions/filterState';
     import {
         invalidate,
         portfolioError,
