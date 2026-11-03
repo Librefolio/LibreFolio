@@ -67,9 +67,9 @@ type Effect = ComponentProps<typeof OtherPeriodEffectsTable>['effects'][number];
 // Fixtures
 // =============================================================================
 
-/** An «FX on cash» row as the backend sends it: its English description is a contract, not a label. */
+/** An «FX on cash» row as the backend sends it: the fixed code `fx_on_cash` tells it (F-AI b); the description is only a fallback label. */
 function fxOnCash(brokerId: number, brokerName: string, periodPnl: string): Effect {
-    return {description: 'FX on cash', category: 'Other', period_pnl: periodPnl, broker_id: brokerId, broker_name: brokerName};
+    return {description: 'FX on cash', code: 'fx_on_cash', category: 'Other', period_pnl: periodPnl, broker_id: brokerId, broker_name: brokerName};
 }
 
 /** A «Transfers at market value» row as the backend sends it (one per broker): its English description is a contract, not a label. */
@@ -175,6 +175,24 @@ describe('OtherPeriodEffectsTable — the FX on cash row (release 1.2, gap 2)', 
         const badge = cellIn(row, 'broker').querySelector<HTMLElement>('[data-testid="broker-badge-41"]');
         expect(badge, 'the broker column shows the badge of the broker the row belongs to').not.toBeNull();
         expect(badge).toHaveTextContent('Probe FX Broker');
+    });
+
+    it('tells the row by its code, whatever its description says (F-AI b)', async () => {
+        await useMarkerLocale();
+        const effect = {...fxOnCash(41, 'Probe FX Broker', '-175'), description: 'any other text'};
+        render(OtherPeriodEffectsTable, {effects: [effect], displayCurrency: 'EUR'});
+
+        const row = await rowOf(keyOf(0, effect));
+        expect(cellIn(row, 'description').textContent?.trim()).toBe(`${marked('dashboard.fxOnCash')} — Probe FX Broker`);
+    });
+
+    it('does not take the English description for the FX on cash row when the code is missing (F-AI b)', async () => {
+        await useMarkerLocale();
+        const effect: Effect = {description: 'FX on cash', category: 'Other', period_pnl: '-175', broker_id: 41, broker_name: 'Probe FX Broker'};
+        render(OtherPeriodEffectsTable, {effects: [effect], displayCurrency: 'EUR'});
+
+        const row = await rowOf(keyOf(0, effect));
+        expect(cellIn(row, 'description').textContent?.trim()).toBe('FX on cash — Probe FX Broker');
     });
 
     it('prints the amount signed in the display currency: + on a gain, the minus on a loss, no sign on zero, a dash when it is missing', async () => {

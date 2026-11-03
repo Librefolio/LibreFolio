@@ -59,6 +59,7 @@ from backend.app.schemas.portfolio import (
     MissingPriceAsset,
     MwrrLinePoint,
     OtherPeriodEffect,
+    OtherPeriodEffectCode,
     PnlCandlePoint,
     PnlCandleSeries,
     PortfolioHistoryPoint,
@@ -1882,6 +1883,7 @@ class PortfolioService:
                 other_effects.append(
                     OtherPeriodEffect(
                         description="FX on cash",
+                        code=OtherPeriodEffectCode.FX_ON_CASH,
                         category="Other",
                         period_pnl=exchange_result,
                         broker_id=bid,

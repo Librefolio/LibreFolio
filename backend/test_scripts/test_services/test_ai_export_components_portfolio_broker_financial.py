@@ -41,6 +41,8 @@ from backend.app.schemas.portfolio import (
     LotsAnalysisMetadata,
     LotsAnalysisResponse,
     LotSummarySchema,
+    OtherPeriodEffect,
+    OtherPeriodEffectCode,
     PortfolioHistoryPoint,
     PortfolioHolding,
     PortfolioReportMetadata,
@@ -800,6 +802,59 @@ class TestAllContributorsRetained:
         assert len(envelope.payload["contributors"]) == 25
         assert Decimal(envelope.payload["gross_gains"]["amount"]) == Decimal("500")
         assert Decimal(envelope.payload["gross_losses"]["amount"]) == Decimal("50")
+
+
+class TestFxOnCashRows:
+    """F-AI (b): the «FX on cash» rows are told by their `code`, never by the English description."""
+
+    @staticmethod
+    def _effects() -> PositionsContribution:
+        return PositionsContribution(
+            other_effects=[
+                OtherPeriodEffect(description="Unallocated income", category="Income", period_pnl=Decimal("80"), broker_id=2, broker_name="Beta"),
+                # Two brokers' exchange results, handed over out of broker order, with a description that is NOT the English one.
+                OtherPeriodEffect(description="renamed row", code=OtherPeriodEffectCode.FX_ON_CASH, category="Other", period_pnl=Decimal("-30"), broker_id=2, broker_name="Beta"),
+                OtherPeriodEffect(description="renamed row", code=OtherPeriodEffectCode.FX_ON_CASH, category="Other", period_pnl=Decimal("12.5"), broker_id=1, broker_name="Alpha"),
+                # The English text without the code is not the exchange result: a row is recognized by its code only.
+                OtherPeriodEffect(description="FX on cash", category="Other", period_pnl=Decimal("99"), broker_id=3, broker_name="Gamma"),
+                OtherPeriodEffect(description="Other / reconciliation residual", category="Other", period_pnl=Decimal("1")),
+            ]
+        )
+
+    async def _resolve(self, monkeypatch: pytest.MonkeyPatch, component_id: str, **scope_overrides) -> SectionEnvelope:
+        scope = _scope(**scope_overrides)
+        _patch_report(monkeypatch, _report(scope, summary=_summary(), contribution=self._effects()))
+        _patch_lots(monkeypatch, {})
+        _patch_metadata(monkeypatch)
+        components = broker_financial.BROKER_FINANCIAL_COMPONENTS if component_id.startswith("broker.") else portfolio_financial.PORTFOLIO_FINANCIAL_COMPONENTS
+        context = _make_context(scope, _registry(components), _make_async_session())
+        return await context.resolve(component_id, required=True)
+
+    @pytest.mark.asyncio
+    async def test_portfolio_flows_income_lists_the_exchange_rows_apart_broker_by_broker(self, monkeypatch):
+        envelope = await self._resolve(monkeypatch, "portfolio.flows_income")
+
+        rows = envelope.payload["fx_on_cash_effects"]
+        assert [(row["broker_id"], row["code"], Decimal(row["period_pnl"]["amount"])) for row in rows] == [(1, "fx_on_cash", Decimal("12.5")), (2, "fx_on_cash", Decimal("-30"))]
+        # Not income: the exchange result stays out of the income rows, which keep no code.
+        assert [(row["description"], row["code"]) for row in envelope.payload["income_effects"]] == [("Unallocated income", None)]
+
+    @pytest.mark.asyncio
+    async def test_portfolio_fees_taxes_keeps_its_cost_rows_without_the_exchange_rows(self, monkeypatch):
+        envelope = await self._resolve(monkeypatch, "portfolio.fees_taxes")
+
+        assert envelope.payload["cost_effects"] == []
+        assert "fx_on_cash_effects" not in envelope.payload
+
+    @pytest.mark.asyncio
+    async def test_broker_effects_carry_the_code(self, monkeypatch):
+        envelope = await self._resolve(monkeypatch, "broker.flows_income_costs", domain=Domain.BROKER, broker_id=7, broker_scope=(7,))
+
+        by_description = {(row["description"], row["broker_id"]): row["code"] for row in envelope.payload["effects"]}
+        assert by_description[("renamed row", 1)] == "fx_on_cash"
+        assert by_description[("renamed row", 2)] == "fx_on_cash"
+        assert by_description[("FX on cash", 3)] is None
+        assert by_description[("Unallocated income", 2)] is None
 
 
 # =============================================================================

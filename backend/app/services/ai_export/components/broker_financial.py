@@ -612,7 +612,7 @@ BROKER_PERFORMANCE_COMPONENT = ComponentSpec(
 
 BROKER_FLOWS_INCOME_COSTS_COMPONENT = ComponentSpec(
     component_id="broker.flows_income_costs",
-    version=1,
+    version=2,  # v2 (F-AI b): a `code` on every effect row, `fx_on_cash` for the exchange result on foreign cash
     domains=frozenset({Domain.BROKER}),
     output_model=BrokerFlowsIncomeCostsPayload,
     builder=_build_broker_flows_income_costs,

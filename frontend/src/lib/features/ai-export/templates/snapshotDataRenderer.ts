@@ -1660,6 +1660,10 @@ const COMPACT_COMPONENT_VERSIONS: ReadonlyMap<string, ReadonlySet<number>> = new
     ['portfolio.allocations_cash', new Set([1, 2])],
     ['broker.concentration_context', new Set([1, 2])],
     ['broker.concentration_comparison', new Set([1, 2])],
+    // F-AI (b): a `code` on every effect row and the portfolio's `fx_on_cash_effects`; the shape is otherwise the same.
+    ['portfolio.flows_income', new Set([1, 2])],
+    ['portfolio.fees_taxes', new Set([1, 2])],
+    ['broker.flows_income_costs', new Set([1, 2])],
 ]);
 const DEFAULT_COMPACT_VERSIONS: ReadonlySet<number> = new Set([1]);
 

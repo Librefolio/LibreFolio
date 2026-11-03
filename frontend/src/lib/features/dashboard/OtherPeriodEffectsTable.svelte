@@ -29,6 +29,8 @@
     interface DisplayRow {
         key: string;
         description: string;
+        /** The backend's fixed code of the rows told by it (`fx_on_cash`); null for the others. */
+        code: string | null;
         category: string;
         periodPnl: number | null;
         brokerId: number | null;
@@ -43,6 +45,7 @@
         (effects ?? []).map((effect, index) => ({
             key: `effect-${index}-${effect.category}-${safeNumber(effect.broker_id) ?? 'global'}`,
             description: effect.description,
+            code: safeString(effect.code),
             category: effect.category,
             periodPnl: safeDecimal(effect.period_pnl),
             brokerId: safeNumber(effect.broker_id),
@@ -70,10 +73,11 @@
 
     /** Backend sends fixed English description strings (never localized) — translate
      *  the known ones instead of leaking raw English into other languages. */
-    function descriptionLabel(description: string): string {
+    function descriptionLabel(description: string, code: string | null): string {
+        // The exchange result on foreign cash is told by its code, never by its text (F-AI b).
+        if (code === 'fx_on_cash') return translateOr($_, 'dashboard.fxOnCash', description);
         if (description === 'Unallocated income') return translateOr($_, 'dashboard.unallocatedIncome', description);
         if (description === 'Unallocated costs') return translateOr($_, 'dashboard.unallocatedCosts', description);
-        if (description === 'FX on cash') return translateOr($_, 'dashboard.fxOnCash', description);
         if (description === 'Transfers at market value') return translateOr($_, 'dashboard.transfersAtMarketValue', description);
         if (description === 'Other / reconciliation residual') return translateOr($_, 'dashboard.otherReconciliationResidual', description);
         return description;
@@ -84,7 +88,7 @@
      *  at a glance. Global rows (no broker, e.g. the reconciliation residual) are
      *  unaffected. */
     function descriptionWithBroker(row: DisplayRow): string {
-        const base = descriptionLabel(row.description);
+        const base = descriptionLabel(row.description, row.code);
         return row.brokerName ? `${base} — ${row.brokerName}` : base;
     }
 
