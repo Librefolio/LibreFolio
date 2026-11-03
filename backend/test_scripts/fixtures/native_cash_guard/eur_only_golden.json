@@ -3975,6 +3975,7 @@
           "broker_id": "B",
           "broker_name": "B",
           "category": "Income",
+          "code": null,
           "description": "Unallocated income",
           "period_pnl": "0.7500000"
         },
@@ -3982,6 +3983,7 @@
           "broker_id": "C",
           "broker_name": "C",
           "category": "Cost",
+          "code": null,
           "description": "Unallocated costs",
           "period_pnl": "-0.75"
         },
@@ -3989,6 +3991,7 @@
           "broker_id": null,
           "broker_name": null,
           "category": "Other",
+          "code": null,
           "description": "Other / reconciliation residual",
           "period_pnl": "-446.912000000000000000000005"
         }
@@ -6814,6 +6817,7 @@
             "broker_id": "B",
             "broker_name": "B",
             "category": "Income",
+            "code": null,
             "description": "Unallocated income",
             "period_pnl": "0.7500000"
           },
@@ -6821,6 +6825,7 @@
             "broker_id": "C",
             "broker_name": "C",
             "category": "Cost",
+            "code": null,
             "description": "Unallocated costs",
             "period_pnl": "-0.75"
           },
@@ -6828,6 +6833,7 @@
             "broker_id": null,
             "broker_name": null,
             "category": "Other",
+            "code": null,
             "description": "Other / reconciliation residual",
             "period_pnl": "-446.912000000000000000000005"
           }
@@ -9644,6 +9650,7 @@
           "broker_id": null,
           "broker_name": null,
           "category": "Other",
+          "code": null,
           "description": "Other / reconciliation residual",
           "period_pnl": "-186.512000000000000000000000"
         }
@@ -10691,6 +10698,7 @@
             "broker_id": null,
             "broker_name": null,
             "category": "Other",
+            "code": null,
             "description": "Other / reconciliation residual",
             "period_pnl": "-186.512000000000000000000000"
           }
