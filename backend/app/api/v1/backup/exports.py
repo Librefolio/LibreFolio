@@ -74,6 +74,9 @@ async def backup_asset_prices(
     ``currency`` is the per-row verbatim value from ``price_history.currency``
     (canary-forensic column, kept in DB but normally not exposed on the
     regular query endpoints).
+
+    ``fetched_at`` is when the row last changed, not when its price was last
+    read: a live quote equal to today's row stamps nothing (MF-FA).
     """
     asset = (await session.execute(select(Asset).where(Asset.id == asset_id))).scalar_one_or_none()
     if not asset:

@@ -983,7 +983,9 @@ class PriceQueryOperations:
         ``as_of_date`` is today, the OHLC row for today is either created
         (``open=high=low=close=value``, ``volume=None``) or its intra-day
         range is extended (``low``/``high`` widened, ``open`` set if missing,
-        ``close`` overwritten with the latest tick). DB-fallback results are
+        ``close`` set to the latest tick when it differs). A row none of whose
+        columns changes is left alone, ``fetched_at`` included: it is the time of
+        the row's last change, not of the last read (MF-FA). DB-fallback results are
         not persisted (they are stale data, not fresh quotes). A commit
         failure on the OHLC persist is logged + rolled back without failing
         the fetch (the FACurrentPriceItem list is still returned).
@@ -1081,6 +1083,7 @@ class PriceQueryOperations:
                 len(existing_by_asset),
             )
 
+            changed_rows = 0
             for item in items_to_persist:
                 # Truncated like the history (W-B58): 12 decimal places, 15 significant digits. A quote no price column
                 # can keep never gets here: it is neither served nor cached (``storable_current_value``; X-R40, W-B62).
@@ -1104,6 +1107,7 @@ class PriceQueryOperations:
                             fetched_at=utcnow(),
                         )
                     )
+                    changed_rows += 1
                     logger.debug(
                         "  [F.2 bootstrap] asset=%s date=%s close=%s currency=%s source=%s",
                         item.asset_id,
@@ -1115,11 +1119,19 @@ class PriceQueryOperations:
                 else:
                     # F.3 intra-day extend
                     patch = PriceQueryOperations._extend_ohlc_bounds(existing, new_close)
-                    # Always overwrite close with the latest quote (per user spec)
-                    patch["close"] = new_close
+                    # Close follows the latest quote, written when it differs: a numeric comparison, so the stored
+                    # 102.5 and a quote of 102.50 are the same close
+                    if existing.close is None or existing.close != new_close:
+                        patch["close"] = new_close
+                    if not patch:
+                        # MF-FA: an unchanged quote leaves the row alone — fetched_at is the time of the row's last
+                        # change, and it feeds the price fingerprint (COUNT + MAX(fetched_at)) of the portfolio
+                        # engine and report caches, which a stamp at every poll would empty
+                        continue
                     for field_name, new_val in patch.items():
                         setattr(existing, field_name, new_val)
                     existing.fetched_at = utcnow()
+                    changed_rows += 1
                     logger.debug(
                         "  [Intra-day price extend] asset=%s date=%s new_close=%s patch_fields=%s",
                         item.asset_id,
@@ -1130,7 +1142,7 @@ class PriceQueryOperations:
 
             try:
                 await session.commit()
-                logger.debug("Current-price persist: commit OK (%d row(s) written/updated)", len(items_to_persist))
+                logger.debug("Current-price persist: commit OK (%d row(s) written/updated)", changed_rows)
             except Exception as commit_err:
                 logger.warning("Current-price OHLC persist failed, rolling back: %s", commit_err)
                 await session.rollback()
@@ -1158,8 +1170,8 @@ class PriceQueryOperations:
         - ``volume`` untouched
 
         Close is intentionally NOT touched here: the caller decides whether to
-        overwrite close with the latest tick (the current-price path does,
-        see ``get_current_prices_bulk``).
+        overwrite close with the latest tick (the current-price path does when
+        the tick differs, see ``get_current_prices_bulk``).
 
         Returns a dict of only the fields that need to change, so the caller
         can SETATTR them directly on the ORM row (no over-write on stable
