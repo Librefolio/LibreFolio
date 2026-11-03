@@ -43,6 +43,7 @@
     import {PORTFOLIO_LINE_ID, portfolioLine, positionLines, selectionKeys, type HistoryPointLike, type PositionKey, type PositionLine, type PositionsChartView, type PositionsSeriesResponse} from './positionsSeries';
     import {rollingLine, type PositionsRollingState} from './positionsRolling';
 
+    import {closedPositionsToList} from './closedPositions';
     import type {AllocationHistoryDimensions, PortfolioSummary, PositionsContribution} from '$lib/stores/portfolio/portfolioStore.svelte';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
 
@@ -275,11 +276,9 @@
     let contributionPositions = $derived(contribution?.positions ?? []);
     let otherEffects = $derived(contribution?.other_effects ?? []);
 
-    /** The positions sold out inside the period: they are no longer holdings, but the Portfolio table lists them last (FB-13). */
+    /** The positions sold out inside the period: they are no longer holdings, but the Portfolio table lists them last (FB-13) — except those that moved to another broker of the report (T1). */
     let soldPositions = $derived(
-        contributionPositions
-            .filter((position) => position.is_fully_sold)
-            .map((position) => ({asset_id: position.asset_id, asset_name: position.asset_name, asset_type: position.asset_type, broker_id: position.broker_id, broker_name: position.broker_name, asset_ticker: typeof position.asset_ticker === 'string' ? position.asset_ticker : null})),
+        closedPositionsToList(contributionPositions, holdings).map((position) => ({asset_id: position.asset_id, asset_name: position.asset_name, asset_type: position.asset_type, broker_id: position.broker_id, broker_name: position.broker_name, asset_ticker: typeof position.asset_ticker === 'string' ? position.asset_ticker : null})),
     );
 
     let showLoading = $derived(loading || (semanticMode === 'performance' && contributionLoading));

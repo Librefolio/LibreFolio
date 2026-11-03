@@ -215,6 +215,7 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/dashboard/positionsSeriesController.test.ts",
             "src/lib/features/dashboard/dateRangeController.test.ts",
             "src/lib/features/dashboard/staleFxIssue.test.ts",
+            "src/lib/features/dashboard/closedPositions.test.ts",
             "src/lib/features/dashboard/positionsRolling.test.ts",
             "src/lib/features/portfolio-view/portfolioDataScope.test.ts",
             "src/lib/features/portfolio-view/portfolioData.test.ts",
