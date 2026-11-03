@@ -11,7 +11,7 @@
  * @module features/portfolio-view/portfolioDataScope
  */
 
-import type {ReportOptions} from '$lib/stores/portfolio/portfolioStore.svelte';
+import type {PortfolioHistoryPoint, PortfolioSummary, ReportOptions} from '$lib/stores/portfolio/portfolioStore.svelte';
 
 /** The scope a page shows: its brokers, its period and its currency. */
 export interface PortfolioScope {
@@ -71,4 +71,27 @@ export function contributionCall(scope: PortfolioScope): ReportCall {
 /** The synthetic P&L candles (G1b): lazy, and only `pnl_candles` is read. */
 export function pnlCandlesCall(scope: PortfolioScope): ReportCall {
     return call(scope, {includeContribution: false, includeBreakdown: false, includeHistory: false, includeAllocationHistory: false, options: {includePnlCandles: true, ...share(scope)}});
+}
+
+/**
+ * The live poll's question (FB-28): the summary alone, of the scope on screen. `include_history` and
+ * `include_allocation_history` are on by default on the route, so they are asked off explicitly (`fetchReport`'s two
+ * trailing booleans). It runs the same engine pass as the main report (FB-14), so the figures agree with it.
+ */
+export function lightSummaryCall(scope: PortfolioScope): ReportCall {
+    return call(scope, {includeContribution: false, includeBreakdown: false, includeHistory: false, includeAllocationHistory: false, options: scope.fullShare ? share(scope) : undefined});
+}
+
+/**
+ * The history with its last step set to the summary's state: the summary is the engine's state at the valuation date, which
+ * is the last step's (`net_worth` is its `nav_value`, `market_value`, `cash_total` its `cash_value`). A new array and a new
+ * point, so what draws the history sees it change; the earlier points are the same objects. What the summary does not
+ * state — the step's own P&L and returns — stays as the engine gave it: nothing is computed here.
+ */
+export function withLiveLastPoint(history: PortfolioHistoryPoint[], summary: PortfolioSummary): PortfolioHistoryPoint[] {
+    if (history.length === 0) return history;
+    const last = history[history.length - 1];
+    // The generated client types an optional amount as a value or a list of values: only a plain amount is a state to copy.
+    const amount = <K extends 'nav_value' | 'market_value' | 'cash_value'>(_field: K, value: unknown, kept: PortfolioHistoryPoint[K]): PortfolioHistoryPoint[K] => (value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as PortfolioHistoryPoint[K]) : kept);
+    return [...history.slice(0, -1), {...last, nav_value: amount('nav_value', summary.net_worth, last.nav_value), market_value: amount('market_value', summary.market_value, last.market_value), cash_value: amount('cash_value', summary.cash_total, last.cash_value)}];
 }

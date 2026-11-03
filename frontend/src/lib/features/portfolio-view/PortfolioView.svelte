@@ -56,6 +56,7 @@
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
     import {createPortfolioData} from './portfolioData';
+    import LiveUpdatesStatus from '$lib/features/live-updates/LiveUpdatesStatus.svelte';
     import PortfolioOverviewTab from './PortfolioOverviewTab.svelte';
     import PortfolioPositionsTab from './PortfolioPositionsTab.svelte';
     import PortfolioRiskTab from './PortfolioRiskTab.svelte';
@@ -690,6 +691,7 @@
     use:guideAnchor={'page.dashboard'}
     aria-busy={reportLoading || contributionLoading || contributionRefreshing || syncLoading}
     data-busy={reportLoading || contributionLoading || contributionRefreshing || syncLoading ? 'true' : 'false'}
+    data-live-updates={$data.liveState}
 >
     <h1 class="sr-only">{$_('nav.dashboard')}</h1>
 
@@ -807,6 +809,9 @@
         {/snippet}
 
         {#snippet actions({showActionLabels})}
+            <!-- «Updates paused» (FB-28): the figures stopped following the prices because nobody used the page for two minutes. -->
+            <LiveUpdatesStatus state={$data.liveState} />
+
             <!-- AI Export -->
             <AiExportMenu
                 domain="portfolio"

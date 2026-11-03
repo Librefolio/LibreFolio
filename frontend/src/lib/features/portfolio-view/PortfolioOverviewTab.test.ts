@@ -43,6 +43,7 @@ function snapshot(cashBalances: {code: string; amount: string}[] | undefined): P
         contributionRefreshing: false,
         contributionInBackground: false,
         pnlCandlesLoading: false,
+        liveState: 'stopped',
     };
 }
 
