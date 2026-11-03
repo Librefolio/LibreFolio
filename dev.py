@@ -216,6 +216,7 @@ def cmd_server(args):
             print_error(str(exc))
             return 1
         db = get_database_path(test_mode=True)
+        # The runner builds in this mode too (TEST_SERVER_BUILDS_DEBUG, scripts/test_runner/_frontend_common.py): keep them equal.
         debug_mode = True
     else:
         try:
