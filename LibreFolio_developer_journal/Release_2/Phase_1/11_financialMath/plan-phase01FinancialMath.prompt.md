@@ -5286,4 +5286,56 @@ Ambiente: `npm ci` e `api sync` fatti (nessuna differenza nei contratti); corsia
    > quotazioni. Docstring del modello e dell'export, docs `assets/architecture.md` e `database/index.md`.
    > **⚠️ Fuori pista**: nessuna pagina sviluppatore dedicata all'export → significato scritto nelle due pagine sopra e
    > nella docstring dell'endpoint (OpenAPI). Cambio visibile solo nella colonna `fetched_at` del CSV/JSON scaricato:
-   > risposta finale del developer prima del commit.
+   > il developer ha approvato «ultimo cambio» prima del commit.
+
+#### Ondata 6 — stato finale (03/11/2026)
+
+> Scritto prima della pulizia della storia del repo: gli hash citati sopra in questa sezione verranno riscritti e non
+> vanno più cercati; qui nessun hash. Ogni lotto qui sotto è stato committato dal coordinatore dopo il suo
+> CHECKPOINT READY (checkpoint in `salvataggi-worktrees-20261021/ondata6/MF-*-checkpoint.md`), e il dev_release2
+> dell'aggiornamento delle dipendenze è unito nel ramo. Lista dell'ondata 6 di MF: **vuota**.
+
+**Fatto — lotti (in ordine)**
+
+| Lotto | Cosa, in una riga |
+|---|---|
+| Giorno 1 (analisi) | T-U1 (`convert_bulk`) e inventario dei change-days; firma di `first_negative_cash` per W6-12 |
+| MF6-1 (T-U5) | il prezzo del riepilogo (oggi e ieri) dal motore (`marked_price`, `AssetMarks`): tolta la copia in `portfolio_service` |
+| MF-K3 | TWRR del periodo: punto None a NAV ≤ 0, la card è l'ultimo punto |
+| MF-A3 | rendimento annualizzato del periodo; MF-A11 scartata coi numeri |
+| MF-C2 | fette d'allocazione nulle quando la somma è ≤ 0 (`slice_percents`) |
+| MF6-2 (MF-A6) | una posizione è tenuta solo sopra la soglia della polvere, nei tre punti del motore |
+| change-days | `financial_math/change_days.py`, una casa per i giorni di cambio |
+| W6-12 (funzione pura) | `native_cash.first_negative_cash` / `NegativeCash` |
+| B3 + MF-J3 | una gamba CASH_TRANSFER / FX_CONVERSION con l'altra fuori scope (o orfana) muove versato/generato come un DEPOSIT o un WITHDRAWAL; restituzione di W confermata dal developer |
+| MF-A13 (misura e revisione) | misura del close convertito (`original_close × fx_rate`) e revisione del diff di X; test di parità consegnati al coordinatore per il ramo di X |
+| W-B94 (b) | costo del trasferimento come prezzo stimato fino al primo dato vero; grazia dal primo arrivo |
+| FB-14 | un solo calcolo del motore per pagina (`_engine_run`) |
+| Golden `native_cash_guard` | esponente dopo W-B63 (stessi valori) |
+| MF6-3 (D4) | `apply_ownership_share` su report, serie delle posizioni e rischio (pagina broker «intera») |
+| Dump `schemas risk` | atteso col campo nuovo di MF6-3 |
+| MF-CB | `closed_by` / `closed_to_broker_id` sulle righe chiuse della Performance |
+| MF-FA | `fetched_at` timbrato solo su un cambio reale del prezzo (cache del motore e del report piene col poll live) |
+
+**Fatto — revisioni e analisi in sola lettura**: J5-4 (estrarre `left_after_start`, oracolo più semplice); AIX
+checkpoint 1 (`percent_of` giusto; suggerito `slice_percents` per l'allocazione per valuta, girato ad AIX); quota
+nell'analisi dei lotti (non scalata: `LotsAnalysisService` legge solo `broker_id`); FB-28 per Y (report leggero
+`include_summary` solo, variazione per posizione dalla percentuale del prezzo; `pnl_change_1d` è il giorno di
+calendario; Y ha scelto niente euro per posizione).
+
+**Pendente — seguiti (nessuno avviato)**
+
+1. **Base media nel tempo** per il rendimento annualizzato (capitale × giorni tenuti), al posto di MF-A11 scartata.
+2. **`merged_windows` / `merged_spans`**: unirle chiede di spostare `merged_spans` in `utils/` (6 chiamanti, tra cui
+   `portfolio_service.py`): `fx_rates.py` è una foglia e non può importare dai servizi.
+3. **Lotti contro report**: l'analisi dei lotti dà quantità intere, il report della Dashboard le scala alla quota
+   dell'Owner; incoerenza vista solo da un Owner sotto il 100 %. Proposto un test che la fissi; decisione aperta.
+4. **Esponente della quota**: un Owner al 100 % ha `1.000000`, un editor `1` (66 campi JSON diversi negli zeri finali,
+   stessi valori). Non normalizzato per non cambiare le risposte di oggi.
+5. **Debito di traduzione** (nessuno stamp, sono riscritture): 7 pagine di MF6-1/K3/A3, 5 di change-days, 10 di
+   W-B94, 1 sezione di MF6-3 (`portfolio-engine/index`, `#whole-broker`).
+6. **Datetime con fuso in colonne senza fuso** (`utcnow()` riletto naive): MF-FA confronta le colonne del prezzo,
+   mai `fetched_at`; il resto è D-UTC (1.4).
+7. **F.3 non aggiorna `source_plugin_key` né `currency`** della riga di oggi: comportamento di sempre, fuori ambito.
+8. **`black`**: una riga lunga di `scripts/test_runner/_backend_services.py` (`print_info` della politica OHLC,
+   X-R78) arrivata con un'unione; da riformattare da chi tocca quel file.
