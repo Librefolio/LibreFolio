@@ -129,6 +129,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Risk tables show five rows per page** (5, 10, 25 or all), in the risk lab and in the risk levels; a click on a point of the risk/return chart opens the page of its row without moving the view.
 - **Risk: the partial-results notice counts the excluded assets** and shows each one as a badge; the return histogram's bars show their days and share.
 - Positions contribution: a row closed in the period says how it closed (a sale, a transfer, with the receiving broker when you can see it, or an adjustment).
+- **The Dashboard and the broker page follow the current prices**: every minute while you use them, amounts, KPIs and positions update by themselves; they stop when the tab is hidden or after two minutes without input («Updates paused») and resume at your next action.
 
 ### 🔄 Changed
 
