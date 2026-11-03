@@ -668,7 +668,7 @@ PORTFOLIO_POSITIONS_COMPONENT = ComponentSpec(
 
 PORTFOLIO_ALLOCATIONS_CASH_COMPONENT = ComponentSpec(
     component_id="portfolio.allocations_cash",
-    version=1,
+    version=2,  # v2 (MF-C2): slice percents are null when the slices sum to zero or less
     domains=frozenset({Domain.PORTFOLIO}),
     output_model=PortfolioAllocationsCashPayload,
     builder=_build_portfolio_allocations_cash,
