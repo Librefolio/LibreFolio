@@ -1655,6 +1655,11 @@ const COMPACT_COMPONENT_VERSIONS: ReadonlyMap<string, ReadonlySet<number>> = new
     ['broker.drawdown_summary', new Set([1, 2])],
     ['asset.drawdown_summary', new Set([1, 2])],
     ['portfolio.asset_drawdown_snapshot', new Set([1, 2])],
+    // The allocation bump (MF-C2) only lets a slice percent be null; the concentration bump (T-U9) moves two shares
+    // through the one percentage formula and splits the reason code of an unavailable comparison.
+    ['portfolio.allocations_cash', new Set([1, 2])],
+    ['broker.concentration_context', new Set([1, 2])],
+    ['broker.concentration_comparison', new Set([1, 2])],
 ]);
 const DEFAULT_COMPACT_VERSIONS: ReadonlySet<number> = new Set([1]);
 

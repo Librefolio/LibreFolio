@@ -103,7 +103,7 @@ def _component(
 _PORTFOLIO_COMPONENTS: tuple[ComponentSpec, ...] = (
     _component(Domain.PORTFOLIO, "summary", "Portfolio summary", period_behavior=PeriodBehavior.AS_OF),
     _component(Domain.PORTFOLIO, "positions", "All portfolio positions", version=2, period_behavior=PeriodBehavior.AS_OF),
-    _component(Domain.PORTFOLIO, "allocations_cash", "Allocations and cash", dependencies=("portfolio.positions",), period_behavior=PeriodBehavior.AS_OF),
+    _component(Domain.PORTFOLIO, "allocations_cash", "Allocations and cash", version=2, dependencies=("portfolio.positions",), period_behavior=PeriodBehavior.AS_OF),
     _component(Domain.PORTFOLIO, "provenance", "Semantics and provenance", version=3, period_behavior=PeriodBehavior.NONE),
     _component(Domain.PORTFOLIO, "performance", "Portfolio performance and contributors", period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.PORTFOLIO, "flows_income", "Flows and income", period_behavior=PeriodBehavior.WINDOWED),
@@ -144,8 +144,8 @@ _BROKER_COMPONENTS: tuple[ComponentSpec, ...] = (
     _component(Domain.BROKER, "fifo_summary", "Broker-scoped FIFO summary", version=3, period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.BROKER, "fifo_lots", "All applicable FIFO lots (broker-scoped)", version=3, dependencies=("broker.fifo_summary",), period_behavior=PeriodBehavior.WINDOWED),
     _component(Domain.BROKER, "drawdown_summary", "Broker drawdown context", version=2, period_behavior=PeriodBehavior.WINDOWED),
-    _component(Domain.BROKER, "concentration_context", "Broker concentration context", dependencies=("broker.allocation_concentration",), period_behavior=PeriodBehavior.AS_OF),
-    _component(Domain.BROKER, "concentration_comparison", "Broker vs portfolio concentration comparison", period_behavior=PeriodBehavior.AS_OF),
+    _component(Domain.BROKER, "concentration_context", "Broker concentration context", version=2, dependencies=("broker.allocation_concentration",), period_behavior=PeriodBehavior.AS_OF),
+    _component(Domain.BROKER, "concentration_comparison", "Broker vs portfolio concentration comparison", version=2, period_behavior=PeriodBehavior.AS_OF),
     _component(Domain.BROKER, "cost_efficiency", "Broker cost efficiency evidence", version=2, dependencies=("broker.flows_income_costs",), period_behavior=PeriodBehavior.WINDOWED),
 )
 
