@@ -78,7 +78,7 @@ backend/app/services/financial_math/
 ├── yield_on_cost.py         Yield on Cost of holdings, replayed from the transaction ledger
 ├── weights.py               a share of a total (none on a total ≤ 0), allocation slices (none on a sum ≤ 0), gross weights, concentration (largest weight, HHI)
 ├── splits.py                stock splits in the ledger: the ADJUSTMENT rows linked to a SPLIT asset event (one query), the ids an average-cost replay rescales, the usable-ratio rule, the incoming adjustments without a cost that a SPLIT retype must not orphan, the split a share change implies (`implied_split_ratio`)
-├── holding_window.py        how long a position has been held at its broker: oldest open lot, a closed position's window, its exits
+├── holding_window.py        how long a position has been held at its broker: oldest open lot, a closed position's window, its exits, the move that closed it (`closing_move`)
 ├── fifo/                    FIFO lots
 │   ├── __init__.py          docstring only
 │   ├── models.py            input transactions, events, lots, fragments, closures, result
@@ -250,6 +250,17 @@ One call of `PortfolioCalculationEngine.calculate()` (`portfolio/engine.py`):
 the daily states run from `date_from` (t=0 for the Dashboard) — or of `date_from` when it is not named.
 `internal_asset_transfers` lists each linked TRANSFER of a security between two brokers of the scope, with its value on
 arrival and the cost the sender moved: the Performance table's transfer split (`contributions.py`, developer decision P22).
+
+**How a closed row closed** (MF-CB). A row closed at the period's end (`is_fully_sold`) says how: `closed_by` is the type
+of the movement that last took its quantity, at the run's share, to the dust threshold or below
+(`holding_window.closing_move`, the same close `closed_position_window` dates; a split never closes) — `SELL`,
+`TRANSFER` or `ADJUSTMENT`. A `TRANSFER` names the broker its units went to, `closed_to_broker_id`: the paired leg's
+(both legs carry `related_transaction_id`), when the user can read that broker, asked for or not; an orphan leg or
+another user's broker names none. So the Performance panel tells a sale from a move: a position moved whole from A to
+a selected B is held at B, not sold at A. Example: 10 units, 6 moved to B then 4 sold → `SELL`; 4 sold then 6 moved →
+`TRANSFER` to B. No figure changes. Tests: `test_closing_move.py` (`test_financial_math/`), `test_closed_by.py`
+(`services closed-by`).
+{: #closed-by }
 
 Callers derive their views from the result with `DerivedViewsBuilder` (`derived_views.py`) —
 history, per-broker P&L, candles, acquisition funding, performance inputs, allocation — and the

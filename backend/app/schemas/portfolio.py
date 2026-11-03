@@ -449,6 +449,14 @@ class AssetPeriodContribution(BaseModel):
         description="Position value at period end, as the portfolio values it (the holding's current_value) at that day's rate; 0 if the position was closed by period end, None if it cannot be valued",
     )
     is_fully_sold: bool = Field(False, description="True if position quantity is 0 at period end")
+    closed_by: Optional[Literal["SELL", "TRANSFER", "ADJUSTMENT"]] = Field(
+        None,
+        description="For a position closed at period end: the type of the movement that closed it (the last one that took its quantity to the dust threshold or below; a split never closes). None while held, for an income-only row, or a position that never opened (MF-CB)",
+    )
+    closed_to_broker_id: Optional[int] = Field(
+        None,
+        description="With closed_by TRANSFER: the broker the units went to (the paired leg's), when the user can read it, in the requested brokers or not; None otherwise (MF-CB)",
+    )
     oldest_open_lot_date: Optional[date_type] = Field(None, description="Opening date of the oldest FIFO lot still open at period end for this (asset, broker); None if fully closed")
 
 
