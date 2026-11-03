@@ -53,7 +53,7 @@ from backend.app.services.ai_export.components.resources import BROKER_REPORT_RE
 from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.types import BuildScope, Domain, PeriodBehavior, ResourceKey
 from backend.app.services.ai_export.dependencies import BuildContext, ResourceLoadError
-from backend.app.services.financial_math.weights import concentration, percent_of
+from backend.app.services.financial_math.weights import concentration, percent_of, slice_percents
 
 # Whole-portfolio (unfiltered) report resource used only by the comparator. It is
 # a *different* cache slot from `broker.report` (the broker-filtered load), so the
@@ -208,14 +208,14 @@ def build_currency_allocation(summary: PortfolioSummary | None, *, currency_code
     covered_total = sum(covered_amounts.values(), Decimal("0"))
     valued_total = covered_total + unknown_amount
 
-    def _percent(value: Decimal) -> Decimal | None:
-        return percent_of(value, valued_total)
+    # One rule for every allocation (MF-C2): the slices, the unknown bucket included, as shares of their sum.
+    percents = slice_percents({**covered_amounts, None: unknown_amount})
 
     slices: list[CurrencyAllocationSlice] = [
         CurrencyAllocationSlice(
             currency=code,
             amount=Currency(code=currency_code, amount=amount),
-            percent=_percent(amount),
+            percent=percents[code],
             position_count=covered_counts[code],
         )
         for code, amount in covered_amounts.items()
@@ -227,7 +227,7 @@ def build_currency_allocation(summary: PortfolioSummary | None, *, currency_code
             CurrencyAllocationSlice(
                 currency=None,
                 amount=Currency(code=currency_code, amount=unknown_amount),
-                percent=_percent(unknown_amount),
+                percent=percents[None],
                 position_count=unknown_count,
             )
         )
@@ -392,7 +392,8 @@ async def _build_broker_concentration_comparison(context: BuildContext, dependen
 
     portfolio_scope = _whole_portfolio_scope(scope)
     try:
-        portfolio_report = await load_portfolio_report(context, portfolio_scope, _BROKER_WHOLE_PORTFOLIO_REPORT_RESOURCE)
+        # R11: the broker is whole, so the portfolio it is compared with counts every broker whole too (one basis for the share).
+        portfolio_report = await load_portfolio_report(context, portfolio_scope, _BROKER_WHOLE_PORTFOLIO_REPORT_RESOURCE, apply_ownership_share=False)
     except ResourceLoadError:
         return _unavailable_comparison(scope, reason_code=REASON_PORTFOLIO_LOAD_FAILED, message="The whole-portfolio report could not be loaded for the selected period, so the concentration comparison is unavailable.")
     portfolio_summary = portfolio_report.summary
@@ -435,7 +436,7 @@ async def _build_broker_concentration_comparison(context: BuildContext, dependen
 
 BROKER_CONCENTRATION_CONTEXT_COMPONENT = ComponentSpec(
     component_id="broker.concentration_context",
-    version=2,  # v2 (MF-C2, T-U9): null slice percents; currency shares through percent_of
+    version=2,  # v2 (MF-C2, T-U9): null slice percents; currency shares through slice_percents
     domains=frozenset({Domain.BROKER}),
     output_model=BrokerConcentrationContextPayload,
     builder=_build_broker_concentration_context,

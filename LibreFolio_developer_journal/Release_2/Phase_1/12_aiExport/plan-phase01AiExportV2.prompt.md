@@ -13,7 +13,7 @@ One v2 bump for everything below (rule: a component is bumped at most +1 over th
 | 1 | **T-U9** — the two hand-made percentages in `broker_concentration_context.py` (`:212`, `:407`) go through `weights.percent_of`; `reason_code` of `broker.concentration_comparison` says the truth (no summary vs summary without positions) | ✅ 3/11/2026 |
 | 2 | **MF-C2, contract side** — `AllocationItem.value` nullable already reaches `AllocationSlice.percent`; the components that carry slices are bumped to v2, the renderer shows an empty percent honestly | ✅ 3/11/2026 |
 | 3 | **F-AI (b)** — code on the "FX on cash" effect (`portfolio_service.py`, `OtherPeriodEffect`), AI Export + `PerformanceChart.svelte` + `OtherPeriodEffectsTable.svelte` read the code, portfolio export shows it apart, broker by broker | ✅ 3/11/2026 (checkpoint 2, front check 0 errors) |
-| 4 | **R11 + MF-A13** — export opened from a broker page: whole amounts (`apply_ownership_share=False`), a note with role and share; MF-A13 closure rounding declared if a dataset shows it | ⏳ |
+| 4 | **R11 + MF-A13** — export opened from a broker page: whole amounts (`apply_ownership_share=False`), a note with role and share; MF-A13 closure rounding declared if a dataset shows it | ✅ 3/11/2026 (checkpoint 3) |
 | 5 | Probe (skill `ai-export-probe-tuning`), test data only | ⏳ |
 
 Checkpoints: (1+2), (3) alone, (4+5), then the probe.
@@ -51,8 +51,19 @@ Checkpoints: (1+2), (3) alone, (4+5), then the probe.
 > Red first: service test (collection error: no `OtherPeriodEffectCode`), table tests (2 failed), chart test (red with the code check replaced by the description).
 > **⚠️ Fuori pista**: `foreign-cash-real.spec.ts` (E2E) compares rows by description/category/amount/broker only, so it needs no change; not run (heavy).
 
-### Pending for lot 4+5 (from MF's review of cp1, optional)
+### Step 4 — R11 + MF-A13 done (3/11/2026, checkpoint 3)
 
-- `build_currency_allocation` (`broker_concentration_context.py`): replace the local `_percent` with
-  `slice_percents({**covered_amounts, None: unknown_amount})`. Same numbers (the divisor is `valued_total` either way, `None` on a total ≤ 0);
-  the slices then get their percent the same way as every other allocation. Not done in cp2 to keep that checkpoint to F-AI (b) alone.
+> **Note implementazione**: one rule, `payloads/portfolio_broker.counts_ownership_share(scope)` (False for a Broker scope, True otherwise);
+> the share itself stays in `native_cash.broker_shares`. Hooks, from `ondata6/MF6-3-checkpoint.md` «Per AIX»:
+> `load_portfolio_report` (new keyword `apply_ownership_share`, default = the scope's domain) — every `broker.*` component that reads the
+> shared report is whole; `drawdown_context` (broker: `PortfolioRiskScope(..., apply_ownership_share=False)`);
+> `broker_cost_efficiency._load_broker_ownership_share(..., apply_ownership_share)` now through `broker_shares` (the broker export: share 1, so
+> `ownership_share_ratio` is 1 and the turnover is whole); `portfolio_income` reads the shares through `broker_shares` too (no number changes: the
+> component is portfolio-only). `broker.concentration_comparison` loads the whole-portfolio report whole as well, so the broker's share of the
+> portfolio is on one basis. Decided, no number change for the user: `asset_resources.py:249` and `fx_core.py:303` keep the owner's share
+> (the asset and FX pages are not the broker page; the Dashboard counts the user's part).
+> The note: `broker.provenance` gains `ownership` (`role`, `owner_stake_ratio`, `amounts_basis="whole_broker"`, `explanation`); the component is
+> already at +1 over v1.2.1 (v3), so no further bump. MF-A13 declared in `asset.provenance.price_provenance_note` (already v2 over v1.2.1).
+> No dataset bump: no dataset changes its composition. `build_currency_allocation` now uses `slice_percents({**covered_amounts, None: unknown_amount})`.
+> **⚠️ Fuori pista**: the existing cost-efficiency test that asserted the owner's 0.25 share on the turnover was rewritten (R11 changes that expectation);
+> the existing provenance version test now seeds the access row.
