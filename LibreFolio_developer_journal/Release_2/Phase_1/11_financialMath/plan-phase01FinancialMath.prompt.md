@@ -5262,3 +5262,16 @@ Ambiente: `npm ci` e `api sync` fatti (nessuna differenza nei contratti); corsia
    > (`test_ownership_share_option.py`, azione `services ownership-share-option`), rossi prima del codice per la ragione
    > giusta; `_OldEngineRun` di FB-14 accetta il flag. docs-writer: `financial_math.md#whole-broker`,
    > `access_control.md`, teoria `portfolio-engine/index.en.md#whole-broker` (debito di traduzione: 1 sezione).
+6. ✅ **MF-CB — `closed_by` delle righe chiuse** (03/11, base `898bc9d15`) — richiesta del developer (31/10): nel
+   pannello delle posizioni un trasferimento di tutta la posizione da A a B (B selezionato) non è una vendita.
+   `holding_window.closing_move` (la mossa dell'ultima chiusura, la stessa che data `closed_position_window`, che ora
+   la usa); `AssetPeriodContribution.closed_by` (`SELL`/`TRANSFER`/`ADJUSTMENT`, solo se `is_fully_sold`) e
+   `closed_to_broker_id` (broker del ramo collegato, solo se l'utente lo legge). Esempio: 10 unità, 6 a B poi 4
+   vendute → `SELL`; 4 vendute poi 6 a B → `TRANSFER` verso B. Nessun numero cambia.
+   > **Note implementazione**: test-author 22 puri (`test_closing_move.py`) + 13 di servizio (`test_closed_by.py`,
+   > azione `services closed-by`), rossi prima del codice. Docs developer `financial_math.md#closed-by`.
+   > **⚠️ Fuori pista — casi limite** (regola, non difetti): uno split inverso che porta a polvere → chiusa senza
+   > `closed_by`; un residuo di polvere spostato dopo una vendita → `SELL`; Owner allo 0 % → la posizione non apre mai,
+   > `closed_by` None.
+   > **⚠️ Fuori pista**: il golden di `test_native_cash_guard` (dump della contribution) ha preso i due campi nuovi a
+   > `null` → rigenerato, +28 righe, 0 tolte, nessun numero cambiato.

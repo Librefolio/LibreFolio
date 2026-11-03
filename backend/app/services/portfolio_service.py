@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import asyncio
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date as date_type
 from datetime import timedelta
@@ -87,7 +87,7 @@ from backend.app.services.financial_math.average_cost import (
     determine_target_currency,
     movement_unit_costs,
 )
-from backend.app.services.financial_math.holding_window import closed_position_window, exits_in, oldest_open_lot_date, quantity_moves
+from backend.app.services.financial_math.holding_window import closed_position_window, closing_move, exits_in, oldest_open_lot_date, quantity_moves
 from backend.app.services.financial_math.native_cash import CONVERSION_DUST, NativeCash, broker_shares, cash_movement_from_transaction, compute_native_cash
 from backend.app.services.financial_math.portfolio import period as period_math
 from backend.app.services.financial_math.portfolio.contributions import (
@@ -502,6 +502,37 @@ class PortfolioService:
             include_positions=True,
             apply_ownership_share=apply_ownership_share,
         )
+
+    async def _closing_transactions(
+        self,
+        user_id: int,
+        lot_txns_by_key: Mapping[tuple[int, int], Sequence[Transaction]],
+        lot_moves: Mapping[tuple[int, int], Sequence],
+    ) -> dict[tuple[int, int], tuple[str, Optional[int]]]:
+        """How each position that ever closed last closed (MF-CB): ``(type, destination broker)`` by position.
+
+        The closing movement is ``holding_window.closing_move``'s; its type is the row's ``closed_by``. A TRANSFER names
+        the broker of its paired leg (both legs carry ``related_transaction_id``) when the user can read that broker,
+        whether or not the report asked for it; an orphan leg, or another user's broker, names none.
+        """
+        closing_txs: dict[tuple[int, int], Transaction] = {}
+        for key, moves in lot_moves.items():
+            move = closing_move(moves)
+            if move is not None:
+                closing_txs[key] = next(tx for tx in lot_txns_by_key[key] if (tx.id or 0) == move.order)
+        partner_ids = {tx.related_transaction_id for tx in closing_txs.values() if tx.type == TransactionType.TRANSFER and tx.related_transaction_id is not None}
+        partner_brokers: dict[int, int] = {}
+        if partner_ids:
+            readable = {access.broker_id for access in await self._get_user_broker_access(user_id, None)}
+            rows = await self.db.execute(select(Transaction.id, Transaction.broker_id).where(Transaction.id.in_(partner_ids)))
+            partner_brokers = {tx_id: broker_id for tx_id, broker_id in rows.all() if broker_id in readable}
+        return {
+            key: (
+                str(getattr(tx.type, "value", tx.type)),
+                partner_brokers.get(tx.related_transaction_id) if tx.type == TransactionType.TRANSFER and tx.related_transaction_id is not None else None,
+            )
+            for key, tx in closing_txs.items()
+        }
 
     async def _get_user_broker_access(
         self,
@@ -1678,6 +1709,7 @@ class PortfolioService:
         lot_shares = engine_result.broker_shares
         lot_moves = {key: quantity_moves(txns, lot_split_ids, share=lot_shares[key[0]]) for key, txns in lot_txns_by_key.items()}
         oldest_open_lot_dates: dict[tuple[int, int], Optional[date_type]] = {key: oldest_open_lot_date(moves) for key, moves in lot_moves.items()}
+        closings = await self._closing_transactions(user_id, lot_txns_by_key, lot_moves)
 
         for pos_key, info in position_info.items():
             broker_id, asset_id = pos_key
@@ -1781,6 +1813,8 @@ class PortfolioService:
                     start_value=start_value,
                     end_value=end_value,
                     is_fully_sold=is_fully_sold,
+                    closed_by=closings[pos_key][0] if is_fully_sold and pos_key in closings else None,
+                    closed_to_broker_id=closings[pos_key][1] if is_fully_sold and pos_key in closings else None,
                     oldest_open_lot_date=oldest_open_lot_dates.get(pos_key),
                 )
             )

@@ -1342,6 +1342,18 @@ def services_ownership_share_option(verbose: bool = False, test_names: list = No
     return run_command(cmd, "Ownership share option tests", verbose=verbose)
 
 
+def services_closed_by(verbose: bool = False, test_names: list = None) -> bool:
+    """Test how a closed position closed: AssetPeriodContribution.closed_by and closed_to_broker_id (MF-CB)."""
+    print_section("Services: Closed By (MF-CB)")
+    print_info("Testing: backend/app/services/portfolio_service.py (get_positions_contribution, get_report) and backend/app/schemas/portfolio.py (AssetPeriodContribution)")
+    print_info(
+        "Tests: a fully sold row says SELL, TRANSFER (with the receiving broker when the user has access to it) or ADJUSTMENT, from the move of its last close; two exits, the later; same-day exits, the later id; another user's broker or an orphan names no broker; open and income-only rows say nothing; a row closed before the period says how; no figure changes (PortfolioService on a private SQLite file)"
+    )
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial/test_closed_by.py", test_names)
+    return run_command(cmd, "Closed by tests", verbose=verbose)
+
+
 def services_lone_transfer_legs(verbose: bool = False, test_names: list = None) -> bool:
     """Test decision 47's conversion of the lone giving TRANSFER legs a broker deletion left before 1.3."""
     print_section("Services: Lone Transfer Legs (decision 47)")
@@ -3262,6 +3274,18 @@ Note: No backend server required.
         services_ownership_share_option,
         name="Ownership Share Option",
         desc="MF6-3 (D4): PortfolioReportQuery / PositionsSeriesQuery.apply_ownership_share=False counts every broker whole — equal to the default for an owner at 100 %, an editor, a viewer; equal to the editor's report and series for an owner at 30 %, at 0 %, and at 30 %/60 % of two brokers linked by a TRANSFER and a CASH_TRANSFER (no share mismatch); by default the owner's money stays share × the whole and its ratios the whole's; default, False, default with the caches kept give three right answers and one engine build per flag; the risk scope of one broker has the same weights and TWRR returns at 30 % and whole; PortfolioRiskScope.apply_ownership_share=False gives the editor's scope value, asset values and hypothetical stress amounts to an owner at 30 %, and a composition to an owner at 0 % (whose default holds no asset)",
+        # The file sits in test_financial/, which roi-fifo-utils runs whole: the derived "all"
+        # skips this action so that the file runs once there.
+        in_all=False,
+        # PURE: PortfolioService on a private SQLite file under tmp_path; no lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "closed-by",
+        services_closed_by,
+        name="Closed By",
+        desc="MF-CB: a Performance row closed by period end says how — closed_by SELL, TRANSFER or ADJUSTMENT, the type of the move of its last close (holding_window.closing_move, a split's never), and with a TRANSFER closed_to_broker_id, the paired leg's broker when the user has access to it (also outside broker_ids), never another user's nor an orphan's; 6 transferred then 4 sold says SELL, the reverse TRANSFER; same-day exits, the later id; an open row and an income-only row (None, None); a row sold before the period and listed by a dividend in it says SELL; get_report carries the fields; every figure equals HEAD 898bc9d15's",
         # The file sits in test_financial/, which roi-fifo-utils runs whole: the derived "all"
         # skips this action so that the file runs once there.
         in_all=False,
