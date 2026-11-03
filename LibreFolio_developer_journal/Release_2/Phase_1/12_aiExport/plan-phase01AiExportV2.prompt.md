@@ -1,6 +1,6 @@
 # AI Export v2 — wave 6 · AIX
 
-> Session AIX, wave 6 (3/11/2026). Base `898bc9d15` (`dev_release2`). Lane: port 6207, `/tmp/librefolio-r13-o6-aix`.
+> Session AIX, wave 6 (3/11/2026). Base: the tip of `dev_release2` at the start of the wave. Lane: port 6207, `/tmp/librefolio-r13-o6-aix`.
 > Kickoff: `salvataggi-worktrees-20261021/ondata6/kickoff-AIX.md`. Related: [11_financialMath plan](../11_financialMath/plan-phase01FinancialMath.prompt.md)
 > (MF writes that file; this one is AIX's own, so nobody shares a writer).
 
@@ -14,9 +14,27 @@ One v2 bump for everything below (rule: a component is bumped at most +1 over th
 | 2 | **MF-C2, contract side** — `AllocationItem.value` nullable already reaches `AllocationSlice.percent`; the components that carry slices are bumped to v2, the renderer shows an empty percent honestly | ✅ 3/11/2026 |
 | 3 | **F-AI (b)** — code on the "FX on cash" effect (`portfolio_service.py`, `OtherPeriodEffect`), AI Export + `PerformanceChart.svelte` + `OtherPeriodEffectsTable.svelte` read the code, portfolio export shows it apart, broker by broker | ✅ 3/11/2026 (checkpoint 2, front check 0 errors) |
 | 4 | **R11 + MF-A13** — export opened from a broker page: whole amounts (`apply_ownership_share=False`), a note with role and share; MF-A13 closure rounding declared if a dataset shows it | ✅ 3/11/2026 (checkpoint 3) |
-| 5 | Probe (skill `ai-export-probe-tuning`), test data only | ⏳ |
+| 5 | Probe (skill `ai-export-probe-tuning`), test data only | ✅ 3/11/2026 (checkpoint 4) |
 
-Checkpoints: (1+2), (3) alone, (4+5), then the probe.
+Checkpoints: (1+2), (3) alone, (4+5), then the probe. All four delivered and committed by the coordinator; the wave-6 list is closed.
+
+### Final state of wave 6 (3/11/2026)
+
+**Done (cp1–cp4)**
+
+- cp1 — T-U9 and the contract side of MF-C2: the hand-made percentages go through `weights.percent_of`, honest `reason_code`s, v2 of `portfolio.allocations_cash`, `broker.concentration_context`, `broker.concentration_comparison`.
+- cp2 — F-AI (b): `OtherPeriodEffect.code = fx_on_cash`; `portfolio.flows_income` lists the rows apart per broker; the AI Export and the two frontend views read the code, not the English label; v2 of `portfolio.flows_income`, `portfolio.fees_taxes`, `broker.flows_income_costs`.
+- cp3 — R11 and MF-A13: one rule, `counts_ownership_share(scope)`; the export opened from a broker page gives whole amounts; `broker.provenance.ownership` note (role, owner stake, whole-amount basis); MF-A13 declared in `asset.provenance.price_provenance_note`; `build_currency_allocation` uses `slice_percents`.
+- cp4 — the probe on test data only (9 prompts, 0 failed, UI/probe byte-equal, secret scan ok): R11 proved (the broker prompt is identical for a 30 % Owner and a 40 % Owner), the ownership note read in the four roles, the portfolio keeps the share. One defect found and fixed: the broker-vs-portfolio comparison now declares its basis with `amounts_basis = "all_brokers_whole"` (no version bump).
+
+**Pending (not mine to start)**
+
+- **Domain Notes sentence** — «amounts are the broker's full amounts» in the frontend «Domain Notes» (localized EN/IT/FR/ES). Only if the developer says yes; the coordinator writes to AIX then. Small, separate lot.
+- **Docs debt** — `ai_export_composition.md` (ownership note, whole-amount basis of the broker export, `amounts_basis` of the comparison, `fx_on_cash_effects`) and the translations: the final docs pass of the wave, one writer.
+- **Open choice, recorded** — the comparison counts both sides whole; if the developer prefers share-on-share, remove `apply_ownership_share=False` from the comparison's report load in `broker_concentration_context.py`.
+- **Not run** (no frontend file touched in cp3/cp4): Vitest, `front check`, E2E `foreign-cash-real.spec.ts` (heavy; it compares description/category/amount/broker, not the code).
+
+The branch goes into the next train.
 
 ### Analysis (3/11/2026)
 
