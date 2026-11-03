@@ -779,7 +779,10 @@
                 <!-- Same component as Dashboard, same props, one different scope:
                      that is the whole difference, and it is what makes the two
                      pages comparable. `portfolioSummary` here is fetched for this
-                     broker alone, so its net worth answers this exact scope. -->
+                     broker alone, so its net worth answers this exact scope. The page
+                     counts the broker whole (`fullShare`, MF6-3, D4), so `wholeBroker`
+                     makes the risk scope ask the same: stress impacts and scope value
+                     then match the net worth printed above. -->
                 <RiskLevelsPanel
                     scope={{kind: 'portfolio', broker_ids: [broker.id]}}
                     dateStart={dateFrom}
@@ -789,6 +792,7 @@
                     scopeValue={portfolioSummary ? parseFloat(portfolioSummary.net_worth.amount) : null}
                     title={$_('risk.brokerTitle')}
                     internalSubset={true}
+                    wholeBroker={true}
                     {refreshVersion}
                     onsynced={async () => {
                         invalidate();
