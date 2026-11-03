@@ -976,7 +976,16 @@ A successful provider quote dated today is written back to today's OHLC row:
 
 - a missing row is created with `open = high = low = close = value` and `volume = None`;
 - an existing row keeps its volume, widens `low`/`high`, fills `open` only when it is missing,
-  and overwrites `close` with the latest quote;
+  and overwrites `close` with the latest quote when it differs (a numeric comparison: `102.50`
+  after a stored `102.5` is no change);
+- `fetched_at` is stamped only when one of those columns changes: it is the time of the row's
+  last change, not of the last read (MF-FA). Today's row written at 10:00 with 102 and read
+  again unchanged at 10:01, 10:02 and 10:03 keeps 10:00; a quote of 102.5 at 10:04 stamps 10:04.
+  `fetched_at` feeds the price fingerprint (`COUNT + MAX(fetched_at)`) of the portfolio engine
+  and of the report cache: before, every poll — the scheduler's every 10 minutes, an asset
+  page's every 30 seconds, the Assets list's every 60 — changed it while the market was open,
+  and the next report recomputed the whole history. The price-history export
+  (`GET /api/v1/backup/asset/{asset_id}/prices`) shows the column with this meaning;
 - the value written is the quote as served, that is as `storable_price()` keeps it, truncated
   like the history (a quote of `65432.1234567890999` is stored `65432.123456789`); a refused
   quote never reaches the write-back, which no longer logs one;
