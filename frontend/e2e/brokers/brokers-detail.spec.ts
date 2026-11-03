@@ -345,6 +345,24 @@ test.describe('Broker Detail Page', () => {
             await expect(page).toHaveURL(/[?&]asset=\d+/);
         });
 
+        test('opening the lots panel scrolls to the start of its section, on the same page', async ({page}) => {
+            await goToBrokerWithHoldings(page);
+            const row = await firstHoldingRow(page);
+            const pathBefore = new URL(page.url()).pathname;
+
+            await clickRowAction(page, row, 'analyze-lots');
+            await expectLotsPanelOpen(page);
+
+            // No second page: same route, the list stays; the view moves to the start of the section below it.
+            expect(new URL(page.url()).pathname, 'the lots panel is a section of the page, not another page').toBe(pathBefore);
+            await expect(page.getByTestId('broker-holdings')).toBeVisible();
+            const lots = page.getByTestId('lots-analysis-panel');
+            await expect
+                .poll(() => lots.evaluate((el) => Math.round(el.getBoundingClientRect().top)), {message: 'the view scrolls to the start of the lots panel', timeout: 10_000})
+                .toBeLessThanOrEqual(120);
+            expect(await lots.evaluate((el) => el.getBoundingClientRect().top), 'the start of the section is not scrolled past').toBeGreaterThanOrEqual(-2);
+        });
+
         test('closing the panel clears the ?asset= query param', async ({page}) => {
             await goToBrokerWithHoldings(page);
 

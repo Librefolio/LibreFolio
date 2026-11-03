@@ -414,6 +414,32 @@ test.describe('Dashboard charts and view matrix', () => {
         await expectDetail();
     });
 
+    test('Dashboard, Positions: opening the lot detail scrolls to the start of its section, on the same page (FB-12b)', async ({page}) => {
+        test.setTimeout(90_000);
+        await openPositionsTab(page);
+        await page.getByTestId('positions-toggle-holdings').click();
+        await page.getByTestId('positions-toggle-table').click();
+        const table = page.getByTestId('exposure-table');
+        const lots = page.getByTestId('lots-analysis-panel');
+        await expect.poll(() => table.locator('tbody tr[data-row-id]').count(), {message: 'the holdings table lists no position: check populate_mock_data.py', timeout: 15_000}).toBeGreaterThan(0);
+        const rowIds = await table.locator('tbody tr[data-row-id]').evaluateAll((rows) => rows.map((row) => row.getAttribute('data-row-id') ?? ''));
+        const rowId = rowIds.find((id) => /^\d+-\d+$/.test(id));
+        if (!rowId) throw new Error(`No holdings row with an {assetId}-{brokerId} id (rows: ${rowIds.join(', ')})`);
+        const pathBefore = new URL(page.url()).pathname;
+
+        await table.locator(`tbody tr[data-row-id="${rowId}"]`).click({button: 'right'});
+        await page.getByTestId('context-menu-action-analyze-lots').click();
+        await expect(lots).toBeVisible({timeout: 15_000});
+
+        // No second page: same route, the positions stay; the section is below, and the view moves to its start.
+        expect(new URL(page.url()).pathname, 'the lot detail is a section of the page, not another page').toBe(pathBefore);
+        await expect(page.getByTestId('positions-panel')).toBeVisible();
+        await expect
+            .poll(() => lots.evaluate((el) => Math.round(el.getBoundingClientRect().top)), {message: 'the view scrolls to the start of the lot detail', timeout: 10_000})
+            .toBeLessThanOrEqual(120);
+        expect(await lots.evaluate((el) => el.getBoundingClientRect().top), 'the start of the section is not scrolled past').toBeGreaterThanOrEqual(-2);
+    });
+
     test('Dashboard, Positions: the chart sits beside the allocation by asset, with Abs / % on the chart, under Portfolio and under Period (FB-12)', async ({page}) => {
         test.setTimeout(90_000);
         await openPositionsTab(page);
