@@ -5262,3 +5262,28 @@ Ambiente: `npm ci` e `api sync` fatti (nessuna differenza nei contratti); corsia
    > (`test_ownership_share_option.py`, azione `services ownership-share-option`), rossi prima del codice per la ragione
    > giusta; `_OldEngineRun` di FB-14 accetta il flag. docs-writer: `financial_math.md#whole-broker`,
    > `access_control.md`, teoria `portfolio-engine/index.en.md#whole-broker` (debito di traduzione: 1 sezione).
+6. ✅ **MF-CB — `closed_by` delle righe chiuse** (03/11, base `898bc9d15`) — richiesta del developer (31/10): nel
+   pannello delle posizioni un trasferimento di tutta la posizione da A a B (B selezionato) non è una vendita.
+   `holding_window.closing_move` (la mossa dell'ultima chiusura, la stessa che data `closed_position_window`, che ora
+   la usa); `AssetPeriodContribution.closed_by` (`SELL`/`TRANSFER`/`ADJUSTMENT`, solo se `is_fully_sold`) e
+   `closed_to_broker_id` (broker del ramo collegato, solo se l'utente lo legge). Esempio: 10 unità, 6 a B poi 4
+   vendute → `SELL`; 4 vendute poi 6 a B → `TRANSFER` verso B. Nessun numero cambia.
+   > **Note implementazione**: test-author 22 puri (`test_closing_move.py`) + 13 di servizio (`test_closed_by.py`,
+   > azione `services closed-by`), rossi prima del codice. Docs developer `financial_math.md#closed-by`.
+   > **⚠️ Fuori pista — casi limite** (regola, non difetti): uno split inverso che porta a polvere → chiusa senza
+   > `closed_by`; un residuo di polvere spostato dopo una vendita → `SELL`; Owner allo 0 % → la posizione non apre mai,
+   > `closed_by` None.
+   > **⚠️ Fuori pista**: il golden di `test_native_cash_guard` (dump della contribution) ha preso i due campi nuovi a
+   > `null` → rigenerato, +28 righe, 0 tolte, nessun numero cambiato.
+7. ✅ **MF-FA — `fetched_at` = ultimo cambio della riga** (03/11, base `45a80320c`) — da FB-28 (Y cp9): il poll live
+   (`POST /assets/prices/current`) timbrava `fetched_at` della riga di oggi a ogni quotazione, anche uguale, e
+   l'impronta prezzi `COUNT + MAX(fetched_at)` del motore e della cache L2 del report cambiava a ogni poll a mercato
+   aperto → ogni report ricalcolava tutta la storia. Ora (ramo F.3) `close` si scrive solo se diverso (confronto
+   numerico) e `fetched_at` solo se cambia una colonna. Esempio: riga di oggi alle 10:00 a 102, letta uguale alle
+   10:01–10:03 → resta 10:00; 102,5 alle 10:04 → 10:04.
+   > **Note implementazione**: test-author 15 test (`test_current_price_fetched_at.py`, puri, azione
+   > `services current-price-fetched-at`), 7 rossi prima del codice. Il log del commit conta le righe cambiate, non le
+   > quotazioni. Docstring del modello e dell'export, docs `assets/architecture.md` e `database/index.md`.
+   > **⚠️ Fuori pista**: nessuna pagina sviluppatore dedicata all'export → significato scritto nelle due pagine sopra e
+   > nella docstring dell'endpoint (OpenAPI). Cambio visibile solo nella colonna `fetched_at` del CSV/JSON scaricato:
+   > risposta finale del developer prima del commit.

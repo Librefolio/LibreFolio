@@ -1342,6 +1342,18 @@ def services_ownership_share_option(verbose: bool = False, test_names: list = No
     return run_command(cmd, "Ownership share option tests", verbose=verbose)
 
 
+def services_closed_by(verbose: bool = False, test_names: list = None) -> bool:
+    """Test how a closed position closed: AssetPeriodContribution.closed_by and closed_to_broker_id (MF-CB)."""
+    print_section("Services: Closed By (MF-CB)")
+    print_info("Testing: backend/app/services/portfolio_service.py (get_positions_contribution, get_report) and backend/app/schemas/portfolio.py (AssetPeriodContribution)")
+    print_info(
+        "Tests: a fully sold row says SELL, TRANSFER (with the receiving broker when the user has access to it) or ADJUSTMENT, from the move of its last close; two exits, the later; same-day exits, the later id; another user's broker or an orphan names no broker; open and income-only rows say nothing; a row closed before the period says how; no figure changes (PortfolioService on a private SQLite file)"
+    )
+
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_financial/test_closed_by.py", test_names)
+    return run_command(cmd, "Closed by tests", verbose=verbose)
+
+
 def services_lone_transfer_legs(verbose: bool = False, test_names: list = None) -> bool:
     """Test decision 47's conversion of the lone giving TRANSFER legs a broker deletion left before 1.3."""
     print_section("Services: Lone Transfer Legs (decision 47)")
@@ -1405,6 +1417,17 @@ def services_current_prices_bulk(verbose: bool = False, test_names: list = None)
     )
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_current_prices_bulk.py", test_names)
     return run_command(cmd, "Current prices bulk tests", verbose=verbose)
+
+
+def services_current_price_fetched_at(verbose: bool = False, test_names: list = None) -> bool:
+    """MF-FA: today's price row keeps fetched_at = the time of its last change (private SQLite, no server, no network)."""
+    print_section("Services: Current Price fetched_at (MF-FA)")
+    print_info("Testing: services/assets/price_query.py (get_current_prices_bulk F.2/F.3), financial_math/portfolio/engine.py (_compute_price_fingerprint)")
+    print_info(
+        "Tests: the same quote again keeps close, fetched_at and the price fingerprint; a numerically equal quote (102.50 after 102.5, 15 digits) is no change; a quote above the high, below the low or inside the bounds moves the row and stamps it; F.2 creates and stamps; a missing bound is filled and stamped; a db:last_known fallback on today's row writes nothing"
+    )
+    cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_current_price_fetched_at.py", test_names)
+    return run_command(cmd, "Current price fetched_at tests", verbose=verbose)
 
 
 def services_fx_pairs_per_query(verbose: bool = False, test_names: list = None) -> bool:
@@ -3270,6 +3293,18 @@ Note: No backend server required.
     )
     add_test(
         cat,
+        "closed-by",
+        services_closed_by,
+        name="Closed By",
+        desc="MF-CB: a Performance row closed by period end says how — closed_by SELL, TRANSFER or ADJUSTMENT, the type of the move of its last close (holding_window.closing_move, a split's never), and with a TRANSFER closed_to_broker_id, the paired leg's broker when the user has access to it (also outside broker_ids), never another user's nor an orphan's; 6 transferred then 4 sold says SELL, the reverse TRANSFER; same-day exits, the later id; an open row and an income-only row (None, None); a row sold before the period and listed by a dividend in it says SELL; get_report carries the fields; every figure equals HEAD 898bc9d15's",
+        # The file sits in test_financial/, which roi-fifo-utils runs whole: the derived "all"
+        # skips this action so that the file runs once there.
+        in_all=False,
+        # PURE: PortfolioService on a private SQLite file under tmp_path; no lane DB, no server, no network.
+        isolation="pure",
+    )
+    add_test(
+        cat,
         "lone-transfer-legs",
         services_lone_transfer_legs,
         name="Lone Transfer Legs",
@@ -3340,6 +3375,16 @@ Note: No backend server required.
         # PURE: the service on a private in-memory SQLite (create_all), the provider a double behind core.configured_provider,
         # a private current-value cache, the route called directly or through a fresh in-process app (httpx.ASGITransport),
         # its service and live_range_changes replaced by recorders, all by monkeypatch.
+        isolation="pure",
+    )
+    add_test(
+        cat,
+        "current-price-fetched-at",
+        services_current_price_fetched_at,
+        name="Current Price fetched_at (MF-FA)",
+        desc="MF-FA: on the F.3 path close is written only when it differs numerically and fetched_at stamped only when open, high, low or close changes, so an unchanged quote leaves the price fingerprint (COUNT + MAX(fetched_at)) of the engine and of the report's L2 key alone; F.2 still creates and stamps; a db:last_known fallback on today's row writes nothing",
+        # PURE: the service on a private SQLite file under tmp_path (create_all), a fresh session per poll; the live quote
+        # is price_query._live_quote_item replaced by a double, the service's today and utcnow frozen, all by monkeypatch.
         isolation="pure",
     )
     add_test(
