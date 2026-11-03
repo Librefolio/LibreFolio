@@ -726,7 +726,7 @@ describe('Financial math exceptions: the browser computes only the interactive m
         });
 
         it('reads every product source, components and modules alike, and no test, mock or generated client', () => {
-            const read = [MEASURE, CELL_DATE_RANGE, 'src/lib/stores/app/toastStore.svelte.ts', 'src/routes/(app)/dashboard/+page.svelte', 'src/lib/api/zodios-client.ts'];
+            const read = [MEASURE, CELL_DATE_RANGE, 'src/lib/stores/app/toastStore.svelte.ts', 'src/routes/(app)/dashboard/+page.svelte', 'src/lib/features/portfolio-view/PortfolioView.svelte', 'src/lib/features/portfolio-view/PortfolioOverviewTab.svelte', 'src/lib/api/zodios-client.ts'];
             const skipped = [
                 'src/financialMathExceptions.gate.test.ts',
                 'src/lib/charts/signals/MeasureSignal.spec.ts',

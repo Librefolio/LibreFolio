@@ -24,7 +24,7 @@ let store: Record<string, unknown>;
  */
 let mutation: Record<string, unknown>;
 
-type ReportOptions = {includeBrokerPnlHistory?: boolean; includePnlCandles?: boolean; includeIncomeHistory?: boolean; includeCostHistory?: boolean; includeDepositHistory?: boolean; includeAcquisitionFunding?: boolean};
+type ReportOptions = {includeBrokerPnlHistory?: boolean; includePnlCandles?: boolean; includeIncomeHistory?: boolean; includeCostHistory?: boolean; includeDepositHistory?: boolean; includeAcquisitionFunding?: boolean; fullShare?: boolean};
 /** `fetchReport`'s arguments without `force`: the same key, read synchronously. */
 type PeekReport = (brokerIds?: number[], dateFrom?: string, dateTo?: string, targetCurrency?: string, includeContribution?: boolean, includeBreakdown?: boolean, includeHistory?: boolean, includeAllocationHistory?: boolean, options?: ReportOptions) => {report: unknown; stale: boolean} | null;
 
@@ -318,5 +318,27 @@ describe('portfolioStore — stale-while-revalidate (page cache, phase 1)', () =
         transitionClientSession(null);
         transitionClientSession(userId);
         expect(peekReport(OWNED, FROM, TO, 'EUR'), 'a logout only marked the report stale: a session change must forget it').toBeNull();
+    });
+});
+
+describe('portfolioStore — the brokers counted whole (MF6-3, D4)', () => {
+    beforeEach(() => {
+        reportApi.mockReset();
+        resetPortfolioCache();
+        transitionClientSession(null);
+        transitionClientSession(901);
+    });
+
+    it('sends apply_ownership_share=false only when asked, and keeps the owner’s share out of the whole answer’s cache entry', async () => {
+        reportApi.mockResolvedValueOnce({marker: 'share'}).mockResolvedValueOnce({marker: 'whole'});
+        const scaled = await fetchReport([1], '2025-01-01', '2025-12-31', 'EUR');
+        const whole = await fetchReport([1], '2025-01-01', '2025-12-31', 'EUR', false, undefined, undefined, undefined, undefined, {fullShare: true});
+        expect(scaled).toMatchObject({marker: 'share'});
+        expect(whole).toMatchObject({marker: 'whole'});
+        expect(reportApi).toHaveBeenCalledTimes(2);
+        expect(reportApi.mock.calls[0][0]).not.toHaveProperty('apply_ownership_share');
+        expect(reportApi.mock.calls[1][0]).toMatchObject({apply_ownership_share: false});
+        expect(peekReport([1], '2025-01-01', '2025-12-31', 'EUR')?.report).toMatchObject({marker: 'share'});
+        expect(peekReport([1], '2025-01-01', '2025-12-31', 'EUR', false, false, true, true, {fullShare: true})?.report).toMatchObject({marker: 'whole'});
     });
 });

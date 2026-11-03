@@ -63,7 +63,7 @@ const REVIEWED_SINKS: readonly ReviewedSink[] = [
     {file: 'src/lib/components/table/DataTableCellContent.svelte', expr: 'cellContent.html', why: COLUMN_DEFS},
     {file: 'src/lib/components/table/DataTableColumnHeader.svelte', expr: 'getColumnHeaderHtml(column)', why: COLUMN_DEFS},
     {file: 'src/lib/components/ui/display/CurrencyAmount.svelte', expr: 'formatCurrencyAmountHtml(…)', why: CURRENCY_HTML},
-    {file: 'src/routes/(app)/dashboard/+page.svelte', expr: 'formatCurrencyAmountHtml(…)', why: CURRENCY_HTML},
+    {file: 'src/lib/features/portfolio-view/PortfolioOverviewTab.svelte', expr: 'formatCurrencyAmountHtml(…)', why: CURRENCY_HTML},
     {file: 'src/lib/features/transactions/wac/WacPreviewSection.svelte', expr: 'formatCurrencyCodeHtml(…)', why: CURRENCY_HTML},
     {file: 'src/lib/features/transactions/bulk/TxBulkBanners.svelte', expr: 'formatCurrencyCodeHtml(…)', why: CURRENCY_HTML},
     {file: 'src/lib/components/table/DataTableColumnFilter.svelte', expr: 'formatCurrencyCodeHtml(…)', why: CURRENCY_HTML},
@@ -205,6 +205,8 @@ describe('{@html} renders sanitised or reviewed HTML only (K step 13, item 0 gat
     it('reads every component of the app, and no test harness', () => {
         expect(isScanned('src/lib/components/ui/feedback/ToastContainer.svelte')).toBe(true);
         expect(isScanned('src/routes/(app)/dashboard/+page.svelte')).toBe(true);
+        expect(isScanned('src/lib/features/portfolio-view/PortfolioView.svelte')).toBe(true);
+        expect(isScanned('src/lib/features/portfolio-view/PortfolioOverviewTab.svelte')).toBe(true);
         expect(isScanned('src/__tests__/harness/AppLayoutGateHarness.svelte')).toBe(false);
         expect(isScanned('src/lib/utils/core/escapeHtml.ts')).toBe(false);
         // 42 sinks in 19 components when this gate was written, 10 of them in DataTable: a walk that
