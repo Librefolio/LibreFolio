@@ -27,6 +27,7 @@ from types import SimpleNamespace
 
 import pandas as pd
 import pytest
+from justetf_scraping.types import IntradayOhlc
 
 from backend.app.db import IdentifierType
 from backend.app.db.models import AssetType, ProviderInputType
@@ -208,7 +209,8 @@ async def test_history_intraday_ohl_enrichment(monkeypatch):
     monkeypatch.setattr(
         je,
         "load_intraday_ohlc",
-        lambda isin: {"date": today.isoformat(), "open": 99.0, "high": 103.0, "low": 98.5},
+        # IntradayOhlc dataclass of the library: attributes, `date` already a date.
+        lambda isin: IntradayOhlc(date=today, open=99.0, high=103.0, low=98.5, last=101.0),
         raising=False,
     )
 
@@ -218,6 +220,35 @@ async def test_history_intraday_ohl_enrichment(monkeypatch):
     assert todays.high == Decimal("103.0")
     assert todays.low == Decimal("98.5")
     assert todays.close == Decimal("101.0")
+
+
+@pytest.mark.asyncio
+async def test_history_intraday_ohl_none_leaves_prices_untouched(monkeypatch):
+    today = date.today()
+    df = _chart_df([(today.isoformat(), 101.0, 0.0)])
+    monkeypatch.setattr(je, "load_chart", lambda isin, ccy, add_current: df, raising=False)
+    monkeypatch.setattr(je, "load_intraday_ohlc", lambda isin: None, raising=False)
+
+    result = await _provider().get_history_value("IE00B4L5Y983", IdentifierType.ISIN, {"currency": "EUR"}, today - timedelta(days=5), today)
+    todays = next(p for p in result.prices if p.date == today)
+    assert (todays.open, todays.high, todays.low) == (None, None, None)
+    assert todays.close == Decimal("101.0")
+
+
+@pytest.mark.asyncio
+async def test_current_value_live_quote_timeout_falls_back_to_raw_chart(monkeypatch):
+    """The library raises the built-in TimeoutError when no gettex quote arrives: «no live price», not a failure."""
+
+    def no_quote(isin):
+        raise TimeoutError("no initial quote")
+
+    raw_chart = {"latestQuote": {"raw": 99.5}, "latestQuoteDate": "2026-02-10"}
+    monkeypatch.setattr(je, "load_live_quote", no_quote, raising=False)
+    monkeypatch.setattr(je, "load_raw_chart", lambda isin, ccy: raw_chart, raising=False)
+
+    result = await _provider().get_current_value("IE00B4L5Y983", IdentifierType.ISIN, {"currency": "EUR"})
+    assert result.value == Decimal("99.5")
+    assert result.as_of_date == date(2026, 2, 10)
 
 
 @pytest.mark.asyncio

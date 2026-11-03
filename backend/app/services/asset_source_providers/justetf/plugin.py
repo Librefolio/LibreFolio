@@ -107,6 +107,11 @@ def _live_quote_worker(isin: str) -> None:
                 backoff = 1  # reset on success
                 if _live_quote_stop.is_set():
                     return
+        except TimeoutError:
+            # No initial quote within the library timeout (ETF without gettex
+            # quotes): there is no live price, so stop instead of retrying forever.
+            logger.debug(f"No live quote for {isin} (timeout); live feed stopped")
+            return
         except Exception as e:
             # WebSocket closed or error — reconnect after backoff
             if not _live_quote_stop.is_set():
@@ -311,7 +316,11 @@ class JustETFProvider(AssetSourceProvider):
                 _ensure_live_feed(identifier)
                 quote = _live_quote_store.get(identifier)
                 if quote is None:
-                    quote = await asyncio.to_thread(load_live_quote, identifier)
+                    try:
+                        quote = await asyncio.to_thread(load_live_quote, identifier)
+                    except TimeoutError:
+                        # No gettex quote for this ETF: «no live price», fall through.
+                        quote = None
                 if quote is not None:
                     q_price = quote.mid or quote.last
                     if q_price is not None:
@@ -425,12 +434,12 @@ class JustETFProvider(AssetSourceProvider):
                 try:
                     ohlc = await asyncio.to_thread(load_intraday_ohlc, identifier)
                     if ohlc:
-                        ohlc_date = date.fromisoformat(ohlc["date"])
+                        # IntradayOhlc dataclass: `date` is already a datetime.date.
                         for pp in prices:
-                            if pp.date == ohlc_date:
-                                pp.open = Decimal(str(ohlc["open"]))
-                                pp.high = Decimal(str(ohlc["high"]))
-                                pp.low = Decimal(str(ohlc["low"]))
+                            if pp.date == ohlc.date:
+                                pp.open = Decimal(str(ohlc.open))
+                                pp.high = Decimal(str(ohlc.high))
+                                pp.low = Decimal(str(ohlc.low))
                                 break
                 except Exception as e:
                     logger.debug(f"Could not enrich intraday OHL for {identifier}: {e}")
