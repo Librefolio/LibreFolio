@@ -101,19 +101,25 @@ def closed_position_window(moves: Sequence[QuantityMove], dust: Decimal = QUANTI
     after redemptions in tranches counts as closed. ``(opening, None)`` while it never closes, ``(None, None)`` when it
     never opens. A split moves the quantity but never opens nor closes a position.
     """
-    open_date: date_type | None = None
-    last_close: date_type | None = None
+    open_date = next((move.date for move in moves if not move.split and move.quantity > 0), None)
+    closing = closing_move(moves, dust)
+    return open_date, closing.date if closing is not None else None
+
+
+def closing_move(moves: Sequence[QuantityMove], dust: Decimal = QUANTITY_DUST_THRESHOLD) -> QuantityMove | None:
+    """The move that last closed the position: the one after which the running quantity fell from above ``dust`` to
+    ``dust`` or below for the last time — the last close :func:`closed_position_window` dates (MF-CB: the row's
+    ``closed_by`` is its transaction's type). None when it never closes; a split never closes. A position closed and
+    then reopened keeps its earlier close: read it for a position that is closed at the end.
+    """
+    closing: QuantityMove | None = None
     running = _ZERO
     for move in moves:
         previous = running
         running += move.quantity
-        if move.split:
-            continue
-        if move.quantity > 0 and open_date is None:
-            open_date = move.date
-        if move.quantity < 0 and previous > dust and running <= dust:
-            last_close = move.date
-    return open_date, last_close
+        if not move.split and move.quantity < 0 and previous > dust and running <= dust:
+            closing = move
+    return closing
 
 
 def exits_in(moves: Sequence[QuantityMove], date_from: date_type | None, end: date_type) -> int:
