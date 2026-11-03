@@ -453,6 +453,35 @@ class TestConcentrationComparison:
         assert counts == {"broker": 1, "portfolio": 1}
 
     @pytest.mark.asyncio
+    async def test_both_sides_of_the_comparison_count_every_broker_whole(self, monkeypatch):
+        """R11: the broker is whole, so the portfolio it is compared with is whole too - one basis for the share.
+
+        Owner at 30 % of a 10 000 broker, the rest of the portfolio 7 000: the page counts 3 000 / 10 000 = 30 %;
+        a whole broker over a share-applied portfolio would read 10 000 / 10 000 = 100 %, a mixed basis. Before R11
+        the portfolio side asked for the owner's share (`apply_ownership_share` True) while the broker side was whole.
+        """
+        scope = _scope()
+        broker_report = _report(scope, summary=_summary(holdings=[_holding(1, nav_weight_percent=100)], market_value=_money(10000)))
+        portfolio_report = _report(scope, summary=_summary(holdings=[_holding(1, nav_weight_percent=60), _holding(9, nav_weight_percent=40)], market_value=_money(17000)))
+        queries: list[object] = []
+
+        async def _fake(self, user_id, query):  # noqa: ARG001
+            queries.append(query)
+            return broker_report if query.broker_ids else portfolio_report
+
+        monkeypatch.setattr(PortfolioService, "get_report", _fake)
+        context = _make_context(scope, _registry(), _make_async_session())
+
+        payload = (await context.resolve("broker.concentration_comparison", required=True)).payload
+
+        assert len(queries) == 2
+        assert all(query.apply_ownership_share is False for query in queries), [q.apply_ownership_share for q in queries]
+        # Whole broker over whole portfolio: 10 000 / 17 000.
+        assert Decimal(payload["broker_share_of_portfolio_market_value_percent"]).quantize(Decimal("0.01")) == Decimal("58.82")
+        # The probe found the portfolio side undeclared: a reader compared it with the Dashboard's (share-reduced) portfolio.
+        assert payload["amounts_basis"] == "all_brokers_whole"
+
+    @pytest.mark.asyncio
     async def test_whole_portfolio_loaded_once_and_shared_with_other_broker_components(self, monkeypatch):
         scope = _scope()
         broker_report = _report(scope, summary=_summary(holdings=[_holding(1, nav_weight_percent=100)], market_value=_money(1000)))
@@ -488,6 +517,44 @@ class TestConcentrationComparison:
         payload = (await context.resolve("broker.concentration_comparison", required=True)).payload
         assert payload["status"] == ConcentrationComparisonStatus.UNAVAILABLE.value
         assert payload["reason_code"] == broker_concentration_context.REASON_PORTFOLIO_EMPTY
+
+    @pytest.mark.asyncio
+    async def test_unavailable_reason_names_a_summary_without_positions(self, monkeypatch):
+        """T-U9: a summary that exists but holds no position is not «summary unavailable» (the message was right, the code was not)."""
+        scope = _scope()
+        _patch_split_report(monkeypatch, broker_report=_report(scope, summary=_summary(holdings=[])), portfolio_report=_report(scope, summary=_summary(holdings=[_holding(1)])))
+        context = _make_context(scope, _registry(), _make_async_session())
+
+        payload = (await context.resolve("broker.concentration_comparison", required=True)).payload
+
+        assert payload["status"] == ConcentrationComparisonStatus.UNAVAILABLE.value
+        assert payload["reason_code"] == broker_concentration_context.REASON_BROKER_NO_POSITIONS
+        assert payload["reason_code"] != broker_concentration_context.REASON_BROKER_EMPTY
+
+    @pytest.mark.asyncio
+    async def test_unavailable_reason_names_a_portfolio_summary_without_positions(self, monkeypatch):
+        scope = _scope()
+        _patch_split_report(monkeypatch, broker_report=_report(scope, summary=_summary(holdings=[_holding(1)])), portfolio_report=_report(scope, summary=_summary(holdings=[])))
+        context = _make_context(scope, _registry(), _make_async_session())
+
+        payload = (await context.resolve("broker.concentration_comparison", required=True)).payload
+
+        assert payload["status"] == ConcentrationComparisonStatus.UNAVAILABLE.value
+        assert payload["reason_code"] == broker_concentration_context.REASON_PORTFOLIO_NO_POSITIONS
+
+    @pytest.mark.asyncio
+    async def test_broker_share_has_no_value_on_a_negative_portfolio_total(self, monkeypatch):
+        """T-U9: the share goes through `weights.percent_of` — a total at or below zero gives no share, never a negative one."""
+        scope = _scope()
+        broker_report = _report(scope, summary=_summary(holdings=[_holding(1, nav_weight_percent=100)], market_value=_money(1000)))
+        portfolio_report = _report(scope, summary=_summary(holdings=[_holding(1, nav_weight_percent=100)], market_value=_money(-500)))
+        _patch_split_report(monkeypatch, broker_report=broker_report, portfolio_report=portfolio_report)
+        context = _make_context(scope, _registry(), _make_async_session())
+
+        payload = (await context.resolve("broker.concentration_comparison", required=True)).payload
+
+        assert payload["status"] == ConcentrationComparisonStatus.OK.value
+        assert payload["broker_share_of_portfolio_market_value_percent"] is None
 
     @pytest.mark.asyncio
     async def test_no_asset_or_row_ids_leaked(self, monkeypatch):
@@ -755,7 +822,8 @@ class TestCostEfficiencyPeriodActivityLoader:
         assert Decimal(payload["turnover"]["gross_turnover"]["amount"]) == Decimal("500")
 
     @pytest.mark.asyncio
-    async def test_share_loaded_from_broker_user_access(self, monkeypatch, real_db_session):
+    async def test_owner_share_does_not_scale_the_whole_broker_turnover(self, monkeypatch, real_db_session):
+        """R11: the broker page counts the broker whole, so an owner at 25 % still sees the full turnover (before: 250, ratio 0.25)."""
         scope = _scope()
         session = real_db_session
         await _seed_parents(session, user_id=scope.user_id, broker_ids=(scope.broker_id,))
@@ -766,8 +834,8 @@ class TestCostEfficiencyPeriodActivityLoader:
         context = _make_context(scope, _registry(), session)
 
         payload = (await context.resolve("broker.cost_efficiency", required=True)).payload
-        assert Decimal(payload["ownership_share_ratio"]) == Decimal("0.25")
-        assert Decimal(payload["turnover"]["gross_turnover"]["amount"]) == Decimal("250")  # 1000 × 0.25
+        assert Decimal(payload["ownership_share_ratio"]) == Decimal("1")
+        assert Decimal(payload["turnover"]["gross_turnover"]["amount"]) == Decimal("1000")
 
     @pytest.mark.asyncio
     async def test_no_access_row_fails_explicitly(self, monkeypatch, real_db_session):
@@ -824,6 +892,28 @@ class TestCostEfficiencyReportShareRule:
 
         assert isinstance(share, Decimal), f"expected a Decimal share, got {share!r}"
         assert share == expected, f"{role.value} with stored share {stored_share}: loader returned {share}, the report counts {expected}"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("role", "stored_share"),
+        [
+            pytest.param(UserRole.OWNER, "0.5", id="owner-half"),
+            pytest.param(UserRole.OWNER, "0", id="owner-zero"),
+            pytest.param(UserRole.EDITOR, "0.5", id="editor"),
+            pytest.param(UserRole.VIEWER, "0", id="viewer"),
+        ],
+    )
+    async def test_loader_counts_the_broker_whole_when_the_share_is_not_applied(self, real_db_session, role, stored_share):
+        """R11: with `apply_ownership_share=False` every role counts the broker whole; a missing access row is still `None`."""
+        scope = _scope()
+        session = real_db_session
+        await _seed_access(session, user_id=scope.user_id, broker_id=scope.broker_id, role=role, share=stored_share)
+
+        share = await broker_cost_efficiency._load_broker_ownership_share(session, user_id=scope.user_id, broker_id=scope.broker_id, apply_ownership_share=False)
+        missing = await broker_cost_efficiency._load_broker_ownership_share(session, user_id=scope.user_id + 1, broker_id=scope.broker_id, apply_ownership_share=False)
+
+        assert share == Decimal("1"), f"{role.value} with stored share {stored_share}: expected the whole broker, got {share!r}"
+        assert missing is None
 
     @pytest.mark.asyncio
     async def test_loader_owner_without_recorded_share_counts_whole_broker(self, nullable_share_db_session):

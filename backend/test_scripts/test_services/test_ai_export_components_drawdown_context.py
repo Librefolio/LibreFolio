@@ -245,6 +245,8 @@ class TestPortfolioDrawdown:
         assert call["user_id"] == 42
         assert request.scope.kind == RiskScopeKind.PORTFOLIO
         assert request.scope.broker_ids is None
+        # The portfolio page counts an owner's share of every broker (R11 changes the broker page only).
+        assert request.scope.apply_ownership_share is True
         assert request.target_currency == "EUR"
         assert request.mode == RiskMode.HISTORICAL
         assert [a.analytic_code for a in request.analytics] == ["drawdown_summary"]
@@ -328,6 +330,8 @@ class TestBrokerDrawdown:
         request = _FakeRiskService.captured[0]["request"]
         assert request.scope.kind == RiskScopeKind.PORTFOLIO
         assert request.scope.broker_ids == [9]
+        # R11: the export opened from the broker page counts the broker whole, as the page does.
+        assert request.scope.apply_ownership_share is False
         # E1: full-history start from the broker-scoped inception…
         assert request.date_range.start == date(2020, 2, 3)
         # …and the sentinel resolution was itself scoped to that broker.

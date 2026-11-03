@@ -21,6 +21,7 @@ AI_EXPORT_UNIT_TEST_PATHS = (
     "src/lib/features/ai-export/__tests__/snapshotDataRenderer.test.ts",
     "src/lib/features/ai-export/__tests__/snapshotDataRenderer.priceSeriesGap.test.ts",
     "src/lib/features/ai-export/__tests__/snapshotDataRendererFailedLots.test.ts",
+    "src/lib/features/ai-export/__tests__/snapshotDataRendererV2Bump.test.ts",
     "src/lib/features/ai-export/__tests__/safeSerialization.test.ts",
     "src/lib/components/charts/__tests__/timeSeriesAggregation.test.ts",
     "src/lib/components/charts/chartCoreHelpers.test.ts",

@@ -42,6 +42,7 @@ from dataclasses import dataclass
 from datetime import date as Date
 from decimal import Decimal
 from enum import StrEnum
+from types import SimpleNamespace
 
 from pydantic import Field, model_validator
 from sqlalchemy import select
@@ -51,12 +52,12 @@ from backend.app.db.models import BrokerUserAccess, Transaction, TransactionType
 from backend.app.schemas.common import Currency, CurrencyCode, PeriodBoundedModel, SafeDecimal, StrictModel
 from backend.app.schemas.portfolio import PortfolioReportResponse, PortfolioSummary
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
-from backend.app.services.ai_export.components.payloads.portfolio_broker import load_portfolio_report
+from backend.app.services.ai_export.components.payloads.portfolio_broker import counts_ownership_share, load_portfolio_report
 from backend.app.services.ai_export.components.resources import BROKER_REPORT_RESOURCE
 from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.types import BuildScope, Domain, PeriodBehavior, ResourceKey
 from backend.app.services.ai_export.dependencies import BuildContext
-from backend.app.services.financial_math.native_cash import effective_share
+from backend.app.services.financial_math.native_cash import broker_shares
 
 # Frozen transaction-type semantics: the only two types that count as a "trade"
 # and therefore contribute to turnover. BUY settles with amount < 0 (cash out),
@@ -121,11 +122,10 @@ class TradeActivityRecord:
 class BrokerPeriodActivity:
     """A broker's settlement transactions inside ``(period_start, period_end]`` plus ownership share.
 
-    ``ownership_share`` is the share of this broker the report counts for the scoped
-    user (``native_cash.effective_share``: an owner's ``share_percentage``, the whole
-    broker for an editor or a viewer); turnover magnitudes are multiplied by it so the
-    exposed turnover reconciles with the engine's share-adjusted fee/invested/NAV
-    figures.
+    ``ownership_share`` is the share of this broker the export counts for the scoped
+    user (``native_cash.broker_shares``); turnover magnitudes are multiplied by it so the
+    exposed turnover reconciles with the engine's fee/invested/NAV figures on the same basis.
+    The broker export counts the broker whole (R11), so the share is 1.
     """
 
     records: tuple[TradeActivityRecord, ...]
@@ -151,23 +151,25 @@ async def _query_broker_period_transactions(session: AsyncSession, *, broker_id:
     return list((await session.execute(stmt)).scalars().all())
 
 
-async def _load_broker_ownership_share(session: AsyncSession, *, user_id: int, broker_id: int) -> Decimal | None:
-    """The share of ``broker_id`` the report counts for the scoped user, or ``None`` when no access row exists.
+async def _load_broker_ownership_share(session: AsyncSession, *, user_id: int, broker_id: int, apply_ownership_share: bool = True) -> Decimal | None:
+    """The share of ``broker_id`` the export counts for the scoped user, or ``None`` when no access row exists.
 
-    The report's own rule, ``native_cash.effective_share``: an owner counts its share (all of it when none is
-    recorded), an editor or a viewer the whole broker.
+    The one rule, ``native_cash.broker_shares``: with ``apply_ownership_share`` an owner counts its share (all of it
+    when none is recorded) and an editor or a viewer the whole broker; without it every role counts the broker whole
+    (R11, the broker page).
     """
-    stmt = select(BrokerUserAccess.role, BrokerUserAccess.share_percentage).where(BrokerUserAccess.user_id == user_id).where(BrokerUserAccess.broker_id == broker_id)
+    stmt = select(BrokerUserAccess.broker_id, BrokerUserAccess.role, BrokerUserAccess.share_percentage).where(BrokerUserAccess.user_id == user_id).where(BrokerUserAccess.broker_id == broker_id)
     access = (await session.execute(stmt)).first()
     if access is None:
         return None
-    role, share = access
-    return effective_share(role, share if share is None or isinstance(share, Decimal) else Decimal(str(share)))
+    share = access.share_percentage
+    normalized = SimpleNamespace(broker_id=access.broker_id, role=access.role, share_percentage=share if share is None or isinstance(share, Decimal) else Decimal(str(share)))
+    return broker_shares([normalized], apply_ownership_share=apply_ownership_share)[broker_id]
 
 
 async def _load_broker_period_activity(context: BuildContext, scope: BuildScope) -> BrokerPeriodActivity:
     async def _loader(session: AsyncSession) -> BrokerPeriodActivity:
-        share = await _load_broker_ownership_share(session, user_id=scope.user_id, broker_id=scope.broker_id)
+        share = await _load_broker_ownership_share(session, user_id=scope.user_id, broker_id=scope.broker_id, apply_ownership_share=counts_ownership_share(scope))
         if share is None:
             raise BrokerCostEfficiencyAccessError(f"user {scope.user_id} has no BrokerUserAccess for broker {scope.broker_id}; cannot compute share-adjusted turnover")
         transactions = await _query_broker_period_transactions(session, broker_id=scope.broker_id, period_start=scope.period_start, period_end=scope.period_end)
@@ -298,7 +300,7 @@ class BrokerCostEfficiencyPayload(PeriodBoundedModel):
     trade_count: int = Field(ge=0, description="BUY + SELL transactions in the period.")
     buy_count: int = Field(ge=0)
     sell_count: int = Field(ge=0)
-    ownership_share_ratio: SafeDecimal = Field(description="The share of this broker the report counts for the scoped user (0..1: an owner's share, 1 for an editor or a viewer), applied to turnover magnitudes.")
+    ownership_share_ratio: SafeDecimal = Field(description="The share of this broker the export counts for the scoped user (0..1), applied to turnover magnitudes. 1 for an export of the broker, which counts it whole (the broker page, R11): the user's own stake is in broker.provenance.")
 
     turnover: TurnoverSummary
     fees: RecordedCostAmount

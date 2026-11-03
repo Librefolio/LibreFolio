@@ -462,6 +462,19 @@ class TestPositionUnitPrice:
         assert envelope.payload["provider"] is None
         assert len(envelope.payload["valuation_source_semantics"]) == 4
 
+    @pytest.mark.asyncio
+    async def test_provenance_declares_how_a_converted_price_is_made(self, monkeypatch):
+        """MF-A13: a price converted into the report currency is the stored price times the day's unit rate, so
+        it can differ by one unit of the last digit from a division of rounded figures. The note says so; the
+        check reads the idea (converted, decimal), not the sentence."""
+        scope = _scope()
+        _patch_metadata(monkeypatch, _metadata())
+        context = _make_context(scope, _make_async_session())
+
+        note = (await context.resolve("asset.provenance", required=True)).payload["price_provenance_note"].lower()
+
+        assert "converted" in note and "decimal" in note, note
+
 
 # =============================================================================
 # J-17 — ESTIMATED_AT_COST: a holding with no price observation, valued at its book cost

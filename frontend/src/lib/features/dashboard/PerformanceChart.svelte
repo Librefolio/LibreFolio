@@ -57,6 +57,8 @@
 
     interface OtherPeriodEffect {
         description: string;
+        /** The backend's fixed code of the rows told by it (`fx_on_cash`). */
+        code?: string | (string | null)[] | null;
         category: 'Income' | 'Cost' | 'Other' | string;
         period_pnl: string;
         broker_id?: number | (number | null)[] | null;
@@ -96,6 +98,8 @@
         key: string;
         kind: 'other';
         label: string;
+        /** The backend's fixed code of the rows told by it (`fx_on_cash`); null for the others. */
+        code: string | null;
         category: string;
         brokerName: string | null;
         net: number;
@@ -290,10 +294,11 @@
     /** Backend sends fixed English description strings for "other effect" rows
      *  (never localized) — translate the known ones instead of leaking raw English
      *  into other languages. Same mapping as OtherPeriodEffectsTable.svelte. */
-    function otherEffectDescriptionLabel(description: string): string {
+    function otherEffectDescriptionLabel(description: string, code: string | null): string {
+        // The exchange result on foreign cash is told by its code, never by its text (F-AI b).
+        if (code === 'fx_on_cash') return translateOr($t, 'dashboard.fxOnCash', description);
         if (description === 'Unallocated income') return translateOr($t, 'dashboard.unallocatedIncome', description);
         if (description === 'Unallocated costs') return translateOr($t, 'dashboard.unallocatedCosts', description);
-        if (description === 'FX on cash') return translateOr($t, 'dashboard.fxOnCash', description);
         if (description === 'Transfers at market value') return translateOr($t, 'dashboard.transfersAtMarketValue', description);
         if (description === 'Other / reconciliation residual') return translateOr($t, 'dashboard.otherReconciliationResidual', description);
         return description;
@@ -368,6 +373,7 @@
             key: `effect-${safeNumber(effect.broker_id) ?? 'none'}-${index}`,
             kind: 'other',
             label: effect.description,
+            code: safeString(effect.code),
             category: effect.category,
             brokerName: safeString(effect.broker_name),
             net: parseNumberOrZero(effect.period_pnl),
@@ -492,7 +498,7 @@
             return `{name|${escapeRichText(trimLabel(row.label))}} {${badgeKey}|${escapeRichText(badgeText)}}`;
         }
 
-        return `{name|${escapeRichText(trimLabel(otherEffectDescriptionLabel(row.label)))}}`;
+        return `{name|${escapeRichText(trimLabel(otherEffectDescriptionLabel(row.label, row.code)))}}`;
     }
 
     /** Mobile row header renders name, status badge and net P&L as three
@@ -510,7 +516,7 @@
             return `{name|${escapeRichText(label)}}`;
         }
 
-        const name = otherEffectDescriptionLabel(row.label);
+        const name = otherEffectDescriptionLabel(row.label, row.code);
         return `{name|${escapeRichText(trimLabel(name, 42))}}`;
     }
 
@@ -530,7 +536,7 @@
 
         if (row.kind === 'other') {
             const pnlHtml = `<span style="color:${signValueColor(row.net, themeDark)}">${escapeHtml(formatCurrencyAmountPlain(row.net, displayCurrency, {showSign: true}))}</span>`;
-            let html = buildTooltipHeader(escapeHtml(otherEffectDescriptionLabel(row.label)), theme.textColor);
+            let html = buildTooltipHeader(escapeHtml(otherEffectDescriptionLabel(row.label, row.code)), theme.textColor);
             html += buildTooltipRow(labels.category, escapeHtml(categoryLabel(row.category)));
             html += buildTooltipRow(labels.periodPnl, pnlHtml, otherEffectColor(row.category, themeDark));
             html += buildTooltipRow(labels.broker, escapeHtml(row.brokerName ?? '—'));

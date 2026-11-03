@@ -1188,3 +1188,41 @@ describe('PerformanceChart net return from period_pnl_percent (R17 / W8 / P4)', 
         });
     });
 });
+
+describe('PerformanceChart FX on cash row (F-AI b)', () => {
+    const FX_BY_CODE = {description: 'Probe exchange row', code: 'fx_on_cash', category: 'Other', period_pnl: decimal(-175), broker_id: 7, broker_name: 'Probe Broker'};
+    // The English text without the code is not the exchange result: a row is told by its code only.
+    const FX_BY_TEXT_ONLY = {description: 'FX on cash', category: 'Other', period_pnl: decimal(-20), broker_id: 8, broker_name: 'Probe Bank'};
+
+    beforeAll(async () => {
+        await waitLocale('it');
+    });
+
+    afterEach(async () => {
+        currentLanguage.set('en');
+        await waitLocale('en');
+        flushSync();
+        await tick();
+    });
+
+    it('draws the row told by its code under the catalogue label and leaves the English text alone without the code', async () => {
+        // Italian, where the catalogue label differs from the English text, so a row that is not recognized stays in English.
+        currentLanguage.set('it');
+        await waitLocale('it');
+        flushSync();
+        await tick();
+        expect(get(locale), 'control: the svelte-i18n locale is Italian').toBe('it');
+
+        const option = latestFullOption(await mountChart({positions: [EUR_ASSET], otherEffects: [FX_BY_CODE, FX_BY_TEXT_ONLY], displayCurrency: 'EUR'}));
+        const labels = option.yAxis.data.map((value) => option.yAxis.axisLabel.formatter(value) as string);
+
+        expect(
+            labels.some((label) => label.includes(FX_BY_CODE.description)),
+            'the code row is shown under the catalogue label, not under its own description',
+        ).toBe(false);
+        expect(
+            labels.filter((label) => label.includes('FX on cash')),
+            'only the row without the code keeps the English text',
+        ).toHaveLength(1);
+    });
+});

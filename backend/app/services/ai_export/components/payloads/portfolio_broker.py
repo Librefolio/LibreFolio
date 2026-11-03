@@ -48,6 +48,7 @@ from backend.app.schemas.portfolio import (
     LotsAnalysisResponse,
     LotSummarySchema,
     OtherPeriodEffect,
+    OtherPeriodEffectCode,
     PortfolioHistoryPoint,
     PortfolioHolding,
     PortfolioReportQuery,
@@ -55,7 +56,7 @@ from backend.app.schemas.portfolio import (
     UnallocatedContribution,
 )
 from backend.app.services.ai_export.components.resources import LotsResultsResource
-from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, ResourceKey
+from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain, ResourceKey
 from backend.app.services.ai_export.temporal.plan import Bucket, BucketPlan
 from backend.app.services.ai_export.temporal.uniform import uniform_calendar_buckets
 from backend.app.services.financial_math.lots.summary import residual_cost
@@ -82,6 +83,7 @@ __all__ = [
     "build_performance_bucket_rows",
     "build_uniform_performance_buckets",
     "count_unavailable_amount_lots",
+    "counts_ownership_share",
     "discover_transacted_asset_ids",
     "fifo_scope_totals",
     "has_nonzero_open_lot",
@@ -267,6 +269,8 @@ class EffectRow(StrictModel):
     """Non-position period P&L row, mirroring `OtherPeriodEffect`."""
 
     description: str
+    #: Fixed code of the rows a reader recognizes by it, never by `description` (`fx_on_cash`); None for every other row.
+    code: OtherPeriodEffectCode | None = None
     category: str
     period_pnl: Currency
     broker_id: int | None = None
@@ -795,6 +799,7 @@ def sort_unallocated(rows: Sequence[UnallocatedRow]) -> list[UnallocatedRow]:
 def map_effect_row(item: OtherPeriodEffect, *, currency_code: str) -> EffectRow:
     return EffectRow(
         description=item.description,
+        code=item.code,
         category=item.category,
         period_pnl=_currency_required(currency_code, item.period_pnl),
         broker_id=item.broker_id,
@@ -911,12 +916,28 @@ async def resolve_accessible_broker_ids(session: AsyncSession, user_id: int) -> 
     return sorted({int(broker_id) for broker_id in result.scalars().all()})
 
 
+def counts_ownership_share(scope: BuildScope) -> bool:
+    """Whether an export of `scope` counts an owner's share of each broker.
+
+    False for a Broker scope (R11, developer 30/10): the export opened from the broker page gives the broker's whole
+    amounts, as the page does, and a note says who the user is for it (`broker.provenance`). True for every other
+    domain: the portfolio, asset and FX pages count the user's own part. The share rule itself stays in
+    `native_cash.broker_shares`.
+    """
+    return scope.domain is not Domain.BROKER
+
+
 async def load_portfolio_report(
     context: BuildContext,
     scope: BuildScope,
     resource_key: ResourceKey[PortfolioReportResponse],
+    *,
+    apply_ownership_share: bool | None = None,
 ) -> PortfolioReportResponse:
     """Loads the single `PortfolioReportResponse` for this request, memoized under `resource_key`.
+
+    `apply_ownership_share` None follows the scope's domain (`counts_ownership_share`); a caller that needs another
+    basis for a different resource key passes it (the broker-vs-portfolio comparison loads the whole portfolio whole).
 
     Every `portfolio.*`/`broker.*` financial component builder calls this with
     the *same* `PORTFOLIO_REPORT_RESOURCE`/`BROKER_REPORT_RESOURCE` key for its
@@ -938,6 +959,7 @@ async def load_portfolio_report(
             include_allocation_history=False,
             include_breakdown=True,
             include_positions_contribution=True,
+            apply_ownership_share=counts_ownership_share(scope) if apply_ownership_share is None else apply_ownership_share,
         )
         return await PortfolioService(session).get_report(scope.user_id, query)
 
