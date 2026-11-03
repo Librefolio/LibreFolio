@@ -422,7 +422,8 @@
           "observations": "{count} days observed",
           "cut": "VaR threshold at {value}",
           "noCut": "No threshold published for this window.",
-          "empty": "No return distribution available for this period."
+          "empty": "No return distribution available for this period.",
+          "bin": "{range}: {count, plural, one {# day} other {# days}} ({share})"
         }
       },
       "l2": {
@@ -590,7 +591,14 @@
         "partialTitle": "Some results are partial",
         "notesTitle": "Worth knowing about these results",
         "noPriceSourceTitle": "Holdings without prices, left out of some measurements",
-        "affected": "Measurements affected"
+        "affected": "Measurements affected",
+        "excluded": {
+          "missing_price": "{count, plural, one {# asset excluded} other {# assets excluded}}: no market prices in the period.",
+          "missing_fx": "{count, plural, one {# asset excluded} other {# assets excluded}}: the exchange rate to your currency is missing.",
+          "invalid_currency": "{count, plural, one {# asset excluded} other {# assets excluded}}: the currency of their prices is not valid.",
+          "insufficient_history": "{count, plural, one {# asset excluded} other {# assets excluded}}: not enough history in the period.",
+          "no_price_source": "{count, plural, one {# asset excluded} other {# assets excluded}}: no price source is assigned and no price has ever been recorded."
+        }
       }
     },
     "eligibility": {

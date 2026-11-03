@@ -12,7 +12,7 @@
  *   1. **A DataTable, used as is.** The container `data-testid={testId}` wraps the shared
  *      `DataTable`; its headers are `dt-header-{id}`, in the fixed order asset, weight, return,
  *      contribution, impact, bar. No selection, no row actions, no column filters, no column
- *      menu, and no paging: every row is drawn, past the ten of a page. The table is identified
+ *      menu; it pages after five rows (B8, 31/10/2026) and «all» draws every row. The table is identified
  *      row by row by the row's key (`getRowId = row.key`, published by DataTable as
  *      `data-row-id`).
  *   2. **A column with nothing to say is not drawn.** Weight, return, contribution and impact are
@@ -81,6 +81,7 @@ vi.mock('$lib/stores/reference/assetStore', async (importOriginal) => ({
 }));
 
 import {render, screen, setupI18n, within} from '$test/component';
+import {showAllRows} from '$test/tablePaging';
 import {_, locale, SUPPORTED_LOCALES, type SupportedLocale} from '$lib/i18n';
 import en from '$lib/i18n/en.json';
 import es from '$lib/i18n/es.json';
@@ -386,12 +387,15 @@ describe('TornadoChart — a table, its columns in a fixed order (k5b)', () => {
         }
     });
 
-    it('is the plain table: no selection, no row actions, no column filters, no column menu and no paging — every row drawn, past the ten of a page', () => {
+    it('is the plain table: no selection, no row actions, no column filters and no column menu, and it pages after five rows, «all» drawing every one (B8)', async () => {
         const root = mount(TWELVE);
         expectColumns(root, COLUMNS, 'barrier: the six columns');
 
-        expect(rowKeys(root), 'not every row is drawn, in the order given: the table pages (DataTable shows ten per page by default)').toEqual(TWELVE.map((row) => row.key));
-        const single = ['dt-select-all', 'dt-show-selected-only', 'data-table-pagination', 'column-visibility-toggle'].filter((testId) => within(root).queryAllByTestId(testId).length > 0);
+        expect(rowKeys(root), 'the table opens on the first five rows, in the order given').toEqual(TWELVE.slice(0, 5).map((row) => row.key));
+        expect(within(root).queryAllByTestId('data-table-pagination'), 'twelve rows and no way to the sixth').toHaveLength(1);
+        await showAllRows(root);
+        expect(rowKeys(root), 'on «all» not every row is drawn, in the order given').toEqual(TWELVE.map((row) => row.key));
+        const single = ['dt-select-all', 'dt-show-selected-only', 'column-visibility-toggle'].filter((testId) => within(root).queryAllByTestId(testId).length > 0);
         expect(single, 'the table offers a control D376 does not give it').toEqual([]);
         const families = ['dt-row-checkbox-', 'row-actions-', 'col-filter-trigger-'].filter((prefix) => root.querySelector(`[data-testid^="${prefix}"]`) !== null);
         expect(families, 'the table offers per-row selection, row actions or column filters').toEqual([]);

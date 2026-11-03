@@ -3,6 +3,9 @@
 
     import {_ as t} from '$lib/i18n';
     import {STATUS_TONES} from '$lib/theme/toneClasses';
+    import {assetStoreVersion, getAssetInfo} from '$lib/stores/reference/assetStore';
+
+    import AssetChip from '../AssetChip.svelte';
 
     import type {ResultHealth, ResultReason} from './levelHelpers';
     import {analyticNameKey} from './partialNotice';
@@ -77,6 +80,39 @@
         return $t('risk.levels.l3.title');
     }
 
+    /**
+     * The short sentence of an exclusion, with the count of the assets it names (developer's decisions of 29/09 and 31/10/2026): the cause
+     * once, and the assets as badges beside it. `null` — so the backend's own sentence stays, whole — when the reason is not an
+     * exclusion (its key starts with the warning's code), states a cause with no short sentence here, or names no asset (merged warnings
+     * that disagreed lose theirs): a reason nobody can badge is never dropped. One literal key per branch, for the i18n audit.
+     */
+    function shortExclusion(entry: ResultReason): string | null {
+        const count = entry.assetIds?.length ?? 0;
+        if (count === 0 || !entry.key.startsWith('assets_excluded:')) return null;
+        const values = {values: {count}};
+        switch (entry.reason) {
+            case 'missing_price':
+                return $t('risk.levels.notice.excluded.missing_price', values);
+            case 'missing_fx':
+                return $t('risk.levels.notice.excluded.missing_fx', values);
+            case 'invalid_currency':
+                return $t('risk.levels.notice.excluded.invalid_currency', values);
+            case 'insufficient_history':
+                return $t('risk.levels.notice.excluded.insufficient_history', values);
+            case 'no_price_source':
+                return $t('risk.levels.notice.excluded.no_price_source', values);
+            default:
+                return null;
+        }
+    }
+
+    /** An asset as the badge shows it: the cache's icon, type and name, else its id. The cache is read, never loaded here. */
+    function chipAsset(assetId: number): {id: number; display_name: string; icon_url: string | null; asset_type: string | null} {
+        void $assetStoreVersion;
+        const info = getAssetInfo(assetId);
+        return {id: assetId, display_name: info?.display_name ?? `#${assetId}`, icon_url: info?.icon_url ?? null, asset_type: info?.asset_type ?? null};
+    }
+
     function measurementName(entry: ResultHealth): string {
         return entry.label ? $t(entry.label) : $t(analyticNameKey(entry.code), {default: entry.code});
     }
@@ -95,7 +131,19 @@
         {#if reasons.length > 0}
             <ul class="mt-1 list-disc space-y-0.5 pl-5" data-testid="risk-partial-reasons" data-count={reasons.length}>
                 {#each reasons as reason (reason.key)}
-                    <li data-testid="risk-partial-reason" data-occurrences={reason.occurrences}>{reason.message}</li>
+                    {@const short = shortExclusion(reason)}
+                    <li data-testid="risk-partial-reason" data-occurrences={reason.occurrences}>
+                        {#if short !== null}
+                            {short}
+                            <span class="mt-1 flex flex-wrap items-center gap-1.5" data-testid="risk-partial-reason-assets">
+                                {#each reason.assetIds ?? [] as assetId (assetId)}
+                                    <AssetChip asset={chipAsset(assetId)} variant="excluded" testId="risk-partial-reason-asset" data-asset-id={assetId} />
+                                {/each}
+                            </span>
+                        {:else}
+                            {reason.message}
+                        {/if}
+                    </li>
                 {/each}
             </ul>
         {/if}

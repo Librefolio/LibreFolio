@@ -1,6 +1,7 @@
 <script lang="ts">
     import {attachOverflowMarqueeToDescendants} from '$lib/actions/scrollOnOverflow';
     import DataTable from '$lib/components/table/DataTable.svelte';
+    import {RISK_PAGE_SIZE, RISK_PAGE_SIZES} from '../../riskTablePaging';
     import type {ColumnDef} from '$lib/components/table/types';
     import {_ as t} from '$lib/i18n';
     import {assetStoreVersion, getAssetInfo} from '$lib/stores/reference/assetStore';
@@ -165,7 +166,8 @@
             selectionMode="none"
             enableActions={false}
             enableColumnFilters={false}
-            enablePagination={false}
+            defaultPageSize={RISK_PAGE_SIZE}
+            pageSizeOptions={RISK_PAGE_SIZES}
             enableColumnVisibility={false}
             enableContextMenu={false}
             enableColumnResize

@@ -20,7 +20,7 @@
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import SimpleSelect from '$lib/components/ui/select/SimpleSelect.svelte';
     import TabBar from '$lib/components/ui/tabs/TabBar.svelte';
-    import {buildHistoricalReplayParameters, buildHypotheticalShockParameters, buildSimulationParameters, STRESS_ASSET_CLASSES, uniformAssetClassShocks, type RiskScenarioDimension, type SimulationView} from '$lib/features/risk/riskRequest';
+    import {buildHistoricalReplayParameters, buildHypotheticalShockParameters, buildSimulationParameters, STRESS_ASSET_CLASSES, withWholeBroker, uniformAssetClassShocks, type RiskScenarioDimension, type SimulationView} from '$lib/features/risk/riskRequest';
     import {assetStoreVersion, ensureAssetsLoaded, getAssetInfo} from '$lib/stores/reference/assetStore';
     import {ensureCountriesLoaded, getAllCountries, getCountryInfo} from '$lib/stores/reference/countryStore';
     import {ensureFxRoutesLoaded, fxRoutesVersion, getConfiguredPairSlugs} from '$lib/stores/reference/fxRoutesStore';
@@ -48,6 +48,8 @@
         assetIds?: number[];
         title?: string;
         subtitle?: string;
+        /** The page shows its amounts whole, not at the owner's share (the broker page, MF6-3, D4): a portfolio scope is queried with `apply_ownership_share: false`. */
+        wholeBroker?: boolean;
         internalSubset?: boolean;
         assetClass?: string | null;
         sectorExposure?: Record<string, number> | null;
@@ -58,12 +60,29 @@
         onsynced?: (detail: {accepted: boolean}) => void | Promise<void>;
     }
 
-    let {scope, dateStart, dateEnd, targetCurrency, assetIds = [], title = '', subtitle = '', internalSubset = false, assetClass = null, sectorExposure = null, geographyExposure = null, refreshVersion = 0, showHeaderActions = true, showBetaBanner = true, onsynced}: Props = $props();
+    let {
+        scope,
+        dateStart,
+        dateEnd,
+        targetCurrency,
+        assetIds = [],
+        title = '',
+        subtitle = '',
+        wholeBroker = false,
+        internalSubset = false,
+        assetClass = null,
+        sectorExposure = null,
+        geographyExposure = null,
+        refreshVersion = 0,
+        showHeaderActions = true,
+        showBetaBanner = true,
+        onsynced,
+    }: Props = $props();
 
     // Every fetch, generation guard and invalidation rule lives in the controller;
     // this component owns only what the user can see and touch. The aliases below
     // are read-only views, so the markup keeps reading the names it always read.
-    const controller = createRiskPanelController(() => ({scope, dateStart, dateEnd, targetCurrency, appliedRiskFreePercent, refreshVersion}), {scenarioCatalogLoaded: initializeScenarioEditors});
+    const controller = createRiskPanelController(() => ({scope: withWholeBroker(scope, wholeBroker), dateStart, dateEnd, targetCurrency, appliedRiskFreePercent, refreshVersion}), {scenarioCatalogLoaded: initializeScenarioEditors});
 
     let catalog = $derived(controller.catalog);
     let scenarioCatalog = $derived(controller.scenarioCatalog);
