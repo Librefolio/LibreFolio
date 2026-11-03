@@ -220,6 +220,8 @@ def front_utility_unit(verbose: bool = False, ui: bool = False, headed: bool = F
             "src/lib/features/portfolio-view/portfolioDataScope.test.ts",
             "src/lib/features/portfolio-view/portfolioData.test.ts",
             "src/lib/features/portfolio-view/PortfolioOverviewTab.test.ts",
+            "src/lib/features/portfolio-view/PortfolioRiskTab.test.ts",
+            "src/lib/features/portfolio-view/portfolioTransactions.test.ts",
             "src/lib/features/brokers/lots/lotGanttChartHelpers.test.ts",
             "src/lib/features/brokers/lots/lotStateVisual.test.ts",
             "src/lib/features/brokers/lots/unifiedLotsTableHelpers.test.ts",

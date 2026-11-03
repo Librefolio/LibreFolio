@@ -55,11 +55,12 @@
     import {getFixedDropdownPosition} from '$lib/utils/layout/dropdownPosition';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
-    import RiskLevelsPanel from '$lib/features/risk/levels/RiskLevelsPanel.svelte';
-    import PositionsPanel from '$lib/features/dashboard/PositionsPanel.svelte';
     import {createPortfolioData} from './portfolioData';
     import PortfolioOverviewTab from './PortfolioOverviewTab.svelte';
-    import LotsAnalysisPanel from '$lib/features/brokers/lots/LotsAnalysisPanel.svelte';
+    import PortfolioPositionsTab from './PortfolioPositionsTab.svelte';
+    import PortfolioRiskTab from './PortfolioRiskTab.svelte';
+    import PortfolioTransactionsTab from './PortfolioTransactionsTab.svelte';
+    import {PortfolioTransactions} from './portfolioTransactions.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
     import {pairsStillStale, STALE_FX_ACTION, STALE_FX_CODE, staleFxIssue, type StaleFxPairLike} from '$lib/features/dashboard/staleFxIssue';
@@ -68,16 +69,10 @@
     import {invalidateFxRoutes} from '$lib/stores/reference/fxRoutesStore';
     import {getClientSessionGeneration, isClientSessionCurrent} from '$lib/stores/app/clientSession';
     import {classifyFxSyncOutcome, formatFxSyncResult, FX_SYNC_TIMEOUT_MS, type FxPairSyncCompleteDetail, type FxSyncResponse} from '$lib/services/fxCreationSync';
-    import TransactionFormModal from '$lib/features/transactions/form/TransactionFormModal.svelte';
-    import TransactionsTable from '$lib/features/transactions/TransactionsTable.svelte';
-    import {resolveFormItemsForView, type FormModalItems} from '$lib/features/transactions/resolveFormItems';
-    import {loadPartnerRows, loadEventTooltipMap} from '$lib/features/transactions/loadTransactionRows';
-    import type {TXReadItem, AssetEvent} from '$lib/features/transactions/types';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import BrokerIcon from '$lib/components/ui/display/BrokerIcon.svelte';
     import {getBrokerRole} from '$lib/stores/reference/brokerStore';
     import {getRoleIcon, getRoleIconColor} from '$lib/utils/broker/brokerRoleHelpers';
-    import {currentLanguage} from '$lib/stores/app/language';
     import {goto} from '$app/navigation';
     import {zodiosApi} from '$lib/api';
     import {buildTransactionsFiltersUrl} from '$lib/features/transactions/filterState';
@@ -105,14 +100,10 @@
     });
     const summary = $derived($data.summary);
     const history = $derived($data.history);
-    const allocationHistoryFromReport = $derived($data.allocationHistory);
-    const positionsContribution = $derived($data.positionsContribution);
     const contributionLoading = $derived($data.contributionLoading);
     /** A contribution already on screen is being refreshed in background: busy, but no skeleton. */
     const contributionRefreshing = $derived($data.contributionRefreshing);
     const reportLoading = $derived($data.reportLoading);
-    /** True only on first load when no data exists yet. Once data is loaded, subsequent fetches are "refreshing". */
-    let summaryLoading = $derived(reportLoading && !summary);
     let syncLoading = $state(false);
     let syncingCode = $state<string | null>(null);
 
@@ -308,61 +299,15 @@
     });
     let fxPairCreateSlug = $state('');
 
-    /** Transaction view modal state (opened from the Transazioni tab's row double-click). */
-    let txViewOpen = $state(false);
-    let txViewItems = $state<FormModalItems | null>(null);
-
-    /** Transazioni tab — filtered by the SAME broker filter + date range as the rest of the
-     *  dashboard (not just "recent 10" regardless of period), with real pagination via
-     *  TransactionsTable's built-in DataTablePagination. Lazy-loaded/reloaded whenever the
-     *  tab is active and the broker/date filter key changes (mirrors RecentTransactionsPanel's
-     *  previous key-based reload pattern, now also keyed on the date range). */
-    let txMainRows = $state<TXReadItem[]>([]);
-    let txPartnerRows = $state<TXReadItem[]>([]);
-    let txEventTooltipMap = $state<Map<number, AssetEvent>>(new Map());
-    let txLoading = $state(false);
-    let txCurrentPage = $state(1);
-    let lastTxLoadKey = $state('');
-
-    $effect(() => {
-        if (activeTab !== 'transazioni') return;
-        const key = `${dateRangeCtl.historyStart}|${dateRangeCtl.end}|${activeBrokerIds ? [...activeBrokerIds].sort((a, b) => a - b).join(',') : 'all'}`;
-        if (key !== lastTxLoadKey) {
-            lastTxLoadKey = key;
-            txCurrentPage = 1;
-            void pageBusy.track('dashboard-transactions', loadTransactions);
-        }
+    /** The Transazioni tab's rows: kept here, not in the tab, so leaving the tab and coming back asks nothing again. */
+    const txCtl = new PortfolioTransactions({
+        ownedBrokerIds: () => ownedBrokerIds,
+        brokerIds: () => activeBrokerIds,
+        period: () => ({historyStart: dateRangeCtl.historyStart, start: dateRangeCtl.start, end: dateRangeCtl.end, isMaxPending: dateRangeCtl.isMaxPending}),
     });
-
-    async function loadTransactions() {
-        // F2: nothing owned → the dashboard (including this tab) shows nothing.
-        if (ownedBrokerIds.length === 0) {
-            txMainRows = [];
-            txPartnerRows = [];
-            return;
-        }
-        txLoading = true;
-        try {
-            // Server-side filter: date range always applied; broker_id per-broker (the endpoint
-            // only accepts a single broker_id) when a subset is selected, omitted for "all".
-            const fetchForBroker = async (brokerId?: number): Promise<TXReadItem[]> => {
-                const queries: Record<string, unknown> = {};
-                if (brokerId != null) queries.broker_id = brokerId;
-                if (!dateRangeCtl.isMaxPending) queries.date_start = dateRangeCtl.start;
-                if (dateRangeCtl.end) queries.date_end = dateRangeCtl.end;
-                return (await zodiosApi.query_transactions_api_v1_transactions_get({queries})) as TXReadItem[];
-            };
-
-            const all = activeBrokerIds && activeBrokerIds.length > 0 ? Array.from(new Map((await Promise.all(activeBrokerIds.map((id) => fetchForBroker(id)))).flat().map((tx) => [tx.id, tx])).values()) : await fetchForBroker(undefined);
-
-            txMainRows = all;
-            const [partner, tooltipMap] = await Promise.all([loadPartnerRows(txMainRows), loadEventTooltipMap(txMainRows)]);
-            txPartnerRows = partner;
-            txEventTooltipMap = tooltipMap;
-        } finally {
-            txLoading = false;
-        }
-    }
+    $effect(() => {
+        txCtl.sync(activeTab === 'transazioni');
+    });
 
     /**
      * «Sync rates» on MISSING_FX_RATES. A date is missing only when no rate exists on or
@@ -897,98 +842,44 @@
     {#if activeTab === 'panoramica'}
         <PortfolioOverviewTab snapshot={$data} displayCurrency={appliedCurrency} brokerIds={activeBrokerIds} onRequestPnlCandles={() => void pageBusy.join('dashboard-pnl-candles', loadPnlCandles)} />
     {:else if activeTab === 'posizioni'}
-        <div data-testid="dashboard-positions-tab">
-            <!-- F2: nothing is asked before the owned brokers are known — the prop arrives with them. -->
-            <PositionsPanel
-                {summary}
-                contribution={positionsContribution}
-                loading={summaryLoading}
-                {contributionLoading}
-                {assetsHref}
-                brokers={allBrokers}
-                onRequestContribution={canAsk ? () => void pageBusy.join('dashboard-contribution', loadContribution) : undefined}
-                onAnalyze={openAssetPanel}
-                analyzedAssetId={activeAssetId}
-                portfolioHistory={history}
-                brokerIds={activeBrokerIds}
-                currentLanguage={$currentLanguage}
-                allocationHistory={allocationHistoryFromReport}
-                positionsSeries={$positionsSeriesCtl.response}
-                positionsSeriesLoading={$positionsSeriesCtl.loading}
-                positionsSeriesFailed={$positionsSeriesCtl.failed}
-                onRequestPositionsSeries={(keys) => positionsSeriesCtl.request(keys, data.positionsSeriesScope(refreshVersion))}
-                positionsRolling={$positionsRollingCtl}
-                onRequestPositionsRolling={(assetIds) => positionsRollingCtl.request(assetIds, data.positionsRollingScope(refreshVersion))}
-            />
-            <!-- The lot detail opens below the positions, as on a broker's page (FB-12b): the chart stays; the panel's ✕ or the browser's back closes it. -->
-            <LotsAnalysisPanel
-                open={activeAssetId != null}
-                assetId={activeAssetId}
-                brokerIds={activeBrokerIds ?? allBrokers.map((b) => b.id)}
-                brokers={allBrokers}
-                currency={activeAsset?.currency ?? appliedCurrency}
-                assetName={activeAsset?.display_name ?? null}
-                onClose={closeAssetPanel}
-                ready={canAsk}
-                {refreshVersion}
-            />
-        </div>
+        <PortfolioPositionsTab
+            snapshot={$data}
+            brokers={allBrokers}
+            brokerIds={activeBrokerIds}
+            {canAsk}
+            {assetsHref}
+            onRequestContribution={canAsk ? () => void pageBusy.join('dashboard-contribution', loadContribution) : undefined}
+            positionsSeries={$positionsSeriesCtl.response}
+            positionsSeriesLoading={$positionsSeriesCtl.loading}
+            positionsSeriesFailed={$positionsSeriesCtl.failed}
+            onRequestPositionsSeries={(keys) => positionsSeriesCtl.request(keys, data.positionsSeriesScope(refreshVersion))}
+            positionsRolling={$positionsRollingCtl}
+            onRequestPositionsRolling={(assetIds) => positionsRollingCtl.request(assetIds, data.positionsRollingScope(refreshVersion))}
+            {activeAssetId}
+            {activeAsset}
+            displayCurrency={appliedCurrency}
+            onAnalyze={openAssetPanel}
+            onCloseAnalysis={closeAssetPanel}
+            {refreshVersion}
+        />
     {:else if activeTab === 'rischio'}
-        <div data-testid="dashboard-risk-tab">
-            <!-- The risk scope is the *whole* portfolio — every broker the user owns (F2,
-                 as the rest of the Dashboard) — even when a broker filter is on, which is
-                 what the subtitle announces. Never without `broker_ids`: the backend would
-                 widen it to every broker the user can see, editor and viewer ones included,
-                 so the panel mounts only once the owned brokers are known. `summary` follows
-                 the filter, so its net worth belongs to a different question: passing it
-                 would print one broker's money beside every broker's risk. -->
-            {#if canAsk}
-                <RiskLevelsPanel
-                    scope={{kind: 'portfolio', broker_ids: ownedBrokerIds}}
-                    dateStart={dateRangeCtl.start}
-                    dateEnd={dateRangeCtl.end}
-                    targetCurrency={appliedCurrency}
-                    assetIds={[...new Set((summary?.holdings ?? []).map((holding) => holding.asset_id))]}
-                    scopeValue={brokerFilterActive || !summary ? null : parseFloat(summary.net_worth.amount)}
-                    title={$_('risk.dashboardTitle')}
-                    subtitle={brokerFilterActive ? $_('risk.dashboardFullPortfolio') : ''}
-                    {refreshVersion}
-                    onsynced={async () => {
-                        invalidate();
-                        await loadAll(true);
-                    }}
-                />
-            {:else if brokersReady}
-                <p class="py-12 text-center text-sm italic text-lf-muted" data-testid="dashboard-risk-no-owned">{$_('common.noData')}</p>
-            {:else}
-                <!-- Owned brokers still loading (cold load): say so instead of an empty tab. -->
-                <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle p-12 text-center" data-testid="dashboard-risk-loading">
-                    <RefreshCw class="text-lf-link animate-spin mx-auto" size={28} />
-                </div>
-            {/if}
-        </div>
+        <PortfolioRiskTab
+            {canAsk}
+            {brokersReady}
+            {ownedBrokerIds}
+            dateStart={dateRangeCtl.start}
+            dateEnd={dateRangeCtl.end}
+            targetCurrency={appliedCurrency}
+            {summary}
+            {brokerFilterActive}
+            {refreshVersion}
+            onsynced={async () => {
+                invalidate();
+                await loadAll(true);
+            }}
+        />
     {:else if activeTab === 'transazioni'}
-        <div data-testid="dashboard-transactions-tab">
-            {#if txLoading && txMainRows.length === 0}
-                <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle p-12 text-center">
-                    <RefreshCw class="text-lf-link animate-spin mx-auto" size={28} />
-                </div>
-            {:else}
-                <TransactionsTable
-                    mainRows={txMainRows}
-                    partnerRows={txPartnerRows}
-                    brokers={allBrokers}
-                    eventTooltipMap={txEventTooltipMap}
-                    currentPage={txCurrentPage}
-                    hideActions={true}
-                    onPageChange={(page) => (txCurrentPage = page)}
-                    onViewRow={(row) => {
-                        txViewItems = resolveFormItemsForView(row as TXReadItem, () => undefined, getBrokerRole);
-                        txViewOpen = true;
-                    }}
-                />
-            {/if}
-        </div>
+        <PortfolioTransactionsTab transactions={txCtl} brokers={allBrokers} />
     {/if}
 </div>
 
@@ -997,6 +888,3 @@
     {@const fxParts = fxPairCreateSlug.includes('-') ? fxPairCreateSlug.split('-') : fxPairCreateSlug.split('/')}
     <FxPairAddModal bind:open={showFxPairAddModal} initialBase={fxParts[0] ?? ''} initialQuote={fxParts[1] ?? ''} oncreated={handleFxPairCreated} onsynced={handleFxPairCreationSynced} />
 {/if}
-
-<!-- Transaction view modal — opened from the Transazioni tab's row double-click -->
-<TransactionFormModal open={txViewOpen} mode="view" items={txViewItems} onClose={() => (txViewOpen = false)} />
