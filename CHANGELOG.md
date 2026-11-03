@@ -118,6 +118,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Backup jobs report the archive's SHA-256; a restore report says that the accounts and credentials come from the backup, and warns when the confirming administrator is not in it. The guide explains nightly copies with restic or Backrest.
 - **Activation and password-reset emails share one limit per network**, `LIBREFOLIO_SIGNUP_EMAILS_PER_ADDRESS` (20 an hour), beside the instance's hourly budget; wrong passwords never spend it. When an email is held, the page says how many minutes to wait, in a yellow box.
 - In the Users list, an info icon next to «Waiting for verification» explains what it means.
+- **Dashboard positions chart: a third view, Rolling**, next to Abs and %: how much each asset's price moved over a window that rolls along the period, to compare assets with each other.
+- **Risk: the correlation matrix can be ordered by type, sector and area**, and the bars of the return histogram show the app's tooltip.
+- **Import wizard: a date the Generic CSV cannot read is reported**, with the row, the value and the format, and where to change it (Settings › Plugins › Broker imports › Generic CSV › «Date format», then «Re-parse all»).
+- **A guide for the Tools page**, in the guides you can replay from Settings.
+- **Diagrams in the documentation open full screen**, with zoom and pan by wheel, pinch, drag and keyboard; texts in the page's language.
+- **Self-hosting: `LIBREFOLIO_DEFAULT_CURRENCY` and `LIBREFOLIO_DEFAULT_TIMEZONE`** set the default currency and the timezone at the first start, until an administrator saves the setting; an invalid value stops the start and names the variable.
+- `./dev.py db check --integrity` checks the database without changing it: integrity, broken references, text that is not UTF-8 and the schema revision.
+- Hosting panel: a `metrics` access with `GET /api/v1/panel/metrics` (storage, database size, price refresh health, counts).
 
 ### 🔄 Changed
 
@@ -201,6 +209,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Linking two Adjustments as a pair is refused**, with a message in your language pointing to an Asset Transfer. Saved data is not changed.
 - The Fineco importer reports the rows it skips (unreadable, or an operation it does not know), like the other plugins out of beta.
 - Notifications are announced by screen readers (errors at once, the others politely), and their close button is named in your language.
+- **Dashboard: the lot detail opens below the positions**, as on the broker page, and the positions chart stays.
+- **«All» starts at the first stored price or rate, before 2000 too**, in the Asset and FX detail pages and lists. A comparison older than the main series is drawn from its own first day, the main line empty before its own.
+- **An asset that arrived only by a transfer is valued at the transfer's cost** as an estimated price, following each day's exchange rate, until its first quote or any other movement; a quoted security moved between brokers keeps its quote.
+- When a sync of old exchange rates finds no newer rate, the notice says so instead of reporting a success.
+- A new username that differs from an existing one only by capitals is refused.
+- On a managed instance nobody else can register with, or move their profile to, the administrator's address.
+- The documentation site draws its diagrams with its own copy of Mermaid, with no request to a third party; the ELK layout is no longer available.
 
 #### 🎨 A new colour palette
 
@@ -443,6 +458,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The phone's menu button is named in your language.** Screen readers read «Toggle menu» in English in every language; the name now follows the interface language, followed as before by the connection level and the security warnings.
 - The lot history shows a transfer that leaves and arrives on the same day as two rows, the departure then the arrival, each naming both brokers, as for transfers over several days.
 - The quantities in the Performance table no longer count a transaction dated after the end of the report.
+- **Dropdown lists inside tables are no longer hidden under the sticky table header.**
+- **Risk: the historical replay dates follow the app language**, and a geography group defined by the host shows its name in the shock table instead of its id.
+- Risk: optimizing more than 100 assets reports a size limit instead of an invalid-parameter error.
+- Positions series: an asset summed over its brokers keeps its percent when units were in transit at the start of the period.
+- The sign-in page no longer flashes «Register here» on an invitation-only instance while the instance loads; the «forgot password» Docker command runs as the server's user, not root.
+- Registration lists Email before Username, so password managers fill the right field; the password rules are announced to screen readers.
+- The Profile tab shows the email as the server stored it, and asks for the current password when the server requires it.
+- `./dev.py user create` stores the email address in its normalised form.
+- A transaction opened from a link keeps its highlight after the pulse.
+- The stale-price tooltip counts days in your language (1 day, 3 days), and «Reset layout», the share cap and the brokers refresh button are translated.
+- The PAC Targets and Review steps fit a phone screen, with no sideways scrolling.
+- The import guide no longer points to a button that may be missing when no file was read.
 
 #### 🔒 Security
 
