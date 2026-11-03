@@ -9737,7 +9737,7 @@ con la nota del 22/10. E2E proposti al coordinatore: `front-broker detail` (il c
 
 ## Ondata 6 · J (30/10/2026) — rischio e numeri: J6-1, J6-2, poi J5-4, A6, J-35, B6–B8
 
-Base `0cd7c637a`, corsia 6213 (`/tmp/librefolio-r13-o6-j`). Checkpoint 1 (treno 12) = J6-1 + J6-2; checkpoint 2 (treno 13) = J5-4, A6, J-35; checkpoint 3 (treno 13) = B6, B7, B8.
+Base: la `dev_release2` di fine ottobre, corsia 6213 (`/tmp/librefolio-r13-o6-j`). Checkpoint 1 (treno 12) = J6-1 + J6-2; checkpoint 2 (treno 13) = J5-4, A6, J-35; checkpoint 3 (treno 13) = B6, B7, B8.
 
 - **J6-1 (T-DI)** — ✅ 30/10/2026. I due `<input type="date">` della riproduzione storica (`RiskAnalysisPanel.svelte`, scope asset) diventano un
   `DateRangePicker` (come `L4Replay`), con `data-testid="risk-replay-period"`.
@@ -9761,7 +9761,7 @@ Base `0cd7c637a`, corsia 6213 (`/tmp/librefolio-r13-o6-j`). Checkpoint 1 (treno 
   - Rossi da scrivere in `test_position_series.py` (classe `TestAnInternalTransfer`, accanto a `test_a_transfer_in_transit_at_the_start_enters_the_receivers_base_at_its_cost`): (1) `[asset] = build([(None, 10)], date_from=3, date_to=8, …)` con partenza 2, arrivo 5, costo spostato 1 000, valori 1 150/1 200: oggi base 0 e `pnl_percent` None; atteso base 1 000 e `pnl_percent` = 200/1 000 dal 6 gen; (2) il confine `departure == date_from`; (3) controllo di non regressione: trasferimento partito dopo `date_from` con valore ignoto → la base resta quella del mittente (non si raddoppia). Da aggiornare: `_summed_oracle` (`:724`, ora toglie sempre) e `_random_book`/il test dei libri casuali, perché l'oracolo segua la stessa regola.
   - Conflitto: la stessa funzione `_sum_over_brokers` è nel cammino di FB-14 di MF (un solo calcolo del motore per report, contribution e positions-series): serve sapere se MF tocca `position_series.py`.
 
-### Ondata 6 · J — checkpoint 2 (30/10/2026), base `fca03e28d`
+### Ondata 6 · J — checkpoint 2 (30/10/2026), sopra il checkpoint 1 già in `dev_release2`
 
 - **A6** — ✅ 30/10/2026. `optimization_models.MAX_OPTIMIZATION_ASSETS = 100` (usata anche dal `max_length` della richiesta); `PortfolioOptimizationAnalytic.execute` rifiuta
   prima della richiesta con `resource_limit_error(metric="assets", actual, limit)` → `RESOURCE_LIMIT`, `details = {metric, actual, limit, remedy: "positions"}` (la stessa forma della simulazione).
@@ -9779,7 +9779,7 @@ Base `0cd7c637a`, corsia 6213 (`/tmp/librefolio-r13-o6-j`). Checkpoint 1 (treno 
 - **B6 · tooltip dell'istogramma** — ✅ 30/10/2026. `ReturnHistogram.svelte`: il `title` nativo diventa il `Tooltip` del design system (`interactiveChild`, 40 barre senza 40 stop di tabulazione), testo = intervallo come gli estremi dell'asse; `binTooltip()` è l'unico punto dove aggiungere «N giorni (x %)» (D-B6a).
   > **Note implementazione**: nuovo `l1/ReturnHistogram.test.ts` (4 test), 3 rossi prima. Verde: `features/risk/levels` 21 file / 707 test.
 
-### Ondata 6 · J — checkpoint 3 (03/11/2026), base `898bc9d15` (+ `5106f268b`)
+### Ondata 6 · J — checkpoint 3 (03/11/2026), sopra l'unione di MF6-3 e del ritocco dei due test del gate
 
 Risposte del developer del 31/10: D-B6a sì (intervallo, giorni e quota), D-B6b sì (conteggio nella frase breve), D-B8b sì (cambia pagina senza muovere la vista), D-B8c allargata («in rischio che correlazione in tutte le tabelle ci sia la paginazione, tanto l'utente se vuole la toglie mettendo infinito»), D-B8d (riferimenti in cima finché la tabella non è ordinata né filtrata, poi come le altre).
 
@@ -9800,3 +9800,27 @@ Risposte del developer del 31/10: D-B6a sì (intervallo, giorni e quota), D-B6b 
   - Vero: «a selected asset the backend could not measure…» cercava il nome `#17` nella frase dell'avviso; con B6b la frase è breve e l'asset è un badge. Riscritto: un badge `risk-partial-reason-asset` con `data-asset-id` dell'asset escluso e `data-variant="excluded"`.
   - Le tre tabelle del laboratorio si leggono intere: `waitForLossTable`/`waitForPaidTable` ora scelgono «tutte» (`showAllRows` in `risk-lab.spec.ts`), come fa il lettore.
   - I 4 del laboratorio rilanciati da soli: 4/4 verdi.
+
+### Ondata 6 · J — stato finale (03/11/2026)
+
+Gli hash dei commit non sono citati: la storia del repo viene riscritta e cambierebbero tutti.
+
+**Fatto** (lotti, ciascuno con rossi prima e verde dopo; tutti consegnati e committati dal coordinatore):
+
+| Checkpoint | Lotti | Treno |
+|---|---|---|
+| 1 | **J6-1** (le date della riproduzione storica seguono la lingua dell'app: `DateRangePicker` al posto dei due `<input type="date">`, con il gate `nativeDateInput.gate.test.ts`); **J6-2** (un gruppo geografico dell'host ha un nome nella tabella dello shock) | 12 |
+| 2 | **A6** (oltre 100 titoli l'ottimizzazione risponde `resource_limit`); **J5-4** (la serie dell'asset sommato tiene la base delle quote in viaggio all'inizio; la regola «partito dopo `date_from`» è in `contributions.left_after_start`, revisione di MF con due ritocchi); **J-35** (una frase nella guida dei lotti, solo inglese) | 13 |
+| 2c | I due rossi del gate dopo l'unione di MF6-3: `apply_ownership_share: true` nelle richieste attese di `riskPanelController.test.ts` e `riskStore.test.ts` | 13 |
+| 3 | **B7** (la matrice di L2 ordina per tipo, settore, area); **B6** (tooltip delle barre con intervallo, giorni e quota; avviso dei parziali con la frase breve e un badge per asset); **B8** (tabelle del rischio a 5 righe per pagina, con «tutte»; `DataTable.navigateToRowId` con `{scroll, highlight}` additivo; cambio pagina dal clic sul punto senza spostare la vista; riferimenti in cima finché la tabella non è ordinata); **`wholeBroker`** (prop dei pannelli del rischio per la pagina del broker, `apply_ownership_share: false`) | 13 |
+
+Decisioni del developer applicate: D1 opzione a (J-35), D2 (A6, B6, B7, B8 nella 1.3), D-B6a, D-B6b, D-B8b, D-B8c (paginazione in tutte le tabelle del rischio), D-B8d (riferimenti in cima senza filtri né ordinamento), D4 (importi interi sulla pagina del broker).
+
+**Pendente** (nessuno bloccante per la 1.3):
+- **Traduzioni**: la frase di J-35 in `fifo-lot-analysis` manca nelle pagine it/fr/es (la cache Aphra è stata timbrata): debito di traduzione dichiarato.
+- **Pagina unica di Y (Y6-7)**: la pagina del broker deve passare `wholeBroker={true}` a `RiskLevelsPanel`; lo accende Y. `RiskAnalysisPanel` ha la prop ma nessun test di montaggio proprio.
+- **Tabelle semplici di `RiskAnalysisPanel`** (pannello legacy, scope asset): restano non paginate; sono `<table>` e non `DataTable`.
+- **Correlazione**: nessuna tabella da paginare (matrice e lista delle coppie); se il developer vuole la paginazione anche della lista delle coppie, è un lotto nuovo.
+- **Tre E2E sono lenti sotto carico** (due di `risk`, tre di `risk-lab`): timeout di caricamento della pagina, verdi da soli e a carico basso; da tenere d'occhio sul treno.
+- **Riga di `_frontend_utility.py`** che Black segnala: è così già prima, non è di J.
+- **Per il cloud**: nulla è cambiato in `GET /panel/status`, nelle rotte del pannello né nel profilo `managed`.
