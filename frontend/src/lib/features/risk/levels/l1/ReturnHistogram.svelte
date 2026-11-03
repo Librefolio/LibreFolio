@@ -29,7 +29,8 @@
     import {_ as t} from '$lib/i18n';
     import {SIGN_BAR} from '$lib/theme/toneClasses';
 
-    import {axisPercent, figurePercent, type ReturnHistogram} from './l1Helpers';
+    import {formatShare} from '../shareFormat';
+    import {axisPercent, figurePercent, type ReturnBin, type ReturnHistogram} from './l1Helpers';
 
     interface Props {
         histogram: ReturnHistogram | null;
@@ -39,11 +40,13 @@
     let {histogram, height = '120px'}: Props = $props();
 
     /**
-     * What a bar's tooltip says: the interval it covers, written as the axis ends are. Anything more about the bar (its days and
-     * share of the observations) is one more line here, so the tooltip and the bar never disagree about what a bar is.
+     * What a bar's tooltip says (D-B6a, 31/10/2026): the interval it covers, written as the axis ends are, how many days fell in it
+     * and their share of the observed days, written by the share rule. The share is a plain ratio of counts, the bar's own over the
+     * histogram's total: it is not a financial quantity and nothing else reads it.
      */
-    function binTooltip(bin: {lowerBound: number; upperBound: number}): string {
-        return `${axisPercent(bin.lowerBound)} … ${axisPercent(bin.upperBound)}`;
+    function binTooltip(bin: ReturnBin, observations: number): string {
+        const range = `${axisPercent(bin.lowerBound)} … ${axisPercent(bin.upperBound)}`;
+        return $t('risk.levels.l1.histogram.bin', {values: {range, count: bin.count, share: formatShare(observations > 0 ? bin.count / observations : 0, 1)}});
     }
 
     function barClass(bin: {holdsCut: boolean; belowCut: boolean}): string {
@@ -70,7 +73,7 @@
                 <div class="flex h-full items-end" style="flex: {bin.upperBound - bin.lowerBound} 1 0%;" data-testid="risk-l1-histogram-bin-{index}" data-holds-cut={bin.holdsCut} data-below-cut={bin.belowCut} data-count={bin.count}>
                     <!-- The app's tooltip, not the browser's `title` (B6): it reads in the dark theme, opens on touch, and an
                          empty bin has one too — a bin with nothing in it and a bin that is not there must not look alike. -->
-                    <Tooltip text={binTooltip(bin)} position="top" interactiveChild wrapperClass="h-full w-full items-end" testId="risk-l1-histogram-bin-{index}-tip">
+                    <Tooltip text={binTooltip(bin, histogram.observations)} position="top" interactiveChild wrapperClass="h-full w-full items-end" testId="risk-l1-histogram-bin-{index}-tip">
                         <!-- A bar with observations never rounds away to nothing: an
                              invisible bar and an empty bin must not look the same. -->
                         <div class="w-full rounded-t-sm {barClass(bin)}" style="height: {bin.count > 0 ? Math.max(bin.share * 100, 2) : 0}%;"></div>

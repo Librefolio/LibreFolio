@@ -40,6 +40,7 @@
     import ScatterChart from '$lib/components/charts/ScatterChart.svelte';
     import {capitalMarketLineAnchor, type RiskReturnPoint} from '$lib/components/charts/scatterChartHelpers';
     import DataTable from '$lib/components/table/DataTable.svelte';
+    import {RISK_PAGE_SIZE, RISK_PAGE_SIZES} from './riskTablePaging';
     import type {ColumnDef} from '$lib/components/table/types';
     import DocsLink from '$lib/components/ui/DocsLink.svelte';
     import {attachOverflowMarqueeToDescendants} from '$lib/actions/scrollOnOverflow';
@@ -270,10 +271,16 @@
         return row ? pointIdOf(row) : null;
     });
 
-    /** A dot selects its row (`rowIdForPoint`); a dot with no row selects nothing. */
+    /**
+     * A dot selects its row (`rowIdForPoint`); a dot with no row selects nothing. The table pages (B8), so the row may be on
+     * another page: the table goes there first, without scrolling (the chart that was clicked sits under the table, and the view
+     * must stay on it, D-B8b) and without its own highlight (the selection marks the row). Clicking the selected dot again only
+     * deselects it: nothing to go to.
+     */
     function selectFromPoint(pointId: string): void {
         const rowId = rowIdForPoint(pointId, rows);
         if (rowId === null) return;
+        if (selectedRowId !== rowId) tableRef?.navigateToRowId(rowId, {scroll: false, highlight: false});
         tableRef?.toggleRowSelectionById(rowId);
     }
 
@@ -305,7 +312,8 @@
             onSelectionChange={(ids) => (selectedRowId = ids.length > 0 ? ids[0] : null)}
             enableActions={false}
             enableColumnFilters={false}
-            enablePagination={false}
+            defaultPageSize={RISK_PAGE_SIZE}
+            pageSizeOptions={RISK_PAGE_SIZES}
             enableContextMenu={false}
         />
     </div>
