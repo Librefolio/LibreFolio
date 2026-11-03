@@ -24,7 +24,7 @@ Design invariants:
   so this timeline and ``portfolio.flows_income`` cannot contradict each other.
   ``period_end`` is the upper bound, so a future-dated row can never appear.
 - **Ownership-share aware.** Native amounts are ``amount * share`` with their sign and
-  the report's share (``native_cash.effective_share``: an owner's share, the whole broker
+  the report's share (``native_cash.broker_shares``: an owner's share, the whole broker
   for an editor or a viewer), exactly like the report's ``period_income``: a co-owned
   broker contributes only the user's economic share, and a negative correction lowers
   the income.
@@ -70,6 +70,7 @@ from backend.app.db.models import BrokerUserAccess, Transaction, TransactionType
 from backend.app.schemas.common import Currency, CurrencyCode, StrictModel
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
 from backend.app.services.ai_export.components.payloads.portfolio_broker import (
+    counts_ownership_share,
     load_asset_metadata,
     load_broker_metadata,
     resolve_accessible_broker_ids,
@@ -77,7 +78,7 @@ from backend.app.services.ai_export.components.payloads.portfolio_broker import 
 from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.types import BuildScope, Domain, PeriodBehavior, ResourceKey
 from backend.app.services.ai_export.dependencies import BuildContext, ResourceLoadError
-from backend.app.services.financial_math.native_cash import effective_share
+from backend.app.services.financial_math.native_cash import broker_shares
 from backend.app.services.fx.conversion import convert_bulk
 
 # Only these two ledger types are realized cash income (see `TransactionType`).
@@ -335,7 +336,7 @@ async def _load_income_records(context: BuildContext, scope: BuildScope) -> _Inc
 
     Permission + period semantics live entirely here: the query is intersected
     with the user's accessible brokers and filtered to ``(period_start,
-    snapshot_as_of]``. Amounts are ``amount * effective_share`` (signed) to mirror
+    snapshot_as_of]``. Amounts are ``amount * share`` (signed, ``native_cash.broker_shares``) to mirror
     the retained ``period_income`` aggregate. An empty result is a valid,
     successfully-built empty snapshot (never a failure).
     """
@@ -355,7 +356,7 @@ async def _load_income_records(context: BuildContext, scope: BuildScope) -> _Inc
                 BrokerUserAccess.broker_id.in_(effective),
             )
         )
-        shares: dict[int, Decimal] = {int(broker_id): effective_share(role, share) for broker_id, role, share in share_result.all()}
+        shares: dict[int, Decimal] = broker_shares(share_result.all(), apply_ownership_share=counts_ownership_share(scope))
 
         stmt = select(Transaction).where(
             Transaction.broker_id.in_(effective),

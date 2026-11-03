@@ -64,6 +64,7 @@ from backend.app.schemas.risk import (
 )
 from backend.app.services.ai_export.components.asset_payloads import AssetMarketSnapshotPayload
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
+from backend.app.services.ai_export.components.payloads.portfolio_broker import counts_ownership_share
 from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.technical_shared import (
     PORTFOLIO_TECHNICAL_UNIVERSE_KWARGS,
@@ -390,7 +391,8 @@ async def _build_broker_drawdown(context: BuildContext, dependencies: Mapping[st
         context,
         scope,
         resource_key=_BROKER_DRAWDOWN_RESULT_RESOURCE,
-        risk_scope=PortfolioRiskScope(kind=RiskScopeKind.PORTFOLIO, broker_ids=list(scope.broker_scope)),
+        # R11: the broker page counts the broker whole, so the stress impacts and the scope value match it.
+        risk_scope=PortfolioRiskScope(kind=RiskScopeKind.PORTFOLIO, broker_ids=list(scope.broker_scope), apply_ownership_share=counts_ownership_share(scope)),
         target_currency=scope.target_currency,
     )
 

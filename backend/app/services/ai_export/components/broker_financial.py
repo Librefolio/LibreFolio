@@ -27,10 +27,13 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from datetime import date as Date
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.app.db.models import Asset
+from backend.app.db.models import Asset, BrokerUserAccess
 from backend.app.schemas.common import Currency, CurrencyCode, PeriodBoundedModel, SafeDecimal, StrictModel
 from backend.app.schemas.portfolio import PortfolioHistoryPoint
 from backend.app.services.ai_export.components.envelope import SectionEnvelope
@@ -72,6 +75,7 @@ from backend.app.services.ai_export.components.resources import BROKER_LOTS_RESU
 from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.types import BuildScope, Domain, PeriodBehavior, ResourceKey
 from backend.app.services.ai_export.dependencies import BuildContext
+from backend.app.services.financial_math.native_cash import effective_share
 from backend.app.services.financial_math.portfolio.period import is_reconciled, period_identity_residual
 from backend.app.services.financial_math.weights import concentration
 
@@ -246,6 +250,27 @@ class ProvenanceNote(StrictModel):
     text: str
 
 
+class BrokerOwnershipNote(StrictModel):
+    """Who the user is for this broker, and what basis its amounts are on (R11, developer 30/10).
+
+    The export opened from the broker page gives the broker's whole amounts, as the page does, whatever the role and
+    the stake: the AI can then compare them with what it finds online. The user's own part is one multiplication away
+    for an owner (`owner_stake_ratio`); an editor or a viewer has no stake of their own to apply.
+    """
+
+    role: str = Field(description="The user's role on this broker: OWNER, EDITOR or VIEWER.")
+    owner_stake_ratio: SafeDecimal | None = Field(None, description="OWNER only: the recorded stake, 0..1 (an owner with no recorded stake owns all of it: 1). None for an editor or a viewer.")
+    amounts_basis: Literal["whole_broker"] = Field(description="Every amount of this export is the broker's full amount, not reduced by any ownership share.")
+    explanation: str
+
+
+_OWNERSHIP_EXPLANATIONS = {
+    "OWNER": "The user owns this broker; owner_stake_ratio is the stake recorded for the user (0..1). The portfolio page counts only that stake of each amount. This export shows the broker's FULL amounts, as the broker page does, so they can be compared with figures found online or at the broker; the user's own part is the amount times owner_stake_ratio.",
+    "EDITOR": "The user can edit this broker but does not own a stake of it. The broker page and this export show the broker's FULL amounts, so they can be compared with figures found online or at the broker.",
+    "VIEWER": "The user can only read this broker (read-only access) and does not own a stake of it. The broker page and this export show the broker's FULL amounts, so they can be compared with figures found online or at the broker.",
+}
+
+
 class BrokerProvenancePayload(PeriodBoundedModel):
 
     domain: str
@@ -254,10 +279,36 @@ class BrokerProvenancePayload(PeriodBoundedModel):
     engine_source: str
     fifo_methodology: str
     valuation_semantics: str
+    ownership: BrokerOwnershipNote
     notes: list[ProvenanceNote] = Field(default_factory=list)
 
 
-def _build_broker_provenance(context: BuildContext, dependencies: Mapping[str, SectionEnvelope]) -> BrokerProvenancePayload:
+_BROKER_ACCESS_RESOURCE: ResourceKey[tuple] = ResourceKey("broker.provenance_access", tuple)
+
+
+async def _query_broker_access(session: AsyncSession, *, user_id: int, broker_id: int) -> tuple[str, Decimal | None] | None:
+    """The scoped user's `(role, share_percentage)` on `broker_id`, or None when no access row exists."""
+    stmt = select(BrokerUserAccess.role, BrokerUserAccess.share_percentage).where(BrokerUserAccess.user_id == user_id).where(BrokerUserAccess.broker_id == broker_id)
+    row = (await session.execute(stmt)).first()
+    if row is None:
+        return None
+    role, share = row
+    return str(getattr(role, "value", role)), None if share is None else Decimal(str(share))
+
+
+async def _build_ownership_note(context: BuildContext, scope: BuildScope) -> BrokerOwnershipNote:
+    async def _loader(session: AsyncSession) -> tuple:
+        access = await _query_broker_access(session, user_id=scope.user_id, broker_id=scope.broker_id)  # type: ignore[arg-type]
+        if access is None:
+            raise ValueError(f"user {scope.user_id} has no BrokerUserAccess for broker {scope.broker_id}; cannot say who the user is for it")
+        return access
+
+    role, share = await context.db_resource(_BROKER_ACCESS_RESOURCE, _loader)
+    stake = effective_share(role, share) if role == "OWNER" else None
+    return BrokerOwnershipNote(role=role, owner_stake_ratio=stake, amounts_basis="whole_broker", explanation=_OWNERSHIP_EXPLANATIONS[role])
+
+
+async def _build_broker_provenance(context: BuildContext, dependencies: Mapping[str, SectionEnvelope]) -> BrokerProvenancePayload:
     scope = _require_broker_scope(context)
     return BrokerProvenancePayload(
         domain="broker",
@@ -268,6 +319,7 @@ def _build_broker_provenance(context: BuildContext, dependencies: Mapping[str, S
         engine_source="PortfolioCalculationEngine via a single PortfolioService.get_report call per request, scoped to this broker",
         fifo_methodology="FIFO lots are computed at runtime by FifoLotEngine via LotsAnalysisService; never persisted.",
         valuation_semantics="wac_per_unit and open_cost_basis are the historical Weighted Average Cost in the target currency: each acquisition is converted at the exchange rate of its own date, so the cost does not move with later rates, and an acquisition recorded without a cost basis adds quantity at zero cost; realized P&L compares each sale's proceeds, or the value an outgoing ADJUSTMENT hands over at its cost basis, converted at its date, with that cost. FIFO lot original_cost/residual_cost_basis are converted at the lot opening date. current_value/current_price/open_value are mark-to-market via the valuation hierarchy (MARKET_PRICE > LAST_TRADE_PRICE > ESTIMATED_AT_COST > MISSING) at the valuation date's rate, so unrealized P&L includes the exchange-rate effect; ESTIMATED_AT_COST (no market quote, no BUY or SELL) counts the book cost instead, with no current_price or unit_price and no unrealized P&L. An ADJUSTMENT is never a price.",
+        ownership=await _build_ownership_note(context, scope),
         notes=[
             ProvenanceNote(subject="currency", text=f"All monetary amounts are expressed in {scope.target_currency}."),
             ProvenanceNote(subject="period", text=f"Period is inclusive [{scope.period_start.isoformat()}, {scope.period_end.isoformat()}]; snapshot_as_of == period_end."),

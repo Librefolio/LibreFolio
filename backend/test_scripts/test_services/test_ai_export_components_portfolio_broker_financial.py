@@ -53,11 +53,12 @@ from backend.app.schemas.portfolio import (
     YieldOnCostResult,
     YieldOnCostStatus,
 )
-from backend.app.services.ai_export.components import broker_financial, portfolio_financial
+from backend.app.services.ai_export.components import asset_resources, broker_financial, fx_core, portfolio_financial
 from backend.app.services.ai_export.components.envelope import ComponentPayloadValidationError, SectionEnvelope
 from backend.app.services.ai_export.components.payloads import portfolio_broker as shared_payloads
 from backend.app.services.ai_export.components.payloads.portfolio_broker import FifoLotRow
 from backend.app.services.ai_export.components.registry import ComponentRegistry
+from backend.app.services.ai_export.components.resources import BROKER_REPORT_RESOURCE, PORTFOLIO_REPORT_RESOURCE
 from backend.app.services.ai_export.components.spec import ComponentSpec
 from backend.app.services.ai_export.components.types import BuildScope, DetailLevel, Domain
 from backend.app.services.ai_export.dependencies import (
@@ -2050,6 +2051,8 @@ class TestProvenanceComponentVersion:
         _patch_report(monkeypatch, _report(scope))
         _patch_lots(monkeypatch, {})
         _patch_metadata(monkeypatch)
+        if component_id == "broker.provenance":
+            _patch_broker_access(monkeypatch, role="OWNER", share="1")
         context = _make_context(scope, _registry(components), _make_async_session())
 
         envelope = await context.resolve(component_id, required=True)
@@ -2261,3 +2264,144 @@ class TestPayloadValidation:
         with pytest.raises(RequiredComponentBuildError) as exc_info:
             await context.resolve("portfolio.summary", required=True)
         assert isinstance(exc_info.value.cause, ComponentPayloadValidationError)
+
+
+# =============================================================================
+# R11 — the export opened from the broker page gives the broker's whole amounts
+# =============================================================================
+
+
+def _patch_report_queries(monkeypatch: pytest.MonkeyPatch, report: PortfolioReportResponse) -> list[object]:
+    """Like `_patch_report`, but keeps every `PortfolioReportQuery` the service received."""
+    queries: list[object] = []
+
+    async def _fake_get_report(self, user_id, query):  # noqa: ARG001
+        queries.append(query)
+        return report
+
+    monkeypatch.setattr(PortfolioService, "get_report", _fake_get_report)
+    return queries
+
+
+def _patch_broker_access(monkeypatch: pytest.MonkeyPatch, *, role: str, share: object | None) -> None:
+    """The access row `broker.provenance` reads for the note: `(role, share_percentage)`, or none."""
+
+    async def _fake_query(session, *, user_id, broker_id):  # noqa: ARG001
+        return (role, None if share is None else Decimal(str(share)))
+
+    monkeypatch.setattr(broker_financial, "_query_broker_access", _fake_query)
+
+
+class TestWholeBrokerAmounts:
+    """R11 (developer, 30/10): the export opened from the broker page counts the broker whole, as the page does.
+
+    The shared report query of the `portfolio.*`/`broker.*` components carries `apply_ownership_share`: False for a
+    Broker scope, True for every other domain (the Dashboard counts an owner's share). The rule is in one place,
+    `counts_ownership_share`; the share itself stays in `native_cash.broker_shares`.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("domain", "overrides", "expected"),
+        [
+            pytest.param(Domain.BROKER, {"broker_id": 5, "broker_scope": (5,)}, False, id="broker-whole"),
+            pytest.param(Domain.PORTFOLIO, {}, True, id="portfolio-keeps-the-share"),
+            pytest.param(Domain.PORTFOLIO, {"broker_scope": (5,)}, True, id="portfolio-subset-keeps-the-share"),
+        ],
+    )
+    async def test_the_shared_report_query_carries_the_flag_of_its_domain(self, monkeypatch, domain, overrides, expected):
+        """Before R11: the query never set the flag (default True) for a Broker scope too."""
+        scope = _scope(domain=domain, **overrides)
+        queries = _patch_report_queries(monkeypatch, _report(scope))
+        context = _make_context(scope, _registry(()), _make_async_session())
+
+        await shared_payloads.load_portfolio_report(context, scope, BROKER_REPORT_RESOURCE if domain is Domain.BROKER else PORTFOLIO_REPORT_RESOURCE)
+
+        assert len(queries) == 1
+        assert queries[0].apply_ownership_share is expected
+
+    @pytest.mark.asyncio
+    async def test_a_caller_can_override_the_flag_of_the_domain(self, monkeypatch):
+        """The broker-vs-portfolio comparison loads the whole portfolio on the broker's basis."""
+        scope = _scope()
+        queries = _patch_report_queries(monkeypatch, _report(scope))
+        context = _make_context(scope, _registry(()), _make_async_session())
+
+        await shared_payloads.load_portfolio_report(context, scope, PORTFOLIO_REPORT_RESOURCE, apply_ownership_share=False)
+
+        assert queries[0].apply_ownership_share is False
+
+    @pytest.mark.asyncio
+    async def test_the_asset_and_fx_pages_keep_the_owners_share(self, monkeypatch):
+        """Only the broker page is whole (R11): the asset page and the FX page count the user's own part, as the Dashboard does."""
+        asset_scope = _scope(domain=Domain.ASSET, asset_id=3)
+        queries = _patch_report_queries(monkeypatch, _report(asset_scope))
+        await asset_resources.load_asset_report(asset_scope)(_make_async_session())
+
+        fx_scope = _scope(domain=Domain.FX, base_currency="EUR", quote_currency="USD")
+        fx_context = _make_context(fx_scope, _registry(()), _make_async_session())
+        await fx_core._load_exposure_report(fx_context)
+
+        assert [query.apply_ownership_share for query in queries] == [True, True]
+
+    def test_the_rule_is_one_function_of_the_scope(self):
+        assert shared_payloads.counts_ownership_share(_scope(domain=Domain.BROKER, broker_id=5, broker_scope=(5,))) is False
+        assert shared_payloads.counts_ownership_share(_scope()) is True
+
+
+class TestBrokerOwnershipNote:
+    """R11: `broker.provenance` says who the user is for the broker, and that the amounts are the broker's full ones."""
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("role", "stored_share", "expected_stake"),
+        [
+            pytest.param("OWNER", "0.3", Decimal("0.3"), id="owner-with-a-stake"),
+            pytest.param("OWNER", None, Decimal("1"), id="owner-without-a-recorded-stake-owns-it-all"),
+            pytest.param("OWNER", "0", Decimal("0"), id="owner-at-zero"),
+            pytest.param("EDITOR", "0.5", None, id="editor-has-no-stake"),
+            pytest.param("VIEWER", "0", None, id="viewer-has-no-stake"),
+        ],
+    )
+    async def test_the_note_carries_the_role_and_the_owner_stake(self, monkeypatch, role, stored_share, expected_stake):
+        scope = _scope(domain=Domain.BROKER, broker_id=5, broker_scope=(5,))
+        _patch_report(monkeypatch, _report(scope))
+        _patch_broker_access(monkeypatch, role=role, share=stored_share)
+        context = _make_context(scope, _registry(broker_financial.BROKER_FINANCIAL_COMPONENTS), _make_async_session())
+
+        payload = (await context.resolve("broker.provenance", required=True)).payload
+
+        ownership = payload["ownership"]
+        assert ownership["role"] == role
+        assert ownership["amounts_basis"] == "whole_broker"
+        if expected_stake is None:
+            assert ownership["owner_stake_ratio"] is None
+        else:
+            assert Decimal(ownership["owner_stake_ratio"]) == expected_stake
+        assert ownership["explanation"], "the role must be explained, whatever the wording"
+
+    @pytest.mark.asyncio
+    async def test_the_explanation_differs_by_role_and_says_the_numbers_are_full(self, monkeypatch):
+        scope = _scope(domain=Domain.BROKER, broker_id=5, broker_scope=(5,))
+        _patch_report(monkeypatch, _report(scope))
+        texts: dict[str, str] = {}
+        for role in ("OWNER", "EDITOR", "VIEWER"):
+            _patch_broker_access(monkeypatch, role=role, share="0.3" if role == "OWNER" else "0")
+            context = _make_context(scope, _registry(broker_financial.BROKER_FINANCIAL_COMPONENTS), _make_async_session())
+            texts[role] = (await context.resolve("broker.provenance", required=True)).payload["ownership"]["explanation"]
+
+        assert len(set(texts.values())) == 3, "each role has its own explanation"
+
+    @pytest.mark.asyncio
+    async def test_a_scoped_user_without_an_access_row_fails_explicitly(self, monkeypatch):
+        scope = _scope(domain=Domain.BROKER, broker_id=5, broker_scope=(5,))
+        _patch_report(monkeypatch, _report(scope))
+
+        async def _none(session, *, user_id, broker_id):  # noqa: ARG001
+            return None
+
+        monkeypatch.setattr(broker_financial, "_query_broker_access", _none)
+        context = _make_context(scope, _registry(broker_financial.BROKER_FINANCIAL_COMPONENTS), _make_async_session())
+
+        with pytest.raises(RequiredComponentBuildError):
+            await context.resolve("broker.provenance", required=True)
