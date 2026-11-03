@@ -227,6 +227,7 @@ const scatter = vi.hoisted(() => {
 vi.mock('$lib/components/charts/ScatterChart.svelte', () => ({default: scatter.ScatterChartStandIn}));
 
 import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
+import {showAllRows, showAllRowsNow} from '$test/tablePaging';
 import {OVERFLOW_MARQUEE_SELECTOR} from '$lib/actions/scrollOnOverflow';
 import {schemas} from '$lib/api';
 import {_, SUPPORTED_LOCALES, type SupportedLocale} from '$lib/i18n';
@@ -576,8 +577,13 @@ function propsOf({assetIds = SELECTION, assetLabels = LABELS, assetIcons = new M
     return {assetIds, assetLabels, assetIcons, riskReturn, kpi, comparison, benchmarkApplies, dateStart, dateEnd, loading, failed, discarded, ...(onretry ? {onretry} : {})};
 }
 
-function mountWith(props: MountProps): void {
+/**
+ * Mount the section. The table pages after five rows (B8), and nearly every case here reads rows past the fifth or counts them,
+ * as a reader who wants them all does: it picks «all» (`showAllRowsNow`). `paged: true` leaves the table as it opens.
+ */
+function mountWith(props: MountProps, {paged = false}: {paged?: boolean} = {}): void {
     render(AssetSetRiskReturnSection, {props: propsOf(props)});
+    if (!paged) showAllRowsNow();
 }
 
 /** The section's own props, so the bound `tableRef` is typed as the section declares it. */
@@ -600,6 +606,7 @@ function mountBinding(props: MountProps): {tableRef: SectionProps['tableRef']} {
             },
         },
     });
+    showAllRowsNow();
     return bound;
 }
 
@@ -963,12 +970,14 @@ describe('AssetSetRiskReturnSection — the table is the project DataTable', () 
         }
     });
 
-    it('draws every selected asset however many there are, with no pagination and no checkbox, filter or action chrome', () => {
-        mountWith({assetIds: WIDE_SELECTION, assetLabels: WIDE_LABELS});
+    it('pages after five rows, draws every selected asset on «all», and has no checkbox, filter or action chrome (B8)', async () => {
+        mountWith({assetIds: WIDE_SELECTION, assetLabels: WIDE_LABELS}, {paged: true});
 
-        expect(drawnOrder(), `${WIDE_SELECTION.length} assets selected and DataTable's default page holds 10: a row on page two reads as an asset nobody selected`).toEqual(WIDE_SELECTION);
-        expect(l3Table()).toHaveAttribute('data-row-count', String(WIDE_SELECTION.length));
-        expect(screen.queryByTestId('data-table-pagination')).toBeNull();
+        expect(drawnOrder(), `${WIDE_SELECTION.length} assets selected: the table opens on the first five`).toEqual(WIDE_SELECTION.slice(0, 5));
+        expect(l3Table(), 'the asset count counts assets, not the rows drawn').toHaveAttribute('data-row-count', String(WIDE_SELECTION.length));
+        expect(screen.queryByTestId('data-table-pagination'), 'twelve rows and no way to the sixth').not.toBeNull();
+        await showAllRows();
+        expect(drawnOrder(), 'on «all» a row on another page reads as an asset nobody selected').toEqual(WIDE_SELECTION);
         expect(screen.queryByTestId('dt-select-all'), 'a row is selected by a click on it, one at a time: no select-all').toBeNull();
         expect(document.querySelectorAll('[data-testid^="dt-row-checkbox-"]'), 'a row is selected by a click on it: no checkbox column').toHaveLength(0);
         expect(document.querySelectorAll('[data-testid^="col-filter-trigger-"]'), 'no column filters: the selection is the filter').toHaveLength(0);

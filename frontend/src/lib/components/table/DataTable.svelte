@@ -866,8 +866,12 @@
     /**
      * Navigate to the page containing the row with the given ID, then scroll it into view.
      * Reusable: called from DataEditor's "Add Row", chart point click, etc.
+     *
+     * Both effects after the page change are on by default and can be turned off (additive; every existing caller keeps
+     * the default): `scroll: false` leaves the view where it is, for a caller whose trigger sits somewhere else on the page (a
+     * click on a chart under the table); `highlight: false` marks nothing, for a caller that selects the row and so marks it.
      */
-    export function navigateToRowId(rowId: string) {
+    export function navigateToRowId(rowId: string, {scroll = true, highlight = true}: {scroll?: boolean; highlight?: boolean} = {}) {
         const index = sortedData.findIndex((row) => getRowId(row) === rowId);
         if (index < 0) return;
         if (enablePagination) {
@@ -877,7 +881,8 @@
             }
         }
         // Set highlight — will be cleared on user interaction
-        highlightedRowId = rowId;
+        if (highlight) highlightedRowId = rowId;
+        if (!scroll) return;
         // After pagination update, scroll to the row
         import('svelte')
             .then(({tick}) => tick())

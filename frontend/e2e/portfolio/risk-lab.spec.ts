@@ -2405,6 +2405,20 @@ async function lossHeaderIds(page: Page): Promise<string[]> {
 async function waitForLossTable(page: Page): Promise<void> {
     await expect(lossTable(page)).toBeVisible({timeout: 20_000});
     await expect(page.getByTestId('risk-asset-set-l1-loading')).toHaveCount(0);
+    await showAllRows(page, lossTable(page));
+}
+
+/**
+ * The reader's step to see every row (B8): the risk tables page after five rows, and the lab's selections are longer, so the
+ * page-size menu is set to «all» (size 0). Nothing to do when the table has no pagination bar, which is drawn together with the
+ * rows: a table of five rows or fewer has none, and no wait decides that.
+ */
+async function showAllRows(page: Page, table: Locator): Promise<void> {
+    const trigger = table.getByTestId('pagination-size-trigger');
+    if ((await trigger.count()) === 0) return;
+    await trigger.click();
+    await page.getByTestId('pagination-size-option-0').click();
+    await expect(trigger, 'the size menu did not take «all»').toContainText('∞');
 }
 
 /**
@@ -2515,6 +2529,7 @@ async function paidHeaderIds(page: Page): Promise<string[]> {
 async function waitForPaidTable(page: Page): Promise<void> {
     await expect(paidTable(page)).toBeVisible({timeout: 20_000});
     await expect(page.getByTestId('risk-asset-set-l3-loading')).toHaveCount(0);
+    await showAllRows(page, paidTable(page));
 }
 
 /**
@@ -4761,13 +4776,15 @@ test.describe('Asset Global risk laboratory', () => {
         await expect(reason).toHaveCount(expected.sentences);
         await expect(reason, `its arity is published rather than drawn ${expected.excluded} times: every result carrying the exclusion counts once`).toHaveAttribute('data-occurrences', String(expected.excluded));
 
-        // …in the reader's language. The warning arrives as its reason's key and
-        // values, with the backend's English `message` only as the fallback. So the
-        // sentence on screen must be the one worded from the key. That is proved by
-        // shape, never by wording: it names the asset the warning planted, a name
-        // only the formatter can have put there; it is not the fallback; and no ICU
-        // brace was left unformatted.
-        await expect(reason, "the warning's names never reached the formatter: the reason was not worded from its key").toContainText(unnamedAsset(unmeasured));
+        // …in the reader's language, and as the short sentence with the assets as badges (B6, developer 29/09 and 31/10/2026). The warning
+        // arrives as its reason's key and values, with the backend's English `message` only as the fallback. The notice words the cause
+        // once, with the count, and shows the excluded asset as a badge beside it, not as a name inside the sentence. Proved by shape,
+        // never by wording: the badge is the asset the warning planted, the sentence is not the fallback, and no ICU brace was left
+        // unformatted.
+        const badge = reason.getByTestId('risk-partial-reason-asset');
+        await expect(badge, 'the excluded asset is not a badge in the notice: the warning named it and the notice did not show it').toHaveCount(1);
+        await expect(badge, 'the badge is of another asset than the one the warning planted').toHaveAttribute('data-asset-id', String(unmeasured));
+        await expect(badge, 'the badge is not the excluded variant of the asset chip').toHaveAttribute('data-variant', 'excluded');
         const sentence = ((await reason.textContent()) ?? '').trim();
         expect(sentence, "the reason is the backend's English fallback, not the sentence of its key").not.toBe(EXCLUDED_WARNING_MESSAGE);
         expect(sentence, 'the reason carries an unformatted ICU placeholder').not.toContain('{');

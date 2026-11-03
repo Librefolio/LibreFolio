@@ -99,6 +99,16 @@ export function canonicalizeScope(scope: RiskScope): RiskScope {
     return normalized;
 }
 
+/**
+ * The scope a panel queries with, for a page that shows its amounts whole (the broker page, MF6-3, developer's decision D4):
+ * a portfolio scope asked not to apply the ownership share, so the stress impacts and the scope value match the page's. Any
+ * other scope, or a page that does not ask, gets the scope back as it came: the Dashboard asks what it always asked.
+ */
+export function withWholeBroker(scope: RiskScope, wholeBroker: boolean): RiskScope {
+    if (!wholeBroker || scope.kind !== 'portfolio') return scope;
+    return {...scope, apply_ownership_share: false};
+}
+
 function stableValue(value: unknown): unknown {
     if (Array.isArray(value)) return value.map(stableValue);
     if (value === null || typeof value !== 'object') return value;

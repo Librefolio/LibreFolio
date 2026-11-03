@@ -422,7 +422,8 @@
           "observations": "{count} jours observés",
           "cut": "Seuil VaR à {value}",
           "noCut": "Aucun seuil publié pour cette fenêtre.",
-          "empty": "Aucune distribution des rendements pour cette période."
+          "empty": "Aucune distribution des rendements pour cette période.",
+          "bin": "{range} : {count, plural, one {# jour} other {# jours}} ({share})"
         }
       },
       "l2": {
@@ -590,7 +591,14 @@
         "partialTitle": "Certains résultats sont partiels",
         "notesTitle": "À savoir sur ces résultats",
         "noPriceSourceTitle": "Positions sans prix, exclues de certaines mesures",
-        "affected": "Mesures concernées"
+        "affected": "Mesures concernées",
+        "excluded": {
+          "missing_price": "{count, plural, one {# actif exclu} other {# actifs exclus}} : aucun prix de marché sur la période.",
+          "missing_fx": "{count, plural, one {# actif exclu} other {# actifs exclus}} : le taux de change vers votre devise est manquant.",
+          "invalid_currency": "{count, plural, one {# actif exclu} other {# actifs exclus}} : la devise de leurs prix n'est pas valide.",
+          "insufficient_history": "{count, plural, one {# actif exclu} other {# actifs exclus}} : historique insuffisant sur la période.",
+          "no_price_source": "{count, plural, one {# actif exclu} other {# actifs exclus}} : aucune source de prix n'est assignée et aucun prix n'a jamais été enregistré."
+        }
       }
     },
     "eligibility": {
