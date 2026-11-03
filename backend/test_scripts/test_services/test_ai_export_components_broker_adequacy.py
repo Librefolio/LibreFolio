@@ -478,6 +478,8 @@ class TestConcentrationComparison:
         assert all(query.apply_ownership_share is False for query in queries), [q.apply_ownership_share for q in queries]
         # Whole broker over whole portfolio: 10 000 / 17 000.
         assert Decimal(payload["broker_share_of_portfolio_market_value_percent"]).quantize(Decimal("0.01")) == Decimal("58.82")
+        # The probe found the portfolio side undeclared: a reader compared it with the Dashboard's (share-reduced) portfolio.
+        assert payload["amounts_basis"] == "all_brokers_whole"
 
     @pytest.mark.asyncio
     async def test_whole_portfolio_loaded_once_and_shared_with_other_broker_components(self, monkeypatch):

@@ -38,6 +38,7 @@ from collections.abc import Mapping, Sequence
 from datetime import date as Date
 from decimal import Decimal
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import Field, model_validator
 
@@ -300,6 +301,10 @@ class BrokerConcentrationComparisonPayload(StrictModel):
 
     broker_id: int
     target_currency: CurrencyCode
+    amounts_basis: Literal["all_brokers_whole"] = Field(
+        "all_brokers_whole",
+        description="Both sides count every broker whole, as the broker page does (R11): the portfolio side is not the Dashboard's portfolio, where an owner's share reduces each broker.",
+    )
 
     broker_position_count: int | None = Field(None, ge=0)
     portfolio_position_count: int | None = Field(None, ge=0)
