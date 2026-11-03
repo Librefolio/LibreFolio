@@ -92,6 +92,7 @@ import {afterEach, beforeAll, beforeEach, describe, expect, it, vi, type MockIns
 import {get} from 'svelte/store';
 import type {z} from 'zod';
 
+import {showAllRows} from '$test/tablePaging';
 import {cleanup, fireEvent, render, screen, setupI18n, waitFor, within} from '$test/component';
 import {OVERFLOW_MARQUEE_SELECTOR} from '$lib/actions/scrollOnOverflow';
 import type {schemas} from '$lib/api';
@@ -688,12 +689,14 @@ describe('AssetSetLossComparisonSection — the table is the project DataTable',
         }
     });
 
-    it('draws every selected asset however many there are, with no pagination and no selection, filter or action chrome', async () => {
+    it('pages after five rows, draws every selected asset on «all», and has no selection, filter or action chrome (B8)', async () => {
         mountWith({assetIds: WIDE_SELECTION, assetLabels: WIDE_LABELS, assetIcons: new Map()});
 
-        expect(drawnOrder(), `${WIDE_SELECTION.length} assets selected and DataTable's default page holds 10: a row on page two reads as an asset nobody selected`).toEqual(WIDE_SELECTION);
+        expect(drawnOrder(), `${WIDE_SELECTION.length} assets selected: the table opens on the first five`).toEqual(WIDE_SELECTION.slice(0, 5));
         expect(screen.getByTestId('risk-asset-set-l1-table')).toHaveAttribute('data-row-count', String(WIDE_SELECTION.length));
-        expect(screen.queryByTestId('data-table-pagination')).toBeNull();
+        expect(screen.queryByTestId('data-table-pagination'), 'twelve rows and no way to the sixth').not.toBeNull();
+        await showAllRows();
+        expect(drawnOrder(), 'on «all» a row on another page reads as an asset nobody selected').toEqual(WIDE_SELECTION);
         expect(screen.queryByTestId('dt-select-all'), 'a comparison selects nothing').toBeNull();
         expect(document.querySelectorAll('[data-testid^="dt-row-checkbox-"]')).toHaveLength(0);
         expect(document.querySelectorAll('[data-testid^="col-filter-trigger-"]'), 'no column filters: the selection is the filter').toHaveLength(0);

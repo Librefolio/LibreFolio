@@ -9,7 +9,8 @@
  *
  * - no bar carries a native `title` any more;
  * - opening the tooltip of a bar (a click opens it at once; a plain hover waits) shows that bar's interval, written by
- *   the same `axisPercent` the axis ends use, so a bar and the axis never print one number two ways;
+ *   the same `axisPercent` the axis ends use, so a bar and the axis never print one number two ways, and (developer, 31/10/2026,
+ *   D-B6a) how many days fell in it and their share of the observations, written by the share rule (`formatShare`);
  * - a bar with no observation has a tooltip too: an empty bin and a missing one must not look alike;
  * - the bars keep their weights: the width of a bar is still its real span, whatever wraps it.
  */
@@ -17,6 +18,7 @@ import {beforeAll, describe, expect, it} from 'vitest';
 
 import {fireEvent, render, screen, setupI18n, waitFor} from '$test/component';
 
+import {formatShare} from '../shareFormat';
 import {axisPercent, type ReturnHistogram as Histogram} from './l1Helpers';
 import ReturnHistogram from './ReturnHistogram.svelte';
 
@@ -52,6 +54,28 @@ describe('ReturnHistogram — the bars use the app tooltip (B6)', () => {
         const content = await waitFor(() => screen.getByTestId('tooltip-content'));
         expect(content.textContent).toContain(axisPercent(-3));
         expect(content.textContent).toContain(axisPercent(0));
+    });
+
+    it('says how many days fell in the bar and their share of the observations (D-B6a)', async () => {
+        render(ReturnHistogram, {props: {histogram: HISTOGRAM}});
+
+        await fireEvent.click(screen.getByTestId(TIP(1)));
+
+        const content = await waitFor(() => screen.getByTestId('tooltip-content'));
+        // 10 of 100 observed days; the share is the share rule's own text, not a number written here.
+        expect(content.textContent).toContain('10');
+        expect(content.textContent).toContain(formatShare(0.1, 1));
+    });
+
+    it('says an empty bar held no day, with a share of zero', async () => {
+        render(ReturnHistogram, {props: {histogram: HISTOGRAM}});
+
+        await fireEvent.click(screen.getByTestId(TIP(2)));
+
+        const content = await waitFor(() => screen.getByTestId('tooltip-content'));
+        expect(content.textContent).toContain(formatShare(0, 1));
+        // More than the interval alone, which is all the bar said before it carried its days.
+        expect(content.textContent?.trim()).not.toBe(`${axisPercent(0)} … ${axisPercent(3)}`);
     });
 
     it('gives a bar with no observation a tooltip too', () => {

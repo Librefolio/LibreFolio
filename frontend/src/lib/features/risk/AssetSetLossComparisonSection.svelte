@@ -40,6 +40,7 @@
      */
     import {_ as t} from '$lib/i18n';
     import DataTable from '$lib/components/table/DataTable.svelte';
+    import {RISK_PAGE_SIZE, RISK_PAGE_SIZES} from './riskTablePaging';
     import type {ColumnDef} from '$lib/components/table/types';
     import {attachOverflowMarqueeToDescendants} from '$lib/actions/scrollOnOverflow';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
@@ -252,7 +253,20 @@
         <p class="py-4 text-center text-sm text-lf-muted" data-testid="risk-asset-set-l1-empty">{$t('risk.states.empty')}</p>
     {:else}
         <div bind:this={tableWrapper} data-testid="risk-asset-set-l1-table" data-row-count={rows.length}>
-            <DataTable bind:this={tableRef} data={rows} {columns} getRowId={(row) => String(row.assetId)} storageKey="risk-asset-set-l1" enableSelection={false} selectionMode="none" enableActions={false} enableColumnFilters={false} enablePagination={false} enableContextMenu={false} />
+            <DataTable
+                bind:this={tableRef}
+                data={rows}
+                {columns}
+                getRowId={(row) => String(row.assetId)}
+                storageKey="risk-asset-set-l1"
+                enableSelection={false}
+                selectionMode="none"
+                enableActions={false}
+                enableColumnFilters={false}
+                defaultPageSize={RISK_PAGE_SIZE}
+                pageSizeOptions={RISK_PAGE_SIZES}
+                enableContextMenu={false}
+            />
         </div>
     {/if}
 </div>

@@ -422,7 +422,8 @@
           "observations": "{count} días observados",
           "cut": "Umbral VaR en {value}",
           "noCut": "No se ha publicado ningún umbral para esta ventana.",
-          "empty": "No hay distribución de rendimientos para este periodo."
+          "empty": "No hay distribución de rendimientos para este periodo.",
+          "bin": "{range}: {count, plural, one {# día} other {# días}} ({share})"
         }
       },
       "l2": {
@@ -590,7 +591,14 @@
         "partialTitle": "Algunos resultados son parciales",
         "notesTitle": "Conviene saber sobre estos resultados",
         "noPriceSourceTitle": "Posiciones sin precios, excluidas de algunas medidas",
-        "affected": "Medidas afectadas"
+        "affected": "Medidas afectadas",
+        "excluded": {
+          "missing_price": "{count, plural, one {# activo excluido} other {# activos excluidos}}: sin precios de mercado en el periodo.",
+          "missing_fx": "{count, plural, one {# activo excluido} other {# activos excluidos}}: falta el tipo de cambio a tu moneda.",
+          "invalid_currency": "{count, plural, one {# activo excluido} other {# activos excluidos}}: la moneda de sus precios no es válida.",
+          "insufficient_history": "{count, plural, one {# activo excluido} other {# activos excluidos}}: historial insuficiente en el periodo.",
+          "no_price_source": "{count, plural, one {# activo excluido} other {# activos excluidos}}: no hay fuente de precios asignada ni se ha registrado nunca un precio."
+        }
       }
     },
     "eligibility": {

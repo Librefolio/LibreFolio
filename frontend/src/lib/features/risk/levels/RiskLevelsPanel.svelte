@@ -9,6 +9,7 @@
     import ColumnVisibilityToggle from '$lib/components/table/ColumnVisibilityToggle.svelte';
     import type DataTable from '$lib/components/table/DataTable.svelte';
     import type {RiskReturnRow} from '../riskReturnLevel';
+    import {withWholeBroker} from '../riskRequest';
 
     import L1HowMuchItHurts from './L1HowMuchItHurts.svelte';
     import L2Diversification from './L2Diversification.svelte';
@@ -52,6 +53,11 @@
         title?: string;
         /** Shown under the title; used by Dashboard to flag an active filter. */
         subtitle?: string;
+        /**
+         * The page shows its amounts whole, not at the owner's share (Broker Detail, MF6-3, developer's decision D4): a portfolio
+         * scope is then queried with `apply_ownership_share: false`, so the stress impacts and the scope value match the page's.
+         */
+        wholeBroker?: boolean;
         /** Marks a scope that is a subset of the whole portfolio, as Broker Detail is. */
         internalSubset?: boolean;
         /**
@@ -71,13 +77,13 @@
         onsynced?: () => void | Promise<void>;
     }
 
-    let {scope, dateStart, dateEnd, targetCurrency, title = '', subtitle = '', internalSubset = false, scopeValue = null, assetIds = [], refreshVersion = 0, onsynced}: Props = $props();
+    let {scope, dateStart, dateEnd, targetCurrency, title = '', subtitle = '', wholeBroker = false, internalSubset = false, scopeValue = null, assetIds = [], refreshVersion = 0, onsynced}: Props = $props();
 
     // The risk-free rate the KPI wave is seeded with. Held here rather than in
     // the controller because it is a user-facing setting, not a fetch concern.
     let appliedRiskFreePercent = $state(0);
 
-    const controller = createRiskPanelController(() => ({scope, dateStart, dateEnd, targetCurrency, appliedRiskFreePercent, refreshVersion}), {
+    const controller = createRiskPanelController(() => ({scope: withWholeBroker(scope, wholeBroker), dateStart, dateEnd, targetCurrency, appliedRiskFreePercent, refreshVersion}), {
         onsynced: () => onsynced?.(),
         // Page cache: a failed refresh of the figures on screen keeps them, and says so.
         onrefreshfailed: () => toasts.error($t('risk.states.loadFailed')),
