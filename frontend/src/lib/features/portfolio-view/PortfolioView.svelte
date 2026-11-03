@@ -8,6 +8,8 @@
 
   Portfolio overview page.
 
+  The Overview tab is `PortfolioOverviewTab` (delivery 2, checkpoint 9c).
+
   Layout (from wireframe plan_ui_dashboard.md):
   1. Header row: DateRangePicker | spacer | Broker filter panel | ↻ Sync
   2. KPI row: Net Worth | Gain/Loss | Weighted ROI
@@ -23,7 +25,7 @@
     import {onDestroy, onMount, tick} from 'svelte';
     import {page} from '$app/stores';
     import {_} from '$lib/i18n';
-    import {RefreshCw, Briefcase, TrendingUp, ArrowRightLeft, Wallet, Shield} from 'lucide-svelte';
+    import {RefreshCw, Briefcase, TrendingUp, ArrowRightLeft, Shield} from 'lucide-svelte';
     import AiExportMenu from '$lib/features/ai-export/AiExportMenu.svelte';
     import {prepareAiExport, type PreparedAiExport} from '$lib/features/ai-export/aiExportClipboard';
     import type {AiExportOptionsSelection} from '$lib/features/ai-export/aiExportOptions';
@@ -53,12 +55,10 @@
     import {getFixedDropdownPosition} from '$lib/utils/layout/dropdownPosition';
     import DateRangePicker from '$lib/components/ui/date/DateRangePicker.svelte';
     import CurrencySearchSelect from '$lib/components/ui/select/CurrencySearchSelect.svelte';
-    import AllocationPanel from '$lib/features/dashboard/AllocationPanel.svelte';
-    import GrowthChart from '$lib/features/dashboard/GrowthChart.svelte';
-    import KpiSection from '$lib/features/dashboard/KpiSection.svelte';
     import RiskLevelsPanel from '$lib/features/risk/levels/RiskLevelsPanel.svelte';
     import PositionsPanel from '$lib/features/dashboard/PositionsPanel.svelte';
-    import {createPortfolioData} from '$lib/features/portfolio-view/portfolioData';
+    import {createPortfolioData} from './portfolioData';
+    import PortfolioOverviewTab from './PortfolioOverviewTab.svelte';
     import LotsAnalysisPanel from '$lib/features/brokers/lots/LotsAnalysisPanel.svelte';
     import {DataQualityBanner} from '$lib/components/ui/feedback';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
@@ -79,9 +79,8 @@
     import {getRoleIcon, getRoleIconColor} from '$lib/utils/broker/brokerRoleHelpers';
     import {currentLanguage} from '$lib/stores/app/language';
     import {goto} from '$app/navigation';
-    import {formatCurrencyAmountHtml} from '$lib/utils/currency/currencyFormat';
     import {zodiosApi} from '$lib/api';
-    import {buildTransactionsFiltersUrl} from '../../../routes/(app)/transactions/filterState';
+    import {buildTransactionsFiltersUrl} from '$lib/features/transactions/filterState';
 
     const DISABLED_AI_EXPORT_COMPATIBILITY = emptyAiExportCompatibility();
 
@@ -106,16 +105,6 @@
     });
     const summary = $derived($data.summary);
     const history = $derived($data.history);
-    /** The days the report's step series cover, and the history's MWRR as true points (D-P4). */
-    const historyRange = $derived($data.range);
-    const mwrrLine = $derived($data.mwrrLine);
-    const brokerPnlHistory = $derived($data.brokerPnlHistory);
-    const pnlCandles = $derived($data.pnlCandles);
-    const pnlCandlesLoading = $derived($data.pnlCandlesLoading);
-    const incomeHistory = $derived($data.incomeHistory);
-    const costHistory = $derived($data.costHistory);
-    const depositHistory = $derived($data.depositHistory);
-    const acquisitionFunding = $derived($data.acquisitionFunding);
     const allocationHistoryFromReport = $derived($data.allocationHistory);
     const positionsContribution = $derived($data.positionsContribution);
     const contributionLoading = $derived($data.contributionLoading);
@@ -124,7 +113,6 @@
     const reportLoading = $derived($data.reportLoading);
     /** True only on first load when no data exists yet. Once data is loaded, subsequent fetches are "refreshing". */
     let summaryLoading = $derived(reportLoading && !summary);
-    let historyLoading = $derived(reportLoading && history.length === 0);
     let syncLoading = $state(false);
     let syncingCode = $state<string | null>(null);
 
@@ -907,42 +895,7 @@
     <DataQualityBanner issues={dataQualityIssues} mode="grouped" onaction={handleBannerAction} busyCode={syncingCode} />
 
     {#if activeTab === 'panoramica'}
-        <div class="space-y-4" data-testid="dashboard-overview-tab">
-            <KpiSection {summary} {history} loading={summaryLoading} displayCurrency={appliedCurrency} />
-
-            <!-- Cash Balances — same position as broker detail (right after the KPIs), using
-                 summary.cash_balances which already aggregates by currency across all brokers
-                 in scope (all accessible brokers, or the broker-filter subset if active). -->
-            <div class="bg-lf-card rounded-xl shadow-sm shadow-lf-shadow-card border border-lf-subtle p-4" data-testid="dashboard-cash-balances">
-                <div class="flex items-center space-x-2 text-lf-secondary mb-4">
-                    <Wallet size={20} />
-                    <h2 class="font-semibold">{$_('brokers.cashBalances')}</h2>
-                </div>
-
-                {#if summary?.cash_balances && summary.cash_balances.length > 0}
-                    <div class="flex flex-wrap gap-2">
-                        {#each [...summary.cash_balances].sort((a, b) => parseFloat(b.amount) - parseFloat(a.amount)) as balance}
-                            <span class="inline-flex items-center px-3 py-1.5 bg-lf-panel rounded-lg text-sm font-medium text-lf-primary">
-                                {@html formatCurrencyAmountHtml(parseFloat(balance.amount), balance.code)}
-                            </span>
-                        {/each}
-                    </div>
-                {:else}
-                    <p class="text-lf-muted text-sm italic py-4 text-center">{$_('brokers.noCashBalances')}</p>
-                {/if}
-            </div>
-
-            <!-- ── Charts Row ── -->
-            <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
-                <!-- Growth Chart — 3/5 -->
-                <div class="lg:col-span-3">
-                    <GrowthChart {history} range={historyRange} {mwrrLine} {brokerPnlHistory} {pnlCandles} onRequestPnlCandles={() => void pageBusy.join('dashboard-pnl-candles', loadPnlCandles)} {incomeHistory} {costHistory} {depositHistory} {acquisitionFunding} loading={historyLoading} {pnlCandlesLoading} baseCurrency={appliedCurrency} />
-                </div>
-
-                <!-- Allocation Panel — 2/5 -->
-                <AllocationPanel {summary} loading={summaryLoading} displayCurrency={appliedCurrency} brokerIds={activeBrokerIds} currentLanguage={$currentLanguage} allocationHistory={allocationHistoryFromReport} />
-            </div>
-        </div>
+        <PortfolioOverviewTab snapshot={$data} displayCurrency={appliedCurrency} brokerIds={activeBrokerIds} onRequestPnlCandles={() => void pageBusy.join('dashboard-pnl-candles', loadPnlCandles)} />
     {:else if activeTab === 'posizioni'}
         <div data-testid="dashboard-positions-tab">
             <!-- F2: nothing is asked before the owned brokers are known — the prop arrives with them. -->

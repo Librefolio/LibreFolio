@@ -84,7 +84,7 @@
     import {defaultDisplayCurrency} from '$lib/stores/app/settings';
     import {matchesAssetLifecycle, orderAssetsByLifecycle} from '$lib/components/assets/assetLifecycle';
     import {buildTabUrl, getResolvedTabParam} from '$lib/utils/url/tabUrl';
-    import {buildTransactionsFiltersUrl} from '../transactions/filterState';
+    import {buildTransactionsFiltersUrl} from '$lib/features/transactions/filterState';
     import {getAssetTypeIconUrl} from '$lib/utils/assetTypes';
 
     // =========================================================================
