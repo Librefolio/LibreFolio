@@ -1115,6 +1115,75 @@ class TestBrokerDatasetComposition:
         assert len(composed_ids) == len(set(composed_ids))
 
 
+_BROKER_DATASET_IDS = (
+    "broker.overview",
+    "broker.performance_flows",
+    "broker.technical",
+    "broker.fifo",
+    "broker.all_data",
+    "broker.technical_summary",
+    "broker.asset_comparison",
+    "broker.drawdown_context",
+    "broker.concentration_evidence",
+    "broker.cost_efficiency_evidence",
+    "broker.overview_and_history",
+    "broker.asset_history",
+)
+
+
+class TestBrokerProvenanceInEveryBrokerDataset:
+    """Role, stake and amounts basis (`broker.provenance` → `ownership`) in every dataset of the broker domain.
+
+    AIX-TOP (developer, 04/11/2026): the export from the broker page gives the broker's whole figures, and the AI must
+    always find who the user is for that broker and on what basis the amounts are. Only the two public datasets can be
+    chosen directly, but the composer is the one place where the guarantee holds for every dataset: a future public
+    dataset or analysis built on any of them keeps it without remembering to ask for it.
+    """
+
+    def test_the_list_follows_the_registry(self):
+        registry = build_portfolio_broker_dataset_registry()
+        assert set(_BROKER_DATASET_IDS) == {spec.dataset_id for spec in registry.for_domain(Domain.BROKER)}
+
+    @pytest.mark.parametrize("dataset_id", _BROKER_DATASET_IDS)
+    def test_the_provenance_is_a_required_component(self, dataset_id):
+        dataset = build_portfolio_broker_dataset_registry().get(dataset_id)
+        assert "broker.provenance" in dataset.required_component_ids
+        assert "broker.provenance" in dataset.section_order
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("dataset_id", _BROKER_DATASET_IDS)
+    async def test_the_composition_carries_role_stake_and_basis_once(self, monkeypatch, dataset_id):
+        scope = _broker_scope()
+        _setup_broker_scenario(monkeypatch, scope)
+        dataset = build_portfolio_broker_dataset_registry().get(dataset_id)
+        context = _full_context(scope, _make_async_session())
+
+        composition = await Composer().compose_dataset(dataset, context, detail_level=DetailLevel.STANDARD)
+
+        provenance = [section for section in composition.sections if section.component_id == "broker.provenance"]
+        assert len(provenance) == 1
+        ownership = provenance[0].payload["ownership"]
+        assert ownership["role"] == "OWNER"
+        assert Decimal(ownership["owner_stake_ratio"]) == Decimal("0.3")
+        assert ownership["amounts_basis"] == "whole_broker"
+
+    @pytest.mark.asyncio
+    async def test_every_broker_analysis_carries_it_once_even_with_two_datasets_that_ask_for_it(self, monkeypatch):
+        scope = _broker_scope()
+        _setup_broker_scenario(monkeypatch, scope)
+        dataset_registry = build_portfolio_broker_dataset_registry()
+        analysis_registry = build_portfolio_broker_analysis_registry(dataset_registry)
+        context = _full_context(scope, _make_async_session())
+        composer = Composer()
+
+        broker_analyses = [spec for spec in analysis_registry if spec.domain == Domain.BROKER]
+        assert broker_analyses
+        for analysis in broker_analyses:
+            composition = await composer.compose_analysis(analysis, dataset_registry, context, detail_level=DetailLevel.STANDARD)
+            ids = [section.component_id for section in composition.sections]
+            assert ids.count("broker.provenance") == 1, analysis.analysis_id
+
+
 # =============================================================================
 # 7. End-to-end analysis composition: all Portfolio/Broker registry analyses
 # =============================================================================
