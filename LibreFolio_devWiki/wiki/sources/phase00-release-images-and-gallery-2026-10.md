@@ -40,7 +40,7 @@ pipeline whose gallery is a gate and whose screenshots come from real data, offl
   ([[decisions/release-image-tags-latest-light]]).
 - **The app compresses its responses**: a first visit −63 %, a warm session −84 % ([[decisions/http-gzip-in-the-app]]).
 - **The Tailscale watchdog** went into the admin guide (step 6): «Sì, M porta lo script nella guida adesso». The
-  supervised `custom_startup.sh` (`ff45b8458`) was tested on the developer's two containers, and the compose examples
+  supervised `custom_startup.sh` (`3d4620d88`) was tested on the developer's two containers, and the compose examples
   gained Tailscale's health check, in all four languages.
 - **One startup timeout** (step 8): the Python runner and `playwright.config.ts` both read
   `LIBREFOLIO_TEST_STARTUP_TIMEOUT`, 300 s by default and no longer different on CI; a test proves the two agree.
@@ -76,18 +76,18 @@ Pages updated: [[features/F-074]], [[features/F-062]], [[features/F-050]], [[fea
 
 | Commit | Date | What |
 |--------|------|------|
-| `c8231cc5f` | 2026-10-06 | Production frontend, real light and full images |
-| `1557c3ddc` | 2026-10-06 | gzip HTTP responses |
-| `ff45b8458` | 2026-10-06 | The supervised Tailscale startup script |
-| `dea7ee40e` | 2026-10-06 | Code indentation kept in translations |
-| `e45a33a66` | 2026-10-07 | The gallery gate; the light image is `latest` |
-| `85505d416` | 2026-10-07 | Release tags must match the release kind |
-| `22cad9ded` | 2026-10-07 | Six gallery scenarios repaired, the fresh dashboard fixture |
-| `bcedd48bc` | 2026-10-08 | Onboarding shots and the offline guard |
-| `20261d993` | 2026-10-09 | Tall screens for long subjects |
-| `a4f6fa03e` | 2026-10-09 | Reduced motion for every shot |
-| `2619baae6` | 2026-10-09 | The PDF preview's render state |
-| `b17579305` | 2026-10-09 | The local, viewer-only PDF preview |
+| `3dcd1fe7b` | 2026-10-06 | Production frontend, real light and full images |
+| `49aaeab29` | 2026-10-06 | gzip HTTP responses |
+| `3d4620d88` | 2026-10-06 | The supervised Tailscale startup script |
+| `7d8922e9b` | 2026-10-06 | Code indentation kept in translations |
+| `2386dc8d7` | 2026-10-07 | The gallery gate; the light image is `latest` |
+| `024181cc2` | 2026-10-07 | Release tags must match the release kind |
+| `18c63bbf1` | 2026-10-07 | Six gallery scenarios repaired, the fresh dashboard fixture |
+| `27b2834b8` | 2026-10-08 | Onboarding shots and the offline guard |
+| `1914f9088` | 2026-10-09 | Tall screens for long subjects |
+| `273685d09` | 2026-10-09 | Reduced motion for every shot |
+| `3dcb45450` | 2026-10-09 | The PDF preview's render state |
+| `da6665fb9` | 2026-10-09 | The local, viewer-only PDF preview |
 
 ## Source files
 

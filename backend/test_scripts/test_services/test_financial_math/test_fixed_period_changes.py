@@ -33,14 +33,14 @@ arbitrary values the two forms round differently in the last digits — not a di
 ``test_high_precision_pair_is_exact_decimal`` pins the house's own arithmetic instead. Distinct values also mean a
 reference read on the wrong day changes the result.
 
-Red by absence on HEAD (c0378cdd0): ``returns.py`` there has none of the new names, so the import below fails and the
+Red by absence on HEAD (c3f84be36): ``returns.py`` there has none of the new names, so the import below fails and the
 file errors at collection with ImportError.
 
 X-R59 (rule 10, developer decision N80) adds ``TestRangeChange`` at the end: the whole-range Δ of the Assets cards and
 the FX Δ Abs / Δ % — today ``computeDerivedPriceState`` (``assetPriceDerived.ts``) and ``displayFxDelta``
 (``fxStoreRegistry.ts``), floats in the browser — get the house function
 ``range_change(reference, anchor) -> RangeChange(change_abs, change_ratio, inverse_change_abs, inverse_change_ratio)``.
-It is looked up on the module when a test calls it, so the rest of this file still collects and runs on HEAD d369e0b49,
+It is looked up on the module when a test calls it, so the rest of this file still collects and runs on HEAD 509d7be90,
 where those tests are red with AttributeError.
 
 X's review, point 2 (decision on N80): a price written down to nothing — a defaulted loan, a delisted share — is −100 %,
@@ -49,7 +49,7 @@ not «no change». ``range_change(reference, anchor)`` with an anchor of exactly
 reference ≤ 0 and a negative anchor still give all four None. ``fixed_period_changes`` delegates to ``range_change``, so
 every period with a positive reference gets −1 and an inverse None. Pinned by ``TestAnchorOfZero``; ``zero-anchor`` left
 ``UNUSABLE_PAIRS``, and ``test_negative_anchor_or_non_positive_reference_gives_no_change`` (formerly
-``test_non_positive_value_gives_no_change_either_way``) keeps only what is still refused. Red on HEAD 2c3e4d452: None where
+``test_non_positive_value_gives_no_change_either_way``) keeps only what is still refused. Red on HEAD 5a3df79a9: None where
 −1 is expected (every test of ``TestAnchorOfZero``).
 
 X5-6 (D-P4 L4, developer decision): the calendar's start is the only floor. A period whose reference day (``as_of − days``)
@@ -57,7 +57,7 @@ would fall before 0001-01-01 has no reference: its ``change_ratio`` is None, as 
 ``OverflowError`` (what ``fixed_period_dates`` and ``fixed_period_changes`` raised for ``as_of`` on or before 0005-12-30,
 the reason the services refused every day before 1900). The other periods of the same ``as_of`` are real. Pinned at the end,
 ``TestBeforeYearOne``, by what is observable: ``fixed_period_changes``' results and the SET of days ``fixed_period_dates``
-returns (the days a service will ask a value for) — never a tuple shape beyond that. RED on HEAD 89cdc2e0e: OverflowError.
+returns (the days a service will ask a value for) — never a tuple shape beyond that. RED on HEAD eb5f0ba01: OverflowError.
 
 Pure: no database, no server, no network.
 """
@@ -593,7 +593,7 @@ ZERO_ANCHOR_REFERENCES = [D("100"), D("3.21"), D("0.000123"), D("99999999.999999
 
 
 def _range_change(reference: Decimal | None, anchor: Decimal | None):
-    """``returns.range_change(reference, anchor)``, looked up when called: it does not exist on HEAD d369e0b49 (an
+    """``returns.range_change(reference, anchor)``, looked up when called: it does not exist on HEAD 509d7be90 (an
     AttributeError there), and an import at the top would take the whole file down with it."""
     return returns_module.range_change(reference, anchor)
 
@@ -609,7 +609,7 @@ class TestRangeChange:
     ``inverse_change_abs = 1/anchor − 1/reference`` (the pair read the other way round, ``displayFxDelta`` inverted),
     ``inverse_change_ratio = reference / anchor − 1``: Decimal, unrounded, never ×100. Only when both values exist, the
     reference > 0 and the anchor ≥ 0 (an anchor of 0: ``TestAnchorOfZero``); otherwise all four None. RED on HEAD
-    d369e0b49: AttributeError, the function does not exist.
+    509d7be90: AttributeError, the function does not exist.
     """
 
     def test_rise(self) -> None:
@@ -703,7 +703,7 @@ class TestAnchorOfZero:
     −reference and ``change_ratio`` −1, exact Decimals; the inverse fields are None, the inverted quote having no value.
     ``fixed_period_changes`` gives the same −1 to every period whose reference is positive, the others staying None.
 
-    RED on HEAD 2c3e4d452, every test: an anchor of 0 was refused there, None where −1 is expected.
+    RED on HEAD 5a3df79a9, every test: an anchor of 0 was refused there, None where −1 is expected.
     """
 
     @pytest.mark.parametrize("reference", ZERO_ANCHOR_REFERENCES, ids=str)

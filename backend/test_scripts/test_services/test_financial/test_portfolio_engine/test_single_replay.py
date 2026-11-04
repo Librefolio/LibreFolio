@@ -21,7 +21,7 @@ the run from the first movement never had.
 - ``TestApplyPoolRule`` — ``DailyStateBuilder._apply_pool_rule``, the K/R/W rule of one movement that is
   not a position reduction, as a pure function.
 
-On HEAD b360f3774 (the pre-frame still there): ``TestWindowEqualsFullReplay`` is red for the SELL, the
+On HEAD 3cb4a04d9 (the pre-frame still there): ``TestWindowEqualsFullReplay`` is red for the SELL, the
 same-day DEPOSIT+BUY after withdrawn returns and the overdraft BUY before D, green for the others (the
 pre-frame applied the frame's rule to income, fees, withdrawals, linked cash legs and foreign cash
 revaluation); ``TestExactPoolsBeforeDateFrom`` red; ``TestCleanDaysShareNoContainer`` green (a parity

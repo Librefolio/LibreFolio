@@ -1,6 +1,6 @@
 """``dev.py`` inside the Docker image, which does not ship the tests (L, R2 P0, plan 35_devCliImage).
 
-``.dockerignore`` drops ``backend/test_scripts/`` (``3b48e25b4``, in 1.1.0). ``dev.py``,
+``.dockerignore`` drops ``backend/test_scripts/`` (``9c5809792``, in 1.1.0). ``dev.py``,
 though, registers the test runner while it builds its parser (``scripts.test_runner`` →
 ``_cli`` → ``_common.py``, which imports ``backend.test_scripts.test_db_config`` and
 ``test_utils``), and imports ``normalize_coverage_argv`` from ``scripts.test_runner._cli``

@@ -32,13 +32,13 @@ settled box with no deadline, and «settled» was satisfied by an empty box.
 
 ## Solution
 
-- **The stall** (Round 7, `18bc11a4f`, 2026-09-21). Developer decision, verbatim: «se dopo 3 secondi il componente non
+- **The stall** (Round 7, `446d31327`, 2026-09-21). Developer decision, verbatim: «se dopo 3 secondi il componente non
   diventa disponibile, scriviamo di andare avanti che c'è stato un problema di caricamento». After `GUIDE_STALL_MS`
   (3 s) of absence the panel says the area did not load in time and the primary button becomes **Continue anyway**:
   `next()` or `finish()`, or, in a step-managed flow, a `skipped` step that was never really shown. The timer runs only
   while waiting, is paused while a nested dialog suspends the step, never coexists with the 3 s panel fade
   (`PANEL_FADE_MS`), and `error` takes precedence over `stalled`. A late anchor clears the stall by itself.
-- **The hidden anchor** (Round 8, 6e, `b3aef9249`, 2026-09-24). `isRendered()` treats a 0×0 box, or an element hidden
+- **The hidden anchor** (Round 8, 6e, `6b6d5d87f`, 2026-09-24). `isRendered()` treats a 0×0 box, or an element hidden
   per `checkVisibility({visibilityProperty: true})`, as absent: waiting, then the stall. **Opacity is ignored on
   purpose**: hover-revealed controls start transparent and are real targets.
 - **The page-author rule**: put `use:guideAnchor` only on an element rendered for its step; when a view hides a region,

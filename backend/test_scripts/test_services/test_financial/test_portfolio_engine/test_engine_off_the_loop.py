@@ -14,7 +14,7 @@ handed (``classified_txs[*].tx``, ``paired_tx``, the transit legs), never a rela
 the only one, is lazy), there are no deferred columns, it reads only rows ``calculate()``'s own queries loaded, which
 never commits, rolls back or expires, and no session enters the thread.
 
-- ``TestTheReplayRunsOffTheEventLoop`` — red on HEAD fe27a7a90, green after:
+- ``TestTheReplayRunsOffTheEventLoop`` — red on HEAD 2e8b72ec5, green after:
   * ``…on_a_portfolio_engine_worker``: ``build`` runs on a ``portfolio-engine_N`` thread, not the loop's. HEAD: on the
     loop's thread (``MainThread``);
   * ``…the_event_loop_keeps_running_during_a_replay``: ``build`` blocks its thread on a ``threading.Event`` that only a
@@ -41,7 +41,7 @@ never commits, rolls back or expires, and no session enters the thread.
   3 units bought for 1000 and a KZT rate of 523.45678 make the figures depend on the decimal context.
   The ``native_cash_guard`` golden (``test_financial/test_native_cash_guard.py``) already pins the engine's numbers
   through the executor; it is not duplicated here.
-- ``TestTheExecutorIsShutDownWithTheApp`` (pure; MF-J45a, the executor J-45 never shut down) — red on HEAD 2c3e4d452
+- ``TestTheExecutorIsShutDownWithTheApp`` (pure; MF-J45a, the executor J-45 never shut down) — red on HEAD 5a3df79a9
   (no ``shutdown_engine_executor``, no ``_engine_executor``: both are looked up when the test runs, so the file still
   collects there), green after. ``shutdown_engine_executor()``, the app's ``portfolio-engine`` shutdown step
   (``test_app_lifecycle.py`` pins its place):
@@ -726,12 +726,12 @@ class TestTheSameNumbersOnAnyThread:
 
 
 # =============================================================================
-# 6 — RED ON HEAD 2c3e4d452 (MF-J45a): THE EXECUTOR IS SHUT DOWN WITH THE APP
+# 6 — RED ON HEAD 5a3df79a9 (MF-J45a): THE EXECUTOR IS SHUT DOWN WITH THE APP
 # =============================================================================
 
 
 def _engine_function(name: str) -> Callable[[], Any]:
-    """``engine.<name>``, looked up when the test runs: HEAD 2c3e4d452 has neither function, and the file still collects."""
+    """``engine.<name>``, looked up when the test runs: HEAD 5a3df79a9 has neither function, and the file still collects."""
     function = getattr(portfolio_engine_module, name, None)
     assert callable(function), f"MF-J45a: engine.{name}() is missing: the engine's executor is not created on first use and shut down with the app"
     return function

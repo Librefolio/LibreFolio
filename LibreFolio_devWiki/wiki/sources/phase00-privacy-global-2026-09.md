@@ -17,9 +17,9 @@ related:
 ## Summary
 
 An analysis (~1 100 lines) and two plans, archived on 2026-10-09. Round 1 (masking core, 2026-09-22,
-`9d9613471` + the gate `b4c078097`) put a "hide values" switch in the header and the masking in the currency
+`442da3f56` + the gate `99770ce9b`) put a "hide values" switch in the header and the masking in the currency
 formatters. The usage review of 2026-09-22 found it hid too much — the currency symbol, the risk sign, lots, the
-broker view, every quantity — because values were classified by formatter; Round 2 (2026-09-24, `0ca72f743`
+broker view, every quantity — because values were classified by formatter; Round 2 (2026-09-24, `6c2cbeb9c`
 "keep currency and sign under the mask") moved to a classification by context.
 
 ## Key takeaways

@@ -15,7 +15,7 @@ related:
 # Problem: a raw-HTML image path is one folder short in every translation
 
 > Written by workstream M as a note for the devWiki on 2026-10-11, filed by the historian on 2026-10-12 with its paths
-> and commits checked at `9f63eec22`.
+> and commits checked at `4bc7be91b`.
 
 ## Symptom
 
@@ -38,14 +38,14 @@ counted only WARNING/ERROR lines did not see it.
 
 ## Fix (batch 14)
 
-- The 21 paths got one more `../` (`87b7697b3`).
+- The 21 paths got one more `../` (`d49013bbf`).
 - `dev.py mkdocs build` resolves every relative file URL of the built site (img/source `src`/`srcset`, video
   `src`/`poster`, audio `src`, `<a href>` to a file) from its page's folder, as a browser does, and exits 1 on a
-  broken one (`e1912ac5a`): the release workflow's build steps now fail on it.
+  broken one (`9116167cf`): the release workflow's build steps now fail on it.
 - `translate-validate` reports `html-asset-depth` (ERROR): a raw-HTML relative file path copied unchanged from the
-  English, with the line and the path to write, computed from the page's build folder (`00c5cc2b2`).
+  English, with the line and the path to write, computed from the page's build folder (`4360c7256`).
 - Tests: `./dev.py test utils gate-docs-links`, `./dev.py test utils translation-validator`.
-- All three commits reached `dev_release2` with train 37 (merge `ad689e230`).
+- All three commits reached `dev_release2` with train 37 (merge `8d146f2cc`).
 
 ## Prevention
 

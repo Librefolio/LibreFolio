@@ -1082,7 +1082,7 @@ class TestNestedTemplates:
 
 
 # ---------------------------------------------------------------------------
-# Third round (R8-R12). On the release tip (5f3509536) 78 live keys still read "not
+# Third round (R8-R12). On the release tip (d0e7eb405) 78 live keys still read "not
 # verified": the evidence for their last segment sits in a module the family's file
 # imports, in a backend code of another case or with a leading digit, or behind several
 # runtime segments. And a key read only by a component nobody imports still reads
@@ -1377,7 +1377,7 @@ class TestUnreferencedSources:
     imports counted as used. ``planner/shared/AgeLabel.svelte`` reads five
     ``tools.pacAllocator.planner.age.*`` keys on the release tip and no file imports it,
     as none imported ``planner/result/WeightBars.svelte`` before it was removed with its
-    keys (``15a52c0a5``). Reachability starts from SvelteKit's own entries (``+page``,
+    keys (``9922c823f``). Reachability starts from SvelteKit's own entries (``+page``,
     ``+layout``, ``+error``, ``+server``, the hooks, the service worker) and follows static
     and dynamic imports: the planner itself is loaded only by
     ``import('./pac-allocator/planner/PacPlannerTool.svelte')`` at
@@ -1412,7 +1412,7 @@ const compiledRendererRegistrations: readonly CompiledToolRendererRegistration[]
 <CopyNotice />
 """
 
-    # planner/shared/AgeLabel.svelte at 5f3509536, reduced.
+    # planner/shared/AgeLabel.svelte at d0e7eb405, reduced.
     AGE_LABEL = """
 <script lang="ts">
     import {t, locale} from '$lib/i18n';

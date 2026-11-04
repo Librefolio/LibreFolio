@@ -12,7 +12,7 @@ A deposits 1000 on D0; a linked CASH_TRANSFER moves 650 from A to B on D1. A sec
 and an INTEREST of 100 on D0 (K_B 100 / R_B 100 before the transfer).
 
 - ``broker_ids=[B]``, first book: on D1 cash 650, capital baseline 650 -> contributed 650 / generated 0.
-  HEAD 3f8e670f2: contributed 0 / generated 650 (the arrival moves no pool; the display gives an empty K nothing).
+  HEAD 559dbe072: contributed 0 / generated 650 (the arrival moves no pool; the display gives an empty K nothing).
 - ``broker_ids=[B]``, second book: on D1 cash 850, capital baseline 750 -> contributed 750 / generated 100.
   HEAD: K 100 / R 100 against a cash of 850, rescaled x 4.25: 425 / 425.
 - Parity pins (green before and after): the whole perimeter {A, B} (the pair is linked-internal, J2's rule: 1000 / 0,

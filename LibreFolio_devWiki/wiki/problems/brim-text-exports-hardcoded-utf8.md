@@ -20,7 +20,7 @@ Bank exports of issue #26.
 27 plugins (31 call sites) opened their files with a fixed `open(path, encoding="utf-8-sig")`. A byte that is not
 valid UTF-8 raised a decode error, or a header with an accented column name no longer matched.
 
-## Solution (2026-09-28, `35db1061f`)
+## Solution (2026-09-28, `864fe0bc6`)
 
 - One ordered list, `TEXT_ENCODINGS = ("utf-8-sig", "cp1252", "latin-1")` in `backend/app/services/brim/brim_provider.py`,
   and helpers built on it: `_read_text` (whole file), `_open_text` (a `StringIO` for `csv` readers),

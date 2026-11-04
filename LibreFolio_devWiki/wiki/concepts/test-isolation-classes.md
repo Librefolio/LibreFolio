@@ -147,7 +147,7 @@ Which means the isolation work had to be done anyway, even if the decision had
 been never to parallelise anything.
 
 - The first time this bit, `test all` could not pass by construction: the services category recreated an empty
-  database before the API category, and only the clean audit's last step (`251df8054`, August 2026) gave the API run
+  database before the API category, and only the clean audit's last step (`ce2abf9e7`, August 2026) gave the API run
   its own populate — [[sources/phase00-clean-audit-2026-08]].
 
 ## E2E: a write to shared state belongs to its test (2026-10-12)

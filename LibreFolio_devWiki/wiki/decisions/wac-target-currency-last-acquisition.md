@@ -93,7 +93,7 @@ split or an acquisition of unknown cost — or there is no addition at all — i
 | Plan | `LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-07-subplan/Parte4/Round6/Bugfix-SPD/plan-R3-SP-D-WacCurrency.prompt.md` |
 
 > Until 2026-10-07 the first row cited `backend/app/services/wac_service.py`. The function actually lived in
-> `backend/app/utils/financial_utils.py`, which Phase 09 M1 (commit `effb09a61`) moved to
+> `backend/app/utils/financial_utils.py`, which Phase 09 M1 (commit `3e23f5f8e`) moved to
 > `backend/app/utils/financial/wac_utils.py`, deleted on 2026-10-07; `wac_service.py` became `portfolio_service.py` in
 > the same commit.
 

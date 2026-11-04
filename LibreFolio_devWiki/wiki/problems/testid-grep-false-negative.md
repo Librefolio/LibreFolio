@@ -71,7 +71,7 @@ A second pass, searching the primitives for the suffix composition, found every 
 for `{testId}-` catches both spellings (it is a substring of `${testId}-`); make it
 case-insensitive, since `AssetSelect` spells the prop `testid`.
 
-*Recount for this page, on `9df0b7b14`*: F's plan counts 12 ids composed by those two primitives.
+*Recount for this page, on `9d87ad80e`*: F's plan counts 12 ids composed by those two primitives.
 Eleven are (ten by `RiskLevelSection`, one by `TornadoChart`); the twelfth id of that shape in the
 spec, `risk-asset-set-l1-row`, is a literal in `AssetSetLossComparisonSection.svelte` — a suffix
 match is not a composition either. Five more `getByTestId` literals are composed by interpolation
@@ -90,8 +90,8 @@ A sibling zero, R2-112 (21/09): `grep -E` read `max(date)` as "max followed by t
 returned nothing on a file that contained it; `grep -F` found it. *"A grep that returns zero does not
 say 'absent': it says 'my pattern found nothing'."* For the presence of a literal, use `-F`.
 
-The `AssetSelect` gap described above is closed at `9df0b7b14`: the wrapper forwards `testId={testid}`
-to `SearchSelect` and no longer carries its own id — the fix this page prescribed (`7bb84d4fc`, 18/09).
+The `AssetSelect` gap described above is closed at `9d87ad80e`: the wrapper forwards `testId={testid}`
+to `SearchSelect` and no longer carries its own id — the fix this page prescribed (`2ff8207e1`, 18/09).
 
 ## A second prop — `TreeSelect` (2026-09-24, workstream K)
 
@@ -106,7 +106,7 @@ trigger and misses every row; search for `-option-` / `-group-` or for the prop 
 |------|------|
 | Suffix composition | `frontend/src/lib/components/ui/select/SimpleSelect.svelte` |
 | Suffix composition | `frontend/src/lib/components/ui/select/SearchSelect.svelte` |
-| Wrapper — did not forward `testId` when this page was written (`9ea2726ce`); forwards it since `7bb84d4fc` | `frontend/src/lib/components/ui/select/AssetSelect.svelte` |
+| Wrapper — did not forward `testId` when this page was written (`20d056e7e`); forwards it since `2ff8207e1` | `frontend/src/lib/components/ui/select/AssetSelect.svelte` |
 | Consumer passing the stem | `frontend/src/lib/features/risk/AssetSetRiskPanel.svelte` |
 | Specs bound to the wrapper id | `frontend/e2e/transactions/tx-import-resolution.spec.ts` |
 | Composes `{testId}-health`, `-reasons`, `-errors`, `-metadata`, `-toggle`, `-body`, … | `frontend/src/lib/features/risk/levels/RiskLevelSection.svelte` |

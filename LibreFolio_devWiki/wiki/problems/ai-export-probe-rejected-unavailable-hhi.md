@@ -34,7 +34,7 @@ valued positions. The user saw no defect.
 
 ## Solution
 
-Commit `9c96c442e` ("fix(ai-export): probe accepts an unavailable HHI", train 56), approved by the developer for 1.2
+Commit `b9e40fe21` ("fix(ai-export): probe accepts an unavailable HHI", train 56), approved by the developer for 1.2
 («Sì, nella 1.2: la cura della sonda più i test rossi»):
 
 - a raw `None` HHI is accepted only when the same record carries `largest_position_weight_percent`, also `None`; it is

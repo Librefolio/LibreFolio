@@ -5,7 +5,7 @@ Workstream J «Numeri e analisi», release 1.3: the service-level reds R1–R12 
 ``test_financial_math/test_lots_scope_boundary.py``; R13, the AI Export, beside the ``broker.fifo_summary`` tests
 (``test_ai_export_broker_fifo_summary_scope_boundary.py``).
 
-TODAY (base ``3be19035c``) the analysis replays only the transactions of the brokers in scope (``_load_transactions``):
+TODAY (base ``d791812e1``) the analysis replays only the transactions of the brokers in scope (``_load_transactions``):
 scope = ``broker_ids`` ∩ the brokers the user can access, every accessible broker when ``broker_ids`` is None. A
 TRANSFER whose other leg sits at a broker outside the scope cannot pair (``FifoLotEngine._resolve_transfer_pair``):
 TRANSFER_PAIR_MISSING, a quantitative failure, so the whole asset is FAILED — for the owner who filters one broker as

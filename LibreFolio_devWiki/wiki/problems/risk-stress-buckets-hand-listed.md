@@ -25,7 +25,7 @@ is simply wrong. The hand-written list sat one layer above the backend's gate, w
 
 ## Solution
 
-`fa920c9c8` («fix(risk): derive the stress buckets from the AssetType enum»): every bucket an `asset_class` shock can
+`5f50a2a21` («fix(risk): derive the stress buckets from the AssetType enum»): every bucket an `asset_class` shock can
 name now comes from the backend enum itself, pinned by `stressBuckets.test.ts`.
 
 ## Prevention

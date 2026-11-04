@@ -45,7 +45,7 @@ import {renderSnapshotDataText} from '../templates/snapshotDataRenderer';
  * renderer's own maps. Titles, headers and keys are format and are asserted; cells are read by column header, rows found
  * by what they hold.
  *
- * Today (base `efb5f82c4`, E-AI503 merged) PSG-01 to PSG-07 and PSG-09 are green, and so are PSG-18 and the three price
+ * Today (base `e6a092954`, E-AI503 merged) PSG-01 to PSG-07 and PSG-09 are green, and so are PSG-18 and the three price
  * rows of PSG-19: they guard that a payload without a gap, or with the E-AI503 codes only, renders as before, and must stay
  * green. PSG-08, PSG-10 to PSG-17, PSG-20 and the `fx.rate_ohlc` row of PSG-19 are red until E-23: the map has two codes,
  * `SERIES_GAP_MEANINGS` does not exist, `no_price_in_period` is an unknown code, gap lists are ignored, and `fx.rate_ohlc`

@@ -19,7 +19,7 @@ What is tested:
   in the calendar and only after a day of ``days`` (not transitive), ``date.max`` never followed.
 - ``TestChangeDays`` — the behaviour the tests of ``test_fx_only_days.TestChangeDays`` pin, plus the calendar order, an
   empty calendar, no currency, and numeric equality (``1.1`` is ``1.10``).
-- ``TestParityWithTheOldInlineFormulas`` — the four inline formulas as they were at HEAD ``1a1e6d7c0`` (copied below,
+- ``TestParityWithTheOldInlineFormulas`` — the four inline formulas as they were at HEAD ``ed2f59268`` (copied below,
   verbatim but for names) against the new calls, on seeded random maps and calendars away from ``date.max``: the same
   days. ``_reading_calendar`` and ``rate_change_days`` are compared through the real methods.
 
@@ -241,7 +241,7 @@ class TestChangeDays:
 
 
 # =============================================================================
-# Parity with the inline formulas of HEAD 1a1e6d7c0
+# Parity with the inline formulas of HEAD ed2f59268
 # =============================================================================
 
 

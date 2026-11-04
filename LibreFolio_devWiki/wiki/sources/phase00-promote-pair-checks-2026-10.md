@@ -25,11 +25,11 @@ code but not reproduced. P wrote the red tests first, the coordinator decided D1
 - the bulk editor comparing costs by reference;
 - the 💡 proposing event-linked rows.
 
-The lot entered with train 34 (`af4463c5f`, merge `1a2ebd2e3`). Three more pieces followed:
+The lot entered with train 34 (`ff449bffe`, merge `82afc0e42`). Three more pieces followed:
 
-- a side task on the distribution editor (`e21fd80fd`, train 32);
-- C-46…C-48 (`a892717de`, train 37);
-- a mini-lot of localisation fixes from M's audit (`f3dc1eb27`, train 38), on the coordinator's word: the developer was
+- a side task on the distribution editor (`7e315bc36`, train 32);
+- C-46…C-48 (`25210ff16`, train 37);
+- a mini-lot of localisation fixes from M's audit (`3d2378626`, train 38), on the coordinator's word: the developer was
   away and had delegated the reasonable choices.
 
 P then finished, and its chat was archived on 2026-10-11.

@@ -1729,7 +1729,7 @@ async def test_rates_of_an_import_written_and_deleted_by_separate_days(test_serv
     3. ``DELETE /fx/currencies/rate`` with 10 001 deletions: 422 ``bulk_too_many_items``, ``max_items`` 10 000,
        ``items`` 10 001; nothing deleted, the 750 days still stored.
 
-    Red on HEAD fbbf55b63: step 2 answers 500 — SQLite refuses the one OR of 1 500 terms («Expression tree is too
+    Red on HEAD 986f6ec01: step 2 answers 500 — SQLite refuses the one OR of 1 500 terms («Expression tree is too
     large»), the detail echoing the SQL.
     """
     print_section("MF-SEC9a: 1 500 rates posted, 1 500 separate days deleted, 10 001 deletions refused")

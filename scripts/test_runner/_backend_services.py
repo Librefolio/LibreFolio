@@ -254,7 +254,7 @@ def services_price_query_observations(verbose: bool = False, test_names: list = 
     """X-Q1/Q2/S1 («formule veloci»): the price query reads a series by observation and converts once for each stretch of unchanged price row and rate row."""
     print_section("Services: Price Query Observations (X-Q1, X-Q2)")
     print_info("Testing: observed_prices (observe, series_points, ObservedPrices), PriceQueryOperations.observed_prices, get_prices_bulk")
-    print_info("Parity: the public points and conversion errors equal the 61a6c828b pipeline's (a copy in the test), on 18 asset/target/window cases and 7 signal cases (EMA, calendar rolling return, drawdown)")
+    print_info("Parity: the public points and conversion errors equal the 14bb7d59e pipeline's (a copy in the test), on 18 asset/target/window cases and 7 signal cases (EMA, calendar rolling return, drawdown)")
     print_info("Count: convert_bulk is handed one conversion for each stretch of unchanged price row and rate row, not one for each day")
     print_info("Object: first_point_date, observation_dates and point_on(day), the point the public series has on that day (J's R1)")
     cmd = _build_pytest_cmd("backend/test_scripts/test_services/test_price_query_observations.py", test_names)
@@ -2566,7 +2566,7 @@ Note: No backend server required.
         "price-query-observations",
         services_price_query_observations,
         name="Price Query Observations",
-        desc="X-Q1/Q2/S1: get_prices_bulk reads a series by observation and converts once for each stretch of unchanged price row and rate row; the public points and conversion errors equal the 61a6c828b pipeline's (18 cases, 7 with signals); convert_bulk handed the stretches, not the days; ObservedPrices (first_point_date, observation_dates, point_on) for the risk",
+        desc="X-Q1/Q2/S1: get_prices_bulk reads a series by observation and converts once for each stretch of unchanged price row and rate row; the public points and conversion errors equal the 14bb7d59e pipeline's (18 cases, 7 with signals); convert_bulk handed the stretches, not the days; ObservedPrices (first_point_date, observation_dates, point_on) for the risk",
         # PURE: a private SQLite file under tmp_path built with create_all; the market holiday table replaced by monkeypatch; no lane DB, no server, no network.
         isolation="pure",
     )
@@ -3296,7 +3296,7 @@ Note: No backend server required.
         "closed-by",
         services_closed_by,
         name="Closed By",
-        desc="MF-CB: a Performance row closed by period end says how — closed_by SELL, TRANSFER or ADJUSTMENT, the type of the move of its last close (holding_window.closing_move, a split's never), and with a TRANSFER closed_to_broker_id, the paired leg's broker when the user has access to it (also outside broker_ids), never another user's nor an orphan's; 6 transferred then 4 sold says SELL, the reverse TRANSFER; same-day exits, the later id; an open row and an income-only row (None, None); a row sold before the period and listed by a dividend in it says SELL; get_report carries the fields; every figure equals HEAD 8e70ec493's",
+        desc="MF-CB: a Performance row closed by period end says how — closed_by SELL, TRANSFER or ADJUSTMENT, the type of the move of its last close (holding_window.closing_move, a split's never), and with a TRANSFER closed_to_broker_id, the paired leg's broker when the user has access to it (also outside broker_ids), never another user's nor an orphan's; 6 transferred then 4 sold says SELL, the reverse TRANSFER; same-day exits, the later id; an open row and an income-only row (None, None); a row sold before the period and listed by a dividend in it says SELL; get_report carries the fields; every figure equals HEAD bb6085662's",
         # The file sits in test_financial/, which roi-fifo-utils runs whole: the derived "all"
         # skips this action so that the file runs once there.
         in_all=False,

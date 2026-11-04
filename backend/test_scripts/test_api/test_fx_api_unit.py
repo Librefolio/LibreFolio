@@ -832,7 +832,7 @@ async def test_xr38_guard_upsert_rates_endpoint_stores_rates_at_the_limits():
 # X-R46: POST /fx/currencies/rate names the rates it refused, machine-readable
 # ============================================================================
 #
-# The defect, on HEAD 88611daf5: the endpoint tells a refused rate only as an English string of ``errors`` («Rate
+# The defect, on HEAD 3609dd862: the endpoint tells a refused rate only as an English string of ``errors`` («Rate
 # {idx}: …») and, when it refuses every rate, as the string ``detail`` of its 400 («All rates failed: …»). The FX data
 # editor cannot tell which rows the server refused: it counts every row it sent as saved.
 #
@@ -927,7 +927,7 @@ def _xr46_not_storable(message: str) -> ValueError:
 async def test_xr46_upsert_rates_endpoint_lists_a_rate_no_column_can_keep_in_rejected(monkeypatch):
     """X-R46: EUR → GBP 0.85, then USD → EUR 1E-1000000, which ``normalize_storable_rate`` refuses.
 
-    Red on HEAD 88611daf5: ``FXBulkUpsertResponse`` has no ``rejected``; the refused rate is told only in ``errors``
+    Red on HEAD 3609dd862: ``FXBulkUpsertResponse`` has no ``rejected``; the refused rate is told only in ``errors``
     («Rate 1: Validation error: The rate of EUR/USD on … cannot be stored: …»), so the FX editor counts it as saved.
     Contract: 200; the first rate alone in ``results`` and handed to the store; ``rejected`` ``[{"index": 1, "date": its
     date, "reason": "rate_not_storable"}]`` -- the index is the item's position in the request, not among the refusals;
@@ -949,7 +949,7 @@ async def test_xr46_upsert_rates_endpoint_lists_a_rate_no_column_can_keep_in_rej
 async def test_xr46_upsert_rates_endpoint_lists_a_same_currency_pair_in_rejected(monkeypatch):
     """X-R46: EUR → GBP 0.85, then EUR → EUR 1.
 
-    Red on HEAD 88611daf5: no ``rejected``; the refusal is only «Rate 1: Base and quote must be different (got EUR)».
+    Red on HEAD 3609dd862: no ``rejected``; the refusal is only «Rate 1: Base and quote must be different (got EUR)».
     Contract: 200; the first rate alone in ``results`` and handed to the store; ``rejected`` ``[{"index": 1, "date": its
     date, "reason": "same_currency"}]``; ``errors`` the same one string as before.
     """
@@ -977,7 +977,7 @@ async def test_xr46_upsert_rates_endpoint_lists_a_rate_the_store_refuses_in_reje
     """X-R46: EUR → GBP 0.85, then EUR → JPY 160, on which ``upsert_rates_bulk`` raises what ``refusal`` builds, when the
     case runs.
 
-    Red on HEAD 88611daf5: no ``rejected``; the refusal is only the string of ``errors``. The ``FXRateNotStorableError``
+    Red on HEAD 3609dd862: no ``rejected``; the refusal is only the string of ``errors``. The ``FXRateNotStorableError``
     case fails before the call: ``services.fx.storage`` has no such class.
     Contract: 200; the first rate alone in ``results``, both handed to the store; ``rejected`` ``[{"index": 1, "date": its
     date, "reason": reason}]``: ``FXRateNotStorableError`` (a ``ValueError``, the store's X-R38 refusal, decided 17/10)
@@ -1003,7 +1003,7 @@ async def test_xr46_upsert_rates_endpoint_answers_400_with_an_object_naming_ever
     store raises a ``RuntimeError``; EUR → EUR 1; EUR → GBP 0.85, on which the store raises a ``ValueError``; USD → EUR
     1E-1000000, which ``normalize_storable_rate`` refuses.
 
-    Red on HEAD 88611daf5: 400 with a string ``detail``, «All rates failed: Rate 0: …; Rate 1: …; …»: the editor can show
+    Red on HEAD 3609dd862: 400 with a string ``detail``, «All rates failed: Rate 0: …; Rate 1: …; …»: the editor can show
     it whole, never say which row was refused and why.
     Contract: 400; ``detail`` exactly ``{"code", "message", "rejected"}``: ``code`` ``fx_rates_refused``; ``message`` the
     same «All rates failed: …» text, the four strings of ``errors`` joined by «; »; ``rejected`` the four as JSON, in
@@ -1044,7 +1044,7 @@ async def test_xr46_upsert_rates_endpoint_answers_400_with_an_object_naming_ever
 async def test_xr46_guard_upsert_rates_endpoint_answers_an_empty_rejected_when_every_rate_is_kept(monkeypatch):
     """X-R46 guard of the cure: EUR → GBP 0.85 and USD → EUR 0.8 (stored EUR/USD 1.25), both kept.
 
-    Red on HEAD 88611daf5 only because ``rejected`` does not exist; green once it does.
+    Red on HEAD 3609dd862 only because ``rejected`` does not exist; green once it does.
     Contract: 200; two results, both handed to the store, no error; ``rejected`` ``[]``.
     """
     store = _xr46_store(monkeypatch)
@@ -1061,7 +1061,7 @@ def test_xr46_fx_rate_rejection_holds_one_of_four_reasons_and_the_answer_default
     """X-R46, the schemas alone: ``FXRateRejection`` holds an index, a date and one of the four reasons, and refuses any
     other reason; an ``FXBulkUpsertResponse`` built without ``rejected`` answers ``[]``.
 
-    Red on HEAD 88611daf5: ``schemas.fx`` has no ``FXRateRejection``.
+    Red on HEAD 3609dd862: ``schemas.fx`` has no ``FXRateRejection``.
     """
     rejection = getattr(fx_schemas, "FXRateRejection", None)
     assert rejection is not None, "X-R46: backend.app.schemas.fx has no FXRateRejection"
@@ -1078,7 +1078,7 @@ async def test_xr46_wire_200_of_upsert_rates_carries_rejected():
     """X-R46 on the wire, on the lane's test database: KHR → MMK "1.5", then MMK → KHR "1E-1000000" (KHR/MMK
     1E+1000000 once inverted, which ``normalize_storable_rate`` refuses), as the FX editor posts them.
 
-    Red on HEAD 88611daf5: the JSON of the 200 has no ``rejected``.
+    Red on HEAD 3609dd862: the JSON of the 200 has no ``rejected``.
     Contract: 200; 1.5 stored alone; the body's ``errors`` one string, «Rate 1: …», and its ``rejected`` ``[{"index": 1,
     "date": "1986-03-04", "reason": "rate_not_storable"}]``.
     """
@@ -1102,7 +1102,7 @@ async def test_xr46_wire_200_of_upsert_rates_lists_a_rate_0_at_10_decimal_places
     ``normalize_storable_rate`` keeps and the real ``upsert_rates_bulk`` refuses at its X-R38 check (0 once cut to the
     10 decimal places of ``fx_rates.rate``): the commonest refusal of the FX editor, made by the store, not the endpoint.
 
-    Red on HEAD 88611daf5: the JSON of the 200 has no ``rejected``; the store's refusal is a plain ``ValueError``,
+    Red on HEAD 3609dd862: the JSON of the 200 has no ``rejected``; the store's refusal is a plain ``ValueError``,
     which the contract read literally would call ``invalid_rate``.
     Contract (decided 17/10): the store raises ``FXRateNotStorableError``, its text unchanged, and the endpoint reads it
     as ``rate_not_storable``. 200; 1.5 stored alone; ``errors`` exactly as before, «Rate 1: Validation error: » and
@@ -1128,7 +1128,7 @@ async def test_xr46_wire_200_of_upsert_rates_lists_a_rate_0_at_10_decimal_places
 async def test_xr46_wire_400_of_upsert_rates_carries_an_object_detail():
     """X-R46 on the wire, on the lane's test database: MMK → KHR "1E-1000000" alone, refused.
 
-    Red on HEAD 88611daf5: 400 with ``{"detail": "All rates failed: Rate 0: …"}``, a string.
+    Red on HEAD 3609dd862: 400 with ``{"detail": "All rates failed: Rate 0: …"}``, a string.
     Contract: 400; nothing stored; ``detail`` ``{"code": "fx_rates_refused", "message": "All rates failed: Rate 0: …",
     "rejected": [{"index": 0, "date": "1986-03-03", "reason": "rate_not_storable"}]}``.
     """
@@ -1150,7 +1150,7 @@ async def test_xr46_wire_400_of_upsert_rates_carries_an_object_detail():
 # X-R41: POST /fx/currencies/convert of an amount of 0
 # ============================================================================
 #
-# The defect, on HEAD 0c866ff73: ``convert_currency_bulk`` gives each daily result between two currencies the rate
+# The defect, on HEAD 79d526d9d: ``convert_currency_bulk`` gives each daily result between two currencies the rate
 # ``converted / from_amount`` (``api/v1/fx/currencies.py`` ~582). ``convert_bulk`` converts 0 to 0 (0 × the rate), so an
 # amount of 0 divides 0 by 0: ``decimal.InvalidOperation`` ([DivisionUndefined]) escapes the handler, which has no try
 # around the division, and the server answers 500 to the whole request, its other conversions with it. An amount of 0 is
@@ -1247,7 +1247,7 @@ async def test_xr41_convert_currency_bulk_converts_an_amount_of_0_as_one_unit(mo
     """X-R41: EUR ``zero`` → USD over two days, beside EUR 100 → USD over the same two days. The double converts EUR → USD
     at 1.1 and has no rate of its own on the second day: it fills the first day's back.
 
-    Red on HEAD 0c866ff73: the double gets the 0 itself and answers USD 0; the handler divides that 0 by the amount, 0, and
+    Red on HEAD 79d526d9d: the double gets the 0 itself and answers USD 0; the handler divides that 0 by the amount, 0, and
     ``decimal.InvalidOperation`` escapes it: the server's 500, the 100's conversions lost with it.
     Contract: 200, no error. The double gets one unit, EUR 1 → USD, for the 0, and EUR 100 for the 100, each once (X-Q3: both
     days read the same rate row). The answer, in request order and days ascending: each day of the 0 is EUR 0 as requested → USD 0, at the rate of
@@ -1279,7 +1279,7 @@ async def test_xr41_convert_currency_bulk_converts_an_amount_of_0_as_one_unit(mo
 
 @pytest.mark.asyncio
 async def test_xr41_guard_convert_currency_bulk_answers_0_and_no_rate_for_the_same_currency(monkeypatch):
-    """X-R41 guard, green on HEAD 0c866ff73 and after: EUR 0 → EUR on one day.
+    """X-R41 guard, green on HEAD 79d526d9d and after: EUR 0 → EUR on one day.
 
     Green today: between the same currency the handler never divides, the rate None. Pinned for the cure, which may send
     this 0 as a unit too (the double, as ``convert_bulk``, answers that unit EUR 1): 200, no error, one result, EUR 0 as
@@ -1297,7 +1297,7 @@ async def test_xr41_guard_convert_currency_bulk_answers_0_and_no_rate_for_the_sa
 
 @pytest.mark.asyncio
 async def test_xr41_guard_convert_currency_bulk_keeps_the_rate_of_an_amount_that_is_not_0(monkeypatch):
-    """X-R41 guard, green on HEAD 0c866ff73 and after: EUR 100 → USD on one day, the double converting at 1.1.
+    """X-R41 guard, green on HEAD 79d526d9d and after: EUR 100 → USD on one day, the double converting at 1.1.
 
     Pinned for the cure: an amount that is not 0 is unchanged. The double gets EUR 100 itself and no unit beside it; the
     answer is 200, no error, EUR 100 → USD 110 at the rate converted / amount, 1.1, both exactly (``Decimal``), no
@@ -1363,7 +1363,7 @@ async def test_xr41_wire_convert_of_0_answers_0_at_the_stored_rate():
     """X-R41 on the wire, on the lane's test database: BAM "0" → SSP over two days, as a client posts it, with one BAM/SSP
     rate stored, 2471.25 on the first day, none on the second (``xr41_bam_ssp_rate``).
 
-    Red on HEAD 0c866ff73: the real ``convert_bulk`` converts the 0 to SSP 0 at the stored rate, the handler divides that 0
+    Red on HEAD 79d526d9d: the real ``convert_bulk`` converts the 0 to SSP 0 at the stored rate, the handler divides that 0
     by the amount, 0, and ``decimal.InvalidOperation`` escapes the app: the server answers 500.
     Contract: 200, no error; two results, days ascending, each BAM 0 → SSP 0 at the stored rate, which is what one BAM
     converts to on that day: the first day not filled, the second filled 1 day back from the first.

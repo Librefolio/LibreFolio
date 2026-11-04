@@ -246,7 +246,7 @@ skipped it as unusable.
 
 Apart from the unusable rates left out, return values and errors are those of the full-history version
 this replaced, which loaded every pair's whole history up to the latest requested date and scanned it
-linearly for each item (PR #30 by Martin Sova, commit `384390a37`).
+linearly for each item (PR #30 by Martin Sova, commit `6f42b2882`).
 
 ### 🪜 One unit's rate as steps {: #unit-rate-steps }
 

@@ -15,7 +15,7 @@ NPV is 0.0 there although nothing changes sign, the zero passes ``_is_xirr_root`
 (|0.0| ≤ tolerance), and the grid point nearest the guess 0.1 comes back as the rate. Newton fails
 on these flows, so the scan's false zero is the answer of ``_solve_xirr`` and of the card.
 
-Concrete flows (found by experiment on HEAD 28eb45521; years, amounts; false rate returned):
+Concrete flows (found by experiment on HEAD 0d85f199b; years, amounts; false rate returned):
 
 * ``[(0, -0.0), (85, -1000), (85.01, +1200)]`` → 6605.934480…; true root 1.2**100 − 1 ≈ 8.3e7,
   outside the grid.

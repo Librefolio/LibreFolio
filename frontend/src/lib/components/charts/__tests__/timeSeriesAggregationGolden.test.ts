@@ -44,12 +44,12 @@ import {describe, expect, it} from 'vitest';
 import {GOLDEN_CASES, GOLDEN_FORMAT_VERSION, GOLDEN_FUNCTIONS, GOLDEN_RESOLUTIONS, canonicalStringify, captureGoldenCorpus, expectedGoldenKeys, goldenDigest, type EncodedValue, type GoldenEntries, type GoldenEntry} from './fixtures/timeSeriesAggregationGoldenCases.ts';
 
 /**
- * Digest of the recorded entries, as captured from commit 30ef5a345 — i.e. from
+ * Digest of the recorded entries, as captured from commit 7aadef765 — i.e. from
  * the pre-refactor implementation — plus exactly one behaviour change accepted
  * since, and nothing else:
  *
  *   I-01 — `aggregateSumSeries` and missing points. Introduced on purpose by
- *   commit c57a762ff and accepted here on 2026-10-16, after the printed drift
+ *   commit 81d7a8a01 and accepted here on 2026-10-16, after the printed drift
  *   was read entry by entry. A missing point no longer adds to the sum, a
  *   bucket with no present point is a gap (value 0, `missing: true`),
  *   `sourcePointCount` counts the present points only, and `missing` is no
@@ -60,7 +60,7 @@ import {GOLDEN_CASES, GOLDEN_FORMAT_VERSION, GOLDEN_FUNCTIONS, GOLDEN_RESOLUTION
  *     aggregateSumSeries|partial-missing-bucket|monthly
  *   Only `sourcePointCount` and `missing` moved in them: every missing point in
  *   this corpus carries value 0, so no recorded sum changed. Every other entry
- *   is still the 30ef5a345 record.
+ *   is still the 7aadef765 record.
  *
  * DO NOT update this because the test went red. A mismatch means the recorded
  * behaviour and the current behaviour disagree, which is the single thing this

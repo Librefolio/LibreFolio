@@ -288,7 +288,7 @@ export function buildScatterOption(input: ScatterOptionInput): ScatterOptionResu
         droppedCount,
         isEmpty: placeable.length === 0,
         option: {
-            // `left` is the outer inset, as on the growth chart (`9c477f5c4`): with
+            // `left` is the outer inset, as on the growth chart (`579fed10a`): with
             // `containLabel` the y labels are added to it, so a pixel constant here was an
             // empty strip before them. It was there for the axis name, which ECharts centres
             // on the axis line and `containLabel` does not measure; the name now starts at

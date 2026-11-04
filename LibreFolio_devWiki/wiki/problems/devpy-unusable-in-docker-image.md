@@ -22,7 +22,7 @@ container, not even `info`.
 the application, not the development tree). Earlier `try/except ImportError` blocks around some groups hid the
 dependency instead of stating it.
 
-## Solution (train 19, merge `c61a90883`)
+## Solution (train 19, merge `bebab4780`)
 
 - `_has(paths)` checks, **before importing**, whether what a command group needs is part of this installation; never
   by catching `ImportError`, so that in a full checkout a broken import stays loud.

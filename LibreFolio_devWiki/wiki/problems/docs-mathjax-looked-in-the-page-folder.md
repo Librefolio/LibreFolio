@@ -20,7 +20,7 @@ During the live preview of batch 23 (2026-10-12), M saw in the server log that t
 `/LibreFolio/it/user/brokers/javascripts/vendor/mathjax/tex-mml-chtml.js` 404. Online, the formulas still showed —
 loaded from jsDelivr, a third party, on every page with formulas. Offline, as in the full Docker image that is meant to
 carry the whole documentation, they did not show at all. The defect was already in 1.0 and 1.1: `lib-loader.js` had
-not changed since `89ec66352` (2026-02-06).
+not changed since `87fe45e2a` (2026-02-06).
 
 ## Root Cause
 
@@ -30,7 +30,7 @@ they are, so the base fell back to the page's own folder: right on the home page
 
 ## Solution
 
-`c29312694` («fix(docs): load local MathJax on nested pages», batch 24): the script reads its own address once, while
+`ae4ecbc8a` («fix(docs): load local MathJax on nested pages», batch 24): the script reads its own address once, while
 it runs (`document.currentScript`, null afterwards), and `getBasePath()` returns everything before
 `/javascripts/lib-loader.js` in it — the site's root, whatever the page's depth, its language folder or the path the
 site is served at. `<base>` and the page's folder stay as fallbacks.
@@ -52,7 +52,7 @@ carries the fix under «Formulas show in the documentation without internet».
   [[problems/mathjax-fonts-missing-from-local-copy]]. The spec, extended to the font faces, waited outside the
   repository for the runner file.
 - *Update (train 70)*: the spec is registered, copied byte for byte, as `front-utility docs-offline-math`
-  (`dbca267ff`, M's batch 28), once the coordinator had assigned M the runner file after T's CP1 of M-18. M's run:
+  (`3a577f63e`, M's batch 28), once the coordinator had assigned M the runner file after T's CP1 of M-18. M's run:
   2 passed (English and Italian), and `check-orphans` clean, 110 of 110 e2e specs registered. A red names the place:
   a 404 under the page's own folder is M-19 back, a 404 at the root is a copy the site does not have.
 

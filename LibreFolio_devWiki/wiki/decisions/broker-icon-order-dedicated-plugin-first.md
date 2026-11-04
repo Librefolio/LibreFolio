@@ -16,7 +16,7 @@ related:
 
 ## Context
 
-Since 2026-06-26 (`fc1f7ccd1`, «correct priority order restored (favicon before plugin icon)», without a written
+Since 2026-06-26 (`18399d90c`, «correct priority order restored (favicon before plugin icon)», without a written
 reason) a broker's icon was the custom icon, else the portal's favicon, else the default plugin's icon, else a
 briefcase. During the review of plan 37 the developer recalled another order and asked to restore it.
 
@@ -42,7 +42,7 @@ all use it — the wizard used to hold its own 50.
 
 ## Consequences
 
-- Commit `9e0beaee3` (2026-10-10, train 30). The «Portal URL» row of the user guide on brokers, the Scalable page and
+- Commit `07538f0cc` (2026-10-10, train 30). The «Portal URL» row of the user guide on brokers, the Scalable page and
   the «Favicons» section of the BRIM guide say the same.
 - A backend test pins the constant (`TestFallbackPluginPriorityLimit`: declared once, equal to 50, only the generic CSV
   below it); Vitest covers the orders (`brokerHelpers.test.ts`, `brokerIconChain.test.ts`, `pluginKind.test.ts`).

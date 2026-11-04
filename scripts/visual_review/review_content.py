@@ -4,7 +4,7 @@ The builders (``build_designer_package``, ``build_review_notes``) are generic; e
 review-specific: area order and titles, the per-area hints drawn from the code analysis, the
 "already known" list, the questions for the designer, the current-palette table and the
 Markdown templates of the team notes. Update it before the next review: the hints quote file
-lines and colour values that were true at commit 666d23701 and will drift with the code.
+lines and colour values that were true at commit 41a14959b and will drift with the code.
 
 Strings are Italian on purpose: they are read by the designer, not by developers.
 """

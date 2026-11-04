@@ -44,7 +44,7 @@ Scenarios — report currency EUR, every amount in EUR (no FX rate is read), one
   like U: value 300, gain None); broker B holds Z (STOCK, bought), W (BOND, ADJUSTMENT in at 40 a unit, no price:
   ESTIMATED_AT_COST 200, gain 0) and C (CRYPTO, like M). Every group computed by hand in ``GROUPS``.
 
-Red on HEAD (f0bc828de), every test: the scenario's preconditions read existing fields and hold there, then the first
+Red on HEAD (b31a23869), every test: the scenario's preconditions read existing fields and hold there, then the first
 read of a new field — ``summary.pnl_change_1d``, ``summary.timing_effect_percent``, ``summary.holding_groups`` —
 raises AttributeError: ``PortfolioSummary`` has no such attribute on HEAD.
 

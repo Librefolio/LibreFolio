@@ -40,7 +40,7 @@ of `instanceBlock.test.ts` fell with `TypeError: Cannot read properties of undef
 
 ## Solution
 Each copy of the module stops the one before it through `import.meta.hot.data`. Vite keys that object by the module's
-path, so it survives from one copy to the next (`67735e1d8`, Z-22):
+path, so it survives from one copy to the next (`e1b6162fc`, Z-22):
 
 ```ts
 const stopFollowing = instanceBlockState.subscribe(() => {

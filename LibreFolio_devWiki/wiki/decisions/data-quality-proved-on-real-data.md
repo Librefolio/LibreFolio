@@ -100,9 +100,9 @@ not collect it.
 - **Left after 1.2** (backlog section V): V-1 the same refresh gap after «Sync prices»; V-2 the lots panel publishes no
   `data-busy`; V-3 the orphan TRANSFER; V-4 E2 must be rebuilt if P-10 is closed; V-5 an outdated comment about the
   seed; V-6 the developer doc lists only part of the banner tests; V-7 the neighbour-spec red above.
-  *Update (trains 58 and 64 in the wiki, 2026-10-12)*: V-1, V-5, V-6 and V-7 were closed by V's batch 2 (train 58: `c8d955c86`, `fc7440524`,
-  `fb0d477a8` — V-7's spec now runs on a disposable account that owns two brokers), V-9 and V-10 by work 3 (`091892da4`,
-  `e8e1d1362`); the isolation audit that followed is [[problems/e2e-writes-leaked-into-shared-state]].
+  *Update (trains 58 and 64 in the wiki, 2026-10-12)*: V-1, V-5, V-6 and V-7 were closed by V's batch 2 (train 58: `86217eaf4`, `7273cc81c`,
+  `b211967c7` — V-7's spec now runs on a disposable account that owns two brokers), V-9 and V-10 by work 3 (`fe166aa0e`,
+  `c2146f844`); the isolation audit that followed is [[problems/e2e-writes-leaked-into-shared-state]].
 
 ## Links
 

@@ -47,7 +47,7 @@ H-62 (contract L3 §5) adds the seven routes of the panel's restore (``api/v1/ba
 the six token routes (``TOKEN_ROUTES``); HPR-006 pins that the seven share one bearer scheme of their own, and HPR-007
 that each documents 409 and 423 too. Red until H-62.
 
-Red at the base, ``6fbba7a60``: ``hosting_panel/access.py`` did not exist (HPR-001); the four backup routes carried
+Red at the base, ``f4472914e``: ``hosting_panel/access.py`` did not exist (HPR-001); the four backup routes carried
 «Backup & Export» and the wake-up «System», and the status route did not exist (HPR-002, HPR-003); nor did
 ``PanelStatusToken`` (HPR-004); no panel route documented a 429 (HPR-005). With the includes above and the shared
 dependency in place, the four cases that need the status route stay red until ``api/v1/panel.py`` serves it: HPR-002

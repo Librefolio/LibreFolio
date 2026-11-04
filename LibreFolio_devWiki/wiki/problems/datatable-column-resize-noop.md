@@ -68,7 +68,7 @@ Low, UX only: on the auto-layout tables the column edge lagged behind the pointe
 ## Re-check (2026-10-12)
 
 Partly disproved: dragging a column's resize handle does widen it in the Risk Lab's L1° table, pinned by an E2E
-(`frontend/e2e/portfolio/risk-lab.spec.ts`, the «value columns carry their help» test, added in `4632658f7`). No other
+(`frontend/e2e/portfolio/risk-lab.spec.ts`, the «value columns carry their help» test, added in `ec0a9dac7`). No other
 DataTable is drag-tested, so «some tables» stays open, to re-test after release 1.2 (backlog C-62).
 
 ## Source files

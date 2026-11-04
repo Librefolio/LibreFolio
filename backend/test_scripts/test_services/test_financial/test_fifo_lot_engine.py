@@ -1159,14 +1159,14 @@ class TestEconomicsOnDateMin:
 
     Every D-1 rule looks at the day before the pool, and date.min has none: nothing was held then, so a D-1 rule finds
     nothing — the income pool is orphan, and a FEE/TAX pool is orphan unless a same-day rule applies. The same-day
-    rules keep working. On HEAD 8a6fa4158 the engine subtracts a day from date.min (the income cutoff, the cost pools'
+    rules keep working. On HEAD b44bdd333 the engine subtracts a day from date.min (the income cutoff, the cost pools'
     ``previous_day`` computed before any rule): OverflowError. Each case runs on date.min and, as its guard, on an
     ordinary day with the same shape, where today's allocation is the expected one.
     """
 
     @pytest.mark.parametrize("day", [pytest.param(DATE_MIN, id="date_min"), pytest.param("2025-01-20", id="ordinary_day")])
     def test_dividend_with_only_a_same_day_lot_is_orphan_income(self, day):
-        """Red on HEAD 8a6fa4158 for ``date_min`` (OverflowError). The lot opened on the dividend's day was not held
+        """Red on HEAD b44bdd333 for ``date_min`` (OverflowError). The lot opened on the dividend's day was not held
         the day before: orphan income, as for ``ordinary_day`` today."""
         result = _run([_buy(1, "10", "100", dt=day)], economic_events=[_income(90, "DIVIDEND", "50", dt=day)], target_currency="EUR")
 
@@ -1179,7 +1179,7 @@ class TestEconomicsOnDateMin:
     @pytest.mark.parametrize("economic_type", ["FEE", "TAX"])
     @pytest.mark.parametrize("day", [pytest.param(DATE_MIN, id="date_min"), pytest.param("2025-01-01", id="ordinary_day")])
     def test_cost_with_a_same_day_buy_goes_to_its_opening_lot(self, day, economic_type):
-        """Red on HEAD 8a6fa4158 for ``date_min`` (OverflowError, raised before any rule). A same-day BUY and no income:
+        """Red on HEAD b44bdd333 for ``date_min`` (OverflowError, raised before any rule). A same-day BUY and no income:
         SAME_DAY_TRADES, the whole pool on the lot the BUY opened — the rule an ordinary day applies today."""
         result = _run([_buy(1, "10", "100", dt=day)], economic_events=[_cost(90, economic_type, "-5", dt=day)], target_currency="EUR")
 
@@ -1196,7 +1196,7 @@ class TestEconomicsOnDateMin:
         [pytest.param(DATE_MIN, DAY_AFTER_DATE_MIN, id="date_min"), pytest.param("2025-01-20", "2025-01-21", id="ordinary_day")],
     )
     def test_cost_without_a_same_day_match_is_orphan(self, day, buy_day, economic_type):
-        """Red on HEAD 8a6fa4158 for ``date_min`` (OverflowError). No income, no trade on the pool's day, and the lot is
+        """Red on HEAD b44bdd333 for ``date_min`` (OverflowError). No income, no trade on the pool's day, and the lot is
         opened the day after: the previous-day rules and the D-1 holdings find nothing, so the pool is orphan under
         OPEN_LOTS_FALLBACK, the last level tried — as for ``ordinary_day`` today."""
         result = _run([_buy(1, "10", "100", dt=buy_day)], economic_events=[_cost(90, economic_type, "-5", dt=day)], target_currency="EUR")
@@ -1209,7 +1209,7 @@ class TestEconomicsOnDateMin:
 
     @pytest.mark.parametrize("day", [pytest.param(DATE_MIN, id="date_min"), pytest.param("2025-01-20", id="ordinary_day")])
     def test_tax_on_a_same_day_orphan_income_is_orphan(self, day):
-        """Red on HEAD 8a6fa4158 for ``date_min`` (OverflowError). TAX follows the same-day income it taxes, held as of
+        """Red on HEAD b44bdd333 for ``date_min`` (OverflowError). TAX follows the same-day income it taxes, held as of
         D-1: there is none, so the dividend is orphan and so is the TAX, under SAME_DAY_INCOME — no fall-through to the
         same-day BUY, as for ``ordinary_day`` today."""
         result = _run(
@@ -1229,7 +1229,7 @@ class TestEconomicsOnDateMin:
         [pytest.param(DATE_MIN, DAY_AFTER_DATE_MIN, id="income_on_date_min"), pytest.param("2025-01-19", "2025-01-20", id="ordinary_days")],
     )
     def test_tax_the_day_after_an_orphan_income_is_orphan(self, income_day, tax_day):
-        """Red on HEAD 8a6fa4158 for ``income_on_date_min`` (OverflowError), although the TAX is dated 0001-01-02:
+        """Red on HEAD b44bdd333 for ``income_on_date_min`` (OverflowError), although the TAX is dated 0001-01-02:
         PREVIOUS_DAY_INCOME reads the holdings of the day before the income, the day before date.min. The dividend's
         only lot opened on its day, so it is orphan, and the TAX that follows it is orphan under PREVIOUS_DAY_INCOME
         — as for ``ordinary_days`` today."""
@@ -1245,7 +1245,7 @@ class TestEconomicsOnDateMin:
         assert (group.rule, group.operation_allocations, group.target_orphan) == ("PREVIOUS_DAY_INCOME", (), _d("10"))
 
     def test_the_day_after_date_min_sees_the_lots_held_on_date_min(self):
-        """Guard (green on HEAD 8a6fa4158 and after): date.min is a day like any other for the day after it. A lot
+        """Guard (green on HEAD b44bdd333 and after): date.min is a day like any other for the day after it. A lot
         bought on date.min is held as of D-1 for a dividend on 0001-01-02, and a FEE on 0001-01-02 with no trade that
         day goes to the date.min BUY under PREVIOUS_DAY_TRADES."""
         result = _run(

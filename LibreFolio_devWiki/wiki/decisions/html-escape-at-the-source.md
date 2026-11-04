@@ -53,7 +53,7 @@ the one the tooltip-HTML fix of 2026-10-09 extended ([[concepts/echarts-chart-go
 
 ## Consequences and gotchas
 
-- `escapeHtml` is defined **three** times at `fef0203ca`: the canonical helper; `$lib/utils/inlineMath.ts`, which
+- `escapeHtml` is defined **three** times at `111c2c8f3`: the canonical helper; `$lib/utils/inlineMath.ts`, which
   deliberately does not escape the apostrophe (its output goes to KaTeX, where `f'(x)` is prime notation); and a
   local copy in `CorrelationHeatmap.svelte` (Risk, 2026-09-24) that escapes only `& < >`. The interpolation gate
   accepts any call **named** `escapeHtml`, so a weaker copy with that name passes it; the heatmap's uses are all text

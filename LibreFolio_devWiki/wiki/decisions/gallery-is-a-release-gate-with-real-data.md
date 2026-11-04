@@ -34,7 +34,7 @@ The developer's four decisions (plan R12, §0, 2026-10-07):
 
 | # | Decision |
 |---|----------|
-| D1, the fixture | «se il dashboard-report.json è diventato obsoleto perché abbiamo aggiunto campi, non fargli inventare nulla, dimmelo e ne fornisco uno nuovo da una build recente». M did not touch the fixture; it sent the capture procedure, and the new capture went through `scripts/normalize_dashboard_fixture.py` (`22cad9ded`) |
+| D1, the fixture | «se il dashboard-report.json è diventato obsoleto perché abbiamo aggiunto campi, non fargli inventare nulla, dimmelo e ne fornisco uno nuovo da una build recente». M did not touch the fixture; it sent the capture procedure, and the new capture went through `scripts/normalize_dashboard_fixture.py` (`18c63bbf1`) |
 | D2, the gate | The gallery blocks releases and stays tolerant on `dev` |
 | D3, retries | Kept: «i retry servono, e se tutto gira non si perde tempo, mentre se fallisce ci dà, attraverso i log, la sicurezza che non è stato momentaneo» |
 | D4, the runner | No pin: «non è un problema, le emoji già ora cambiano nei vari OS. Lasciamo com'è». Only `ImageOS` joins the cache keys, so that no 24.04 cache is restored on 26.04 |
@@ -45,17 +45,17 @@ Then the rules for the new scenarios, approved for groups 3–7 of the repairs:
   deleted in `afterEach` with its brokers and files; `hideGalleryTempData` hides, from each session, the marked
   brokers and files of other tests that the session cannot reach.
 - **Injected responses only where real data is not enough**, and no change to `populate_mock_data.py`.
-- **No network** (`bcedd48bc`, 2026-10-08). `guardGalleryOffline`, installed before any sign-in, aborts and fails the
+- **No network** (`27b2834b8`, 2026-10-08). `guardGalleryOffline`, installed before any sign-in, aborts and fails the
   test on any provider sync a scenario presses; answers the live-price poll and the exchange-rate provider catalogue
   from `galleryOfflineData.ts`; aborts the admin's check of the latest GitHub release; and aborts, and fails the test
   on, any third-party host. `expectGalleryOffline` reads the record at the end of each test. The last rule is why the
   PDF viewer had to serve its own engine and fonts ([[decisions/pdf-preview-viewer-only-local-assets]]).
   *Update (train 70)*: the cards' live prices, answered from that file, are checked as the shot's locale writes them
   — [[problems/gallery-price-guard-expected-tofixed-text]].
-- **Reduced motion for every shot** (`a4f6fa03e`, 2026-10-09). A name too long for its box scrolls as a marquee
+- **Reduced motion for every shot** (`273685d09`, 2026-10-09). A name too long for its box scrolls as a marquee
   (`scrollOnOverflow.ts`) 2 s after mounting, a loop that freezing animations cannot stop, so shots caught names
   mid-scroll. The gallery's context now has `reducedMotion: 'reduce'`; a full comparison changed 659 of 2,796 PNGs.
-- **Screens as tall as their subject** (`20261d993`). `extendScreenToBlock` grows the window to the block to shoot.
+- **Screens as tall as their subject** (`1914f9088`). `extendScreenToBlock` grows the window to the block to shoot.
   Playwright's `fullPage` was dropped: it keeps the 720 px screen, so the fixed sidebar stops at 720 and the page
   below is blank.
 - **A hung action fails in 20 s** (`actionTimeout: 20_000`), naming the real step, instead of at the four-minute test

@@ -787,7 +787,7 @@ async def test_get_events_by_ids_groups_multiple_assets(test_server):
 # ============================================================
 #
 # The event editor edits a row the user can see, so the edit must land on THAT
-# row: same id, links kept. Before the fix (03c943f53) ``_upsert_asset_events``
+# row: same id, links kept. Before the fix (58ac14b21) ``_upsert_asset_events``
 # was DELETE + INSERT on (asset_id, date, type, provider_assignment_id):
 #
 # * F2 — a manual event that a transaction links to could not be edited at all.

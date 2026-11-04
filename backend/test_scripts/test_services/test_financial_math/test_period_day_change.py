@@ -27,7 +27,7 @@ States are real ``DailyPortfolioState`` objects. ``day_change`` reads their date
 holds a poison value, so a figure computed from the wrong field (the NAV less the capital, the market value…) comes
 out wrong.
 
-Red by absence on HEAD (f0bc828de): ``period.py`` exists there, without ``day_change``; the module is imported and the
+Red by absence on HEAD (b31a23869): ``period.py`` exists there, without ``day_change``; the module is imported and the
 name read while each test runs, so the file collects and every test fails with AttributeError
 (``module ... has no attribute 'day_change'``).
 

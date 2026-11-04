@@ -7,7 +7,7 @@ related_features: [F-064]
 
 # Concept: Single Migration Strategy
 
-> **⚠️ Superseded (checked 2026-10-09 at `249f5a9aa`).** This was the rule of the pre-release phase. LibreFolio is
+> **⚠️ Superseded (checked 2026-10-09 at `b0635b0cf`).** This was the rule of the pre-release phase. LibreFolio is
 > released: schema changes ship as **incremental Alembic migrations** with a working `upgrade()` and `downgrade()`,
 > named `00N_<release or scope>` (`002_identifier_other_json_list.py`, `003_scheduler_timezone.py`,
 > `004_release_1_2_0_schema.py` exist), and `db create-clean` only builds fresh installs and test databases. The rule

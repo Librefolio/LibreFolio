@@ -14,7 +14,7 @@ hold keeps the lot's opening broker. Nothing else changes: kind, quantity, price
 ``scope_boundary`` and the transfer rows. The schema already says so: «Broker directly associated with this event, when
 singular» (``LotTimelineEventSchema.broker_id``).
 
-TODAY (base ``962626f9a``) ``LotsAnalysisService._build_closure_rows`` writes ``broker_id=lot.opening_broker_id``: a lot
+TODAY (base ``828120fc3``) ``LotsAnalysisService._build_closure_rows`` writes ``broker_id=lot.opening_broker_id``: a lot
 opened at A and moved to B shows its closures at A, where its units no longer are, while the Gantt draws the fragment
 they leave at B.
 
@@ -254,7 +254,7 @@ async def test_s29_c4_the_transfer_rows_name_their_brokers(session, transfer):
 
     - ``in-transit``, L1 (12 → 13 Jan) — GUARD, green before and after: both rows are read off the transit fragment —
       TRANSFER_DEPART on 12 Jan and TRANSFER_ARRIVE on 13 Jan name no broker, A as the source and B as the destination;
-    - ``same-day``, L1 with B's leg dated 12 Jan — J-68, RED before the cure (ondata 4, base ``295a09c86``: one
+    - ``same-day``, L1 with B's leg dated 12 Jan — J-68, RED before the cure (ondata 4, base ``19c37e2d7``: one
       TRANSFER_ARRIVE on 12 Jan, read off B's fragment, naming B with no source or destination): no transit, yet the pair's
       brokers are in the engine's events, so the move writes both rows on 12 Jan with A as the source and B as the
       destination — the arrival keeps B as its broker, the departure names none (as a move of days does).

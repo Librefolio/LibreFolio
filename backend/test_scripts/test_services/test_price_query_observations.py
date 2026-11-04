@@ -10,7 +10,7 @@ only where it is read.
 The contract pinned here (``ObservedPrices`` is the object J agreed for R1, 23/10):
 
 1. **Parity.** On every window of the corpus, ``get_prices_bulk`` answers the points, and the conversion errors, the
-   HEAD pipeline answers: ``HEAD_dense`` (``_build_backward_filled_series`` as it was at 61a6c828b) then ``HEAD_convert``
+   HEAD pipeline answers: ``HEAD_dense`` (``_build_backward_filled_series`` as it was at 14bb7d59e) then ``HEAD_convert``
    (the conversion pass as it was, one ``convert_bulk`` item for every point whose currency is not the target). Written
    here, a copy, not read from the code under test. Green before the cure by design; it pins the answer.
 2. **The count.** The conversions handed to ``convert_bulk`` are one for each stretch of days on which the price row and
@@ -186,12 +186,12 @@ async def _rows(world: _World, asset: str) -> dict[date, PriceHistory]:
 
 
 # =============================================================================
-# THE HEAD PIPELINE (61a6c828b), COPIED: what the public answer is measured against
+# THE HEAD PIPELINE (14bb7d59e), COPIED: what the public answer is measured against
 # =============================================================================
 
 
 def head_dense(price_map: dict[date, PriceHistory], start: date, end: date, seed: PriceHistory | None) -> list[FAPricePoint]:
-    """``_build_backward_filled_series`` at 61a6c828b: a point for every calendar day from the start (or the first price)."""
+    """``_build_backward_filled_series`` at 14bb7d59e: a point for every calendar day from the start (or the first price)."""
     results: list[FAPricePoint] = []
     last_known = seed
     current = start
@@ -221,8 +221,8 @@ def head_dense(price_map: dict[date, PriceHistory], start: date, end: date, seed
     return results
 
 
-async def head_convert(session: AsyncSession, prices: list[FAPricePoint], target: str | None) -> tuple[list[FAPricePoint], list[str]]:  # noqa: C901 — a copy of the pass at 61a6c828b, as it was
-    """The conversion pass at 61a6c828b, one ``convert_bulk`` item for every point whose currency is not the target."""
+async def head_convert(session: AsyncSession, prices: list[FAPricePoint], target: str | None) -> tuple[list[FAPricePoint], list[str]]:  # noqa: C901 — a copy of the pass at 14bb7d59e, as it was
+    """The conversion pass at 14bb7d59e, one ``convert_bulk`` item for every point whose currency is not the target."""
     errors: list[str] = []
     prices = list(prices)
     if not target or not prices:
@@ -311,7 +311,7 @@ async def head_convert(session: AsyncSession, prices: list[FAPricePoint], target
 
 
 async def head_series(world: _World, asset: str, window: str, target: str | None, *, load_start: date | None = None) -> tuple[list[FAPricePoint], list[str]]:
-    """The series of an item without signals at 61a6c828b, from the load start to the end, and its conversion errors."""
+    """The series of an item without signals at 14bb7d59e, from the load start to the end, and its conversion errors."""
     start, end = WINDOWS[window]
     start = load_start or start
     rows = await _rows(world, asset)
@@ -524,7 +524,7 @@ def _without_clock(dumped: Any) -> Any:
 
 
 async def head_signals(world: _World, item: FAPriceQueryItem) -> tuple[list[FAPricePoint], list]:
-    """The signal pipeline of ``get_prices_bulk`` at 61a6c828b for one item with signals and no comparison asset: the load
+    """The signal pipeline of ``get_prices_bulk`` at 14bb7d59e for one item with signals and no comparison asset: the load
     range from the plan's warm-up, HEAD's dense fill and conversion, the prepared series of a risk signal, the neutral
     prices with the market-closed carries marked, ``SignalService.execute``, then the cut to the range. Returns the cut
     points and the results."""

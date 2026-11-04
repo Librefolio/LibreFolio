@@ -14,7 +14,7 @@ related:
 
 ## Symptom
 
-While `POST /assets/merge` was being written (P3, `9d6de0cf6`, 08/08/2026), its tests found two ways for the merge to
+While `POST /assets/merge` was being written (P3, `db7620f01`, 08/08/2026), its tests found two ways for the merge to
 go wrong, both silent or fatal depending only on the **order** of the steps. Neither reached a user.
 
 ## Root Cause

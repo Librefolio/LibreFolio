@@ -6,7 +6,7 @@ What changed. ``PortfolioService.get_summary`` (``backend/app/services/portfolio
 currency, valuation day)``; for a holding valued at its market price (``MARKET_PRICE``) the day before is
 ``marks.last_market_price_at(asset, D − 1)`` — the last market quote on or before D − 1 — converted **at D − 1's rate**
 (``marks.in_target(..., D − 1)``), and only on a day the engine replayed (``AssetMarks`` answers on
-``first_day`` … ``last_day``). At HEAD ``8ebdb3857`` the day before's close was converted at **the quote's own
+``first_day`` … ``last_day``). At HEAD ``33b66ba1c`` the day before's close was converted at **the quote's own
 date**'s rate, and read on any day, even before the portfolio existed.
 
 - ``test_the_day_before_is_converted_at_its_own_rate`` (red on HEAD): a USD stock read in EUR. Closes 187.45 USD on
@@ -24,7 +24,7 @@ date**'s rate, and read on any day, even before the portfolio existed.
 - ``test_the_service_has_no_price_reader_of_its_own`` (red on HEAD): structural — no ``_get_price_at_date`` and no
   ``_convert_to_base`` on ``PortfolioService``.
 
-Red on HEAD ``8ebdb3857`` (the backend of that commit extracted with ``git archive``, this file copied into it), the
+Red on HEAD ``33b66ba1c`` (the backend of that commit extracted with ``git archive``, this file copied into it), the
 exact messages:
 
 - ``test_the_day_before_is_converted_at_its_own_rate``: «price_change_1d 0.0191: the 03-03 close at 03-04's rate gives

@@ -20,7 +20,7 @@ to arrival). The service hands the engine the partner legs dated after ``date_to
 3. GUARD: ``replay_until`` None, or on or after the last event, changes nothing. The bound is inclusive: an event dated
    ON ``replay_until`` is applied.
 
-Today (base ``3cfa070bb``): TypeError — ``run_fifo_lot_engine() got an unexpected keyword argument 'replay_until'`` — in
+Today (base ``8b4e252b3``): TypeError — ``run_fifo_lot_engine() got an unexpected keyword argument 'replay_until'`` — in
 every test of this file, the guards included: the keyword does not exist yet. Each test computes what it can without it
 first, so that a precondition read today stays green.
 """

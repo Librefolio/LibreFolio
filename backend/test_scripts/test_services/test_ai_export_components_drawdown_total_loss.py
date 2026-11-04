@@ -37,7 +37,7 @@ and a drawdown of exactly -1.0. The deep fall of point 5 is the other side of th
 step, which the float wealth cannot represent.
 
 ``float_price_return`` is read as an attribute of ``returns`` while each test runs, never imported at module level, so
-the file collects without MF-D1 too. The other names it imports exist on HEAD (7b0a7c3ea).
+the file collects without MF-D1 too. The other names it imports exist on HEAD (7f086146d).
 
 Pure: no database, no server, no network.
 """

@@ -1943,7 +1943,7 @@ class TestTransferShareMismatchDataQuality:
     (``get_summary``'s, and ``get_report``'s own when the summary is not requested) — and the engine's result carries
     the pair as a ``ShareMismatch``. At equal shares nothing is reported.
 
-    The pair is same-day on purpose: on HEAD b090055f0 the classifier does not even warn for it (J-43a), and no warning
+    The pair is same-day on purpose: on HEAD f130d284e the classifier does not even warn for it (J-43a), and no warning
     of any date leaves the classifier (J-43b). Each test owns its user and its two brokers (flushed, rolled back by
     ``session``), so the counts are the counts of what it wrote; a barrier first proves the pair is in the scope at the
     shares the case claims. ``ShareMismatch`` is read from ``models`` when the test runs.
@@ -2080,7 +2080,7 @@ class TestStalePriceDataQuality:
     carried forward for more than ``STALE_PRICE_THRESHOLD_DAYS`` (7) days
     (``DailyPositionState.valuation_stale``), and ``build_data_quality_report`` already
     renders STALE_PRICE from ``stale_prices_dto``. But ``get_summary`` never passes that
-    argument — not since the engine rewrite 0a29ee73f — so the banner never appears.
+    argument — not since the engine rewrite 35c61f98b — so the banner never appears.
 
     The approved rule: at ``date_to`` an asset is flagged when ALL of these hold —
       * it has an open position (quantity above dust);

@@ -85,7 +85,7 @@ coordinator settled the vehicle of 23 (12:58) and the editor's save (16:20). Quo
 
 ## How it is built
 
-### E1a: the backend (`6fb148aa0`, `fix(events)!`, in `dev_release2` with `e81a7ba9a`)
+### E1a: the backend (`2495404ce`, `fix(events)!`, in `dev_release2` with `162e3cfab`)
 
 - `bulk_upsert_events()` runs the items in order in one transaction. `_write_manual_item()` checks an item, then
   writes and flushes it, so a later item sees what the earlier ones wrote. One commit closes the request; any refusal
@@ -120,7 +120,7 @@ coordinator settled the vehicle of 23 (12:58) and the editor's save (16:20). Quo
   answers `not_found`, and its event stays (`delete_events_bulk()`). The `DELETE` still answers 200 with one outcome
   per id and commits the deletable ones.
 
-### E1c: the stored types (`81a6ec804`, in `dev_release2` with `e81a7ba9a`)
+### E1c: the stored types (`b3d33778e`, in `dev_release2` with `162e3cfab`)
 
 - The post-migration fix `event_types` (`EventTypesFix`, appended last to `FIXES`):
   - a type that `strip().upper()` makes valid is corrected in place. The event keeps its id, and its transactions

@@ -1207,7 +1207,7 @@ describe('distinguishability (§1.8) — no pair of a table under ΔE00 5; under
  * each role is held to `categoryColor` of its key, in both themes. Their `-soft` and `-on-soft` derivatives, the
  * badge's tint and its text, are T's contrast gate (`src/themeTokens.gate.test.ts`), not this test.
  *
- * True since 18/10/2026: T's roles landed first (R3-b, `a37e5da23`), and DV flipped the flag at its merge of the target.
+ * True since 18/10/2026: T's roles landed first (R3-b, `5ead35a38`), and DV flipped the flag at its merge of the target.
  * Since DV-11 (22/10/2026) a type colour lives in one place, its role: `categoryColor` reads it (the stand-ins of
  * `roleColors.ts` here, where no page is loaded), so this block now checks that the read and tokens.css agree.
  */

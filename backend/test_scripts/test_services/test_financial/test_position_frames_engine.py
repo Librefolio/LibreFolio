@@ -19,7 +19,7 @@ Isolation: PURE with respect to the lane — a private SQLite file under ``tmp_p
 NullPool, disposed at teardown), no lane database, no server, no network. The report, WAC and engine blob caches are
 emptied before and after each test.
 
-RED on HEAD ebc5c87a8, by absence: ``PositionFrame`` does not exist (``ImportError`` at collection). After a cure that
+RED on HEAD e40bb5154, by absence: ``PositionFrame`` does not exist (``ImportError`` at collection). After a cure that
 adds the type but not the engine flag, ``calculate`` raises ``TypeError``; after one that forgets the cache key, the
 second run of ``test_the_flag_is_part_of_the_blob_cache_key`` gets the first run's blob.
 

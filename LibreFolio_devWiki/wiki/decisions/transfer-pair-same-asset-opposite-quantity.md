@@ -34,14 +34,14 @@ The editor proposed such pairs: `findPromoteMatch` compared only the signs (`qA 
 The coordinator's decision D1 = (a), on P's recommendation (2026-10-10); the developer had already said that a defect
 confirmed by a red test enters 1.2:
 
-- **Backend** (`af4463c5f`, train 34): for a TRANSFER pair, `_validate_linked_pair` refuses different assets
+- **Backend** (`ff449bffe`, train 34): for a TRANSFER pair, `_validate_linked_pair` refuses different assets
   (`pairAssetMismatch`) and quantities that are not exactly opposite in `Decimal` (`pairQuantityMismatch`, with `qtyA` and
   `qtyB`). Both keys exist in the four catalogues.
 - **The editor's rule**: in `findPromoteMatch`, «opposite» means `qA !== 0 && qA === -qB`, so −3/+5 is no longer
   proposed, locally or with saved rows.
 - **Exact decimals where it matters**: the banner pairs securities with `assetQuantitiesCancel` and cash with
   `cashAmountsCancel`, both in exact decimal arithmetic since this lot (`cashAmountsCancel` lost its `Number` tolerance
-  of 1e-9). The selection bar followed on 2026-10-11 (C-46, `a892717de`, train 37): `-123456789012.123456` and
+  of 1e-9). The selection bar followed on 2026-10-11 (C-46, `25210ff16`, train 37): `-123456789012.123456` and
   `+123456789012.123457` are the same double but not the same decimal, and the bar offered them.
 - **Scope**: only TRANSFER. The other declared constraints — CASH_TRANSFER (opposite amount, same currency),
   FX_CONVERSION (different currencies, same broker) — went to backlog C-42: forms and imports already respect them, so

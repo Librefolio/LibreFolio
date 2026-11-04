@@ -13,7 +13,7 @@ related: [asset-global-page-shows-no-money, discarded-risk-answer-read-as-empty]
 The developer's review of the laboratory's "+" picker (24/09): four crowdfunding assets were offered as selectable
 although they had **0 prices recorded**. "The point is not the crowdfunding type, it is the zero prices", and it
 "should reconnect to the asset eligibility engine". Risk's backend (`POST /api/v1/risk/eligibility`, time ② of its
-redesign) arrived in the lab's branch with the Risk → F merge `288998c72`.
+redesign) arrived in the lab's branch with the Risk → F merge `879063c1c`.
 
 ## Options Considered
 1. **A frontend rule** (e.g. "no prices loaded → disabled") — rejected: whether an asset has enough prices in a period

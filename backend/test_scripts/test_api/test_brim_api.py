@@ -2995,7 +2995,7 @@ class TestPluginCheckEndpoint:
 # check, for anyone signed in, its parse and its delete included (W-B3). And ``brim_provider.list_files`` keeps
 # ``target_broker_id is None`` in every list it filters by broker, so such a file reaches every user's list, whatever
 # ``broker_ids`` they ask for. Files with no broker are those an old version left in the ROOT of a status folder of
-# ``broker_reports/`` ("backward compatibility"): before 58c985976 (January 2026) a sidecar had neither
+# ``broker_reports/`` ("backward compatibility"): before 2d2319450 (January 2026) a sidecar had neither
 # ``uploaded_by_user_id`` nor ``target_broker_id``; the upload has required a broker since.
 #
 # The cure, approved by the coordinator (plan 04, F36):
@@ -3024,7 +3024,7 @@ class TestPluginCheckEndpoint:
 # to pytest alike, and the function refuses a directory overlapping production data), the sidecar keys of that time, no
 # ``plugins_signature`` (a read detects its plugins again, as for any file older than item 8), and either
 # ``uploaded_by_user_id`` = the test's uploader with ``target_broker_id`` null (what ``save_uploaded_file`` writes when it
-# is given no broker), or neither key (a file from before 58c985976). The writes and the sweep hold the backend's own lock
+# is given no broker), or neither key (a file from before 2d2319450). The writes and the sweep hold the backend's own lock
 # for the files with no broker (``broker_reports/.locks/broker_none.lock``): a concurrent read that detects the plugins
 # again then never writes a sidecar back after the sweep. The sweep covers every status folder, since today a parse moves
 # the file to ``parsed/``, and runs at teardown, after a red too. Before anything is asserted about a user who must be
@@ -3237,8 +3237,8 @@ def planter() -> Iterator[_Planter]:
 def _without_broker(planter: _Planter, uploader_id: Optional[int]) -> _Planted:
     """A file with no broker, written as an old version wrote it: the sidecar keys of that time, no ``plugins_signature``.
 
-    With ``uploader_id``, what ``save_uploaded_file`` has written since 58c985976 when given no broker
-    (``target_broker_id`` null); without it, a file from before 58c985976 (neither key).
+    With ``uploader_id``, what ``save_uploaded_file`` has written since 2d2319450 when given no broker
+    (``target_broker_id`` null); without it, a file from before 2d2319450 (neither key).
     """
     report = _Planted(file_id=str(uuid.uuid4()), filename=f"legacy_{uuid.uuid4().hex[:8]}.csv", broker_id=None)
     sidecar: Dict[str, object] = {
@@ -3364,7 +3364,7 @@ class TestReportsWithoutBroker:
 
     @pytest.mark.asyncio
     async def test_a_file_with_neither_broker_nor_uploader_is_the_administrators_only(self, test_server, planter):
-        """F36-03: a file from before 58c985976 (neither ``target_broker_id`` nor ``uploaded_by_user_id``): a regular user does not list
+        """F36-03: a file from before 2d2319450 (neither ``target_broker_id`` nor ``uploaded_by_user_id``): a regular user does not list
         it, gets 403 on ``GET /files/{id}`` and on ``DELETE``, and the file stays. Barrier: the administrator reads and lists it. Red
         today: listed, 200, and the delete removes it."""
         print_section("F36-03: a file with neither broker nor uploader is the administrator's only")

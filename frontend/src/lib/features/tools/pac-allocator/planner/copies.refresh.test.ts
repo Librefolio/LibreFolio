@@ -4,7 +4,7 @@
  *
  * RED until X-R45b-ui.
  *
- * Subject. X-R45b (backend fa330c6c4): `POST /portfolio/allocation-source`, section `fx_quotes`, skips the
+ * Subject. X-R45b (backend aa2ad56d5): `POST /portfolio/allocation-source`, section `fx_quotes`, skips the
  * latest saved rate of a pair when it is 0 or not finite and quotes the previous valid one. It says so with a
  * source issue, `allocation.saved_fx_skipped` (warning; params pair, skipped_date, used_date), on the `rate`
  * field of the quote it used.

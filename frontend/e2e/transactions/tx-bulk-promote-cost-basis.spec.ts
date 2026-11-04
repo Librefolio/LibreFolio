@@ -1,6 +1,6 @@
 /**
  * tx-bulk-promote-cost-basis.spec.ts — the bulk editor's side of a promote that leaves the
- * receiving side of an asset TRANSFER without a cost basis (1076fa994).
+ * receiving side of an asset TRANSFER without a cost basis (48c3f52a9).
  *
  * `validate_cost_basis` (`backend/app/services/transactions/transaction_batch_stages.py`) checks promoted
  * pairs: once two ADJUSTMENTs are promoted into a TRANSFER, the receiving side (quantity > 0)

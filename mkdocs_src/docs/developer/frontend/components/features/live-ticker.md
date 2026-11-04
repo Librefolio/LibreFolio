@@ -14,7 +14,7 @@ catches up on prices, through the same helper: see [Updating prices…](#price-r
 !!! note "No `LiveTicker` component"
 
     The `LiveTicker` badge strip this page used to describe was removed in August 2026 (commit
-    `61c24e05c`); the page keeps its address for the existing links. The dashboard shows no live
+    `cd7b24bb4`); the page keeps its address for the existing links. The dashboard shows no live
     prices: it never calls the endpoint.
 
 ## 🧩 The shared service {: #live-price-service }

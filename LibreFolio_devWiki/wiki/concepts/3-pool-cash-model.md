@@ -32,7 +32,7 @@ W(t) = withdrawn_returns_pool— generated returns that left the system (tracked
 
 `W` is a hidden bookkeeping pool: not directly visible in the UI, but enables correct deposit accounting when returns were previously withdrawn.
 
-In the code K and R are kept **per broker** (`K[b]`, `R[b]`, since 2026-07-01, `1ffde6cb9`) and W is global; each rule
+In the code K and R are kept **per broker** (`K[b]`, `R[b]`, since 2026-07-01, `2a5d70cea`) and W is global; each rule
 below applies to the broker of the transaction, and the display series sum the brokers.
 
 ## Event-Driven Pool Updates
@@ -66,7 +66,7 @@ R_new = R_old + I
 K_new = K_old
 W_new = W_old
 ```
-Signed since 2026-09-18 (`a1e6fce55`): a negative correction lowers R by its amount.
+Signed since 2026-09-18 (`73fbf9c1e`): a negative correction lowers R by its amount.
 
 ### SELL — Read WAC BEFORE Reducing Pool ⚠️
 This is the critical fix introduced in commit `39106380`. The WAC must be read _before_ the pool is reduced to avoid incorrect K/R split on full exit:
@@ -162,8 +162,8 @@ cash_from_generated = max(cash_like − cash_from_contributed, 0)
 
 > *Corrected 2026-10-12.* Until then this section said that a deviation from `cash_like ≈ K + R` became a
 > `reconciliation_delta` data-quality flag and that the engine never corrected it. The architecture spec has that
-> name; the code never had it (no `reconciliation_delta` in `backend/` or `frontend/src` at `9f63eec22`). The
-> rescaling above dates from 2026-06-25 (`b155fead2`), and it works on the **summed** pools, not broker by broker —
+> name; the code never had it (no `reconciliation_delta` in `backend/` or `frontend/src` at `4bc7be91b`). The
+> rescaling above dates from 2026-06-25 (`ce284da9c`), and it works on the **summed** pools, not broker by broker —
 > the same correction lot 41's documentation made in the theory pages (step F-5).
 
 ## Where It Applies

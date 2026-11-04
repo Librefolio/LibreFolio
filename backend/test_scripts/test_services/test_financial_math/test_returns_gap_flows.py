@@ -21,7 +21,7 @@ given, onto its snapshot; then today's formulas, in today's order of operations.
 performs exactly today's operations, so it also serves the Dashboard guarantee, compared digit by digit
 (``Decimal.as_tuple``). Elsewhere values are compared as Decimals.
 
-Isolation: PURE — no database, server or network. Each docstring says what today's functions give (HEAD 91eb454e5).
+Isolation: PURE — no database, server or network. Each docstring says what today's functions give (HEAD 9ae48a337).
 """
 
 import random
@@ -128,7 +128,7 @@ class TestTheDevelopersExample:
         1 500, gain 0. Priced at 110 (NAV 1 650), the capital shows: ROI 150 / 1 500 = 10%, TWRR (1 650 − 500 − 1 000) /
         1 000 = 15%. On 5 Jan ROI 0 and no TWRR. Every function: the ROI series, the TWRR sub-periods and public series.
 
-        Today (HEAD 91eb454e5): the 6 Jan flow is dropped — flat ROI and TWRR 50%; priced 65% and 65%.
+        Today (HEAD 9ae48a337): the 6 Jan flow is dropped — flat ROI and TWRR 50%; priced 65% and 65%.
         """
         navs, flows = self._book(nav_on_jan_7)
         assert _headline(navs, flows)[JAN_7] == (D(roi), D(twrr)), "precondition: the oracle gives the stated figures"

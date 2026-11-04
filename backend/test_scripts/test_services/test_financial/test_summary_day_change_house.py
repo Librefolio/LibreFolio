@@ -4,7 +4,7 @@ What changed. ``PortfolioService.get_summary`` (``backend/app/services/portfolio
 its market price (``valuation_source == "MARKET_PRICE"``) that has a usable price the day before:
 
 * ``price_change_1d`` is ``returns.change_ratio(current_price - prev_price_base, prev_price_base)`` rounded to 4
-  decimals. At HEAD ``0420024b9`` it was ``((current_price - prev_price_base) / prev_price_base).quantize(
+  decimals. At HEAD ``ba1f1e421`` it was ``((current_price - prev_price_base) / prev_price_base).quantize(
   Decimal("0.0001"))``, in line;
 * ``gain_loss_change_1d_percent`` is ``returns.change_ratio(gain_loss_change_1d, previous_position_value) × 100`` rounded
   to 2 decimals, under the caller's own materiality guard ``|previous_position_value| > 0.01``. At HEAD it was
@@ -32,7 +32,7 @@ move's sign, as the percent column always did. The values are proved in
   price fell: ``price_change_1d`` −0.2500, as the percent −25.00 says; HEAD said +0.2500. Negative closes are stored
   and valued at market price like any other (``price_store`` only refuses a close it cannot keep or one truncated to 0).
 
-Red on HEAD ``0420024b9`` (the module loaded from ``git show``):
+Red on HEAD ``ba1f1e421`` (the module loaded from ``git show``):
 
 - ``test_the_columns_ask_the_house``: «change_ratio was not asked twice for the holding: []», nothing being recorded;
 - ``test_below_the_materiality_guard_the_percent_is_not_asked``: «… asked once for the price column: []»;
@@ -92,7 +92,7 @@ VALUATION = date(2025, 3, 5)
 
 
 # =============================================================================
-# HEAD's expressions (0420024b9, portfolio_service.py:745 and :759), as written
+# HEAD's expressions (ba1f1e421, portfolio_service.py:745 and :759), as written
 # =============================================================================
 
 

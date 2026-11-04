@@ -37,12 +37,12 @@ missing from the release.
   `loadBrokerFiles()` read an empty list, so every broker panel renders collapsed and the file row never exists. No
   wait inside step 2 can fix that. (The product side of this race was M-16, fixed in train 48 — below.)
 
-The trap itself was known — `e2e/fixtures/probe.ts` has had `appears()` for it since 2026-08-15 (`fda663d2a`), and
+The trap itself was known — `e2e/fixtures/probe.ts` has had `appears()` for it since 2026-08-15 (`09e22bbb3`), and
 the agent rules warn about it — but `gallery.spec.ts` used `appears()` nowhere.
 
 ## Solution
 
-Backlog M-13, batch 19 of workstream M (2026-10-12, test-author; commit `e67b66375`, train 46, merge `7c3119d97`):
+Backlog M-13, batch 19 of workstream M (2026-10-12, test-author; commit `23a9427d5`, train 46, merge `a81dbdc6e`):
 
 - The 76 probes were read one by one and classified: **A**, 19 guard a shot; **B**, 29 prepare a later shot; **C**, 7
   fail loudly when they miss; **D**, 21 are cleanups or a deliberate instant question. A and B — **48** — became
@@ -69,7 +69,7 @@ Backlog M-13, batch 19 of workstream M (2026-10-12, test-author; commit `e67b663
 - **The developer's decision** (2026-10-12, verbatim): «tanto gli screen vanno fatti in ogni caso, impostiamo il locale
   in playwright sin da ora, è la scelta giusta» ("the shots have to be taken anyway: set the locale in Playwright from
   now on, it is the right choice").
-- **The fix** (batch 20 of M, test-author; `379b9792d`, journal `817332976`, train 52 `7da9438c4`):
+- **The fix** (batch 20 of M, test-author; `d970be7f9`, journal `d970be7f9`, train 52 `4ce725fcf`):
   - Playwright's `locale` is fixed per browser context, while the gallery loops four languages in one page. So
     `setBrowserLocale(page, lang)` (`frontend/e2e/fixtures/galleryLocale.ts`) sends Chromium's
     `Emulation.setLocaleOverride` from the page's CDP session — en-US, it-IT, fr-FR, es-ES — as the first statement of
@@ -80,7 +80,7 @@ Backlog M-13, batch 19 of workstream M (2026-10-12, test-author; commit `e67b663
     whose page was drawn under another locale, or carries no stamp.
   - *Update (train 78)*: the override moves only `Intl`'s fallback locale and `Accept-Language`; `navigator.language`,
     which `uiLocale()` reads since M-18, stays en-US — backlog M-24 (low), written into the header of
-    `galleryLocale.ts` (`fc66a1055`).
+    `galleryLocale.ts` (`6e492723d`).
   - The 13 tests that shoot a page prepared once (3 auth pages, 2 PAC, 8 Files) now redraw it in each language.
   - **The trap**: `@playwright/test` gives every context `locale: 'en-US'`, and Chromium then refuses a second override
     («Another locale override is already in effect»). `test.use({locale: undefined})` falls back to that default; the
@@ -94,13 +94,13 @@ Backlog M-13, batch 19 of workstream M (2026-10-12, test-author; commit `e67b663
 
 - The product side of the wizard race above: on step 1 «Next» stayed enabled while the broker list loaded, and a user
   faster than the list found step 2's broker panels collapsed, the files there but hidden.
-- Fixed by workstream I (`40a192a89`, "fix(import): gate wizard Next on broker load"; train 48, `9d9004dfb`; plan
+- Fixed by workstream I (`aa12286e1`, "fix(import): gate wizard Next on broker load"; train 48, `ab322f5fd`; plan
   `Phase_0/44_importWizardBrokerGate/`). Every broker-list load in flight — the one at opening and the refresh after a
   broker created from step 1 — keeps step 1 busy (`data-busy`) and «Next» disabled with its spinner
   (`trackBrokerLoad()`, `brokersLoading`). `loadBrokers()` waits with `Promise.allSettled`, so a loader that fails
   neither releases «Next» early nor locks it.
 - The gallery line that depends on it, `waitForSettled(import-wizard-step1)` before the step-1 shot, came with batch 20
-  of M (`379b9792d`).
+  of M (`d970be7f9`).
 - The defect and its fix in full: [[problems/import-wizard-next-before-brokers-loaded]].
 
 ## Still open (post-1.2 backlog, section M)
@@ -113,11 +113,11 @@ Backlog M-13, batch 19 of workstream M (2026-10-12, test-author; commit `e67b663
 ## Planned in release 1.2 (assigned to I)
 
 - **M-17**, found by M-14 — the coordinator's decision, after M-16: two UI strings fixed in English — the date range
-  picker formats with `'en'`, and «Last updated:» in the global settings. *Resolved in M-18's CP2 (`c0b6e2229`, train 75).*
+  picker formats with `'en'`, and «Last updated:» in the global settings. *Resolved in M-18's CP2 (`5ca9a47b1`, train 75).*
 - **M-18**, found by M-14 — the developer's decision of 2026-10-12, after the UI refinement: numbers built with
   `toFixed(n)` never meet a locale and keep the dot in every language — percentages (about 50 lines in some 30 files),
   file sizes, durations — so a shot reads «+4788,01 €» next to «14.07%». *Update (train 68)*: moved to T, with the
-  developer's rule «Lingua della UI per tutto» — CP1 delivered (`cdc341b6a`); CP2 and CP3 delivered in trains 75–76, M-18 closed —
+  developer's rule «Lingua della UI per tutto» — CP1 delivered (`1837b77da`); CP2 and CP3 delivered in trains 75–76, M-18 closed —
   [[decisions/figures-in-the-interface-language]]. A known limit stays after it (T's analysis,
   backlog T-DI): a native `<input type="date">` is drawn by the browser in the browser's language
   (`RiskAnalysisPanel.svelte`); only a date picker of the app's own would follow the UI.

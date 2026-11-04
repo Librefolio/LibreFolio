@@ -3,7 +3,7 @@
 Workstream MF (release 1.3), lot MF5-2a. Pure: no database, no server, no network; steps built by hand.
 
 WHY. ``DailyStateBuilder._valuation_rate_change_days`` (``financial_math/portfolio/daily_state.py``) finds the frame days
-on which a rate the valuation reads changes from the day before. Today (HEAD ``b1ff9215c``) it builds
+on which a rate the valuation reads changes from the day before. Today (HEAD ``212a3d8b2``) it builds
 ``_calendar(replay_from - 1 day, date_to)`` — every calendar day — and hands it to ``change_days`` (then in ``native_cash``, now ``financial_math/change_days.py``) with
 ``self._read_rate`` (``fx_rate_map.get((currency, target, day))``), once for the currencies of the securities and once
 per cash in-transit interval. A book with a deposit on 1900-01-02 and activity in 2025 is read on ~46 000 days per
@@ -52,7 +52,7 @@ Note on ``_replay_from``: ``build()`` sets it (the earliest movement, or ``date_
 method-level tests set it directly, as ``build()`` would, to keep each case to the method's own inputs. The build-level
 tests (``test_cost_dict_book_through_build``, ``test_build_does_not_raise_on_date_min``) take it from a real book.
 
-History: written red on HEAD ``b1ff9215c`` (MF5-2a); the oracles read the 1900 floor until MF-PAV-L1 removed it (D-P4):
+History: written red on HEAD ``212a3d8b2`` (MF5-2a); the oracles read the 1900 floor until MF-PAV-L1 removed it (D-P4):
 now they start at ``_replay_from``.
 
 Runs in ``./dev.py test services financial-math`` (the runner collects the whole ``test_financial_math/`` directory);

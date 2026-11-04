@@ -22,13 +22,13 @@ THE RULES (decision N76, coordinator 17/10; home ``backend/app/services/financia
 5. ``FifoInputTransaction.from_transaction`` hands a ``FifoInputTransaction`` back as it is, so the new flag survives
    ``build_engine_transactions`` (``financial_math/lots/economic_events.py``).
 
-Today (base ``3be19035c``): the module does not exist — ModuleNotFoundError — and ``FifoInputTransaction`` has no
+Today (base ``d791812e1``): the module does not exist — ModuleNotFoundError — and ``FifoInputTransaction`` has no
 ``hands_over_at_own_cost`` — TypeError. The module is imported inside each test (``_scope_boundary``), so that the
 engine GUARD at the bottom — a costless ADJUSTMENT-out handed over at 0, green today and after — is collected and runs.
 
 J-51 (last section, coordinator 17/10): ``read_arrivals_at_scope_boundary``, for Yield on Cost, reads at the edge only
 the ARRIVING legs whose partner pairs back from outside the scope, as rule 2 reads them, and takes no price; a departure,
-and every other row, comes back as it is. Today (HEAD ``70092773d``) it does not exist: ImportError, raised inside each
+and every other row, comes back as it is. Today (HEAD ``2b826945d``) it does not exist: ImportError, raised inside each
 of its tests (``_read_arrivals``).
 """
 

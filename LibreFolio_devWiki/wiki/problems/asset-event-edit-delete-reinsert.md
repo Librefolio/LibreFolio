@@ -30,7 +30,7 @@ In the asset detail's event editor (dividends, interest, splits, price adjustmen
 - S2/F3: the shared `DataEditor` import matched on the date column alone, and the events schema had no alias for
   the exported column name.
 
-## Solution (2026-10-08, `fbc95f3f9`)
+## Solution (2026-10-08, `e99e4bfce`)
 
 - `FAEventUpsertPoint` carries an optional **`id`**: with an id, the stored manual event is **edited in place** —
   every field may change, date and type included, and the id is kept, so linked transactions follow; without an
@@ -51,9 +51,9 @@ Workstream W closed the items left open here in lots E0 and E1, under decisions 
 ([[decisions/asset-event-saves-all-or-nothing]]):
 
 - **I-09**, the free-text type:
-  - E1a (`6fb148aa0`): `FAAssetEventPoint.normalize_type()` trims and upper-cases the type and refuses anything else
+  - E1a (`2495404ce`): `FAAssetEventPoint.normalize_type()` trims and upper-cases the type and refuses anything else
     with a 422;
-  - E1c (`81a6ec804`): the post-migration fix `event_types` repairs the stored rows. A correctable type is upper-cased
+  - E1c (`b3d33778e`): the post-migration fix `event_types` repairs the stored rows. A correctable type is upper-cased
     in place; an unknown one is deleted after its transactions are unlinked.
 - **I-10**:
   - S3 was closed without code by the coordinator: deleting a provider's event from the editor is the documented
@@ -62,12 +62,12 @@ Workstream W closed the items left open here in lots E0 and E1, under decisions 
   - the deletions now go before the edits, in the same request (`delete_ids`, E1b);
   - a refusal is translated and names the row (E1b).
 - **I-11**:
-  - (a) and (d), E0 (`167ba7e8c`): CSV rows and the date picker are keyed on date **and** type;
+  - (a) and (d), E0 (`0fa902b35`): CSV rows and the date picker are keyed on date **and** type;
   - (c), E1b: a row keeps its currency, and one in another currency is refused with its row;
   - (b) stays open as W-B16.
 - **I-12**: (a) the `DELETE` requires `asset_id` (decision 21); (b) the upsert is all or nothing (decision 22) — E1a.
 
-E1a and E1c are in `dev_release2` (`e81a7ba9a`); E1b was in W's worktree, not committed, at filing.
+E1a and E1c are in `dev_release2` (`162e3cfab`); E1b was in W's worktree, not committed, at filing.
 
 ## Prevention
 

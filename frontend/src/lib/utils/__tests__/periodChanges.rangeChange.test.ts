@@ -3,7 +3,7 @@
  * decision N80).
  *
  * One home for financial math: the backend (rule 10). The change from the first to the last point of the range a page
- * shows comes from the same two calls as the period changes (commit b3b593da1): an item that carries a `range_start`
+ * shows comes from the same two calls as the period changes (commit b44bdd333): an item that carries a `range_start`
  * answers a `range_change` — null when the item asked none, every field null when there was no usable price (rate).
  * `fetchAssetPeriodChanges` and `fetchFxPeriodChanges` take the start of the range as a third argument, as the page holds
  * it, and apply `rangeStartFor` (`utils/rangeChange.ts`) themselves:
@@ -17,7 +17,7 @@
  * call rejected.
  *
  * `$lib/api` is mocked as in `periodChanges.test.ts`: `post` answers what each case gives it, shaped as the backend
- * serialises `FAPeriodChangesResult` and `FXPeriodChangesResult` since b3b593da1 (`range_change` on every result). The
+ * serialises `FAPeriodChangesResult` and `FXPeriodChangesResult` since b44bdd333 (`range_change` on every result). The
  * body is read as the fetcher built it, not through JSON, so a `range_start` key holding nothing is caught too.
  * `RangeDelta` is imported as a type only, erased: the file runs against today’s module and fails on its assertions.
  *

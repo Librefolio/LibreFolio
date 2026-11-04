@@ -27,7 +27,7 @@ as **N-1 … N-9**; N-9 (the backward-fill page) is [[problems/fx-backward-fill-
 
 ## Key takeaways
 
-- **FX in the Dashboard** (`plan-phase00FxDashboardSync`, 2026-10-06, `2c58e7c9b` and follow-ups):
+- **FX in the Dashboard** (`plan-phase00FxDashboardSync`, 2026-10-06, `4b5ec41b5` and follow-ups):
   - **D1** — an FX pair created with a real provider syncs its **whole history** (`start = 'min'` → today), so
     new pairs are born without holes (`frontend/src/lib/services/fxCreationSync.ts`).
   - **D2** — the rule belongs to the creation service; the add-pair modal lost `dateStart/dateEnd` and its five
@@ -42,12 +42,12 @@ as **N-1 … N-9**; N-9 (the backward-fill page) is [[problems/fx-backward-fill-
   - **D7** — the day change is shown as a percentage of **|base|** (card 1: yesterday's total P&L; card 2:
     yesterday's NAV), so its sign always follows the change, even on a negative base — "a loss that shrinks is a
     rise"; it is hidden only on a zero or unreadable base (`dayChangePct` in
-    `frontend/src/lib/components/dashboard/KpiSection.svelte`, `fe3b5a182`).
-- **Page cache** (`…Step2PageCache`, 2026-10-07, `e47e57e04`): stale-while-revalidate for the portfolio views —
+    `frontend/src/lib/components/dashboard/KpiSection.svelte`, `49f9c4567`).
+- **Page cache** (`…Step2PageCache`, 2026-10-07, `04c6bc6fc`): stale-while-revalidate for the portfolio views —
   [[concepts/stale-while-revalidate-page-cache]]. Syncs count as writes only when they wrote; the live-price poll
   no longer refreshes every view. Fixed on the way: the Dashboard asked Performance before knowing the user's
   brokers.
-- **Default display currency** (2026-10-08, `19748fbe0`): five pages (Dashboard, broker list and detail, the
+- **Default display currency** (2026-10-08, `fd78ef330`): five pages (Dashboard, broker list and detail, the
   assets risk panel, the FX-detail AI Export) started from the **instance** default (`global_settings`, the currency
   given to new users). They now start from `defaultDisplayCurrency` — the user's `base_currency`, else the instance
   default, else EUR (`frontend/src/lib/stores/app/settings.ts`); a remembered or manual Dashboard choice still wins.
@@ -55,7 +55,7 @@ as **N-1 … N-9**; N-9 (the backward-fill page) is [[problems/fx-backward-fill-
   `MISSING_COST_BASIS` issue with its own `navigate_asset` link, and an E2E that counted links page-wide found 3
   instead of 2. Gotcha kept: banner rows are keyed by `code + group_key` in `{#each}`; production Svelte does not
   check duplicate keys, so two issues with the same pair would silently collapse into one row.
-- **`dev.py db <path>`** (2026-10-09, `049d51963`): [[problems/db-path-argument-ignored-by-alembic]].
+- **`dev.py db <path>`** (2026-10-09, `1b7ba7343`): [[problems/db-path-argument-ignored-by-alembic]].
 - **FX add-pair navigation wait** (2026-10-08, test-only): a full `page.goto` followed by a 3 s default `expect` was
   too short under load — a wrong test assumption, not a product bug; `goToFxPage` now takes query params
   (`frontend/e2e/fx/fx-helpers.ts`).

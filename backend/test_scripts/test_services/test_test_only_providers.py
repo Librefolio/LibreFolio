@@ -1,6 +1,6 @@
 """X-R44 (workstream X): a test-only provider is served outside test mode.
 
-Measured before the cure (read at 83b56fbc5). ``test_only = True`` marks the provider doubles the image ships with the
+Measured before the cure (read at 3bea3d3b3). ``test_only = True`` marks the provider doubles the image ships with the
 application (the Dockerfile copies ``backend/``, ``.dockerignore`` leaves out only ``backend/test_scripts/``): ``mockprov``
 (``asset_source_providers/mockprov/plugin.py``: 100 USD every day, a fixed description and distribution, any query
 answered), ``MOCKFX`` (``fx_providers/mockfx/plugin.py``: 1.2345 for every day and every currency) and ``MOCKFX_FAIL`` (a
@@ -40,7 +40,7 @@ without the flag, or with it false, is served by the registry of this file's own
 
 X-R44c, a guard (green today and after): only an asset or an FX plugin may be flagged ``test_only``. Their registries
 serve a plugin only through the base doors, which ask ``_withheld``; the other families also serve theirs through doors of
-their own that never ask it (read at 7d70723d9): ``BRIMProviderRegistry``'s ``auto_detect_plugin``,
+their own that never ask it (read at f4b7516b6): ``BRIMProviderRegistry``'s ``auto_detect_plugin``,
 ``get_compatible_plugins`` and ``list_plugin_info`` walk ``_providers``, ``SignalPluginRegistry.list_definitions()`` and
 ``RiskAnalyticRegistry.list_definitions()`` walk ``_plugins``, ``ToolPluginRegistry`` serves its own snapshot
 (``get_snapshot``, ``get_definition``, its own ``get_plugin_instance``). Flagged there — their bases do not inherit the
@@ -537,7 +537,7 @@ KNOWN_REGISTRIES: tuple[type[AbstractPluginRegistry], ...] = (AssetProviderRegis
 #: The families whose plugins may be flagged ``test_only``: their registries serve a plugin only through the base doors,
 #: which ask ``_withheld``, or (the Tools, X5-4b) through a snapshot that is built without the withheld classes.
 TEST_ONLY_FAMILIES: tuple[type[AbstractPluginRegistry], ...] = (AssetProviderRegistry, FXProviderRegistry, ToolPluginRegistry)
-#: The doors of the other families that serve a plugin without asking ``_withheld`` (read at 7d70723d9).
+#: The doors of the other families that serve a plugin without asking ``_withheld`` (read at f4b7516b6).
 UNGUARDED_DOORS: dict[type[AbstractPluginRegistry], str] = {
     BRIMProviderRegistry: "auto_detect_plugin, get_compatible_plugins and list_plugin_info walk _providers",
     SignalPluginRegistry: "list_definitions() walks _plugins",

@@ -15,7 +15,7 @@ related: [concepts/entity-store-pattern, problems/svelte5-teardown-reads-stale-s
 
 With the Transactions page open, the browser sent 40–60 `GET /api/v1/brokers/{id}` per second for one broker —
 close to 100 000 a day — whenever that broker had no icon, no portal and no default import plugin. Present in
-v1.1.0 (origin `0cdefa3f4`, 2026-06-30). Measured on a copy of real data: 0 requests in 10 s with the plugin set,
+v1.1.0 (origin `03eae3e4f`, 2026-06-30). Measured on a copy of real data: 0 requests in 10 s with the plugin set,
 587 in 10 s once it was cleared (one request per round trip).
 
 ## The chain (workstream K, step 10, issue C3)
@@ -31,7 +31,7 @@ v1.1.0 (origin `0cdefa3f4`, 2026-06-30). Measured on a copy of real data: 0 requ
 5. The loader's `finally` released the in-flight promise in the same tick as the bump, so the next effect found the
    road clear. Back to 1.
 
-## Fix (`66df32355`)
+## Fix (`33a89e7fe`)
 
 `brokerStore.ts` keeps `settledIconFieldIds`: the first answer — success **or** error — settles the id for the
 cache generation, because "no icon fields" is a valid state, not missing data. The id is added **before** the merge

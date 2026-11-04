@@ -16,7 +16,7 @@ related:
 
 ## Summary
 
-One plan (~430 lines), integrated in train 9 (merge `308dc4bdd`, commits `79564104d`, `a79744d58`, `35c7f5687`,
+One plan (~430 lines), integrated in train 9 (merge `ac441c80f`, commits `f90c0b1fd`, `847c40ed2`, `cf782ed2b`,
 2026-10-07) and archived on 2026-10-09. Issue #35 reported DEGIRO statements in languages the plugin did not know.
 The plugin was rewritten to read the Account Statement **by column position** — the twelve columns are the same in
 every language — and the wizard learned to keep the two legs of a currency exchange together.

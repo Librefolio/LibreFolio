@@ -8413,7 +8413,7 @@ test.describe('Live price direction flash', () => {
 // sentinel to the first cached close, after `loadChartData()` has already
 // captured the start it checks the answer against. Its own events-only answer
 // then fails `dataRequestIsCurrent()` and is dropped, so the chart draws no
-// event markers (and no backend signal overlays). Regression of f4d209b11.
+// event markers (and no backend signal overlays). Regression of 6b4e46b93.
 //
 // Everything is served by route mocks for synthetic asset ids that no other
 // spec uses. Nothing is written to the database, so there is nothing to clean

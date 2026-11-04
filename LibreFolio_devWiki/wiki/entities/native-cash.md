@@ -29,7 +29,7 @@ portfolio service and AI Export read cash from it. Why it exists, and the K/R ru
 
 ## Location
 
-`backend/app/services/financial_math/native_cash.py` (490 lines at `9f63eec22`), flat next to `average_cost.py` in the
+`backend/app/services/financial_math/native_cash.py` (490 lines at `4bc7be91b`), flat next to `average_cost.py` in the
 financial math layer ([[decisions/financial-math-one-home]]). It imports only `Currency` (`schemas.common`) and
 `convert_bulk` (`services.fx`), from the modules that define them.
 
@@ -80,9 +80,9 @@ financial math layer ([[decisions/financial-math-one-home]]). It imports only `C
 
 | Date | Change |
 |------|--------|
-| 2026-10-11 | Created by lot 41 step F-1 (`e95d053e4`): ledger, flows, missing conversions, `effective_share`. The engine reads it from step F-2 (`04522e123`). |
-| 2026-10-12 | `exchange_results()` and `CONVERSION_DUST` (`b92c0cfdb`); the service reads cards, histories and contributions from it (`df5db60d0`). |
-| 2026-10-12 | AI Export uses `CONVERSION_DUST` for `reconciled` (C-53, `323c5ff13`). |
+| 2026-10-11 | Created by lot 41 step F-1 (`862d3fa32`): ledger, flows, missing conversions, `effective_share`. The engine reads it from step F-2 (`23cbffea9`). |
+| 2026-10-12 | `exchange_results()` and `CONVERSION_DUST` (`9d112f294`); the service reads cards, histories and contributions from it (`b11c7720e`). |
+| 2026-10-12 | AI Export uses `CONVERSION_DUST` for `reconciled` (C-53, `9bc377cf5`). |
 
 ## Source files
 

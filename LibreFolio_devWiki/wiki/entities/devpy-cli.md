@@ -74,7 +74,7 @@ Sub-commands imported from external modules via `register_subparser()`:
 - Introduced in V4 rewrite to replace scattered shell scripts
 - Sub-module architecture allows skills and agents to extend it without touching the core
 - 2026-05-26: `scripts/test_runner/` (4841-line monolith) refactored into 18-module package at `scripts/test_runner/`. See [[decisions/test-runner-package-split]].
-- 2026-09-10: runtime lanes (`63cfb55d1`) — [[sources/phase00-parallel-runtime-isolation-2026-09]].
+- 2026-09-10: runtime lanes (`4588506b9`) — [[sources/phase00-parallel-runtime-isolation-2026-09]].
 - 2026-10-08/09: image-aware command groups (train 19), `db <path>` honoured, `user` exit status, shared JWT secret — [[sources/phase00-dev-cli-image-2026-10]].
 
 ## Source files

@@ -66,8 +66,8 @@ predictions were written; no record of their execution exists.
 
 ## ⚠️ Verification (2026-09-23 — reading, not execution)
 
-The recorded premise does not match the code, at S5's baseline `44dd7779d` or at
-`9df0b7b14` (neither `auth.ts` nor `clientSession.ts` changed in between):
+The recorded premise does not match the code, at S5's baseline `eb006c9b6` or at
+`9d87ad80e` (neither `auth.ts` nor `clientSession.ts` changed in between):
 
 - `(app)/+layout.svelte` renders `<slot />` only inside `{:else if $isAuthenticated}`.
   `{#if $i18nLoading}` is indeed the only top-level `{#if}` — but it is the head of a chain,
@@ -88,7 +88,7 @@ range ends today); the axios response interceptor classifies that as a portfolio
 [[concepts/discard-the-answer-not-the-question]] recorded this mechanism for the risk
 catalogue on 2026-08-31. **Whether it was the trigger of R2-62 was never measured.**
 
-## Solution (S5, passo 1c, 18/09 — verified at `9df0b7b14`)
+## Solution (S5, passo 1c, 18/09 — verified at `9d87ad80e`)
 
 The guard was **not** touched: discarding another account's answer is correct. What changed
 is that the discard can now say so.

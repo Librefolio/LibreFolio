@@ -20,25 +20,25 @@ related:
 ## Summary
 
 Five fixes asked by the developer and the coordinator on 2026-10-12, before the 1.2 tag, each proved red before and
-green after, and integrated in train 72 (2026-10-12, `1f5334583`). The work stopped with the developer's STOP at 18:26
+green after, and integrated in train 72 (2026-10-12, `365d0ce55`). The work stopped with the developer's STOP at 18:26
 and resumed at 19:24.
 
 ## Key takeaways
 
-- **The broker icon** (`9b2d731cd`): a late `error` event from a replaced `<img>` marked the visible plugin icon as
+- **The broker icon** (`db0277a99`): a late `error` event from a replaced `<img>` marked the visible plugin icon as
   failed — [[problems/late-img-error-marked-the-visible-icon-failed]]. C-56 and C-57 stay in the backlog
   ([[problems/broker-icon-race-condition]]).
-- **The wrong-broker modal of the import** (`cada13e1f`): the developer, verbatim, «i bottoni hanno i testi che vanno
+- **The wrong-broker modal of the import** (`1955aca96`): the developer, verbatim, «i bottoni hanno i testi che vanno
   a capo e restano larghi, magari il rimuovi può essere accorciato, e anche lo sposta può diventare senza il nome del
   broker» ("the buttons' texts wrap and stay wide; maybe 'remove' can be shortened, and 'move' can lose the broker's
   name"). The buttons now read Remove and Move in the four languages, never wrap inside, and the footer wraps as a
   whole at 375 px. Written against the old catalogue paths, the change reached `base/` through U-2's pure rename
   ([[decisions/plugin-folders-and-split-i18n]]). The import guide that quotes the old labels goes to workstream M.
-- **The security details** (`673b68028`) close by themselves after 30 s —
+- **The security details** (`0f3d48794`) close by themselves after 30 s —
   [[decisions/security-details-close-after-30-seconds]].
-- **The copy buttons** (`367ae7d56`, M-20 and C-63) go through one helper, kept there by a gate —
+- **The copy buttons** (`8395c0287`, M-20 and C-63) go through one helper, kept there by a gate —
   [[decisions/clipboard-through-one-helper-with-a-gate]].
-- **The Spanish toolbar** (`a91ffd892`, V-19): the thresholds compare the bar's width, and a 15 px gap between two
+- **The Spanish toolbar** (`25b453fbe`, V-19): the thresholds compare the bar's width, and a 15 px gap between two
   measurements was the scrollbar gutter — [[problems/toolbar-measurements-differed-by-the-scrollbar-gutter]].
 
 ## Not ingested

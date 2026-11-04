@@ -17,7 +17,7 @@ C-58: under load, a test of `brokers-detail.spec.ts` went over its 30 s.
 
 ## Root Cause and Solution
 
-`ae4867b38` (workstream I's lot 50, train 81):
+`671bbf665` (workstream I's lot 50, train 81):
 
 - 25 tests reloaded the broker list that their `beforeEach` had just loaded; they now reuse it;
 - the FIFO lots block, which walks login, the list and the lots, gets an explicit budget of 60 s;

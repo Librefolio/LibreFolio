@@ -32,7 +32,7 @@ Since 2026-10-07 it also no longer computes the **WAC lines** (per broker and cu
 single average-cost function of the `financial_math` layer ([[decisions/financial-math-single-average-cost]]). FIFO
 stays here only to create the lots.
 
-Since 2026-10-12 its pure math is not here either. Workstream T's T-1 (step B3, `7d1ddc50f`) turned every pure method of
+Since 2026-10-12 its pure math is not here either. Workstream T's T-1 (step B3, `94901d98a`) turned every pure method of
 `LotsAnalysisService` into a function of `backend/app/services/financial_math/lots/` — `prices`, `conversions`,
 `economic_events`, `histories`, `average_cost_lines` — with the same bodies; names read across modules became public
 (`FxRateResolver`, `WithheldEconomics`, `ALL_BROKERS`, …). The service keeps the orchestration, the database loading,
@@ -41,7 +41,7 @@ the DTOs (summaries, Gantt, event rows) and the lots data-quality report ([[deci
 ## Location
 
 `backend/app/services/lots_analysis_service.py` (~1980 lines at the v4 ingest; 2 032 lines on 2026-10-07; 2 274 before
-T-1's cut, 1 172 at `9f63eec22`), plus its math in `backend/app/services/financial_math/lots/`.
+T-1's cut, 1 172 at `4bc7be91b`), plus its math in `backend/app/services/financial_math/lots/`.
 
 ## Key Interfaces
 
@@ -85,10 +85,10 @@ T-1's cut, 1 172 at `9f63eec22`), plus its math in `backend/app/services/financi
 - ~~**Known limit (outside workstream P):** the FIFO lot figures still fall back to the unconverted amount when a rate
   is missing — e.g. `fx_resolver.convert(lot.original_cost, lot.currency, lot.opening_date) or lot.original_cost` in
   `_build_value_history()` and `_build_return_history()`, and the same `… or <unconverted>` shape for closure
-  proceeds.~~ *Resolved 2026-10-11* by workstream T, B3a (`04f091944`): a price, a cost or closure proceeds without a
+  proceeds.~~ *Resolved 2026-10-11* by workstream T, B3a (`f8eb42aff`): a price, a cost or closure proceeds without a
   rate are unavailable (`None`) from that date, the analysis turns `DEGRADED` and the pair is reported; never the
   native amount. The remaining fallbacks (summary fields, the Gantt `unit_price`, economic events, trade weights) were
-  closed in B3b the same day (`f20c8ba78`, "withhold pools without a rate").
+  closed in B3b the same day (`c171402d8`, "withhold pools without a rate").
 - **A FAILED replay withholds its figures (2026-10-17, J-12, decision N81 option A).** Until then a `FAILED` analysis
   ("warn but show", 2026-07-22) returned the lots of a replay that no longer matched the account — a sale beyond the
   quantity held left a lot of 4 open where 1 was held. Now, right after the engine, `shown_analyses` keeps only the

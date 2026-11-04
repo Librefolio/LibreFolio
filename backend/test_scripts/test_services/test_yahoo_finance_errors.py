@@ -903,7 +903,7 @@ async def test_history_of_a_london_line_reports_pence_while_its_points_carry_pou
 # N86 §1: each index value is dated on its own wall calendar (a tz-naive one by ``.date()``); the current value dates
 # ``regularMarketTime`` in the timezone of ``info["exchangeTimezoneName"]``, in UTC when that is missing or unknown.
 #
-# Red on HEAD 0de969965: the plugin reads the dates in UTC, and a tz-naive index fails the whole history (a pandas
+# Red on HEAD 41cde9d5f: the plugin reads the dates in UTC, and a tz-naive index fails the whole history (a pandas
 # ``Timestamp`` always has ``tz_convert``, which refuses a naive one, so the plugin's own ``.date()`` branch is never
 # reached: FETCH_ERROR). The cases named ``-guard`` are green before and after: the contract must not move them.
 
@@ -1012,7 +1012,7 @@ async def test_z33_current_value_is_dated_in_the_exchange_timezone(monkeypatch, 
 # ``ZoneInfo``, imported at the module's top, patched to raise; the log is read with ``capture_logs``, behind a barrier.
 # The level and the ``timezone`` the event carries are pinned, never its wording.
 #
-# Red on HEAD 4fef69544: the plugin has no ``_exchange_zone`` yet; each test fails on that first (``_z33_exchange_zone``).
+# Red on HEAD f7b687e83: the plugin has no ``_exchange_zone`` yet; each test fails on that first (``_z33_exchange_zone``).
 
 _Z33_ZONE_LOG_CANARY = "Z-33 test: canary through a logger of the Yahoo plugin's name"
 
@@ -1064,7 +1064,7 @@ def test_z33_an_unknown_area_zone_is_logged_once(monkeypatch):
     warning; then ``_exchange_zone("Asia/Tokyo")``, None and one more warning, naming Tokyo — once per name, not once in
     all. A warning: neither silence nor an error; its wording free.
 
-    Red on HEAD 4fef69544: the plugin has no ``_exchange_zone``.
+    Red on HEAD f7b687e83: the plugin has no ``_exchange_zone``.
     """
     zone_of = _z33_exchange_zone()
     _z33_no_zone_logged_yet(monkeypatch)
@@ -1090,7 +1090,7 @@ def test_z33_an_unknown_name_without_area_is_not_logged(monkeypatch):
     (``UTC+02:00``), ``legacy-utc`` (no mark any more: a name without an area like any other), an empty name and None
     give None and no warning either.
 
-    Red on HEAD 4fef69544: the plugin has no ``_exchange_zone``. Green once it has, and must stay green.
+    Red on HEAD f7b687e83: the plugin has no ``_exchange_zone``. Green once it has, and must stay green.
     """
     zone_of = _z33_exchange_zone()
     _z33_no_zone_logged_yet(monkeypatch)
@@ -1122,7 +1122,7 @@ def test_z33_an_unknown_name_without_area_is_not_logged(monkeypatch):
 # a refusal. Each test reads symbols of its own (``_z39_symbol``): no entry another test left in the shared cache can
 # answer instead of Yahoo. A request to Yahoo is one read of ``fast_info`` (``_Z39Yahoo.requests``).
 #
-# Red on HEAD 286a3d880: every case but the ``_guard`` one; the first search of the other-error case is a guard too.
+# Red on HEAD 6f0525572: every case but the ``_guard`` one; the first search of the other-error case is a guard too.
 
 
 def _z39_symbol(label: str) -> str:
@@ -1186,7 +1186,7 @@ def test_z39_fetch_currency_refused_raises_at_once_and_caches_nothing(monkeypatc
     requests in all.
 
     The guide's «Never swallow a refusal»: swallowed, it read as «no currency» for 24 hours and Yahoo was never paused.
-    Red on HEAD 286a3d880: ``_fetch_currency`` gives None (DID NOT RAISE).
+    Red on HEAD 6f0525572: ``_fetch_currency`` gives None (DID NOT RAISE).
     """
     _sleeping_fails(monkeypatch)
     symbol = _z39_symbol("REFUSED")
@@ -1208,7 +1208,7 @@ def test_z39_fetch_currency_other_error_gives_none_and_caches_nothing(monkeypatc
     asks Yahoo again and gives its answer, ``GBP``, cached as any answer is: the third read does not ask. Two requests
     for three reads.
 
-    Cached, the failure read as «no currency» for 24 hours. Red on HEAD 286a3d880: the second read gives None from the
+    Cached, the failure read as «no currency» for 24 hours. Red on HEAD 6f0525572: the second read gives None from the
     cache, without asking Yahoo.
     """
     symbol = _z39_symbol("BROKEN")
@@ -1246,7 +1246,7 @@ async def test_z39_search_refused_on_a_result_currency_raises_rate_limited(monke
     currency request for each of the first two symbols and none for the third: the refusal leaves at once, and nothing
     more is asked of a source that has just refused.
 
-    The guide's «Never swallow a refusal». Red on HEAD 286a3d880: ``search()`` answers three results, the second
+    The guide's «Never swallow a refusal». Red on HEAD 6f0525572: ``search()`` answers three results, the second
     without a currency.
     """
     _sleeping_fails(monkeypatch)
@@ -1273,7 +1273,7 @@ async def test_z39_search_other_error_on_a_result_currency_answers_then_asks_aga
     green before and after. Searched again, on the provider itself so that the core's query cache plays no part, Yahoo is
     asked again for that symbol's currency alone, and its result now carries ``GBP``; the other two come from the cache.
 
-    Red on HEAD 286a3d880, at the second search: the failure was cached as None, and Yahoo is not asked again.
+    Red on HEAD 6f0525572, at the second search: the failure was cached as None, and Yahoo is not asked again.
     """
     first, broken, third = (_z39_symbol(label) for label in ("FIRST", "BROKEN", "THIRD"))
     symbols = (first, broken, third)

@@ -17,7 +17,7 @@ related:
 
 ## Summary
 
-One plan (~195 lines), merged in train 19 (`c61a90883`; commits `ffb3b39f3`, `452ed291a`, `69d0e8f4b`) and archived on
+One plan (~195 lines), merged in train 19 (`bebab4780`; commits `98ea8c940`, `c9403765b`, `c9403765b`) and archived on
 2026-10-09. In 1.1.0 no `dev.py` command worked inside the container — not even the documented password reset —
 because the CLI imported the test tree that the image excludes. The fix registers each command group only when its
 files are present and turns the others into explicit "not available in this installation" stubs; on the way the

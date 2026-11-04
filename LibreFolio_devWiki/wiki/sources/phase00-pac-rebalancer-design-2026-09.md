@@ -29,7 +29,7 @@ developer. The implementation bundle is the companion source, [[sources/phase00-
 | `plan-phase00PacRebalancerPolicies.prompt.md` | 2026-09-16 → 10-02 | What a candidate must satisfy and in which order candidates are compared, with counter-examples |
 | `plan-phase00PacRebalancerArchitecture.prompt.md` | 2026-09-16 → 10-02 | Ten principles, the SCIP adapter, the SELL verifier, no planner database in v1, failure boundaries |
 | `plan-phase00PacRebalancerUiTarget.prompt.md` | 2026-09-15 → 10-05 | Every approved ASCII screen (reviews A–D), privacy, the 2026-10-02 strike-outs |
-| `review/PAC_ALLOCATOR_REVIEW_DOSSIER.md` | 2026-09-19 → 10-09 | D's dossier for the developer's review of merge `67ee437a0`, checked at `41df8ac80`: the arc, the mathematics, choices left unauthorised, the DBT register, 907 tests |
+| `review/PAC_ALLOCATOR_REVIEW_DOSSIER.md` | 2026-09-19 → 10-09 | D's dossier for the developer's review of merge `b8999cad1`, checked at `b8999cad1`: the arc, the mathematics, choices left unauthorised, the DBT register, 907 tests |
 | `review/drive_planner.py` | 2026-09-19 | A read-only harness from before `plan` had a route: calls `plan_pac_allocation` directly and prints four outcomes |
 | `drafts/` (15 files) | 2026-09-07 → 10-02 | The P1 contract and its evidence, the rejected UI rounds 2–4, the operational rounds 5–7, the first solver draft, the end-to-end design and the decision chronicle — «Nessun file qui è autorità prodotto corrente» (README of the drafts) |
 

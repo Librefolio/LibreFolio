@@ -17,7 +17,7 @@ related:
 
 During batch 25, workstream M had a local, uncommitted change to the shared backlog
 (`LibreFolio_developer_journal/Release_2/Phase_0/BACKLOG_POST_1.2.md`) when the coordinator fast-forwarded M's branch
-to `bb1696929` (train 64): 103 incoming files, and one overlap — the backlog, where the target had added its own hunks
+to `9eca1835e` (train 64): 103 incoming files, and one overlap — the backlog, where the target had added its own hunks
 and workstream V 67 lines above and below M's section. Git refused the fast-forward, although the two sets of hunks
 were disjoint.
 

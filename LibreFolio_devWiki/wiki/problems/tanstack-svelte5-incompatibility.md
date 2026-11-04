@@ -23,7 +23,7 @@ A custom Svelte 5 adapter was created at `frontend/src/lib/tanstack-table/`. Thi
 **[[F-075]]** — When TanStack Table v9 releases a stable official Svelte adapter, migrate to it and delete the custom adapter.
 
 ## Resolution (verified in git, 2026-10-12)
-Resolved by removal, not by the migration: commit `61c24e05c` (2026-08-05, the code audit, bands S1–S3) deleted the
+Resolved by removal, not by the migration: commit `cd7b24bb4` (2026-08-05, the code audit, bands S1–S3) deleted the
 vendored `tanstack-table/`, "absorbed by the project's own table implementation", and dropped `@tanstack/table-core`
 from `frontend/package.json`. Nothing is left to migrate, so [[F-075]] is superseded.
 

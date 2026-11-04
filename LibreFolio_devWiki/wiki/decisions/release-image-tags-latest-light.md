@@ -32,14 +32,14 @@ The developer (plan of the release images, §0, 2026-10-06):
   correggere, come è ora va bene, correggiamo la guida e allineamola a questa logica».
 
 On 2026-10-07 he confirmed it for the workflow too, through the coordinator: «Correggere il workflow: latest =
-light» (plan 32, D1). M wrote it in `release.yml` the same day (`e45a33a66`), together with three rules on
+light» (plan 32, D1). M wrote it in `release.yml` the same day (`2386dc8d7`), together with three rules on
 prereleases:
 
 | Rule | Developer, verbatim | Where |
 |------|---------------------|-------|
 | A prerelease never moves `latest` and never deploys the docs | «Sì, escluderle da latest e dal deploy della doc» | the light metadata step's `flavor: latest=…` is `auto` only for a non-prerelease release; the deploy runs only on `main` or a stable release |
 | A prerelease tag is `vX.Y.Z-rc.N` | «sì al suffisso rc per le pre release, però non succede che faccio una pre release e poi promuovo, al più ne creo un'altra da 0 su un tag nuovo» | first job step |
-| The check works both ways | «Sì, controllo simmetrico» | the step «Release tag must match the release kind» (`85505d416`): a prerelease must carry `-rc.N`, a stable release a plain `vX.Y.Z` |
+| The check works both ways | «Sì, controllo simmetrico» | the step «Release tag must match the release kind» (`024181cc2`): a prerelease must carry `-rc.N`, a stable release a plain `vX.Y.Z` |
 
 The resulting tags, which the user guide's «Image Variants» table states:
 

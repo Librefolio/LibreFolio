@@ -14,13 +14,13 @@ related:
 
 # Problem: a guard that wrote figures the way the cards no longer did
 
-> Filed at the train-70 ingest (M's batch 28, journal of round 12 §17.2), checked against the code at `f884e8d3a`.
+> Filed at the train-70 ingest (M's batch 28, journal of round 12 §17.2), checked against the code at `984f8d40a`.
 
 ## Symptom
 
 In the three «Asset list» scenarios of the gallery (the page, the table view, the filtered list),
 `expectOfflinePricesDrawn` waits until every asset card shows the price that the offline fixture answered. After T's
-CP1 of M-18 (`cdc341b6a`, train 68), `dev.py mkdocs gallery -f "Asset list"` went red: 6 failed (3 tests, desktop and
+CP1 of M-18 (`1837b77da`, train 68), `dev.py mkdocs gallery -f "Asset list"` went red: 6 failed (3 tests, desktop and
 mobile), all on `Gold Spot Price`, expected `4116.60`, drawn `4,116.60`.
 
 ## Root Cause
@@ -42,7 +42,7 @@ through test-author.
 
 ## Solution
 
-`250a6df1e` («test(gallery): expect prices in the UI locale», train 70):
+`b6ee99781` («test(gallery): expect prices in the UI locale», train 70):
 
 - the guard takes the shot's language from its three callers in `gallery.spec.ts`;
 - in the page, it writes the expected figure with the browser's own `Intl.NumberFormat` in `GALLERY_LOCALES[lang]`
@@ -74,7 +74,7 @@ languages, desktop and mobile.
 ## Still open
 
 - With CP2 (amounts, dates, chart axes), the header of `galleryLocale.ts` («the app formats with it wherever it passes
-  no locale») goes out of date; T's note leaves it to M. *Done (train 74)*: M rewrote it in batch 31 (`80fbabc3a`) —
+  no locale») goes out of date; T's note leaves it to M. *Done (train 74)*: M rewrote it in batch 31 (`9e0dd6ac0`) —
   the app writes every figure in `uiLocale()`, and the browser locale still decides the English shots.
 
 ## Source files

@@ -16,7 +16,7 @@ related:
 ## Context
 
 The usage review of 2026-09-22 found the intro tour telling Transactions users that Import «has a guide of its own»
-(R19). Round 8 removed that sentence (`865509a12`), but at the developer's live review of 2026-09-24 (point 12) the
+(R19). Round 8 removed that sentence (`7c4a6ffab`), but at the developer's live review of 2026-09-24 (point 12) the
 Brokers stop still read «Una breve guida si avvia quando scegli Aggiungi broker». The developer asked for the
 principle to hold **for every text, without having to remember it**. The skill `onboarding-guide` keeps the count:
 «"a short guide starts when you choose Add…" is what the developer asked to remove, twice».
@@ -26,7 +26,7 @@ principle to hold **for every text, without having to remember it**. The skill `
 Written in Round 8, step 8 (C7): *a tour or guide text describes its section; it does not announce that another guide
 will start.*
 
-- **The fix** (`a47cbcdc7`, 2026-09-25): five violations, all the same shape — a second sentence announcing a guide —
+- **The fix** (`0c6de3e67`, 2026-09-25): five violations, all the same shape — a second sentence announcing a guide —
   in `onboarding.tour.steps.brokersNav.description` and in the **Add** step of the four page guides (Transactions,
   Brokers, FX, Assets). The first sentence was kept, in four languages; no key was removed.
 - **Kept on purpose**: `tour.steps.settingsNav` («…permettono di ripetere qualsiasi guida…» describes what the Settings
@@ -41,7 +41,7 @@ will start.*
 
 - The `steps` table of `OnboardingOverlayHost.svelte` keeps `titleKey` and `descriptionKey` as string literals,
   because the gate reads them from the source.
-- The dead keys of the old tour, which still named the Import guide, went later with the i18n audit (`15a52c0a5`,
+- The dead keys of the old tour, which still named the Import guide, went later with the i18n audit (`9922c823f`,
   2026-10-07).
 
 ## Source files

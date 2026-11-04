@@ -40,20 +40,20 @@ how many bumps can accumulate before the release, and what else must move with a
 2. **At most one +1 over the last released version, until the release ships** (the developer's rule, 2026-10-12): a
    component already moved in the cycle does not move again. The released reference is `v1.1.0`.
 3. **A bump updates `COMPACT_COMPONENT_VERSIONS` in the same change**, or the section silently becomes YAML. This is the
-   lesson of `asset.lot_detail`: beta fix F6 (`e3aee4032`, 2026-09-01) took it to v2 without the map, so from
+   lesson of `asset.lot_detail`: beta fix F6 (`d1ae2fb49`, 2026-09-01) took it to v2 without the map, so from
    `v1.1.0` on its lots came out as a longer YAML block — a silent regression, found by workstream T and fixed on
-   2026-10-11 (`d477de722`) with v3, compact, in the map.
+   2026-10-11 (`97aeb8140`) with v3, compact, in the map.
 
-## State at `9f63eec22`
+## State at `4bc7be91b`
 
 Nine components moved in the cycle, each exactly +1 over `v1.1.0`, each listed in the compact map:
 
 | Component | `v1.1.0` | Now | Commit |
 |---|---|---|---|
-| `portfolio.provenance`, `broker.provenance` | 1 | 2 | `6f13e1ba4` (issue #32, 2026-10-07) |
-| `portfolio.fifo_summary`, `broker.fifo_summary`, `portfolio.fifo_lots`, `broker.fifo_lots` | 1 | 2 | `d477de722` (2026-10-11) |
-| `asset.lot_detail` | 2 | 3 | `d477de722` (2026-10-11) |
-| `portfolio.reconciliation`, `broker.reconciliation` | 1 | 2 | `323c5ff13` (C-53, 2026-10-12) |
+| `portfolio.provenance`, `broker.provenance` | 1 | 2 | `ad6af7184` (issue #32, 2026-10-07) |
+| `portfolio.fifo_summary`, `broker.fifo_summary`, `portfolio.fifo_lots`, `broker.fifo_lots` | 1 | 2 | `97aeb8140` (2026-10-11) |
+| `asset.lot_detail` | 2 | 3 | `97aeb8140` (2026-10-11) |
+| `portfolio.reconciliation`, `broker.reconciliation` | 1 | 2 | `9bc377cf5` (C-53, 2026-10-12) |
 
 The rule had a concrete effect on a pending item: lot 41's cost estimate for F-AI (b) counted an optional sentence in
 the two provenances' `valuation_semantics` as a bump «to v3» with a map `{1,2,3}`. Under the rule it would stay at v2,
@@ -64,7 +64,7 @@ the version they already have in this cycle.
 - Several fixes in one cycle cost one version per component, and a reader of a 1.2 prompt sees at most one version
   step from 1.1.
 - Before bumping, check the component's version in the last release tag (`git show v1.1.0:…/catalog.py`).
-- **Written down on 2026-10-12** (`214624747`, train 53), after this page noted that the rule lived only in the
+- **Written down on 2026-10-12** (`ad0de6a29`, train 53), after this page noted that the rule lived only in the
   journal: a «Versions» section in `.github/instructions/ai-development.instructions.md` and a paragraph in
   «ComponentSpec» of `ai_export_composition.md`, both citing this page. Writing the paragraph, docs-writer checked the
   code and corrected the wording this page had taken from the journal: the parity between a spec and its placeholder

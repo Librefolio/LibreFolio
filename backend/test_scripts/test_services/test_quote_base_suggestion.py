@@ -58,7 +58,7 @@ that of an application of the test around the real ``provider_router``: importin
 ``configure_logging``, which opens the lane's log file (``openapi-client-text`` in ``_backend_schemas.py`` says why that
 is not PURE); ``test_assets_provider.py`` reads the document the lane's server serves.
 
-Red before Z-32 (d) (HEAD fb0795cfb), each for the reason its docstring gives: QBS-S01…S04 and S07 (no
+Red before Z-32 (d) (HEAD b73704f2e), each for the reason its docstring gives: QBS-S01…S04 and S07 (no
 ``FAQuoteBaseSuggestion``); QBS-S05 and S06 (``FAProviderSearchResultItem`` and ``ProbeMetadataResult`` have no
 ``quote_base_suggestion``); QBS-S08 (no such component, no such properties in the document); QBS-R01…R03 (a search
 result has no ``quote_base_suggestion``, and nothing warns about an invalid one; R01 also builds the model); QBS-R04

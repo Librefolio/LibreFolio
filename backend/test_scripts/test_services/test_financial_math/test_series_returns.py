@@ -19,14 +19,14 @@ risk results and the comparison plugin import it from the house. ``market_series
 with ``from ... import``, which binds them in its namespace: whatever it binds must be the house's own object, never a
 second implementation.
 
-Red on HEAD (7b0a7c3ea): both names are imported at module level, so the whole file fails at collection with an
+Red on HEAD (7f086146d): both names are imported at module level, so the whole file fails at collection with an
 ``ImportError`` (``cannot import name 'float_price_return'``).
 
 MF-D3 (rule 10, the formula has one home): ``observations_per_year(n_observations, calendar_days) -> float`` is
 ``n_observations × 365 / calendar_days`` itself, ValueError for a span that is not positive; ``observed_annualization``
 computes its factor with it, and the risk schemas' validators check a contract's factor against it (their guard is in
 ``test_schemas/test_risk_schemas.py``). Its tests read it as ``returns.observations_per_year`` inside the test body, never
-with a module-level import, so the file still collects where the function does not exist: red on HEAD (2c3e4d452) is an
+with a module-level import, so the file still collects where the function does not exist: red on HEAD (5a3df79a9) is an
 ``AttributeError`` in each of them, the MF-D1 tests above staying green.
 
 Pure: no database, no server, no network.

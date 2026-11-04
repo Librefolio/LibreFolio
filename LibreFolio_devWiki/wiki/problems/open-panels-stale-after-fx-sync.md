@@ -29,7 +29,7 @@ test E1 of workstream V's real-data E2E (plan 46), red for exactly this reason b
 
 ## Solution
 
-Commit `f7c59b815` ("fix(dashboard): refresh open panels after FX sync", train 56): in `syncMissingFxRates()`, after
+Commit `5b4b9f188` ("fix(dashboard): refresh open panels after FX sync", train 56): in `syncMissingFxRates()`, after
 `invalidate()` and only without a transport error, `refreshVersion += 1`. With the fix the lots request leaves about
 1 ms after the sync's response, together with the report reload, and E1 is green with 1 and with 4 workers. The
 decision to write the red test and the fix in the same lot was the developer's (D2,
@@ -40,7 +40,7 @@ decision to write the red test and the fix in the same lot was the developer's (
 Any action that changes the data under the Dashboard must send the same refresh signal as «Aggiorna», not only reload
 the report. **The same gap after «Sync prices» (V-1)** — the stale-price button (`sync_asset_prices` in
 `handleBannerAction`) reloaded the report without incrementing `refreshVersion`, so open panels stayed old until a
-reload — was closed the same way in V's batch 2 (`c8d955c86`, train 58): red first in `stale-price-banner.spec.ts`
+reload — was closed the same way in V's batch 2 (`86217eaf4`, train 58): red first in `stale-price-banner.spec.ts`
 (the lots panel already open must ask `POST /portfolio/lots/analysis` again, in the same page load), then
 `refreshVersion += 1` after `invalidate()`.
 

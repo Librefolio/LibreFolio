@@ -178,7 +178,7 @@ describe('designerLabPlugin — virtual modules', () => {
     });
 
     it('scans on the first load only, reading the app version then', () => {
-        const appVersion = vi.fn(() => '1.2.0+4beec1e2');
+        const appVersion = vi.fn(() => '1.2.0+80bee759');
         const plugin = pluginOf({enabled: true, appVersion});
         plugin.resolveId(VIRTUAL_ID);
         expect(scan.scanColors).not.toHaveBeenCalled();
@@ -188,7 +188,7 @@ describe('designerLabPlugin — virtual modules', () => {
         plugin.load.call(context(), RESOLVED_INDEX);
         plugin.load.call(context(), RESOLVED);
         expect(scan.scanColors).toHaveBeenCalledOnce();
-        expect(scan.scanColors).toHaveBeenCalledWith({appVersion: '1.2.0+4beec1e2'});
+        expect(scan.scanColors).toHaveBeenCalledWith({appVersion: '1.2.0+80bee759'});
         expect(appVersion).toHaveBeenCalledOnce();
 
         pluginOf({enabled: true}).load.call(context(), RESOLVED);

@@ -38,7 +38,7 @@ The damage spread over two lists: **A**, pages the next alignment would translat
 
 ## Solution
 
-`dea7ee40e` (2026-10-06, «fix(aphra): keep code indentation in translations»):
+`7d8922e9b` (2026-10-06, «fix(aphra): keep code indentation in translations»):
 
 - **B, the clean-up spares code.** Step 7 becomes `_collapse_inner_spaces()`: runs of spaces between two words
   collapse, only on lines outside code; leading indentation and trailing hard breaks are never touched.
@@ -47,7 +47,7 @@ The damage spread over two lists: **A**, pages the next alignment would translat
 - **A new module, standard library only**, `mkdocs_src/aphra-pipeline/code_blocks.py` (`pair_blocks`,
   `restore_code_indent`, `code_indent_issues`). On that day `dev.py` imported the translation commands inside
   `except ImportError: pass`, so a third-party import there would have made them vanish in silence. (Since
-  `ffb3b39f3`, 2026-10-08, `dev.py` checks with `_has()` that the docs sources are there instead, and a broken import
+  `98ea8c940`, 2026-10-08, `dev.py` checks with `_has()` that the docs sources are there instead, and a broken import
   in a full checkout fails loudly — [[problems/devpy-unusable-in-docker-image]].)
 - **A new ERROR in the validator**, `code-block-indent`.
 - **80 tests**, written red first: `test_translation_code_blocks.py`, with fixtures modelled on the real pages

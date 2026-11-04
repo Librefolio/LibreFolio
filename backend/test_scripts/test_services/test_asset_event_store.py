@@ -519,7 +519,7 @@ async def test_a_lower_case_type_is_stored_upper_case_and_reads_back(owned):
 # Before the fix ``bulk_upsert_events`` committed each item on its own (and
 # ``_upsert_asset_events`` each chunk), so a refused item left the items before it saved.
 # Within ONE item the edits by id were already validated before the first write
-# (fbc95f3f9): the single-item tests below fail on ``details`` only.
+# (e99e4bfce): the single-item tests below fail on ``details`` only.
 # ─────────────────────────────────────────────────────────────────────────────
 
 

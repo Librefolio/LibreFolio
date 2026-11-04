@@ -331,7 +331,7 @@ class TestPortfolioWAC:
 # A3 pins the refusal and the retype once the cost is there; A4 the reverse split,
 # whose outgoing row never carries a cost and becomes a reduction, still allowed.
 #
-# Before the fix (03c943f53) both tests failed at the retype itself: the upsert
+# Before the fix (58ac14b21) both tests failed at the retype itself: the upsert
 # point had no ``id`` field, so the request was rejected with 422.
 
 
