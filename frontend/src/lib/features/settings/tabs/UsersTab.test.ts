@@ -1438,3 +1438,43 @@ describe('UsersTab — who can sign up, from here (UTAB-63…72, N69c)', () => {
         });
     });
 });
+
+// =========================================================================
+describe('UsersTab — a list that follows what happens elsewhere (UTAB-74…75, FB-22)', () => {
+    /** An invitation accepted in another tab: the account exists on the server, nothing on this screen moved. */
+    function acceptedElsewhere(): number {
+        const id = 900;
+        server.accounts.push(makeAccount(id, 'joined_by_invite'));
+        return id;
+    }
+
+    it('UTAB-74: the reload button asks both lists again and shows the account that joined meanwhile', async () => {
+        await mount();
+        const id = acceptedElsewhere();
+        const before = listUsers().mock.calls.length;
+
+        await fireEvent.click(screen.getByTestId('users-reload-button'));
+
+        await waitFor(() => expect(listUsers().mock.calls.length).toBe(before + 1));
+        await waitFor(() => expect(rowsOf(id)).toHaveLength(1));
+        await settled();
+    });
+
+    it('UTAB-75: the list is asked again when the page comes back to the front, and not while it is hidden', async () => {
+        await mount();
+        acceptedElsewhere();
+        const before = listUsers().mock.calls.length;
+        const setVisibility = (state: 'hidden' | 'visible') => {
+            Object.defineProperty(document, 'visibilityState', {configurable: true, get: () => state});
+            document.dispatchEvent(new Event('visibilitychange'));
+        };
+
+        setVisibility('hidden');
+        await tick();
+        expect(listUsers().mock.calls.length, 'hiding the page asks nothing').toBe(before);
+
+        setVisibility('visible');
+        await waitFor(() => expect(listUsers().mock.calls.length).toBe(before + 1));
+        await settled();
+    });
+});

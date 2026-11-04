@@ -10,7 +10,7 @@ Every action reloads the tab: the backend decides, the tab shows its answer.
 -->
 <script lang="ts">
     import {onMount} from 'svelte';
-    import {CreditCard, ExternalLink, UserPlus, Users} from 'lucide-svelte';
+    import {CreditCard, ExternalLink, RefreshCw, UserPlus, Users} from 'lucide-svelte';
     import {_} from '$lib/i18n';
     import {zodiosApi} from '$lib/api';
     import {notify} from '$lib/stores/app/notify.svelte';
@@ -135,8 +135,18 @@ Every action reloads the tab: the backend decides, the tab shows its answer.
         }
     }
 
+    // An invitation accepted elsewhere (FB-22) changes the list without anything here moving: reload when the tab comes
+    // back to the front, as well as at the «Reload» button. A load already running is not doubled.
+    function reloadOnReturn() {
+        if (document.visibilityState === 'visible' && !busy) {
+            void load();
+        }
+    }
+
     onMount(() => {
         void load();
+        document.addEventListener('visibilitychange', reloadOnReturn);
+        return () => document.removeEventListener('visibilitychange', reloadOnReturn);
     });
 
     /** Runs one administrator action, tells what happened (the toast only where the outcome is not on screen), then reloads. */
@@ -294,6 +304,9 @@ Every action reloads the tab: the backend decides, the tab shows its answer.
                         testId="users-registration-mode"
                     />
                 </div>
+                <button class="inline-flex items-center gap-1.5 rounded-md border border-lf-input px-3 py-1.5 text-sm text-lf-secondary hover:bg-lf-hover disabled:cursor-not-allowed disabled:opacity-50" data-testid="users-reload-button" disabled={busy} onclick={() => void load()} type="button">
+                    <RefreshCw class="h-4 w-4" />{$_('common.refresh')}
+                </button>
                 <button
                     class="inline-flex items-center gap-1.5 rounded-md bg-lf-action px-3 py-1.5 text-sm font-medium text-lf-on-action hover:bg-lf-action-hover disabled:cursor-not-allowed disabled:opacity-50"
                     data-disabled-reason={inviteBlocked ?? undefined}

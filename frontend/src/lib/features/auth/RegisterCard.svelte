@@ -25,10 +25,14 @@
     let email = initialEmail;
     let password = '';
     let confirmPassword = '';
-    let error = '';
+    // The refusal of the server: a catalogue key, or its own words when nothing better is known (translated where drawn)
+    let errorKey = '';
+    let errorRaw = '';
+    $: error = errorKey ? $_(errorKey) : errorRaw;
     let loading = false;
 
-    // Validation states
+    // Validation states: each holds a catalogue key, translated where it is drawn, so a language picked afterwards
+    // changes the message on screen (FB-21)
     let usernameError = '';
     let emailError = '';
     let passwordError = '';
@@ -39,12 +43,12 @@
 
     function validateUsername() {
         if (username.length < 3) {
-            usernameError = $_('auth.validation.usernameMinLength');
+            usernameError = 'auth.validation.usernameMinLength';
             return false;
         }
         // The sign-in reads a name with @ as an email address: the server refuses it (A-21a)
         if (username.includes('@')) {
-            usernameError = $_('auth.validation.usernameNoAt');
+            usernameError = 'auth.validation.usernameNoAt';
             return false;
         }
         usernameError = '';
@@ -54,7 +58,7 @@
     function validateEmail() {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) {
-            emailError = $_('auth.validation.invalidEmail');
+            emailError = 'auth.validation.invalidEmail';
             return false;
         }
         emailError = '';
@@ -65,7 +69,7 @@
         // Check all password rules
         const allPassed = passwordRulesMet;
         if (!allPassed) {
-            passwordError = $_('auth.validation.passwordTooWeak');
+            passwordError = 'auth.validation.passwordTooWeak';
             return false;
         }
         passwordError = '';
@@ -74,7 +78,7 @@
 
     function validateConfirmPassword() {
         if (password !== confirmPassword) {
-            confirmPasswordError = $_('auth.validation.passwordsNoMatch');
+            confirmPasswordError = 'auth.validation.passwordsNoMatch';
             return false;
         }
         confirmPasswordError = '';
@@ -82,7 +86,8 @@
     }
 
     async function handleSubmit() {
-        error = '';
+        errorKey = '';
+        errorRaw = '';
 
         // Strip leading/trailing whitespace (mobile keyboards often add trailing spaces)
         username = username.trim();
@@ -112,7 +117,8 @@
             dispatch('gotoLogin', held ? {message, tone: 'warning'} : {message});
         } catch (e: unknown) {
             const described = describeRegistrationError(e);
-            error = 'key' in described ? $_(described.key) : described.raw;
+            errorKey = 'key' in described ? described.key : '';
+            errorRaw = 'raw' in described ? described.raw : '';
         } finally {
             loading = false;
         }
@@ -134,7 +140,15 @@
     <div class="p-8 pt-6">
         <form class="space-y-4" data-testid="register-form" on:submit|preventDefault={handleSubmit}>
             <!-- General Error Message -->
-            <InfoBanner dismissible message={error} ondismiss={() => (error = '')} variant="error" />
+            <InfoBanner
+                dismissible
+                message={error}
+                ondismiss={() => {
+                    errorKey = '';
+                    errorRaw = '';
+                }}
+                variant="error"
+            />
 
             {#if inviteToken}
                 <div data-testid="register-invite-notice">
@@ -173,7 +187,7 @@
                     />
                 </div>
                 {#if emailError}
-                    <p class="text-lf-danger text-xs mt-1">{emailError}</p>
+                    <p class="text-lf-danger text-xs mt-1">{$_(emailError)}</p>
                 {/if}
             </div>
 
@@ -205,7 +219,7 @@
                     />
                 </div>
                 {#if usernameError}
-                    <p class="text-lf-danger text-xs mt-1">{usernameError}</p>
+                    <p class="text-lf-danger text-xs mt-1">{$_(usernameError)}</p>
                 {/if}
             </div>
 
@@ -215,7 +229,7 @@
                 <PasswordInput autocomplete="new-password" bind:value={password} disabled={loading} hasError={!!passwordError} icon={Lock} id="register-password" name="new-password" on:blur={validatePassword} placeholder={$_('auth.password')} testId="register-password" />
                 <PasswordStrength {password} bind:valid={passwordRulesMet} />
                 {#if passwordError}
-                    <p class="text-lf-danger text-xs mt-1">{passwordError}</p>
+                    <p class="text-lf-danger text-xs mt-1">{$_(passwordError)}</p>
                 {/if}
             </div>
 
@@ -235,7 +249,7 @@
                     testId="register-confirm-password"
                 />
                 {#if confirmPasswordError}
-                    <p class="text-lf-danger text-xs mt-1">{confirmPasswordError}</p>
+                    <p class="text-lf-danger text-xs mt-1">{$_(confirmPasswordError)}</p>
                 {/if}
             </div>
 
