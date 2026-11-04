@@ -11,7 +11,7 @@
   which export it is (`aiExport.domain`, its memory key, its default choice) and the request's context, which the view gives.
 -->
 <script lang="ts">
-    import {onMount, type ComponentProps} from 'svelte';
+    import {onMount, type ComponentProps, type Snippet} from 'svelte';
     import {_} from '$lib/i18n';
     import {RefreshCw} from 'lucide-svelte';
     import AiExportMenu from '$lib/features/ai-export/AiExportMenu.svelte';
@@ -29,6 +29,7 @@
     import type {DateRangeController} from '$lib/features/dashboard/dateRangeController.svelte';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import BrokerFilterSelect from './BrokerFilterSelect.svelte';
+    import type {PortfolioScopeProfile} from './portfolioScopeProfile';
 
     type TabItems = ComponentProps<typeof PageToolbar>['tabs'];
 
@@ -43,6 +44,8 @@
     }
 
     interface Props {
+        /** What the two pages do not share: test ids, thresholds, the order of the buttons, the broker filter. */
+        profile: PortfolioScopeProfile;
         tabs: TabItems;
         activeTab: string;
         ontabchange: (tabId: string) => void;
@@ -64,9 +67,11 @@
         liveState: ActivePollingState;
         aiExport: AiExportConfig;
         onrefresh: () => void;
+        /** The page's own buttons, first among the actions (the broker's Edit and Share). */
+        actionsBefore?: Snippet<[{showActionLabels: boolean}]>;
     }
 
-    let {tabs, activeTab, ontabchange, dateRangeCtl, targetCurrency = $bindable(), baseCurrency, oncurrencychange, oncreateforex, brokers, selectedBrokerIds, brokerFilterActive, onselectbrokers, liveState, aiExport, onrefresh}: Props = $props();
+    let {profile, tabs, activeTab, ontabchange, dateRangeCtl, targetCurrency = $bindable(), baseCurrency, oncurrencychange, oncreateforex, brokers, selectedBrokerIds, brokerFilterActive, onselectbrokers, liveState, aiExport, onrefresh, actionsBefore}: Props = $props();
 
     /** Mirrors the DateRangePicker's own effective 2-row max-width, so the Currency+Broker row
      *  below it can be capped to the SAME pixel value when filtersStacked — otherwise it
@@ -109,10 +114,21 @@
     });
 </script>
 
-<PageToolbar thresholds={{oneRow: 1000, denseRow: 990, stackFilters: 510, oneColumn: 390, noExtraLabel: 410, labelHideActions: 210, labelHideTabs: 460}} {tabs} {activeTab} {ontabchange} testId="dashboard-controls" filterRowTestId="dashboard-filter-bar" layoutDebugName="dashboard">
+<PageToolbar thresholds={profile.toolbar.thresholds} {tabs} {activeTab} {ontabchange} testId={profile.testIds.controls} filterRowTestId={profile.testIds.filterRow} layoutDebugName={profile.toolbar.debugName}>
     {#snippet filters({layoutMode, filtersStacked, showExtraLabels})}
         <!-- Date range picker (wired to global store via the shared dateRangeController) -->
-        <DateRangePicker bind:activePreset={dateRangeCtl.activePreset} bind:start={dateRangeCtl.displayStart} bind:end={dateRangeCtl.end} compact={true} align="start" {layoutMode} debugName="dashboard" onchange={dateRangeCtl.onDateRangeChange} bind:effectiveMaxWidth={pickerMaxWidth} />
+        <DateRangePicker
+            bind:activePreset={dateRangeCtl.activePreset}
+            bind:start={dateRangeCtl.displayStart}
+            bind:end={dateRangeCtl.end}
+            compact={true}
+            align="start"
+            maxWidthTwoRow={profile.toolbar.pickerMaxWidthTwoRow}
+            {layoutMode}
+            debugName={profile.toolbar.debugName}
+            onchange={dateRangeCtl.onDateRangeChange}
+            bind:effectiveMaxWidth={pickerMaxWidth}
+        />
 
         <!-- Currency override + Broker multi-select — share one justified row when the
              filters+summary zone stacks (stackFilters/oneColumn — see filtersStacked
@@ -134,7 +150,7 @@
                         bind:value={targetCurrency}
                         compact={true}
                         configuredOnly={true}
-                        testId="dashboard-target-currency"
+                        testId={profile.testIds.currency}
                         defaultCurrency={baseCurrency}
                         createForexLabel={$_('common.createForex')}
                         dropdownPosition="bottom"
@@ -148,7 +164,9 @@
                 </div>
             </div>
 
-            <BrokerFilterSelect {brokers} selectedIds={selectedBrokerIds} active={brokerFilterActive} onselect={onselectbrokers} />
+            {#if profile.hasBrokerFilter}
+                <BrokerFilterSelect {brokers} selectedIds={selectedBrokerIds} active={brokerFilterActive} onselect={onselectbrokers} />
+            {/if}
         </div>
     {/snippet}
 
@@ -156,32 +174,45 @@
         <!-- «Updates paused» (FB-28): the figures stopped following the prices because nobody used the page for two minutes. -->
         <LiveUpdatesStatus state={liveState} />
 
-        <!-- AI Export -->
-        <AiExportMenu
-            domain={aiExport.domain}
-            compatibility={aiExportCompatibility}
-            memoryKey={aiExport.memoryKey}
-            defaultSelectionId={aiExport.defaultSelectionId}
-            disabled={aiExportCatalogLoading || aiExportCatalogFailed || aiExport.disabled}
-            labels={aiExportLabels}
-            showLabel={showActionLabels}
-            onprepare={handleAiExport}
-            oncopied={handleAiExportCopied}
-            onerror={(error) => toasts.error(getAiExportErrorMessage($_, error))}
-        />
+        {@render actionsBefore?.({showActionLabels})}
 
-        <button
-            class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 bg-lf-card border border-lf-subtle rounded-lg text-xs font-medium text-lf-secondary hover:bg-lf-hover transition-colors disabled:opacity-50"
-            onclick={onrefresh}
-            disabled={pageBusy.busy}
-            data-busy={pageBusy.busy ? 'true' : 'false'}
-            data-testid="sync-button"
-            title={$_('dashboard.syncData')}
-        >
-            <RefreshCw size={14} class={pageBusy.busy ? 'animate-spin' : ''} />
-            {#if showActionLabels}
-                <span>{$_('dashboard.syncData')}</span>
-            {/if}
-        </button>
+        {#if profile.refreshBeforeAiExport}
+            {@render refreshButton(showActionLabels)}
+            {@render aiExportMenu(showActionLabels)}
+        {:else}
+            {@render aiExportMenu(showActionLabels)}
+            {@render refreshButton(showActionLabels)}
+        {/if}
     {/snippet}
 </PageToolbar>
+
+{#snippet aiExportMenu(showActionLabels: boolean)}
+    <AiExportMenu
+        domain={aiExport.domain}
+        compatibility={aiExportCompatibility}
+        memoryKey={aiExport.memoryKey}
+        defaultSelectionId={aiExport.defaultSelectionId}
+        disabled={aiExportCatalogLoading || aiExportCatalogFailed || aiExport.disabled}
+        labels={aiExportLabels}
+        showLabel={showActionLabels}
+        onprepare={handleAiExport}
+        oncopied={handleAiExportCopied}
+        onerror={(error) => toasts.error(getAiExportErrorMessage($_, error))}
+    />
+{/snippet}
+
+{#snippet refreshButton(showActionLabels: boolean)}
+    <button
+        class="flex items-center justify-center gap-1.5 px-2.5 py-1.5 whitespace-nowrap bg-lf-card border border-lf-subtle rounded-lg text-xs font-medium text-lf-secondary hover:bg-lf-hover transition-colors disabled:opacity-50"
+        onclick={onrefresh}
+        disabled={pageBusy.busy}
+        data-busy={pageBusy.busy ? 'true' : 'false'}
+        data-testid={profile.testIds.refresh}
+        title={$_('dashboard.syncData')}
+    >
+        <RefreshCw size={14} class={pageBusy.busy ? 'animate-spin' : ''} />
+        {#if showActionLabels}
+            <span>{$_('dashboard.syncData')}</span>
+        {/if}
+    </button>
+{/snippet}

@@ -1,38 +1,28 @@
 <!--
-  PortfolioView — the body of the Dashboard (Y6-7, delivery 2).
+  PortfolioView — the body of the Dashboard and of a broker's page (Y6-7, deliveries 2 and 3).
 
-  Moved whole from `routes/(app)/dashboard/+page.svelte`, which is now a shell that mounts it: markup, `data-testid`s,
-  URLs and behaviour are the page's, unchanged. It takes no props yet: what it shows is the user's own share of every
-  broker, optionally filtered. The `scope` prop (portfolio | broker) arrives with its second user, the broker page
-  (delivery 3) — a prop with one value would be code nothing proves.
+  One page, two users, told apart by `scope`: `{kind: 'portfolio'}` (the user's own share of every broker they own, optionally
+  filtered — the Dashboard) and `{kind: 'broker', brokerId}` (that one broker, counted whole, as the page of the broker is).
+  What the two do not share — `data-testid`s, `pageBusy` keys, guide anchors, toolbar thresholds, the broker filter, the
+  banner, what the Transactions tab follows — is `portfolioScopeProfile`; what is the broker's own (its header, the Info tab,
+  the buttons that write, their modals) arrives as snippets from the page that mounts this one.
 
-  Portfolio overview page.
-
-  The Overview tab is `PortfolioOverviewTab` (delivery 2, checkpoint 9c).
-
-  Layout (from wireframe plan_ui_dashboard.md):
-  1. Header row: DateRangePicker | spacer | Broker filter panel | ↻ Sync
-  2. KPI row: Net Worth | Gain/Loss | Weighted ROI
-  3. Charts row: GrowthChart (3/5) | Allocation tabs (2/5)
-  4. Bottom grid: Holdings (left) | Recent Transactions (right)
-
-  Data source: portfolioStore.fetchReport() → single POST /portfolio/report
-  (summary + history + allocation_history in one engine run)
+  Data: the report, the contribution and the candles are the data controller's (`createPortfolioData`); the toolbar, the banner
+  and the four tabs are shared components of this folder.
 
   Pattern: Svelte 5 Runes, Tailwind CSS 4, dark mode, data-testid everywhere.
 -->
 <script lang="ts">
-    import {onDestroy, onMount} from 'svelte';
+    import {onDestroy, onMount, untrack, type ComponentProps, type Snippet} from 'svelte';
     import {page} from '$app/stores';
     import {_} from '$lib/i18n';
-    import {Briefcase, TrendingUp, ArrowRightLeft, Shield} from 'lucide-svelte';
     import type {AiExportRequestContext} from '$lib/features/ai-export/aiExportClipboard';
     import {toasts} from '$lib/stores/app/toastStore.svelte';
     import {escapeHtml} from '$lib/utils/core/escapeHtml';
     import {guideAnchor} from '$lib/features/onboarding/guideAnchors.svelte';
 
     import {invalidate, portfolioError} from '$lib/stores/portfolio/portfolioStore.svelte';
-    import {ensureBrokersLoaded, getAllBrokers, getOwnedBrokers} from '$lib/stores/reference/brokerStore';
+    import {brokerStoreVersion, ensureBrokersLoaded, getAllBrokers, getOwnedBrokers} from '$lib/stores/reference/brokerStore';
     import {registerPortfolioMutationListener, requestPortfolioRefresh} from '$lib/stores/portfolio/portfolioMutation';
     import {pageBusy} from '$lib/stores/app/pageBusy.svelte';
     import {readDashboardView, writeDashboardView} from '$lib/features/dashboard/dashboardViewStore';
@@ -50,13 +40,59 @@
     import PortfolioPositionsTab from './PortfolioPositionsTab.svelte';
     import PortfolioRiskTab from './PortfolioRiskTab.svelte';
     import PortfolioTransactionsTab from './PortfolioTransactionsTab.svelte';
+    import {busyKey as profileBusyKey, DEFAULT_PORTFOLIO_TAB, portfolioScopeProfile, tabsForProfile, type PortfolioScopeTestIds, type PortfolioTabId, type PortfolioViewScope} from './portfolioScopeProfile';
+    import type TransactionsTable from '$lib/features/transactions/TransactionsTable.svelte';
+    import type {TXReadItem} from '$lib/features/transactions/types';
+    import type {FilterValue} from '$lib/components/table/types';
     import {PortfolioTransactions} from './portfolioTransactions.svelte';
     import type {DataQualityIssue} from '$lib/components/ui/feedback/DataQualityBanner.svelte';
     import {staleFxIssue, type StaleFxPairLike} from '$lib/features/dashboard/staleFxIssue';
     import {todayIso} from '$lib/utils/dateOnly';
     import type {BrokerLike} from '$lib/utils/broker/brokerColors';
     import {goto} from '$app/navigation';
-    import {buildTransactionsFiltersUrl} from '$lib/features/transactions/filterState';
+
+    interface TransactionsWriter {
+        hideActions: boolean;
+        onSelectionChange: (rows: TXReadItem[]) => void;
+        onEditRow: (row: TXReadItem) => void;
+        onCloneRow: (row: TXReadItem) => void;
+        onDeleteRow: (row: TXReadItem) => void;
+        onFiltersChange: (filters: Record<string, FilterValue>) => void;
+        /** The rows and their partner legs are loaded: the bulk workspace reads the originals of a selected row from there (FB-17). */
+        onLoaded: (mainRows: TXReadItem[], partnerRows: TXReadItem[]) => void;
+    }
+
+    interface Props {
+        scope?: PortfolioViewScope;
+        /** A broker's page: the broker, once the page has loaded it (null before). */
+        broker?: BrokerLike | null;
+        /** The page shows `gate` (its loading or its error) instead of the toolbar and the tabs: the report is asked all the same. */
+        gated?: boolean;
+        /** A broker's page: what it asks besides the report (its own broker summary) — held with the first load, asked again by Refresh and after a sync. */
+        extraLoad?: () => Promise<unknown>;
+        /** The first load (the page's and the report's) is over. */
+        onFirstLoaded?: () => void;
+        /** What stands above the toolbar: a broker's identity. */
+        header?: Snippet;
+        gate?: Snippet;
+        /** The page's own buttons, first among the toolbar's actions (a broker's Edit and Share). */
+        actionsBefore?: Snippet<[{showActionLabels: boolean}]>;
+        /** The Info tab (a broker's only). */
+        infoTab?: Snippet;
+        /** Buttons above the Transactions table, and the table's own callbacks, for a page that writes. */
+        transactionsBar?: Snippet<[{table: TransactionsTable | undefined}]>;
+        transactionsWriter?: TransactionsWriter;
+        transactionsTable?: TransactionsTable | undefined;
+    }
+
+    let {scope = {kind: 'portfolio'}, broker = null, gated = false, extraLoad, onFirstLoaded, header, gate, actionsBefore, infoTab, transactionsBar, transactionsWriter, transactionsTable = $bindable()}: Props = $props();
+
+    // A page keeps its scope for its whole life (a broker's page remounts for another broker).
+    const profile = portfolioScopeProfile(untrack(() => scope));
+    const brokerScopeId = untrack(() => (scope.kind === 'broker' ? scope.brokerId : null));
+    const isBrokerScope = brokerScopeId !== null;
+    const testIds: PortfolioScopeTestIds = profile.testIds;
+    const busy = (name: string) => profileBusyKey(profile, name);
 
     // =========================================================================
     // State
@@ -66,9 +102,11 @@
     // portfolio data controller's (Y6-7): this page gives it its scope and reads what it shows. A store, so that
     // `$data` is followed by the lazy loaders' wrappers below.
     const data = createPortfolioData({
-        scope: () => ({brokerIds: activeBrokerIds, start: dateRangeCtl.historyStart, end: dateRangeCtl.end || undefined, currency: targetCurrency, fullShare: false}),
+        scope: () => ({brokerIds: activeBrokerIds, start: dateRangeCtl.historyStart, end: dateRangeCtl.end || undefined, currency: targetCurrency, fullShare: profile.fullShare}),
         canAsk: () => canAsk,
         brokersKnown: () => brokersReady,
+        // A broker's page asks its report at once and waits for the broker only for the per-position chart.
+        positionsReady: () => (isBrokerScope ? broker !== null : canAsk),
         alive: () => pageAlive,
         wantsBrokerPnlHistory: () => wantsBrokerPnlHistory,
         rollingPeriod: () => ({start: dateRangeCtl.start, end: dateRangeCtl.end || undefined}),
@@ -88,18 +126,18 @@
 
     /** The currency and broker filter the user left (E3): they last the session, so a return asks
      *  the key it left and the cache can serve it. */
-    const restoredView = readDashboardView();
+    const restoredView = isBrokerScope ? {brokerIds: [] as number[], targetCurrency: null} : readDashboardView();
     /** The owned brokers, when the broker list is already in memory (any in-app return): the restored
      *  scope can then be read from the cache before the first render. On a cold load the list arrives
      *  in onMount, and nothing is asked before it (F2). */
-    const knownOwnedBrokers: BrokerLike[] | null = getAllBrokers().length > 0 ? getOwnedBrokers() : null;
+    const knownOwnedBrokers: BrokerLike[] | null = !isBrokerScope && getAllBrokers().length > 0 ? getOwnedBrokers() : null;
 
     /** Broker IDs selected in the filter (empty = all brokers). */
     let selectedBrokerIds = $state<number[]>(knownOwnedBrokers ? restoredView.brokerIds.filter((id) => knownOwnedBrokers.some((broker) => broker.id === id)) : restoredView.brokerIds);
     let allBrokers = $state<BrokerLike[]>(knownOwnedBrokers ?? []);
     /** F2: the owned brokers are known. Until then nothing is asked: a request without them would be
      *  widened by the backend to every broker the user can see, viewer and editor ones included. */
-    let brokersReady = $state(knownOwnedBrokers !== null);
+    let brokersReady = $state(isBrokerScope || knownOwnedBrokers !== null);
     /** Bumped by «Aggiorna»: the risk levels and the lots panel ask again too (E4). */
     let refreshVersion = $state(0);
 
@@ -149,7 +187,7 @@
      * shared dateRangeController (owns the seed/display/isMaxPending bookkeeping
      * that used to be duplicated per-page — see dateRangeController.svelte.ts).
      */
-    const dateRangeCtl = createDateRangeController(() => void pageBusy.track('dashboard-period', () => loadAll()));
+    const dateRangeCtl = createDateRangeController(() => void pageBusy.track(busy('period'), () => loadAll()));
 
     /**
      * Sentinel-aware values for building "See all" links (assets/transactions).
@@ -180,7 +218,7 @@
         // (or a prior currency change) is still in flight — avoids duplicate concurrent
         // fetches racing to reassign summary/history while the user may be interacting
         // with the page (e.g. clicking a card whose click depends on stable DOM state).
-        if (hadLoadedData && !reportLoading) void pageBusy.track('dashboard-currency', () => loadAll(true));
+        if (hadLoadedData && !reportLoading) void pageBusy.track(busy('currency'), () => loadAll(true));
     });
 
     /**
@@ -191,11 +229,20 @@
 
     /** Owned broker IDs (F2: the dashboard only aggregates brokers the user owns,
      *  scaled by share; a 0% share behaves like editor/viewer and is excluded). */
-    const ownedBrokerIds = $derived(allBrokers.map((b) => b.id));
+    const ownedBrokerIds = $derived(isBrokerScope ? [brokerScopeId] : allBrokers.map((b) => b.id));
 
     /** F2: a request may leave only with an explicit owned scope. Without one the backend would
      *  widen it to every broker the user can see; a user who owns nothing is asked nothing. */
     const canAsk = $derived(brokersReady && ownedBrokerIds.length > 0);
+
+    /** The brokers the panels name: the one of a broker's page, the owned ones on the Dashboard. */
+    const panelBrokers = $derived<BrokerLike[]>(isBrokerScope ? (broker ? [broker] : []) : allBrokers);
+    /** The brokers the Transactions table names: a broker's page also names the other leg's broker of a paired transaction. */
+    const transactionsBrokers = $derived.by<BrokerLike[]>(() => {
+        if (!isBrokerScope) return allBrokers;
+        void $brokerStoreVersion;
+        return getAllBrokers();
+    });
 
     /** Which broker IDs to pass to the API — always the explicit owned set, so the
      *  backend never falls back to "every accessible broker" for the dashboard. */
@@ -218,31 +265,30 @@
         return [...(quality?.issues ?? []), ...(staleFx ? [staleFx] : [])];
     });
 
-    /** Tab navigation — mirrors the broker detail page's structure (no "Info" tab
-     *  here: there's no portfolio-wide metadata/sharing concept at this level). */
-    const DASHBOARD_TAB_IDS = ['panoramica', 'posizioni', 'rischio', 'transazioni'] as const;
-    type DashboardTabId = (typeof DASHBOARD_TAB_IDS)[number];
-    const DEFAULT_DASHBOARD_TAB: DashboardTabId = 'panoramica';
+    /** Tab navigation: the profile lists the tabs (a broker's has «Info» too). */
+    const TAB_IDS = profile.tabs.map((tab) => tab.id);
 
-    function isDashboardTabId(tabId: string): tabId is DashboardTabId {
-        return DASHBOARD_TAB_IDS.includes(tabId as DashboardTabId);
+    function isTabId(tabId: string): tabId is PortfolioTabId {
+        return (TAB_IDS as string[]).includes(tabId);
     }
 
     // Read at init too, so a return to another tab does not first mount the overview and tear it down.
-    let activeTab = $state<DashboardTabId>(getResolvedTabParam($page.url.searchParams, DASHBOARD_TAB_IDS, DEFAULT_DASHBOARD_TAB));
-    const dashboardTabs = $derived([
-        {id: 'panoramica', label: $_('brokers.overview'), icon: Briefcase, testId: 'dashboard-tab-panoramica'},
-        {id: 'posizioni', label: $_('brokers.positions'), icon: TrendingUp, testId: 'dashboard-tab-posizioni'},
-        {id: 'rischio', label: $_('risk.title'), icon: Shield, testId: 'dashboard-tab-risk'},
-        {id: 'transazioni', label: $_('transactions.title'), icon: ArrowRightLeft, testId: 'dashboard-tab-transazioni'},
-    ]);
+    let activeTab = $state<PortfolioTabId>(getResolvedTabParam($page.url.searchParams, TAB_IDS, DEFAULT_PORTFOLIO_TAB));
+    const tabLabels: Record<PortfolioTabId, () => string> = {
+        panoramica: () => $_('brokers.overview'),
+        posizioni: () => $_('brokers.positions'),
+        rischio: () => $_('risk.title'),
+        transazioni: () => $_('transactions.title'),
+        info: () => $_('brokers.info'),
+    };
+    const viewTabs = $derived(tabsForProfile(profile, (id) => tabLabels[id]()));
 
     $effect(() => {
-        activeTab = getResolvedTabParam($page.url.searchParams, DASHBOARD_TAB_IDS, DEFAULT_DASHBOARD_TAB);
+        activeTab = getResolvedTabParam($page.url.searchParams, TAB_IDS, DEFAULT_PORTFOLIO_TAB);
     });
 
     function handleTabChange(tabId: string) {
-        if (!isDashboardTabId(tabId)) return;
+        if (!isTabId(tabId)) return;
         activeTab = tabId;
         void goto(buildTabUrl($page.url, tabId), {replaceState: true, noScroll: true});
     }
@@ -258,6 +304,9 @@
         ownedBrokerIds: () => ownedBrokerIds,
         brokerIds: () => activeBrokerIds,
         period: () => ({historyStart: dateRangeCtl.historyStart, start: dateRangeCtl.start, end: dateRangeCtl.end, isMaxPending: dateRangeCtl.isMaxPending}),
+        followsPeriod: () => profile.transactionsFollowPeriod,
+        busyKey: busy('transactions'),
+        onLoaded: (mainRows, partnerRows) => transactionsWriter?.onLoaded(mainRows, partnerRows),
     });
     $effect(() => {
         txCtl.sync(activeTab === 'transazioni');
@@ -269,37 +318,17 @@
         staleFxPairs: () => (summary?.data_quality as {stale_fx_pairs?: StaleFxPairLike[]} | undefined)?.stale_fx_pairs,
         periodEnd: () => dateRangeCtl.end,
         alive: () => pageAlive,
+        busyKey: busy('reload'),
         reload: (force, propagateError) => loadAll(force, propagateError),
         onDataChanged: () => (refreshVersion += 1),
         translate: (key, options) => $_(key, options as never),
     });
 
-    /** URL for "See all" links — preserves current date range (assets) and, for
-     *  transactions, ALSO the broker filter (single broker_id / multi broker_ids),
-     *  via the SAME filter map + URL builder /transactions itself uses. */
+    /** URL of the «See all» link of the positions: it keeps the date range on screen. */
     const assetsHref = $derived(`/assets?start=${urlDateFrom}&end=${urlDateTo}`);
-    const transactionsHref = $derived(
-        buildTransactionsFiltersUrl({
-            date_start: dateRangeCtl.isMaxPending ? undefined : dateRangeCtl.start,
-            date_end: dateRangeCtl.end || undefined,
-            broker_id: activeBrokerIds && activeBrokerIds.length === 1 ? activeBrokerIds[0] : undefined,
-            broker_ids: activeBrokerIds && activeBrokerIds.length > 1 ? activeBrokerIds : undefined,
-        }),
-    );
-
     // =========================================================================
     // Loaders
     // =========================================================================
-
-    async function loadSummary(force = false) {
-        // No-op: summary is loaded as part of loadAll via fetchReport
-        void force;
-    }
-
-    async function loadHistory(force = false) {
-        // No-op: history is loaded as part of loadAll via fetchReport
-        void force;
-    }
 
     /** The main report of the scope on screen, from the cache at once and asked again when stale (E1); see the controller. */
     function loadAll(force = false, propagateError = false, options: {background?: boolean} = {}) {
@@ -349,20 +378,20 @@
         scheduleReload();
     }
 
-    function toggleBroker(id: number) {
-        selectBrokers(selectedBrokerIds.includes(id) ? selectedBrokerIds.filter((x) => x !== id) : [...selectedBrokerIds, id]);
-    }
-
     /** Fires loadAll after a 2-second quiet period (anti-bounce for rapid clicks). */
     function scheduleReload() {
         if (reloadTimer !== null) clearTimeout(reloadTimer);
         reloadTimer = setTimeout(() => {
             reloadTimer = null;
-            void pageBusy.track('dashboard-scope', () => loadAll());
+            void pageBusy.track(busy('scope'), () => loadAll());
         }, 2000);
     }
 
-    /** «Aggiorna» (E4): report, contribution, risk and lots are all asked again; what is on screen stays meanwhile. */
+    /** «Aggiorna» (E4): report, contribution, risk and lots are all asked again; what is on screen stays meanwhile. A broker's page asks its own summary and, once its Transactions were opened, their rows too. */
+    export async function refresh() {
+        await handleSync();
+    }
+
     async function handleSync() {
         refreshing = true;
         // The user's Refresh: the lazy sections may be asked again whatever failed before (Y-24).
@@ -370,7 +399,10 @@
         requestPortfolioRefresh();
         refreshVersion += 1;
         try {
-            await pageBusy.track('dashboard-refresh', () => loadAll(true));
+            await pageBusy.track(busy('refresh'), async () => {
+                await Promise.all([extraLoad?.(), loadAll(true)]);
+                await txCtl.reload();
+            });
         } finally {
             refreshing = false;
         }
@@ -388,32 +420,40 @@
         void loadAll(false, false, {background: true});
     }
     onMount(() =>
-        registerPortfolioMutationListener('dashboard:prices', (signal) => {
+        registerPortfolioMutationListener(`${busy('view')}:${brokerScopeId ?? 'all'}:prices`, (signal) => {
             if (signal.kind === 'prices') queueMicrotask(reloadAfterPriceCatchUp);
         }),
     );
 
     /** The toolbar's AI Export: which export it is, and the request's context (the broker filter and period on screen). */
     const aiExport = {
-        domain: 'portfolio',
-        memoryKey: 'portfolio',
-        defaultSelectionId: 'portfolio.pac_planning',
+        ...profile.aiExport,
         get disabled() {
-            return !canAsk;
+            return isBrokerScope ? broker?.id !== brokerScopeId : !canAsk;
         },
         context: (): AiExportRequestContext => {
+            if (isBrokerScope) {
+                if (!broker || broker.id !== brokerScopeId) throw new Error('Broker is not loaded');
+                return {domain: 'broker', brokerId: broker.id, snapshotAsOf: dateRangeCtl.end, targetCurrency};
+            }
             // F2: a portfolio export without the owned scope would be widened by the backend to every
             // broker the user can see. The trigger is disabled until then; this guards the call itself.
             if (!canAsk) throw new Error('Owned brokers are not loaded');
             return {domain: 'portfolio', snapshotAsOf: dateRangeCtl.end, targetCurrency, brokerIds: activeBrokerIds};
         },
-    } as const;
+    } as ComponentProps<typeof PortfolioToolbar>['aiExport'];
 
     /** The user picked a currency in the toolbar. */
     function handleCurrencyChange() {
         targetCurrencyManuallySet = true;
-        writeDashboardView({targetCurrency});
-        void pageBusy.track('dashboard-currency', () => loadAll());
+        if (!isBrokerScope) writeDashboardView({targetCurrency});
+        void pageBusy.track(busy('currency'), () => loadAll());
+    }
+
+    /** The risk panel synced prices or rates: the report is asked again, and a broker's page asks its summary too. */
+    async function handleRiskSynced() {
+        invalidate();
+        await Promise.all([extraLoad?.(), loadAll(true)]);
     }
 
     // =========================================================================
@@ -427,96 +467,130 @@
     hydrateFromCache();
 
     onMount(() => {
-        // The first load holds the Refresh button (Y11), from the reference lists to the report.
-        void pageBusy.track('dashboard-first-load', async () => {
-            await Promise.all([ensureBrokersLoaded(), ensureAssetsLoaded()]);
-            if (!pageAlive) return;
-            // F2: dashboard scope = owned brokers only (share > 0). A user who owns
-            // nothing (viewer/editor elsewhere, or fresh install) gets an empty
-            // dashboard — no fetch, so viewer/editor data never leaks into totals.
-            allBrokers = getOwnedBrokers();
-            const kept = selectedBrokerIds.filter((id) => allBrokers.some((broker) => broker.id === id));
-            if (kept.length !== selectedBrokerIds.length) {
-                selectedBrokerIds = kept;
-                writeDashboardView({brokerIds: kept});
-            }
-            brokersReady = true;
-            // A user who owns nothing is asked nothing: `loadAll` only stops the page from being busy.
-            await loadAll();
-        });
+        void (async () => {
+            // The first load holds the Refresh button (Y11), from the reference lists to the report.
+            await pageBusy.track(busy('first-load'), async () => {
+                if (isBrokerScope) {
+                    // A broker's page asks its report at once, beside its own broker and the two lists.
+                    await Promise.all([extraLoad?.(), loadAll(), ensureBrokersLoaded(), ensureAssetsLoaded()]);
+                    return;
+                }
+                await Promise.all([ensureBrokersLoaded(), ensureAssetsLoaded()]);
+                if (!pageAlive) return;
+                // F2: dashboard scope = owned brokers only (share > 0). A user who owns
+                // nothing (viewer/editor elsewhere, or fresh install) gets an empty
+                // dashboard — no fetch, so viewer/editor data never leaks into totals.
+                allBrokers = getOwnedBrokers();
+                const kept = selectedBrokerIds.filter((id) => allBrokers.some((broker) => broker.id === id));
+                if (kept.length !== selectedBrokerIds.length) {
+                    selectedBrokerIds = kept;
+                    writeDashboardView({brokerIds: kept});
+                }
+                brokersReady = true;
+                // A user who owns nothing is asked nothing: `loadAll` only stops the page from being busy.
+                await loadAll();
+            });
+            if (pageAlive) onFirstLoaded?.();
+        })();
     });
 </script>
 
 <div
-    class="space-y-4 text-lf-primary"
-    data-testid="dashboard-page"
-    use:guideAnchor={'page.dashboard'}
+    class="{profile.rootSpacing} text-lf-primary"
+    data-testid={testIds.root}
+    use:guideAnchor={profile.rootGuideAnchor ?? []}
     aria-busy={reportLoading || contributionLoading || contributionRefreshing || refreshing || banners.syncLoading}
     data-busy={reportLoading || contributionLoading || contributionRefreshing || refreshing || banners.syncLoading ? 'true' : 'false'}
     data-live-updates={$data.liveState}
 >
-    <h1 class="sr-only">{$_('nav.dashboard')}</h1>
+    {#if isBrokerScope}
+        {@render header?.()}
+    {:else}
+        <h1 class="sr-only">{$_('nav.dashboard')}</h1>
+    {/if}
 
-    <PortfolioToolbar
-        tabs={dashboardTabs}
-        {activeTab}
-        ontabchange={handleTabChange}
-        {dateRangeCtl}
-        bind:targetCurrency
-        {baseCurrency}
-        oncurrencychange={handleCurrencyChange}
-        oncreateforex={(slug) => banners.openFxPairModal(slug)}
-        brokers={allBrokers}
-        {selectedBrokerIds}
-        {brokerFilterActive}
-        onselectbrokers={selectBrokers}
-        liveState={$data.liveState}
-        {aiExport}
-        onrefresh={handleSync}
-    />
-
-    <PortfolioBanners issues={dataQualityIssues} actions={banners} />
-
-    {#if activeTab === 'panoramica'}
-        <PortfolioOverviewTab snapshot={$data} displayCurrency={appliedCurrency} brokerIds={activeBrokerIds} onRequestPnlCandles={() => void pageBusy.join('dashboard-pnl-candles', loadPnlCandles)} />
-    {:else if activeTab === 'posizioni'}
-        <PortfolioPositionsTab
-            snapshot={$data}
+    {#if gated}
+        {@render gate?.()}
+    {:else}
+        <PortfolioToolbar
+            {profile}
+            tabs={viewTabs}
+            {activeTab}
+            ontabchange={handleTabChange}
+            {dateRangeCtl}
+            bind:targetCurrency
+            {baseCurrency}
+            oncurrencychange={handleCurrencyChange}
+            oncreateforex={(slug) => banners.openFxPairModal(slug)}
             brokers={allBrokers}
-            brokerIds={activeBrokerIds}
-            {canAsk}
-            {assetsHref}
-            onRequestContribution={canAsk ? () => void pageBusy.join('dashboard-contribution', loadContribution) : undefined}
-            positionsSeries={$positionsSeriesCtl.response}
-            positionsSeriesLoading={$positionsSeriesCtl.loading}
-            positionsSeriesFailed={$positionsSeriesCtl.failed}
-            onRequestPositionsSeries={(keys) => positionsSeriesCtl.request(keys, data.positionsSeriesScope(refreshVersion))}
-            positionsRolling={$positionsRollingCtl}
-            onRequestPositionsRolling={(assetIds) => positionsRollingCtl.request(assetIds, data.positionsRollingScope(refreshVersion))}
-            {activeAssetId}
-            {activeAsset}
-            displayCurrency={appliedCurrency}
-            onAnalyze={openAssetPanel}
-            onCloseAnalysis={closeAssetPanel}
-            {refreshVersion}
-        />
-    {:else if activeTab === 'rischio'}
-        <PortfolioRiskTab
-            {canAsk}
-            {brokersReady}
-            {ownedBrokerIds}
-            dateStart={dateRangeCtl.start}
-            dateEnd={dateRangeCtl.end}
-            targetCurrency={appliedCurrency}
-            {summary}
+            {selectedBrokerIds}
             {brokerFilterActive}
-            {refreshVersion}
-            onsynced={async () => {
-                invalidate();
-                await loadAll(true);
-            }}
+            onselectbrokers={selectBrokers}
+            liveState={$data.liveState}
+            {aiExport}
+            onrefresh={handleSync}
+            {actionsBefore}
         />
-    {:else if activeTab === 'transazioni'}
-        <PortfolioTransactionsTab transactions={txCtl} brokers={allBrokers} />
+
+        <!-- A broker's page shows no banner yet (delivery 4); the dialog of «Create forex» is the same. -->
+        <PortfolioBanners issues={profile.showsBanners ? dataQualityIssues : []} actions={banners} />
+
+        {#if activeTab === 'panoramica'}
+            <PortfolioOverviewTab snapshot={$data} displayCurrency={appliedCurrency} brokerIds={activeBrokerIds} {testIds} onRequestPnlCandles={() => void pageBusy.join(busy('pnl-candles'), loadPnlCandles)} />
+        {:else if activeTab === 'posizioni'}
+            <PortfolioPositionsTab
+                testId={testIds.positionsTab}
+                snapshot={$data}
+                brokers={panelBrokers}
+                brokerIds={activeBrokerIds}
+                {canAsk}
+                {assetsHref}
+                onRequestContribution={canAsk ? () => void pageBusy.join(busy('contribution'), loadContribution) : undefined}
+                positionsSeries={$positionsSeriesCtl.response}
+                positionsSeriesLoading={$positionsSeriesCtl.loading}
+                positionsSeriesFailed={$positionsSeriesCtl.failed}
+                onRequestPositionsSeries={(keys) => positionsSeriesCtl.request(keys, data.positionsSeriesScope(refreshVersion))}
+                positionsRolling={$positionsRollingCtl}
+                onRequestPositionsRolling={(assetIds) => positionsRollingCtl.request(assetIds, data.positionsRollingScope(refreshVersion))}
+                {activeAssetId}
+                {activeAsset}
+                displayCurrency={appliedCurrency}
+                onAnalyze={openAssetPanel}
+                onCloseAnalysis={closeAssetPanel}
+                {refreshVersion}
+            />
+        {:else if activeTab === 'rischio'}
+            <PortfolioRiskTab
+                testId={testIds.riskTab}
+                broker={isBrokerScope ? {id: brokerScopeId} : undefined}
+                {canAsk}
+                {brokersReady}
+                {ownedBrokerIds}
+                dateStart={dateRangeCtl.start}
+                dateEnd={dateRangeCtl.end}
+                targetCurrency={appliedCurrency}
+                {summary}
+                {brokerFilterActive}
+                {refreshVersion}
+                onsynced={handleRiskSynced}
+            />
+        {:else if activeTab === 'transazioni'}
+            <PortfolioTransactionsTab
+                transactions={txCtl}
+                brokers={transactionsBrokers}
+                testId={testIds.transactionsTab}
+                tableTestId={isBrokerScope ? 'broker-transactions' : undefined}
+                bind:table={transactionsTable}
+                bar={transactionsBar}
+                hideActions={transactionsWriter?.hideActions ?? true}
+                onSelectionChange={transactionsWriter?.onSelectionChange}
+                onEditRow={transactionsWriter?.onEditRow}
+                onCloneRow={transactionsWriter?.onCloneRow}
+                onDeleteRow={transactionsWriter?.onDeleteRow}
+                onFiltersChange={transactionsWriter?.onFiltersChange}
+            />
+        {:else if activeTab === 'info'}
+            {@render infoTab?.()}
+        {/if}
     {/if}
 </div>

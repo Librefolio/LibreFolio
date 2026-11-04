@@ -25,6 +25,8 @@
         /** The brokers the view shows; undefined while the owned brokers are not known. */
         brokerIds: number[] | undefined;
         /** The owned brokers are known: the lot detail may ask. */
+        /** The tab's test id: the Dashboard's and a broker's pages keep their own (`portfolioScopeProfile`). */
+        testId: string;
         canAsk: boolean;
         assetsHref: string;
         /** The contribution is asked through this callback; absent until the owned brokers are known (F2). */
@@ -44,12 +46,12 @@
         refreshVersion: number;
     }
 
-    let {snapshot, brokers, brokerIds, canAsk, assetsHref, onRequestContribution, positionsSeries, positionsSeriesLoading, positionsSeriesFailed, onRequestPositionsSeries, positionsRolling, onRequestPositionsRolling, activeAssetId, activeAsset, displayCurrency, onAnalyze, onCloseAnalysis, refreshVersion}: Props = $props();
+    let {testId, snapshot, brokers, brokerIds, canAsk, assetsHref, onRequestContribution, positionsSeries, positionsSeriesLoading, positionsSeriesFailed, onRequestPositionsSeries, positionsRolling, onRequestPositionsRolling, activeAssetId, activeAsset, displayCurrency, onAnalyze, onCloseAnalysis, refreshVersion}: Props = $props();
 
     const summaryLoading = $derived(snapshot.reportLoading && !snapshot.summary);
 </script>
 
-<div data-testid="dashboard-positions-tab">
+<div data-testid={testId}>
     <!-- F2: nothing is asked before the owned brokers are known — the prop arrives with them. -->
     <PositionsPanel
         summary={snapshot.summary}

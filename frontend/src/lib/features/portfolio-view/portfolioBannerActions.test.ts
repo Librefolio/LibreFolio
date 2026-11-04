@@ -67,6 +67,7 @@ function make(overrides: Partial<Knobs> = {}, reload?: PortfolioBannerInputs['re
         staleFxPairs: () => knobs.stalePairs,
         periodEnd: () => '2026-06-30',
         alive: () => knobs.alive,
+        busyKey: 'dashboard-reload',
         reload: reload ?? vi.fn(async () => undefined),
         onDataChanged: vi.fn(),
         translate: (key: string) => key,

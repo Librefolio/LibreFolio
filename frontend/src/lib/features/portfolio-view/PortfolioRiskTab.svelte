@@ -16,6 +16,9 @@
     import type {PortfolioSummary} from '$lib/stores/portfolio/portfolioStore.svelte';
 
     interface Props {
+        testId: string;
+        /** A broker's page: the risk of that broker alone (`brokerId`), as the broker is counted whole on the page (MF6-3, D4). */
+        broker?: {id: number};
         /** The owned brokers are known and there is at least one: the panel can ask. */
         canAsk: boolean;
         /** The owned brokers are known (possibly none): tells "nothing owned" from "still loading". */
@@ -32,11 +35,29 @@
         onsynced: () => void | Promise<void>;
     }
 
-    let {canAsk, brokersReady, ownedBrokerIds, dateStart, dateEnd, targetCurrency, summary, brokerFilterActive, refreshVersion, onsynced}: Props = $props();
+    let {testId, broker, canAsk, brokersReady, ownedBrokerIds, dateStart, dateEnd, targetCurrency, summary, brokerFilterActive, refreshVersion, onsynced}: Props = $props();
 </script>
 
-<div data-testid="dashboard-risk-tab">
-    {#if canAsk}
+<div data-testid={testId}>
+    {#if broker}
+        <!-- Same component as Dashboard, same props, one different scope: that is the whole difference, and it is what makes the two
+             pages comparable. `summary` is the one of this broker alone, so its net worth answers this exact scope. The page counts
+             the broker whole (`fullShare`), so `wholeBroker` makes the risk scope ask the same: stress impacts and scope value then
+             match the net worth printed above. -->
+        <RiskLevelsPanel
+            scope={{kind: 'portfolio', broker_ids: [broker.id]}}
+            {dateStart}
+            {dateEnd}
+            {targetCurrency}
+            assetIds={[...new Set((summary?.holdings ?? []).map((holding) => holding.asset_id))]}
+            scopeValue={summary ? parseFloat(summary.net_worth.amount) : null}
+            title={$_('risk.brokerTitle')}
+            internalSubset={true}
+            wholeBroker={true}
+            {refreshVersion}
+            {onsynced}
+        />
+    {:else if canAsk}
         <RiskLevelsPanel
             scope={{kind: 'portfolio', broker_ids: ownedBrokerIds}}
             {dateStart}

@@ -34,6 +34,8 @@ export interface PortfolioBannerInputs {
     /** The end of the period on screen: where a price sync stops. */
     periodEnd: () => string;
     alive: () => boolean;
+    /** The `pageBusy` key held while a new pair's report reloads: `dashboard-reload` or `broker-reload`. */
+    busyKey: string;
     /** The view's own report load. */
     reload: (force?: boolean, propagateError?: boolean) => Promise<unknown>;
     /** New rates or prices: the open lots and risk panels ask again too, as after «Aggiorna». */
@@ -198,7 +200,7 @@ export class PortfolioBannerActions {
         if (!this.inputs.alive()) return;
         invalidateFxRoutes();
         invalidate();
-        await pageBusy.track('dashboard-reload', () => this.inputs.reload(true));
+        await pageBusy.track(this.inputs.busyKey, () => this.inputs.reload(true));
     }
 
     async handleFxPairCreationSynced(detail: FxPairSyncCompleteDetail): Promise<void> {
