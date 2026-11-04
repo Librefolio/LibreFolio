@@ -79,7 +79,7 @@ This skill is intentionally **high-level and durable**. For the current contract
   `backend/app/services/accounts/onboarding_service.py` (flow registry and versions).
 - **Reference tests** — `frontend/e2e/onboarding-guides.spec.ts` with
   `frontend/e2e/fixtures/onboarding-accounts.ts`, and `frontend/e2e/onboarding-tour.spec.ts`.
-- **History and decisions** — `LibreFolio_developer_journal/Release_2/Phase_0/21_onboarding/`.
+- **History and decisions** — `../LibreFolio_developer_journal/Release_2/Phase_0/21_onboarding/`.
 
 Do not rely on this page for names or signatures — they change; the code and the developer docs
 are kept current.

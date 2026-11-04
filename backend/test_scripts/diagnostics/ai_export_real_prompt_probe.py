@@ -43,7 +43,7 @@ from backend.app.services.ai_export.temporal.policy import (  # noqa: E402
 from scripts.i18n_catalog import build as build_i18n_catalog  # noqa: E402
 
 DEFAULT_SOURCE_DB = PROJECT_ROOT / "backend" / "data" / "prod" / "sqlite" / "app.db"
-DEFAULT_OUTPUT_DIR = PROJECT_ROOT / "LibreFolio_developer_journal" / "Release_2" / "Phase_0" / "01_signalMigration" / "02_aiExport" / "real_prompt_probe"
+DEFAULT_OUTPUT_DIR = PROJECT_ROOT.parent / "LibreFolio_developer_journal" / "Release_2" / "Phase_0" / "01_signalMigration" / "02_aiExport" / "real_prompt_probe"
 FRONTEND_BRIDGE = PROJECT_ROOT / "frontend" / "scripts" / "run-ai-export-render-prompt-probe.mjs"
 API_PREFIX = "/api/v1"
 DEFAULT_USERS = ("alfy", "marco")

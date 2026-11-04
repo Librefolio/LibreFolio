@@ -171,5 +171,5 @@ If the answer required synthesizing 3+ sources or revealed a new connection:
 
 If the graph returns no matching nodes AND index.md has no coverage:
 1. Say clearly: "The wiki doesn't have coverage of X yet."
-2. Suggest what to ingest: "Consider ingesting `developer_journal/RoadmapV4_UI/...`"
+2. Suggest what to ingest: "Consider ingesting `../LibreFolio_developer_journal/RoadmapV4_UI/...`"
 3. Optionally fall back to codebase search, noting the result isn't in the wiki yet.

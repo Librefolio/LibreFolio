@@ -75,7 +75,7 @@ REQUIRED_SELECTIONS = (
     "portfolio.technical",
 )
 FX_SELECTION = "fx.market_technical"
-DEFAULT_BASELINE = REPOSITORY_ROOT / "LibreFolio_developer_journal" / "Release_2" / "Phase_0" / "01_signalMigration" / "02_aiExport" / "probe-phase00AiExportTechnicalDensity.json"
+DEFAULT_BASELINE = REPOSITORY_ROOT.parent / "LibreFolio_developer_journal" / "Release_2" / "Phase_0" / "01_signalMigration" / "02_aiExport" / "probe-phase00AiExportTechnicalDensity.json"
 TEMPORAL_CLASS_ORDER = (
     SignalTemporalClass.VERY_FAST,
     SignalTemporalClass.FAST,

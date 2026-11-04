@@ -5,7 +5,7 @@ description: "Use this skill when the user needs to verify, cross-link, or archi
 
 # Plan Archive Skill
 
-> Verification and archiving of development plans in `LibreFolio_developer_journal/`.
+> Verification and archiving of development plans in `../LibreFolio_developer_journal/`.
 
 ## Workflow Overview
 
@@ -112,7 +112,7 @@ When a phase is complete:
 ## Directory Structure
 
 ```
-LibreFolio_developer_journal/
+../LibreFolio_developer_journal/
 ├── RoadmapV4_UI/
 │   ├── phases/                    # Archived completed phases
 │   │   ├── 00-index.md            # Master index
@@ -148,12 +148,12 @@ When a phase completes entirely, `Release_N/phases/Phase_N/` will hold it.
 
 ```bash
 # List all active plans (not yet archived)
-ls LibreFolio_developer_journal/RoadmapV4_UI/plan-*.md
+ls ../LibreFolio_developer_journal/RoadmapV4_UI/plan-*.md
 
 # List archived phases
-ls LibreFolio_developer_journal/RoadmapV4_UI/phases/
+ls ../LibreFolio_developer_journal/RoadmapV4_UI/phases/
 
 # Check a phase's sub-plans
-cat LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-06-subplan/README.md
+cat ../LibreFolio_developer_journal/RoadmapV4_UI/phases/phase-06-subplan/README.md
 ```
 

@@ -42,6 +42,10 @@ permettendogli di lavorare al massimo».
 This is the global rule of `.github/copilot-instructions.md` («Git: local yes, remote
 only the developer») applied to coordination. Children still never mutate history.
 
+The journal is a separate local repository, `../LibreFolio_developer_journal/` (see «Developer Journal & Plan
+Methodology» in `CLAUDE.md`). You commit it too, on `main`, by explicit path, when you verify a delivery: a
+delivery's snapshot covers its plan file there as well as the files in its worktree.
+
 **The coordinator may, locally:**
 
 - commit children's checkpoints and its own records;
@@ -119,7 +123,7 @@ letters followed by ` - `, for example `F - Asset data`, `G - BRIM extraction` o
 - the sessions of every coordinator, active or archived (`list_sessions_and_chats`);
 - the section headings of `Release_2/Phase_0/BACKLOG_POST_1.2.md`;
 - the ID prefixes already used in the backlog and the journal
-  (`grep -rE '\b<CODE>-?[0-9]' LibreFolio_developer_journal`);
+  (`grep -rE '\b<CODE>-?[0-9]' ../LibreFolio_developer_journal`);
 - the codes the developer or the designer use for questions and decisions (for
   example `N1`–`N6`, `Q2`–`Q13`, `GR1`–`GR5`).
 
