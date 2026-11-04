@@ -254,7 +254,14 @@
         </fieldset>
 
         {#if mode === 'secure'}
-            <div class="space-y-3" data-testid="backup-password-fields">
+            <!--
+                FB-20: the pair a password manager expects, so that it does not take the backup password for the user's
+                own: a form with a fixed user field («backup») before two new-password fields. The user field is not
+                type="hidden" (managers skip those): a text input kept off the screen, out of the tab order and away
+                from assistive technology. The form never submits (the buttons stay type="button").
+            -->
+            <form class="space-y-3" autocomplete="off" data-testid="backup-password-form" data-1p-ignore data-bwignore="true" data-form-type="other" data-lpignore="true" onsubmit={(event) => event.preventDefault()}>
+                <input class="sr-only" aria-hidden="true" autocomplete="username" data-testid="backup-password-username" name="backup-username" readonly tabindex="-1" type="text" value="backup" />
                 <div class="space-y-2">
                     <label class="block text-sm font-medium text-lf-secondary" for="backup-password">{$_('backup.download.password.label')}</label>
                     <PasswordInput autocomplete="new-password" bind:value={password} id="backup-password" name="backup-password" testId="backup-password" />
@@ -267,7 +274,7 @@
                         <p class="text-xs text-lf-danger" data-testid="backup-password-mismatch">{$_('backup.download.password.mismatch')}</p>
                     {/if}
                 </div>
-            </div>
+            </form>
         {/if}
 
         <div class="flex flex-wrap items-center gap-2">

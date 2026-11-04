@@ -1124,6 +1124,79 @@ describe('B4b — BackupDownloadCard: the password fields of a secure backup are
 });
 
 // =====================================================================================================================
+// FB-20 — the backup password is not offered to the browser as the user's own (written red first)
+// =====================================================================================================================
+
+/*
+ * Today the two password fields sit outside any `<form>` and have no user field beside them, so the browser takes the
+ * pair for a password change and offers to save the backup password as the account's. The fix is the shape password
+ * managers expect: a `<form>` holding a fixed user field («backup») and the two new-password fields. The user field is
+ * not `type="hidden"` (managers skip those): a text input kept off the screen, out of the tab order and away from
+ * assistive technology. The form never submits (the buttons stay `type="button"`). Whether a given browser then stops
+ * offering to save is seen by hand: this file pins the markup.
+ */
+describe('FB-20 — BackupDownloadCard: the password fields are a form with a fixed user field', () => {
+    const form = () => screen.getByTestId('backup-password-form') as HTMLFormElement;
+    const userField = () => screen.getByTestId('backup-password-username') as HTMLInputElement;
+
+    it('the two password fields and the user field are in one <form> that exists only in secure mode', async () => {
+        render(BackupDownloadCard);
+        expect(screen.queryByTestId('backup-password-form'), 'clear mode: no form').toBeNull();
+        await chooseSecure();
+
+        expect(form().tagName).toBe('FORM');
+        expect(form()).toContainElement(userField());
+        expect(form()).toContainElement(passwordField());
+        expect(form()).toContainElement(confirmField());
+    });
+
+    it('the user field is a fixed, read-only text input called «backup», for a password manager to pair with the new password', async () => {
+        render(BackupDownloadCard);
+        await chooseSecure();
+
+        expect(userField().getAttribute('type'), 'not "hidden": password managers skip hidden fields').toBe('text');
+        expect(userField().value).toBe('backup');
+        expect(userField()).toHaveAttribute('autocomplete', 'username');
+        expect(userField()).toHaveAttribute('readonly');
+        expect(userField().getAttribute('name')).toBeTruthy();
+    });
+
+    it('the user field is out of the way: no tab stop, hidden from assistive technology, and it comes before the passwords', async () => {
+        render(BackupDownloadCard);
+        await chooseSecure();
+
+        expect(userField()).toHaveAttribute('tabindex', '-1');
+        expect(userField()).toHaveAttribute('aria-hidden', 'true');
+        // A manager pairs a password with the user field that comes before it.
+        expect(userField().compareDocumentPosition(passwordField()) & Node.DOCUMENT_POSITION_FOLLOWING, 'the user field precedes the password').toBeTruthy();
+    });
+
+    it('the form never submits: submitting it is cancelled and starts no backup; the buttons stay outside as type="button"', async () => {
+        render(BackupDownloadCard);
+        await chooseSecure();
+        await typePasswords(PASSWORD);
+
+        const submitted = fireEvent.submit(form());
+        await settle();
+        expect(api.start, 'a submit starts nothing').not.toHaveBeenCalled();
+        expect(await submitted, 'the submit event is cancelled').toBe(false);
+        expect(createButton().getAttribute('type')).toBe('button');
+        expect(form().querySelectorAll('button[type="submit"], input[type="submit"]')).toHaveLength(0);
+    });
+
+    it('the form asks the common password managers to leave it alone', async () => {
+        render(BackupDownloadCard);
+        await chooseSecure();
+
+        expect(form()).toHaveAttribute('autocomplete', 'off');
+        expect(form()).toHaveAttribute('data-lpignore', 'true');
+        expect(form()).toHaveAttribute('data-1p-ignore');
+        expect(form()).toHaveAttribute('data-bwignore', 'true');
+        expect(form()).toHaveAttribute('data-form-type', 'other');
+    });
+});
+
+// =====================================================================================================================
 // B-8, developer 19/10 — on screen only «busy»; the console names the backup that runs (workstream B; written red first)
 // =====================================================================================================================
 
